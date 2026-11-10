@@ -6,8 +6,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type initWebviewTrpc as InitWebviewTrpc } from '@microsoft/vscode-ext-webview';
-import { API } from '../../../DocumentDBExperiences';
 import * as vscode from 'vscode';
+import { API } from '../../../DocumentDBExperiences';
+import { type DockerReadiness, type StageEvent } from '../../../services/localQuickStart/quickStartTypes';
 
 const mockStartDockerProvider = vi.fn();
 const mockIsDockerReady = vi.fn();
@@ -18,6 +19,7 @@ const mockSuggestPort = vi.fn();
 const mockProvision = vi.fn();
 const mockProcedureTelemetry = vi.fn();
 const mockGetWizardContext = vi.fn();
+const mockGetInstanceEngine = vi.fn();
 
 vi.mock('../../../services/survey/SurveyService', (): object => ({ recordSurveyActivity: vi.fn() }));
 
@@ -47,6 +49,7 @@ vi.mock('../../../services/localQuickStart/QuickStartService', () => ({
         canReuseExistingData: (...args: unknown[]) => mockCanReuseExistingData(...args) as unknown,
         suggestPort: (...args: unknown[]) => mockSuggestPort(...args) as unknown,
         getWizardContext: (...args: unknown[]) => mockGetWizardContext(...args) as unknown,
+        getInstanceEngine: (...args: unknown[]) => mockGetInstanceEngine(...args) as unknown,
         checkPort: vi.fn(),
         onDidChangeStatus: (listener: () => void) => {
             statusListeners.add(listener);
@@ -130,6 +133,7 @@ function createContext(): RouterContext & {
 describe('localQuickStartRouter', () => {
     beforeEach(() => {
         mockSuggestPort.mockResolvedValue(10260);
+        mockGetInstanceEngine.mockReset().mockResolvedValue(undefined);
     });
 
     it.each(['docker', 'podman', 'notRecorded', undefined] as const)(
@@ -154,7 +158,10 @@ describe('localQuickStartRouter', () => {
 
             expect(result).toMatchObject({
                 status: { state: 'NotInstalled', canResumeReadiness: true },
-                busy: false, canReuseExistingData: true, suggestedPort: 10273, instanceEngine,
+                busy: false,
+                canReuseExistingData: true,
+                suggestedPort: 10273,
+                instanceEngine,
             });
             expect(result.status.metadata).toBeUndefined();
             expect(mockIsDockerReady).not.toHaveBeenCalled();
@@ -248,22 +255,71 @@ describe('localQuickStartRouter', () => {
     });
 
     describe('preferred engine', () => {
-        it.each(['docker', 'podman'] as const)('forwards %s to readiness, provider start and provision', async (preferredEngine) => {
-            const caller = createCallerFactory(localQuickStartRouter)(createContext());
-            mockProvision.mockImplementation(async function* () {});
+        it.each(['done', 'error'] as const)(
+            'records original checking readiness on the %s subscription event without a query',
+            async (status) => {
+                const base = {
+                    environment: 'linux',
+                    endpointKind: 'unixSocket',
+                    provider: 'podman',
+                    providerEvidence: 'none',
+                    executionTarget: 'local',
+                    checkedAtMs: 1,
+                    cliInstalled: true,
+                    cli: 'podman',
+                    preferredEngine: 'docker',
+                    cliFallback: true,
+                    canContinueAnyway: false,
+                } as const;
+                const readiness: DockerReadiness =
+                    status === 'done'
+                        ? { ...base, outcome: 'ready', daemonReachable: true }
+                        : { ...base, outcome: 'diagnosed', daemonReachable: false, failureKind: 'daemonUnavailable' };
+                mockProvision.mockImplementation(async function* (): AsyncGenerator<StageEvent> {
+                    yield { stage: 'checking', status, dockerReadiness: readiness };
+                });
+                mockIsDockerReady.mockClear();
+                const context = createContext();
+                const caller = createCallerFactory(localQuickStartRouter)(context);
+                const stream = await caller.startQuickStart({ preferredEngine: 'docker' });
 
-            await caller.getDockerStatus({ preferredEngine });
-            await caller.startDockerProvider({ preferredEngine });
-            const stream = await caller.startQuickStart({ preferredEngine }) as AsyncGenerator<unknown>;
-            await stream.next();
+                for await (const event of stream) {
+                    expect(event.dockerReadiness).toBe(readiness);
+                }
 
-            expect(mockIsDockerReady).toHaveBeenLastCalledWith(expect.anything(), preferredEngine);
-            expect(mockStartDockerProvider).toHaveBeenLastCalledWith(preferredEngine);
-            expect(mockProvision).toHaveBeenLastCalledWith(
-                expect.anything(), { preferredEngine }, undefined, expect.any(String),
-            );
-            mockProvision.mockReset();
-        });
+                expect(context.actionContext.telemetry.properties).toMatchObject({
+                    preferredContainerEngine: 'docker',
+                    containerCliFallback: 'true',
+                    containerCli: 'podman',
+                    dockerReadinessOutcome: readiness.outcome,
+                });
+                expect(mockIsDockerReady).not.toHaveBeenCalled();
+                mockProvision.mockReset();
+            },
+        );
+
+        it.each(['docker', 'podman'] as const)(
+            'forwards %s to readiness, provider start and provision',
+            async (preferredEngine) => {
+                const caller = createCallerFactory(localQuickStartRouter)(createContext());
+                mockProvision.mockImplementation(async function* () {});
+
+                await caller.getDockerStatus({ preferredEngine });
+                await caller.startDockerProvider({ preferredEngine });
+                const stream = (await caller.startQuickStart({ preferredEngine })) as AsyncGenerator<unknown>;
+                await stream.next();
+
+                expect(mockIsDockerReady).toHaveBeenLastCalledWith(expect.anything(), preferredEngine);
+                expect(mockStartDockerProvider).toHaveBeenLastCalledWith(preferredEngine);
+                expect(mockProvision).toHaveBeenLastCalledWith(
+                    expect.anything(),
+                    { preferredEngine },
+                    undefined,
+                    expect.any(String),
+                );
+                mockProvision.mockReset();
+            },
+        );
 
         it('defaults provider start to Docker for omitted input and an empty object', async () => {
             const caller = createCallerFactory(localQuickStartRouter)(createContext());
@@ -273,18 +329,21 @@ describe('localQuickStartRouter', () => {
             expect(mockStartDockerProvider).toHaveBeenLastCalledWith('docker');
         });
 
-        it.each(['containerd', 'Docker', '', null, 1])('rejects invalid preference %j on every entry point', async (preferredEngine) => {
-            const caller = createCallerFactory(localQuickStartRouter)(createContext());
-            await expect(caller.getDockerStatus(
-                { preferredEngine } as Parameters<typeof caller.getDockerStatus>[0],
-            )).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-            await expect(caller.startDockerProvider(
-                { preferredEngine } as Parameters<typeof caller.startDockerProvider>[0],
-            )).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-            await expect(caller.startQuickStart(
-                { preferredEngine } as Parameters<typeof caller.startQuickStart>[0],
-            )).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-        });
+        it.each(['containerd', 'Docker', '', null, 1])(
+            'rejects invalid preference %j on every entry point',
+            async (preferredEngine) => {
+                const caller = createCallerFactory(localQuickStartRouter)(createContext());
+                await expect(
+                    caller.getDockerStatus({ preferredEngine } as Parameters<typeof caller.getDockerStatus>[0]),
+                ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+                await expect(
+                    caller.startDockerProvider({ preferredEngine } as Parameters<typeof caller.startDockerProvider>[0]),
+                ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+                await expect(
+                    caller.startQuickStart({ preferredEngine } as Parameters<typeof caller.startQuickStart>[0]),
+                ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+            },
+        );
     });
 
     // Each of these used to reach Docker and fail there: a readiness timeout, a container that
@@ -513,6 +572,19 @@ describe('localQuickStartRouter', () => {
             // The removal is what the guard needs: same state, different `missing`.
             expect(received[0].status.missing).toBe(false);
             expect(received[1].status.missing).toBe(true);
+        });
+
+        it('pushes engine-only changes, including deletion, without re-reading wizard context or checking readiness', async () => {
+            mockGetStatus.mockReturnValue({ state: 'NotInstalled' });
+            mockCanReuseExistingData.mockResolvedValue(false);
+            mockGetInstanceEngine.mockResolvedValueOnce('podman').mockResolvedValue(undefined);
+            mockGetWizardContext.mockClear();
+
+            const received = await drain(2);
+
+            expect(received).toMatchObject([{ instanceEngine: 'podman' }, { instanceEngine: undefined }]);
+            expect(mockGetWizardContext).not.toHaveBeenCalled();
+            expect(mockIsDockerReady).not.toHaveBeenCalled();
         });
 
         it('never calls Docker, because the tree fires this event on a cooldown', async () => {

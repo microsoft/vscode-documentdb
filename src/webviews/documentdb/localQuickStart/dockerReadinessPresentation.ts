@@ -98,7 +98,13 @@ export type DockerDetailFailureKey =
  */
 export type DockerDetailSegment =
     | { readonly kind: 'provider'; readonly provider: DockerProvider }
-    | { readonly kind: 'cli'; readonly cli?: 'docker' | 'podman'; readonly version?: string }
+    | {
+          readonly kind: 'cli';
+          readonly cli?: 'docker' | 'podman';
+          readonly version?: string;
+          readonly preferredEngine?: DockerReadiness['preferredEngine'];
+          readonly cliFallback?: boolean;
+      }
     | { readonly kind: 'platform'; readonly osType?: 'linux' | 'windows'; readonly architecture?: string }
     | { readonly kind: 'executionTarget'; readonly target: DockerExecutionTargetKey }
     | { readonly kind: 'failure'; readonly failure: DockerDetailFailureKey };
@@ -436,11 +442,23 @@ function composeDetail(
     state: DockerReadinessPresentationState,
 ): readonly DockerDetailSegment[] {
     const segments: DockerDetailSegment[] = [];
+    const cliSegment: DockerDetailSegment = {
+        kind: 'cli',
+        cli: readiness.cli,
+        version: readiness.cliVersion,
+        ...(readiness.cliInstalled &&
+        readiness.cliFallback === true &&
+        readiness.preferredEngine &&
+        readiness.cli &&
+        readiness.preferredEngine !== readiness.cli
+            ? { preferredEngine: readiness.preferredEngine, cliFallback: true }
+            : {}),
+    };
 
     if (state === 'ready') {
         segments.push({ kind: 'provider', provider: readiness.provider });
-        if (readiness.cliVersion) {
-            segments.push({ kind: 'cli', cli: readiness.cli, version: readiness.cliVersion });
+        if (readiness.cliVersion || cliSegment.cliFallback) {
+            segments.push(cliSegment);
         }
         const platform = getPlatformSegment(readiness);
         if (platform) {
@@ -457,7 +475,7 @@ function composeDetail(
     }
 
     // The CLI version is not the provider's version, so on a failure the two are separate facts.
-    segments.push({ kind: 'cli', cli: readiness.cli, version: readiness.cliVersion });
+    segments.push(cliSegment);
     if (readiness.provider !== 'unknown') {
         segments.push({ kind: 'provider', provider: readiness.provider });
     }

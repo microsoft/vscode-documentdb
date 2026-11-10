@@ -266,38 +266,66 @@ describe('getDockerReadinessPresentation', () => {
             { machine: { kind: 'running', name: 'vm' }, guidance: 'podmanMachineRunning' },
             { machine: { kind: 'unknown' }, guidance: 'podmanNotRunning' },
         ] as const)('presents $machine.kind Podman state without a launch', ({ machine, guidance }) => {
-            expect(getDockerReadinessPresentation(readiness({
-                environment: 'macos', cli: 'podman', provider: 'podman', podmanMachine: machine,
-            }))).toMatchObject({ guidance, guide: 'podmanMachine', showStartDockerProvider: false });
+            expect(
+                getDockerReadinessPresentation(
+                    readiness({
+                        environment: 'macos',
+                        cli: 'podman',
+                        provider: 'podman',
+                        podmanMachine: machine,
+                    }),
+                ),
+            ).toMatchObject({ guidance, guide: 'podmanMachine', showStartDockerProvider: false });
         });
 
         it.each(['linux', 'wsl'] as const)('uses Podman socket guidance and copy only on %s', (environment) => {
-            expect(getDockerReadinessPresentation(readiness({
-                environment, cli: 'podman',
-                recoveryCommand: {
-                    id: 'linuxStartPodmanSocket', commandLine: 'systemctl --user start podman.socket',
-                    requiresElevation: false,
-                },
-            }))).toMatchObject({
-                guidance: 'podmanSocketNotRunning', showCopyCommand: true, showStartDockerProvider: false,
+            expect(
+                getDockerReadinessPresentation(
+                    readiness({
+                        environment,
+                        cli: 'podman',
+                        recoveryCommand: {
+                            id: 'linuxStartPodmanSocket',
+                            commandLine: 'systemctl --user start podman.socket',
+                            requiresElevation: false,
+                        },
+                    }),
+                ),
+            ).toMatchObject({
+                guidance: 'podmanSocketNotRunning',
+                showCopyCommand: true,
+                showStartDockerProvider: false,
                 recoveryNote: undefined,
             });
         });
 
         it('presents starting Podman machines as a waiting state without a button', () => {
-            expect(getDockerReadinessPresentation(readiness({
-                environment: 'macos', cli: 'podman', failureKind: 'daemonStarting',
-                podmanMachine: { kind: 'starting', name: 'vm' },
-            }))).toMatchObject({ state: 'starting', showStartDockerProvider: false });
+            expect(
+                getDockerReadinessPresentation(
+                    readiness({
+                        environment: 'macos',
+                        cli: 'podman',
+                        failureKind: 'daemonStarting',
+                        podmanMachine: { kind: 'starting', name: 'vm' },
+                    }),
+                ),
+            ).toMatchObject({ state: 'starting', showStartDockerProvider: false });
         });
 
         it('presents the Podman machine action for a positively identified Docker CLI shim', () => {
-            expect(getDockerReadinessPresentation(readiness({
-                environment: 'macos', cli: 'docker', engine: 'podman', engineEvidence: 'podmanShim',
-                startAction: 'startPodmanMachine', podmanMachine: { kind: 'stopped', name: 'vm' },
-            }))).toMatchObject({ guidance: 'podmanNotRunning', guide: 'podmanMachine', startLabel: 'startPodmanMachine' });
+            expect(
+                getDockerReadinessPresentation(
+                    readiness({
+                        environment: 'macos',
+                        cli: 'docker',
+                        engine: 'podman',
+                        engineEvidence: 'podmanShim',
+                        startAction: 'startPodmanMachine',
+                        podmanMachine: { kind: 'stopped', name: 'vm' },
+                    }),
+                ),
+            ).toMatchObject({ guidance: 'podmanNotRunning', guide: 'podmanMachine', startLabel: 'startPodmanMachine' });
         });
-
     });
 
     it('keeps installed-application wording provider-neutral while naming the action', () => {
@@ -440,6 +468,60 @@ describe('getDockerReadinessPresentation detail line', () => {
             kind: 'cli',
             cli: 'podman',
             version: '5.1',
+        });
+    });
+
+    it.each([
+        ['docker', 'podman', 'ready'],
+        ['podman', 'docker', 'ready'],
+        ['docker', 'podman', 'diagnosed'],
+        ['podman', 'docker', 'diagnosed'],
+    ] as const)('carries the original preferred %s fallback to %s on a %s check', (preferredEngine, cli, outcome) => {
+        const detail = getDockerReadinessPresentation(
+            readiness({ outcome, preferredEngine, cli, cliVersion: '5.8.3', cliFallback: true }),
+        ).detail;
+
+        expect(detail.find((segment) => segment.kind === 'cli')).toEqual({
+            kind: 'cli',
+            cli,
+            version: '5.8.3',
+            preferredEngine,
+            cliFallback: true,
+        });
+    });
+
+    it.each([
+        ['docker', 'podman', false],
+        ['podman', 'docker', undefined],
+        ['docker', 'docker', true],
+        [undefined, 'podman', true],
+    ] as const)(
+        'does not infer fallback from preferred %s, selected %s and flag %s',
+        (preferredEngine, cli, cliFallback) => {
+            const detail = getDockerReadinessPresentation(
+                readiness({ outcome: 'ready', preferredEngine, cli, cliVersion: '5.8.3', cliFallback }),
+            ).detail;
+
+            expect(detail.find((segment) => segment.kind === 'cli')).toEqual({
+                kind: 'cli',
+                cli,
+                version: '5.8.3',
+            });
+        },
+    );
+
+    it.each(['docker', 'podman'] as const)('shows execution fallback to %s even without a reported version', (cli) => {
+        const preferredEngine = cli === 'docker' ? 'podman' : 'docker';
+        const detail = getDockerReadinessPresentation(
+            readiness({ outcome: 'ready', preferredEngine, cli, cliFallback: true }),
+        ).detail;
+
+        expect(detail.find((segment) => segment.kind === 'cli')).toEqual({
+            kind: 'cli',
+            cli,
+            version: undefined,
+            preferredEngine,
+            cliFallback: true,
         });
     });
 

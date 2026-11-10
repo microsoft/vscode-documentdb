@@ -13,6 +13,7 @@ import {
     InstanceState,
     PROVISION_STAGES,
     type DockerReadiness,
+    type InstanceStatusUpdate,
     type StageEvent,
 } from '../../../services/localQuickStart/quickStartTypes';
 import { LocalQuickStart } from './LocalQuickStart';
@@ -49,7 +50,16 @@ const client = vi.hoisted(() => {
                 getDockerStatus: { query: vi.fn() },
                 getWizardContext: { query: vi.fn() },
                 checkPort: { query: vi.fn(async () => 'available') },
-                onInstanceChanged: { subscribe: vi.fn(() => ({ unsubscribe: vi.fn() })) },
+                onInstanceChanged: {
+                    subscribe: vi.fn(
+                        (
+                            _input: undefined,
+                            _handlers: { onData(update: InstanceStatusUpdate): void; onError(): void },
+                        ) => ({
+                            unsubscribe: vi.fn(),
+                        }),
+                    ),
+                },
                 startQuickStart: { subscribe },
                 waitLonger: { subscribe },
                 discardTimedOut: { mutate: vi.fn(async () => true) },
@@ -136,8 +146,12 @@ async function click(element: HTMLElement): Promise<void> {
     await act(async () => element.click());
 }
 
-async function event(value: StageEvent): Promise<void> {
-    await act(async () => client.streams.at(-1)?.onData(value));
+async function event(value: StageEvent, readiness: DockerReadiness = ready): Promise<void> {
+    const snapshot =
+        value.stage === 'checking' && value.status !== 'active' && !value.dockerReadiness
+            ? { ...value, dockerReadiness: readiness }
+            : value;
+    await act(async () => client.streams.at(-1)?.onData(snapshot));
 }
 
 async function start(): Promise<void> {
@@ -158,7 +172,9 @@ describe('Local Quick Start stage details', () => {
         client.trpc.localQuickStart.getDockerStatus.query.mockReset().mockResolvedValue(status(ready));
         client.trpc.localQuickStart.getWizardContext.query.mockReset().mockResolvedValue({
             status: { state: InstanceState.NotInstalled },
-            busy: false, canReuseExistingData: false, suggestedPort: 10260,
+            busy: false,
+            canReuseExistingData: false,
+            suggestedPort: 10260,
         });
         client.trpc.localQuickStart.startQuickStart.subscribe.mockClear();
         client.trpc.localQuickStart.startDockerProvider.mutate.mockReset().mockResolvedValue(undefined);
@@ -188,7 +204,13 @@ describe('Local Quick Start stage details', () => {
     ])('defaults to Docker with static choices and no pre-execution readiness (%o)', async (cliOnPath) => {
         client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status({ ...ready, cliOnPath }));
         client.initialPhase = 'introduction';
-        await act(async () => root.render(<SSRProvider><LocalQuickStart key="introduction" /></SSRProvider>));
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <LocalQuickStart key="introduction" />
+                </SSRProvider>,
+            ),
+        );
         expect(host.textContent).toContain(
             'You choose a preferred engine in the next step; setup uses the other if it is not installed.',
         );
@@ -201,7 +223,9 @@ describe('Local Quick Start stage details', () => {
         expect(docker.checked).toBe(true);
         expect(docker.disabled).toBe(false);
         expect(podman.disabled).toBe(false);
-        expect(host.textContent).toContain('Setup uses your preferred engine if installed, or the other one otherwise.');
+        expect(host.textContent).toContain(
+            'Setup uses your preferred engine if installed, or the other one otherwise.',
+        );
         expect(host.textContent).not.toMatch(/Found on PATH|Not found on PATH|Detected|not installed on this machine/);
         await click(podman);
         expect(podman.checked).toBe(true);
@@ -221,19 +245,24 @@ describe('Local Quick Start stage details', () => {
 
         await start();
         expect(client.trpc.localQuickStart.startQuickStart.subscribe).toHaveBeenLastCalledWith(
-            expect.objectContaining({ preferredEngine: 'podman' }), expect.any(Object),
+            expect.objectContaining({ preferredEngine: 'podman' }),
+            expect.any(Object),
         );
         await event({ stage: 'checking', status: 'done' });
-        expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenLastCalledWith(
-            { preferredEngine: 'podman' }, expect.any(Object),
-        );
+        expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
     });
 
     it('starts a new wizard with Docker rather than retaining the previous preference', async () => {
         await click(button('Change the container engine'));
         await click(host.querySelector<HTMLInputElement>('input[value="podman"]')!);
 
-        await act(async () => root.render(<SSRProvider><LocalQuickStart key="new-wizard" /></SSRProvider>));
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <LocalQuickStart key="new-wizard" />
+                </SSRProvider>,
+            ),
+        );
 
         expect(host.querySelector('table tr')?.textContent).toContain('Container engineDocker');
         await click(button('Change the container engine'));
@@ -244,18 +273,20 @@ describe('Local Quick Start stage details', () => {
     it('passes the selected preference to post-execution rechecks, provider start, and polling', async () => {
         await click(button('Change the container engine'));
         await click(host.querySelector<HTMLInputElement>('input[value="podman"]')!);
-        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status({
+        const readiness: DockerReadiness = {
             ...failed,
             failureKind: 'daemonUnavailable',
             provider: 'dockerDesktop',
             environment: 'windows',
             startAction: 'startDockerDesktopWindows',
-        }));
+        };
+        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(readiness));
         await start();
-        await event({ stage: 'checking', status: 'error' });
+        await event({ stage: 'checking', status: 'error' }, readiness);
         await click(button('Check Docker again'));
         expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenLastCalledWith(
-            { forceRefresh: true, resetProviderMemory: true, preferredEngine: 'podman' }, expect.any(Object),
+            { forceRefresh: true, resetProviderMemory: true, preferredEngine: 'podman' },
+            expect.any(Object),
         );
         client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(ready));
         client.trpc.localQuickStart.startDockerProvider.mutate.mockResolvedValue('started');
@@ -265,9 +296,9 @@ describe('Local Quick Start stage details', () => {
             await click(button('Start Docker Desktop'));
             await act(async () => vi.advanceTimersByTimeAsync(1000));
 
-            expect(client.trpc.localQuickStart.startDockerProvider.mutate).toHaveBeenCalledWith(
-                { preferredEngine: 'podman' },
-            );
+            expect(client.trpc.localQuickStart.startDockerProvider.mutate).toHaveBeenCalledWith({
+                preferredEngine: 'podman',
+            });
             expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenLastCalledWith(
                 expect.objectContaining({ preferredEngine: 'podman', forceRefresh: true, polled: true }),
                 expect.any(Object),
@@ -279,9 +310,14 @@ describe('Local Quick Start stage details', () => {
 
     it('automatically waits for an initially starting Podman machine without sending a startup mutation', async () => {
         await start();
-        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status({
-            ...ready, cli: 'podman', engine: 'podman', provider: 'podman',
-        }));
+        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(
+            status({
+                ...ready,
+                cli: 'podman',
+                engine: 'podman',
+                provider: 'podman',
+            }),
+        );
         vi.useFakeTimers();
         try {
             await event({ stage: 'checking', status: 'error', dockerReadiness: startingPodman });
@@ -294,9 +330,19 @@ describe('Local Quick Start stage details', () => {
             expect(host.textContent).toContain('Ready to set up');
             expect(host.textContent).toContain('Podman is ready now.');
             expect(host.textContent).toContain('Podman is ready. Setup has not run yet.');
-            expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenLastCalledWith({
-                preferredEngine: 'docker', forceRefresh: true, polled: true, suppressCommandEcho: false,
-            }, expect.objectContaining({ signal: expect.any(AbortSignal) }));
+            expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenLastCalledWith(
+                {
+                    preferredEngine: 'docker',
+                    forceRefresh: true,
+                    polled: true,
+                    suppressCommandEcho: false,
+                },
+                expect.anything(),
+            );
+            expect(client.trpc.localQuickStart.getDockerStatus.query.mock.lastCall?.[1]).toHaveProperty(
+                'signal',
+                expect.any(AbortSignal),
+            );
             expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
         } finally {
             vi.useRealTimers();
@@ -318,9 +364,11 @@ describe('Local Quick Start stage details', () => {
             await click(button('Check Docker again'));
             await act(async () => vi.advanceTimersByTimeAsync(10_000));
             expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenCalledTimes(count + 1);
-            expect([...host.querySelectorAll('button')].some((candidate) =>
-                candidate.textContent?.trim() === 'Stop waiting',
-            )).toBe(false);
+            expect(
+                [...host.querySelectorAll('button')].some(
+                    (candidate) => candidate.textContent?.trim() === 'Stop waiting',
+                ),
+            ).toBe(false);
             expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
 
             await click(button('Retry setup'));
@@ -355,18 +403,23 @@ describe('Local Quick Start stage details', () => {
         vi.useFakeTimers();
         try {
             await event({
-                stage: 'checking', status: 'error',
+                stage: 'checking',
+                status: 'error',
                 dockerReadiness: {
-                    ...failed, failureKind: 'daemonStarting', provider: 'dockerDesktop',
+                    ...failed,
+                    failureKind: 'daemonStarting',
+                    provider: 'dockerDesktop',
                     providerEvidence: 'rememberedProvider',
                 },
             });
             await act(async () => vi.advanceTimersByTimeAsync(5_000));
             expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
             expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
-            expect([...host.querySelectorAll('button')].some((candidate) =>
-                candidate.textContent?.trim() === 'Stop waiting',
-            )).toBe(false);
+            expect(
+                [...host.querySelectorAll('button')].some(
+                    (candidate) => candidate.textContent?.trim() === 'Stop waiting',
+                ),
+            ).toBe(false);
         } finally {
             vi.useRealTimers();
         }
@@ -379,9 +432,11 @@ describe('Local Quick Start stage details', () => {
         await start();
         await event({ stage: 'checking', status: 'error', dockerReadiness: stoppedPodman });
         let finishStart = (_result: string): void => undefined;
-        client.trpc.localQuickStart.startDockerProvider.mutate.mockReturnValueOnce(new Promise((resolve) => {
-            finishStart = resolve;
-        }));
+        client.trpc.localQuickStart.startDockerProvider.mutate.mockReturnValueOnce(
+            new Promise((resolve) => {
+                finishStart = resolve;
+            }),
+        );
         vi.useFakeTimers();
         try {
             await click(button('Start Podman machine'));
@@ -398,9 +453,11 @@ describe('Local Quick Start stage details', () => {
                 finishStart('launchAttempted');
                 await vi.advanceTimersByTimeAsync(5_000);
             });
-            expect(client.trpc.localQuickStart.getDockerStatus.query.mock.calls.some(
-                ([input]) => (input as { polled?: boolean } | undefined)?.polled,
-            )).toBe(false);
+            expect(
+                client.trpc.localQuickStart.getDockerStatus.query.mock.calls.some(
+                    ([input]) => (input as { polled?: boolean } | undefined)?.polled,
+                ),
+            ).toBe(false);
             expect(host.textContent).not.toContain('Waiting 00:');
         } finally {
             vi.useRealTimers();
@@ -414,16 +471,31 @@ describe('Local Quick Start stage details', () => {
             await start();
             await event({ stage: 'checking', status: 'error', dockerReadiness: stoppedPodman });
             client.trpc.localQuickStart.startDockerProvider.mutate.mockResolvedValueOnce(launchResult);
-            client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status({
-                ...ready, cli: 'podman', engine: 'podman', provider: 'podman',
-            }));
+            client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(
+                status({
+                    ...ready,
+                    cli: 'podman',
+                    engine: 'podman',
+                    provider: 'podman',
+                }),
+            );
             vi.useFakeTimers();
             try {
                 await click(button('Start Podman machine'));
                 await act(async () => vi.advanceTimersByTimeAsync(1_000));
-                expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenLastCalledWith({
-                    preferredEngine: 'docker', forceRefresh: true, polled: true, suppressCommandEcho: false,
-                }, expect.objectContaining({ signal: expect.any(AbortSignal) }));
+                expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenLastCalledWith(
+                    {
+                        preferredEngine: 'docker',
+                        forceRefresh: true,
+                        polled: true,
+                        suppressCommandEcho: false,
+                    },
+                    expect.anything(),
+                );
+                expect(client.trpc.localQuickStart.getDockerStatus.query.mock.lastCall?.[1]).toHaveProperty(
+                    'signal',
+                    expect.any(AbortSignal),
+                );
                 expect(host.textContent).toContain('Ready to set up');
                 expect(host.textContent).not.toContain('could not be started');
             } finally {
@@ -456,7 +528,10 @@ describe('Local Quick Start stage details', () => {
     });
 
     it.each([
-        { machine: { kind: 'ambiguous', names: ['vm-one', '<img src=x onerror=alert(1)>'] }, text: 'vm-one, <img src=x onerror=alert(1)>' },
+        {
+            machine: { kind: 'ambiguous', names: ['vm-one', '<img src=x onerror=alert(1)>'] },
+            text: 'vm-one, <img src=x onerror=alert(1)>',
+        },
         { machine: { kind: 'otherActive', active: '<b>busy-vm</b>' }, text: '<b>busy-vm</b>' },
         { machine: { kind: 'running', name: '<em>running-vm</em>' }, text: '<em>running-vm</em>' },
     ] as const)('renders $machine.kind machine names as plain text with no start action', async ({ machine, text }) => {
@@ -466,43 +541,74 @@ describe('Local Quick Start stage details', () => {
         await event({ stage: 'checking', status: 'error', dockerReadiness: readiness });
         expect(host.textContent).toContain(text);
         expect(host.querySelector('img, b, em')).toBeNull();
-        expect([...host.querySelectorAll('button')].some((candidate) =>
-            candidate.textContent?.trim() === 'Start Podman machine',
-        )).toBe(false);
+        expect(
+            [...host.querySelectorAll('button')].some(
+                (candidate) => candidate.textContent?.trim() === 'Start Podman machine',
+            ),
+        ).toBe(false);
     });
 
     it.each([
-        { environment: 'macos', machine: { kind: 'none' }, id: 'podmanMachineInit', commandLine: 'podman machine init' },
-        { environment: 'linux', machine: undefined, id: 'linuxStartPodmanSocket', commandLine: 'systemctl --user start podman.socket' },
-        { environment: 'wsl', machine: undefined, id: 'linuxStartPodmanSocket', commandLine: 'systemctl --user start podman.socket' },
-    ] as const)('copies Podman recovery without starting anything on $environment', async ({ environment, machine, id, commandLine }) => {
-        const readiness: DockerReadiness = {
-            ...stoppedPodman, environment, startAction: undefined, podmanMachine: machine,
-            recoveryCommand: { id, commandLine, requiresElevation: false },
-        };
-        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(readiness));
-        await start();
-        await event({ stage: 'checking', status: 'error', dockerReadiness: readiness });
-        expect(host.textContent).toContain(commandLine);
-        await click(button('Copy'));
-        expect(client.trpc.localQuickStart.copyRecoveryCommand.mutate).toHaveBeenCalledExactlyOnceWith(id);
-        expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
-        expect([...host.querySelectorAll('button')].some((candidate) =>
-            /Start (?:Podman machine|Docker)/.test(candidate.textContent ?? ''),
-        )).toBe(false);
-    });
-
-    it.each(['ssh', 'devContainer', 'codespaces', 'otherRemote'] as const)(
-        'never offers a local Podman machine action in %s', async (environment) => {
+        {
+            environment: 'macos',
+            machine: { kind: 'none' },
+            id: 'podmanMachineInit',
+            commandLine: 'podman machine init',
+        },
+        {
+            environment: 'linux',
+            machine: undefined,
+            id: 'linuxStartPodmanSocket',
+            commandLine: 'systemctl --user start podman.socket',
+        },
+        {
+            environment: 'wsl',
+            machine: undefined,
+            id: 'linuxStartPodmanSocket',
+            commandLine: 'systemctl --user start podman.socket',
+        },
+    ] as const)(
+        'copies Podman recovery without starting anything on $environment',
+        async ({ environment, machine, id, commandLine }) => {
             const readiness: DockerReadiness = {
-                ...stoppedPodman, environment, startAction: undefined, podmanMachine: undefined,
+                ...stoppedPodman,
+                environment,
+                startAction: undefined,
+                podmanMachine: machine,
+                recoveryCommand: { id, commandLine, requiresElevation: false },
             };
             client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(readiness));
             await start();
             await event({ stage: 'checking', status: 'error', dockerReadiness: readiness });
-            expect([...host.querySelectorAll('button')].some((candidate) =>
-                candidate.textContent?.trim() === 'Start Podman machine',
-            )).toBe(false);
+            expect(host.textContent).toContain(commandLine);
+            await click(button('Copy'));
+            expect(client.trpc.localQuickStart.copyRecoveryCommand.mutate).toHaveBeenCalledExactlyOnceWith(id);
+            expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
+            expect(
+                [...host.querySelectorAll('button')].some((candidate) =>
+                    /Start (?:Podman machine|Docker)/.test(candidate.textContent ?? ''),
+                ),
+            ).toBe(false);
+        },
+    );
+
+    it.each(['ssh', 'devContainer', 'codespaces', 'otherRemote'] as const)(
+        'never offers a local Podman machine action in %s',
+        async (environment) => {
+            const readiness: DockerReadiness = {
+                ...stoppedPodman,
+                environment,
+                startAction: undefined,
+                podmanMachine: undefined,
+            };
+            client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(readiness));
+            await start();
+            await event({ stage: 'checking', status: 'error', dockerReadiness: readiness });
+            expect(
+                [...host.querySelectorAll('button')].some(
+                    (candidate) => candidate.textContent?.trim() === 'Start Podman machine',
+                ),
+            ).toBe(false);
             expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
         },
     );
@@ -514,9 +620,18 @@ describe('Local Quick Start stage details', () => {
     ])('locks the existing %s engine without readiness, including Start fresh', async (instanceEngine, summary) => {
         client.trpc.localQuickStart.getWizardContext.query.mockResolvedValue({
             status: { state: InstanceState.Stopped, missing: true },
-            busy: false, canReuseExistingData: true, suggestedPort: 10273, instanceEngine,
+            busy: false,
+            canReuseExistingData: true,
+            suggestedPort: 10273,
+            instanceEngine,
         });
-        await act(async () => root.render(<SSRProvider><LocalQuickStart key={instanceEngine} /></SSRProvider>));
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <LocalQuickStart key={instanceEngine} />
+                </SSRProvider>,
+            ),
+        );
         expect(host.textContent).toContain(summary);
         expect(host.querySelector('[aria-label="Change the container engine"]')).toBeNull();
         const fresh = host.querySelector<HTMLInputElement>('input[value="fresh"]')!;
@@ -529,12 +644,144 @@ describe('Local Quick Start stage details', () => {
     it('restores a resumable timeout from metadata without a readiness query', async () => {
         client.trpc.localQuickStart.getWizardContext.query.mockResolvedValue({
             status: { state: InstanceState.Error, canResumeReadiness: true },
-            busy: false, canReuseExistingData: true, suggestedPort: 10273, instanceEngine: 'podman',
+            busy: false,
+            canReuseExistingData: true,
+            suggestedPort: 10273,
+            instanceEngine: 'podman',
         });
-        await act(async () => root.render(<SSRProvider><LocalQuickStart key="resume" /></SSRProvider>));
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <LocalQuickStart key="resume" />
+                </SSRProvider>,
+            ),
+        );
         expect(button('Wait longer')).toBeDefined();
         expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
     });
+
+    it('unlocks engine selection after deletion without reloading wizard context or resetting its port', async () => {
+        client.trpc.localQuickStart.getWizardContext.query.mockResolvedValue({
+            status: { state: InstanceState.Stopped, missing: true },
+            busy: false,
+            canReuseExistingData: true,
+            suggestedPort: 10273,
+            instanceEngine: 'podman',
+        });
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <LocalQuickStart key="deleted-instance" />
+                </SSRProvider>,
+            ),
+        );
+        expect(host.textContent).toContain('Podman · kept from the existing instance');
+        const contextCalls = client.trpc.localQuickStart.getWizardContext.query.mock.calls.length;
+
+        await act(async () =>
+            client.trpc.localQuickStart.onInstanceChanged.subscribe.mock.lastCall?.[1].onData({
+                status: { state: InstanceState.NotInstalled },
+                canReuseExistingData: false,
+                instanceEngine: undefined,
+            }),
+        );
+
+        await click(button('Change the container engine'));
+        await click(host.querySelector<HTMLInputElement>('input[value="docker"]')!);
+        expect(host.textContent).toContain('10273');
+        expect(client.trpc.localQuickStart.getWizardContext.query).toHaveBeenCalledTimes(contextCalls);
+        expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
+        await start();
+        expect(client.trpc.localQuickStart.startQuickStart.subscribe).toHaveBeenLastCalledWith(
+            expect.objectContaining({ preferredEngine: 'docker', port: 10273 }),
+            expect.any(Object),
+        );
+    });
+
+    it('replaces engine and PATH evidence on a repeated attempt without a post-check query', async () => {
+        const first: DockerReadiness = {
+            ...ready,
+            cli: 'podman',
+            preferredEngine: 'docker',
+            cliFallback: true,
+            cliVersion: '5.8.3',
+            provider: 'podman',
+            cliOnPath: { docker: false, podman: true },
+        };
+        await start();
+        await event({ stage: 'checking', status: 'done' }, first);
+        await event({ stage: 'pulling', status: 'active' });
+        await event({ stage: 'error', status: 'error' });
+        expect(host.textContent).toContain('Podman 5.8.3 (Docker not found)');
+
+        await click(button('Retry setup'));
+        expect(host.textContent).not.toContain('5.8.3');
+        expect(toggle('Checking container engine')).toBeNull();
+        const second: DockerReadiness = {
+            ...ready,
+            cli: 'docker',
+            preferredEngine: 'docker',
+            cliFallback: false,
+            cliVersion: '28.0.0',
+            cliOnPath: { docker: true, podman: true },
+        };
+        await event({ stage: 'checking', status: 'done' }, second);
+        expect(host.textContent).toContain('Docker CLI 28.0.0 found');
+        expect(host.textContent).not.toContain('5.8.3');
+        await click(toggle('Checking container engine')!);
+        expect(host.textContent).toContain('Found on PATH, not checked');
+        expect(host.textContent).not.toContain('not found, used');
+        expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
+    });
+
+    it('retains the original checking snapshot when waiting longer', async () => {
+        const readiness: DockerReadiness = {
+            ...ready,
+            cli: 'podman',
+            preferredEngine: 'docker',
+            cliFallback: true,
+            cliVersion: '5.8.3',
+            provider: 'podman',
+            cliOnPath: { docker: false, podman: true },
+        };
+        await start();
+        await event({ stage: 'checking', status: 'done' }, readiness);
+        await event({ stage: 'waiting', status: 'active' });
+        await event({ stage: 'error', status: 'error', timedOut: true });
+
+        await click(button('Wait longer'));
+
+        expect(host.textContent).toContain('Podman 5.8.3 (Docker not found)');
+        await click(toggle('Checking container engine')!);
+        expect(host.textContent).toContain('Docker · not found, used Podman');
+        expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
+    });
+
+    it.each(['docker', 'podman'] as const)(
+        'uses the captured %s fallback on a failed check without querying status',
+        async (preferredEngine) => {
+            const cli = preferredEngine === 'docker' ? 'podman' : 'docker';
+            const readiness: DockerReadiness = {
+                ...failed,
+                cli,
+                preferredEngine,
+                cliFallback: true,
+                failureKind: 'daemonUnavailable',
+                cliVersion: '5.8.3',
+                cliOnPath: { docker: cli === 'docker', podman: cli === 'podman' },
+            };
+            await start();
+            await event({ stage: 'checking', status: 'error', dockerReadiness: readiness });
+            expect(host.textContent).toContain(
+                `${cli === 'docker' ? 'Docker' : 'Podman'} 5.8.3 (${preferredEngine === 'docker' ? 'Docker' : 'Podman'} not found)`,
+            );
+            await click(toggle('Checking container engine')!);
+            expect(host.textContent).toContain(
+                `${preferredEngine === 'docker' ? 'Docker' : 'Podman'} · not found, used ${cli === 'docker' ? 'Docker' : 'Podman'}`,
+            );
+            expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
+        },
+    );
 
     it('reserves an inaccessible blank detail line for every pending and active stage', async () => {
         const focusFallback = { current: null };
@@ -774,7 +1021,7 @@ describe('Local Quick Start stage details', () => {
         client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(failed));
         await start();
         await event({ stage: 'checking', status: 'active' });
-        await event({ stage: 'checking', status: 'error' });
+        await event({ stage: 'checking', status: 'error' }, failed);
         const checking = toggle('Checking container engine');
         expect(checking?.getAttribute('aria-expanded')).toBe('false');
         await click(checking!);
@@ -803,7 +1050,7 @@ describe('Local Quick Start stage details', () => {
         client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(failed));
         await start();
         await event({ stage: 'checking', status: 'active' });
-        await event({ stage: 'checking', status: 'error' });
+        await event({ stage: 'checking', status: 'error' }, failed);
         let resolveRecheck: (value: object) => void = () => undefined;
         client.trpc.localQuickStart.getDockerStatus.query.mockImplementationOnce(
             () => new Promise((resolve) => (resolveRecheck = resolve)),
@@ -1177,9 +1424,52 @@ describe('Local Quick Start stage details', () => {
             ),
         );
         await start();
-        await event({ stage: 'checking', status: 'done' });
+        await event({ stage: 'checking', status: 'done' }, { ...ready, executionTarget });
         expect(host.textContent).toContain(expected);
     });
+
+    it.each([
+        ['docker', 'podman', true, 'Podman 5.8.3 (Docker not found)', 'Docker · not found, used Podman'],
+        ['podman', 'docker', true, 'Docker 5.8.3 (Podman not found)', 'Podman · not found, used Docker'],
+        ['docker', 'docker', false, 'Docker CLI 5.8.3 found', 'Docker'],
+        ['podman', 'podman', false, 'Podman CLI 5.8.3 found', 'Podman'],
+    ] as const)(
+        'shows the executed %s preference with selected %s and fallback=%s only after checking',
+        async (preferredEngine, cli, cliFallback, summary, preferredFact) => {
+            const readiness: DockerReadiness = {
+                ...ready,
+                cli,
+                preferredEngine,
+                cliFallback,
+                cliVersion: '5.8.3',
+                provider: cli === 'docker' ? 'dockerEngine' : 'podman',
+                cliOnPath: { docker: cli === 'docker', podman: cli === 'podman' },
+            };
+            if (preferredEngine === 'podman') {
+                await click(button('Change the container engine'));
+                await click(host.querySelector<HTMLInputElement>('input[value="podman"]')!);
+            }
+            expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
+            expect(host.textContent).not.toContain('not found');
+            expect(host.textContent).not.toContain('Preferred engine');
+
+            await start();
+            await event({ stage: 'checking', status: 'done' }, readiness);
+
+            expect(host.textContent).toContain(summary);
+            expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
+            if (!cliFallback) expect(host.textContent).not.toContain('not found');
+            await click(toggle('Checking container engine')!);
+            const region = host.querySelector(`[aria-labelledby="${toggle('Checking container engine')!.id}"]`)!;
+            const labels = [...region.querySelectorAll('dt')];
+            const index = labels.findIndex((label) => label.textContent === 'Preferred engine');
+            expect(labels[index].nextElementSibling?.textContent).toBe(preferredFact);
+            expect(labels[index + 1].textContent).toBe(cli === 'docker' ? 'Docker CLI' : 'Podman CLI');
+            expect(labels[index + 1].nextElementSibling?.textContent).toBe('Found, version 5.8.3');
+            expect(labels[index + 2].textContent).toBe(cli === 'docker' ? 'Podman CLI' : 'Docker CLI');
+            expect(labels[index + 2].nextElementSibling?.textContent).toBe('Not found');
+        },
+    );
 
     it.each([
         ['cliMissing', 'No Docker or Podman CLI found'],
@@ -1206,7 +1496,7 @@ describe('Local Quick Start stage details', () => {
         } as DockerReadiness;
         client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(readiness));
         await start();
-        await event({ stage: 'checking', status: 'error' });
+        await event({ stage: 'checking', status: 'error' }, readiness);
         expect(host.textContent).toContain(expected);
         if (failureKind !== 'cliMissing') {
             expect(host.textContent).toContain('Podman CLI 5.1 found');
@@ -1217,16 +1507,14 @@ describe('Local Quick Start stage details', () => {
         ['linux', 'Not running'],
         ['wsl', 'Not available in this WSL distribution'],
     ] as const)('capitalizes Docker Desktop failure evidence on %s', async (environment, expected) => {
-        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(
-            status({
-                ...failed,
-                environment,
-                provider: 'dockerDesktop',
-                failureKind: 'daemonUnavailable',
-            }),
-        );
+        const readiness: DockerReadiness = {
+            ...failed,
+            environment,
+            provider: 'dockerDesktop',
+            failureKind: 'daemonUnavailable',
+        };
         await start();
-        await event({ stage: 'checking', status: 'error' });
+        await event({ stage: 'checking', status: 'error' }, readiness);
         expect(host.textContent).toContain(expected);
     });
 

@@ -271,14 +271,16 @@ export const localQuickStartRouter = router({
 
     /** Copy one fixed, never-executed recovery command selected by the extension host. */
     copyRecoveryCommand: publicProcedureWithTelemetry
-        .input(z.enum([
-            'linuxDockerGroup',
-            'linuxStartService',
-            'wslStartServiceNoSystemd',
-            'wslRestartFromWindows',
-            'linuxStartPodmanSocket',
-            'podmanMachineInit',
-        ]))
+        .input(
+            z.enum([
+                'linuxDockerGroup',
+                'linuxStartService',
+                'wslStartServiceNoSystemd',
+                'wslRestartFromWindows',
+                'linuxStartPodmanSocket',
+                'podmanMachineInit',
+            ]),
+        )
         .mutation(async ({ input, ctx }): Promise<void> => {
             const command = getDockerRecoveryCommandById(input);
             await vscode.env.clipboard.writeText(command.commandLine);
@@ -363,12 +365,17 @@ export const localQuickStartRouter = router({
                 if (dirty) {
                     dirty = false;
                     const status = toWebviewStatus(QuickStartService.getStatus());
-                    const statusKey = JSON.stringify(status);
+                    const instanceEngine = await QuickStartService.getInstanceEngine();
+                    const statusKey = JSON.stringify({ status, instanceEngine });
                     // The status event also fires when nothing user-visible changed; skipping those
                     // keeps the credential read below off the repeating path.
                     if (statusKey !== lastStatusKey) {
                         lastStatusKey = statusKey;
-                        yield { status, canReuseExistingData: await QuickStartService.canReuseExistingData() };
+                        yield {
+                            status,
+                            canReuseExistingData: await QuickStartService.canReuseExistingData(),
+                            instanceEngine,
+                        };
                     }
                     continue;
                 }
@@ -419,6 +426,12 @@ export const localQuickStartRouter = router({
                 undefined,
                 provisionCorrelationId,
             )) {
+                if (event.stage === 'checking' && event.dockerReadiness) {
+                    Object.assign(
+                        myCtx.actionContext.telemetry.properties,
+                        getDockerReadinessTelemetryProperties(event.dockerReadiness),
+                    );
+                }
                 recordSetupResult(session, event);
                 yield event;
             }

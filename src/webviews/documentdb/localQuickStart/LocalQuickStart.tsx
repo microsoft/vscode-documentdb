@@ -49,15 +49,15 @@ import { type ContainerCli } from '../../../services/localQuickStart/containerCl
 import { formatQuickStartMessage } from '../../../services/localQuickStart/quickStartMessages';
 import {
     type AdvancedQuickStartOptions,
-    type DockerProvider,
     type DockerLaunchResult,
+    type DockerProvider,
     type DockerReadiness,
     type DockerRecoveryCommand,
     type DockerStatusResult,
     InstanceState,
     type InstanceStatusUpdate,
-    type PortAvailability,
     type PodmanMachineState,
+    type PortAvailability,
     PROVISION_STAGES,
     type ProvisionStage,
     QUICK_START_CONTAINER_NAME,
@@ -350,12 +350,8 @@ function dockerGuidance(podmanMachine?: PodmanMachineState): Readonly<Record<Doc
         podmanNotRunning: l10n.t(
             'Podman is not reachable. Start its machine in Podman Desktop or check its connection, then check again.',
         ),
-        podmanSocketNotRunning: l10n.t(
-            'Start the Podman user socket with this command, then check again.',
-        ),
-        podmanMachineMissing: l10n.t(
-            'No Podman machine was found. Run this command to create one, then check again.',
-        ),
+        podmanSocketNotRunning: l10n.t('Start the Podman user socket with this command, then check again.'),
+        podmanMachineMissing: l10n.t('No Podman machine was found. Run this command to create one, then check again.'),
         podmanMachineAmbiguous: l10n.t(
             'Several Podman machines were found without a unique default: {0}. Start the machine you want, then check again.',
             podmanMachine?.kind === 'ambiguous' ? podmanMachine.names.join(', ') : '',
@@ -499,6 +495,12 @@ function formatDockerDetailSegment(segment: DockerDetailSegment): string | undef
         case 'provider':
             return dockerDetailProviderLabels()[segment.provider];
         case 'cli': {
+            if (segment.cliFallback && segment.cli && segment.preferredEngine) {
+                const engine = segment.cli === 'docker' ? l10n.t('Docker') : l10n.t('Podman');
+                const selected = segment.version ? l10n.t('{0} {1}', engine, segment.version) : engine;
+                const preferred = segment.preferredEngine === 'docker' ? l10n.t('Docker') : l10n.t('Podman');
+                return l10n.t('{0} ({1} not found)', selected, preferred);
+            }
             const name =
                 segment.cli === 'docker'
                     ? l10n.t('Docker CLI')
@@ -737,8 +739,6 @@ export const LocalQuickStart = (): JSX.Element => {
 
     const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
     const readinessAbortRef = useRef<AbortController | null>(null);
-    // Mirrors `checkReadiness` so the stage-event handler can test it without reading state inside
-    // a setState updater (which React may invoke more than once).
     const checkReadinessRef = useRef<DockerReadiness | undefined>(undefined);
     const dockerPollAbortRef = useRef<AbortController | null>(null);
     const lastDockerProblemRef = useRef<
@@ -891,11 +891,7 @@ export const LocalQuickStart = (): JSX.Element => {
         setRelativeTimeNow(Date.now());
     }, []);
 
-    /**
-     * Refresh the Docker facts backing the `Checking container engine` stage. The host memoizes
-     * readiness briefly, so a call made right after that stage settles returns exactly the result
-     * the service acted on rather than probing Docker a second time.
-     */
+    /** Refresh engine facts for an explicit recovery action. */
     const syncDockerStatus = useCallback(
         async (request?: {
             readonly forceRefresh: boolean;
@@ -986,6 +982,8 @@ export const LocalQuickStart = (): JSX.Element => {
             if (options?.resetStages !== false) {
                 setStageStatus(emptyStageStatus());
                 setFacts(emptyStageFacts());
+                setCheckReadiness(undefined);
+                checkReadinessRef.current = undefined;
             } else {
                 setFacts((previous) => ({ ...previous, waiting: undefined }));
             }
@@ -1005,6 +1003,9 @@ export const LocalQuickStart = (): JSX.Element => {
             const subscription = subscribe({
                 onData(event: StageEvent) {
                     if (myGeneration !== streamGenerationRef.current) return; // superseded/cancelled stream
+                    if (event.stage === 'checking' && event.dockerReadiness) {
+                        applyReadiness(event.dockerReadiness);
+                    }
                     if (event.facts || event.status !== 'active') {
                         const stageFacts = event.facts;
                         setFacts((previous) => {
@@ -1044,15 +1045,11 @@ export const LocalQuickStart = (): JSX.Element => {
                             event.message ? formatQuickStartMessage(event.message) : l10n.t('Setup failed.'),
                         );
                         setTimedOut(event.timedOut === true);
-                        if (event.dockerReadiness) {
+                        if (event.dockerReadiness && event.stage !== 'checking') {
                             // Docker became unusable mid-run: the remediation belongs beside the
                             // stage that hit it, not on a screen of its own.
                             setStageDockerFailure(event.dockerReadiness);
                             setRelativeTimeNow(Date.now());
-                        } else if (event.stage === 'checking') {
-                            // The check stage does not carry its readiness, so pull the classification
-                            // the host just computed to drive the detail line and the remediation.
-                            void syncDockerStatus();
                         }
                         if (event.canReuseExistingData !== undefined) {
                             setCanReuseExistingData(event.canReuseExistingData);
@@ -1062,14 +1059,6 @@ export const LocalQuickStart = (): JSX.Element => {
                         setStageStatus((prev) =>
                             prev[event.stage] === event.status ? prev : { ...prev, [event.stage]: event.status },
                         );
-                        if (
-                            event.stage === 'checking' &&
-                            event.status === 'done' &&
-                            checkReadinessRef.current?.outcome !== 'ready'
-                        ) {
-                            // Read the engine evidence only after execution's check has completed.
-                            void syncDockerStatus();
-                        }
                     }
                 },
                 onError(error: unknown) {
@@ -1104,7 +1093,7 @@ export const LocalQuickStart = (): JSX.Element => {
             });
             subscriptionRef.current = subscription;
         },
-        [navigate, stopTimer, syncDockerStatus],
+        [applyReadiness, navigate, stopTimer],
     );
 
     const startProvisioning = useCallback(
@@ -1148,71 +1137,76 @@ export const LocalQuickStart = (): JSX.Element => {
         );
     }, [stopDockerWait]);
 
-    const beginDockerWait = useCallback((launch: () => Promise<DockerLaunchResult>, isPodman: boolean): void => {
-        stopDockerWait();
-        setDockerActionMessage(undefined);
-        setStartingDocker(true);
-        setDockerWaitElapsedMs(0);
-        const abortController = new AbortController();
-        dockerPollAbortRef.current = abortController;
-        const startedAt = Date.now();
-        dockerWaitTimerRef.current = setInterval(() => setDockerWaitElapsedMs(Date.now() - startedAt), 250);
-        void launch()
-            .then(async (launchResult) => {
-                if (abortController.signal.aborted) return;
-                if (launchResult === 'notAvailable' || launchResult === 'failed') {
+    const beginDockerWait = useCallback(
+        (launch: () => Promise<DockerLaunchResult>, isPodman: boolean): void => {
+            stopDockerWait();
+            setDockerActionMessage(undefined);
+            setStartingDocker(true);
+            setDockerWaitElapsedMs(0);
+            const abortController = new AbortController();
+            dockerPollAbortRef.current = abortController;
+            const startedAt = Date.now();
+            dockerWaitTimerRef.current = setInterval(() => setDockerWaitElapsedMs(Date.now() - startedAt), 250);
+            void launch()
+                .then(async (launchResult) => {
+                    if (abortController.signal.aborted) return;
+                    if (launchResult === 'notAvailable' || launchResult === 'failed') {
+                        stopDockerWait();
+                        setDockerActionMessage(
+                            isPodman ? l10n.t('Podman could not be started.') : l10n.t('Docker could not be started.'),
+                        );
+                        return;
+                    }
+                    let latestResult: DockerStatusResult | undefined;
+                    const outcome = await pollDockerReadiness({
+                        signal: abortController.signal,
+                        query: (suppressCommandEcho) =>
+                            trpcClient.localQuickStart.getDockerStatus.query(
+                                { forceRefresh: true, polled: true, suppressCommandEcho, preferredEngine },
+                                { signal: abortController.signal },
+                            ),
+                        onResult: (result) => {
+                            latestResult = result;
+                            applyReadiness(result.readiness);
+                            setCanReuseExistingData(result.canReuseExistingData);
+                            setInstanceState(result.status.state);
+                            setInstanceMissing(result.status.missing === true);
+                            setInstanceDataRemoved(result.status.dataRemoved === true);
+                        },
+                    });
+                    if (abortController.signal.aborted) return;
+                    stopDockerWait();
+                    if (outcome === 'ready' && latestResult) {
+                        applyDockerRecovery();
+                    } else if (outcome === 'deadline') {
+                        setDockerActionMessage(
+                            isPodman
+                                ? l10n.t('Podman did not become ready before the wait timed out.')
+                                : l10n.t('Docker did not become ready before the wait timed out.'),
+                        );
+                    } else if (outcome === 'stopped') {
+                        // Docker answered, but with a non-transient problem (e.g. permission denied). The
+                        // readiness card below already updated via onResult; announce the transition too,
+                        // otherwise the spinner just disappears and the Announcer says nothing.
+                        setDockerActionMessage(
+                            isPodman
+                                ? l10n.t('Podman started, but it is not usable yet. See the details below.')
+                                : l10n.t('Docker started, but it is not usable yet. See the details below.'),
+                        );
+                    }
+                })
+                .catch(() => {
+                    if (abortController.signal.aborted) return;
                     stopDockerWait();
                     setDockerActionMessage(
-                        isPodman ? l10n.t('Podman could not be started.') : l10n.t('Docker could not be started.'),
+                        isPodman
+                            ? l10n.t('The Podman readiness check failed.')
+                            : l10n.t('The Docker readiness check failed.'),
                     );
-                    return;
-                }
-                let latestResult: DockerStatusResult | undefined;
-                const outcome = await pollDockerReadiness({
-                    signal: abortController.signal,
-                    query: (suppressCommandEcho) =>
-                        trpcClient.localQuickStart.getDockerStatus.query(
-                            { forceRefresh: true, polled: true, suppressCommandEcho, preferredEngine },
-                            { signal: abortController.signal },
-                        ),
-                    onResult: (result) => {
-                        latestResult = result;
-                        applyReadiness(result.readiness);
-                        setCanReuseExistingData(result.canReuseExistingData);
-                        setInstanceState(result.status.state);
-                        setInstanceMissing(result.status.missing === true);
-                        setInstanceDataRemoved(result.status.dataRemoved === true);
-                    },
                 });
-                if (abortController.signal.aborted) return;
-                stopDockerWait();
-                if (outcome === 'ready' && latestResult) {
-                    applyDockerRecovery();
-                } else if (outcome === 'deadline') {
-                    setDockerActionMessage(
-                        isPodman
-                            ? l10n.t('Podman did not become ready before the wait timed out.')
-                            : l10n.t('Docker did not become ready before the wait timed out.'),
-                    );
-                } else if (outcome === 'stopped') {
-                    // Docker answered, but with a non-transient problem (e.g. permission denied). The
-                    // readiness card below already updated via onResult; announce the transition too,
-                    // otherwise the spinner just disappears and the Announcer says nothing.
-                    setDockerActionMessage(
-                        isPodman
-                            ? l10n.t('Podman started, but it is not usable yet. See the details below.')
-                            : l10n.t('Docker started, but it is not usable yet. See the details below.'),
-                    );
-                }
-            })
-            .catch(() => {
-                if (abortController.signal.aborted) return;
-                stopDockerWait();
-                setDockerActionMessage(
-                    isPodman ? l10n.t('The Podman readiness check failed.') : l10n.t('The Docker readiness check failed.'),
-                );
-            });
-    }, [applyDockerRecovery, applyReadiness, preferredEngine, stopDockerWait, trpcClient]);
+        },
+        [applyDockerRecovery, applyReadiness, preferredEngine, stopDockerWait, trpcClient],
+    );
 
     const handleStartDocker = useCallback((): void => {
         beginDockerWait(
@@ -1255,6 +1249,7 @@ export const LocalQuickStart = (): JSX.Element => {
                 setInstanceMissing(update.status.missing === true);
                 setInstanceDataRemoved(update.status.dataRemoved === true);
                 setCanReuseExistingData(update.canReuseExistingData);
+                setInstanceEngine(update.instanceEngine);
                 // The timed-out container is gone (e.g. deleted from the tree), so "Wait longer" has
                 // nothing left to wait for. While it is still retained the instance stays in Error.
                 if (
@@ -2095,10 +2090,10 @@ export const LocalQuickStart = (): JSX.Element => {
                             {shownPodman && (startingDocker || shownDocker.problem.failureKind === 'daemonStarting')
                                 ? l10n.t('Waiting for Podman to start. This can take a minute.')
                                 : dockerGuidanceMap[
-                                    startingDocker
-                                        ? 'daemonStarting'
-                                        : (shownDocker.presentation.guidance ?? 'notAccessible')
-                                ]}
+                                      startingDocker
+                                          ? 'daemonStarting'
+                                          : (shownDocker.presentation.guidance ?? 'notAccessible')
+                                  ]}
                         </div>
                         {recoveryCommand && (
                             <div className={styles.recoveryCommand}>

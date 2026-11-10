@@ -45,7 +45,11 @@ export interface ScenarioReadiness {
 }
 
 export type ScenarioStep =
-    | { readonly action: 'click'; readonly role: 'button' | 'link' | 'switch' | 'menuitem' | 'radio'; readonly name: string }
+    | {
+          readonly action: 'click';
+          readonly role: 'button' | 'link' | 'switch' | 'menuitem' | 'radio';
+          readonly name: string;
+      }
     | { readonly action: 'fill'; readonly role: 'textbox'; readonly name: string; readonly value: string };
 
 type CallAssertion = {
@@ -222,14 +226,19 @@ function defaultScenario<V extends WebviewName>(view: V, steps: readonly Scenari
 const base = fixtures.localQuickStart;
 const readyDocker = base.rpc['localQuickStart.getDockerStatus'].results[0];
 const completedStages = [
-    { stage: 'checking', status: 'done' },
+    { stage: 'checking', status: 'done', dockerReadiness: readyDocker.readiness },
     { stage: 'pulling', status: 'done' },
     { stage: 'creating', status: 'done' },
     { stage: 'starting', status: 'done' },
 ] as const;
 
 const detailedStages = [
-    { stage: 'checking', status: 'done', facts: { kind: 'checking', port: 10260, portFree: true } },
+    {
+        stage: 'checking',
+        status: 'done',
+        dockerReadiness: readyDocker.readiness,
+        facts: { kind: 'checking', port: 10260, portFree: true },
+    },
     {
         stage: 'pulling',
         status: 'done',
@@ -347,6 +356,16 @@ const startingPodmanMachine = {
     failureKind: 'daemonStarting',
     startAction: undefined,
     podmanMachine: { kind: 'starting', name: 'documentdb-dev' },
+} as const satisfies QuickStartOutputs['getDockerStatus']['readiness'];
+const readyPodmanMachine = {
+    ...readyDocker.readiness,
+    environment: 'macos',
+    cli: 'podman',
+    engine: 'podman',
+    engineEvidence: 'selectedCli',
+    provider: 'podman',
+    providerEvidence: 'liveDaemon',
+    cliVersion: '6.0.2',
 } as const satisfies QuickStartOutputs['getDockerStatus']['readiness'];
 const linuxPodmanSocketDown = {
     ...stoppedPodmanMachine,
@@ -2449,12 +2468,20 @@ export const scenarios = {
                     excludes: ['Found', 'Not found on PATH', 'Detected', 'CLI', 'Runs on this machine'],
                 },
                 {
-                    kind: 'calls', name: 'Opening Configure does not check readiness',
-                    path: 'localQuickStart.getDockerStatus', input: undefined, count: 0, steps: [],
+                    kind: 'calls',
+                    name: 'Opening Configure does not check readiness',
+                    path: 'localQuickStart.getDockerStatus',
+                    input: undefined,
+                    count: 0,
+                    steps: [],
                 },
                 {
-                    kind: 'calls', name: 'Opening Configure does not start an engine',
-                    path: 'localQuickStart.startDockerProvider', input: undefined, count: 0, steps: [],
+                    kind: 'calls',
+                    name: 'Opening Configure does not start an engine',
+                    path: 'localQuickStart.startDockerProvider',
+                    input: undefined,
+                    count: 0,
+                    steps: [],
                 },
             ],
         },
@@ -2478,24 +2505,45 @@ export const scenarios = {
             },
             assertions: [
                 {
-                    kind: 'text', name: 'The Podman preference is not an availability prediction',
-                    selector: 'table', includes: ['Container engine', 'Podman'],
+                    kind: 'text',
+                    name: 'The Podman preference is not an availability prediction',
+                    selector: 'table',
+                    includes: ['Container engine', 'Podman'],
                     excludes: ['Found', 'Not found on PATH', 'Detected', 'CLI'],
                 },
                 {
-                    kind: 'calls', name: 'Changing preference and navigating does not check readiness',
-                    path: 'localQuickStart.getDockerStatus', input: undefined, count: 0, steps: [],
+                    kind: 'calls',
+                    name: 'Changing preference and navigating does not check readiness',
+                    path: 'localQuickStart.getDockerStatus',
+                    input: undefined,
+                    count: 0,
+                    steps: [],
                 },
                 {
-                    kind: 'calls', name: 'Changing preference does not start an engine',
-                    path: 'localQuickStart.startDockerProvider', input: undefined, count: 0, steps: [],
+                    kind: 'calls',
+                    name: 'Changing preference does not start an engine',
+                    path: 'localQuickStart.startDockerProvider',
+                    input: undefined,
+                    count: 0,
+                    steps: [],
                 },
                 {
-                    kind: 'calls', name: 'Execution receives the unchanged Podman preference',
+                    kind: 'calls',
+                    name: 'Execution receives the unchanged Podman preference',
                     path: 'localQuickStart.startQuickStart',
                     input: { preferredEngine: 'podman', port: 10260 },
                     count: 1,
-                    steps: [{ action: 'click', role: 'button', name: 'Start DocumentDB Local' }],
+                    steps: [
+                        { action: 'click', role: 'button', name: 'Start DocumentDB Local' },
+                        { action: 'click', role: 'button', name: 'Cancel' },
+                    ],
+                },
+                {
+                    kind: 'text',
+                    name: 'The submitted Podman preference remains selected after cancelling the empty setup stream',
+                    selector: 'table',
+                    includes: ['Container engine', 'Podman'],
+                    excludes: ['Found', 'Not found on PATH', 'Detected', 'CLI'],
                 },
             ],
         },
@@ -2505,16 +2553,24 @@ export const scenarios = {
                 ...base.rpc,
                 'localQuickStart.getWizardContext': {
                     type: 'query',
-                    results: [{
-                        status: { state: InstanceState.Stopped, missing: true },
-                        busy: false, canReuseExistingData: true, suggestedPort: 10260, instanceEngine: 'podman',
-                    }],
+                    results: [
+                        {
+                            status: { state: InstanceState.Stopped, missing: true },
+                            busy: false,
+                            canReuseExistingData: true,
+                            suggestedPort: 10260,
+                            instanceEngine: 'podman',
+                        },
+                    ],
                 },
                 'localQuickStart.onInstanceChanged': {
                     type: 'subscription',
-                    results: [{
-                        status: { state: InstanceState.Stopped, missing: true }, canReuseExistingData: true,
-                    }],
+                    results: [
+                        {
+                            status: { state: InstanceState.Stopped, missing: true },
+                            canReuseExistingData: true,
+                        },
+                    ],
                     keepOpen: true,
                 },
             },
@@ -2526,22 +2582,34 @@ export const scenarios = {
             },
             assertions: [
                 {
-                    kind: 'text', name: 'The existing engine is read-only, with no detected availability',
-                    selector: 'table', includes: ['Container engine', 'Podman · kept from the existing instance'],
+                    kind: 'text',
+                    name: 'The existing engine is read-only, with no detected availability',
+                    selector: 'table',
+                    includes: ['Container engine', 'Podman · kept from the existing instance'],
                     excludes: ['Found', 'Not found on PATH', 'Detected', 'Preferred container engine'],
                 },
                 {
-                    kind: 'attribute', name: 'Recreate has no engine editor',
+                    kind: 'attribute',
+                    name: 'Recreate has no engine editor',
                     selector: '[aria-label="Change the container engine"]',
-                    attribute: 'aria-expanded', expected: null,
+                    attribute: 'aria-expanded',
+                    expected: null,
                 },
                 {
-                    kind: 'calls', name: 'Reading the recorded engine does not check readiness',
-                    path: 'localQuickStart.getDockerStatus', input: undefined, count: 0, steps: [],
+                    kind: 'calls',
+                    name: 'Reading the recorded engine does not check readiness',
+                    path: 'localQuickStart.getDockerStatus',
+                    input: undefined,
+                    count: 0,
+                    steps: [],
                 },
                 {
-                    kind: 'calls', name: 'Reading the recorded engine does not start an engine',
-                    path: 'localQuickStart.startDockerProvider', input: undefined, count: 0, steps: [],
+                    kind: 'calls',
+                    name: 'Reading the recorded engine does not start an engine',
+                    path: 'localQuickStart.startDockerProvider',
+                    input: undefined,
+                    count: 0,
+                    steps: [],
                 },
             ],
         },
@@ -2552,7 +2620,7 @@ export const scenarios = {
                 'localQuickStart.startQuickStart': {
                     type: 'subscription',
                     results: [
-                        { stage: 'checking', status: 'done' },
+                        { stage: 'checking', status: 'done', dockerReadiness: readyDocker.readiness },
                         {
                             stage: 'pulling',
                             status: 'active',
@@ -2737,16 +2805,20 @@ export const scenarios = {
             config: base.config,
             rpc: {
                 ...base.rpc,
-                'localQuickStart.getDockerStatus': {
-                    type: 'query',
-                    results: [
-                        {
-                            ...readyDocker,
-                            readiness: { ...readyDocker.readiness, cliOnPath: { docker: true, podman: true } },
-                        },
-                    ],
+                'localQuickStart.startQuickStart': {
+                    type: 'subscription',
+                    results: detailedStages.map((event) =>
+                        event.stage === 'checking'
+                            ? {
+                                  ...event,
+                                  dockerReadiness: {
+                                      ...readyDocker.readiness,
+                                      cliOnPath: { docker: true, podman: true },
+                                  },
+                              }
+                            : event,
+                    ),
                 },
-                'localQuickStart.startQuickStart': { type: 'subscription', results: detailedStages },
             },
             steps: setupSteps,
             readiness: { content: ['DocumentDB Local is ready', 'Docker CLI 27.0.0 found'], noProgressbar: true },
@@ -2777,26 +2849,113 @@ export const scenarios = {
                 },
             ],
         },
+        'setup-engine-fallback': {
+            config: base.config,
+            rpc: {
+                ...base.rpc,
+                'localQuickStart.startQuickStart': {
+                    type: 'subscription',
+                    results: detailedStages.map((event) =>
+                        event.stage === 'checking'
+                            ? {
+                                  ...event,
+                                  dockerReadiness: {
+                                      ...readyDocker.readiness,
+                                      cli: 'podman',
+                                      preferredEngine: 'docker',
+                                      cliFallback: true,
+                                      cliOnPath: { docker: false, podman: true },
+                                      cliVersion: '5.8.3',
+                                      engine: 'podman',
+                                      engineEvidence: 'selectedCli',
+                                      provider: 'podman',
+                                  },
+                              }
+                            : event,
+                    ),
+                },
+            },
+            steps: setupSteps,
+            readiness: {
+                content: ['DocumentDB Local is ready', 'Podman 5.8.3 (Docker not found)'],
+                noProgressbar: true,
+            },
+            assertions: [
+                {
+                    kind: 'text',
+                    name: 'The checking summary names the selected engine and actual fallback',
+                    selector: '[aria-label="Completed setup steps"] [role="listitem"]:first-child',
+                    includes: ['Podman 5.8.3 (Docker not found)'],
+                    excludes: ['Podman CLI 5.8.3 found'],
+                },
+                {
+                    kind: 'attribute',
+                    name: 'Checking Details expands',
+                    selector: '[aria-label="Details for Checking container engine"]',
+                    attribute: 'aria-expanded',
+                    expected: 'true',
+                    steps: [{ action: 'click', role: 'button', name: 'Details for Checking container engine' }],
+                },
+                {
+                    kind: 'order',
+                    name: 'The executed preference is next to the selected command and both CLI facts',
+                    selector:
+                        '[aria-label="Completed setup steps"] [role="listitem"]:first-child [role="region"] dl > div:nth-child(n+2):nth-child(-n+4) dt',
+                    texts: ['Preferred engine', 'Podman CLI', 'Docker CLI'],
+                },
+                {
+                    kind: 'text',
+                    name: 'Details records the execution fallback and both PATH facts',
+                    selector: '[aria-label="Completed setup steps"] [role="listitem"]:first-child [role="region"]',
+                    includes: [
+                        'Preferred engine',
+                        'Docker · not found, used Podman',
+                        'Podman CLI',
+                        'Found, version 5.8.3',
+                        'Docker CLI',
+                        'Not found',
+                    ],
+                    excludes: [...privateDetails, ...checkingNotes, 'Docker CLI Found'],
+                },
+                {
+                    kind: 'calls',
+                    name: 'Execution carries its checking snapshot without a post-check query',
+                    path: 'localQuickStart.getDockerStatus',
+                    input: undefined,
+                    count: 0,
+                    steps: [],
+                },
+                {
+                    kind: 'calls',
+                    name: 'Fallback does not start another engine automatically',
+                    path: 'localQuickStart.startDockerProvider',
+                    input: undefined,
+                    count: 0,
+                    steps: [],
+                },
+            ],
+        },
         'podman-selected': {
             config: base.config,
             rpc: {
                 ...base.rpc,
-                'localQuickStart.getDockerStatus': {
-                    type: 'query',
-                    results: [
-                        {
-                            ...readyDocker,
-                            readiness: {
-                                ...readyDocker.readiness,
-                                cli: 'podman',
-                                cliOnPath: { docker: false, podman: true },
-                                cliVersion: '5.0.0',
-                                provider: 'podman',
-                            },
-                        },
-                    ],
+                'localQuickStart.startQuickStart': {
+                    type: 'subscription',
+                    results: detailedStages.map((event) =>
+                        event.stage === 'checking'
+                            ? {
+                                  ...event,
+                                  dockerReadiness: {
+                                      ...readyDocker.readiness,
+                                      cli: 'podman',
+                                      cliOnPath: { docker: false, podman: true },
+                                      cliVersion: '5.0.0',
+                                      provider: 'podman',
+                                  },
+                              }
+                            : event,
+                    ),
                 },
-                'localQuickStart.startQuickStart': { type: 'subscription', results: detailedStages },
             },
             steps: setupSteps,
             readiness: { content: ['DocumentDB Local is ready', 'Podman CLI 5.0.0 found'], noProgressbar: true },
@@ -2833,27 +2992,7 @@ export const scenarios = {
                 ...base.rpc,
                 'localQuickStart.getDockerStatus': {
                     type: 'query',
-                    results: [
-                        { ...readyDocker, readiness: startingPodmanMachine },
-                        {
-                            ...readyDocker,
-                            readiness: {
-                                ...readyDocker.readiness,
-                                outcome: 'ready',
-                                canContinueAnyway: false,
-                                daemonReachable: true,
-                                environment: 'macos',
-                                cli: 'podman',
-                                engine: 'podman',
-                                engineEvidence: 'selectedCli',
-                                provider: 'podman',
-                                providerEvidence: 'liveDaemon',
-                                startAction: undefined,
-                                podmanMachine: undefined,
-                                cliVersion: '6.0.2',
-                            },
-                        },
-                    ],
+                    results: [{ ...readyDocker, readiness: readyPodmanMachine }],
                 },
                 'localQuickStart.startQuickStart': {
                     type: 'subscription',
@@ -2883,7 +3022,10 @@ export const scenarios = {
                 {
                     kind: 'calls',
                     name: 'An already-starting Podman machine never receives a startup mutation',
-                    path: 'localQuickStart.startDockerProvider', input: undefined, count: 0, steps: [],
+                    path: 'localQuickStart.startDockerProvider',
+                    input: undefined,
+                    count: 0,
+                    steps: [],
                 },
             ],
         },
@@ -2893,38 +3035,37 @@ export const scenarios = {
                 ...base.rpc,
                 'localQuickStart.getDockerStatus': {
                     type: 'query',
-                    results: [
-                        { ...readyDocker, readiness: stoppedPodmanMachine },
-                        {
-                            ...readyDocker,
-                            readiness: startingPodmanMachine,
-                        },
-                    ],
+                    results: [{ ...readyDocker, readiness: readyPodmanMachine }],
                 },
                 'localQuickStart.startQuickStart': {
                     type: 'subscription',
                     results: [{ stage: 'checking', status: 'error', dockerReadiness: stoppedPodmanMachine }],
                 },
             },
-            steps: [...podmanSetupSteps, { action: 'click', role: 'button', name: 'Start Podman machine' }],
+            steps: [
+                ...podmanSetupSteps,
+                { action: 'click', role: 'button', name: 'Start Podman machine' },
+                { action: 'click', role: 'button', name: 'Stop waiting' },
+                { action: 'click', role: 'button', name: 'Start Podman machine' },
+            ],
             readiness: {
-                content: ['Waiting for Podman to start', 'Waiting 00:', 'Stop waiting'],
-                noProgressbar: false,
+                content: ['Ready to set up', 'Continue setup', 'Podman CLI 6.0.2 found'],
+                noProgressbar: true,
             },
             assertions: [
                 {
-                    kind: 'text',
+                    kind: 'sequence',
                     name: 'The selected Podman machine enters the existing wait without a Docker action',
-                    selector: 'body',
-                    includes: ['Waiting for Podman to start', 'Stop waiting'],
-                    excludes: ['Start Docker Desktop', 'Podman could not be started'],
+                    milestones: ['.fui-MessageBar [role="progressbar"]'],
+                    minimumGapMs: 0,
+                    minimumSpanMs: 0,
                 },
                 {
                     kind: 'calls',
                     name: 'Only an explicit click starts the selected Podman machine',
                     path: 'localQuickStart.startDockerProvider',
                     input: { preferredEngine: 'podman' },
-                    count: 1,
+                    count: 2,
                     steps: [],
                 },
                 {
@@ -2932,15 +3073,15 @@ export const scenarios = {
                     name: 'Stopping the wait does not send another startup action',
                     path: 'localQuickStart.startDockerProvider',
                     input: { preferredEngine: 'podman' },
-                    count: 1,
-                    steps: [{ action: 'click', role: 'button', name: 'Stop waiting' }],
+                    count: 2,
+                    steps: [],
                 },
                 {
                     kind: 'text',
                     name: 'Cancel stops waiting without claiming the machine was stopped',
                     selector: 'body',
-                    includes: ['Start Podman machine'],
-                    excludes: ['Waiting 00:', 'Podman could not be started'],
+                    includes: ['Ready to set up', 'Continue setup', 'Podman CLI 6.0.2 found'],
+                    excludes: ['Waiting 00:', 'Podman could not be started', 'Podman machine was stopped', 'Start Docker Desktop'],
                 },
             ],
         },
@@ -2949,7 +3090,8 @@ export const scenarios = {
             rpc: {
                 ...base.rpc,
                 'localQuickStart.getDockerStatus': {
-                    type: 'query', results: [{ ...readyDocker, readiness: linuxPodmanSocketDown }],
+                    type: 'query',
+                    results: [{ ...readyDocker, readiness: linuxPodmanSocketDown }],
                 },
                 'localQuickStart.startQuickStart': {
                     type: 'subscription',
@@ -2972,7 +3114,10 @@ export const scenarios = {
                 {
                     kind: 'calls',
                     name: 'A Linux Podman failure never launches a local machine',
-                    path: 'localQuickStart.startDockerProvider', input: undefined, count: 0, steps: [],
+                    path: 'localQuickStart.startDockerProvider',
+                    input: undefined,
+                    count: 0,
+                    steps: [],
                 },
                 {
                     kind: 'calls',
@@ -3059,7 +3204,14 @@ export const scenarios = {
                 ...base.rpc,
                 'localQuickStart.startQuickStart': {
                     type: 'subscription',
-                    results: [{ stage: 'checking', status: 'error', message: { key: 'portInUse', port: 10260 } }],
+                    results: [
+                        {
+                            stage: 'checking',
+                            status: 'error',
+                            dockerReadiness: readyDocker.readiness,
+                            message: { key: 'portInUse', port: 10260 },
+                        },
+                    ],
                 },
             },
             steps: setupSteps,

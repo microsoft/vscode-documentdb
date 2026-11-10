@@ -370,6 +370,20 @@ export function buildDockerDetailRows(readiness: DockerReadiness): readonly Stag
         rows.push({ label: l10n.t('Detected problem'), value: labels[readiness.failureKind] });
     }
 
+    if (readiness.preferredEngine) {
+        const preferred = readiness.preferredEngine === 'docker' ? l10n.t('Docker') : l10n.t('Podman');
+        const fallback = readiness.cliFallback && readiness.cli && readiness.cli !== readiness.preferredEngine;
+        rows.push({
+            label: l10n.t('Preferred engine'),
+            value: fallback
+                ? l10n.t(
+                      '{0} · not found, used {1}',
+                      preferred,
+                      readiness.cli === 'docker' ? l10n.t('Docker') : l10n.t('Podman'),
+                  )
+                : preferred,
+        });
+    }
     const cliLabels = { docker: l10n.t('Docker CLI'), podman: l10n.t('Podman CLI') };
     if (readiness.cli) {
         rows.push({

@@ -32,8 +32,8 @@ describe('L2-dev manifest and routes', (): void => {
 
     it('round-trips every scenario and theme, without duplicate routes', (): void => {
         const routes = scenarioRoutes();
-        expect(routes).toHaveLength(159);
-        expect(new Set(routes.map((route): string => route.path)).size).toBe(159);
+        expect(routes).toHaveLength(162);
+        expect(new Set(routes.map((route): string => route.path)).size).toBe(162);
         for (const route of routes) expect(parseScenarioRoute(route.path)).toEqual(route);
     });
 
@@ -71,10 +71,10 @@ describe('L2-dev manifest and routes', (): void => {
     });
 
     it('provides path-only all/view/theme helpers and rejects unknown subsets', (): void => {
-        expect(runnerRoutes('/scenarios/run-all.js')).toHaveLength(159);
+        expect(runnerRoutes('/scenarios/run-all.js')).toHaveLength(162);
         expect(runnerRoutes('/scenarios/run-all/connectionDiagnostics.js')).toHaveLength(84);
-        expect(runnerRoutes('/scenarios/run-all/localQuickStart.js')).toHaveLength(63);
-        expect(runnerRoutes('/scenarios/run-all/localQuickStart/dark.js')).toHaveLength(21);
+        expect(runnerRoutes('/scenarios/run-all/localQuickStart.js')).toHaveLength(66);
+        expect(runnerRoutes('/scenarios/run-all/localQuickStart/dark.js')).toHaveLength(22);
         expect(runnerRoutes('/scenarios/run-all/unknown.js')).toBeUndefined();
         expect(runnerRoutes('/scenarios/run-all.js?view=localQuickStart')).toBeUndefined();
         const snippet = scenarioRunner(scenarioRoutes());
@@ -86,19 +86,105 @@ describe('L2-dev manifest and routes', (): void => {
     it.each(['configure-engine-default', 'configure-engine-choice', 'configure-engine-recreate'] as const)(
         'covers %s in every theme with metadata and no pre-execution readiness',
         (name): void => {
-            expect(scenarioRoutes().filter((route): boolean => route.scenario === name).map((route) => route.theme))
-                .toEqual(['dark', 'light', 'high-contrast']);
+            expect(
+                scenarioRoutes()
+                    .filter((route): boolean => route.scenario === name)
+                    .map((route) => route.theme),
+            ).toEqual(['dark', 'light', 'high-contrast']);
             const scenario = scenarios.localQuickStart[name];
             expect(scenario.rpc['localQuickStart.getWizardContext']).toBeDefined();
-            expect(scenario.assertions).toContainEqual(expect.objectContaining({
-                kind: 'calls', path: 'localQuickStart.getDockerStatus', count: 0,
-            }));
-            expect(scenario.assertions).toContainEqual(expect.objectContaining({
-                kind: 'calls', path: 'localQuickStart.startDockerProvider', count: 0,
-            }));
-            expect(scenario.assertions).toContainEqual(expect.objectContaining({
-                kind: 'text', excludes: expect.arrayContaining(['Found', 'Not found on PATH', 'Detected']),
-            }));
+            expect(scenario.assertions).toContainEqual(
+                expect.objectContaining({
+                    kind: 'calls',
+                    path: 'localQuickStart.getDockerStatus',
+                    count: 0,
+                }),
+            );
+            expect(scenario.assertions).toContainEqual(
+                expect.objectContaining({
+                    kind: 'calls',
+                    path: 'localQuickStart.startDockerProvider',
+                    count: 0,
+                }),
+            );
+            expect(
+                scenario.assertions?.some(
+                    (assertion) =>
+                        assertion.kind === 'text' &&
+                        ['Found', 'Not found on PATH', 'Detected'].every((text) => assertion.excludes.includes(text)),
+                ),
+            ).toBe(true);
+        },
+    );
+
+    it('covers execution fallback with its summary, preferred-engine fact and both PATH facts in every theme', (): void => {
+        const scenario: Scenario<'localQuickStart'> = scenarios.localQuickStart['setup-engine-fallback'];
+        expect(
+            scenarioRoutes()
+                .filter((route): boolean => route.scenario === 'setup-engine-fallback')
+                .map((route) => route.theme),
+        ).toEqual(['dark', 'light', 'high-contrast']);
+        expect(scenario.readiness.content).toContain('Podman 5.8.3 (Docker not found)');
+        expect(scenario.assertions).toContainEqual(
+            expect.objectContaining({
+                kind: 'order',
+                texts: ['Preferred engine', 'Podman CLI', 'Docker CLI'],
+            }),
+        );
+        const evidence = scenario.assertions
+            ?.filter((assertion) => assertion.kind === 'text')
+            .find((assertion) => assertion.includes.includes('Docker · not found, used Podman'));
+        expect(evidence?.includes).toEqual(
+            expect.arrayContaining([
+                'Docker · not found, used Podman',
+                'Podman CLI',
+                'Found, version 5.8.3',
+                'Docker CLI',
+                'Not found',
+            ]),
+        );
+        expect(scenario.assertions).toContainEqual(
+            expect.objectContaining({
+                kind: 'calls',
+                path: 'localQuickStart.getDockerStatus',
+                input: undefined,
+                count: 0,
+            }),
+        );
+        expect(scenario.assertions).toContainEqual(
+            expect.objectContaining({
+                kind: 'calls',
+                path: 'localQuickStart.startDockerProvider',
+                count: 0,
+            }),
+        );
+    });
+
+    it.each([
+        'both-clis-found',
+        'setup-engine-fallback',
+        'podman-selected',
+        'failed-check-details',
+        'docker-missing-windows',
+        'docker-missing-mac',
+        'docker-missing-linux',
+    ] as const)(
+        'carries execution checking evidence in the %s fixture rather than depending on a post-check query',
+        (name): void => {
+            const scenario: Scenario<'localQuickStart'> = scenarios.localQuickStart[name];
+            const stream = scenario.rpc['localQuickStart.startQuickStart'];
+            expect(stream?.type).toBe('subscription');
+            if (!stream || stream.type !== 'subscription') throw new Error('Missing setup stream');
+            const checking = stream.results.find((event) => event.stage === 'checking');
+            expect(checking?.dockerReadiness).toBeDefined();
+            if (name === 'setup-engine-fallback') {
+                expect(checking?.dockerReadiness).toMatchObject({
+                    preferredEngine: 'docker',
+                    cli: 'podman',
+                    cliFallback: true,
+                    cliOnPath: { docker: false, podman: true },
+                });
+            }
         },
     );
 
@@ -109,35 +195,97 @@ describe('L2-dev manifest and routes', (): void => {
             expect(scenarioRoutes().filter((route): boolean => route.scenario === name)).toHaveLength(3);
         }
         expect(machine.steps).toContainEqual({ action: 'click', role: 'button', name: 'Start Podman machine' });
-        expect(machine.assertions).toContainEqual(expect.objectContaining({
-            kind: 'calls', path: 'localQuickStart.startDockerProvider', count: 1,
-            input: { preferredEngine: 'podman' },
-        }));
-        expect(socket.assertions).toContainEqual(expect.objectContaining({
-            kind: 'calls', path: 'localQuickStart.startDockerProvider', count: 0,
-        }));
-        expect(socket.assertions).toContainEqual(expect.objectContaining({
-            kind: 'calls', path: 'localQuickStart.copyRecoveryCommand', input: 'linuxStartPodmanSocket', count: 1,
-        }));
+        expect(machine.assertions).toContainEqual(
+            expect.objectContaining({
+                kind: 'calls',
+                path: 'localQuickStart.startDockerProvider',
+                count: 2,
+                input: { preferredEngine: 'podman' },
+            }),
+        );
+        expect(socket.assertions).toContainEqual(
+            expect.objectContaining({
+                kind: 'calls',
+                path: 'localQuickStart.startDockerProvider',
+                count: 0,
+            }),
+        );
+        expect(socket.assertions).toContainEqual(
+            expect.objectContaining({
+                kind: 'calls',
+                path: 'localQuickStart.copyRecoveryCommand',
+                input: 'linuxStartPodmanSocket',
+                count: 1,
+            }),
+        );
     });
 
     it('covers an initially starting Podman machine with read-only polling in every theme', (): void => {
         const scenario = scenarios.localQuickStart['podman-machine-starting-initial'];
-        expect(scenarioRoutes().filter((route): boolean =>
-            route.scenario === 'podman-machine-starting-initial',
-        )).toHaveLength(3);
+        expect(
+            scenarioRoutes().filter((route): boolean => route.scenario === 'podman-machine-starting-initial'),
+        ).toHaveLength(3);
         expect(scenario.steps).not.toContainEqual({
-            action: 'click', role: 'button', name: 'Start Podman machine',
+            action: 'click',
+            role: 'button',
+            name: 'Start Podman machine',
         });
-        expect(scenario.assertions).toContainEqual(expect.objectContaining({
-            kind: 'calls', path: 'localQuickStart.startDockerProvider', count: 0,
-        }));
-        expect(scenario.assertions).toContainEqual(expect.objectContaining({
-            kind: 'sequence', milestones: ['.fui-MessageBar [role="progressbar"]'],
-        }));
+        expect(scenario.assertions).toContainEqual(
+            expect.objectContaining({
+                kind: 'calls',
+                path: 'localQuickStart.startDockerProvider',
+                count: 0,
+            }),
+        );
+        expect(scenario.assertions).toContainEqual(
+            expect.objectContaining({
+                kind: 'sequence',
+                milestones: ['.fui-MessageBar [role="progressbar"]'],
+            }),
+        );
         expect(scenario.readiness.content).toContain('Ready to set up');
         expect(scenario.readiness.content).toContain('Podman CLI 6.0.2 found');
     });
+
+    it('settles the preference submission back in Configure instead of leaving its readiness marker behind', (): void => {
+        const scenario = scenarios.localQuickStart['configure-engine-choice'];
+        expect(scenario.assertions).toContainEqual(expect.objectContaining({
+            kind: 'calls',
+            path: 'localQuickStart.startQuickStart',
+            input: { preferredEngine: 'podman', port: 10260 },
+            count: 1,
+            steps: [
+                { action: 'click', role: 'button', name: 'Start DocumentDB Local' },
+                { action: 'click', role: 'button', name: 'Cancel' },
+            ],
+        }));
+        expect(scenario.readiness.content).toContain('Configure setup');
+    });
+
+    it.each(['podman-machine-starting-initial', 'podman-machine-stopped-mac'] as const)(
+        'lets %s finish on the first independent healthy poll and verifies its final ready state',
+        (name): void => {
+            const scenario: Scenario<'localQuickStart'> = scenarios.localQuickStart[name];
+            const query = scenario.rpc['localQuickStart.getDockerStatus'];
+            expect(query?.results).toHaveLength(1);
+            expect(query?.results[0]?.readiness).toMatchObject({
+                outcome: 'ready',
+                cli: 'podman',
+                daemonReachable: true,
+            });
+            expect(scenario.readiness.content).toEqual([
+                'Ready to set up', 'Continue setup', 'Podman CLI 6.0.2 found',
+            ]);
+            expect(scenario.readiness.noProgressbar).toBe(true);
+            if (name === 'podman-machine-stopped-mac') {
+                expect(scenario.steps?.slice(-3)).toEqual([
+                    { action: 'click', role: 'button', name: 'Start Podman machine' },
+                    { action: 'click', role: 'button', name: 'Stop waiting' },
+                    { action: 'click', role: 'button', name: 'Start Podman machine' },
+                ]);
+            }
+        },
+    );
 
     it('emits the host initial-data contract and theme kind before the Vite boot', (): void => {
         for (const route of scenarioRoutes()) {

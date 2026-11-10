@@ -313,7 +313,7 @@ export interface StageEvent {
      * webview offers "Wait longer" / "View logs" / "Start over" instead of a hard failure.
      */
     readonly timedOut?: boolean;
-    /** Typed recovery result when Docker became unavailable during pull or run. */
+    /** Execution's checking snapshot, or typed recovery when the engine became unavailable during pull or run. */
     readonly dockerReadiness?: DockerReadiness;
     /** Set on a setup's terminal event: whether data can be reused once the failed run rolled back. */
     readonly canReuseExistingData?: boolean;
@@ -599,6 +599,7 @@ export interface DockerStatusResult {
 export interface InstanceStatusUpdate {
     readonly status: QuickStartStatus;
     readonly canReuseExistingData: boolean;
+    readonly instanceEngine?: ContainerCli | 'notRecorded';
 }
 
 /** Why a host port cannot be used, or `'available'` when it can (Configure-step validation, L3). */
