@@ -58,6 +58,10 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
   `Introduction → Configure → Set up → Done`; the stage 1 heading is `Checking container engine`
   ([0003](./decisions.md#0003--concept-f-docker-verified-as-the-first-setup-stage)). Redesigned
   findings and engine-specific guides are pending W5; the detail still shows raw CLI version output.
+- **Settled setup stages offer evidence in Details.** Rows with facts start collapsed on both Set up
+  and Done; explanations and recovery actions remain in the failure block. Sample-data loading
+  failure is also called out on success. No step durations are recorded
+  ([0008](./decisions.md#0008---set-up-stages-expand-to-show-what-each-stage-did)).
 - **Docker is preferred; Podman is the fallback.** Docker Engine and Docker Desktop are supported.
   The extension uses Docker when its CLI is available, and falls back to Podman only when it is
   not; there is no preference setting. Engine identification uses positive evidence. When evidence
@@ -96,7 +100,7 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 | 2026-09-29 | #979  | Wizard journey telemetry and correlation ids                   | [decisions.md#0006](./decisions.md#0006---wizard-journey-telemetry-and-correlation-ids)                                                                        |
 | 2026-10-15 | #1018 | Image usage telemetry follows VS Code's setting                | [decisions.md#0007](./decisions.md#0007---image-usage-telemetry-follows-vs-codes-setting)                                                                      |
 | 2026-11-09 | —     | Partial container-runtime transparency; W1/W5/W8 pending       | [iterations/10-container-runtime-transparency.md](./iterations/10-container-runtime-transparency.md); [user manual](../../../user-manual/local-quick-start.md) |
-| 2026-11-10 | —     | Plan accepted: Details on the Set up stages, no step durations | [iterations/11-setup-stage-details.md](./iterations/11-setup-stage-details.md)                                                                                 |
+| 2026-11-10 | —     | Details on settled Set up and Done stages; no step durations   | [iterations/11-setup-stage-details.md](./iterations/11-setup-stage-details.md)                                                                                 |
 
 ## Decisions
 

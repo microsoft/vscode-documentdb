@@ -226,109 +226,22 @@ instead of the start flow:
 
 ### 5.4 Webview: Progress
 
-After the user clicks **Start DocumentDB Local**, the webview transitions
-to a progress view. The user can keep working — the webview is not modal
-(yet — modal webview API is expected from VS Code; once available we
-switch).
+After **Start DocumentDB Local**, Set up shows five stages: checking the container engine, pulling
+the image, creating and starting the container, and waiting for DocumentDB to accept connections.
+Command output is available through **View setup log**.
 
-The heavy container work (pull / create / start) runs as **VS Code
-terminal tasks**, so the raw `docker` commands and their streaming output
-are visible in the integrated terminal. This mirrors the PostgreSQL
-"Local Docker Server" reference (see §16): the webview shows friendly step
-status while the terminal provides full command transparency. The
-webview's **View Docker output** expander surfaces the same stream inline
-for users who prefer not to switch to the terminal.
-
-**v1.0 keeps the webview side minimal** — matching the PostgreSQL reference,
-which shows _no_ in-webview progress at all. While the container work runs,
-the **Start** button is disabled and shows a spinner, and a failure renders
-as a single inline error message with a **Retry** (the terminal carries the
-detail). The staged progress list, per-stage percentages, and per-step
-inline expansion shown below are the **v1.2** enriched view (§15); the
-diagram illustrates that target, not the v1.0 surface.
-
-```
-+======================================================================+
-|  DocumentDB Local - Quick Start                              [x]     |
-+======================================================================+
-|                                                                      |
-|  ┌────────────────────────────────────────────────────────────────┐  |
-|  │  Setting up DocumentDB Local...                  00:18        │  |
-|  └────────────────────────────────────────────────────────────────┘  |
-|                                                                      |
-|  ┌────────────────────────────────────────────────────────────────┐  |
-|  │  [✅] Checking Docker                                         │  |
-|  │  [✅] Reserving port 10260                                    │  |
-|  │  [🔄] Pulling official image                          42%     │  |
-|  │  [  ] Creating container                                      │  |
-|  │  [  ] Starting container                                      │  |
-|  │  [  ] Waiting for DocumentDB to accept connections            │  |
-|  └────────────────────────────────────────────────────────────────┘  |
-|                                                                      |
-|  ┌────────────────────────────────────────────────────────────────┐  |
-|  │  ▸ View Docker output                                         │  |
-|  └────────────────────────────────────────────────────────────────┘  |
-|                                                                      |
-|                                                      [ Cancel ]      |
-|                                                                      |
-+======================================================================+
-```
-
-On failure (v1.2 enriched view), the failed step expands with guidance; in
-v1.0 the same guidance is a single inline error message with **Retry** (the
-terminal carries the detail). When `docker run` fails, distinguish the cause
-via `docker inspect` — if the container exists it is a **start** failure,
-otherwise a **create** failure — and word the message accordingly (matching
-the PostgreSQL reference):
-
-```
-|  │  [✅] Checking Docker                                         │  |
-|  │  [✅] Reserving port 10260                                    │  |
-|  │  [❌] Pulling official image                       Failed     │  |
-|  │       We couldn't pull the image from ghcr.io.                │  |
-|  │       Check your network connection or proxy settings.        │  |
-|  │                                                               │  |
-|  │       [ Retry ]   [ Troubleshooting ]                         │  |
-|  │  [  ] Creating container                                      │  |
-|  │  [  ] Starting container                                      │  |
-|  │  [  ] Waiting for DocumentDB to accept connections            │  |
-```
+A settled row with facts offers **Details** on its detail line. It starts collapsed and shows
+available evidence, not step durations. A failed stage does not expand automatically: the
+explanation and recovery actions remain visible in the message block below the list. The checking
+row retains its last-checked time and re-check action; its Details replaces the old Docker-check
+accordion. See [0008](./decisions.md#0008---set-up-stages-expand-to-show-what-each-stage-did).
 
 ### 5.5 Webview: Success
 
-```
-+======================================================================+
-|  DocumentDB Local - Quick Start                              [x]     |
-+======================================================================+
-|                                                                      |
-|  ┌────────────────────────────────────────────────────────────────┐  |
-|  │  ✅  DocumentDB Local is running on localhost:10260           │  |
-|  └────────────────────────────────────────────────────────────────┘  |
-|                                                                      |
-|  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌────────────┐  |
-|  │  Status      │ │  Endpoint    │ │  Image       │ │  Data      │  |
-|  │  ✅ Running  │ │  localhost    │ │  v1.2.3      │ │  Persisted │  |
-|  │              │ │  :10260      │ │  (latest)    │ │            │  |
-|  └──────────────┘ └──────────────┘ └──────────────┘ └────────────┘  |
-|                                                                      |
-|  ┌────────────────────────────────────────────────────────────────┐  |
-|  │  [ Open Connection ]       [ Copy Connection String ]         │  |
-|  │  [ Load Sample Data ]      [ View Logs ]                      │  |
-|  └────────────────────────────────────────────────────────────────┘  |
-|                                                                      |
-+======================================================================+
-```
-
-On readiness success the webview **auto-closes** and hands off to the
-tree, which becomes the persistent control surface (this matches the
-prototype: "progress in the terminal, and the webview closes
-automatically"). The success card above is shown only briefly.
-**Open Connection** expands the managed cluster in the tree (user browses
-databases/collections from the Quick Start subtree).
-
-**Load Sample Data** is rendered only when a seed dataset is available at
-ship time (see §8.4); otherwise it appears disabled with a "Coming soon"
-tooltip, since it is a v1.2 item (§15).
+On readiness success, Done retains the five completed rows and their Details, followed by the
+success message and next steps. **Open Connection** reveals the managed cluster in the tree. If
+requested sample data was not loaded, the success message says so and the waiting row's Details
+provides an informational message and a link to the setup log.
 
 ### 5.6 Cancel rules
 
@@ -782,6 +695,9 @@ gets a `quickStartSessionId` from the open command, and every event the panel pr
 
 ## 15. Scope split
 
+This section records the original proposed scope, not the current setup and success behavior in
+§§5.4–5.5.
+
 ### v1.0 (must ship)
 
 - Quick Start webview (review, success, Docker diagnosis); create progress
@@ -840,6 +756,8 @@ gets a `quickStartSessionId` from the open command, and every event the panel pr
 ---
 
 ## 16. Webview implementation notes
+
+These are the original implementation notes; current setup and success behavior is in §§5.4–5.5.
 
 The Quick Start webview follows existing extension patterns:
 
@@ -903,6 +821,8 @@ The Quick Start webview follows existing extension patterns:
 ---
 
 ## 18. Review resolutions (iteration 2)
+
+These review resolutions are historical; current setup and success behavior is in §§5.4–5.5.
 
 This revision folds in the PR review feedback (notably @xgerman's
 comments), the design intent shown in @tnaum-ms's prototype screenshots,

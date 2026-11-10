@@ -18,6 +18,7 @@ verified: 2026-08-14
 | 0005 | Restore missing credentials from the managed container | Accepted            | Error-node tree flow deferred             | 2026-09-29 | #979  |
 | 0006 | Wizard journey telemetry and correlation ids           | Accepted            | Quick Start lineage id not added          | 2026-09-29 | #979  |
 | 0007 | Image usage telemetry follows VS Code's setting        | Accepted            | Accepted as proposed                      | 2026-10-15 | #1018 |
+| 0008 | Set up stages expand to show what each stage did       | Accepted            | Amends 0003's single failure surface      | 2026-11-10 | —     |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -445,3 +446,25 @@ that choice rather than ask again.
 - Images before rc2 ignore the variable.
 - The Configure step says so in its footer note, after what Start does, linking the image's
   [privacy statement](https://github.com/documentdb/documentdb/blob/main/documentdb-local/PRIVACY.md).
+
+## 0008 - Set up stages expand to show what each stage did
+
+**Status:** Accepted · **Date:** 2026-11-10 · **PR:** — · **Raised by:** the operator
+**Evidence:** [iterations/11-setup-stage-details.md](./iterations/11-setup-stage-details.md) §§7–9
+
+### Decision
+
+The operator accepted Details on each settled stage with facts, on both Set up and Done. Details
+start collapsed and contain evidence only. This amends 0003's single failure surface: the
+`MessageBlock` remains the visible home for explanations and recovery actions, while the checking
+row's Details replaces the old Docker-check accordion. The relative last-checked time stays on the
+checking row.
+
+If requested sample data was not loaded, success remains success; the success block says so and
+the waiting row's Details contains an informational message pointing to the setup log.
+
+The operator deliberately left out step durations, unlike Diagnose connection's
+[0050](../connectivity-troubleshooter/decisions.md#0050--each-row-shows-its-duration-in-a-squared-badge-the-list-shades-the-row-under-the-pointer),
+and accepted session aggregates on the existing
+`wizard.close` event: the bounded, sorted stages opened and the number of openings. No new event
+per opening is sent.

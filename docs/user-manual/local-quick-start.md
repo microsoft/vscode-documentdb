@@ -42,6 +42,10 @@ The first setup stage heading reads **Checking container engine**, and its detai
 
 The setup view shows pull, create, start, and connection-readiness progress. Container-engine command output is written to the **DocumentDB Local Setup** output channel.
 
+Select **Details** on a completed or failed setup stage to see the facts available for that stage.
+Details start collapsed and remain available on the success screen. Failure explanations and recovery
+actions stay visible below the stages.
+
 ## Port
 
 The **Configure** step pre-fills the **Address** with a host port that is free at that moment, starting at `10260` and moving forward if that port is taken. You can change it, and the value is checked while you are still on the step.

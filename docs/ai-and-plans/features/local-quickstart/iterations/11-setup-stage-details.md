@@ -240,7 +240,7 @@ The pre-existing untracked Podman archive is outside this work.
 | P1 | Shared checking-row disclosure, focus/reset behavior; remove accordion | Terra: self-contained webview migration | — | Done `fa4a4d69` |
 | P2 | Typed runtime image inspection, per-stage facts, non-readiness presentation | Sol: host/webview contract and runtime lifecycle | P1 | Done `1e018adc` |
 | P3 | Readiness attempts, best-effort hello, sample-data outcomes and success sentence | Sol: readiness lifecycle and cross-module behavior | P2 | Done `2c735f8a` |
-| P4 | Aggregate disclosure telemetry, browser scenarios, docs and decision record | Sol: session lifecycle and cross-module verification | P3 | Queued |
+| P4 | Aggregate disclosure telemetry, browser scenarios, docs and decision record | Sol: telemetry; Terra: isolated scenarios/docs | P3 | Done `ac54c837` (docs separately) |
 
 Contract review advised by Opus 5.5 (high confidence): store terminal facts by
 `facts.kind`, not `event.stage`; preserve mid-setup Docker failure evidence on the
@@ -295,6 +295,33 @@ Added 29 tests; 738 focused tests passed before correction, 136 targeted tests
 afterward; root type check passed before correction. Published-image metadata
 was verified, but the first isolated live probe failed before container startup
 and was cleaned up; live `hello` verification is being retried separately.
+
+**P4 Done (2026-11-10), commit `ac54c837`:** P4 was split into disjoint
+telemetry (Sol) and scenario/documentation (Terra) sub-items; the accepted-item
+count remains four. Leader authorized the directly related exact route-count
+test updates (coordination, 100% confidence). Details openings use an
+uninstrumented, bounded mutation and aggregate only on the existing close event.
+Added 14 focused tests and three browser scenarios in all three themes.
+Focused webview tests: 205 passed; browser scenario contract tests: 31 passed;
+all 39 Local Quick Start live browser routes and named disclosure regions passed,
+plus 19 focus tests. Root type check passed.
+Advised (Opus 5.5, high confidence): no significant issue; accepted crash-before-close
+telemetry limitation unchanged. Documentation is committed separately with this note.
+
+**Live image validation:** the isolated retry used the existing official image,
+OCI version `1.0.0`, digest
+`sha256:4a341daca29b02dabd0d64c357bc9231868b59ef08c8059058b1e5cedbe3899d`.
+One ping/hello attempt succeeded: `maxWireVersion=21`, product-version field absent
+(correctly omitted). Total probe setup/check/cleanup: 3526 ms; ping 3 ms, hello
+2 ms. Only its new container, volume and credential file were used, then removed.
+The first probe attempt failed before startup without retaining the CLI error;
+the retry used a named temporary credential file and succeeded.
+
+**Batch Case 1:** `npm run build` passed; focused service/webview Vitest passed
+755 tests in 27 files (19.57 s). The check runner also launched a separate
+read-only branch review, which reported no significant issue. Full Case 2 follows
+at the operator's explicit request, even though the stacked PR will remain draft
+pending operator workbench review.
 
 1. **A PR stacked on #1065.** Branch from `dev/guanzhousong/quickstart-podman-fallback` and open
    the PR against that branch, not `main`. When #1065 merges, retarget it to `main`. Keep the
