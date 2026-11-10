@@ -144,27 +144,50 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
     });
 
-    it.each([false, true])('blocks eager token completion after trust removal without replacing failure context (prior=%s)', async (prior): Promise<void> => {
-        let suffix: string | undefined = 'database.example.com';
-        vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
-            inspect: vi.fn(() => ({ globalValue: { hostnameSuffix: suffix } })),
-        } as unknown as vscode.WorkspaceConfiguration);
-        if (prior) {
-            recordEntraTokenFailure('cluster-1', { cloudCategory: 'custom', authMethod: 'interactive' });
-        }
-        const failure = getRecentEntraTokenFailure('cluster-1');
-        let finish!: (value: { accessToken: string }) => void;
-        getSessionFromVSCode.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
-        const startupProperties: Record<string, string> = {};
-        const configuring = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.database.example.com/'))
-            .configureAuth(undefined, { startupCorrelationId: 'startup', surface: 'extension', startupProperties });
-        await vi.waitFor(() => expect(getSessionFromVSCode).toHaveBeenCalledTimes(1));
-        suffix = undefined;
-        finish({ accessToken: 'must-not-return' });
-        await expect(configuring).rejects.toBeInstanceOf(EntraDestinationRejectedError);
-        expect(getRecentEntraTokenFailure('cluster-1')).toBe(failure);
-        expect(startupProperties.entraFailureKind).not.toBe('tokenAcquisitionFailed');
-    });
+    it.each([
+        [false, false],
+        [false, true],
+        [true, false],
+        [true, true],
+    ] as const)(
+        'blocks token completion after trust removal without replacing failure context (prior=%s, interactive=%s)',
+        async (prior, interactive): Promise<void> => {
+            let suffix: string | undefined = 'database.example.com';
+            vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+                inspect: vi.fn(() => ({ globalValue: { hostnameSuffix: suffix } })),
+            } as unknown as vscode.WorkspaceConfiguration);
+            if (prior) {
+                recordEntraTokenFailure('cluster-1', { cloudCategory: 'custom', authMethod: 'interactive' });
+            }
+            const failure = getRecentEntraTokenFailure('cluster-1');
+            let finish!: (value: { accessToken: string }) => void;
+            getSessionFromVSCode.mockReturnValueOnce(
+                new Promise((resolve) => {
+                    finish = resolve;
+                }),
+            );
+            const startupProperties: Record<string, string> = {};
+            const onTokenStarted = vi.fn();
+            const onTokenAcquired = vi.fn();
+            const onTokenFailed = vi.fn();
+            const configuring = new MicrosoftEntraIDAuthHandler(
+                buildCredentials('mongodb://cluster.database.example.com/'),
+                { interactive, observer: { onTokenStarted, onTokenAcquired, onTokenFailed } },
+            ).configureAuth(undefined, { startupCorrelationId: 'startup', surface: 'extension', startupProperties });
+            await vi.waitFor(() => expect(getSessionFromVSCode).toHaveBeenCalledTimes(1));
+            expect(getSessionFromVSCode.mock.calls[0][2]).toEqual(
+                interactive ? { createIfNone: true } : { silent: true },
+            );
+            suffix = undefined;
+            finish({ accessToken: 'must-not-return' });
+            await expect(configuring).rejects.toBeInstanceOf(EntraDestinationRejectedError);
+            expect(getRecentEntraTokenFailure('cluster-1')).toBe(failure);
+            expect(startupProperties.entraFailureKind).not.toBe('tokenAcquisitionFailed');
+            expect(onTokenStarted).toHaveBeenCalledOnce();
+            expect(onTokenAcquired).not.toHaveBeenCalled();
+            expect(onTokenFailed).not.toHaveBeenCalled();
+        },
+    );
 
     it('rechecks the eager captured-token callback and existing TLS hook after trust removal', async (): Promise<void> => {
         let suffix: string | undefined = 'database.example.com';
@@ -501,6 +524,14 @@ describe('MicrosoftEntraIDAuthHandler', () => {
             };
             const target = buildAuthConnectionTarget(AuthMethodId.MicrosoftEntraID, credentials);
 
+            if (connectionString.startsWith('mongodb://localhost:')) {
+                await expect(new MicrosoftEntraIDAuthHandler(credentials).configureAuth()).rejects.toBeInstanceOf(
+                    EntraDestinationRejectedError,
+                );
+                expect(getSessionFromVSCode).not.toHaveBeenCalled();
+                return;
+            }
+
             const result = await new MicrosoftEntraIDAuthHandler(credentials).configureAuth();
 
             expect(result.connectionString).toBe(target.connectionString);
@@ -520,7 +551,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         }
 
         it('keeps the interactive request when the policy is explicitly interactive', async () => {
-            const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.example.com/'), {
+            const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.mongocluster.cosmos.azure.com/'), {
                 interactive: true,
             });
             await handler.configureAuth();
@@ -535,7 +566,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         });
 
         it('looks up an existing session silently when non-interactive', async () => {
-            const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.example.com/'), {
+            const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.mongocluster.cosmos.azure.com/'), {
                 interactive: false,
             });
             const { options } = await handler.configureAuth();
@@ -558,7 +589,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         it('reports a missing silent session as unavailable input without recording a token failure', async () => {
             getSessionFromVSCode.mockResolvedValueOnce(undefined);
             const events: string[] = [];
-            const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.example.com/'), {
+            const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.mongocluster.cosmos.azure.com/'), {
                 interactive: false,
                 observer: recordingObserver(events),
             });
@@ -575,20 +606,20 @@ describe('MicrosoftEntraIDAuthHandler', () => {
             expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
             expect(startupProperties.entraFailureKind).not.toBe('tokenAcquisitionFailed');
             expect(startupProperties.entraFailureKind).toBe('none');
-            expect(events).toEqual(['resolved:*.azure.com', 'tokenStarted', 'tokenFailed']);
+            expect(events).toEqual(['resolved:*.mongocluster.cosmos.azure.com', 'tokenStarted', 'tokenFailed']);
         });
 
         it('does not clear an earlier recorded failure when no silent session is available', async () => {
             getSessionFromVSCode.mockRejectedValueOnce(new Error('AADSTS65002: Preauthorization required'));
             await expect(
-                new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.example.com/')).configureAuth(),
+                new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.mongocluster.cosmos.azure.com/')).configureAuth(),
             ).rejects.toThrow('AADSTS65002');
             const failure = getRecentEntraTokenFailure('cluster-1');
             expect(failure).toBeDefined();
 
             getSessionFromVSCode.mockResolvedValueOnce(undefined);
             await expect(
-                new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.example.com/'), {
+                new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.mongocluster.cosmos.azure.com/'), {
                     interactive: false,
                 }).configureAuth(),
             ).rejects.toBeInstanceOf(AuthInputUnavailableError);
@@ -598,7 +629,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         it('records a silent token request error exactly as an interactive one', async () => {
             const error = Object.freeze(new Error('AADSTS65002: Preauthorization required'));
             getSessionFromVSCode.mockRejectedValueOnce(error);
-            const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.example.com/'), {
+            const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.mongocluster.cosmos.azure.com/'), {
                 interactive: false,
             });
             const startupProperties: Record<string, string> = {};
@@ -647,7 +678,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
 
             await handler.configureAuth();
 
-            expect(events).toEqual(['resolved:*.azure.com', 'tokenStarted', 'tokenAcquired:tenant']);
+            expect(events).toEqual(['resolved:*.mongocluster.cosmos.azure.com', 'tokenStarted', 'tokenAcquired:tenant']);
             expect(acquired).toEqual([
                 {
                     accessToken: 'access-token',
@@ -662,7 +693,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
             let resolvedInfo:
                 | Parameters<NonNullable<AuthPhaseObserver['onSignInConfigurationResolved']>>[0]
                 | undefined;
-            const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.example.com/'), {
+            const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.mongocluster.cosmos.azure.com/'), {
                 interactive: true,
                 observer: { onSignInConfigurationResolved: (info) => (resolvedInfo = info) },
             });
@@ -671,7 +702,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
                 details: { flow: 'interactive', tokenResource: 'https://ossrdbms-aad.database.windows.net' },
                 cloudCategory: 'public',
                 tokenResourceReason: 'setting',
-                allowedHosts: ['*.azure.com'],
+                allowedHosts: ['*.mongocluster.cosmos.azure.com'],
             });
         });
 
@@ -686,7 +717,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
                 const events: string[] = [];
                 let failedInfo: unknown;
                 const observer = recordingObserver(events);
-                const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.azure.us/'), {
+                const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.mongocluster.cosmos.azure.us/'), {
                     interactive,
                     observer: {
                         ...observer,
@@ -719,7 +750,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
                 onTokenAcquired: throwing,
                 onTokenFailed: throwing,
             };
-            const credentials = buildCredentials('mongodb://cluster.example.com/');
+            const credentials = buildCredentials('mongodb://cluster.mongocluster.cosmos.azure.com/');
             const expected = await new MicrosoftEntraIDAuthHandler(credentials, { interactive }).configureAuth();
 
             const result = await new MicrosoftEntraIDAuthHandler(credentials, {

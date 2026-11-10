@@ -74,6 +74,8 @@ describe('Connections recovery actions', () => {
 
             expect(treeItems.map((child) => child.command?.command)).toEqual([
                 'vscode-documentdb.command.internal.retry',
+                'vscode-documentdb.command.diagnoseConnection',
+                'vscode-documentdb.command.shell.open',
                 'vscode-documentdb.command.connectionsView.updateCredentials',
                 ...(reason ? ['vscode-documentdb.command.connectionsView.updateConnectionString'] : []),
             ]);

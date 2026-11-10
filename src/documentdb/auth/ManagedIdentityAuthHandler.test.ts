@@ -153,9 +153,13 @@ describe('ManagedIdentityAuthHandler', () => {
             inspect: vi.fn(() => ({ globalValue: { hostnameSuffix: suffix } })),
         } as unknown as vscode.WorkspaceConfiguration);
         const startupProperties: Record<string, string> = {};
-        const { options } = await new ManagedIdentityAuthHandler(buildCredentials({
-            connectionString: 'mongodb://cluster.database.example.com/',
-        })).configureAuth(undefined, { startupCorrelationId: 'startup', surface: 'extension', startupProperties });
+        const onTokenStarted = vi.fn();
+        const onTokenAcquired = vi.fn();
+        const onTokenFailed = vi.fn();
+        const { options } = await new ManagedIdentityAuthHandler(
+            buildCredentials({ connectionString: 'mongodb://cluster.database.example.com/' }),
+            { interactive: false, observer: { onTokenStarted, onTokenAcquired, onTokenFailed } },
+        ).configureAuth(undefined, { startupCorrelationId: 'startup', surface: 'extension', startupProperties });
         if (prior) {
             recordEntraTokenFailure('cluster-1', { cloudCategory: 'custom', authMethod: 'managedIdentity' });
         }
@@ -169,6 +173,9 @@ describe('ManagedIdentityAuthHandler', () => {
         await expect(pending).rejects.toBeInstanceOf(EntraDestinationRejectedError);
         expect(startupProperties.entraFailureKind).not.toBe('tokenAcquisitionFailed');
         expect(getRecentEntraTokenFailure('cluster-1')).toBe(failure);
+        expect(onTokenStarted).toHaveBeenCalledOnce();
+        expect(onTokenAcquired).not.toHaveBeenCalled();
+        expect(onTokenFailed).not.toHaveBeenCalled();
         expect(options.checkServerIdentity?.('cluster.database.example.com', {} as PeerCertificate))
             .toBeInstanceOf(EntraDestinationRejectedError);
     });
@@ -493,6 +500,14 @@ describe('ManagedIdentityAuthHandler', () => {
             });
             const target = buildAuthConnectionTarget(AuthMethodId.ManagedIdentity, credentials);
 
+            if (connectionString.startsWith('mongodb://localhost:')) {
+                await expect(new ManagedIdentityAuthHandler(credentials).configureAuth()).rejects.toBeInstanceOf(
+                    EntraDestinationRejectedError,
+                );
+                expect(getManagedIdentityAccessToken).not.toHaveBeenCalled();
+                return;
+            }
+
             const { connectionString: actual, options } = await new ManagedIdentityAuthHandler(
                 credentials,
             ).configureAuth();
@@ -548,11 +563,11 @@ describe('ManagedIdentityAuthHandler', () => {
             );
 
             const { options } = await handler.configureAuth();
-            expect(events).toEqual(['resolved:public:host:*.azure.com']);
+            expect(events).toEqual(['resolved:public:host:*.mongocluster.cosmos.azure.com']);
             expect(getManagedIdentityAccessToken).not.toHaveBeenCalled();
 
             await invokeOidcCallback(options);
-            expect(events).toEqual(['resolved:public:host:*.azure.com', 'tokenStarted', 'tokenAcquired:tenant']);
+            expect(events).toEqual(['resolved:public:host:*.mongocluster.cosmos.azure.com', 'tokenStarted', 'tokenAcquired:tenant']);
             expect(tokens).toEqual(['a-token']);
             const output = JSON.stringify([
                 vi.mocked(ext.outputChannel.info).mock.calls,
@@ -571,9 +586,9 @@ describe('ManagedIdentityAuthHandler', () => {
             });
 
             const { options } = await handler.configureAuth();
-            expect(events).toEqual(['resolved:public:host:*.azure.com']);
+            expect(events).toEqual(['resolved:public:host:*.mongocluster.cosmos.azure.com']);
             await expect(invokeOidcCallback(options)).rejects.toBe(error);
-            expect(events).toEqual(['resolved:public:host:*.azure.com', 'tokenStarted', 'tokenFailed']);
+            expect(events).toEqual(['resolved:public:host:*.mongocluster.cosmos.azure.com', 'tokenStarted', 'tokenFailed']);
             expect(getRecentEntraTokenFailure('cluster-1')).toMatchObject({
                 authMethod: 'managedIdentity',
                 ruleId: 'applicationNotInDirectory',

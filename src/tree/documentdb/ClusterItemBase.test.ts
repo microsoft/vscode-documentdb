@@ -454,11 +454,21 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
             'Learn More',
         );
         expect(item.lastConnectionFailureReason).toBe('entraDestinationRejected');
-        expect(children).toHaveLength(1);
+        expect(children).toHaveLength(3);
         expect(children[0].id).toBe('connectionsView/folder/cluster-1/retry');
         expect((children[0] as TreeElement & { commandId: string }).commandId).toBe(
             'vscode-documentdb.command.internal.retry',
         );
+        expect(children.map((child) => child.id)).toEqual([
+            'connectionsView/folder/cluster-1/retry',
+            'connectionsView/folder/cluster-1/diagnose',
+            'connectionsView/folder/cluster-1/open-shell',
+        ]);
+        expect(children.map((child) => (child as TreeElement & { commandId: string }).commandId)).toEqual([
+            'vscode-documentdb.command.internal.retry',
+            'vscode-documentdb.command.diagnoseConnection',
+            'vscode-documentdb.command.shell.open',
+        ]);
     });
 
     it('clears the destination rejection reason after a successful cached retry', async (): Promise<void> => {

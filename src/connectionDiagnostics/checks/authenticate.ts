@@ -32,7 +32,11 @@ import { TokenResourceResolutionError } from '../../documentdb/auth/documentdbTo
 import { classifyEntraError } from '../../documentdb/auth/entraErrors/classifyEntraError';
 import { getRecentEntraTokenFailure } from '../../documentdb/auth/entraErrors/entraTokenFailures';
 import { getCloudForTokenResource } from '../../documentdb/auth/entraScopes';
-import { getAzureHostSuffix } from '../../documentdb/auth/oidcAllowedHosts';
+import {
+    BUILT_IN_ENTRA_DESTINATION_SUFFIXES,
+    getAzureHostSuffix,
+    isEntraDestinationRejectedError,
+} from '../../documentdb/auth/oidcAllowedHosts';
 import { type CachedClusterCredentials } from '../../documentdb/CredentialCache';
 import { prepareDriverConnectionString } from '../../documentdb/srv/prepareDriverConnectionString';
 import { ConnectionStartupTimings } from '../../documentdb/utils/ConnectionStartupTimings';
@@ -104,7 +108,9 @@ const tokenResourceReasons: readonly string[] = [
     'imds',
     'copyDefault',
 ];
-const knownAllowedHostPatterns: readonly string[] = ['*.azure.com', '*.azure.us', '*.azure.cn'];
+const knownAllowedHostPatterns: readonly string[] = BUILT_IN_ENTRA_DESTINATION_SUFFIXES.map(
+    (suffix): string => `*.${suffix}`,
+);
 const knownMechanisms: readonly string[] = [
     'DEFAULT',
     'SCRAM-SHA-1',
@@ -417,6 +423,9 @@ export function createAuthenticateCheck(
                 return finish(inputUnavailable(error.missing, method, steps, facts));
             }
             getRunOwnedClient().authError = error;
+            if (isEntraDestinationRejectedError(error)) {
+                return finish(connectFailure(error, undefined, {}, new Set()));
+            }
             if (error instanceof TokenResourceResolutionError) {
                 steps?.finish('auth.signInConfiguration', 'fail', {
                     ...safeResolutionDetails(error.details),
@@ -515,14 +524,15 @@ export function createAuthenticateCheck(
                 return { status: 'fail' };
             }
             if (
-                error instanceof MongoInvalidArgumentError &&
-                classifyEntraError(error.message)?.ruleId === 'oidcHostNotAllowed'
+                isEntraDestinationRejectedError(error) ||
+                (error instanceof MongoInvalidArgumentError &&
+                    classifyEntraError(error.message)?.ruleId === 'oidcHostNotAllowed')
             ) {
                 const finding = makeFinding(
                     'auth.oidcHostNotAllowed',
                     'error',
                     {},
-                    'The driver does not allow this cluster host for Microsoft Entra ID authentication, so no token was sent.',
+                    "Microsoft Entra ID isn't allowed for this server.",
                 );
                 if (steps) {
                     steps.replace('auth.signInConfiguration', 'fail', [finding]);
