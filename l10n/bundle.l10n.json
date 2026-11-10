@@ -1868,6 +1868,7 @@
   "Microsoft Entra ID sign-in appears to require Microsoft to preauthorize VS Code. Only Microsoft can change this.": "Microsoft Entra ID sign-in appears to require Microsoft to preauthorize VS Code. Only Microsoft can change this.",
   "Microsoft Entra ID sign-in failed": "Microsoft Entra ID sign-in failed",
   "Microsoft Entra ID sign-in for Azure DocumentDB appears to require Microsoft to preauthorize VS Code. Only Microsoft can change this, not you or your tenant administrator. Use Username and Password authentication or managed identity on an Azure VM as a workaround, and report this on GitHub. See {link}": "Microsoft Entra ID sign-in for Azure DocumentDB appears to require Microsoft to preauthorize VS Code. Only Microsoft can change this, not you or your tenant administrator. Use Username and Password authentication or managed identity on an Azure VM as a workaround, and report this on GitHub. See {link}",
+  "Microsoft Entra ID unavailable": "Microsoft Entra ID unavailable",
   "Microsoft Entra ID: not available": "Microsoft Entra ID: not available",
   "Migration Providers: {0}": "Migration Providers: {0}",
   "Mode: {0}": "Mode: {0}",

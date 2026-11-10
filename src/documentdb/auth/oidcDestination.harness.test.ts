@@ -13,7 +13,11 @@ import { join } from 'path';
 import tls, { type ConnectionOptions, type PeerCertificate, type TLSSocket } from 'tls';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EntraDestinationRejectedError } from './oidcAllowedHosts';
-import { buildOidcClientConfiguration, createOidcDestinationPolicy, type OidcDestinationPolicy } from './oidcClientOptions';
+import {
+    buildOidcClientConfiguration,
+    createOidcDestinationPolicy,
+    type OidcDestinationPolicy,
+} from './oidcClientOptions';
 
 const SEED = 'cluster.mongocluster.cosmos.azure.com';
 const REJECTED = 'sink.cloudapp.azure.com';
@@ -481,7 +485,9 @@ describe('offline OIDC destination protocol (real installed driver and TLS)', ()
         const reconnectStart = attempts.length;
         const replacement = await startEndpoint(false, seed.port);
         await until(
-            () => attempts.slice(reconnectStart).filter((attempt) => attempt.checkError && attempt.socket.closed).length >= 2,
+            () =>
+                attempts.slice(reconnectStart).filter((attempt) => attempt.checkError && attempt.socket.closed)
+                    .length >= 2,
             'revoked policy rejected two replacement sockets',
         );
         await closeClient(client);

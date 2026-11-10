@@ -203,7 +203,9 @@ describe('saved connection destination authentication', () => {
         async (outcome): Promise<void> => {
             const connection = makeConnection('mongodb://other.example.com/', AuthMethodId.MicrosoftEntraID);
             vi.mocked(ConnectionStorageService.get).mockResolvedValue(connection);
-            const error = new EntraDestinationRejectedError(evaluateEntraDestination(connection.secrets.connectionString));
+            const error = new EntraDestinationRejectedError(
+                evaluateEntraDestination(connection.secrets.connectionString),
+            );
             vi.mocked(ClustersClient.getClient).mockRejectedValue(error);
             showErrorMessage.mockResolvedValueOnce('Learn More');
             if (outcome === 'false') {

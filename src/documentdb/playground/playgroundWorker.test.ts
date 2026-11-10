@@ -7,7 +7,11 @@ import { type MongoClientOptions, type MongoClient as MongoClientType } from 'mo
 import { type PeerCertificate } from 'tls';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EntraDestinationRejectedError } from '../auth/oidcAllowedHosts';
-import { type MainToWorkerMessage, type SerializableOidcDestinationPolicy, type WorkerToMainMessage } from './workerTypes';
+import {
+    type MainToWorkerMessage,
+    type SerializableOidcDestinationPolicy,
+    type WorkerToMainMessage,
+} from './workerTypes';
 
 const transport = vi.hoisted(() => ({ on: vi.fn(), postMessage: vi.fn() }));
 const driver = vi.hoisted(() => ({
@@ -160,14 +164,22 @@ describe('playground worker OIDC configuration at the driver boundary', () => {
         { originalConnectionString: 'mongodb://cluster.database.example.com/', revoked: new ArrayBuffer(4) },
         { originalConnectionString: 'mongodb://cluster.database.example.com/', revoked: new SharedArrayBuffer(8) },
         { originalConnectionString: 1, revoked: new SharedArrayBuffer(4) },
-        { originalConnectionString: 'mongodb://cluster.database.example.com/', customHostnameSuffix: '*.example.com', revoked: new SharedArrayBuffer(4) },
+        {
+            originalConnectionString: 'mongodb://cluster.database.example.com/',
+            customHostnameSuffix: '*.example.com',
+            revoked: new SharedArrayBuffer(4),
+        },
     ])('fails closed for missing or malformed worker policy %#', async (payload): Promise<void> => {
         init({ oidcDestinationPolicy: payload as unknown as SerializableOidcDestinationPolicy });
         await waitForInit();
         expect(driver.construct).not.toHaveBeenCalled();
-        expect(transport.postMessage).toHaveBeenCalledWith(expect.objectContaining({
-            type: 'initResult', success: false, errorName: 'EntraDestinationRejectedError',
-        }));
+        expect(transport.postMessage).toHaveBeenCalledWith(
+            expect.objectContaining({
+                type: 'initResult',
+                success: false,
+                errorName: 'EntraDestinationRejectedError',
+            }),
+        );
         expect(transport.postMessage.mock.calls.some(([message]) => message.type === 'tokenRequest')).toBe(false);
     });
 
@@ -183,15 +195,19 @@ describe('playground worker OIDC configuration at the driver boundary', () => {
         const options = driver.construct.mock.calls[0][1];
         const callback = options.authMechanismProperties!.OIDC_CALLBACK!;
         const pending = callback({ version: 1, timeoutContext: new AbortController().signal });
-        const request = transport.postMessage.mock.calls.map(([message]) => message as WorkerToMainMessage)
+        const request = transport.postMessage.mock.calls
+            .map(([message]) => message as WorkerToMainMessage)
             .find((message) => message.type === 'tokenRequest')!;
         Atomics.store(new Int32Array(revoked), 0, 1);
         receive({ type: 'tokenResponse', requestId: request.requestId, accessToken: 'must-not-return' });
         await expect(pending).rejects.toBeInstanceOf(EntraDestinationRejectedError);
         const name = 'resolved.mongocluster.cosmos.azure.com';
-        expect(options.checkServerIdentity?.(name, { subjectaltname: `DNS:${name}` } as PeerCertificate))
-            .toBeInstanceOf(EntraDestinationRejectedError);
-        await expect(callback({ version: 1, timeoutContext: new AbortController().signal })).rejects.toBeInstanceOf(EntraDestinationRejectedError);
+        expect(
+            options.checkServerIdentity?.(name, { subjectaltname: `DNS:${name}` } as PeerCertificate),
+        ).toBeInstanceOf(EntraDestinationRejectedError);
+        await expect(callback({ version: 1, timeoutContext: new AbortController().signal })).rejects.toBeInstanceOf(
+            EntraDestinationRejectedError,
+        );
         expect(transport.postMessage.mock.calls.filter(([message]) => message.type === 'tokenRequest')).toHaveLength(1);
     });
 
@@ -205,9 +221,13 @@ describe('playground worker OIDC configuration at the driver boundary', () => {
         });
         await waitForInit();
         expect(driver.construct).not.toHaveBeenCalled();
-        expect(transport.postMessage).toHaveBeenCalledWith(expect.objectContaining({
-            type: 'initResult', success: false, errorName: 'EntraDestinationRejectedError',
-        }));
+        expect(transport.postMessage).toHaveBeenCalledWith(
+            expect.objectContaining({
+                type: 'initResult',
+                success: false,
+                errorName: 'EntraDestinationRejectedError',
+            }),
+        );
     });
 
     it('preserves a rejected relay error through worker initialization', async (): Promise<void> => {

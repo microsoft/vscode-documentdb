@@ -8,7 +8,11 @@ import { type PeerCertificate } from 'tls';
 import { describe, expect, it, vi } from 'vitest';
 import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString';
 import { EntraDestinationRejectedError, isEntraDestinationRejectedError } from './oidcAllowedHosts';
-import { buildOidcClientConfiguration, createEntraCheckServerIdentity, createOidcDestinationPolicy } from './oidcClientOptions';
+import {
+    buildOidcClientConfiguration,
+    createEntraCheckServerIdentity,
+    createOidcDestinationPolicy,
+} from './oidcClientOptions';
 
 const host = 'cluster.mongocluster.cosmos.azure.com';
 const connectionString = `mongodb://${host}/`;
@@ -113,7 +117,10 @@ describe('buildOidcClientConfiguration', () => {
             mechanism: 'MONGODB-OIDC',
             source: '$external',
             username: '',
-            mechanismProperties: { ALLOWED_HOSTS: patterns, OIDC_CALLBACK: result.options.authMechanismProperties?.OIDC_CALLBACK },
+            mechanismProperties: {
+                ALLOWED_HOSTS: patterns,
+                OIDC_CALLBACK: result.options.authMechanismProperties?.OIDC_CALLBACK,
+            },
         });
         expect(callback).not.toHaveBeenCalled();
     });
@@ -200,7 +207,11 @@ describe('buildOidcClientConfiguration', () => {
         ['tlsInsecure=false&tlsInsecure=true', true],
         ['REJECTUNAUTHORIZED=true&rejectUnauthorized=FaLsE', true],
     ])('removes %s and reports only requested TLS relaxation', (query, ignored) => {
-        const result = buildOidcClientConfiguration({ connectionString: `${connectionString}?${query}`, policy, oidcCallback });
+        const result = buildOidcClientConfiguration({
+            connectionString: `${connectionString}?${query}`,
+            policy,
+            oidcCallback,
+        });
         expect(new DocumentDBConnectionString(result.connectionString).search).toBe('');
         expect(result.ignoredTlsBypass).toBe(ignored);
         const parsed = new MongoClient(result.connectionString, result.options).options;
@@ -410,7 +421,10 @@ describe('buildOidcClientConfiguration', () => {
     it('supports SRV and explicit custom suffixes without adding unrelated destinations', () => {
         const result = buildOidcClientConfiguration({
             connectionString: 'mongodb+srv://cluster.database.example.com/',
-            policy: createOidcDestinationPolicy('mongodb+srv://cluster.database.example.com/', () => ' .DATABASE.EXAMPLE.COM '),
+            policy: createOidcDestinationPolicy(
+                'mongodb+srv://cluster.database.example.com/',
+                () => ' .DATABASE.EXAMPLE.COM ',
+            ),
             oidcCallback,
         });
         const parsed = new MongoClient(result.connectionString, result.options).options;
@@ -446,15 +460,19 @@ describe('buildOidcClientConfiguration', () => {
             '*.mongocluster.cosmos.azure.com',
             '*.mongocluster.cosmos.azure.us',
         ]);
-        expect(result.options.checkServerIdentity?.(
-            'node.mongocluster.cosmos.azure.cn',
-            certificateFor('node.mongocluster.cosmos.azure.cn'),
-        )).toBeInstanceOf(EntraDestinationRejectedError);
-        expect(() => buildOidcClientConfiguration({
-            connectionString: 'mongodb://node.mongocluster.cosmos.azure.cn/',
-            policy: originalPolicy,
-            oidcCallback,
-        })).toThrow(EntraDestinationRejectedError);
+        expect(
+            result.options.checkServerIdentity?.(
+                'node.mongocluster.cosmos.azure.cn',
+                certificateFor('node.mongocluster.cosmos.azure.cn'),
+            ),
+        ).toBeInstanceOf(EntraDestinationRejectedError);
+        expect(() =>
+            buildOidcClientConfiguration({
+                connectionString: 'mongodb://node.mongocluster.cosmos.azure.cn/',
+                policy: originalPolicy,
+                oidcCallback,
+            }),
+        ).toThrow(EntraDestinationRejectedError);
     });
 
     it('rechecks live trust on existing TLS hooks and on both sides of callback awaits', async () => {
@@ -462,8 +480,17 @@ describe('buildOidcClientConfiguration', () => {
         let suffix: string | undefined = 'database.example.com';
         const originalPolicy = createOidcDestinationPolicy(original, () => suffix);
         let finish!: (value: { accessToken: string }) => void;
-        const callback = vi.fn(() => new Promise<{ accessToken: string }>((resolve) => { finish = resolve; }));
-        const result = buildOidcClientConfiguration({ connectionString: original, policy: originalPolicy, oidcCallback: callback });
+        const callback = vi.fn(
+            () =>
+                new Promise<{ accessToken: string }>((resolve) => {
+                    finish = resolve;
+                }),
+        );
+        const result = buildOidcClientConfiguration({
+            connectionString: original,
+            policy: originalPolicy,
+            oidcCallback: callback,
+        });
         const wrapped = result.options.authMechanismProperties!.OIDC_CALLBACK!;
         const params = { version: 1 as const, timeoutContext: new AbortController().signal };
         const token = wrapped(params);
@@ -471,8 +498,12 @@ describe('buildOidcClientConfiguration', () => {
         suffix = undefined;
         finish({ accessToken: 'must-not-return' });
         await expect(token).rejects.toBeInstanceOf(EntraDestinationRejectedError);
-        expect(result.options.checkServerIdentity?.('cluster.database.example.com', certificateFor('cluster.database.example.com')))
-            .toBeInstanceOf(EntraDestinationRejectedError);
+        expect(
+            result.options.checkServerIdentity?.(
+                'cluster.database.example.com',
+                certificateFor('cluster.database.example.com'),
+            ),
+        ).toBeInstanceOf(EntraDestinationRejectedError);
         await expect(wrapped(params)).rejects.toBeInstanceOf(EntraDestinationRejectedError);
         expect(callback).toHaveBeenCalledTimes(1);
     });

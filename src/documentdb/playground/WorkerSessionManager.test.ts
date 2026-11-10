@@ -5,8 +5,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest';
 
-import { UserCancelledError, type IActionContext, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import { rewriteSrvUri } from '@documentdb-js/srv-resolver';
+import { UserCancelledError, type IActionContext, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import { MongoClient } from 'mongodb';
 import * as path from 'path';
 import * as vscode from 'vscode';
@@ -376,7 +376,9 @@ describe('WorkerSessionManager', () => {
             });
             const manager = new WorkerSessionManager(callbacks);
             const initializing = manager.ensureWorker('custom', {
-                ...initMessage(), authMechanism: 'ManagedIdentity', connectionString: 'mongodb+srv://original.database.example.com/',
+                ...initMessage(),
+                authMechanism: 'ManagedIdentity',
+                connectionString: 'mongodb+srv://original.database.example.com/',
             });
             await Promise.resolve();
             const posted = replyInit();
@@ -403,7 +405,10 @@ describe('WorkerSessionManager', () => {
 
         it('does not subscribe or revoke built-in-only generations for unrelated custom settings', async (): Promise<void> => {
             const manager = new WorkerSessionManager(callbacks);
-            const initializing = manager.ensureWorker('built-in', { ...initMessage(), authMechanism: 'ManagedIdentity' });
+            const initializing = manager.ensureWorker('built-in', {
+                ...initMessage(),
+                authMechanism: 'ManagedIdentity',
+            });
             await Promise.resolve();
             const posted = replyInit();
             await initializing;
@@ -427,7 +432,9 @@ describe('WorkerSessionManager', () => {
                     vi.mocked(prepareDriverConnectionString).mockRejectedValueOnce(new Error('preparation failed'));
                 }
                 const initializing = manager.ensureWorker('custom', {
-                    ...initMessage(), authMechanism: 'MicrosoftEntraID', connectionString: 'mongodb://original.database.example.com/',
+                    ...initMessage(),
+                    authMechanism: 'MicrosoftEntraID',
+                    connectionString: 'mongodb://original.database.example.com/',
                 });
                 if (lifecycle === 'failedPreparation') {
                     await expect(initializing).rejects.toThrow('preparation failed');
@@ -437,10 +444,18 @@ describe('WorkerSessionManager', () => {
                 }
                 await Promise.resolve();
                 const worker = workerMock();
-                const posted = worker.postMessage.mock.calls.at(-1)![0] as Extract<MainToWorkerMessage, { type: 'init' }>;
+                const posted = worker.postMessage.mock.calls.at(-1)![0] as Extract<
+                    MainToWorkerMessage,
+                    { type: 'init' }
+                >;
                 const revoked = new Int32Array(posted.oidcDestinationPolicy!.revoked);
                 if (lifecycle === 'failedInit') {
-                    worker._emit('message', { type: 'initResult', requestId: posted.requestId, success: false, error: 'failed' });
+                    worker._emit('message', {
+                        type: 'initResult',
+                        requestId: posted.requestId,
+                        success: false,
+                        error: 'failed',
+                    });
                     await expect(initializing).rejects.toThrow('failed');
                 } else {
                     replyInit();
@@ -455,7 +470,9 @@ describe('WorkerSessionManager', () => {
                         await stopping;
                     } else {
                         const replacing = manager.ensureWorker('replacement', {
-                            ...initMessage(), authMechanism: 'ManagedIdentity', connectionString: 'mongodb://new.database.example.com/',
+                            ...initMessage(),
+                            authMechanism: 'ManagedIdentity',
+                            connectionString: 'mongodb://new.database.example.com/',
                         });
                         expect(Atomics.load(revoked, 0)).toBe(1);
                         await Promise.resolve();
@@ -486,11 +503,17 @@ describe('WorkerSessionManager', () => {
             vi.mocked(prepareDriverConnectionString).mockReturnValueOnce(pending.promise);
             const manager = new WorkerSessionManager(callbacks);
             const initializing = manager.ensureWorker('custom', {
-                ...initMessage(), authMechanism: 'ManagedIdentity', connectionString: 'mongodb+srv://original.database.example.com/',
+                ...initMessage(),
+                authMechanism: 'ManagedIdentity',
+                connectionString: 'mongodb+srv://original.database.example.com/',
             });
             suffix = undefined;
             changed({ affectsConfiguration: () => true } as vscode.ConfigurationChangeEvent);
-            pending.resolve({ connectionString: 'mongodb://resolved.database.example.com/', options: {}, srvResolution: 'fallback' });
+            pending.resolve({
+                connectionString: 'mongodb://resolved.database.example.com/',
+                options: {},
+                srvResolution: 'fallback',
+            });
             await expect(initializing).rejects.toBeInstanceOf(EntraDestinationRejectedError);
             expect(Worker).not.toHaveBeenCalled();
             expect(dispose).toHaveBeenCalledTimes(1);
@@ -507,7 +530,9 @@ describe('WorkerSessionManager', () => {
                         const rewritten = rewriteSrvUri({
                             connectionString: input.connectionString,
                             options: input.options,
-                            srvRecords: [{ name: 'resolved.database.example.com', port: 10260, weight: 0, priority: 0 }],
+                            srvRecords: [
+                                { name: 'resolved.database.example.com', port: 10260, weight: 0, priority: 0 },
+                            ],
                             txtRecords: [['authSource=authdb']],
                         });
                         return { ...rewritten, srvResolution: 'fallback' };

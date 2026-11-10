@@ -16,8 +16,12 @@ import {
     type resolveInteractiveTokenResource,
     type resolveManagedIdentityTokenResource,
 } from '../auth/documentdbTokenResource';
+import {
+    getRecentEntraTokenFailure,
+    recordEntraTokenFailure,
+    resetEntraTokenFailuresForTests,
+} from '../auth/entraErrors/entraTokenFailures';
 import { type getManagedIdentityAccessToken } from '../auth/managedIdentityTokenProvider';
-import { getRecentEntraTokenFailure, recordEntraTokenFailure, resetEntraTokenFailuresForTests } from '../auth/entraErrors/entraTokenFailures';
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { PlaygroundEvaluator } from './PlaygroundEvaluator';
 import { type WorkerSessionCallbacks } from './WorkerSessionManager';
@@ -306,7 +310,9 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
             recordEntraTokenFailure(clusterId, { cloudCategory: 'custom', authMethod: 'interactive' });
             const failure = getRecentEntraTokenFailure(clusterId);
             let finish!: () => void;
-            const gate = new Promise<void>((resolve) => { finish = resolve; });
+            const gate = new Promise<void>((resolve) => {
+                finish = resolve;
+            });
             if (authMethod === AuthMethodId.ManagedIdentity) {
                 mocks.managedIdentityToken.mockImplementationOnce(async () => {
                     await gate;
@@ -321,17 +327,24 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
             const startupProperties: Record<string, string> = {};
             const response = vi.fn();
             const pending = mocks.callbacks!.onTokenRequest!(
-                { type: 'tokenRequest', requestId: 'pending' }, response, () => true, undefined,
+                { type: 'tokenRequest', requestId: 'pending' },
+                response,
+                () => true,
+                undefined,
                 { ...traceContext, startupProperties },
             );
-            await vi.waitFor(() => expect(
-                authMethod === AuthMethodId.ManagedIdentity ? mocks.managedIdentityToken : mocks.interactiveToken,
-            ).toHaveBeenCalledTimes(1));
+            await vi.waitFor(() =>
+                expect(
+                    authMethod === AuthMethodId.ManagedIdentity ? mocks.managedIdentityToken : mocks.interactiveToken,
+                ).toHaveBeenCalledTimes(1),
+            );
             customSuffix = undefined;
             finish();
             await pending;
             expect(response).toHaveBeenCalledExactlyOnceWith({
-                type: 'tokenError', requestId: 'pending', error: "Microsoft Entra ID isn't allowed for this server.",
+                type: 'tokenError',
+                requestId: 'pending',
+                error: "Microsoft Entra ID isn't allowed for this server.",
                 errorName: 'EntraDestinationRejectedError',
             });
             expect(getRecentEntraTokenFailure(clusterId)).toBe(failure);

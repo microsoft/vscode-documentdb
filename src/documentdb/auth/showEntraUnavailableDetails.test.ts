@@ -38,8 +38,12 @@ describe('showEntraUnavailableDetails', () => {
 
     it.each(['back', 'escape'] as const)('shows the modal and returns without opening for %s', async (dismissal) => {
         mocks.showInformationMessage.mockImplementation(
-            (_title: string, _options: vscode.MessageOptions, _learnMore: vscode.MessageItem, back: vscode.MessageItem) =>
-                Promise.resolve(dismissal === 'back' ? back : undefined),
+            (
+                _title: string,
+                _options: vscode.MessageOptions,
+                _learnMore: vscode.MessageItem,
+                back: vscode.MessageItem,
+            ) => Promise.resolve(dismissal === 'back' ? back : undefined),
         );
 
         await expect(showEntraUnavailableDetails()).resolves.toBeUndefined();
@@ -48,8 +52,7 @@ describe('showEntraUnavailableDetails', () => {
             'Microsoft Entra ID unavailable',
             {
                 modal: true,
-                detail:
-                    'Microsoft Entra ID is available only for Azure DocumentDB\nor servers allowed by the trusted-server setting.',
+                detail: 'Microsoft Entra ID is available only for Azure DocumentDB\nor servers allowed by the trusted-server setting.',
             },
             { title: 'Learn More' },
             { title: 'Back', isCloseAffordance: true },
