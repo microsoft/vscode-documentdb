@@ -396,5 +396,22 @@ computed colours; the final check finished the existing CSS transitions before
 sampling their end state, without changing application styles. The existing
 shared preview server was left untouched.
 
-The PR remains draft; Case 2, including formatting, localization validation, lint
-and packaging, is deferred until ready for review.
+The PR was marked ready externally during this work, so the complete Case 2 list
+was then run. Localization generation was unnecessary because no string changed;
+localization validation still ran. Formatting, localization validation, build,
+strict `npm run typecheck:tests`, the full runtime suite and packaging passed.
+Full root lint passed after the documented keyboard-tooltip exception below.
+
+The full suite found one lint issue in the preceding typography change:
+`jsx-a11y/no-noninteractive-tabindex` on the read-only identifier's focusable group.
+Advised (Opus 5.5, high confidence): retain keyboard access and use the exact
+reasoned exception already used for read-only tooltips in DashboardHeader.
+Luna added that single scoped JSX comment (`ad33b6f3`), leaving semantics, focus,
+tooltip descriptions and runtime behavior unchanged. Focused lint and all 53
+disclosure tests passed; the root lint rerun passed as well. Case 2 formatting
+was committed separately (`845ab510`).
+
+Final full runtime rerun: **388 files passed; 8,212 tests passed and 1 skipped**
+(124.41 s). Packaging produced `vscode-documentdb-1.0.2.vsix`. No shared package,
+persisted data, host operation or telemetry behavior changed. The leader did not
+change the PR's ready/draft state.
