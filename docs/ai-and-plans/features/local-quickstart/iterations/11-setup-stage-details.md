@@ -239,7 +239,7 @@ The pre-existing untracked Podman archive is outside this work.
 | ---- | ----- | ---------------- | ------------ | ------ |
 | P1 | Shared checking-row disclosure, focus/reset behavior; remove accordion | Terra: self-contained webview migration | — | Done `fa4a4d69` |
 | P2 | Typed runtime image inspection, per-stage facts, non-readiness presentation | Sol: host/webview contract and runtime lifecycle | P1 | Done `1e018adc` |
-| P3 | Readiness attempts, best-effort hello, sample-data outcomes and success sentence | Sol: readiness lifecycle and cross-module behavior | P2 | Queued |
+| P3 | Readiness attempts, best-effort hello, sample-data outcomes and success sentence | Sol: readiness lifecycle and cross-module behavior | P2 | Done `2c735f8a` |
 | P4 | Aggregate disclosure telemetry, browser scenarios, docs and decision record | Sol: session lifecycle and cross-module verification | P3 | Queued |
 
 Contract review advised by Opus 5.5 (high confidence): store terminal facts by
@@ -280,6 +280,21 @@ unknown-fact rule authorizes omission, not a new user-visible outcome.
 Final advisor approval: high confidence. Added 63 tests; 706 focused tests passed
 before the correction, 112 targeted tests afterward, root type check passed.
 Four regressions were observed failing before the correction.
+
+**P3 Done (2026-11-10), commit `2c735f8a`:** Sol added readiness attempts,
+bounded best-effort `hello` on the successful ping client, allow-listed server
+facts, masked timeout/exit evidence and sample-data outcomes in both provisioning
+and Wait longer. Requested-but-failed sample loading stays successful and is
+visible in Details and the success block, as accepted by the operator.
+Advised (Opus 5.5, high confidence): isolated `hello` failure cannot retry ping;
+timer, abort-listener and client cleanup are correct; Saved as appears only after
+finalization. The advisor noticed an incidental retry-delay shift; Sol restored
+500 ms then 750 ms and pinned that cadence in a regression test. Singular
+one-attempt wording was corrected. Final advisor found no significant issue.
+Added 29 tests; 738 focused tests passed before correction, 136 targeted tests
+afterward; root type check passed before correction. Published-image metadata
+was verified, but the first isolated live probe failed before container startup
+and was cleaned up; live `hello` verification is being retried separately.
 
 1. **A PR stacked on #1065.** Branch from `dev/guanzhousong/quickstart-podman-fallback` and open
    the PR against that branch, not `main`. When #1065 merges, retarget it to `main`. Keep the
