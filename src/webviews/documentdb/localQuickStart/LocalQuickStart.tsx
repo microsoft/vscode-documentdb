@@ -2557,13 +2557,9 @@ export const LocalQuickStart = (): JSX.Element => {
                     value="introduction"
                     label={l10n.t('Introduction')}
                     title={l10n.t('Develop and test locally')}
-                    subtitle={
-                        /* Approved product copy, taken verbatim from documentdb.io — exempt from the
-                           repo's "never MongoDB as a bare product name" terminology rule. Do not sweep. */
-                        l10n.t(
-                            'DocumentDB Local gives you an open-source, fully MongoDB-compatible database for development and testing on your machine.',
-                        )
-                    }
+                    subtitle={l10n.t(
+                        'DocumentDB Local gives you an open-source, fully MongoDB-compatible database for local development and testing.',
+                    )}
                 >
                     {introduction}
                 </WizardStep>

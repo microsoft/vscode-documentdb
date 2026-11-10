@@ -214,6 +214,9 @@ describe('Local Quick Start stage details', () => {
         expect(host.textContent).toContain(
             'You choose a preferred engine in the next step; setup uses the other if it is not installed.',
         );
+        expect(host.textContent).toContain(
+            'DocumentDB Local gives you an open-source, fully MongoDB-compatible database for local development and testing.',
+        );
         await click(button('Continue'));
         const labels = [...host.querySelectorAll('table tr')].map((row) => row.textContent);
         expect(labels[0]).toContain('Container engineDocker');

@@ -2413,6 +2413,7 @@ export const scenarios = {
             readiness: {
                 content: [
                     'Develop and test locally',
+                    'DocumentDB Local gives you an open-source, fully MongoDB-compatible database for local development and testing.',
                     'Set up DocumentDB locally for development and testing with Docker or Podman.',
                     'Check your container engine',
                     'Confirms Docker or Podman is installed and can run Linux containers on this machine. You choose a preferred engine in the next step; setup uses the other if it is not installed.',
