@@ -536,7 +536,9 @@ describe('Local Quick Start stage details', () => {
         await start();
         await event({ stage: 'pulling', status: 'active' });
         await event({
-            stage: 'error', status: 'error', dockerReadiness: failed,
+            stage: 'error',
+            status: 'error',
+            dockerReadiness: failed,
             facts: { kind: 'pulling', imageRef: 'image:failed', imageOrigin: 'default' },
         });
         expect(host.textContent).toContain('Image image:failed');
@@ -549,8 +551,16 @@ describe('Local Quick Start stage details', () => {
         const previousImageId = 'sha256:987654321098765432109876543210';
         await start();
         await event({
-            stage: 'pulling', status: 'done',
-            facts: { kind: 'pulling', imageRef: 'image', imageOrigin: 'default', result: 'updated', imageId, previousImageId },
+            stage: 'pulling',
+            status: 'done',
+            facts: {
+                kind: 'pulling',
+                imageRef: 'image',
+                imageOrigin: 'default',
+                result: 'updated',
+                imageId,
+                previousImageId,
+            },
         });
         await click(toggle('Pulling official image')!);
         const triggers = [...host.querySelectorAll<HTMLElement>('code[tabindex="0"]')];
@@ -580,7 +590,13 @@ describe('Local Quick Start stage details', () => {
         ['otherRemote', 'Runs on the remote extension host'],
     ] as const)('capitalizes the %s execution target segment', async (executionTarget, expected) => {
         client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status({ ...ready, executionTarget }));
-        await act(async () => root.render(<SSRProvider><LocalQuickStart key={executionTarget} /></SSRProvider>));
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <LocalQuickStart key={executionTarget} />
+                </SSRProvider>,
+            ),
+        );
         await start();
         await event({ stage: 'checking', status: 'done' });
         expect(host.textContent).toContain(expected);
@@ -622,9 +638,14 @@ describe('Local Quick Start stage details', () => {
         ['linux', 'Not running'],
         ['wsl', 'Not available in this WSL distribution'],
     ] as const)('capitalizes Docker Desktop failure evidence on %s', async (environment, expected) => {
-        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status({
-            ...failed, environment, provider: 'dockerDesktop', failureKind: 'daemonUnavailable',
-        }));
+        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(
+            status({
+                ...failed,
+                environment,
+                provider: 'dockerDesktop',
+                failureKind: 'daemonUnavailable',
+            }),
+        );
         await start();
         await event({ stage: 'checking', status: 'error' });
         expect(host.textContent).toContain(expected);

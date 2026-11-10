@@ -412,9 +412,9 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             await complete;
 
             expect(progressLines()).toEqual(['First run output']);
-            expect(events.find((event) => event.stage === 'pulling' && event.status === 'done')?.facts).not.toHaveProperty(
-                'progress',
-            );
+            expect(
+                events.find((event) => event.stage === 'pulling' && event.status === 'done')?.facts,
+            ).not.toHaveProperty('progress');
             expect(vi.getTimerCount()).toBe(0);
             vi.mocked(runtime.pullImage).mockResolvedValue(undefined);
             const retry = await collect(service.provision(new AbortController().signal));

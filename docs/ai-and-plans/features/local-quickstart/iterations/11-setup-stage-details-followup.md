@@ -16,12 +16,12 @@ The run began at 09:22:28 UTC. Advisor: Opus 5.5; leader: Sol.
 
 ## Accepted scope and execution order
 
-| Item | Operator requests | Implementation | Model | Status |
-| ---- | ----------------- | -------------- | ----- | ------ |
-| F1 | 2, 4, 6 | Discover both CLI executables without changing engine preference; carry previous image ID when already inspected; emit known image facts at pull start | Sol: host/readiness contract spans modules | Done `40056c79` |
-| F2 | 1, 2, 3, 4, 5, 6, 7 | Capitalized evidence segments, truthful CLI labels, full-ID tooltips, previous image identity, concise summaries and active image facts; remove checking explanation notes | Terra: bounded presentation work | Done `c6752605` |
-| F3 | 8 | Stream the latest bounded, masked engine-output line during pull, with coalescing and cancellation cleanup | Sol: command streaming and generator lifecycle | Done: F3a `a203ac50`, F3b `ba8c43de` |
-| F4 | All | Browser coverage in all themes, accessible ID tooltips and progress checks; update related design/docs | Terra: isolated fixtures/scenarios and docs | Done `f2a07985`; docs separately |
+| Item | Operator requests   | Implementation                                                                                                                                                             | Model                                          | Status                               |
+| ---- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------ |
+| F1   | 2, 4, 6             | Discover both CLI executables without changing engine preference; carry previous image ID when already inspected; emit known image facts at pull start                     | Sol: host/readiness contract spans modules     | Done `40056c79`                      |
+| F2   | 1, 2, 3, 4, 5, 6, 7 | Capitalized evidence segments, truthful CLI labels, full-ID tooltips, previous image identity, concise summaries and active image facts; remove checking explanation notes | Terra: bounded presentation work               | Done `c6752605`                      |
+| F3   | 8                   | Stream the latest bounded, masked engine-output line during pull, with coalescing and cancellation cleanup                                                                 | Sol: command streaming and generator lifecycle | Done: F3a `a203ac50`, F3b `ba8c43de` |
+| F4   | All                 | Browser coverage in all themes, accessible ID tooltips and progress checks; update related design/docs                                                                     | Terra: isolated fixtures/scenarios and docs    | Done `f2a07985`; docs separately     |
 
 These items share files and normally run sequentially. F3 is split into F3a
 (host streaming) and F3b (webview rendering): F3a can run alongside F2 because

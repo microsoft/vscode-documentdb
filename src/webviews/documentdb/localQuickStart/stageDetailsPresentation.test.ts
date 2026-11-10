@@ -78,14 +78,24 @@ describe('buildDockerDetailRows', () => {
     });
 
     it.each([
-        ['docker', { docker: true, podman: true }, 'Docker CLI', 'Found, version 27.3.1', 'Podman CLI', 'Found on PATH, not checked'],
+        [
+            'docker',
+            { docker: true, podman: true },
+            'Docker CLI',
+            'Found, version 27.3.1',
+            'Podman CLI',
+            'Found on PATH, not checked',
+        ],
         ['podman', { docker: false, podman: true }, 'Podman CLI', 'Found, version 27.3.1', 'Docker CLI', 'Not found'],
-    ] as const)('reports PATH presence without probing the unselected CLI (%s)', (cli, cliOnPath, selected, version, other, presence) => {
-        const rows = buildDockerDetailRows({ ...ready, cli, cliOnPath });
-        expect(rows.find((row) => row.label === selected)?.value).toBe(version);
-        expect(rows.find((row) => row.label === other)?.value).toBe(presence);
-        expect(rows.every((row) => row.note === undefined)).toBe(true);
-    });
+    ] as const)(
+        'reports PATH presence without probing the unselected CLI (%s)',
+        (cli, cliOnPath, selected, version, other, presence) => {
+            const rows = buildDockerDetailRows({ ...ready, cli, cliOnPath });
+            expect(rows.find((row) => row.label === selected)?.value).toBe(version);
+            expect(rows.find((row) => row.label === other)?.value).toBe(presence);
+            expect(rows.every((row) => row.note === undefined)).toBe(true);
+        },
+    );
 
     it('does not infer unselected CLI presence or a selected CLI name', () => {
         const rows = buildDockerDetailRows(ready);
@@ -95,19 +105,31 @@ describe('buildDockerDetailRows', () => {
 
     it('shows both CLI paths absent when discovery established neither', () => {
         const rows = buildDockerDetailRows({
-            ...ready, outcome: 'diagnosed', failureKind: 'cliMissing', daemonReachable: false,
-            cliInstalled: false, cliOnPath: { docker: false, podman: false }, provider: 'unknown', endpointKind: 'unknown',
+            ...ready,
+            outcome: 'diagnosed',
+            failureKind: 'cliMissing',
+            daemonReachable: false,
+            cliInstalled: false,
+            cliOnPath: { docker: false, podman: false },
+            provider: 'unknown',
+            endpointKind: 'unknown',
         });
         expect(rows.find((row) => row.label === 'Docker CLI')?.value).toBe('Not found');
         expect(rows.find((row) => row.label === 'Podman CLI')?.value).toBe('Not found');
         expect(rows.some((row) => row.label === 'Container CLI')).toBe(false);
-        expect(rows.some((row) => row.label === 'Engine' || row.label === 'Provider' || row.label === 'Endpoint')).toBe(false);
+        expect(rows.some((row) => row.label === 'Engine' || row.label === 'Provider' || row.label === 'Endpoint')).toBe(
+            false,
+        );
     });
 
     it('does not attribute a Podman check failure to Docker', () => {
         const rows = buildDockerDetailRows({
-            ...ready, cli: 'podman', engine: 'podman', outcome: 'diagnosed',
-            failureKind: 'daemonUnavailable', daemonReachable: false,
+            ...ready,
+            cli: 'podman',
+            engine: 'podman',
+            outcome: 'diagnosed',
+            failureKind: 'daemonUnavailable',
+            daemonReachable: false,
         });
         expect(rows.find((row) => row.label === 'Detected problem')?.value).toBe('Engine unavailable');
     });
@@ -141,7 +163,12 @@ describe('buildStageSummary', () => {
         'summarizes pulling %s without premature success',
         (imageOrigin) => {
             const facts = { kind: 'pulling', imageRef: 'image:tag', imageOrigin, result: 'updated' } as const;
-            const suffix = imageOrigin === 'custom' ? ' · Custom tag' : imageOrigin === 'reused' ? ' · Kept from existing data' : '';
+            const suffix =
+                imageOrigin === 'custom'
+                    ? ' · Custom tag'
+                    : imageOrigin === 'reused'
+                      ? ' · Kept from existing data'
+                      : '';
             expect(buildStageSummary(facts, 'active')).toBe(`Image image:tag${suffix}`);
             expect(buildStageSummary(facts, 'error')).toBe('Image image:tag');
             expect(buildStageSummary(facts, 'done')).toBe('Updated');
@@ -154,14 +181,26 @@ describe('buildStageSummary', () => {
         ['updated', 'Updated'],
         ['upToDate', 'Already up to date'],
     ] as const)('summarizes pull result %s', (result, expected) => {
-        expect(buildStageSummary({ kind: 'pulling', imageRef: 'image', imageOrigin: 'default', result }, 'done')).toBe(expected);
+        expect(buildStageSummary({ kind: 'pulling', imageRef: 'image', imageOrigin: 'default', result }, 'done')).toBe(
+            expected,
+        );
     });
 
     it.each(['active', 'done', 'error'] as const)('summarizes creating for %s', (status) => {
-        expect(buildStageSummary({
-            kind: 'creating', containerName: 'local', hostPort: 1, containerPort: 2,
-            volumeName: 'volume', dataPath: '/data', username: 'user',
-        }, status)).toBe('Container local');
+        expect(
+            buildStageSummary(
+                {
+                    kind: 'creating',
+                    containerName: 'local',
+                    hostPort: 1,
+                    containerPort: 2,
+                    volumeName: 'volume',
+                    dataPath: '/data',
+                    username: 'user',
+                },
+                status,
+            ),
+        ).toBe('Container local');
     });
 
     it.each(['active', 'done', 'error'] as const)(
@@ -178,9 +217,13 @@ describe('buildStageSummary', () => {
         const facts = { kind: 'waiting', port: 10273 } as const;
         expect(buildStageSummary(facts, 'active')).toBe('Endpoint localhost:10273');
         expect(buildStageSummary(facts, 'done')).toBe('Endpoint localhost:10273');
-        expect(buildStageSummary({ ...facts, sampleData: 'loaded' }, 'done')).toBe('Accepting connections on localhost:10273');
+        expect(buildStageSummary({ ...facts, sampleData: 'loaded' }, 'done')).toBe(
+            'Accepting connections on localhost:10273',
+        );
         expect(buildStageSummary({ ...facts, sampleData: 'loaded' }, 'active')).toBe('Endpoint localhost:10273');
-        expect(buildStageSummary({ ...facts, sampleData: 'loaded', attempts: 2, exitCode: 0 }, 'error')).toBe('Exit code 0');
+        expect(buildStageSummary({ ...facts, sampleData: 'loaded', attempts: 2, exitCode: 0 }, 'error')).toBe(
+            'Exit code 0',
+        );
         expect(buildStageSummary({ ...facts, attempts: 1 }, 'error')).toBe('1 attempt');
         expect(buildStageSummary({ ...facts, attempts: 2 }, 'error')).toBe('2 attempts');
         expect(buildStageSummary(facts, 'error')).toBe('Endpoint localhost:10273');
@@ -412,7 +455,13 @@ describe('buildStageDetailRows', () => {
     });
 
     it('keeps complete previous IDs only for updated images and omits fullValue for short IDs', () => {
-        const base = { kind: 'pulling', imageRef: 'image', imageOrigin: 'default', previousImageId: 'sha256:12345678901234567890', imageId: 'short' } as const;
+        const base = {
+            kind: 'pulling',
+            imageRef: 'image',
+            imageOrigin: 'default',
+            previousImageId: 'sha256:12345678901234567890',
+            imageId: 'short',
+        } as const;
         const rows = buildStageDetailRows({ ...base, result: 'updated' });
         expect(rows.find((row) => row.label === 'Image ID')).toEqual({ label: 'Image ID', value: 'short', code: true });
         expect(rows.find((row) => row.label === 'Previous image ID')).toEqual({
@@ -421,7 +470,9 @@ describe('buildStageDetailRows', () => {
             fullValue: base.previousImageId,
             code: true,
         });
-        expect(buildStageDetailRows({ ...base, result: 'downloaded' }).some((row) => row.label === 'Previous image ID')).toBe(false);
+        expect(
+            buildStageDetailRows({ ...base, result: 'downloaded' }).some((row) => row.label === 'Previous image ID'),
+        ).toBe(false);
     });
 
     it('omits unknown starting state and time, and identifies the requested port fallback', () => {

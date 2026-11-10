@@ -322,11 +322,13 @@ export class DockerReadinessService {
             cli,
             request.cancellationToken,
             request.suppressCommandEcho === true,
-        ).then((readiness): DockerReadiness => ({
-            ...readiness,
-            cli,
-            ...(cliOnPath !== undefined ? { cliOnPath } : {}),
-        }));
+        ).then(
+            (readiness): DockerReadiness => ({
+                ...readiness,
+                cli,
+                ...(cliOnPath !== undefined ? { cliOnPath } : {}),
+            }),
+        );
         this.inFlight = check;
         try {
             const result = await check;

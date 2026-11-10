@@ -1492,9 +1492,10 @@ export const LocalQuickStart = (): JSX.Element => {
             if (checkStageDetail) return checkStageDetail;
         }
         const status = stageStatus[stage];
-        const summary = status === 'active' || status === 'done' || status === 'error'
-            ? buildStageSummary(facts[stage], status)
-            : undefined;
+        const summary =
+            status === 'active' || status === 'done' || status === 'error'
+                ? buildStageSummary(facts[stage], status)
+                : undefined;
         if (summary) return summary;
         if (stage === failedStage && stageDockerFailure) {
             return formatDockerDetail(getDockerReadinessPresentation(stageDockerFailure).detail);

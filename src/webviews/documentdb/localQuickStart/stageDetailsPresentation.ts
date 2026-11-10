@@ -374,9 +374,8 @@ export function buildDockerDetailRows(readiness: DockerReadiness): readonly Stag
     ];
 
     if (readiness.outcome !== 'ready') {
-        const labels = readiness.cli === 'docker' && readiness.engine !== 'podman'
-            ? dockerFailureLabels()
-            : engineFailureLabels();
+        const labels =
+            readiness.cli === 'docker' && readiness.engine !== 'podman' ? dockerFailureLabels() : engineFailureLabels();
         rows.push({ label: l10n.t('Detected problem'), value: labels[readiness.failureKind] });
     }
 

@@ -394,7 +394,9 @@ describe('getDockerReadinessPresentation detail line', () => {
 
     it('carries the actual selected CLI on failures', () => {
         expect(getDockerReadinessPresentation(readiness({ cli: 'podman', cliVersion: '5.1' })).detail[0]).toEqual({
-            kind: 'cli', cli: 'podman', version: '5.1',
+            kind: 'cli',
+            cli: 'podman',
+            version: '5.1',
         });
     });
 

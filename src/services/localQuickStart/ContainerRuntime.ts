@@ -94,13 +94,10 @@ class MaskedChannelWritable extends Writable {
 
     constructor(channel: vscode.OutputChannel, secrets: ReadonlyArray<string>, onLine?: (line: string) => void) {
         super();
-        this.lineBuffer = new MaskingLineBuffer(
-            (line) => {
-                channel.appendLine(line);
-                onLine?.(line);
-            },
-            secrets,
-        );
+        this.lineBuffer = new MaskingLineBuffer((line) => {
+            channel.appendLine(line);
+            onLine?.(line);
+        }, secrets);
     }
 
     public override _write(chunk: unknown, _encoding: BufferEncoding, callback: (error?: Error | null) => void): void {
