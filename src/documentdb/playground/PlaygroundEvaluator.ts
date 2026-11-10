@@ -14,7 +14,7 @@ import { randomUUID } from 'crypto';
 import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
-import { traceAuthFlow, traceAuthOperation, type AuthTraceContext } from '../../utils/authTrace';
+import { traceAuthFlow, traceAuthOperation, traceEntraDestination, type AuthTraceContext } from '../../utils/authTrace';
 import { getBatchSizeSetting, getConnectionTimeoutMs } from '../../utils/workspacUtils';
 import { AuthMethodId } from '../auth/AuthMethod';
 import {
@@ -23,7 +23,9 @@ import {
     TokenResourceResolutionError,
     type ResolvedTokenResource,
 } from '../auth/documentdbTokenResource';
+import { evaluateEntraDestinationFromSettings } from '../auth/entraDestinationSettings';
 import { clearEntraTokenFailure, recordEntraTokenFailure } from '../auth/entraErrors/entraTokenFailures';
+import { EntraDestinationRejectedError } from '../auth/oidcAllowedHosts';
 import { CredentialCache } from '../CredentialCache';
 import { withTokenAcquisitionTiming, type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
@@ -75,7 +77,7 @@ import { type MainToWorkerMessage, type SerializableMongoClientOptions, type Wor
  */
 export class PlaygroundEvaluator implements vscode.Disposable {
     private readonly _workerManager: WorkerSessionManager;
-    private _sessionConnectionString: string | undefined;
+    private _sessionInitMessage: Extract<MainToWorkerMessage, { type: 'init' }> | undefined;
     private _resolvedTokenResource: ResolvedTokenResource | undefined;
 
     /**
@@ -201,7 +203,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
 
         // Start a new telemetry session if we're spawning a new worker
         if (needsSpawn) {
-            this._sessionConnectionString = CredentialCache.getCredentials(connection.clusterId)?.connectionString;
+            this._sessionInitMessage = initMsg;
             this._resolvedTokenResource = undefined;
             this._sessionId = randomUUID();
             this._sessionEvalCount = 0;
@@ -312,9 +314,8 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                 )
                     ? 4000
                     : undefined,
-            // TLS-allow-invalid is keyed off `disableEmulatorSecurity` (design §7), honored ONLY for
-            // local/private hosts ("hybrid" runtime policy): an orphaned flag on a public host is not
-            // activated; an explicit URL param is still honored by the driver (we never force `false`).
+            // Non-OIDC connections keep the local/private TLS exception. The worker's OIDC builder
+            // removes this option and URI bypasses for Entra connections.
             tlsAllowInvalidCertificates: resolveAllowInvalidCertificates(
                 credentials.emulatorConfiguration?.disableEmulatorSecurity,
                 connectionString,
@@ -388,15 +389,29 @@ export class PlaygroundEvaluator implements vscode.Disposable {
     ): Promise<void> {
         try {
             const clusterId = this._workerManager.workerClusterId;
-            const connectionString = this._sessionConnectionString;
-            if (!clusterId || !connectionString) {
+            const sessionInit = this._sessionInitMessage;
+            if (
+                !clusterId ||
+                !sessionInit ||
+                (sessionInit.authMechanism !== 'MicrosoftEntraID' && sessionInit.authMechanism !== 'ManagedIdentity')
+            ) {
                 throw new Error(l10n.t('No credentials found for the query playground connection.'));
             }
+            if (!isCurrent()) {
+                return;
+            }
+            const connectionString = sessionInit.connectionString;
+            const decision = evaluateEntraDestinationFromSettings(connectionString);
+            traceEntraDestination(decision, msg.requestId, traceContext);
+            if (!decision.allowed) {
+                throw new EntraDestinationRejectedError(decision);
+            }
+            const usesManagedIdentity = sessionInit.authMechanism === 'ManagedIdentity';
             let resolved: ResolvedTokenResource;
             try {
                 resolved =
                     this._resolvedTokenResource ??
-                    (msg.source === 'managedIdentity'
+                    (usesManagedIdentity
                         ? await resolveManagedIdentityTokenResource(connectionString)
                         : await resolveInteractiveTokenResource(connectionString));
                 if (isCurrent()) {
@@ -411,7 +426,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             }
             let accessToken: string;
 
-            if (msg.source === 'managedIdentity') {
+            if (usesManagedIdentity) {
                 const { getManagedIdentityAccessToken } = await import('../auth/managedIdentityTokenProvider');
                 this._sessionId ??= randomUUID();
                 try {
@@ -419,8 +434,8 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                         await withTokenAcquisitionTiming(timings, () =>
                             getManagedIdentityAccessToken(
                                 [resolved.scope],
-                                msg.clientId,
-                                msg.tenantId,
+                                sessionInit.managedIdentityClientId,
+                                sessionInit.tenantId,
                                 this._sessionId,
                                 traceContext,
                             ),
@@ -449,10 +464,10 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                         'interactiveEntra.getSession',
                         () =>
                             withTokenAcquisitionTiming(timings, () =>
-                                getSessionFromVSCode([resolved.scope], msg.tenantId, { createIfNone: true }),
+                                getSessionFromVSCode([resolved.scope], sessionInit.tenantId, { createIfNone: true }),
                             ),
                         {
-                            tenantSpecified: !!msg.tenantId,
+                            tenantSpecified: !!sessionInit.tenantId,
                             createIfNone: true,
                             cloudCategory: resolved.cloudCategory,
                             tokenResourceReason: resolved.reason,
@@ -494,6 +509,9 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                 type: 'tokenError',
                 requestId: msg.requestId,
                 error: errorMessage,
+                ...(error instanceof EntraDestinationRejectedError
+                    ? { errorName: 'EntraDestinationRejectedError' as const }
+                    : {}),
             });
         }
     }
@@ -512,7 +530,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             });
         }
 
-        this._sessionConnectionString = undefined;
+        this._sessionInitMessage = undefined;
         this._resolvedTokenResource = undefined;
         this._sessionId = undefined;
         this._sessionEvalCount = 0;

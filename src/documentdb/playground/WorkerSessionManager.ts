@@ -11,13 +11,17 @@ import {
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as path from 'path';
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
 import { settingsKeys } from '../../settingsKeys';
-import { type AuthTraceContext } from '../../utils/authTrace';
-import { type DocumentDBCustomEnvironment } from '../auth/documentdbTokenResource';
-import { getOidcAllowedHosts } from '../auth/oidcAllowedHosts';
+import { traceEntraDestination, type AuthTraceContext } from '../../utils/authTrace';
+import { getEntraCustomHostnameSuffix } from '../auth/entraDestinationSettings';
+import {
+    EntraDestinationRejectedError,
+    evaluateEntraDestination,
+    normalizeCustomHostnameSuffix,
+} from '../auth/oidcAllowedHosts';
 import { SettingsHintError } from '../shell/SettingsHintError';
 import { prepareDriverConnectionString } from '../srv/prepareDriverConnectionString';
 import { ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
@@ -322,6 +326,20 @@ export class WorkerSessionManager implements vscode.Disposable {
         this._workerState = 'spawning';
         const options = { ...initMsg.clientOptions };
         const usesOidc = initMsg.authMechanism === 'MicrosoftEntraID' || initMsg.authMechanism === 'ManagedIdentity';
+        const oidcCustomHostnameSuffix = usesOidc
+            ? normalizeCustomHostnameSuffix(getEntraCustomHostnameSuffix())
+            : undefined;
+        if (usesOidc) {
+            const decision = evaluateEntraDestination(initMsg.connectionString, oidcCustomHostnameSuffix);
+            traceEntraDestination(decision, startup.requestId, {
+                startupCorrelationId: startup.requestId,
+                surface: startup.surface,
+                startupProperties: startup.telemetry.properties,
+            });
+            if (!decision.allowed) {
+                throw new EntraDestinationRejectedError(decision);
+            }
+        }
         const prepared = await prepareDriverConnectionString({
             connectionString: initMsg.connectionString,
             // The worker adds OIDC itself; the mechanism is passed so a TXT authSource is not applied.
@@ -347,11 +365,7 @@ export class WorkerSessionManager implements vscode.Disposable {
                 appName: prepared.options.appName,
                 tls: prepared.options.tls,
             },
-            oidcAllowedHosts: getOidcAllowedHosts(
-                initMsg.connectionString,
-                vscode.workspace.getConfiguration().get<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment)
-                    ?.hostnameSuffix,
-            ),
+            oidcCustomHostnameSuffix,
         };
         this._spawnCount++;
         this._lastSpawnTime = Date.now();
@@ -577,7 +591,11 @@ export class WorkerSessionManager implements vscode.Disposable {
                     if (msg.success) {
                         pending.resolve(undefined);
                     } else {
-                        pending.reject(new Error(msg.error ?? 'Worker init failed'));
+                        pending.reject(
+                            msg.errorName === 'EntraDestinationRejectedError'
+                                ? new EntraDestinationRejectedError({ hostCount: 0 })
+                                : new Error(msg.error ?? 'Worker init failed'),
+                        );
                     }
                 }
                 break;

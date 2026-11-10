@@ -13,6 +13,7 @@ import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
 import { traceAuthFlow, type AuthTraceContext } from '../../utils/authTrace';
 import { AuthMethodId } from '../auth/AuthMethod';
+import { EntraDestinationRejectedError } from '../auth/oidcAllowedHosts';
 import { CredentialCache } from '../CredentialCache';
 import { ShellSessionManager } from '../shell/ShellSessionManager';
 import {
@@ -146,6 +147,7 @@ describe('WorkerSessionManager', () => {
         vi.clearAllMocks();
         vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
             get: vi.fn().mockReturnValue(undefined),
+            inspect: vi.fn().mockReturnValue(undefined),
         } as unknown as vscode.WorkspaceConfiguration);
         mockTelemetryEvents.length = 0;
         vi.mocked(prepareDriverConnectionString).mockImplementation(async (input) => ({
@@ -275,20 +277,86 @@ describe('WorkerSessionManager', () => {
             return mockTelemetryEvents.find((event) => event.eventName === 'worker.startup')!;
         }
 
+        it.each(['MicrosoftEntraID', 'ManagedIdentity'] as const)(
+            'rejects mixed saved %s destinations before preparing SRV or spawning',
+            async (authMechanism): Promise<void> => {
+                const manager = new WorkerSessionManager(callbacks);
+                await expect(
+                    manager.ensureWorker('cluster-id', {
+                        ...initMessage(),
+                        authMechanism,
+                        connectionString:
+                            'mongodb://cluster.mongocluster.cosmos.azure.com,attacker.cloudapp.azure.com/',
+                    }),
+                ).rejects.toBeInstanceOf(EntraDestinationRejectedError);
+                expect(prepareDriverConnectionString).not.toHaveBeenCalled();
+                expect(Worker).not.toHaveBeenCalled();
+                expect(startupEvent().telemetry.properties).toMatchObject({
+                    entraDestinationClass: 'otherAzure',
+                    microsoftCloudDomain: 'true',
+                    serviceLabel: 'false',
+                    result: 'Failed',
+                });
+                expect(JSON.stringify(startupEvent())).not.toMatch(/attacker|mongodb:\/\//);
+                manager.dispose();
+            },
+        );
+
+        it('does not serialize a malformed machine suffix', async (): Promise<void> => {
+            vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+                inspect: vi.fn().mockReturnValue({ globalValue: { hostnameSuffix: { invalid: true } } }),
+            } as unknown as vscode.WorkspaceConfiguration);
+            const manager = new WorkerSessionManager(callbacks);
+            const initializing = manager.ensureWorker('cluster-id', {
+                ...initMessage(),
+                authMechanism: 'ManagedIdentity',
+            });
+            await Promise.resolve();
+            const posted = replyInit();
+            await initializing;
+            expect(posted.oidcCustomHostnameSuffix).toBeUndefined();
+            manager.dispose();
+        });
+
+        it('restores a worker destination rejection as the explicit localized error', async (): Promise<void> => {
+            const manager = new WorkerSessionManager(callbacks);
+            const initializing = manager.ensureWorker('cluster-id', {
+                ...initMessage(),
+                authMechanism: 'ManagedIdentity',
+            });
+            await Promise.resolve();
+            const worker = workerMock();
+            const posted = worker.postMessage.mock.calls.at(-1)?.[0] as Extract<MainToWorkerMessage, { type: 'init' }>;
+            worker._emit('message', {
+                type: 'initResult',
+                requestId: posted.requestId,
+                success: false,
+                error: "Microsoft Entra ID isn't allowed for this server.",
+                errorName: 'EntraDestinationRejectedError',
+            });
+            await expect(initializing).rejects.toBeInstanceOf(EntraDestinationRejectedError);
+            manager.dispose();
+        });
+
         it('passes the configured custom hostname suffix to the worker allowlist', async (): Promise<void> => {
             vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
                 get: vi.fn().mockReturnValue({ hostnameSuffix: '.database.example.com' }),
+                inspect: vi.fn().mockReturnValue({ globalValue: { hostnameSuffix: '.database.example.com' } }),
             } as unknown as vscode.WorkspaceConfiguration);
             const manager = new WorkerSessionManager(callbacks);
             const initializing = manager.ensureWorker(
                 'cluster-id',
-                { ...initMessage(), connectionString: 'mongodb://cluster.database.example.com/' },
+                {
+                    ...initMessage(),
+                    authMechanism: 'MicrosoftEntraID',
+                    connectionString: 'mongodb://cluster.database.example.com/',
+                },
                 1000,
             );
             await Promise.resolve();
             const posted = replyInit();
             await initializing;
-            expect(posted.oidcAllowedHosts).toEqual(['*.database.example.com']);
+            expect(posted.oidcCustomHostnameSuffix).toBe('database.example.com');
             manager.dispose();
         });
 
@@ -316,7 +384,7 @@ describe('WorkerSessionManager', () => {
             expect(posted).toMatchObject({
                 connectionString: rewrittenUri,
                 clientOptions: { serverSelectionTimeoutMS: 8000, tls: true },
-                oidcAllowedHosts: ['*.azure.us'],
+                oidcCustomHostnameSuffix: undefined,
             });
             expect(() => structuredClone(posted)).not.toThrow();
             expect(input).toEqual(snapshot);
@@ -520,7 +588,8 @@ describe('WorkerSessionManager', () => {
                 {
                     type: 'init',
                     requestId: '',
-                    connectionString: 'mongodb://private-user:private-password@private-host:27017',
+                    connectionString:
+                        'mongodb://private-user:private-password@private-host.mongocluster.cosmos.azure.com:27017',
                     clientOptions: {},
                     databaseName: 'private-database',
                     authMechanism: 'MicrosoftEntraID',

@@ -17,6 +17,7 @@ import * as tokenResources from './documentdbTokenResource';
 import { EntraErrorExplainer } from './entraErrors/EntraErrorExplainer';
 import { getRecentEntraTokenFailure, resetEntraTokenFailuresForTests } from './entraErrors/entraTokenFailures';
 import { ManagedIdentityAuthHandler } from './ManagedIdentityAuthHandler';
+import { EntraDestinationRejectedError } from './oidcAllowedHosts';
 import { expiresInSecondsFromTimestamp } from './tokenExpiry';
 
 const getManagedIdentityAccessToken = vi.fn();
@@ -89,6 +90,37 @@ describe('ManagedIdentityAuthHandler', () => {
         resetEntraTokenFailuresForTests();
     });
 
+    it.each([
+        'mongodb://attacker.cloudapp.azure.com/',
+        'mongodb://cluster.mongocluster.cosmos.azure.com,attacker.example.com/',
+        'mongodb://localhost:27017/',
+    ])('rejects %s before the audience resolver can invoke IMDS', async (connectionString): Promise<void> => {
+        const resolver = vi.spyOn(tokenResources, 'resolveManagedIdentityTokenResource');
+        await expect(
+            new ManagedIdentityAuthHandler(buildCredentials({ connectionString })).configureAuth(),
+        ).rejects.toBeInstanceOf(EntraDestinationRejectedError);
+        expect(resolver).not.toHaveBeenCalled();
+        expect(getManagedIdentityAccessToken).not.toHaveBeenCalled();
+    });
+
+    it('rechecks the current suffix before every deferred token acquisition', async (): Promise<void> => {
+        let suffix: unknown = '.database.example.com';
+        vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+            get: vi.fn().mockReturnValue({ ossrdbmsEndpoint: 'https://database.example.com' }),
+            inspect: vi.fn(() => ({ globalValue: { hostnameSuffix: suffix } })),
+        } as unknown as vscode.WorkspaceConfiguration);
+        const { options } = await new ManagedIdentityAuthHandler(
+            buildCredentials({
+                connectionString: 'mongodb://cluster.database.example.com/',
+            }),
+        ).configureAuth();
+        await invokeOidcCallback(options);
+        expect(getManagedIdentityAccessToken).toHaveBeenCalledTimes(1);
+        suffix = undefined;
+        await expect(invokeOidcCallback(options)).rejects.toBeInstanceOf(EntraDestinationRejectedError);
+        expect(getManagedIdentityAccessToken).toHaveBeenCalledTimes(1);
+    });
+
     it('configures the OIDC mechanism with a curated allowed-hosts list', async () => {
         const handler = new ManagedIdentityAuthHandler(buildCredentials());
 
@@ -99,6 +131,7 @@ describe('ManagedIdentityAuthHandler', () => {
             startupProperties,
         });
         expect(startupProperties).toEqual({
+            entraDestinationClass: 'documentdbService',
             cloudCategory: 'public',
             tokenResourceReason: 'host',
             configuredCloud: 'AzureCloud',
@@ -108,7 +141,7 @@ describe('ManagedIdentityAuthHandler', () => {
 
         expect(options.authMechanism).toBe('MONGODB-OIDC');
         expect(options.tls).toBe(true);
-        expect(options.authMechanismProperties?.ALLOWED_HOSTS).toEqual(['*.azure.com']);
+        expect(options.authMechanismProperties?.ALLOWED_HOSTS).toEqual(['*.mongocluster.cosmos.azure.com']);
     });
 
     it('strips authMechanism, authMechanismProperties, and credentials from the connection string', async () => {
@@ -167,7 +200,7 @@ describe('ManagedIdentityAuthHandler', () => {
         );
         const { options } = await handler.configureAuth();
         await invokeOidcCallback(options);
-        expect(options.authMechanismProperties?.ALLOWED_HOSTS).toEqual(['*.azure.us']);
+        expect(options.authMechanismProperties?.ALLOWED_HOSTS).toEqual(['*.mongocluster.cosmos.azure.us']);
         expect(getManagedIdentityAccessToken).toHaveBeenCalledWith(
             ['https://ossrdbms-aad.database.usgovcloudapi.net/.default'],
             undefined,
@@ -242,7 +275,7 @@ describe('ManagedIdentityAuthHandler', () => {
     });
 
     it('records failures only inside the deferred token callback and rethrows the same error', async (): Promise<void> => {
-        const connectionString = 'mongodb://cluster.azure.us/';
+        const connectionString = 'mongodb://cluster.mongocluster.cosmos.azure.us/';
         const handler = new ManagedIdentityAuthHandler(
             buildCredentials({ connectionString, connectionStringWithPassword: connectionString }),
         );
@@ -295,7 +328,7 @@ describe('ManagedIdentityAuthHandler', () => {
     });
 
     it('retains failure context through configureAuth and clears it only after a token succeeds', async (): Promise<void> => {
-        const connectionString = 'mongodb://cluster.azure.us/';
+        const connectionString = 'mongodb://cluster.mongocluster.cosmos.azure.us/';
         const handler = new ManagedIdentityAuthHandler(
             buildCredentials({ connectionString, connectionStringWithPassword: connectionString }),
         );
@@ -339,12 +372,12 @@ describe('ManagedIdentityAuthHandler', () => {
         expect(error.message).toBe('platform_broker_error');
     });
 
-    it('honors the host-gated TLS exception', async () => {
+    it('ignores TLS exceptions for an admitted Entra destination', async () => {
         vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
             get: vi.fn().mockReturnValue({ ossrdbmsEndpoint: 'https://ossrdbms-aad.database.windows.net' }),
             inspect: vi.fn().mockReturnValue(undefined),
         } as unknown as vscode.WorkspaceConfiguration);
-        const cs = 'mongodb://localhost:27017/';
+        const cs = 'mongodb://cluster.mongocluster.cosmos.azure.com/?tlsInsecure=true';
         const handler = new ManagedIdentityAuthHandler(
             buildCredentials({
                 connectionString: cs,
@@ -353,9 +386,15 @@ describe('ManagedIdentityAuthHandler', () => {
             }),
         );
 
-        const { options } = await handler.configureAuth();
+        const { connectionString, options } = await handler.configureAuth();
 
-        expect(options.tlsAllowInvalidCertificates).toBe(true);
+        expect(options.tlsAllowInvalidCertificates).toBeUndefined();
+        expect(options.rejectUnauthorized).toBe(true);
+        expect(options.checkServerIdentity).toBeTypeOf('function');
+        expect(connectionString).not.toContain('tlsInsecure');
+        expect(ext.outputChannel.info).toHaveBeenCalledWith(
+            '[Auth] TLS validation bypass parameters are ignored for Microsoft Entra ID connections.',
+        );
     });
 
     it('excludes managed-identity token acquisition from the database duration', async () => {

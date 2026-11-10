@@ -5,6 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import * as vscode from 'vscode';
 import { type AuthenticationSession } from 'vscode';
 import { ext } from '../../extensionVariables';
 import { AuthMethodId } from '../auth/AuthMethod';
@@ -103,6 +104,10 @@ describe('ShellSessionManager', () => {
         resetEntraTokenFailuresForTests();
         workerClusterId = clusterId;
         requestTokenOnInit = false;
+        vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+            get: vi.fn(),
+            inspect: vi.fn(),
+        } as unknown as vscode.WorkspaceConfiguration);
         const publicResolution = {
             resource: 'https://ossrdbms-aad.database.windows.net',
             scope: 'https://ossrdbms-aad.database.windows.net/.default',
@@ -118,7 +123,7 @@ describe('ShellSessionManager', () => {
         CredentialCache.setAuthCredentials(
             clusterId,
             AuthMethodId.MicrosoftEntraID,
-            'mongodb://test-host.example.com:27017',
+            'mongodb://test-host.mongocluster.cosmos.azure.com:27017',
             undefined,
             undefined,
             { tenantId: 'test-tenant-id' },
@@ -130,13 +135,216 @@ describe('ShellSessionManager', () => {
         resetEntraTokenFailuresForTests();
     });
 
-    async function initializeSession(manager: ShellSessionManager | PlaygroundEvaluator): Promise<void> {
+    async function initializeSession(
+        manager: ShellSessionManager | PlaygroundEvaluator,
+        source?: 'vscode' | 'managedIdentity',
+    ): Promise<void> {
+        if (source) {
+            const credentials = CredentialCache.getCredentials(clusterId)!;
+            CredentialCache.setAuthCredentials(
+                clusterId,
+                source === 'managedIdentity' ? AuthMethodId.ManagedIdentity : AuthMethodId.MicrosoftEntraID,
+                credentials.connectionString,
+                undefined,
+                undefined,
+                credentials.entraIdConfig,
+                credentials.managedIdentityConfig,
+            );
+        }
         if (manager instanceof ShellSessionManager) {
             await manager.initialize();
         } else {
             await manager.evaluate({ clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' }, '1');
         }
     }
+
+    describe.each(['shell', 'playground'] as const)('%s relay destination enforcement', (surface) => {
+        function createManager(): ShellSessionManager | PlaygroundEvaluator {
+            return surface === 'shell'
+                ? new ShellSessionManager({ clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' })
+                : new PlaygroundEvaluator();
+        }
+
+        it.each([AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity])(
+            'binds %s source, tenant, client and destination to the original session, not forged requests or cache',
+            async (authMethod): Promise<void> => {
+                const original = 'mongodb://original.mongocluster.cosmos.azure.com/';
+                CredentialCache.setAuthCredentials(
+                    clusterId,
+                    authMethod,
+                    original,
+                    undefined,
+                    undefined,
+                    { tenantId: 'original-tenant' },
+                    { tenantId: 'original-tenant', clientId: 'original-client' },
+                );
+                const manager = createManager();
+                await initializeSession(manager);
+                CredentialCache.setAuthCredentials(
+                    clusterId,
+                    AuthMethodId.ManagedIdentity,
+                    'mongodb://attacker.cloudapp.azure.com/',
+                    undefined,
+                    undefined,
+                    { tenantId: 'cache-tenant' },
+                    { tenantId: 'cache-tenant', clientId: 'cache-client' },
+                );
+                const provider =
+                    authMethod === AuthMethodId.ManagedIdentity
+                        ? mockGetManagedIdentityAccessToken
+                        : mockGetSessionFromVSCode;
+                provider.mockResolvedValue({ accessToken: 'private-token', account: { label: 'private-account' } });
+                const postResponse = vi.fn();
+                const forged = {
+                    type: 'tokenRequest',
+                    requestId: 'forged-request',
+                    source: authMethod === AuthMethodId.ManagedIdentity ? 'vscode' : 'managedIdentity',
+                    tenantId: 'forged-tenant',
+                    clientId: 'forged-client',
+                } as const;
+                await workerCallbacks.onTokenRequest?.(forged, postResponse, () => true);
+                await workerCallbacks.onTokenRequest?.({ ...forged, requestId: 'refresh' }, postResponse, () => true);
+                expect(provider).toHaveBeenCalledTimes(2);
+                if (authMethod === AuthMethodId.ManagedIdentity) {
+                    expect(resolveManagedIdentityTokenResource).toHaveBeenCalledExactlyOnceWith(original);
+                    expect(mockGetSessionFromVSCode).not.toHaveBeenCalled();
+                    expect(provider).toHaveBeenCalledWith(
+                        ['https://ossrdbms-aad.database.windows.net/.default'],
+                        'original-client',
+                        'original-tenant',
+                        expect.any(String),
+                        undefined,
+                    );
+                } else {
+                    expect(resolveInteractiveTokenResource).toHaveBeenCalledExactlyOnceWith(original);
+                    expect(mockGetManagedIdentityAccessToken).not.toHaveBeenCalled();
+                    expect(provider).toHaveBeenCalledWith(
+                        ['https://ossrdbms-aad.database.windows.net/.default'],
+                        'original-tenant',
+                        { createIfNone: true },
+                    );
+                }
+                expect(postResponse).toHaveBeenLastCalledWith({
+                    type: 'tokenResponse',
+                    requestId: 'refresh',
+                    accessToken: 'private-token',
+                });
+                manager.dispose();
+            },
+        );
+
+        it.each([AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity])(
+            'rejects a mixed saved %s session before audience resolution, IMDS or tokens',
+            async (authMethod): Promise<void> => {
+                CredentialCache.setAuthCredentials(
+                    clusterId,
+                    authMethod,
+                    'mongodb://cluster.mongocluster.cosmos.azure.com,attacker.cloudapp.azure.com/',
+                );
+                const manager = createManager();
+                await initializeSession(manager);
+                const postResponse = vi.fn();
+                const startupProperties: Record<string, string> = {};
+                await workerCallbacks.onTokenRequest?.(
+                    { type: 'tokenRequest', requestId: 'rejected' },
+                    postResponse,
+                    () => true,
+                    undefined,
+                    { startupCorrelationId: 'startup-id', surface, startupProperties },
+                );
+                expect(resolveInteractiveTokenResource).not.toHaveBeenCalled();
+                expect(resolveManagedIdentityTokenResource).not.toHaveBeenCalled();
+                expect(mockGetSessionFromVSCode).not.toHaveBeenCalled();
+                expect(mockGetManagedIdentityAccessToken).not.toHaveBeenCalled();
+                expect(postResponse).toHaveBeenCalledExactlyOnceWith({
+                    type: 'tokenError',
+                    requestId: 'rejected',
+                    error: "Microsoft Entra ID isn't allowed for this server.",
+                    errorName: 'EntraDestinationRejectedError',
+                });
+                expect(startupProperties).toEqual({
+                    entraDestinationClass: 'otherAzure',
+                    microsoftCloudDomain: 'true',
+                    serviceLabel: 'false',
+                });
+                manager.dispose();
+            },
+        );
+
+        it.each([AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity])(
+            'rechecks current machine trust for %s refresh even when the cache now contains an approved destination',
+            async (authMethod): Promise<void> => {
+                let suffix: unknown = '.database.example.com';
+                vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+                    get: vi.fn(),
+                    inspect: vi.fn(() => ({ globalValue: { hostnameSuffix: suffix } })),
+                } as unknown as vscode.WorkspaceConfiguration);
+                CredentialCache.setAuthCredentials(clusterId, authMethod, 'mongodb://original.database.example.com/');
+                const manager = createManager();
+                await initializeSession(manager);
+                const provider =
+                    authMethod === AuthMethodId.ManagedIdentity
+                        ? mockGetManagedIdentityAccessToken
+                        : mockGetSessionFromVSCode;
+                provider.mockResolvedValue({ accessToken: 'private-token', account: { label: 'private-account' } });
+                const postResponse = vi.fn();
+                await workerCallbacks.onTokenRequest?.(
+                    { type: 'tokenRequest', requestId: 'first' },
+                    postResponse,
+                    () => true,
+                );
+                expect(provider).toHaveBeenCalledTimes(1);
+                CredentialCache.setAuthCredentials(
+                    clusterId,
+                    authMethod,
+                    'mongodb://cluster.mongocluster.cosmos.azure.com/',
+                );
+                suffix = undefined;
+                await workerCallbacks.onTokenRequest?.(
+                    { type: 'tokenRequest', requestId: 'refresh' },
+                    postResponse,
+                    () => true,
+                );
+                expect(provider).toHaveBeenCalledTimes(1);
+                expect(
+                    vi.mocked(resolveInteractiveTokenResource).mock.calls.length +
+                        vi.mocked(resolveManagedIdentityTokenResource).mock.calls.length,
+                ).toBe(1);
+                expect(postResponse).toHaveBeenLastCalledWith({
+                    type: 'tokenError',
+                    requestId: 'refresh',
+                    error: "Microsoft Entra ID isn't allowed for this server.",
+                    errorName: 'EntraDestinationRejectedError',
+                });
+                manager.dispose();
+            },
+        );
+
+        it.each([AuthMethodId.NoAuth, AuthMethodId.NativeAuth])(
+            'never acquires tokens for a forged request from a %s session',
+            async (authMethod): Promise<void> => {
+                CredentialCache.setAuthCredentials(clusterId, authMethod, 'mongodb://localhost:27017/');
+                const manager = createManager();
+                await initializeSession(manager);
+                const postResponse = vi.fn();
+                await workerCallbacks.onTokenRequest?.(
+                    {
+                        type: 'tokenRequest',
+                        requestId: 'forged',
+                        source: 'managedIdentity',
+                    },
+                    postResponse,
+                    () => true,
+                );
+                expect(postResponse).toHaveBeenCalledWith(expect.objectContaining({ type: 'tokenError' }));
+                expect(resolveInteractiveTokenResource).not.toHaveBeenCalled();
+                expect(resolveManagedIdentityTokenResource).not.toHaveBeenCalled();
+                expect(mockGetSessionFromVSCode).not.toHaveBeenCalled();
+                expect(mockGetManagedIdentityAccessToken).not.toHaveBeenCalled();
+                manager.dispose();
+            },
+        );
+    });
 
     it('returns the optional Microsoft Entra account display name', async () => {
         requestTokenOnInit = true;
@@ -211,7 +419,7 @@ describe('ShellSessionManager', () => {
             now = 40;
             return { accessToken: 'private-token', account: { label: 'private-account' } };
         });
-        await initializeSession(manager);
+        await initializeSession(manager, source);
         const stopDatabase = timings.startDatabaseConnect();
         now = 10;
         const stopWait = timings.startTokenWait();
@@ -265,7 +473,7 @@ describe('ShellSessionManager', () => {
         ['playground', 'vscode'],
         ['playground', 'managedIdentity'],
     ] as const)('resolves the %s %s token audience from the cluster credentials', async (surface, source) => {
-        const connectionString = 'mongodb://cluster.azure.us/';
+        const connectionString = 'mongodb://cluster.mongocluster.cosmos.azure.us/';
         CredentialCache.setAuthCredentials(
             clusterId,
             source === 'vscode' ? AuthMethodId.MicrosoftEntraID : AuthMethodId.ManagedIdentity,
@@ -303,6 +511,7 @@ describe('ShellSessionManager', () => {
             { startupCorrelationId: 'startup-id', surface, startupProperties },
         );
         expect(startupProperties).toEqual({
+            entraDestinationClass: 'documentdbService',
             cloudCategory: 'usgov',
             tokenResourceReason: source === 'vscode' ? 'setting' : 'host',
             configuredCloud: 'AzureUSGovernment',
@@ -342,7 +551,7 @@ describe('ShellSessionManager', () => {
                 surface === 'shell'
                     ? new ShellSessionManager({ clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' })
                     : new PlaygroundEvaluator();
-            await initializeSession(manager);
+            await initializeSession(manager, source);
             const postResponse = vi.fn();
             const startupProperties: Record<string, string> = {};
             await workerCallbacks.onTokenRequest?.(
@@ -394,7 +603,7 @@ describe('ShellSessionManager', () => {
                 surface === 'shell'
                     ? new ShellSessionManager({ clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' })
                     : new PlaygroundEvaluator();
-            await initializeSession(manager);
+            await initializeSession(manager, source);
             const postResponse = vi.fn();
             const startupProperties: Record<string, string> = {};
 
@@ -447,7 +656,7 @@ describe('ShellSessionManager', () => {
                 surface === 'shell'
                     ? new ShellSessionManager({ clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' })
                     : new PlaygroundEvaluator();
-            await initializeSession(manager);
+            await initializeSession(manager, source);
             const postResponse = vi.fn();
             const failedProperties: Record<string, string> = {};
             await workerCallbacks.onTokenRequest?.(
