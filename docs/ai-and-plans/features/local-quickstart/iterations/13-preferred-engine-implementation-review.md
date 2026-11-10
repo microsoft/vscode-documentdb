@@ -95,6 +95,23 @@ Earlier lint failures were not counted as green; the final annotation-only corre
 The full model/role usage, token breakdown, timing scope and optimization note are in
 the [source work-item document](./12-preferred-engine-and-podman-start.md#lead-usage-snapshot).
 
+## Native Windows Podman test (2026-11-10)
+
+A reviewer ran the CI build of `ba85263e` on native Windows 11 with Podman 6.1.4, a rootful WSL
+machine and no Docker CLI
+([report](https://github.com/microsoft/vscode-documentdb/pull/1076#issuecomment-6779412748)).
+Fallback, setup, lifecycle, recreate, delete, **Start Podman machine** and **Stop waiting** worked.
+This covers manual check 1 below for Windows; macOS is still untested.
+
+| Finding                                                                                                                                                                                               | Disposition                                                                                                                                         |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No start button about a minute after `podman machine stop`: WSL shuts down its idle VM then, `machine list` blocked for up to 11.3 s, and the 10 s process deadline turned the machine into `unknown` | Fixed: a timed-out `machine list` is retried once, inside the same readiness deadline                                                               |
+| The log said only "machine list failed or returned invalid JSON"                                                                                                                                      | Fixed: the log names a timeout, an exit code or invalid JSON, with the end of stderr                                                                |
+| `machine list` reports `Default: false` for a rootful machine, because its default connection is `<name>-root`. Several machines with a rootful default were therefore "ambiguous"                    | Fixed: when several machines exist and none is marked default, `system connection list` names the default. Unit-tested only; one machine was tested |
+| The Podman failure screen said "Docker daemon unavailable", "Check Docker again" and "the Docker check", and told the user to open Podman Desktop next to the in-app button                           | Fixed: engine-neutral or Podman wording, and a stopped machine is named                                                                             |
+| The check stage showed "Podman podman.EXE version 6.1.4", the raw `podman -v` output                                                                                                                  | Fixed in the webview: only the version number is shown. `cliVersion` itself is unchanged                                                            |
+| Configure kept "DocumentDB Local is already running" after the container was removed outside VS Code                                                                                                  | Not changed. Opening the wizard is metadata-only by decision (iteration 12, P3); a tree Refresh clears it. Operator decision                        |
+
 ## Manual checks and remaining operator decisions
 
 1. Native macOS/Windows: initialize a Podman machine, leave it stopped, choose Podman and
