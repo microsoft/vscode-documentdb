@@ -9,10 +9,10 @@ import { Collapse } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import { Fragment, type JSX } from 'react';
 
+import { getClusterVersions } from '../../../../utils/clusterVersions';
 import { regionToDisplayName } from '../../../../utils/regionToDisplayName';
 import { type ClusterDashboardAzureInfo } from '../clusterDashboardController';
 import { type ClusterDashboardInfo } from '../clusterDashboardRouter';
-import { getClusterVersions } from '../formatUtils';
 
 /** A row in the disclosed details grid. */
 export interface DashboardDetail {

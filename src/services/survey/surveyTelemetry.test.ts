@@ -248,6 +248,12 @@ describe('SurveyTelemetry', (): void => {
         expect(localTelemetry.reportFeedbackActivated({ source: 'localQuickStart' }, INVITATION_ID)).toBe(false);
         expect(sink.mock.calls[0][0].properties.activationSource).toBe('localQuickStart');
         sink.mockClear();
+        const diagnosticsTelemetry = createTelemetry();
+        expect(diagnosticsTelemetry.reportFeedbackActivated({ source: 'connectionDiagnostics' }, INVITATION_ID)).toBe(
+            true,
+        );
+        expect(sink.mock.calls[0][0].properties.activationSource).toBe('connectionDiagnostics');
+        sink.mockClear();
         permitted = false;
         expect(telemetry.reportFeedbackActivated({ source: 'clusterDashboard' }, INVITATION_ID)).toBe(false);
         permitted = true;

@@ -18,6 +18,7 @@ const viewModules = {
     localQuickStart: './src/webviews/documentdb/localQuickStart/LocalQuickStart.tsx',
     atlasCredentials: './src/webviews/documentdb/atlasCredentials/AtlasCredentialsView.tsx',
     clusterDashboard: './src/webviews/documentdb/clusterDashboard/ClusterDashboard.tsx',
+    connectionDiagnostics: './src/webviews/documentdb/connectionDiagnostics/ConnectionDiagnostics.tsx',
 };
 // Dynamic imports whose specifier is not a string cannot be resolved offline. A script may have at
 // most the sum of `maximum` over the entries whose `moduleId` its report chunk contains, or, for

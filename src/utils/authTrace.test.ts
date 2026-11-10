@@ -51,9 +51,11 @@ describe('describeAuthError', () => {
                 tokenResourceReason: 'setting',
                 configuredCloud: 'AzureUSGovernment',
                 hostCloud: 'AzureUSGovernment',
-                errorKind: 'cloudMismatch',
+                entraFailureKind: 'cloudMismatch',
             });
             expect(JSON.stringify(properties)).not.toMatch(/private|https|AzurePrivateCloud/i);
+            // Whole-error masking redacts any property named like an error, so these would arrive empty.
+            expect(Object.keys(properties).filter((key) => /(error|exception)/i.test(key))).toEqual([]);
         });
 
         it('copies a host-cloud conflict', () => {
@@ -64,7 +66,7 @@ describe('describeAuthError', () => {
                 undefined,
                 { startupCorrelationId: 'startup-id', surface: 'extension', startupProperties: properties },
             );
-            expect(properties).toMatchObject({ hostCloud: 'conflicting', errorKind: 'hostCloudConflict' });
+            expect(properties).toMatchObject({ hostCloud: 'conflicting', entraFailureKind: 'hostCloudConflict' });
         });
 
         it('rejects dynamic values even under known property names', () => {
@@ -86,7 +88,7 @@ describe('describeAuthError', () => {
                 tokenResourceReason: 'unknown',
                 configuredCloud: 'unknown',
                 hostCloud: 'unknown',
-                errorKind: 'none',
+                entraFailureKind: 'none',
             });
         });
 

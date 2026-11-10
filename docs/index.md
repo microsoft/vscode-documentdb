@@ -49,6 +49,7 @@ The User Manual provides guidance on using the extension. It contains detailed d
 - [Connecting with a URL](./user-manual/how-to-construct-url)
 - [Connect with a Managed Identity](./user-manual/connect-with-managed-identity)
 - [Troubleshoot SRV DNS Lookups (`querySrv EBADRESP`)](./user-manual/troubleshooting-srv-dns)
+- [Diagnose a Connection](./user-manual/diagnose-connection)
 - [Service Discovery](./user-manual/service-discovery)
   - [Azure DocumentDB](./user-manual/service-discovery-azure-cosmosdb-for-mongodb-vcore)
   - [Azure Cosmos DB for MongoDB (RU)](./user-manual/service-discovery-azure-cosmosdb-for-mongodb-ru)

@@ -18,6 +18,7 @@ import {
     type V1Service,
 } from '@kubernetes/client-node';
 import { ext } from '../../extensionVariables';
+import { type CredentialReadIssue } from '../../tree/documentdb/diagnosticCredentialRead';
 import { CREDENTIAL_SECRET_ANNOTATION, DISCOVERY_ANNOTATION, DOCUMENTDB_PORTS } from './config';
 import { getSource, readInlineYaml } from './sources/sourceStore';
 
@@ -193,6 +194,25 @@ interface DkoDocumentDbResourceInfo {
 
 interface ListDkoDocumentDbResourcesOptions {
     readonly suppressUnexpectedErrors?: boolean;
+    readonly strict?: boolean;
+    readonly ignoreDkoAccessDenied?: boolean;
+}
+
+interface KubernetesCredentials {
+    username: string;
+    password: string;
+}
+
+interface DocumentDBCredentials extends KubernetesCredentials {
+    connectionParams: string;
+}
+
+interface CredentialReadOptions {
+    readonly strict?: boolean;
+}
+
+interface DkoCredentialReadOptions extends CredentialReadOptions {
+    readonly ignoreDkoAccessDenied?: boolean;
 }
 
 const DEFAULT_DKO_SECRET_NAME = 'documentdb-credentials';
@@ -751,7 +771,17 @@ async function listDkoDocumentDbResources(
 
         return result.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
     } catch (error) {
-        if (isDkoCrdUnavailableError(error) || options.suppressUnexpectedErrors) {
+        if (isDkoCrdUnavailableError(error)) {
+            return [];
+        }
+        if (options.strict) {
+            if (options.ignoreDkoAccessDenied && getKubernetesApiStatusCode(error) === 403) {
+                return [];
+            }
+            // Diagnostic classification needs the original status and network codes.
+            throw error;
+        }
+        if (options.suppressUnexpectedErrors) {
             // Treat unavailable DKO metadata as no DKO resources when callers explicitly allow fallback.
             return [];
         }
@@ -1202,15 +1232,32 @@ async function getFirstNodeAddress(coreApi: CoreV1Api): Promise<{ address: strin
  * @param serviceName The service name to match against DocumentDB CRs
  * @returns Credentials and connection params if a matching DocumentDB CR is found
  */
+export function resolveDocumentDBCredentials(
+    coreApi: CoreV1Api,
+    kubeConfig: KubeConfig,
+    namespace: string,
+    serviceName: string,
+): Promise<DocumentDBCredentials | undefined>;
+export function resolveDocumentDBCredentials(
+    coreApi: CoreV1Api,
+    kubeConfig: KubeConfig,
+    namespace: string,
+    serviceName: string,
+    options: DkoCredentialReadOptions,
+): Promise<DocumentDBCredentials | { readonly credentialReadIssue: CredentialReadIssue } | undefined>;
 export async function resolveDocumentDBCredentials(
     coreApi: CoreV1Api,
     kubeConfig: KubeConfig,
     namespace: string,
     serviceName: string,
-): Promise<{ username: string; password: string; connectionParams: string } | undefined> {
-    // Credential lookup is best-effort: failing to read DKO metadata should prompt for credentials later,
-    // not block a target that was already discovered.
-    const resources = await listDkoDocumentDbResources(kubeConfig, namespace, { suppressUnexpectedErrors: true });
+    options: DkoCredentialReadOptions = {},
+): Promise<DocumentDBCredentials | { readonly credentialReadIssue: CredentialReadIssue } | undefined> {
+    // Ordinary lookup is best-effort so an unavailable Secret can prompt for credentials later.
+    const resources = await listDkoDocumentDbResources(
+        kubeConfig,
+        namespace,
+        options.strict ? options : { suppressUnexpectedErrors: true },
+    );
     const matchingResource = resources.find((resource) => resource.serviceName === serviceName);
     if (!matchingResource) {
         return undefined;
@@ -1228,8 +1275,19 @@ export async function resolveDocumentDBCredentials(
                 connectionParams: buildDocumentDbConnectionParams(),
             };
         }
-    } catch {
-        // Secret not found or not readable
+    } catch (error) {
+        if (options.strict) {
+            const status = getKubernetesApiStatusCode(error);
+            if (status === 403 || status === 404) {
+                return {
+                    credentialReadIssue: {
+                        source: 'kubernetes',
+                        reason: status === 403 ? 'accessDenied' : 'notFound',
+                    },
+                };
+            }
+            throw error;
+        }
     }
 
     return undefined;
@@ -1245,18 +1303,31 @@ export async function resolveDocumentDBCredentials(
  * - Secret is always read from the same namespace as the service.
  * - Only `username` and `password` keys are decoded.
  * - Secret values are never logged.
- * - Returns `undefined` on any failure so that the UI can prompt later.
+ * - Ordinary reads return `undefined` on failure so that the UI can prompt later.
+ * - Diagnostic reads preserve source failures and report unreadable Secrets without prompting.
  *
  * @param coreApi A CoreV1Api client
  * @param namespace The namespace of the service (secret must be in the same namespace)
  * @param secretName The Kubernetes Secret name to read
  * @returns Decoded credentials, or `undefined` if unavailable
  */
+export function resolveGenericServiceCredentials(
+    coreApi: CoreV1Api,
+    namespace: string,
+    secretName: string,
+): Promise<KubernetesCredentials | undefined>;
+export function resolveGenericServiceCredentials(
+    coreApi: CoreV1Api,
+    namespace: string,
+    secretName: string,
+    options: CredentialReadOptions,
+): Promise<KubernetesCredentials | { readonly credentialReadIssue: CredentialReadIssue } | undefined>;
 export async function resolveGenericServiceCredentials(
     coreApi: CoreV1Api,
     namespace: string,
     secretName: string,
-): Promise<{ username: string; password: string } | undefined> {
+    options: CredentialReadOptions = {},
+): Promise<KubernetesCredentials | { readonly credentialReadIssue: CredentialReadIssue } | undefined> {
     if (!isValidKubernetesSecretName(secretName)) {
         return undefined;
     }
@@ -1269,8 +1340,19 @@ export async function resolveGenericServiceCredentials(
             const password = Buffer.from(data.password, 'base64').toString('utf-8');
             return { username, password };
         }
-    } catch {
-        // Secret not found or not readable — return undefined so UI can prompt later.
+    } catch (error) {
+        if (options.strict) {
+            const status = getKubernetesApiStatusCode(error);
+            if (status === 403 || status === 404) {
+                return {
+                    credentialReadIssue: {
+                        source: 'kubernetes',
+                        reason: status === 403 ? 'accessDenied' : 'notFound',
+                    },
+                };
+            }
+            throw error;
+        }
     }
 
     return undefined;

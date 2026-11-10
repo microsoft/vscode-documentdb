@@ -11,7 +11,7 @@ const path = require('node:path');
 const { test } = require('node:test');
 const { buildSizeComment, cacheSizes, sizeWarnings } = require('./build-size-report.cjs');
 
-// The 14 graphs inspect.cjs measures, in its order.
+// The 15 graphs inspect.cjs measures, in its order.
 const graphSizes = {
     main: 9_500_000,
     mainStartup: 3_000_000,
@@ -24,6 +24,7 @@ const graphSizes = {
     localQuickStart: 1_500_000,
     atlasCredentials: 1_500_000,
     clusterDashboard: 1_700_000,
+    connectionDiagnostics: 1_600_000,
     editorWorker: 260_000,
     jsonWorker: 390_000,
     vsix: 8_000_000,
@@ -96,8 +97,11 @@ test('No change gives a single quiet line and the artifacts, with every graph in
     assert.ok(!body.includes('⚠'));
     assert.ok(!body.includes('<!--'));
     assert.ok(body.includes('| Collection View page (`collectionView`) | 6,000,000 | 6,000,000 | ✅ 0 | 0.0% |'));
+    assert.ok(
+        body.includes('| Diagnose Connection page (`connectionDiagnostics`) | 1,600,000 | 1,600,000 | ✅ 0 | 0.0% |'),
+    );
     assert.ok(body.includes('| `jsonWorker` | 390,000 | 390,000 | ✅ 0 | 0.0% |'));
-    assert.equal(body.match(/^\| (?!Graph|-)/gm).length, 14);
+    assert.equal(body.match(/^\| (?!Graph|-)/gm).length, 15);
     assert.ok(body.includes('[Bundle-reports-123](https://example.test/bundle)'));
     assert.deepEqual(sizeWarnings(report, base, 'main'), []);
 });
@@ -217,6 +221,7 @@ test('The v3 cache keeps the L1 graph names and package totals, and the CLI writ
         'localQuickStart',
         'atlasCredentials',
         'clusterDashboard',
+        'connectionDiagnostics',
         'editorWorker',
         'jsonWorker',
         'vsix',

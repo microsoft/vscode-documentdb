@@ -3,8 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ConnectionReachabilityProvider } from '../../services/connectionReachabilityService';
-import { rememberKubernetesCluster } from './KubernetesDiagnosticsProvider';
+import {
+    type ConnectionReachabilityIntent,
+    type ConnectionReachabilityProvider,
+    type ConnectionReachabilityResult,
+} from '../../services/connectionReachabilityService';
+import { rememberKubernetesCluster } from './KubernetesErrorExplainer';
 import { getKubernetesPortForwardMetadata } from './portForwardMetadata';
 
 /**
@@ -26,19 +30,24 @@ export class KubernetesReachabilityProvider implements ConnectionReachabilityPro
         return getKubernetesPortForwardMetadata(connectionProperties) !== undefined;
     }
 
-    public async ensureReachable(connectionProperties: Record<string, unknown>, clusterId?: string): Promise<void> {
+    public async ensureReachable(
+        connectionProperties: Record<string, unknown>,
+        clusterId?: string,
+        intent?: ConnectionReachabilityIntent,
+    ): Promise<ConnectionReachabilityResult> {
         const metadata = getKubernetesPortForwardMetadata(connectionProperties);
         if (!metadata) {
-            return;
+            return {};
         }
 
         // The only moment where both the clusterId and this connection's port-forward metadata are
-        // known; recording the pair lets KubernetesDiagnosticsProvider explain later failures.
+        // known; recording the pair lets KubernetesErrorExplainer explain later failures.
         if (clusterId) {
             rememberKubernetesCluster(clusterId, metadata);
         }
 
         const { ensureKubernetesPortForward } = await import('./ensureKubernetesPortForward');
-        await ensureKubernetesPortForward(metadata);
+        const { outcome } = await ensureKubernetesPortForward(metadata, intent);
+        return { sharedTunnel: outcome };
     }
 }

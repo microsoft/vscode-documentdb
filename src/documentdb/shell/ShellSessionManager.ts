@@ -412,7 +412,7 @@ export class ShellSessionManager implements vscode.Disposable {
                     ).accessToken;
                 } catch (error) {
                     if (traceContext?.startupProperties) {
-                        traceContext.startupProperties.errorKind = 'tokenAcquisitionFailed';
+                        traceContext.startupProperties.entraFailureKind = 'tokenAcquisitionFailed';
                     }
                     if (isCurrent()) {
                         recordEntraTokenFailure(this._connectionInfo.clusterId, {
@@ -450,7 +450,7 @@ export class ShellSessionManager implements vscode.Disposable {
                     }
                 } catch (error) {
                     if (traceContext?.startupProperties) {
-                        traceContext.startupProperties.errorKind = 'tokenAcquisitionFailed';
+                        traceContext.startupProperties.entraFailureKind = 'tokenAcquisitionFailed';
                     }
                     if (isCurrent()) {
                         recordEntraTokenFailure(this._connectionInfo.clusterId, {
