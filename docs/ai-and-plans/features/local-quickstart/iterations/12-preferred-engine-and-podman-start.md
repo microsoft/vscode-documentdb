@@ -255,6 +255,52 @@ This documentation-only approval does not start those implementation checks.
    startup. Use the next available decision numbers; iteration 10's draft numbers must not
    overwrite the accepted stage-Details decision 0008.
 
+### Execution record — 2026-11-10
+
+The operator requested implementation with the lead workflow from #1073 and Opus 5.5 as
+advisor. Work is on `dev/tnaum/preferred-engine-podman-start`, stacked on
+`dev/tnaum/quickstart-setup-stage-details-pr` (#1072), not `main`. The attached iteration 12
+document is the task source; iteration 11 is the existing stage-Details implementation.
+
+Opus 5.5 prepared the work breakdown and approved the P1–P4 interfaces at 82% confidence.
+P5 requires verification against Podman 5.x/6.x source before implementation. The approved
+instance ownership rule also governs Start fresh: deleting and recreating existing data
+must not silently change engines. Opening the wizard includes metadata hydration only;
+live engine status remains unknown until execution.
+
+| Item | Assigned model | Reason | State |
+| --- | --- | --- | --- |
+| P1 | `gpt-6.1-sol` | Persisted ownership, lifecycle and concurrent runtime isolation | In progress |
+| P2 | `gpt-6.1-sol` | Resolver, readiness and execution interfaces cross modules | Queued |
+| P3 | `gpt-6.1-sol` | Check-free behavior spans command, service, router and webview | Queued |
+| P4 | `gpt-6.1-terra` | Bounded provider-evidence isolation | Queued |
+| P5 | `gpt-6.1-sol` | Platform detection and long-running process lifecycle | Queued |
+| P6 | `gpt-6.1-sol` | Evidence, telemetry and scenario integration | Queued |
+
+P1's first worker stopped after the runtime split exposed a command log consumer outside
+its initial file list. The leader authorized that necessary consumer migration; no
+behavioral scope was added. The continuation must finish the tests before P1 is committed.
+Case 1 runs per phase, as requested by this plan; the full Case 2 runs at handover and is
+repeated with Case 1 after any fixes until green, as explicitly requested by the operator.
+
+**P5 source gate, advised (`claude-opus-5.5`), 85% confidence:** Podman v5.8.0 and
+v6.0.0 both expose `Name`, `Default`, `Running` and `Starting` in JSON. JSON names do not
+include the human table's default marker. The verified same-machine startup error is
+`unable to start "<name>": already running`; another active machine produces a different
+failure and must not be treated as success. Detection may use the existing bounded
+process runner, but startup needs a non-killing process path that continues draining
+stdout/stderr after the user stops waiting. A long boot returns control to the readiness
+poller rather than blocking Cancel. Platform and machine evidence remain live and are
+rechecked on click.
+
+Source verification:
+[5.8 reporter](https://github.com/containers/podman/blob/v5.8.0/pkg/domain/entities/machine.go),
+[6.0 reporter](https://github.com/containers/podman/blob/v6.0.0/pkg/domain/entities/machine.go),
+[5.8 listing](https://github.com/containers/podman/blob/v5.8.0/cmd/podman/machine/list.go),
+[6.0 listing](https://github.com/containers/podman/blob/v6.0.0/cmd/podman/machine/list.go),
+[5.8 startup](https://github.com/containers/podman/blob/v5.8.0/pkg/machine/shim/host.go),
+[6.0 startup](https://github.com/containers/podman/blob/v6.0.0/pkg/machine/shim/host.go).
+
 ## 5. Tests
 
 - `containerCli.test.ts`: every combination of preference × {docker, podman, both, neither} on
