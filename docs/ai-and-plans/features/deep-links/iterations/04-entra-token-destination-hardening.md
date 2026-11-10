@@ -1,7 +1,7 @@
 ---
 feature: deep-links
 kind: plan
-status: in-progress
+status: implemented
 created: 2026-11-10
 code:
     - src/documentdb/auth/oidcAllowedHosts.ts
@@ -25,7 +25,9 @@ code:
 
 # Iteration 4 - Entra token destination hardening
 
-> **Status:** implementation authorized by the operator on 2026-11-10; verification pending.
+> **Status:** B1–B6 implemented and locally verified; B7 integration bypass fix pending.
+> Case 1 and Case 2 will be repeated after B7. Live-cloud, workbench UX and human author
+> review remain pending.
 > The execution plan below records the accepted scope. The research and proposal remain as
 > supporting evidence, not a claim that the vulnerability has been fixed.
 >
@@ -61,8 +63,10 @@ The implementation branch is `dev/tnaum/entra-token-destination-hardening`, stac
 - Keep interactive token acquisition **eager, after the destination policy check**, rather than
   moving consent into the driver's callback. Opus found the callback's 60-second automated
   timeout does not cancel a pending VS Code consent prompt. This follows the proposal's
-  pre-acquisition requirement while preserving sign-in behavior. Driver seed validation and
-  per-socket TLS enforcement still precede token transmission.
+  pre-acquisition requirement for URI seeds only while preserving sign-in behavior. SRV answers
+  are checked after sign-in but before any token is transmitted. This explicitly amends the
+  original SRV zero-acquisition criterion; it does not weaken the no-disclosure invariant.
+  Driver seed validation and per-socket TLS enforcement still precede token transmission.
 - Strip **every case variant** of URI authentication and TLS parameters. The installed
   case-insensitive URL wrapper's single `delete()` can leave another casing behind.
 - Remove URI-supplied CA/CRL and proxy overrides as well: review found these could replace peer
@@ -152,16 +156,36 @@ Coding agents use the harness's configured coding model; the operator explicitly
 `claude-opus-5.5` for the read-only advisor. Each batch gets a separate commit and an inline
 completion note. Non-overlapping batches may run concurrently.
 
-| Batch | Original items     | Ownership and deliverable                                                                                                                                                                                                                                                                       | Prerequisite              |
-| ----- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| B0    | plan               | Leader: commit this revised plan before coding                                                                                                                                                                                                                                                  | source proposal committed |
-| B1    | WI2, WI3, WI8 core | Policy/builder worker: `oidcAllowedHosts.ts` and tests; new `oidcClientOptions.ts` and tests, `entraDestinationSettings.ts`. Keep legacy exports until consumers migrate.                                                                                                                       | B0                        |
-| B2    | WI0, WI4, WI5      | Lifecycle worker: Entra/managed-identity handlers and tests, `WorkerSessionManager`, `workerTypes`, `playgroundWorker`, `ShellSessionManager`, `PlaygroundEvaluator`, related tests and `authTrace`. Narrow driver options, original-session relays, bounded telemetry and safe output records. | B1                        |
-| B3    | WI4 proof          | Harness worker: new `oidcDestination.harness.test.ts` and its fixtures only. Real installed driver, loopback TLS, dummy token, seed/SRV/topology/polling/reconnect/session tests.                                                                                                               | B1                        |
-| B4a   | WI6 pickers        | Picker worker: `AuthMethod`, `ChooseAuthMethodStep`, authentication/new/update-credentials contexts, new-connection and update-credentials prompt/orchestration files and their tests.                                                                                                          | B1                        |
-| B4b   | WI6 saved state    | Connection worker: update-connection-string execution/tests, `DocumentDBClusterItem`, failure presentation, `ClusterItemBase`, `ConnectionsBranchDataProvider`, `constants`, `entraErrorRules` and related tests.                                                                               | B4a                       |
-| B5    | WI7, WI8 docs      | Documentation worker: setting description, new public page, sovereign/managed-identity user guidance, active feature docs/decisions and acceptance evidence.                                                                                                                                    | B2, B3, B4b               |
-| B6    | verification       | Leader/check worker: Case 1 and full Case 2, required fixes, AI pre-review committed under this feature's iterations; publish stacked PR.                                                                                                                                                       | B5                        |
+**Additional integration item B7 (2026-11-10):** a late source-backed check found that selecting
+Native or No Authentication can still let a URI declare `MONGODB-OIDC`. The driver then runs its
+own machine workflow outside the Entra handlers. Opus confirmed this offline with `parseOptions`
+for Azure, GCP and Kubernetes environment values, including Native with an empty password.
+This is a blocking gap in the original every-path goal, not an optional new authentication feature.
+The leader accepted the advisor's narrow remedy (high confidence): honor the selected non-OIDC
+method by removing **only conflicting OIDC mechanism/properties**, in every casing, on the two
+main-thread paths and the common shell/playground worker branch. Genuine native mechanisms
+(SCRAM, GSSAPI, X509) and all their TLS settings must remain byte-identical.
+
+B7 adds a pure `removeConflictingOidcMechanism(connectionString: string): string` helper in
+`src/documentdb/auth/nonOidcConnectionString.ts`. It detects any case variant of an
+`authMechanism` key with a trimmed, case-insensitive `MONGODB-OIDC` value, then removes all
+case variants of both authentication keys from the runtime string. Otherwise it returns the
+input unchanged. `NativeAuthHandler`, `NoAuthHandler` and the non-Entra worker branch call it
+before constructing the driver. Persisted strings are unchanged. Tests must inspect the real
+driver's effective mechanism, plus worker constructor arguments, not just string formatting.
+No new setting, dialog, fallback to Entra or trust input is introduced.
+
+| Batch | Original items      | Ownership and deliverable                                                                                                                                                                                                                                                                       | Prerequisite              |
+| ----- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| B0    | plan                | Leader: commit this revised plan before coding                                                                                                                                                                                                                                                  | source proposal committed |
+| B1    | WI2, WI3, WI8 core  | Policy/builder worker: `oidcAllowedHosts.ts` and tests; new `oidcClientOptions.ts` and tests, `entraDestinationSettings.ts`. Keep legacy exports until consumers migrate.                                                                                                                       | B0                        |
+| B2    | WI0, WI4, WI5       | Lifecycle worker: Entra/managed-identity handlers and tests, `WorkerSessionManager`, `workerTypes`, `playgroundWorker`, `ShellSessionManager`, `PlaygroundEvaluator`, related tests and `authTrace`. Narrow driver options, original-session relays, bounded telemetry and safe output records. | B1                        |
+| B3    | WI4 proof           | Harness worker: new `oidcDestination.harness.test.ts` and its fixtures only. Real installed driver, loopback TLS, dummy token, seed/SRV/topology/polling/reconnect/session tests.                                                                                                               | B1                        |
+| B4a   | WI6 pickers         | Picker worker: `AuthMethod`, `ChooseAuthMethodStep`, authentication/new/update-credentials contexts, new-connection and update-credentials prompt/orchestration files and their tests.                                                                                                          | B1                        |
+| B4b   | WI6 saved state     | Connection worker: update-connection-string execution/tests, `DocumentDBClusterItem`, failure presentation, `ClusterItemBase`, `ConnectionsBranchDataProvider`, `constants`, `entraErrorRules` and related tests.                                                                               | B4a                       |
+| B5    | WI7, WI8 docs       | Documentation worker: setting description, new public page, sovereign/managed-identity user guidance, active feature docs/decisions and acceptance evidence.                                                                                                                                    | B2, B3, B4b               |
+| B6    | verification        | Leader/check worker: Case 1 and full Case 2, required fixes, AI pre-review committed under this feature's iterations; publish stacked PR.                                                                                                                                                       | B5, B7                    |
+| B7    | WI3 integration gap | Coding worker: pure `nonOidcConnectionString` helper/tests, `NativeAuthHandler` and new tests, `NoAuthHandler` and tests, non-Entra `playgroundWorker` branch/tests. Prevent URI-selected OIDC from bypassing the selected non-OIDC method.                                                     | B1                        |
 
 Focused root tests use `npx vitest run <owned test paths>`; the `extension` project includes
 `src/**/*.test.{ts,tsx}`. No workspace-package source changes are planned. Intentional non-TDD
@@ -189,8 +213,9 @@ must remain unchanged.
 
 ### Progress
 
-The nine original required items (WI0–WI8) are grouped into eight execution batches
-(B0, B1, B2, B3, B4a, B4b, B5, B6). WI9 remains excluded.
+The nine original required items (WI0–WI8) were grouped into eight execution batches
+(B0, B1, B2, B3, B4a, B4b, B5, B6). B7 is an explicitly added ninth execution batch addressing
+the blocking non-Entra dispatch gap. WI9 remains excluded.
 
 - **B0 — Done (2026-11-10), commits `e572791ce`, `639ebd072`:** original source and revised
   execution plan committed before coding. Operator chose Option B with the existing setting;
@@ -221,18 +246,43 @@ The nine original required items (WI0–WI8) are grouped into eight execution ba
   action-only recovery work on fresh and cached failures. Advised (`claude-opus-5.5`, high
   confidence): retain the narrow `instanceof` predicate because IPC reconstructs real instances.
   Twenty-two added edit/recovery tests plus updated diagnostics assertions passed.
-- **B5 — implemented, documentation commit pending:** public trusted-server page, setting consequence/link, related user guidance and active
+- **B5 — Done (2026-11-10), commit `e6081e4b8`:** public trusted-server page, setting consequence/link, related user guidance and active
   deep-links/sovereign-clouds/managed-identities decisions updated. A bounded WI0 query is provided
   below; no production telemetry query was executed. Targeted read-only validation passed for
   14 Markdown files, 33 added local links/anchors, the explicit Learn More permalink and unchanged
   setting schema/scope. `git diff --check` passed for the owned documentation/setting files.
   No build, lint, formatting, localization or site-rendering command was run for B5.
-- **B6 — in progress:** first Case 1 passed 978 tests; the final expanded Case 1 passed
+- **B6 — Done (2026-11-10), localization commit `7a0d3675c`:** first Case 1 passed 978 tests; the final expanded Case 1 passed
   **1,001 tests in 40 files** plus `npm run build`. The first full Case 2 passed every command
   except lint's twelve new-file errors; those were corrected without weakening assertions.
-  The final full Case 2 rerun is in progress. The
+  The final full Case 2 rerun passed all eight commands. The
   [AI pre-review and dispositions](./05-entra-token-destination-hardening-review.md) record all
   findings and fixes. Live/cloud/workbench/localized-layout checks remain explicitly unverified.
+
+B7 is pending implementation; its plan is committed before coding. The verification results below
+are the green pre-B7 run and will be superseded by a complete repeated Case 1/Case 2 run.
+The PR will remain a draft for the operator's final review and recorded manual/live checks.
+
+| Verification                              | Final result                                                   |
+| ----------------------------------------- | -------------------------------------------------------------- |
+| Case 1: `npm run build`                   | Passed                                                         |
+| Case 1: all affected focused Vitest tests | 40 files, 1,001 tests passed                                   |
+| Case 2: `npm run l10n`                    | Passed; source bundle committed separately                     |
+| Case 2: `npm run prettier-fix`            | Passed                                                         |
+| Case 2: `npm run l10n:check`              | Passed                                                         |
+| Case 2: `npm run lint`                    | Passed after twelve lint fixes                                 |
+| Case 2: `npm run build`                   | Passed                                                         |
+| Case 2: `npm run typecheck:tests`         | Passed, exact workspace script                                 |
+| Case 2: `npx vitest run --reporter=dot`   | 345 files; 6,265 passed, 1 skipped; 84.90 seconds              |
+| Case 2: `npm run package`                 | Passed; unsigned local VSIX, 204 files, 8.56 MB; not published |
+
+A sixth, narrowly scoped Opus 5.5 consultation clarified the SRV acceptance wording after the
+green run (high confidence; no production change). Eager interactive sign-in can occur for an
+approved SRV URI before malformed or rejected DNS answers are known. The driver callback is
+not invoked for rejected resolved seeds and no token is transmitted. The original matrix row
+below was corrected so the harness's callback assertion is not misrepresented as proof of zero
+interactive session acquisition. This follows the earlier advisor's recorded eager-sign-in
+design, not a new token-destination exception.
 
 ### Lead usage snapshot
 
@@ -265,6 +315,10 @@ Cache and reasoning fields may overlap input/output; they must not be added into
 Summed request spans overlap and are not wall-clock elapsed time. The helper does not report a
 separate end-to-end check/CI duration here; command logs provide individual execution evidence.
 No hosted CI result is included in this local snapshot.
+
+The later SRV clarification is outside this snapshot: 3 requests, 23 seconds summed model time,
+20.5 AIU; input 90,662, output 1,918, cache read 59,688, cache write 30,966, reasoning 877.
+It brings the advisor consultation count to six; it did not write code or run checks.
 
 Optimization: advising was the largest measured category. Five consultations included integration
 and review-driven rework; the initial broad advisor investigation was particularly expensive.
@@ -1051,42 +1105,42 @@ reach users at least one release before enforcement, if the release schedule all
 Use dummy tokens and controlled local/in-memory infrastructure; no real user token should be sent
 to a test sink. Assert token-provider calls and captured authentication payloads, not only errors.
 
-| Scenario                                                                                                                                                                  | Required result                                                                                                                       |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Customer-controlled `*.cloudapp.azure.com` destination                                                                                                                    | Rejected before token acquisition; no token sent                                                                                      |
-| Unrelated domain, deceptive suffix, malformed connection                                                                                                                  | Explicit rejection, with no permissive fallback                                                                                       |
-| Mixed approved and unapproved seed hosts, in either order                                                                                                                 | Entire Entra attempt rejected before token acquisition                                                                                |
-| Supported service endpoints in each supported cloud                                                                                                                       | Authentication reaches the intended server using the correct audience                                                                 |
-| Legitimate SRV and private-endpoint forms                                                                                                                                 | Continue to work with certificate validation enabled                                                                                  |
-| Initial SRV results outside policy                                                                                                                                        | Rejected before requesting or transmitting a token                                                                                    |
-| Unapproved topology member, reconnect destination, or later SRV result                                                                                                    | No cached or newly acquired token transmitted to that destination                                                                     |
-| Saved credentials or authentication picker skipped                                                                                                                        | Same destination policy enforced                                                                                                      |
-| Interactive Entra, managed identity, shell, playground                                                                                                                    | Equivalent destination protection                                                                                                     |
-| Explicit trusted custom service                                                                                                                                           | Works without widening the built-in policy                                                                                            |
-| Link-supplied audience/authentication properties or purported source                                                                                                      | Cannot change audience or establish destination trust                                                                                 |
-| New-connection confirmation canceled                                                                                                                                      | No connection created and no token requested                                                                                          |
-| Non-Entra native/password connection                                                                                                                                      | Existing supported behavior preserved                                                                                                 |
-| Saved `authMechanismProperties=ENVIRONMENT:azure,…` (from a link or paste), opened in the tree, shell and playground                                                      | Property removed from the OIDC options; driver host check active; no token to an unapproved host                                      |
-| Entra or managed identity with `tlsInsecure`, `tlsAllowInvalidCertificates`, `tlsAllowInvalidHostnames`, `ssl*` aliases or `rejectUnauthorized=false` in the saved string | Certificate and hostname validation stay on; no token over an unvalidated connection; native auth on the same saved string unaffected |
-| Approved seed whose `hello` lists an unapproved member                                                                                                                    | `checkServerIdentity` rejects the member before any application data; no token sent                                                   |
-| Host forms from [R6](#r6-endpoint-inventory-wi1-evidence): `global.`, `fc-…-000` node, `privatelink.`, legacy `c-`, port 10260, mixed case                                | Accepted in each supported cloud                                                                                                      |
-| `xmongocluster.cosmos.azure.com`, `mongocluster.cosmos.azure.com.evil.com`, `….azure.tk`, punycode lookalike, trailing dot, IP literal                                    | Rejected before token acquisition, with the same outcome in our predicate and in the driver                                           |
-| RU account (`*.mongo.cosmos.azure.*`, `*.documents.azure.*`) with Entra                                                                                                   | Rejected with an explanation; native auth unaffected                                                                                  |
-| Government- or China-signed-in user, public `*.cloudapp.azure.com` host                                                                                                   | Still stopped by the cloud-mismatch check before token acquisition (regression)                                                       |
-| Managed identity, public `*.cloudapp.azure.com` host                                                                                                                      | Rejected before the IMDS request                                                                                                      |
-| String declares `MONGODB-OIDC` for an unrecognized host                                                                                                                   | Entra and managed identity not offered; explanation shown                                                                             |
-| Worker `tokenRequest` while the worker's connection targets a rejected host                                                                                               | Relay refuses before token acquisition                                                                                                |
-| Pasted `*.cloudapp.azure.com` string in New Connection, with and without `authMechanism=MONGODB-OIDC`                                                                     | Entra and managed identity not offered; if forced through stored state, rejected before token acquisition                             |
-| Update Credentials on a connection to a rejected host                                                                                                                     | Entra and managed identity not offered                                                                                                |
-| Existing approved Entra connection; Update Connection String to a rejected host; then expand                                                                              | Stored method cleared, with an explanation; next connect prompts without Entra; no token sent                                         |
-| Existing approved Entra connection; Update Connection String to another approved host                                                                                     | Method kept; connects as before                                                                                                       |
-| Saved Entra connection whose host became disallowed (built-in list narrowed, or custom suffix removed)                                                                    | Expand fails with the localized explanation and recovery actions; no token, no silent method fallback                                 |
-| First open of a link-created connection to a rejected host                                                                                                                | Picker does not offer Entra or managed identity                                                                                       |
-| `hostnameSuffix` set to `azure.com`, `cloudapp.azure.com`, `eastus.cloudapp.azure.com`, `cosmos.azure.com` or a sovereign `cloudapp` domain                               | Rejected by validation; built-in policy unchanged                                                                                     |
-| `hostnameSuffix` set to a narrow new service suffix                                                                                                                       | Matching hosts accepted, with every-host, `checkServerIdentity` and certificate enforcement; the admitted connection is logged        |
-| `hostnameSuffix` in workspace settings, or arriving through Settings Sync                                                                                                 | Ignored (machine scope)                                                                                                               |
-| Rejection modal **Learn More**                                                                                                                                            | Opens documentation; no setting written or pre-filled                                                                                 |
-| New strings in every shipped locale                                                                                                                                       | Picker label and detail, placeholder, toast and modal title fit the [length budgets](#length-limits-for-the-new-strings)              |
+| Scenario                                                                                                                                                                  | Required result                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Customer-controlled `*.cloudapp.azure.com` destination                                                                                                                    | Rejected before token acquisition; no token sent                                                                                                                              |
+| Unrelated domain, deceptive suffix, malformed connection                                                                                                                  | Explicit rejection, with no permissive fallback                                                                                                                               |
+| Mixed approved and unapproved seed hosts, in either order                                                                                                                 | Entire Entra attempt rejected before token acquisition                                                                                                                        |
+| Supported service endpoints in each supported cloud                                                                                                                       | Authentication reaches the intended server using the correct audience                                                                                                         |
+| Legitimate SRV and private-endpoint forms                                                                                                                                 | Continue to work with certificate validation enabled                                                                                                                          |
+| Initial SRV results outside policy                                                                                                                                        | Driver rejects before transmission and never invokes the OIDC callback. Eager interactive sign-in can precede SRV resolution; see the accepted eager-sign-in amendment above. |
+| Unapproved topology member, reconnect destination, or later SRV result                                                                                                    | No cached or newly acquired token transmitted to that destination                                                                                                             |
+| Saved credentials or authentication picker skipped                                                                                                                        | Same destination policy enforced                                                                                                                                              |
+| Interactive Entra, managed identity, shell, playground                                                                                                                    | Equivalent destination protection                                                                                                                                             |
+| Explicit trusted custom service                                                                                                                                           | Works without widening the built-in policy                                                                                                                                    |
+| Link-supplied audience/authentication properties or purported source                                                                                                      | Cannot change audience or establish destination trust                                                                                                                         |
+| New-connection confirmation canceled                                                                                                                                      | No connection created and no token requested                                                                                                                                  |
+| Non-Entra native/password connection                                                                                                                                      | Existing supported behavior preserved                                                                                                                                         |
+| Saved `authMechanismProperties=ENVIRONMENT:azure,…` (from a link or paste), opened in the tree, shell and playground                                                      | Property removed from the OIDC options; driver host check active; no token to an unapproved host                                                                              |
+| Entra or managed identity with `tlsInsecure`, `tlsAllowInvalidCertificates`, `tlsAllowInvalidHostnames`, `ssl*` aliases or `rejectUnauthorized=false` in the saved string | Certificate and hostname validation stay on; no token over an unvalidated connection; native auth on the same saved string unaffected                                         |
+| Approved seed whose `hello` lists an unapproved member                                                                                                                    | `checkServerIdentity` rejects the member before any application data; no token sent                                                                                           |
+| Host forms from [R6](#r6-endpoint-inventory-wi1-evidence): `global.`, `fc-…-000` node, `privatelink.`, legacy `c-`, port 10260, mixed case                                | Accepted in each supported cloud                                                                                                                                              |
+| `xmongocluster.cosmos.azure.com`, `mongocluster.cosmos.azure.com.evil.com`, `….azure.tk`, punycode lookalike, trailing dot, IP literal                                    | Rejected before token acquisition, with the same outcome in our predicate and in the driver                                                                                   |
+| RU account (`*.mongo.cosmos.azure.*`, `*.documents.azure.*`) with Entra                                                                                                   | Rejected with an explanation; native auth unaffected                                                                                                                          |
+| Government- or China-signed-in user, public `*.cloudapp.azure.com` host                                                                                                   | Still stopped by the cloud-mismatch check before token acquisition (regression)                                                                                               |
+| Managed identity, public `*.cloudapp.azure.com` host                                                                                                                      | Rejected before the IMDS request                                                                                                                                              |
+| String declares `MONGODB-OIDC` for an unrecognized host                                                                                                                   | Entra and managed identity not offered; explanation shown                                                                                                                     |
+| Worker `tokenRequest` while the worker's connection targets a rejected host                                                                                               | Relay refuses before token acquisition                                                                                                                                        |
+| Pasted `*.cloudapp.azure.com` string in New Connection, with and without `authMechanism=MONGODB-OIDC`                                                                     | Entra and managed identity not offered; if forced through stored state, rejected before token acquisition                                                                     |
+| Update Credentials on a connection to a rejected host                                                                                                                     | Entra and managed identity not offered                                                                                                                                        |
+| Existing approved Entra connection; Update Connection String to a rejected host; then expand                                                                              | Stored method cleared, with an explanation; next connect prompts without Entra; no token sent                                                                                 |
+| Existing approved Entra connection; Update Connection String to another approved host                                                                                     | Method kept; connects as before                                                                                                                                               |
+| Saved Entra connection whose host became disallowed (built-in list narrowed, or custom suffix removed)                                                                    | Expand fails with the localized explanation and recovery actions; no token, no silent method fallback                                                                         |
+| First open of a link-created connection to a rejected host                                                                                                                | Picker does not offer Entra or managed identity                                                                                                                               |
+| `hostnameSuffix` set to `azure.com`, `cloudapp.azure.com`, `eastus.cloudapp.azure.com`, `cosmos.azure.com` or a sovereign `cloudapp` domain                               | Rejected by validation; built-in policy unchanged                                                                                                                             |
+| `hostnameSuffix` set to a narrow new service suffix                                                                                                                       | Matching hosts accepted, with every-host, `checkServerIdentity` and certificate enforcement; the admitted connection is logged                                                |
+| `hostnameSuffix` in workspace settings, or arriving through Settings Sync                                                                                                 | Ignored (machine scope)                                                                                                                                                       |
+| Rejection modal **Learn More**                                                                                                                                            | Opens documentation; no setting written or pre-filled                                                                                                                         |
+| New strings in every shipped locale                                                                                                                                       | Picker label and detail, placeholder, toast and modal title fit the [length budgets](#length-limits-for-the-new-strings)                                                      |
 
 Extend the existing policy, authentication-handler, sovereign integration, authentication-picker,
 worker-manager, and URI-handler suites; add the smallest protocol harness needed to prove token

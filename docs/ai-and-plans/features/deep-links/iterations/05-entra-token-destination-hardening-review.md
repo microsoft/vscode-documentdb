@@ -20,9 +20,9 @@ The leader committed the proposal (`e572791ce`) and revised execution plan (`639
 coding. This review covers the resulting stacked change against
 `dev/tnaum/url-handler-improvmements`, not `main`.
 
-Five read-only Opus consultations covered the execution plan, shared trust boundary, token
+Six read-only Opus consultations covered the execution plan, shared trust boundary, token
 lifecycle/protocol harness/pickers, corrected builder/saved-connection recovery, and final
-integration. Reviewers inspected implementation and installed driver source; their reviews did
+integration, and exact SRV acceptance wording. Reviewers inspected implementation and installed driver source; their reviews did
 not run builds or use real credentials, Azure resources or production telemetry.
 Coding workers and the leader ran the local tests recorded in the source plan.
 
@@ -67,6 +67,13 @@ The real-driver harness uses temporary local certificates and dummy tokens. Its 
 case rejects a trailing-dot result that passes the driver's parent-domain rule; it does not
 demonstrate acceptance of an arbitrary unrelated SRV domain.
 Driver hooks and polling internals must be rechecked after driver upgrades.
+
+The sixth advisor consultation explicitly corrected the original matrix's zero-acquisition claim
+for rejected SRV answers. Interactive sign-in remains eager after the URI-seed policy check, so a
+prompt or cached-session read can occur before malformed/rejected DNS answers are known. The
+driver callback is never invoked for rejected resolved seeds and no token is transmitted to an
+unapproved recipient. This is the recorded eager-sign-in amendment, not proof of zero interactive
+acquisitions for SRV failures.
 
 Live Government/China/private-link endpoint and certificate acceptance remain unverified.
 The operator should exercise consent, picker cancellation/Learn More, rejected saved-connection
