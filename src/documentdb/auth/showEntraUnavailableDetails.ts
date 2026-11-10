@@ -11,7 +11,7 @@ export async function showEntraUnavailableDetails(): Promise<void> {
     const learnMore = { title: vscode.l10n.t('Learn More') };
     const back = { title: vscode.l10n.t('Back'), isCloseAffordance: true };
     const selected = await vscode.window.showInformationMessage(
-        vscode.l10n.t("Microsoft Entra ID isn't available for this server."),
+        vscode.l10n.t('Microsoft Entra ID unavailable'),
         {
             modal: true,
             detail: vscode.l10n.t(
@@ -21,7 +21,15 @@ export async function showEntraUnavailableDetails(): Promise<void> {
         learnMore,
         back,
     );
-    if (selected === learnMore && !(await openUrl(Links.EntraTrustedServers))) {
-        void vscode.window.showWarningMessage(vscode.l10n.t("We couldn't open this link."));
+    if (selected === learnMore) {
+        let opened: boolean;
+        try {
+            opened = await openUrl(Links.EntraTrustedServers);
+        } catch {
+            opened = false;
+        }
+        if (!opened) {
+            void vscode.window.showWarningMessage(vscode.l10n.t("We couldn't open this link."));
+        }
     }
 }

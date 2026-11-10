@@ -168,6 +168,9 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 if (isEntraDestinationRejectedError(error)) {
                     await callWithTelemetryAndErrorHandling('connect', async (context) => {
                         context.errorHandling.suppressDisplay = true;
+                        context.telemetry.properties.connectionResult = 'failed';
+                        context.telemetry.properties.experience = this.experience.api;
+                        context.telemetry.properties.failurePhase = 'cachedClientConnect';
                         await showClusterConnectFailure({
                             clusterId: this.cluster.clusterId,
                             clusterName: this.cluster.name,

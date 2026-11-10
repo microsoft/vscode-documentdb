@@ -671,6 +671,18 @@ describe('ClusterItemBase.connect', () => {
             expect.objectContaining({ modal: true }),
             'Learn More',
         );
+        expect(mockTelemetryEvents).toEqual([
+            {
+                eventName: 'connect',
+                suppressDisplay: true,
+                properties: {
+                    connectionResult: 'failed',
+                    experience: item.experience.api,
+                    failurePhase: 'cachedClientConnect',
+                    diagnosisProviderId: 'none',
+                },
+            },
+        ]);
     });
 
     it.each(['connected', 'canceled', 'failed'] as const)(

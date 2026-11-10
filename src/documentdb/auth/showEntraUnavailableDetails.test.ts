@@ -45,7 +45,7 @@ describe('showEntraUnavailableDetails', () => {
         await expect(showEntraUnavailableDetails()).resolves.toBeUndefined();
 
         expect(mocks.showInformationMessage).toHaveBeenCalledExactlyOnceWith(
-            "Microsoft Entra ID isn't available for this server.",
+            'Microsoft Entra ID unavailable',
             {
                 modal: true,
                 detail:
@@ -113,15 +113,19 @@ describe('showEntraUnavailableDetails', () => {
         expect(mocks.getSession).not.toHaveBeenCalled();
     });
 
-    it('propagates browser open errors', async () => {
+    it('warns without waiting for dismissal when the browser open rejects', async () => {
         const error = new Error('open failed');
         mocks.showInformationMessage.mockImplementation(
             (_title: string, _options: vscode.MessageOptions, learnMore: vscode.MessageItem) =>
                 Promise.resolve(learnMore),
         );
         mocks.openUrl.mockRejectedValue(error);
+        mocks.showWarningMessage.mockReturnValue(new Promise(() => {}));
 
-        await expect(showEntraUnavailableDetails()).rejects.toBe(error);
-        expect(mocks.showWarningMessage).not.toHaveBeenCalled();
+        await expect(showEntraUnavailableDetails()).resolves.toBeUndefined();
+        expect(mocks.openUrl).toHaveBeenCalledExactlyOnceWith(Links.EntraTrustedServers);
+        expect(mocks.showWarningMessage).toHaveBeenCalledExactlyOnceWith("We couldn't open this link.");
+        expect(mocks.update).not.toHaveBeenCalled();
+        expect(mocks.getSession).not.toHaveBeenCalled();
     });
 });

@@ -11,14 +11,16 @@ import { ErrorExplanationService } from '../services/errorExplanationService';
 import { EntraDestinationRejectedError, evaluateEntraDestination } from './auth/oidcAllowedHosts';
 import { showClusterConnectFailure } from './showClusterConnectFailure';
 
-const { showErrorMessage, openExternal, update } = vi.hoisted(() => ({
+const { showErrorMessage, showWarningMessage, openExternal, update } = vi.hoisted(() => ({
     showErrorMessage: vi.fn<(...args: unknown[]) => Promise<string | undefined>>(),
+    showWarningMessage: vi.fn(),
     openExternal: vi.fn(),
     update: vi.fn(),
 }));
 
 vi.mock('vscode', () => ({
-    window: { showErrorMessage },
+    l10n: { t: (message: string): string => message },
+    window: { showErrorMessage, showWarningMessage },
     env: { openExternal },
     Uri: { parse: (value: string): string => value },
     workspace: { getConfiguration: (): object => ({ update }) },
@@ -40,6 +42,7 @@ function createMockContext(): IActionContext {
 describe('showClusterConnectFailure', () => {
     beforeEach(() => {
         vi.resetAllMocks();
+        openExternal.mockResolvedValue(true);
     });
 
     it.each(['Learn More', undefined])(
@@ -54,7 +57,7 @@ describe('showClusterConnectFailure', () => {
             error.message = 'mongodb://user:password@first.example.com/?secret=value';
             const context = createMockContext();
 
-            await showClusterConnectFailure({
+            const selected = await showClusterConnectFailure({
                 clusterId: 'stable-id',
                 clusterName: 'Test Cluster',
                 error,
@@ -76,11 +79,40 @@ describe('showClusterConnectFailure', () => {
             expect(detail).not.toMatch(/mongodb|user:|password|27017|secret|second.example|sensitive/);
             expect(update).not.toHaveBeenCalled();
             expect(ErrorExplanationService.explain).not.toHaveBeenCalled();
+            expect(selected).toBe(choice);
+            expect(showWarningMessage).not.toHaveBeenCalled();
             if (choice) {
                 expect(openExternal).toHaveBeenCalledExactlyOnceWith(Links.EntraTrustedServers);
             } else {
                 expect(openExternal).not.toHaveBeenCalled();
             }
+        },
+    );
+
+    it.each(['false', 'rejection'])(
+        'preserves Learn More and warns without awaiting dismissal after browser %s',
+        async (outcome): Promise<void> => {
+            showErrorMessage.mockResolvedValue('Learn More');
+            if (outcome === 'false') {
+                openExternal.mockResolvedValue(false);
+            } else {
+                openExternal.mockRejectedValue(new Error('browser failed'));
+            }
+            showWarningMessage.mockReturnValue(new Promise(() => {}));
+
+            await expect(
+                showClusterConnectFailure({
+                    clusterId: 'stable-id',
+                    clusterName: 'Test Cluster',
+                    error: new EntraDestinationRejectedError({ firstHost: 'other.example.com', hostCount: 1 }),
+                    context: createMockContext(),
+                }),
+            ).resolves.toBe('Learn More');
+
+            expect(openExternal).toHaveBeenCalledExactlyOnceWith(Links.EntraTrustedServers);
+            expect(showWarningMessage).toHaveBeenCalledExactlyOnceWith("We couldn't open this link.");
+            expect(showErrorMessage).toHaveBeenCalledOnce();
+            expect(update).not.toHaveBeenCalled();
         },
     );
 

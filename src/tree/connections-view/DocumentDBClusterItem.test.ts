@@ -23,11 +23,21 @@ import type * as storageModule from '../../services/connectionStorageService';
 import { ConnectionStorageService, ItemType, StorageZone, type ConnectionItem } from '../../services/connectionStorageService';
 import { DocumentDBClusterItem } from './DocumentDBClusterItem';
 
-const { prompt, wizardCreated, showQuickPick } = vi.hoisted(() => ({
+const { prompt, wizardCreated, showQuickPick, showErrorMessage } = vi.hoisted(() => ({
     prompt: vi.fn<(context: AuthenticateWizardContext) => Promise<void>>(),
     wizardCreated: vi.fn(),
     showQuickPick: vi.fn(),
+    showErrorMessage: vi.fn<(...args: unknown[]) => Promise<string | undefined>>(),
 }));
+
+vi.mock('vscode', async (importOriginal) => {
+    const original = await importOriginal<typeof vscode>();
+    return {
+        ...original,
+        window: { ...original.window, showErrorMessage },
+        env: { ...original.env, openExternal: vi.fn() },
+    };
+});
 
 vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
     ...(await importOriginal<{
@@ -184,6 +194,38 @@ describe('saved connection destination authentication', () => {
                 undefined,
                 undefined,
                 undefined,
+            );
+        },
+    );
+
+    it.each(['false', 'rejection'])(
+        'cleans up the original failed connection after browser %s',
+        async (outcome): Promise<void> => {
+            const connection = makeConnection('mongodb://other.example.com/', AuthMethodId.MicrosoftEntraID);
+            vi.mocked(ConnectionStorageService.get).mockResolvedValue(connection);
+            const error = new EntraDestinationRejectedError(evaluateEntraDestination(connection.secrets.connectionString));
+            vi.mocked(ClustersClient.getClient).mockRejectedValue(error);
+            showErrorMessage.mockResolvedValueOnce('Learn More');
+            if (outcome === 'false') {
+                vi.mocked(vscode.env.openExternal).mockResolvedValueOnce(false);
+            } else {
+                vi.mocked(vscode.env.openExternal).mockRejectedValueOnce(new Error('browser failed'));
+            }
+            vi.mocked(vscode.window.showWarningMessage).mockReturnValueOnce(new Promise(() => {}));
+            const item = makeItem();
+
+            await expect(item.connect()).resolves.toBeNull();
+
+            expect(vscode.window.showWarningMessage).toHaveBeenCalledExactlyOnceWith("We couldn't open this link.");
+            expect(item.lastConnectionOutcome).toBe('failed');
+            expect(item.lastConnectionFailureReason).toBe('entraDestinationRejected');
+            expect(ClustersClient.deleteClient).toHaveBeenCalledExactlyOnceWith('stable-id');
+            expect(CredentialCache.deleteCredentials).toHaveBeenCalledExactlyOnceWith('stable-id');
+            expect(vi.mocked(vscode.window.showErrorMessage).mock.invocationCallOrder[0]).toBeLessThan(
+                vi.mocked(ClustersClient.deleteClient).mock.invocationCallOrder[0],
+            );
+            expect(vi.mocked(vscode.window.showWarningMessage).mock.invocationCallOrder[0]).toBeLessThan(
+                vi.mocked(ClustersClient.deleteClient).mock.invocationCallOrder[0],
             );
         },
     );

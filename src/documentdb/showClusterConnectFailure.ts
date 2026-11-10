@@ -58,7 +58,15 @@ export async function showClusterConnectFailure(
             learnMore,
         );
         if (selected === learnMore) {
-            await vscode.env.openExternal(vscode.Uri.parse(Links.EntraTrustedServers));
+            let opened: boolean;
+            try {
+                opened = await vscode.env.openExternal(vscode.Uri.parse(Links.EntraTrustedServers));
+            } catch {
+                opened = false;
+            }
+            if (!opened) {
+                void vscode.window.showWarningMessage(vscode.l10n.t("We couldn't open this link."));
+            }
         }
         return selected;
     }

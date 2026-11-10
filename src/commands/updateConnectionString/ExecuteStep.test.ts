@@ -56,6 +56,7 @@ function makeContext(newConnectionString: string): UpdateCSWizardContext {
         isEmulator: false,
         originalConnectionString: approved,
         newConnectionString,
+        connectionStringSaved: false,
     } as UpdateCSWizardContext;
 }
 
@@ -148,5 +149,61 @@ describe('updateConnectionString destination policy', () => {
 
         expect(connection.properties.availableAuthMethods).toEqual(approvedMethods);
         expect(connection.properties.selectedAuthMethod).toBe(AuthMethodId.MicrosoftEntraID);
+    });
+
+    it('marks the string saved only after storage succeeds', async (): Promise<void> => {
+        vi.mocked(ConnectionStorageService.get).mockResolvedValue(makeConnection(AuthMethodId.ManagedIdentity));
+        let finishSave!: () => void;
+        vi.mocked(ConnectionStorageService.save).mockReturnValue(
+            new Promise<void>((resolve) => {
+                finishSave = resolve;
+            }),
+        );
+        const context = makeContext('mongodb://new.mongocluster.cosmos.azure.com/');
+        const pending = new ExecuteStep().execute(context);
+        await vi.waitFor(() => expect(ConnectionStorageService.save).toHaveBeenCalledOnce());
+        expect(context.connectionStringSaved).toBe(false);
+
+        finishSave();
+        await pending;
+
+        expect(context.connectionStringSaved).toBe(true);
+    });
+
+    it.each(['missing connection', 'missing string'])(
+        'does not mark the string saved for %s',
+        async (missing): Promise<void> => {
+            const connection = makeConnection();
+            connection.secrets.connectionString = '';
+            vi.mocked(ConnectionStorageService.get).mockResolvedValue(
+                missing === 'missing connection' ? undefined : connection,
+            );
+            const context = makeContext('mongodb://new.mongocluster.cosmos.azure.com/');
+
+            await new ExecuteStep().execute(context);
+
+            expect(context.connectionStringSaved).toBe(false);
+            expect(ConnectionStorageService.save).not.toHaveBeenCalled();
+        },
+    );
+
+    it('does not mark the string saved when storage fails', async (): Promise<void> => {
+        vi.mocked(ConnectionStorageService.get).mockResolvedValue(makeConnection());
+        vi.mocked(ConnectionStorageService.save).mockRejectedValue(new Error('save failed'));
+        const context = makeContext('mongodb://new.mongocluster.cosmos.azure.com/');
+
+        await expect(new ExecuteStep().execute(context)).resolves.toBeUndefined();
+
+        expect(context.connectionStringSaved).toBe(false);
+        expect(ConnectionStorageService.save).toHaveBeenCalledOnce();
+        expect(vscode.window.showErrorMessage).toHaveBeenCalledExactlyOnceWith('Failed to update the connection.');
+    });
+
+    it.each(['', approved])('does not execute or mark an unchanged string saved: %s', (value): void => {
+        const context = makeContext(value);
+
+        expect(new ExecuteStep().shouldExecute(context)).toBe(false);
+        expect(context.connectionStringSaved).toBe(false);
+        expect(ConnectionStorageService.save).not.toHaveBeenCalled();
     });
 });

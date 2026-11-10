@@ -86,6 +86,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCSWizardContext> {
             }
 
             await ConnectionStorageService.save(resourceType, connection, true);
+            context.connectionStringSaved = true;
 
             if (clearedEntraMethod) {
                 void window.showInformationMessage(
