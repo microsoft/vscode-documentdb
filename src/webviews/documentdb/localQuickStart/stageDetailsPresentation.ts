@@ -26,7 +26,7 @@ export interface StageDetailFact {
     readonly value: string;
     readonly fullValue?: string;
     readonly note?: string;
-    readonly code?: boolean;
+    readonly qualification?: string;
     readonly action?: 'showOutput';
     readonly message?: 'info';
 }
@@ -79,8 +79,8 @@ export function buildStageSummary(
 
 function idFact(label: string, value: string, limit: number): StageDetailFact {
     return value.length > limit
-        ? { label, value: `${value.slice(0, limit)}…`, fullValue: value, code: true }
-        : { label, value, code: true };
+        ? { label, value: `${value.slice(0, limit)}…`, fullValue: value }
+        : { label, value };
 }
 
 export function buildStageDetailRows(facts: StageFacts | undefined): readonly StageDetailFact[] {
@@ -89,7 +89,7 @@ export function buildStageDetailRows(facts: StageFacts | undefined): readonly St
     switch (facts.kind) {
         case 'checking':
             rows.push(
-                { label: l10n.t('Port'), value: String(facts.port), code: true },
+                { label: l10n.t('Port'), value: String(facts.port) },
                 {
                     label: l10n.t('Port status'),
                     value: facts.portFree ? l10n.t('Free on 127.0.0.1') : l10n.t('In use on 127.0.0.1'),
@@ -99,7 +99,6 @@ export function buildStageDetailRows(facts: StageFacts | undefined): readonly St
                 rows.push({
                     label: l10n.t('Removed container'),
                     value: facts.removedContainerId,
-                    code: true,
                 });
             }
             break;
@@ -107,7 +106,6 @@ export function buildStageDetailRows(facts: StageFacts | undefined): readonly St
             rows.push({
                 label: l10n.t('Image'),
                 value: facts.imageRef,
-                code: true,
                 note:
                     facts.imageOrigin === 'custom'
                         ? l10n.t('Custom tag')
@@ -129,9 +127,9 @@ export function buildStageDetailRows(facts: StageFacts | undefined): readonly St
             if (facts.result === 'updated' && facts.previousImageId) {
                 rows.push(idFact(l10n.t('Previous image ID'), facts.previousImageId, 19));
             }
-            if (facts.digest) rows.push({ label: l10n.t('Digest'), value: facts.digest, code: true });
+            if (facts.digest) rows.push({ label: l10n.t('Digest'), value: facts.digest });
             if (facts.imageVersion) {
-                rows.push({ label: l10n.t('Image version'), value: facts.imageVersion, code: true });
+                rows.push({ label: l10n.t('Image version'), value: facts.imageVersion });
             }
             if (facts.createdAtMs !== undefined) {
                 rows.push({ label: l10n.t('Created'), value: new Date(facts.createdAtMs).toLocaleDateString() });
@@ -147,21 +145,18 @@ export function buildStageDetailRows(facts: StageFacts | undefined): readonly St
                 {
                     label: l10n.t('Container'),
                     value: facts.containerName,
-                    code: true,
                 },
                 ...(facts.containerId ? [idFact(l10n.t('Container ID'), facts.containerId, 12)] : []),
                 {
                     label: l10n.t('Port mapping'),
                     value: `localhost:${facts.hostPort} → ${facts.containerPort}`,
-                    code: true,
                 },
                 {
                     label: l10n.t('Data volume'),
                     value: l10n.t('{0} at {1}', facts.volumeName, facts.dataPath),
-                    code: true,
                     note: facts.volume === undefined ? undefined : volumes[facts.volume],
                 },
-                { label: l10n.t('User'), value: facts.username, code: true },
+                { label: l10n.t('User'), value: facts.username },
                 {
                     label: l10n.t('Password'),
                     value: '(hidden)',
@@ -181,8 +176,7 @@ export function buildStageDetailRows(facts: StageFacts | undefined): readonly St
                 {
                     label: l10n.t('Bound port'),
                     value: String(facts.boundPort),
-                    code: true,
-                    note: facts.boundPortReported ? undefined : l10n.t('As requested'),
+                    qualification: facts.boundPortReported ? undefined : l10n.t('As requested'),
                 },
                 { label: l10n.t('Logs'), value: l10n.t('Streaming to the setup log'), action: 'showOutput' },
             );
@@ -191,7 +185,6 @@ export function buildStageDetailRows(facts: StageFacts | undefined): readonly St
             rows.push({
                 label: l10n.t('Endpoint'),
                 value: `localhost:${facts.port}`,
-                code: true,
                 note: l10n.t('TLS (self-signed certificate accepted)'),
             });
             if (facts.attempts !== undefined) {
@@ -241,13 +234,13 @@ export function buildStageDetailRows(facts: StageFacts | undefined): readonly St
                 });
             }
             if (facts.lastProbeError) {
-                rows.push({ label: l10n.t('Last probe error'), value: facts.lastProbeError, code: true });
+                rows.push({ label: l10n.t('Last probe error'), value: facts.lastProbeError });
             }
             if (facts.exitCode !== undefined) {
-                rows.push({ label: l10n.t('Exit code'), value: String(facts.exitCode), code: true });
+                rows.push({ label: l10n.t('Exit code'), value: String(facts.exitCode) });
             }
             if (facts.lastLogLine) {
-                rows.push({ label: l10n.t('Last log line'), value: facts.lastLogLine, code: true });
+                rows.push({ label: l10n.t('Last log line'), value: facts.lastLogLine });
             }
             break;
         }
@@ -450,7 +443,7 @@ export function buildDockerDetailRows(readiness: DockerReadiness): readonly Stag
         value: new Date(readiness.checkedAtMs).toLocaleString(),
     });
     if (readiness.diagnosticFingerprint) {
-        rows.push({ label: l10n.t('Diagnostic reference'), value: readiness.diagnosticFingerprint, code: true });
+        rows.push({ label: l10n.t('Diagnostic reference'), value: readiness.diagnosticFingerprint });
     }
     return rows;
 }

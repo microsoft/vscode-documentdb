@@ -72,7 +72,6 @@ describe('buildDockerDetailRows', () => {
         expect(rows.find((row) => row.label === 'Diagnostic reference')).toEqual({
             label: 'Diagnostic reference',
             value: 'abc123',
-            code: true,
         });
         expect(rows.every((row) => row.note === undefined)).toBe(true);
     });
@@ -242,13 +241,34 @@ describe('buildStageDetailRows', () => {
         username: 'docuser',
     };
 
+    it('does not mark ordinary facts as code in any stage or engine diagnostics', () => {
+        const stages: StageFacts[] = [
+            { kind: 'checking', port: 10273, portFree: true, removedContainerId: 'old-id' },
+            {
+                kind: 'pulling',
+                imageRef: 'image:tag',
+                imageOrigin: 'custom',
+                imageId: 'sha256:01234567890123456789',
+                digest: 'sha256:digest',
+                imageVersion: '1',
+            },
+            { ...creating, containerId: '123456789012345678' },
+            { kind: 'starting', boundPort: 10273, boundPortReported: false },
+            { kind: 'waiting', port: 10273, lastProbeError: 'error', exitCode: 1, lastLogLine: 'line' },
+        ];
+        const rows = [
+            ...stages.flatMap(buildStageDetailRows),
+            ...buildDockerDetailRows({ ...ready, diagnosticFingerprint: 'abc123' }),
+        ];
+        expect(rows.every((row) => !('code' in row))).toBe(true);
+    });
+
     it('omits empty evidence and unknown readiness facts', () => {
         expect(buildStageDetailRows(undefined)).toEqual([]);
         expect(buildStageDetailRows({ kind: 'waiting', port: 10273 })).toEqual([
             {
                 label: 'Endpoint',
                 value: 'localhost:10273',
-                code: true,
                 note: 'TLS (self-signed certificate accepted)',
             },
         ]);
@@ -344,12 +364,11 @@ describe('buildStageDetailRows', () => {
             {
                 label: 'Port',
                 value: '10273',
-                code: true,
             },
             { label: 'Port status', value: portFree ? 'Free on 127.0.0.1' : 'In use on 127.0.0.1' },
         ]);
         const removed = buildStageDetailRows({ kind: 'checking', port: 10273, portFree, removedContainerId: 'old-id' });
-        expect(removed[2]).toMatchObject({ label: 'Removed container', value: 'old-id', code: true });
+        expect(removed[2]).toMatchObject({ label: 'Removed container', value: 'old-id' });
         expect(removed.every((row) => row.note === undefined)).toBe(true);
     });
 
@@ -362,7 +381,6 @@ describe('buildStageDetailRows', () => {
             {
                 label: 'Image',
                 value: 'official:tag',
-                code: true,
                 note,
             },
         ]);
@@ -385,11 +403,11 @@ describe('buildStageDetailRows', () => {
             createdAtMs,
         });
         expect(rows).toEqual([
-            { label: 'Image', value: 'official:tag', code: true, note: undefined },
+            { label: 'Image', value: 'official:tag', note: undefined },
             { label: 'Result', value: expected },
-            { label: 'Image ID', value: 'sha256:012345678901…', fullValue: 'sha256:01234567890123456789', code: true },
-            { label: 'Digest', value: 'sha256:digest', code: true },
-            { label: 'Image version', value: '0.116.0', code: true },
+            { label: 'Image ID', value: 'sha256:012345678901…', fullValue: 'sha256:01234567890123456789' },
+            { label: 'Digest', value: 'sha256:digest' },
+            { label: 'Image version', value: '0.116.0' },
             { label: 'Created', value: new Date(createdAtMs).toLocaleDateString() },
         ]);
     });
@@ -411,13 +429,11 @@ describe('buildStageDetailRows', () => {
         expect(rows.find((row) => row.label === 'Data volume')).toMatchObject({
             value: 'local-instance-data at /data',
             note: expected,
-            code: true,
         });
         expect(rows.find((row) => row.label === 'Port mapping')).toMatchObject({
             value: 'localhost:10273 → 10260',
-            code: true,
         });
-        expect(rows.find((row) => row.label === 'User')).toMatchObject({ value: 'docuser', code: true });
+        expect(rows.find((row) => row.label === 'User')).toMatchObject({ value: 'docuser' });
         expect(rows.find((row) => row.label === 'Password')).toEqual({
             label: 'Password',
             value: '(hidden)',
@@ -434,7 +450,6 @@ describe('buildStageDetailRows', () => {
         expect(rows.find((row) => row.label === 'Data volume')).toEqual({
             label: 'Data volume',
             value: 'local-instance-data at /data',
-            code: true,
             note: undefined,
         });
     });
@@ -444,13 +459,11 @@ describe('buildStageDetailRows', () => {
         expect(rows.find((row) => row.label === 'Container')).toEqual({
             label: 'Container',
             value: 'local-instance',
-            code: true,
         });
         expect(rows.find((row) => row.label === 'Container ID')).toEqual({
             label: 'Container ID',
             value: '123456789012…',
             fullValue: '123456789012345678',
-            code: true,
         });
     });
 
@@ -463,12 +476,11 @@ describe('buildStageDetailRows', () => {
             imageId: 'short',
         } as const;
         const rows = buildStageDetailRows({ ...base, result: 'updated' });
-        expect(rows.find((row) => row.label === 'Image ID')).toEqual({ label: 'Image ID', value: 'short', code: true });
+        expect(rows.find((row) => row.label === 'Image ID')).toEqual({ label: 'Image ID', value: 'short' });
         expect(rows.find((row) => row.label === 'Previous image ID')).toEqual({
             label: 'Previous image ID',
             value: 'sha256:123456789012…',
             fullValue: base.previousImageId,
-            code: true,
         });
         expect(
             buildStageDetailRows({ ...base, result: 'downloaded' }).some((row) => row.label === 'Previous image ID'),
@@ -477,7 +489,7 @@ describe('buildStageDetailRows', () => {
 
     it('omits unknown starting state and time, and identifies the requested port fallback', () => {
         expect(buildStageDetailRows({ kind: 'starting', boundPort: 10273, boundPortReported: false })).toEqual([
-            { label: 'Bound port', value: '10273', code: true, note: 'As requested' },
+            { label: 'Bound port', value: '10273', qualification: 'As requested' },
             { label: 'Logs', value: 'Streaming to the setup log', action: 'showOutput' },
         ]);
     });
@@ -493,7 +505,7 @@ describe('buildStageDetailRows', () => {
         });
         expect(rows[0]).toEqual({ label: 'State', value: running ? 'Running' : 'Not running' });
         expect(rows[1]).toEqual({ label: 'Started', value: new Date(startedAtMs).toLocaleTimeString() });
-        expect(rows[2]).toEqual({ label: 'Bound port', value: '10273', code: true, note: undefined });
+        expect(rows[2]).toEqual({ label: 'Bound port', value: '10273', qualification: undefined });
         expect(JSON.stringify(rows)).not.toContain('duration');
     });
 });

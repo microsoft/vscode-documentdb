@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { makeStyles } from '@fluentui/react-components';
+import { makeStyles, tokens } from '@fluentui/react-components';
 import { StatusListItem, type StatusListItemStatus } from '@microsoft/vscode-ext-webview-fluentui/components';
 import * as l10n from '@vscode/l10n';
 import { type JSX, type ReactNode, type RefObject, useCallback, useRef } from 'react';
@@ -12,6 +12,7 @@ import { SetupStageDetails } from './SetupStageDetails';
 import { type StageDetailFact } from './stageDetailsPresentation';
 
 const useStyles = makeStyles({
+    summary: { color: tokens.colorNeutralForeground1 },
     activePull: {
         // The active row has no disclosure; constrain the copy and its detail Text to the row.
         '& > div': { flexGrow: 1 },
@@ -64,7 +65,11 @@ export const SetupStageRow = ({
             className={stage === 'pulling' && status === 'active' ? styles.activePull : undefined}
             label={label}
             status={status}
-            detail={detail}
+            detail={
+                detail !== undefined && detail !== null && detail !== false && detail !== '' ? (
+                    <span className={styles.summary}>{detail}</span>
+                ) : undefined
+            }
             reserveDetailSpace
             disclosure={
                 settledFacts

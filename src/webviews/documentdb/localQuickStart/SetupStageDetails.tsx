@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Link, makeStyles, tokens, Tooltip } from '@fluentui/react-components';
+import { Link, makeStyles, mergeClasses, tokens, Tooltip } from '@fluentui/react-components';
 import {
     StatusListDetailsFacts,
     StatusListDetailsMessage,
@@ -14,11 +14,23 @@ import { type JSX, useId } from 'react';
 import { type StageDetailFact } from './stageDetailsPresentation';
 
 const useStyles = makeStyles({
-    root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
+    root: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: tokens.spacingVerticalM,
+        '& dt': { color: 'inherit' },
+        '& a, & button': {
+            fontFamily: 'inherit',
+            fontSize: 'inherit',
+            fontWeight: 'inherit',
+            lineHeight: 'inherit',
+        },
+    },
     idTrigger: {
         ':focus-visible': { outline: `2px solid ${tokens.colorStrokeFocus2}`, outlineOffset: '2px' },
     },
-    idTooltip: { maxWidth: '320px', overflowWrap: 'anywhere' },
+    idTooltip: { maxWidth: '320px', overflowWrap: 'anywhere', fontWeight: tokens.fontWeightRegular },
+    note: { color: `var(--vscode-descriptionForeground, ${tokens.colorNeutralForeground2})` },
 });
 
 const ShortId = ({ fact }: { readonly fact: StageDetailFact }): JSX.Element => {
@@ -26,9 +38,9 @@ const ShortId = ({ fact }: { readonly fact: StageDetailFact }): JSX.Element => {
     const id = useId();
     return (
         <Tooltip content={{ children: fact.fullValue, className: styles.idTooltip }} relationship="description">
-            <code className={styles.idTrigger} tabIndex={0} role="group" aria-labelledby={id}>
+            <span className={styles.idTrigger} tabIndex={0} role="group" aria-labelledby={id}>
                 <span id={id}>{fact.value}</span>
-            </code>
+            </span>
         </Tooltip>
     );
 };
@@ -72,13 +84,7 @@ export const SetupStageDetails = ({
                             term: fact.label,
                             value: (
                                 <>
-                                    {fact.fullValue ? (
-                                        <ShortId fact={fact} />
-                                    ) : fact.code ? (
-                                        <code>{fact.value}</code>
-                                    ) : (
-                                        fact.value
-                                    )}
+                                    {fact.fullValue ? <ShortId fact={fact} /> : fact.value}
                                     {fact.action === 'showOutput' && (
                                         <>
                                             {' · '}
@@ -86,9 +92,15 @@ export const SetupStageDetails = ({
                                         </>
                                     )}
                                     {fact.note && (
-                                        <span className={mutedClassName}>
+                                        <span className={mergeClasses(mutedClassName, styles.note)}>
                                             {' · '}
                                             {fact.note}
+                                        </span>
+                                    )}
+                                    {fact.qualification && (
+                                        <span>
+                                            {' · '}
+                                            {fact.qualification}
                                         </span>
                                     )}
                                 </>
