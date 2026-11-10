@@ -476,6 +476,8 @@ const docker: DockerStatusResult = {
         providerEvidence: 'liveDaemon',
         executionTarget: 'local',
         checkedAtMs: 1790884800000,
+        cli: 'docker',
+        cliOnPath: { docker: true, podman: false },
         cliInstalled: true,
         cliVersion: '27.0.0',
         canContinueAnyway: false,

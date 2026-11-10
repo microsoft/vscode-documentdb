@@ -231,8 +231,9 @@ const detailedStages = [
             kind: 'pulling',
             imageRef: 'ghcr.io/documentdb/documentdb-local:latest',
             imageOrigin: 'default',
-            result: 'upToDate',
+            result: 'updated',
             imageId: 'sha256:4a341daca1234567890123456789012345678901234567890123456789012345',
+            previousImageId: 'sha256:5b451daca1234567890123456789012345678901234567890123456789012345',
             digest: 'sha256:4a341daca1234567890123456789012345678901234567890123456789012345',
             imageVersion: '1.0.0',
             createdAtMs: 1790884800000,
@@ -244,7 +245,7 @@ const detailedStages = [
         facts: {
             kind: 'creating',
             containerName: 'vscode-documentdb-local',
-            containerId: '123456789abc123456789abc',
+            containerId: 'sha256:123456789abc123456789abc123456789abc123456789abc123456789abc1234',
             hostPort: 10260,
             containerPort: 10260,
             volumeName: 'vscode-documentdb-local-data',
@@ -293,6 +294,14 @@ const privateDetails = [
     'DOCUMENTDB_PASSWORD',
     'DOCUMENTDB_USAGE_TELEMETRY',
 ];
+const checkingNotes = [
+    'The docker command was located and run',
+    'The daemon answered, so everything below',
+    'The operating system and CPU architecture the daemon',
+    'Where VS Code is running the extension',
+    'The container is created here, so localhost',
+    'Inferred from the Docker application',
+];
 
 const missingReadiness = {
     outcome: 'diagnosed',
@@ -305,6 +314,7 @@ const missingReadiness = {
     failureKind: 'cliMissing',
     checkedAtMs: 1791199200000,
     cliInstalled: false,
+    cliOnPath: { docker: false, podman: false },
     arch: 'x64',
     platformSupported: true,
     canContinueAnyway: false,
@@ -367,8 +377,14 @@ function dockerMissing(
                 kind: 'text',
                 name: 'The checking Details contains evidence rather than the recovery actions',
                 selector: '[aria-label="Setup progress"] [role="listitem"]:nth-child(1) [role="region"]',
-                includes: ['Check result', 'A specific problem was identified', 'Docker CLI', 'Not found'],
-                excludes: [label, ...privateDetails],
+                includes: [
+                    'Check result',
+                    'A specific problem was identified',
+                    'Docker CLI',
+                    'Podman CLI',
+                    'Not found',
+                ],
+                excludes: [label, ...privateDetails, ...checkingNotes, 'no further probe could run'],
             },
             {
                 kind: 'calls',
@@ -2379,7 +2395,16 @@ export const scenarios = {
                     type: 'subscription',
                     results: [
                         { stage: 'checking', status: 'done' },
-                        { stage: 'pulling', status: 'active' },
+                        {
+                            stage: 'pulling',
+                            status: 'active',
+                            facts: {
+                                kind: 'pulling',
+                                imageRef: 'ghcr.io/documentdb/documentdb-local:latest',
+                                imageOrigin: 'custom',
+                                progress: 'Downloading layer one',
+                            },
+                        },
                     ],
                     keepOpen: true,
                 },
@@ -2390,11 +2415,33 @@ export const scenarios = {
                     'Setting up DocumentDB Local',
                     'Checking container engine',
                     'Pulling official image',
+                    'Image ghcr.io/documentdb/documentdb-local:latest · Custom tag',
+                    'Engine output: Downloading layer one',
                     'View setup log',
                 ],
                 selectors: ['[aria-label="Setup progress"] [role="listitem"]:nth-child(2) .fui-Spinner'],
                 noProgressbar: false,
             },
+            assertions: [
+                {
+                    kind: 'text',
+                    name: 'Active pull shows known image and literal engine activity without invented totals',
+                    selector: '[aria-label="Setup progress"] [role="listitem"]:nth-child(2)',
+                    includes: [
+                        'Image ghcr.io/documentdb/documentdb-local:latest',
+                        'Custom tag',
+                        'Engine output: Downloading layer one',
+                    ],
+                    excludes: [...privateDetails, '\\b\\d+\\s*%', '\\b\\d+\\s*(?:MB|GB)\\b'],
+                },
+                {
+                    kind: 'attribute',
+                    name: 'Active pull has no Details disclosure',
+                    selector: '[aria-label="Details for Pulling official image"]',
+                    attribute: 'aria-expanded',
+                    expected: null,
+                },
+            ],
         },
         success: {
             config: base.config,
@@ -2442,6 +2489,21 @@ export const scenarios = {
                         expected: 'false',
                     }),
                 ),
+                ...[
+                    'Docker CLI 27.0.0 found',
+                    'Updated',
+                    'Container vscode-documentdb-local',
+                    'Running on port 10260',
+                    'Accepting connections on localhost:10260',
+                ].map(
+                    (summary, index): ScenarioAssertion => ({
+                        kind: 'text',
+                        name: `${quickStartRows[index]} has a factual summary`,
+                        selector: `[aria-label="Completed setup steps"] [role="listitem"]:nth-child(${index + 1})`,
+                        includes: [summary],
+                        excludes: privateDetails,
+                    }),
+                ),
                 ...quickStartRows.flatMap((label, index): ScenarioAssertion[] => [
                     {
                         kind: 'attribute',
@@ -2456,17 +2518,30 @@ export const scenarios = {
                         name: `${label} shows its evidence`,
                         selector: `[aria-label="Completed setup steps"] [role="listitem"]:nth-child(${index + 1}) [role="region"][aria-labelledby]`,
                         includes: [
-                            ['Docker is ready', 'Docker Engine', '27.0.0', 'Port', '10260', 'Free on 127.0.0.1'],
+                            [
+                                'Engine is ready',
+                                'Docker CLI',
+                                '27.0.0',
+                                'Engine',
+                                'Endpoint',
+                                'Docker Engine',
+                                'Port',
+                                '10260',
+                                'Free on 127.0.0.1',
+                            ],
                             [
                                 'Image',
                                 'ghcr.io/documentdb/documentdb-local:latest',
-                                'Already up to date',
+                                'Updated',
+                                'Image ID',
+                                'Previous image ID',
                                 'Digest',
                                 '1.0.0',
                             ],
                             [
                                 'vscode-documentdb-local',
-                                '123456789abc',
+                                'Container ID',
+                                'sha256:12345',
                                 'localhost:10260',
                                 'vscode-documentdb-local-data',
                                 'documentdb',
@@ -2483,7 +2558,11 @@ export const scenarios = {
                                 'DocumentDB Local',
                             ],
                         ][index],
-                        excludes: [...privateDetails, ...(index === 4 ? ['DocumentDB version', 'Image version'] : [])],
+                        excludes: [
+                            ...privateDetails,
+                            ...(index === 0 ? checkingNotes : []),
+                            ...(index === 4 ? ['DocumentDB version', 'Image version'] : []),
+                        ],
                     },
                 ]),
                 {
@@ -2492,6 +2571,100 @@ export const scenarios = {
                     selector: 'body',
                     includes: ['All set'],
                     excludes: privateDetails,
+                },
+            ],
+        },
+        'both-clis-found': {
+            config: base.config,
+            rpc: {
+                ...base.rpc,
+                'localQuickStart.getDockerStatus': {
+                    type: 'query',
+                    results: [
+                        {
+                            ...readyDocker,
+                            readiness: { ...readyDocker.readiness, cliOnPath: { docker: true, podman: true } },
+                        },
+                    ],
+                },
+                'localQuickStart.startQuickStart': { type: 'subscription', results: detailedStages },
+            },
+            steps: setupSteps,
+            readiness: { content: ['DocumentDB Local is ready', 'Docker CLI 27.0.0 found'], noProgressbar: true },
+            assertions: [
+                {
+                    kind: 'attribute',
+                    name: 'Checking Details expands',
+                    selector: '[aria-label="Details for Checking container engine"]',
+                    attribute: 'aria-expanded',
+                    expected: 'true',
+                    steps: [{ action: 'click', role: 'button', name: 'Details for Checking container engine' }],
+                },
+                {
+                    kind: 'text',
+                    name: 'Both CLI executables found, only selected Docker checked',
+                    selector: '[aria-label="Completed setup steps"] [role="listitem"]:first-child [role="region"]',
+                    includes: [
+                        'Docker CLI',
+                        'Found, version 27.0.0',
+                        'Podman CLI',
+                        'Found on PATH, not checked',
+                        'Engine',
+                        'Reachable',
+                        'Endpoint',
+                        'Unix socket',
+                    ],
+                    excludes: [...privateDetails, ...checkingNotes, 'Podman CLI Found, version'],
+                },
+            ],
+        },
+        'podman-selected': {
+            config: base.config,
+            rpc: {
+                ...base.rpc,
+                'localQuickStart.getDockerStatus': {
+                    type: 'query',
+                    results: [
+                        {
+                            ...readyDocker,
+                            readiness: {
+                                ...readyDocker.readiness,
+                                cli: 'podman',
+                                cliOnPath: { docker: false, podman: true },
+                                cliVersion: '5.0.0',
+                                provider: 'podman',
+                            },
+                        },
+                    ],
+                },
+                'localQuickStart.startQuickStart': { type: 'subscription', results: detailedStages },
+            },
+            steps: setupSteps,
+            readiness: { content: ['DocumentDB Local is ready', 'Podman CLI 5.0.0 found'], noProgressbar: true },
+            assertions: [
+                {
+                    kind: 'attribute',
+                    name: 'Checking Details expands',
+                    selector: '[aria-label="Details for Checking container engine"]',
+                    attribute: 'aria-expanded',
+                    expected: 'true',
+                    steps: [{ action: 'click', role: 'button', name: 'Details for Checking container engine' }],
+                },
+                {
+                    kind: 'text',
+                    name: 'Selected Podman and absent Docker have truthful evidence',
+                    selector: '[aria-label="Completed setup steps"] [role="listitem"]:first-child [role="region"]',
+                    includes: [
+                        'Podman CLI',
+                        'Found, version 5.0.0',
+                        'Docker CLI',
+                        'Not found',
+                        'Engine',
+                        'Reachable',
+                        'Endpoint',
+                        'Unix socket',
+                    ],
+                    excludes: [...privateDetails, ...checkingNotes, 'Docker CLI Found'],
                 },
             ],
         },
