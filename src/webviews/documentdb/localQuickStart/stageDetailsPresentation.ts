@@ -6,12 +6,10 @@
 import * as l10n from '@vscode/l10n';
 import {
     type DockerEndpointKind,
-    type DockerEndpointProbe,
     type DockerFailureKind,
     type DockerHostEnvironment,
     type DockerPermissionDetail,
     type DockerProvider,
-    type DockerProviderEvidence,
     type DockerReadiness,
     type DockerReadinessOutcome,
     type StageFacts,
@@ -26,10 +24,63 @@ import {
 export interface StageDetailFact {
     readonly label: string;
     readonly value: string;
+    readonly fullValue?: string;
     readonly note?: string;
     readonly code?: boolean;
     readonly action?: 'showOutput';
     readonly message?: 'info';
+}
+
+export function buildStageSummary(
+    facts: StageFacts | undefined,
+    status: 'active' | 'done' | 'error',
+): string | undefined {
+    if (!facts) return undefined;
+    switch (facts.kind) {
+        case 'checking':
+            return facts.portFree ? l10n.t('Port {0} free', facts.port) : l10n.t('Port {0} in use', facts.port);
+        case 'pulling': {
+            if (status === 'done' && facts.result) {
+                const results = {
+                    downloaded: l10n.t('Downloaded'),
+                    updated: l10n.t('Updated'),
+                    upToDate: l10n.t('Already up to date'),
+                };
+                return results[facts.result];
+            }
+            const image = l10n.t('Image {0}', facts.imageRef);
+            if (status === 'active' && facts.imageOrigin === 'custom') {
+                return l10n.t('{0} · {1}', image, l10n.t('Custom tag'));
+            }
+            if (status === 'active' && facts.imageOrigin === 'reused') {
+                return l10n.t('{0} · {1}', image, l10n.t('Kept from existing data'));
+            }
+            return image;
+        }
+        case 'creating':
+            return l10n.t('Container {0}', facts.containerName);
+        case 'starting':
+            return status === 'done' && facts.running
+                ? l10n.t('Running on port {0}', facts.boundPort)
+                : l10n.t('Port {0}', facts.boundPort);
+        case 'waiting':
+            if (status === 'done' && facts.sampleData !== undefined) {
+                return l10n.t('Accepting connections on localhost:{0}', facts.port);
+            }
+            if (status === 'error' && facts.exitCode !== undefined) {
+                return l10n.t('Exit code {0}', facts.exitCode);
+            }
+            if (status === 'error' && facts.attempts !== undefined) {
+                return facts.attempts === 1 ? l10n.t('1 attempt') : l10n.t('{0} attempts', facts.attempts);
+            }
+            return l10n.t('Endpoint localhost:{0}', facts.port);
+    }
+}
+
+function idFact(label: string, value: string, limit: number): StageDetailFact {
+    return value.length > limit
+        ? { label, value: `${value.slice(0, limit)}…`, fullValue: value, code: true }
+        : { label, value, code: true };
 }
 
 export function buildStageDetailRows(facts: StageFacts | undefined): readonly StageDetailFact[] {
@@ -37,18 +88,18 @@ export function buildStageDetailRows(facts: StageFacts | undefined): readonly St
     const rows: StageDetailFact[] = [];
     switch (facts.kind) {
         case 'checking':
-            rows.push({
-                label: l10n.t('Port'),
-                value: String(facts.port),
-                code: true,
-                note: facts.portFree ? l10n.t('Free on 127.0.0.1') : l10n.t('In use on 127.0.0.1'),
-            });
+            rows.push(
+                { label: l10n.t('Port'), value: String(facts.port), code: true },
+                {
+                    label: l10n.t('Port status'),
+                    value: facts.portFree ? l10n.t('Free on 127.0.0.1') : l10n.t('In use on 127.0.0.1'),
+                },
+            );
             if (facts.removedContainerId) {
                 rows.push({
-                    label: l10n.t('Previous container'),
+                    label: l10n.t('Removed container'),
                     value: facts.removedContainerId,
                     code: true,
-                    note: l10n.t('Removed for a clean run'),
                 });
             }
             break;
@@ -73,11 +124,10 @@ export function buildStageDetailRows(facts: StageFacts | undefined): readonly St
                 rows.push({ label: l10n.t('Result'), value: results[facts.result] });
             }
             if (facts.imageId) {
-                rows.push({
-                    label: l10n.t('Image ID'),
-                    value: facts.imageId.length > 19 ? `${facts.imageId.slice(0, 19)}…` : facts.imageId,
-                    code: true,
-                });
+                rows.push(idFact(l10n.t('Image ID'), facts.imageId, 19));
+            }
+            if (facts.result === 'updated' && facts.previousImageId) {
+                rows.push(idFact(l10n.t('Previous image ID'), facts.previousImageId, 19));
             }
             if (facts.digest) rows.push({ label: l10n.t('Digest'), value: facts.digest, code: true });
             if (facts.imageVersion) {
@@ -88,10 +138,6 @@ export function buildStageDetailRows(facts: StageFacts | undefined): readonly St
             }
             break;
         case 'creating': {
-            const containerId =
-                facts.containerId && facts.containerId.length > 12
-                    ? `${facts.containerId.slice(0, 12)}…`
-                    : facts.containerId;
             const volumes = {
                 new: l10n.t('New'),
                 reused: l10n.t('Kept existing data'),
@@ -100,9 +146,10 @@ export function buildStageDetailRows(facts: StageFacts | undefined): readonly St
             rows.push(
                 {
                     label: l10n.t('Container'),
-                    value: containerId ? `${facts.containerName} ${containerId}` : facts.containerName,
+                    value: facts.containerName,
                     code: true,
                 },
+                ...(facts.containerId ? [idFact(l10n.t('Container ID'), facts.containerId, 12)] : []),
                 {
                     label: l10n.t('Port mapping'),
                     value: `localhost:${facts.hostPort} → ${facts.containerPort}`,
@@ -152,8 +199,8 @@ export function buildStageDetailRows(facts: StageFacts | undefined): readonly St
                 if (facts.sampleData !== undefined) {
                     probe =
                         facts.attempts === 1
-                            ? l10n.t('ping on admin answered after 1 attempt')
-                            : l10n.t('ping on admin answered after {0} attempts', facts.attempts);
+                            ? l10n.t('Ping on admin answered after 1 attempt')
+                            : l10n.t('Ping on admin answered after {0} attempts', facts.attempts);
                 }
                 rows.push({
                     label: l10n.t('Probe'),
@@ -242,6 +289,21 @@ export function dockerFailureLabels(): Readonly<Record<DockerFailureKind, string
     };
 }
 
+function engineFailureLabels(): Readonly<Record<DockerFailureKind, string>> {
+    return {
+        cliMissing: l10n.t('Docker or Podman CLI not found'),
+        permissionDenied: l10n.t('Engine access denied'),
+        daemonUnavailable: l10n.t('Engine unavailable'),
+        daemonStarting: l10n.t('Engine starting'),
+        contextUnavailable: l10n.t('Engine context unavailable'),
+        endpointUnreachable: l10n.t('Engine endpoint unreachable'),
+        probeTimedOut: l10n.t('Engine check timed out'),
+        unsupportedHost: l10n.t('Unsupported host'),
+        windowsContainers: l10n.t('Windows containers enabled'),
+        unknown: l10n.t('Unknown engine problem'),
+    };
+}
+
 function dockerProviderLabels(): Readonly<Record<DockerProvider, string>> {
     return {
         dockerDesktop: l10n.t('Docker Desktop'),
@@ -253,7 +315,7 @@ function dockerProviderLabels(): Readonly<Record<DockerProvider, string>> {
 
 function dockerOutcomeValues(): Readonly<Record<DockerReadinessOutcome, string>> {
     return {
-        ready: l10n.t('Docker is ready'),
+        ready: l10n.t('Engine is ready'),
         diagnosed: l10n.t('A specific problem was identified'),
         indeterminate: l10n.t('No clear answer'),
     };
@@ -266,25 +328,6 @@ function dockerEndpointKindValues(): Readonly<Record<DockerEndpointKind, string>
         tcp: l10n.t('TCP address'),
         ssh: l10n.t('SSH tunnel'),
         unknown: l10n.t('Could not be resolved'),
-    };
-}
-
-function dockerEndpointSourceNotes(): Readonly<Record<DockerEndpointProbe['source'], string>> {
-    return {
-        dockerHostEnv: l10n.t('Taken from the DOCKER_HOST environment variable, which overrides everything else.'),
-        dockerContextEnv: l10n.t('Taken from the DOCKER_CONTEXT environment variable.'),
-        currentContext: l10n.t('Taken from the Docker context that is currently active.'),
-        platformDefault: l10n.t('No override was set, so the default location for this platform was used.'),
-    };
-}
-
-function dockerProviderEvidenceNotes(): Readonly<Record<DockerProviderEvidence, string>> {
-    return {
-        liveDaemon: l10n.t('Read from the daemon that answered the check.'),
-        activeContext: l10n.t('Inferred from the Docker context that is currently active.'),
-        installedApplication: l10n.t('Inferred from the Docker application installed on this machine.'),
-        rememberedProvider: l10n.t('Remembered from the last check on this machine that did reach a daemon.'),
-        none: l10n.t('Nothing identified it: the check reached neither a daemon nor a usable context.'),
     };
 }
 
@@ -312,12 +355,12 @@ function dockerPermissionDetailValues(): Readonly<Record<DockerPermissionDetail,
 
 function executionTargetValues(): Readonly<Record<ReturnType<typeof getDockerExecutionTargetKey>, string>> {
     return {
-        local: l10n.t('This machine (Docker)'),
-        wsl: l10n.t('This WSL environment (Docker)'),
-        ssh: l10n.t('Remote SSH host (Docker)'),
-        devContainer: l10n.t('This dev container environment (Docker)'),
-        codespaces: l10n.t('This Codespaces environment (Docker)'),
-        otherRemote: l10n.t('This remote extension host (Docker)'),
+        local: l10n.t('This machine'),
+        wsl: l10n.t('This WSL environment'),
+        ssh: l10n.t('Remote SSH host'),
+        devContainer: l10n.t('This dev container environment'),
+        codespaces: l10n.t('This Codespaces environment'),
+        otherRemote: l10n.t('This remote extension host'),
     };
 }
 
@@ -327,52 +370,60 @@ export function buildDockerDetailRows(readiness: DockerReadiness): readonly Stag
         {
             label: l10n.t('Check result'),
             value: dockerOutcomeValues()[readiness.outcome],
-            note:
-                readiness.outcome === 'indeterminate'
-                    ? l10n.t('Docker answered too vaguely to name a cause, so setup can still be attempted.')
-                    : undefined,
         },
     ];
 
     if (readiness.outcome !== 'ready') {
-        rows.push({ label: l10n.t('Detected problem'), value: dockerFailureLabels()[readiness.failureKind] });
+        const labels = readiness.cli === 'docker' && readiness.engine !== 'podman'
+            ? dockerFailureLabels()
+            : engineFailureLabels();
+        rows.push({ label: l10n.t('Detected problem'), value: labels[readiness.failureKind] });
     }
 
-    rows.push({
-        label: l10n.t('Docker CLI'),
-        value: readiness.cliInstalled
-            ? readiness.cliVersion
+    const cliLabels = { docker: l10n.t('Docker CLI'), podman: l10n.t('Podman CLI') };
+    if (readiness.cli) {
+        rows.push({
+            label: cliLabels[readiness.cli],
+            value: readiness.cliInstalled
+                ? readiness.cliVersion
+                    ? l10n.t('Found, version {0}', readiness.cliVersion)
+                    : l10n.t('Found, version not reported')
+                : l10n.t('Not found'),
+        });
+    } else if (readiness.cliInstalled) {
+        rows.push({
+            label: l10n.t('Container CLI'),
+            value: readiness.cliVersion
                 ? l10n.t('Found, version {0}', readiness.cliVersion)
-                : l10n.t('Found, version not reported')
-            : l10n.t('Not found'),
-        note: readiness.cliInstalled
-            ? l10n.t('The docker command was located and run to read its version.')
-            : l10n.t('The docker command is not on PATH, so no further probe could run.'),
-    });
-    rows.push({
-        label: l10n.t('Docker daemon'),
-        value: dockerDaemonValues()[getDockerReadinessPresentation(readiness).state],
-        note: readiness.daemonReachable
-            ? l10n.t('The daemon answered, so everything below was reported by Docker itself.')
-            : l10n.t('The daemon did not answer, so anything only Docker can report is still unknown.'),
-    });
-    rows.push({
-        label: l10n.t('Docker endpoint'),
-        value: dockerEndpointKindValues()[readiness.endpointKind],
-        note: readiness.endpointSource ? dockerEndpointSourceNotes()[readiness.endpointSource] : undefined,
-    });
+                : l10n.t('Found, version not reported'),
+        });
+    }
+    if (readiness.cliOnPath) {
+        for (const cli of ['docker', 'podman'] as const) {
+            if (cli !== readiness.cli) {
+                rows.push({
+                    label: cliLabels[cli],
+                    value: readiness.cliOnPath[cli] ? l10n.t('Found on PATH, not checked') : l10n.t('Not found'),
+                });
+            }
+        }
+    }
+    const state = getDockerReadinessPresentation(readiness).state;
+    if (state !== 'cliMissing') {
+        rows.push({ label: l10n.t('Engine'), value: dockerDaemonValues()[state] });
+    }
+    if (readiness.endpointKind !== 'unknown') {
+        rows.push({ label: l10n.t('Endpoint'), value: dockerEndpointKindValues()[readiness.endpointKind] });
+    }
     if (readiness.permissionDetail) {
         rows.push({
             label: l10n.t('Socket access'),
             value: dockerPermissionDetailValues()[readiness.permissionDetail],
-            note: l10n.t('Checked by comparing the Docker socket owner group against your user and this process.'),
         });
     }
-    rows.push({
-        label: l10n.t('Provider'),
-        value: dockerProviderLabels()[readiness.provider],
-        note: dockerProviderEvidenceNotes()[readiness.providerEvidence],
-    });
+    if (readiness.provider !== 'unknown') {
+        rows.push({ label: l10n.t('Provider'), value: dockerProviderLabels()[readiness.provider] });
+    }
     const osLabels = { linux: l10n.t('Linux'), windows: l10n.t('Windows') };
     const daemonOs = readiness.osType ? osLabels[readiness.osType] : undefined;
     const daemonPlatform =
@@ -383,7 +434,6 @@ export function buildDockerDetailRows(readiness: DockerReadiness): readonly Stag
         rows.push({
             label: l10n.t('Containers run on'),
             value: daemonPlatform,
-            note: l10n.t('The operating system and CPU architecture the daemon builds and runs containers for.'),
         });
     }
     rows.push({
@@ -391,22 +441,17 @@ export function buildDockerDetailRows(readiness: DockerReadiness): readonly Stag
         value: readiness.arch
             ? l10n.t('{0}, {1}', dockerHostEnvironmentValues()[readiness.environment], readiness.arch)
             : dockerHostEnvironmentValues()[readiness.environment],
-        note:
-            readiness.platformSupported === false
-                ? l10n.t('DocumentDB Local images are published for x64 and arm64 only.')
-                : l10n.t('Where VS Code is running the extension, detected before Docker was contacted.'),
     });
     rows.push({
         label: l10n.t('Container host'),
         value: executionTargetValues()[getDockerExecutionTargetKey(readiness.executionTarget)],
-        note: l10n.t('The container is created here, so localhost refers to this environment.'),
     });
     rows.push({
         label: l10n.t('Check run'),
         value: new Date(readiness.checkedAtMs).toLocaleString(),
-        note: readiness.diagnosticFingerprint
-            ? l10n.t('Diagnostic reference {0}. Quote it when reporting this.', readiness.diagnosticFingerprint)
-            : undefined,
     });
+    if (readiness.diagnosticFingerprint) {
+        rows.push({ label: l10n.t('Diagnostic reference'), value: readiness.diagnosticFingerprint, code: true });
+    }
     return rows;
 }

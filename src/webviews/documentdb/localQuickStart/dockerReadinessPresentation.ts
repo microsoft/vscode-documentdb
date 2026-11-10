@@ -92,8 +92,8 @@ export type DockerDetailFailureKey =
  * the fact behind it, so a line never contains a placeholder.
  */
 export type DockerDetailSegment =
-    | { readonly kind: 'provider'; readonly provider: DockerProvider; readonly version?: string }
-    | { readonly kind: 'cli'; readonly version?: string }
+    | { readonly kind: 'provider'; readonly provider: DockerProvider }
+    | { readonly kind: 'cli'; readonly cli?: 'docker' | 'podman'; readonly version?: string }
     | { readonly kind: 'platform'; readonly osType?: 'linux' | 'windows'; readonly architecture?: string }
     | { readonly kind: 'executionTarget'; readonly target: DockerExecutionTargetKey }
     | { readonly kind: 'failure'; readonly failure: DockerDetailFailureKey };
@@ -410,7 +410,10 @@ function composeDetail(
     const segments: DockerDetailSegment[] = [];
 
     if (state === 'ready') {
-        segments.push({ kind: 'provider', provider: readiness.provider, version: readiness.cliVersion });
+        segments.push({ kind: 'provider', provider: readiness.provider });
+        if (readiness.cliVersion) {
+            segments.push({ kind: 'cli', cli: readiness.cli, version: readiness.cliVersion });
+        }
         const platform = getPlatformSegment(readiness);
         if (platform) {
             segments.push(platform);
@@ -426,7 +429,7 @@ function composeDetail(
     }
 
     // The CLI version is not the provider's version, so on a failure the two are separate facts.
-    segments.push({ kind: 'cli', version: readiness.cliVersion });
+    segments.push({ kind: 'cli', cli: readiness.cli, version: readiness.cliVersion });
     if (readiness.provider !== 'unknown') {
         segments.push({ kind: 'provider', provider: readiness.provider });
     }

@@ -94,7 +94,12 @@ import { getExistingInstanceGuard, guardBlocksSetup } from './existingInstanceGu
 import './localQuickStart.scss';
 import { type LocalQuickStartConfigurationType } from './localQuickStartController';
 import { SetupStageRow } from './SetupStageRow';
-import { buildDockerDetailRows, buildStageDetailRows, dockerFailureLabels } from './stageDetailsPresentation';
+import {
+    buildDockerDetailRows,
+    buildStageDetailRows,
+    buildStageSummary,
+    dockerFailureLabels,
+} from './stageDetailsPresentation';
 
 /**
  * Wizard phases. `provisioning` and `failed` are both the "Set up" step: a setup failure — Docker
@@ -414,13 +419,13 @@ function dockerRecoveryNotes(): Readonly<Record<DockerRecoveryNoteKey, string>> 
     };
 }
 
-/** Provider names for the stage detail line; an unidentified provider is still "Docker". */
+/** Provider names for the stage detail line. */
 function dockerDetailProviderLabels(): Readonly<Record<DockerProvider, string>> {
     return {
         dockerDesktop: l10n.t('Docker Desktop'),
         dockerEngine: l10n.t('Docker Engine'),
         podman: 'Podman',
-        unknown: l10n.t('Docker'),
+        unknown: l10n.t('Engine'),
     };
 }
 
@@ -433,40 +438,45 @@ function dockerDetailOsLabels(): Readonly<Record<'linux' | 'windows', string>> {
 
 function dockerDetailTargetLabels(): Readonly<Record<ReturnType<typeof getDockerExecutionTargetKey>, string>> {
     return {
-        local: l10n.t('runs on this machine'),
-        wsl: l10n.t('runs in this WSL environment'),
-        ssh: l10n.t('runs on the remote SSH host'),
-        devContainer: l10n.t('runs in this dev container'),
-        codespaces: l10n.t('runs in this Codespace'),
-        otherRemote: l10n.t('runs on the remote extension host'),
+        local: l10n.t('Runs on this machine'),
+        wsl: l10n.t('Runs in this WSL environment'),
+        ssh: l10n.t('Runs on the remote SSH host'),
+        devContainer: l10n.t('Runs in this dev container'),
+        codespaces: l10n.t('Runs in this Codespace'),
+        otherRemote: l10n.t('Runs on the remote extension host'),
     };
 }
 
 function dockerDetailFailureLabels(): Readonly<Record<DockerDetailFailureKey, string>> {
     return {
-        noCli: l10n.t('no Docker or Podman CLI found'),
-        accessDenied: l10n.t('access denied'),
-        notRunning: l10n.t('not running'),
-        daemonNotRunning: l10n.t('daemon not running'),
-        daemonStarting: l10n.t('daemon starting'),
-        notAvailableInWsl: l10n.t('not available in this WSL distribution'),
-        endpointUnreachable: l10n.t('endpoint unreachable'),
-        contextUnavailable: l10n.t('context unavailable'),
-        checkTimedOut: l10n.t('check timed out'),
-        unsupportedHost: l10n.t('unsupported host'),
+        noCli: l10n.t('No Docker or Podman CLI found'),
+        accessDenied: l10n.t('Access denied'),
+        notRunning: l10n.t('Not running'),
+        daemonNotRunning: l10n.t('Daemon not running'),
+        daemonStarting: l10n.t('Daemon starting'),
+        notAvailableInWsl: l10n.t('Not available in this WSL distribution'),
+        endpointUnreachable: l10n.t('Endpoint unreachable'),
+        contextUnavailable: l10n.t('Context unavailable'),
+        checkTimedOut: l10n.t('Check timed out'),
+        unsupportedHost: l10n.t('Unsupported host'),
         windowsContainers: l10n.t('Windows containers enabled'),
-        daemonUnreachable: l10n.t('daemon unreachable'),
+        daemonUnreachable: l10n.t('Daemon unreachable'),
     };
 }
 
 function formatDockerDetailSegment(segment: DockerDetailSegment): string | undefined {
     switch (segment.kind) {
-        case 'provider': {
-            const name = dockerDetailProviderLabels()[segment.provider];
-            return segment.version ? l10n.t('{0} {1}', name, segment.version) : name;
+        case 'provider':
+            return dockerDetailProviderLabels()[segment.provider];
+        case 'cli': {
+            const name =
+                segment.cli === 'docker'
+                    ? l10n.t('Docker CLI')
+                    : segment.cli === 'podman'
+                      ? l10n.t('Podman CLI')
+                      : l10n.t('Container CLI');
+            return segment.version ? l10n.t('{0} {1} found', name, segment.version) : l10n.t('{0} found', name);
         }
-        case 'cli':
-            return segment.version ? l10n.t('Docker CLI {0} found', segment.version) : l10n.t('Docker CLI found');
         case 'platform': {
             const osName = segment.osType ? dockerDetailOsLabels()[segment.osType] : undefined;
             if (osName && segment.architecture) {
@@ -1453,8 +1463,13 @@ export const LocalQuickStart = (): JSX.Element => {
 
     const stageDetailFor = (stage: ProvisionStage): string | undefined => {
         if (stage === 'checking') {
-            return checkStageDetail;
+            if (checkStageDetail) return checkStageDetail;
         }
+        const status = stageStatus[stage];
+        const summary = status === 'active' || status === 'done' || status === 'error'
+            ? buildStageSummary(facts[stage], status)
+            : undefined;
+        if (summary) return summary;
         if (stage === failedStage && stageDockerFailure) {
             return formatDockerDetail(getDockerReadinessPresentation(stageDockerFailure).detail);
         }
@@ -2109,7 +2124,7 @@ export const LocalQuickStart = (): JSX.Element => {
                         stage={stage}
                         label={stageLabelsMap[stage]}
                         status="done"
-                        detail={stage === 'checking' ? checkStageDetail : undefined}
+                        detail={stageDetailFor(stage)}
                         facts={stageFactsFor(stage)}
                         expanded={expandedStages.has(stage)}
                         onExpandedChange={handleExpandedChange}

@@ -78,6 +78,7 @@ const ready: DockerReadiness = {
     canContinueAnyway: false,
     checkedAtMs: 1_700_000_000_000,
     cliInstalled: true,
+    cli: 'docker',
     daemonReachable: true,
 };
 const failed: DockerReadiness = {
@@ -226,7 +227,7 @@ describe('Local Quick Start stage details', () => {
         await click(check!);
         const regions = [...host.querySelectorAll('[role="region"]')];
         const checkRegion = regions.find((region) => region.getAttribute('aria-labelledby') === check?.id);
-        expect(checkRegion?.textContent).toContain('Docker is ready');
+        expect(checkRegion?.textContent).toContain('Engine is ready');
     });
 
     it('shows failed check evidence and moves focus to the focusable disabled footer when rechecking', async () => {
@@ -386,6 +387,125 @@ describe('Local Quick Start stage details', () => {
         expect(client.trpc.common.reportEvent.mutate).not.toHaveBeenCalled();
     });
 
+    it('shows active image origin without disclosure and retains settled summaries on Done', async () => {
+        await start();
+        await event({
+            stage: 'pulling',
+            status: 'active',
+            facts: { kind: 'pulling', imageRef: 'image:custom', imageOrigin: 'custom' },
+        });
+        expect(host.textContent).toContain('Image image:custom · Custom tag');
+        expect(toggle('Pulling official image')).toBeNull();
+        await event({
+            stage: 'pulling',
+            status: 'done',
+            facts: { kind: 'pulling', imageRef: 'image:custom', imageOrigin: 'custom', result: 'updated' },
+        });
+        expect(host.textContent).toContain('Updated');
+        expect(toggle('Pulling official image')).not.toBeNull();
+        await event({ stage: 'done', status: 'done' });
+        expect(host.textContent).toContain('Updated');
+        expect(toggle('Pulling official image')).not.toBeNull();
+    });
+
+    it('keeps the image summary ahead of engine failure details', async () => {
+        await start();
+        await event({ stage: 'pulling', status: 'active' });
+        await event({
+            stage: 'error', status: 'error', dockerReadiness: failed,
+            facts: { kind: 'pulling', imageRef: 'image:failed', imageOrigin: 'default' },
+        });
+        expect(host.textContent).toContain('Image image:failed');
+        await click(toggle('Pulling official image')!);
+        expect(host.textContent).toContain('Docker access denied');
+    });
+
+    it('makes shortened image IDs keyboard- and mouse-accessible with full descriptions', async () => {
+        const imageId = 'sha256:012345678901234567890123456789';
+        const previousImageId = 'sha256:987654321098765432109876543210';
+        await start();
+        await event({
+            stage: 'pulling', status: 'done',
+            facts: { kind: 'pulling', imageRef: 'image', imageOrigin: 'default', result: 'updated', imageId, previousImageId },
+        });
+        await click(toggle('Pulling official image')!);
+        const triggers = [...host.querySelectorAll<HTMLElement>('code[tabindex="0"]')];
+        expect(triggers.map((node) => node.textContent)).toEqual(['sha256:012345678901…', 'sha256:987654321098…']);
+        await act(async () => {
+            triggers[0].focus();
+            await new Promise((resolve) => setTimeout(resolve, 600));
+        });
+        expect(document.activeElement).toBe(triggers[0]);
+        const description = triggers[0].getAttribute('aria-describedby');
+        expect(description && document.getElementById(description)?.textContent).toBe(imageId);
+        await act(async () => {
+            triggers[0].blur();
+            triggers[1].dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+            await new Promise((resolve) => setTimeout(resolve, 600));
+        });
+        const previousDescription = triggers[1].getAttribute('aria-describedby');
+        expect(previousDescription && document.getElementById(previousDescription)?.textContent).toBe(previousImageId);
+    });
+
+    it.each([
+        ['local', 'Runs on this machine'],
+        ['wsl', 'Runs in this WSL environment'],
+        ['ssh', 'Runs on the remote SSH host'],
+        ['devContainer', 'Runs in this dev container'],
+        ['codespaces', 'Runs in this Codespace'],
+        ['otherRemote', 'Runs on the remote extension host'],
+    ] as const)('capitalizes the %s execution target segment', async (executionTarget, expected) => {
+        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status({ ...ready, executionTarget }));
+        await act(async () => root.render(<SSRProvider><LocalQuickStart key={executionTarget} /></SSRProvider>));
+        await start();
+        await event({ stage: 'checking', status: 'done' });
+        expect(host.textContent).toContain(expected);
+    });
+
+    it.each([
+        ['cliMissing', 'No Docker or Podman CLI found'],
+        ['permissionDenied', 'Access denied'],
+        ['daemonUnavailable', 'Daemon not running'],
+        ['daemonStarting', 'Daemon starting'],
+        ['contextUnavailable', 'Context unavailable'],
+        ['endpointUnreachable', 'Endpoint unreachable'],
+        ['unsupportedHost', 'Unsupported host'],
+        ['windowsContainers', 'Windows containers enabled'],
+        ['probeTimedOut', 'Check timed out'],
+        ['unknown', 'Daemon unreachable'],
+    ] as const)('capitalizes the %s failure evidence', async (failureKind, expected) => {
+        const indeterminate = failureKind === 'probeTimedOut' || failureKind === 'unknown';
+        const readiness = {
+            ...failed,
+            outcome: indeterminate ? 'indeterminate' : 'diagnosed',
+            canContinueAnyway: indeterminate,
+            cliInstalled: failureKind !== 'cliMissing',
+            failureKind,
+            provider: 'unknown',
+            cli: 'podman',
+            cliVersion: '5.1',
+        } as DockerReadiness;
+        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(readiness));
+        await start();
+        await event({ stage: 'checking', status: 'error' });
+        expect(host.textContent).toContain(expected);
+        if (failureKind !== 'cliMissing') {
+            expect(host.textContent).toContain('Podman CLI 5.1 found');
+        }
+    });
+
+    it.each([
+        ['linux', 'Not running'],
+        ['wsl', 'Not available in this WSL distribution'],
+    ] as const)('capitalizes Docker Desktop failure evidence on %s', async (environment, expected) => {
+        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status({
+            ...failed, environment, provider: 'dockerDesktop', failureKind: 'daemonUnavailable',
+        }));
+        await start();
+        await event({ stage: 'checking', status: 'error' });
+        expect(host.textContent).toContain(expected);
+    });
+
     it('stores terminal error facts by kind rather than the error event stage', async () => {
         await start();
         await event({ stage: 'checking', status: 'done' });
@@ -420,7 +540,7 @@ describe('Local Quick Start stage details', () => {
             expect(host.textContent?.includes(sentence)).toBe(sampleData === 'failed');
             await click(waiting!);
             expect(host.textContent).toContain('localhost:10333');
-            expect(host.textContent).toContain('ping on admin answered after 3 attempts');
+            expect(host.textContent).toContain('Ping on admin answered after 3 attempts');
             expect(host.textContent).toContain('Credentials in VS Code secret storage');
             if (sampleData === 'failed') {
                 const region = host.querySelector(`[aria-labelledby="${waiting!.id}"]`);
@@ -460,7 +580,7 @@ describe('Local Quick Start stage details', () => {
         expect(host.textContent).toContain('4 attempts');
         expect(host.textContent).toContain('masked ***');
         expect(host.textContent).toContain('fatal ***');
-        expect(host.textContent).not.toContain('ping on admin answered');
+        expect(host.textContent).not.toContain('Ping on admin answered');
         expect(host.textContent).not.toContain('Credentials in VS Code secret storage');
         await click(button('Wait longer'));
         expect(toggle('Waiting for DocumentDB to accept connections')).toBeNull();

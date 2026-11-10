@@ -3,19 +3,35 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Link, makeStyles, tokens } from '@fluentui/react-components';
+import { Link, makeStyles, tokens, Tooltip } from '@fluentui/react-components';
 import {
     StatusListDetailsFacts,
     StatusListDetailsMessage,
     StatusListDetailsSection,
 } from '@microsoft/vscode-ext-webview-fluentui/components';
 import * as l10n from '@vscode/l10n';
-import { type JSX } from 'react';
+import { type JSX, useId } from 'react';
 import { type StageDetailFact } from './stageDetailsPresentation';
 
 const useStyles = makeStyles({
     root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
+    idTrigger: {
+        ':focus-visible': { outline: `2px solid ${tokens.colorStrokeFocus2}`, outlineOffset: '2px' },
+    },
+    idTooltip: { maxWidth: '320px', overflowWrap: 'anywhere' },
 });
+
+const ShortId = ({ fact }: { readonly fact: StageDetailFact }): JSX.Element => {
+    const styles = useStyles();
+    const id = useId();
+    return (
+        <Tooltip content={{ children: fact.fullValue, className: styles.idTooltip }} relationship="description">
+            <code className={styles.idTrigger} tabIndex={0} role="group" aria-labelledby={id}>
+                <span id={id}>{fact.value}</span>
+            </code>
+        </Tooltip>
+    );
+};
 
 export const SetupStageDetails = ({
     facts,
@@ -56,7 +72,13 @@ export const SetupStageDetails = ({
                             term: fact.label,
                             value: (
                                 <>
-                                    {fact.code ? <code>{fact.value}</code> : fact.value}
+                                    {fact.fullValue ? (
+                                        <ShortId fact={fact} />
+                                    ) : fact.code ? (
+                                        <code>{fact.value}</code>
+                                    ) : (
+                                        fact.value
+                                    )}
                                     {fact.action === 'showOutput' && (
                                         <>
                                             {' · '}

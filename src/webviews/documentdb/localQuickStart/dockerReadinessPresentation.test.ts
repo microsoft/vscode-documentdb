@@ -304,7 +304,7 @@ describe('getDockerReadinessPresentation', () => {
             guide: 'dockerTroubleshooting',
             startLabel: undefined,
             detail: [
-                { kind: 'provider', provider: 'unknown', version: undefined },
+                { kind: 'provider', provider: 'unknown' },
                 { kind: 'executionTarget', target: 'local' },
             ],
             showInstall: false,
@@ -331,7 +331,8 @@ describe('getDockerReadinessPresentation detail line', () => {
                 }),
             ).detail,
         ).toEqual([
-            { kind: 'provider', provider: 'dockerEngine', version: '27.5.1' },
+            { kind: 'provider', provider: 'dockerEngine' },
+            { kind: 'cli', cli: undefined, version: '27.5.1' },
             { kind: 'platform', osType: 'linux', architecture: 'amd64' },
             { kind: 'executionTarget', target: 'wsl' },
         ]);
@@ -343,7 +344,8 @@ describe('getDockerReadinessPresentation detail line', () => {
                 readiness({ outcome: 'ready', provider: 'dockerDesktop', cliVersion: '27.5.1' }),
             ).detail,
         ).toEqual([
-            { kind: 'provider', provider: 'dockerDesktop', version: '27.5.1' },
+            { kind: 'provider', provider: 'dockerDesktop' },
+            { kind: 'cli', cli: undefined, version: '27.5.1' },
             { kind: 'executionTarget', target: 'local' },
         ]);
     });
@@ -366,7 +368,7 @@ describe('getDockerReadinessPresentation detail line', () => {
         expect(
             getDockerReadinessPresentation(readiness({ failureKind: 'permissionDenied', cliVersion: '27.5.1' })).detail,
         ).toEqual([
-            { kind: 'cli', version: '27.5.1' },
+            { kind: 'cli', cli: undefined, version: '27.5.1' },
             { kind: 'failure', failure: 'accessDenied' },
         ]);
     });
@@ -377,7 +379,7 @@ describe('getDockerReadinessPresentation detail line', () => {
                 readiness({ failureKind: 'daemonUnavailable', provider: 'dockerDesktop', cliVersion: '27.5.1' }),
             ).detail,
         ).toEqual([
-            { kind: 'cli', version: '27.5.1' },
+            { kind: 'cli', cli: undefined, version: '27.5.1' },
             { kind: 'provider', provider: 'dockerDesktop' },
             { kind: 'failure', failure: 'notRunning' },
         ]);
@@ -385,9 +387,15 @@ describe('getDockerReadinessPresentation detail line', () => {
 
     it('names the daemon explicitly when no provider was identified', () => {
         expect(getDockerReadinessPresentation(readiness({ failureKind: 'daemonUnavailable' })).detail).toEqual([
-            { kind: 'cli', version: undefined },
+            { kind: 'cli', cli: undefined, version: undefined },
             { kind: 'failure', failure: 'daemonNotRunning' },
         ]);
+    });
+
+    it('carries the actual selected CLI on failures', () => {
+        expect(getDockerReadinessPresentation(readiness({ cli: 'podman', cliVersion: '5.1' })).detail[0]).toEqual({
+            kind: 'cli', cli: 'podman', version: '5.1',
+        });
     });
 
     it('carries the WSL integration refinement into the failure segment', () => {
