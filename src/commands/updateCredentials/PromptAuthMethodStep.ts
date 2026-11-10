@@ -5,8 +5,11 @@
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import { l10n } from 'vscode';
+import { Links } from '../../constants';
 import { createAuthMethodQuickPickItemsWithSupportInfo } from '../../documentdb/auth/AuthMethod';
+import { evaluateEntraDestinationFromSettings } from '../../documentdb/auth/entraDestinationSettings';
 import { traceAuthFlow, traceAuthOperation } from '../../utils/authTrace';
+import { openUrl } from '../../utils/openUrl';
 import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 
 export class PromptAuthMethodStep extends AzureWizardPromptStep<UpdateCredentialsWizardContext> {
@@ -18,7 +21,13 @@ export class PromptAuthMethodStep extends AzureWizardPromptStep<UpdateCredential
          * when the picker is displayed.
          */
 
-        const quickPickItems = createAuthMethodQuickPickItemsWithSupportInfo(context.availableAuthenticationMethods);
+        const entraDestinationAllowed = context.connectionString
+            ? evaluateEntraDestinationFromSettings(context.connectionString).allowed
+            : false;
+        const quickPickItems = createAuthMethodQuickPickItemsWithSupportInfo(
+            context.availableAuthenticationMethods,
+            entraDestinationAllowed,
+        );
 
         // Reorder items to put the current selection first
         if (context.selectedAuthenticationMethod) {
@@ -40,17 +49,23 @@ export class PromptAuthMethodStep extends AzureWizardPromptStep<UpdateCredential
             managedIdentityKind: undefined,
             managedIdentityClientIdSource: undefined,
         });
-        const selectedItem = await traceAuthOperation(
-            'updateCredentials.authMethodPicker',
-            () =>
-                context.ui.showQuickPick(quickPickItems, {
-                    placeHolder: l10n.t('Select an authentication method'),
-                    stepName: 'selectAuthMethod',
-                    suppressPersistence: true,
-                    ignoreFocusOut: true,
-                }),
-            { options: quickPickItems.map((item) => item.authMethod).join(','), reason: 'credentialsBeingUpdated' },
-        );
+        let selectedItem: (typeof quickPickItems)[number];
+        do {
+            selectedItem = await traceAuthOperation(
+                'updateCredentials.authMethodPicker',
+                () =>
+                    context.ui.showQuickPick(quickPickItems, {
+                        placeHolder: l10n.t('Select an authentication method'),
+                        stepName: 'selectAuthMethod',
+                        suppressPersistence: true,
+                        ignoreFocusOut: true,
+                    }),
+                { options: quickPickItems.map((item) => item.authMethod).join(','), reason: 'credentialsBeingUpdated' },
+            );
+            if (selectedItem?.entraUnavailable) {
+                await openUrl(Links.EntraTrustedServers);
+            }
+        } while (selectedItem?.entraUnavailable);
         if (!selectedItem) {
             throw new Error(l10n.t('No authentication method selected.'));
         }

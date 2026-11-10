@@ -111,6 +111,7 @@ export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
             // Prepare wizard context
             const wizardContext: AuthenticateWizardContext = {
                 ...context,
+                connectionString: credentials.connectionString,
                 adminUserName: credentials.nativeAuthConfig?.connectionUser,
                 resourceName: this.cluster.name,
                 availableAuthMethods: credentials.availableAuthMethods,

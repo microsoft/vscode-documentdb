@@ -69,7 +69,7 @@ async function inferMethods(
     storedMethods: AuthMethodId[] = [AuthMethodId.NativeAuth, AuthMethodId.NoAuth],
 ): Promise<UpdateCredentialsWizardContext> {
     vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
-        get: vi.fn().mockReturnValue({ hostnameSuffix: suffix }),
+        inspect: vi.fn().mockReturnValue({ globalValue: { hostnameSuffix: suffix } }),
     } as unknown as vscode.WorkspaceConfiguration);
     mockGet.mockResolvedValue({
         id: 'stable-cluster-id',
@@ -141,6 +141,24 @@ describe('updateCredentials host inference', () => {
     ])('does not add Entra methods for lookalike, RU, or rejected custom host %s', async (host, suffix) => {
         const context = await inferMethods(host, suffix);
         expect(context.availableAuthenticationMethods).toEqual([AuthMethodId.NativeAuth, AuthMethodId.NoAuth]);
+    });
+
+    it.each([
+        'cluster.eastus.cloudapp.azure.com',
+        'cluster.mongo.cosmos.azure.com',
+        'cluster.mongocluster.cosmos.azure.com,other.example.com',
+        'cluster.mongocluster.cosmos.azure.com.',
+    ])('removes stale Entra methods and preselection for rejected destination %s', async (host) => {
+        const context = await inferMethods(host, undefined, [
+            AuthMethodId.NativeAuth,
+            AuthMethodId.MicrosoftEntraID,
+            AuthMethodId.ManagedIdentity,
+            AuthMethodId.NoAuth,
+        ]);
+
+        expect(context.availableAuthenticationMethods).toEqual([AuthMethodId.NativeAuth, AuthMethodId.NoAuth]);
+        expect(context.selectedAuthenticationMethod).toBeUndefined();
+        expect(context.connectionString).toBe(`mongodb://${host}:10255/`);
     });
 });
 
