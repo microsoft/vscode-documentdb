@@ -267,6 +267,14 @@ This documentation-only approval does not start those implementation checks.
    readiness where needed. No detection-dependent hints or validation.
 4. **P4 — W1 replaced.** No provider memory for Podman runs, and no Docker evidence or start action
    for them.
+
+   **Done (2026-11-10), commit `00fd6724`:** Terra guarded every provider-memory access,
+   including reset and launch recording, with the actual run's CLI. Podman no longer uses
+   Docker installed-app evidence, launch capabilities or recovery commands. Docker behavior
+   is unchanged. Advised (`claude-opus-5.5`), high confidence; 13 new regressions and all
+   155 focused tests passed, as did the Case 1 build. P4 ran independently of P3 on
+   disjoint files and was committed first; this does not change the accepted six-item scope.
+
 5. **P5 — W8.** Machine detection, the `startPodmanMachine` action, the platform gate, the button
    and the wait.
 6. **P6 — fallback display, telemetry, docs.** The detail-line segment, the Details fact, the user
@@ -292,7 +300,7 @@ live engine status remains unknown until execution.
 | P1 | `gpt-6.1-sol` | Persisted ownership, lifecycle and concurrent runtime isolation | Done: `deecc32f` |
 | P2 | `gpt-6.1-sol` | Resolver, readiness and execution interfaces cross modules | Done: `7f5ad767` |
 | P3 | `gpt-6.1-sol` | Check-free behavior spans command, service, router and webview | In progress |
-| P4 | `gpt-6.1-terra` | Bounded provider-evidence isolation | In progress |
+| P4 | `gpt-6.1-terra` | Bounded provider-evidence isolation | Done: `00fd6724` |
 | P5 | `gpt-6.1-sol` | Platform detection and long-running process lifecycle | Queued |
 | P6 | `gpt-6.1-sol` | Evidence, telemetry and scenario integration | Queued |
 
