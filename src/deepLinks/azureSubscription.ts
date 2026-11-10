@@ -133,7 +133,14 @@ export async function resolveAzureSubscription(
             return undefined;
         }
         report?.(vscode.l10n.t('Signing in to tenant…'));
-        await measureDeepLinkPhase(context, 'azureSignIn', () => azureSubscriptionProvider.signIn(tenantId));
+        const signedIn = await measureDeepLinkPhase(context, 'azureSignIn', () =>
+            azureSubscriptionProvider.signIn(tenantId),
+        );
+        if (!signedIn) {
+            ext.outputChannel.trace('[DeepLink] Tenant sign-in stopped');
+            cancelDeepLink(context, 'AzureTenantSignIn');
+            return undefined;
+        }
     }
 
     ext.outputChannel.trace('[DeepLink] Subscription not found');

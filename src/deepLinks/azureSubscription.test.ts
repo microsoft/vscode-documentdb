@@ -251,6 +251,27 @@ describe('resolveAzureSubscription', (): void => {
         });
     });
 
+    it('treats a false tenant sign-in result as cancellation without retrying subscription lookup', async (): Promise<void> => {
+        azureSubscriptionProvider.signIn.mockResolvedValue(false);
+        (vscode.window.showInformationMessage as Mock).mockResolvedValue('Sign in to tenant');
+
+        await expect(
+            resolveAzureSubscription(context, { ...request, tenantId: 'tenant-id' }),
+        ).resolves.toBeUndefined();
+
+        expect(azureSubscriptionProvider.signIn).toHaveBeenCalledExactlyOnceWith('tenant-id');
+        expect(azureSubscriptionProvider.getSubscriptions).toHaveBeenCalledExactlyOnceWith(false);
+        expect(context.telemetry.properties).toMatchObject({
+            tenantSignInRequired: 'true',
+            deepLinkOutcome: 'canceled',
+            result: 'Canceled',
+            userCancelledAtStep: 'AzureTenantSignIn',
+        });
+        expect(context.telemetry.properties.errorReason).toBeUndefined();
+        expect(context.errorHandling.buttons).toBeUndefined();
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Tenant sign-in stopped');
+    });
+
     it('throws with a working Manage Azure accounts button when the tenant retry still cannot find the subscription', async (): Promise<void> => {
         azureSubscriptionProvider.getSubscriptions.mockResolvedValue([
             subscription('other-tenant', 'account-id'),
