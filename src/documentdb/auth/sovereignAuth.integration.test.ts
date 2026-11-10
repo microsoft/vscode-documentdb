@@ -274,9 +274,17 @@ describe('sovereign authentication with real audience resolvers', () => {
                     expect.objectContaining({
                         type: 'init',
                         connectionString: stored.connectionString,
-                        oidcCustomHostnameSuffix: undefined,
+                        oidcDestinationPolicy: {
+                            originalConnectionString: stored.connectionString,
+                            customHostnameSuffix: undefined,
+                            revoked: expect.any(SharedArrayBuffer),
+                        },
                     }),
                 );
+                const init = postedMessages.find((message) => message.type === 'init');
+                const revoked = init?.oidcDestinationPolicy?.revoked;
+                expect(revoked?.byteLength).toBe(Int32Array.BYTES_PER_ELEMENT);
+                expect(Atomics.load(new Int32Array(revoked!), 0)).toBe(0);
                 expect(postedMessages).toContainEqual({
                     type: 'tokenResponse',
                     requestId: 'token-request',
