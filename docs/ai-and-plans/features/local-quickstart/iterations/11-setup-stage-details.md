@@ -237,7 +237,7 @@ The pre-existing untracked Podman archive is outside this work.
 
 | Item | Scope | Model and reason | Prerequisite | Status |
 | ---- | ----- | ---------------- | ------------ | ------ |
-| P1 | Shared checking-row disclosure, focus/reset behavior; remove accordion | Terra: self-contained webview migration | — | Queued |
+| P1 | Shared checking-row disclosure, focus/reset behavior; remove accordion | Terra: self-contained webview migration | — | Done `fa4a4d69` |
 | P2 | Typed runtime image inspection, per-stage facts, non-readiness presentation | Sol: host/webview contract and runtime lifecycle | P1 | Queued |
 | P3 | Readiness attempts, best-effort hello, sample-data outcomes and success sentence | Sol: readiness lifecycle and cross-module behavior | P2 | Queued |
 | P4 | Aggregate disclosure telemetry, browser scenarios, docs and decision record | Sol: session lifecycle and cross-module verification | P3 | Queued |
@@ -255,6 +255,18 @@ contract without changing persisted data, authentication, or the accepted UI.
 The leader chose sequential ownership and the four commits above (confidence
 100%: phases overlap in service, presentation, and scenario files). No additional
 work items, W5 redesign, step timings, or optional hardening are in scope.
+
+**P1 Done (2026-11-10), commit `fa4a4d69`:** Terra moved checking evidence into
+shared, collapsed Set up/Done row disclosures and added pure presentation tests.
+Accepted operator decisions control wording, disclosure state and absolute check
+time; advised (Opus 5.5, high confidence) that mid-setup Docker evidence remains on
+the owning failed row. Advisor found the real recheck link could lose focus;
+Terra applied the approved footer handoff and added a link-focused regression
+without weakening the original toggle-focused test. Final advisor approval: high
+confidence, no remaining findings. Focused webview suite: 155 passed, followed by
+7 focused disclosure tests after correction; root `tsc --noEmit -p .` passed.
+Full build/Case 2 are scheduled after the implementation batch. Thirteen tests
+added across presentation and disclosure behavior.
 
 1. **A PR stacked on #1065.** Branch from `dev/guanzhousong/quickstart-podman-fallback` and open
    the PR against that branch, not `main`. When #1065 merges, retarget it to `main`. Keep the
