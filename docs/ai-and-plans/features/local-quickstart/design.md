@@ -230,8 +230,13 @@ After **Start DocumentDB Local**, Set up shows five stages: checking the contain
 the image, creating and starting the container, and waiting for DocumentDB to accept connections.
 Command output is available through **View setup log**.
 
-A settled row with facts offers **Details** on its detail line. It starts collapsed and shows
-available evidence, not step durations. A failed stage does not expand automatically: the
+A settled row with facts offers **Details** alongside a concise factual summary. It starts collapsed
+and shows available evidence, not step durations. Checking reports PATH presence for both CLI
+executables but probes only the selected engine; its Details omit explanatory notes. Long image
+and container IDs are shortened visually and their full values are available via mouse and keyboard
+tooltips. An updated image includes its previous ID when already known. While pulling, the known
+image and custom or reused origin appear with the latest bounded engine-output line when available;
+this is literal activity, not an estimated completion percentage. A failed stage does not expand automatically: the
 explanation and recovery actions remain visible in the message block below the list. The checking
 row retains its last-checked time and re-check action; its Details replaces the old Docker-check
 accordion. See [0008](./decisions.md#0008---set-up-stages-expand-to-show-what-each-stage-did).

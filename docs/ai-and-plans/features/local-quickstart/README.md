@@ -59,7 +59,11 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
   ([0003](./decisions.md#0003--concept-f-docker-verified-as-the-first-setup-stage)). Redesigned
   findings and engine-specific guides are pending W5; the detail still shows raw CLI version output.
 - **Settled setup stages offer evidence in Details.** Rows with facts start collapsed on both Set up
-  and Done; explanations and recovery actions remain in the failure block. Sample-data loading
+  and Done and have concise factual summaries; explanations and recovery actions remain in the
+  failure block. Full image and container IDs are available through mouse and keyboard tooltips.
+  Checking reports which Docker and Podman executables are on PATH but probes only the selected engine, without
+  explanatory notes in its Details. Active pulling shows the known image and origin, and the latest
+  bounded engine-output line when available, not an estimated percentage. Sample-data loading
   failure is also called out on success. No step durations are recorded
   ([0008](./decisions.md#0008---set-up-stages-expand-to-show-what-each-stage-did)).
 - **Docker is preferred; Podman is the fallback.** Docker Engine and Docker Desktop are supported.

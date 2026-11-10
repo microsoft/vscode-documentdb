@@ -468,3 +468,14 @@ The operator deliberately left out step durations, unlike Diagnose connection's
 and accepted session aggregates on the existing
 `wizard.close` event: the bounded, sorted stages opened and the number of openings. No new event
 per opening is sent.
+
+### Amendment, 2026-11-10
+
+The operator explicitly requested the eight changes in the
+[setup-stage follow-up](./iterations/11-setup-stage-details-followup.md). Checking Details no
+longer includes explanatory notes; it reports both CLI executables' PATH presence without
+claiming the unselected engine was probed. Settled rows with Details have concise factual summaries.
+Long image and container IDs retain full values in mouse and keyboard tooltips, and Updated includes
+the previous image ID when already available. Active pulling shows the known image and origin and
+the latest bounded engine-output line when available, without an invented completion estimate.
+The decision to omit durations remains unchanged.

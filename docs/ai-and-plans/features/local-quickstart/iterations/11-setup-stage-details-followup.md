@@ -20,8 +20,8 @@ The run began at 09:22:28 UTC. Advisor: Opus 5.5; leader: Sol.
 | ---- | ----------------- | -------------- | ----- | ------ |
 | F1 | 2, 4, 6 | Discover both CLI executables without changing engine preference; carry previous image ID when already inspected; emit known image facts at pull start | Sol: host/readiness contract spans modules | Done `40056c79` |
 | F2 | 1, 2, 3, 4, 5, 6, 7 | Capitalized evidence segments, truthful CLI labels, full-ID tooltips, previous image identity, concise summaries and active image facts; remove checking explanation notes | Terra: bounded presentation work | Done `c6752605` |
-| F3 | 8 | Stream the latest bounded, masked engine-output line during pull, with coalescing and cancellation cleanup | Sol: command streaming and generator lifecycle | F3a done `a203ac50`; F3b in progress |
-| F4 | All | Browser coverage in all themes, accessible ID tooltips and progress checks; update related design/docs | Terra: isolated fixtures/scenarios and docs | Queued |
+| F3 | 8 | Stream the latest bounded, masked engine-output line during pull, with coalescing and cancellation cleanup | Sol: command streaming and generator lifecycle | Done: F3a `a203ac50`, F3b `ba8c43de` |
+| F4 | All | Browser coverage in all themes, accessible ID tooltips and progress checks; update related design/docs | Terra: isolated fixtures/scenarios and docs | Done `f2a07985`; docs separately |
 
 These items share files and normally run sequentially. F3 is split into F3a
 (host streaming) and F3b (webview rendering): F3a can run alongside F2 because
@@ -138,3 +138,37 @@ accepted request. A narrow advisor follow-up approved visible ordinary-text
 stage announcement (80% confidence). It also required checking that StatusList is
 not a live-region wrapper and preserving stage-status object identity when
 repeated active events do not change status. These checks are part of F3b.
+
+**F3b Done (2026-11-10), commit `ba8c43de`:** Sol displays literal activity
+below the image summary without changing the separate polite announcement,
+stage telemetry, controls or timers. Repeated status events preserve state
+identity; completion, failure, cancellation and retry clear stale activity.
+Eight tests added; all 258 webview tests and root type check passed.
+Advised (Opus 5.5, 88% confidence): approved, no concrete bug. The package's
+list/listitem wrappers are not live regions; component and live-browser checks
+confirmed that changing activity leaves announcements unchanged.
+
+**F4 Done (2026-11-10), commit `f2a07985`:** Terra added two scenarios (both CLIs present; Podman selected)
+and strengthened existing summary, previous-ID, active-image/output and no-notes
+assertions. Exact totals are 141 source-scenario routes overall and 45 Local
+Quick Start routes. All 31 focused scenario-contract tests and root type check
+passed. The worker's live checks were initially blocked by an unavailable shared
+page/server; the leader started a temporary scenario helper and verified:
+
+- All 45 Local Quick Start routes passed across dark, light and high contrast.
+- All three shortened IDs on the success fixture exposed their complete
+  71-character values on mouse hover and real keyboard navigation in every theme.
+  Accessible descriptions matched, tooltips wrapped without overflowing, and
+  keyboard focus outlines were visible, including high contrast.
+- Two successive active-pull output updates rendered in every theme without
+  additional RPC calls or changed polite announcements. Active pulling had no
+  Details toggle, and progress disappeared when the stage completed.
+
+The browser driver's external script environment needed an explicit timer adapter
+using Playwright's wait API; no product or test-infrastructure workaround was
+introduced. Layout in a real workbench and actual screen-reader speech remain
+operator checks. No request is parked and no inferred progress estimate was added.
+The leader reviewed the mechanical fixture/count/documentation changes directly
+(100% confidence: assertions strengthen the expressly requested behavior, with
+no added runtime API or inferred facts). Case 1 and the full requested Case 2
+verification follow this implementation batch.

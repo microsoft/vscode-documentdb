@@ -50,3 +50,22 @@ intended collapse/reset behavior.
 The PR remains draft. The operator's final author decisions and any subsequent
 GitHub Copilot reviewer comments have not been fabricated or marked complete.
 Verification results and execution/cost records are tracked in the source plan.
+
+## Operator UX follow-up review
+
+The operator then requested eight refinements; their accepted scope, implementation
+and measured verification are in the [follow-up record](./11-setup-stage-details-followup.md).
+
+| Item | Advisor | Confidence | Verdict |
+| ---- | ------- | ---------- | ------- |
+| F1: both-CLI discovery and initial/previous image facts | Opus 5.5 | 90% | Approved; selection and exact probe counts unchanged, no invented unselected-engine checks. |
+| F2 and F3a: evidence presentation and pull stream bridge | Opus 5.5 | 86% | Approved; full IDs preserved, truthful summaries, bounded latest-slot streaming, failures/cancellation/iterator-return cleanup. |
+| F3b: visible active progress placement | Opus 5.5 | 80% placement clarification; 88% implementation review | Approved; visible ordinary text below the image, not hidden behind an unavailable active-stage disclosure or added to live announcements. |
+
+No concrete implementation findings remained after these reviews. The placement
+clarification corrected the initial suggestion to render activity only inside
+Details, which would have hidden it while pulling. Real-browser checks then
+confirmed all 45 Local Quick Start routes, full-ID mouse/keyboard access and
+wrapping in all themes, and two changing progress updates without new RPC calls
+or changed polite announcements. The operator's request explicitly supersedes
+the old checking-explanation notes; that is not an unapproved design deviation.

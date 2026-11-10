@@ -24,6 +24,11 @@ code:
 > port, how readiness was confirmed, and whether sample data loaded. The default view does not
 > change: the labels stay fixed, there is one evidence line, and Details start collapsed.
 
+> **Follow-up:** The operator's [2026-11-10 follow-up](./11-setup-stage-details-followup.md)
+> supersedes the statements that checking's explanatory notes stay (§3.1) and that the default
+> evidence lines remain unchanged: settled rows have summaries and active pulls show known image
+> facts and bounded engine output. Details still start collapsed, and durations remain excluded.
+
 - **Builds on:** `StatusListItem.disclosure` and the `StatusListDetails*` building blocks
   (package 1.3.0), merged from `main` with #1066.
 - **Stacked on:** #1065 (`dev/guanzhousong/quickstart-podman-fallback`). The PR for this plan
