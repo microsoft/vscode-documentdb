@@ -109,6 +109,7 @@ function mockRuntime(overrides: Partial<IContainerRuntime>): IContainerRuntime {
     return {
         listByLabel: vi.fn().mockResolvedValue([]),
         inspectContainer: vi.fn().mockResolvedValue(undefined),
+        inspectImage: vi.fn().mockResolvedValue(undefined),
         // Docker answering normally is the default, so an empty inspect means the container is gone.
         isDockerReady: vi.fn().mockResolvedValue({ outcome: 'ready', daemonReachable: true }),
         removeContainer: vi.fn().mockResolvedValue(undefined),

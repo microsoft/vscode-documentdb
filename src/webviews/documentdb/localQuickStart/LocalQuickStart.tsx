@@ -65,6 +65,7 @@ import {
     type QuickStartWizardPhase,
     type QuickStartWizardStepTrigger,
     type StageEvent,
+    type StageFacts,
 } from '../../../services/localQuickStart/quickStartTypes';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility/Announcer';
@@ -93,7 +94,7 @@ import { getExistingInstanceGuard, guardBlocksSetup } from './existingInstanceGu
 import './localQuickStart.scss';
 import { type LocalQuickStartConfigurationType } from './localQuickStartController';
 import { SetupStageRow } from './SetupStageRow';
-import { buildDockerDetailRows, dockerFailureLabels } from './stageDetailsPresentation';
+import { buildDockerDetailRows, buildStageDetailRows, dockerFailureLabels } from './stageDetailsPresentation';
 
 /**
  * Wizard phases. `provisioning` and `failed` are both the "Set up" step: a setup failure — Docker
@@ -535,6 +536,18 @@ function emptyStageStatus(): Record<ProvisionStage, StageStatus> {
     };
 }
 
+function emptyStageFacts(): Record<ProvisionStage, StageFacts | undefined> {
+    return {
+        checking: undefined,
+        pulling: undefined,
+        creating: undefined,
+        starting: undefined,
+        waiting: undefined,
+        done: undefined,
+        error: undefined,
+    };
+}
+
 export const LocalQuickStart = (): JSX.Element => {
     const styles = useStyles();
     const trpcClient = useTrpcClient();
@@ -591,6 +604,7 @@ export const LocalQuickStart = (): JSX.Element => {
      */
     const [dataChoice, setDataChoice] = useState<'reuse' | 'fresh'>('reuse');
     const [stageStatus, setStageStatus] = useState<Record<ProvisionStage, StageStatus>>(emptyStageStatus);
+    const [facts, setFacts] = useState<Record<ProvisionStage, StageFacts | undefined>>(emptyStageFacts);
     const [expandedStages, setExpandedStages] = useState<ReadonlySet<ProvisionStage>>(() => new Set());
     const handleExpandedChange = useCallback((stage: ProvisionStage, expanded: boolean): void => {
         setExpandedStages((previous) => {
@@ -913,6 +927,9 @@ export const LocalQuickStart = (): JSX.Element => {
             // rather than resetting the whole list to pending.
             if (options?.resetStages !== false) {
                 setStageStatus(emptyStageStatus());
+                setFacts(emptyStageFacts());
+            } else {
+                setFacts((previous) => ({ ...previous, waiting: undefined }));
             }
             setErrorMessage(undefined);
             setSuccessMessage(undefined);
@@ -930,6 +947,10 @@ export const LocalQuickStart = (): JSX.Element => {
             const subscription = subscribe({
                 onData(event: StageEvent) {
                     if (myGeneration !== streamGenerationRef.current) return; // superseded/cancelled stream
+                    if (event.facts) {
+                        const stageFacts = event.facts;
+                        setFacts((previous) => ({ ...previous, [stageFacts.kind]: stageFacts }));
+                    }
                     if (event.stage === 'done' && event.status === 'done') {
                         settled = true;
                         stopTimer();
@@ -1105,6 +1126,7 @@ export const LocalQuickStart = (): JSX.Element => {
     const handleCheckDockerAgain = useCallback((): void => {
         setDockerActionMessage(undefined);
         setCheckingDockerAgain(true);
+        setFacts((previous) => ({ ...previous, checking: undefined }));
         setExpandedStages((previous) => {
             const next = new Set(previous);
             next.delete('checking');
@@ -1143,6 +1165,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     setTimedOut(false);
                     setErrorMessage(undefined);
                     setStageStatus(emptyStageStatus());
+                    setFacts(emptyStageFacts());
                     setPhase((current) => (current === 'failed' ? 'configure' : current));
                 }
             },
@@ -1274,6 +1297,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     setTimedOut(false);
                     setErrorMessage(undefined);
                     setStageStatus(emptyStageStatus());
+                    setFacts(emptyStageFacts());
                     navigate('configure', 'startOver');
                 } else {
                     setTimedOut(true);
@@ -1425,13 +1449,17 @@ export const LocalQuickStart = (): JSX.Element => {
     };
 
     const stageFactsFor = (stage: ProvisionStage): ReturnType<typeof buildDockerDetailRows> | undefined => {
+        const rows = buildStageDetailRows(facts[stage]).filter(
+            (row) => stageStatus[stage] !== 'error' || row.action !== 'showOutput',
+        );
         if (stage === 'checking') {
-            if (!checkReadiness || (stageStatus.checking === 'done') !== (checkReadiness.outcome === 'ready')) {
-                return undefined;
+            if (checkReadiness && (stageStatus.checking === 'done') === (checkReadiness.outcome === 'ready')) {
+                rows.unshift(...buildDockerDetailRows(checkReadiness));
             }
-            return buildDockerDetailRows(checkReadiness);
+        } else if (stage === failedStage && stageDockerFailure) {
+            rows.unshift(...buildDockerDetailRows(stageDockerFailure));
         }
-        return stage === failedStage && stageDockerFailure ? buildDockerDetailRows(stageDockerFailure) : undefined;
+        return rows.length ? rows : undefined;
     };
 
     // Human-readable message for the current in-flight stage, mirrored into a polite live
@@ -2011,6 +2039,7 @@ export const LocalQuickStart = (): JSX.Element => {
                         onExpandedChange={handleExpandedChange}
                         focusFallback={primaryButtonRef}
                         mutedClassName={styles.muted}
+                        onShowOutput={handleViewOutput}
                     />
                 ))}
             </StatusList>
@@ -2073,6 +2102,7 @@ export const LocalQuickStart = (): JSX.Element => {
                         onExpandedChange={handleExpandedChange}
                         focusFallback={primaryButtonRef}
                         mutedClassName={styles.muted}
+                        onShowOutput={handleViewOutput}
                     />
                 ))}
             </StatusList>

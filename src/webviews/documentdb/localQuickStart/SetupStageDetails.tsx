@@ -3,8 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { makeStyles, tokens } from '@fluentui/react-components';
+import { Link, makeStyles, tokens } from '@fluentui/react-components';
 import { StatusListDetailsFacts, StatusListDetailsSection } from '@microsoft/vscode-ext-webview-fluentui/components';
+import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
 import { type StageDetailFact } from './stageDetailsPresentation';
 
@@ -15,9 +16,11 @@ const useStyles = makeStyles({
 export const SetupStageDetails = ({
     facts,
     mutedClassName,
+    onShowOutput,
 }: {
     readonly facts: readonly StageDetailFact[];
     readonly mutedClassName: string;
+    readonly onShowOutput: () => void;
 }): JSX.Element => {
     const styles = useStyles();
     return (
@@ -28,7 +31,13 @@ export const SetupStageDetails = ({
                         term: fact.label,
                         value: (
                             <>
-                                {fact.value}
+                                {fact.code ? <code>{fact.value}</code> : fact.value}
+                                {fact.action === 'showOutput' && (
+                                    <>
+                                        {' · '}
+                                        <Link onClick={onShowOutput}>{l10n.t('View setup log')}</Link>
+                                    </>
+                                )}
                                 {fact.note && (
                                     <span className={mutedClassName}>
                                         {' · '}

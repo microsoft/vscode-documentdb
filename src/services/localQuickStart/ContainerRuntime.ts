@@ -31,6 +31,7 @@ import { type Shell, type ShellQuotedString, ShellQuoting } from '@microsoft/vsc
 import * as net from 'net';
 import { Writable } from 'stream';
 import * as vscode from 'vscode';
+import { meterSilentCatch as meterQuickStartSilentCatch } from '../../utils/accumulatingTelemetry';
 import { createContainerClient, resolveContainerCli, type ResolvedContainerCli } from './containerCli';
 import { type DockerCommandResponse, getDockerShellProvider, runDockerCommand } from './dockerCommand';
 import { CapturingTeeWritable } from './dockerProbes';
@@ -122,6 +123,13 @@ export interface CreateContainerOptions {
     readonly command?: ReadonlyArray<string>;
 }
 
+export interface RuntimeImageFacts {
+    readonly id: string;
+    readonly digest?: string;
+    readonly version?: string;
+    readonly createdAtMs?: number;
+}
+
 /**
  * IO surface of the Docker-backed runtime (WI-0). Extracted so {@link QuickStartService}
  * can be unit-tested against a mock runtime with no real Docker daemon. The pure inspectors
@@ -132,6 +140,7 @@ export interface IContainerRuntime {
     isDockerReady(request?: DockerReadinessRequest): Promise<DockerReadiness>;
     isPortFree(port?: number): Promise<boolean>;
     pullImage(imageRef: string, token?: vscode.CancellationToken): Promise<void>;
+    inspectImage(imageRef: string, token?: vscode.CancellationToken): Promise<RuntimeImageFacts | 'absent' | undefined>;
     createAndRunContainer(
         options: CreateContainerOptions,
         secrets: ReadonlyArray<string>,
@@ -268,6 +277,62 @@ class ContainerRuntimeImpl implements IContainerRuntime {
 
     public async pullImage(imageRef: string, token?: vscode.CancellationToken): Promise<void> {
         await this.runCommand(this.client.pullImage({ imageRef }), [], token);
+    }
+
+    public async inspectImage(
+        imageRef: string,
+        token?: vscode.CancellationToken,
+    ): Promise<RuntimeImageFacts | 'absent' | undefined> {
+        const bounds = {
+            shellProvider: SHELL_PROVIDER,
+            cancellationToken: token,
+            timeoutMs: POLLED_QUERY_TIMEOUT_MS,
+        };
+        try {
+            const command = await this.client.inspectImages({ imageRefs: [imageRef] });
+            const items = await runDockerCommand(
+                { ...command, parse: (output) => command.parse(output, true) },
+                bounds,
+            );
+            const item = items?.[0];
+            if (item) {
+                const parsed: unknown = JSON.parse(item.raw);
+                const isRecord = (value: unknown): value is Record<string, unknown> =>
+                    typeof value === 'object' && value !== null && !Array.isArray(value);
+                const record: unknown = Array.isArray(parsed)
+                    ? parsed.find((value: unknown) => isRecord(value) && value.Id === item.id)
+                    : parsed;
+                const created = isRecord(record) && record.Id === item.id ? record.Created : undefined;
+                const createdAtMs = typeof created === 'string' ? Date.parse(created) : NaN;
+                const repository = imageRef.split('@')[0].replace(/:[^/:]+$/, '');
+                const digest = item.repoDigests.find((value) => value.split('@')[0] === repository)?.split('@')[1];
+                const version = item.labels['org.opencontainers.image.version'];
+                return {
+                    id: item.id,
+                    digest,
+                    version: version && version.length <= 64 ? version : undefined,
+                    // The client turns a missing Created into today's date; only trust the source field.
+                    createdAtMs:
+                        Number.isFinite(createdAtMs) && createdAtMs >= Date.UTC(2000, 0, 1)
+                            ? createdAtMs
+                            : undefined,
+                };
+            }
+        } catch {
+            meterQuickStartSilentCatch('quickStart_inspectImage');
+        }
+        try {
+            const command = await this.client.listImages({ references: [imageRef] });
+            const items = await runDockerCommand(
+                { ...command, parse: (output) => command.parse(output, true) },
+                bounds,
+            );
+            // Reference filters cannot reliably prove absence for a digest reference.
+            return items?.length === 0 && !imageRef.includes('@') ? 'absent' : undefined;
+        } catch {
+            meterQuickStartSilentCatch('quickStart_inspectImage_listImages');
+            return undefined;
+        }
     }
 
     /** `docker run` detached, returning the new container id. */

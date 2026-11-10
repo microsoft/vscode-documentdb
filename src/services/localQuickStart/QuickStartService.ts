@@ -42,6 +42,7 @@ import {
     hasExited,
     type IContainerRuntime,
     isRunning,
+    type RuntimeImageFacts,
     SETUP_CLEANUP_TIMEOUT_MS,
 } from './ContainerRuntime';
 import { DockerCommandError, DockerCommandTimeoutError } from './dockerCommand';
@@ -80,6 +81,7 @@ import {
     type OpenLocalQuickStartOptions,
     type PortAvailability,
     type ProvisionStage,
+    type PullingStageFacts,
     QUICK_START_ALIAS_LABEL_KEY,
     QUICK_START_DATA_PATH,
     QUICK_START_IMAGE,
@@ -92,6 +94,7 @@ import {
     type QuickStartStatus,
     resolveQuickStartImage,
     type StageEvent,
+    type StageFacts,
     volumeName,
 } from './quickStartTypes';
 
@@ -778,6 +781,7 @@ export class QuickStartServiceImpl {
             (reusing || (dataRemoved && !wantsCustomCredentials) ? stored : undefined) ??
             resolveProvisionCredentials(options);
         const secrets: string[] = secretVariants(credentials.password);
+        const masked = (value: string): string => maskSecrets(value, secrets);
 
         // Advanced overrides (P1-4). When reusing an existing instance we keep its data volume,
         // so custom credentials AND a custom image tag are intentionally IGNORED: the stored
@@ -830,6 +834,16 @@ export class QuickStartServiceImpl {
         // (provisioning/lifecycleBusy) are already clean — otherwise a fast click could hit the
         // "already in progress" guard (opus-4.7).
         let terminalEvent: StageEvent | undefined;
+        let facts: StageFacts | undefined;
+        const pullingFacts = (image: RuntimeImageFacts | 'absent' | undefined): PullingStageFacts => ({
+            kind: 'pulling',
+            imageRef: masked(imageRef),
+            imageOrigin: reusing ? 'reused' : usedCustomImage ? 'custom' : 'default',
+            imageId: image && image !== 'absent' ? masked(image.id) : undefined,
+            digest: image && image !== 'absent' && image.digest ? masked(image.digest) : undefined,
+            imageVersion: image && image !== 'absent' && image.version ? masked(image.version) : undefined,
+            createdAtMs: image && image !== 'absent' ? image.createdAtMs : undefined,
+        });
         const provisionStartedAt = Date.now();
 
         try {
@@ -877,24 +891,30 @@ export class QuickStartServiceImpl {
                     return;
                 }
             }
+            let removedContainerId: string | undefined;
             if (existing) {
                 channel.appendLine(`Removing existing Quick Start container ${existing.id} for a clean run…`);
                 await this.runtime
                     .removeContainer(existing.id)
+                    .then(() => {
+                        removedContainerId = masked(existing.id);
+                    })
                     .catch(() => meterQuickStartSilentCatch('provision_removeExistingContainer'));
             }
 
             // The host port is ALWAYS explicit (review L3, "no magic after execute"): the Configure
             // step suggests a free port, validates it while the user can still react, and sends it.
             // Setup never relocates it — a conflict here is a hard, explained error.
-            if (!(await this.runtime.isPortFree(chosenPort))) {
+            const portFree = await this.runtime.isPortFree(chosenPort);
+            facts = { kind: 'checking', port: chosenPort, portFree, removedContainerId };
+            if (!portFree) {
                 const message: QuickStartMessage = { key: 'portInUse', port: chosenPort };
                 this.setStatus(alias, InstanceState.Error, undefined, message);
-                yield stageEvent('checking', 'error', message);
+                yield { ...stageEvent('checking', 'error', message), facts };
                 return;
             }
             this.throwIfAborted(signal);
-            yield stageEvent('checking', 'done');
+            yield { ...stageEvent('checking', 'done'), facts };
 
             // Take the durable provisioning lease BEFORE the pull (H3): a host killed anywhere from
             // here to `finalizeReadyInstance` then reconciles as "Provisioning…" (fresh lease) or is
@@ -909,6 +929,9 @@ export class QuickStartServiceImpl {
             // --- pulling ---
             yield stageEvent('pulling', 'active');
             activeDockerStage = 'pulling';
+            facts = pullingFacts(undefined);
+            const imageBefore = await this.runtime.inspectImage(imageRef, cts.token);
+            facts = pullingFacts(imageBefore);
             await this.runProvisionStage(
                 'pulling',
                 provisionCorrelationId,
@@ -918,11 +941,24 @@ export class QuickStartServiceImpl {
                 },
                 [imageRef],
             );
+            const imageAfter = await this.runtime.inspectImage(imageRef, cts.token);
+            facts = {
+                ...pullingFacts(imageAfter),
+                result:
+                    imageBefore !== undefined && imageAfter && imageAfter !== 'absent'
+                        ? imageBefore === 'absent'
+                            ? 'downloaded'
+                            : imageBefore.id === imageAfter.id
+                              ? 'upToDate'
+                              : 'updated'
+                        : undefined,
+            };
             activeDockerStage = undefined;
-            yield stageEvent('pulling', 'done');
+            yield { ...stageEvent('pulling', 'done'), facts };
 
             // --- creating (docker run -d creates and starts) ---
             yield stageEvent('creating', 'active');
+            facts = undefined;
             if (leaseHeld) {
                 await this.renewProvisioningLease(alias, operationId, chosenPort);
             }
@@ -944,6 +980,16 @@ export class QuickStartServiceImpl {
             // Retained credentials don't prove the volume survived (e.g. Start over after a timeout
             // removed it), and only data that is really kept should skip the sample seed.
             reusesVolume = reusing && volumeOnDisk;
+            facts = {
+                kind: 'creating',
+                containerName: masked(containerName(alias)),
+                hostPort: chosenPort,
+                containerPort: QUICK_START_PORT,
+                volumeName: masked(volumeName(alias)),
+                dataPath: masked(QUICK_START_DATA_PATH),
+                volume: reusesVolume ? 'reused' : undefined,
+                username: masked(credentials.username),
+            };
             this.throwIfAborted(signal);
             // Drop the old data volume only now that the port is checked and the image is local, so a
             // failed check, pull or Cancel leaves it intact (#946). Fresh credentials need a clean
@@ -1029,15 +1075,23 @@ export class QuickStartServiceImpl {
             );
             activeDockerStage = undefined;
             containerCreated = true;
+            let reportedContainerId = containerId;
             if (!containerId) {
                 const item = await this.runtime.inspectContainer(containerName(alias));
+                reportedContainerId = item?.id;
                 containerId = item?.id ?? containerName(alias);
             }
             const provisionedContainerId = containerId;
-            yield stageEvent('creating', 'done');
+            facts = {
+                ...facts,
+                volume: reusesVolume ? 'reused' : !reusing && volumeOnDisk ? 'replaced' : 'new',
+                containerId: reportedContainerId ? masked(reportedContainerId) : undefined,
+            };
+            yield { ...stageEvent('creating', 'done'), facts };
 
             // --- starting (confirm running, read bound port, follow logs) ---
             yield stageEvent('starting', 'active');
+            facts = { kind: 'starting', boundPort: chosenPort, boundPortReported: false };
             const inspected = await this.runProvisionStage('starting', provisionCorrelationId, async () => {
                 const result = await this.runtime.inspectContainer(provisionedContainerId);
                 this.throwIfAborted(signal);
@@ -1046,13 +1100,23 @@ export class QuickStartServiceImpl {
             // Fall back to the port we actually requested (not the canonical default) if the
             // inspect can't report the binding, so a custom port stays correct in the success
             // message + stored connection string.
-            const boundPort = (inspected && getBoundHostPort(inspected)) || chosenPort;
+            const reportedPort = inspected && getBoundHostPort(inspected);
+            const boundPort = reportedPort || chosenPort;
+            const startedAtMs = inspected?.startedAt?.getTime();
+            facts = {
+                kind: 'starting',
+                running: inspected ? isRunning(inspected) : undefined,
+                startedAtMs: startedAtMs !== undefined && Number.isFinite(startedAtMs) ? startedAtMs : undefined,
+                boundPort,
+                boundPortReported: !!reportedPort,
+            };
             // Stream container logs to the channel during the wait (compensates for -dt detach, D2).
             void this.runtime.followLogs(provisionedContainerId, secrets, cts.token);
-            yield stageEvent('starting', 'done');
+            yield { ...stageEvent('starting', 'done'), facts };
 
             // --- waiting (wire-protocol readiness, D7) ---
             yield stageEvent('waiting', 'active');
+            facts = undefined;
             const connectionString = composeConnectionString(credentials.username, credentials.password, boundPort);
             // Retain everything a "Wait longer" resume needs BEFORE probing, so a readiness
             // timeout can keep this running container and finish adoption later (§9.1).
@@ -1139,6 +1203,9 @@ export class QuickStartServiceImpl {
                 // driven by this event can't race the still-set `provisioning` guard either
                 // (opus-4.7). On unsubscribe/return() the post-finally yield is simply skipped.
                 terminalEvent = stageEvent('error', 'error', message, undefined, undefined, dockerReadiness);
+            }
+            if (terminalEvent && facts) {
+                terminalEvent = { ...terminalEvent, facts };
             }
         } finally {
             // Stop the followLogs stream (started with cts.token). Disposing alone

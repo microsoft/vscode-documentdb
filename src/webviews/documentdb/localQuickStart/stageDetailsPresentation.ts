@@ -14,6 +14,7 @@ import {
     type DockerProviderEvidence,
     type DockerReadiness,
     type DockerReadinessOutcome,
+    type StageFacts,
 } from '../../../services/localQuickStart/quickStartTypes';
 import {
     getDockerExecutionTargetKey,
@@ -25,6 +26,122 @@ export interface StageDetailFact {
     readonly label: string;
     readonly value: string;
     readonly note?: string;
+    readonly code?: boolean;
+    readonly action?: 'showOutput';
+}
+
+export function buildStageDetailRows(facts: StageFacts | undefined): readonly StageDetailFact[] {
+    if (!facts) return [];
+    const rows: StageDetailFact[] = [];
+    switch (facts.kind) {
+        case 'checking':
+            rows.push({
+                label: l10n.t('Port'),
+                value: String(facts.port),
+                code: true,
+                note: facts.portFree ? l10n.t('Free on 127.0.0.1') : l10n.t('In use on 127.0.0.1'),
+            });
+            if (facts.removedContainerId) {
+                rows.push({
+                    label: l10n.t('Previous container'),
+                    value: facts.removedContainerId,
+                    code: true,
+                    note: l10n.t('Removed for a clean run'),
+                });
+            }
+            break;
+        case 'pulling':
+            rows.push({
+                label: l10n.t('Image'),
+                value: facts.imageRef,
+                code: true,
+                note:
+                    facts.imageOrigin === 'custom'
+                        ? l10n.t('Custom tag')
+                        : facts.imageOrigin === 'reused'
+                          ? l10n.t('Kept from existing data')
+                          : undefined,
+            });
+            if (facts.result) {
+                const results = {
+                    downloaded: l10n.t('Downloaded'),
+                    updated: l10n.t('Updated'),
+                    upToDate: l10n.t('Already up to date'),
+                };
+                rows.push({ label: l10n.t('Result'), value: results[facts.result] });
+            }
+            if (facts.imageId) {
+                rows.push({
+                    label: l10n.t('Image ID'),
+                    value: facts.imageId.length > 19 ? `${facts.imageId.slice(0, 19)}…` : facts.imageId,
+                    code: true,
+                });
+            }
+            if (facts.digest) rows.push({ label: l10n.t('Digest'), value: facts.digest, code: true });
+            if (facts.imageVersion) {
+                rows.push({ label: l10n.t('Image version'), value: facts.imageVersion, code: true });
+            }
+            if (facts.createdAtMs !== undefined) {
+                rows.push({ label: l10n.t('Created'), value: new Date(facts.createdAtMs).toLocaleDateString() });
+            }
+            break;
+        case 'creating': {
+            const containerId =
+                facts.containerId && facts.containerId.length > 12
+                    ? `${facts.containerId.slice(0, 12)}…`
+                    : facts.containerId;
+            const volumes = {
+                new: l10n.t('New'),
+                reused: l10n.t('Kept existing data'),
+                replaced: l10n.t('Replaced, Start fresh'),
+            };
+            rows.push(
+                {
+                    label: l10n.t('Container'),
+                    value: containerId ? `${facts.containerName} ${containerId}` : facts.containerName,
+                    code: true,
+                },
+                {
+                    label: l10n.t('Port mapping'),
+                    value: `localhost:${facts.hostPort} → ${facts.containerPort}`,
+                    code: true,
+                },
+                {
+                    label: l10n.t('Data volume'),
+                    value: l10n.t('{0} at {1}', facts.volumeName, facts.dataPath),
+                    code: true,
+                    note: facts.volume === undefined ? undefined : volumes[facts.volume],
+                },
+                { label: l10n.t('User'), value: facts.username, code: true },
+                {
+                    label: l10n.t('Password'),
+                    value: '(hidden)',
+                    note: l10n.t('Passed in a temporary file, deleted after create'),
+                },
+            );
+            break;
+        }
+        case 'starting':
+            if (facts.running !== undefined) {
+                rows.push({ label: l10n.t('State'), value: facts.running ? l10n.t('Running') : l10n.t('Not running') });
+            }
+            if (facts.startedAtMs !== undefined) {
+                rows.push({ label: l10n.t('Started'), value: new Date(facts.startedAtMs).toLocaleTimeString() });
+            }
+            rows.push(
+                {
+                    label: l10n.t('Bound port'),
+                    value: String(facts.boundPort),
+                    code: true,
+                    note: facts.boundPortReported ? undefined : l10n.t('As requested'),
+                },
+                { label: l10n.t('Logs'), value: l10n.t('Streaming to the setup log'), action: 'showOutput' },
+            );
+            break;
+        case 'waiting':
+            break;
+    }
+    return rows;
 }
 
 function dockerDaemonValues(): Readonly<Record<DockerReadinessPresentationState, string>> {

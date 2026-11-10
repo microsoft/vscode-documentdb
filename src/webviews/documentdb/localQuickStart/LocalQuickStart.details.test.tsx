@@ -240,4 +240,110 @@ describe('Local Quick Start stage details', () => {
         await event({ stage: 'checking', status: 'done' });
         expect(toggle('Checking container engine')?.getAttribute('aria-expanded')).toBe('false');
     });
+
+    it('shows each non-readiness stage table in Set up and Done, using code and the existing log action', async () => {
+        await start();
+        await event({ stage: 'checking', status: 'done', facts: { kind: 'checking', port: 10273, portFree: true } });
+        await event({ stage: 'pulling', status: 'active' });
+        expect(toggle('Pulling official image')).toBeNull();
+        await event({
+            stage: 'pulling',
+            status: 'done',
+            facts: { kind: 'pulling', imageRef: 'official:test-tag', imageOrigin: 'custom', result: 'downloaded' },
+        });
+        await event({
+            stage: 'creating',
+            status: 'done',
+            facts: {
+                kind: 'creating',
+                containerName: 'test-instance',
+                containerId: 'container-id',
+                hostPort: 10273,
+                containerPort: 10260,
+                volumeName: 'test-volume',
+                dataPath: '/data',
+                volume: 'new',
+                username: 'test-user',
+            },
+        });
+        await event({
+            stage: 'starting',
+            status: 'done',
+            facts: { kind: 'starting', running: true, boundPort: 10273, boundPortReported: true },
+        });
+        for (const stage of ['Checking container engine', 'Pulling official image', 'Creating container', 'Starting container']) {
+            expect(toggle(stage)?.getAttribute('aria-expanded')).toBe('false');
+            await click(toggle(stage)!);
+        }
+        expect(toggle('Waiting for DocumentDB to accept connections')).toBeNull();
+        expect([...host.querySelectorAll('code')].map((node) => node.textContent)).toContain('official:test-tag');
+        expect(host.textContent).toContain('(hidden)');
+        expect(host.textContent).toContain('Passed in a temporary file');
+        const calls = client.trpc.localQuickStart.showOutput.mutate.mock.calls.length;
+        const logLink = [...host.querySelectorAll<HTMLElement>('[role="button"], button, a')].find(
+            (element) => element.textContent === 'View setup log',
+        );
+        expect(logLink).toBeDefined();
+        await click(logLink!);
+        expect(client.trpc.localQuickStart.showOutput.mutate).toHaveBeenCalledTimes(calls + 1);
+        await event({ stage: 'waiting', status: 'done' });
+        await event({ stage: 'done', status: 'done' });
+        expect(host.textContent).toContain('official:test-tag');
+        expect(host.textContent).toContain('test-volume');
+        expect(host.textContent).toContain('10273');
+    });
+
+    it('stores terminal error facts by kind rather than the error event stage', async () => {
+        await start();
+        await event({ stage: 'checking', status: 'done' });
+        await event({ stage: 'pulling', status: 'active' });
+        await event({
+            stage: 'error',
+            status: 'error',
+            facts: { kind: 'pulling', imageRef: 'official:failed-tag', imageOrigin: 'custom' },
+        });
+        expect(toggle('Pulling official image')?.getAttribute('aria-expanded')).toBe('false');
+        await click(toggle('Pulling official image')!);
+        expect(host.textContent).toContain('official:failed-tag');
+        await click(button('Retry setup'));
+        await event({ stage: 'pulling', status: 'done' });
+        expect(toggle('Pulling official image')).toBeNull();
+        expect(host.textContent).not.toContain('official:failed-tag');
+    });
+
+    it('does not claim logs started streaming when starting failed before log following', async () => {
+        await start();
+        await event({ stage: 'starting', status: 'active' });
+        await event({
+            stage: 'error',
+            status: 'error',
+            facts: { kind: 'starting', boundPort: 10273, boundPortReported: false },
+        });
+        await click(toggle('Starting container')!);
+        expect(host.textContent).toContain('10273');
+        expect(host.textContent).not.toContain('Streaming to the setup log');
+    });
+
+    it('keeps earlier facts when waiting longer, but removes them on start over', async () => {
+        await start();
+        await event({ stage: 'checking', status: 'done', facts: { kind: 'checking', port: 10273, portFree: true } });
+        await event({
+            stage: 'pulling',
+            status: 'done',
+            facts: { kind: 'pulling', imageRef: 'official:retained', imageOrigin: 'default' },
+        });
+        await event({ stage: 'waiting', status: 'active' });
+        await event({ stage: 'waiting', status: 'error', timedOut: true, facts: { kind: 'waiting', port: 10273 } });
+        await click(toggle('Pulling official image')!);
+        await click(button('Wait longer'));
+        expect(toggle('Pulling official image')?.getAttribute('aria-expanded')).toBe('false');
+        await click(toggle('Pulling official image')!);
+        expect(host.textContent).toContain('official:retained');
+        await event({ stage: 'waiting', status: 'error', timedOut: true });
+        await click(button('Start over'));
+        await start();
+        await event({ stage: 'pulling', status: 'done' });
+        expect(toggle('Pulling official image')).toBeNull();
+        expect(host.textContent).not.toContain('official:retained');
+    });
 });

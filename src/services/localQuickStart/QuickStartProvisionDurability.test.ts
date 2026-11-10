@@ -142,6 +142,7 @@ function runtimeFor(options: RuntimeOptions = {}): IContainerRuntime {
         isPortFree: vi.fn().mockResolvedValue(options.portFree ?? true),
         listByLabel: options.listByLabel ?? vi.fn().mockResolvedValue(options.containers ?? []),
         pullImage: vi.fn().mockResolvedValue(undefined),
+        inspectImage: vi.fn().mockResolvedValue(undefined),
         createAndRunContainer: options.createAndRunContainer ?? vi.fn().mockResolvedValue('c1'),
         inspectContainer: vi.fn().mockResolvedValue({
             id: 'c1',
@@ -222,6 +223,293 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         ext.secretStorage = originalSecretStorage;
         ext.context = originalContext;
         onProbe = () => undefined;
+    });
+
+    describe('setup stage facts', () => {
+        it('emits allow-listed facts on every non-readiness done stage without credentials or env', async () => {
+            const password = 'private-password-123';
+            const runtime = runtimeFor({
+                overrides: {
+                    inspectImage: vi.fn()
+                        .mockResolvedValueOnce('absent')
+                        .mockResolvedValueOnce({
+                            id: 'sha256:image',
+                            digest: 'sha256:digest',
+                            version: '0.116.0',
+                            createdAtMs: Date.UTC(2026, 9, 28),
+                            environmentVariables: { PASSWORD: password },
+                            raw: 'private-inspect-raw',
+                        }),
+                    inspectContainer: vi.fn().mockResolvedValue({
+                        id: 'c1',
+                        status: 'running',
+                        startedAt: new Date('2026-10-28T10:42:17Z'),
+                        ports: [{ containerPort: QUICK_START_PORT, hostPort: 10273 }],
+                        environmentVariables: { PASSWORD: password },
+                        raw: 'private-container-raw',
+                    }),
+                },
+            });
+            const service = new QuickStartServiceImpl(runtime);
+            const events = await collect(service.provision(new AbortController().signal, {
+                username: 'testuser',
+                password,
+                port: 10273,
+            }));
+            const doneFacts = events.filter((event) => event.status === 'done' && event.facts).map((event) => event.facts);
+            expect(doneFacts).toEqual([
+                { kind: 'checking', port: 10273, portFree: true, removedContainerId: undefined },
+                {
+                    kind: 'pulling',
+                    imageRef: `${QUICK_START_IMAGE_REPOSITORY}:latest`,
+                    imageOrigin: 'default',
+                    result: 'downloaded',
+                    imageId: 'sha256:image',
+                    digest: 'sha256:digest',
+                    imageVersion: '0.116.0',
+                    createdAtMs: Date.UTC(2026, 9, 28),
+                },
+                {
+                    kind: 'creating',
+                    containerName: DEFAULT_ALIAS,
+                    containerId: 'c1',
+                    hostPort: 10273,
+                    containerPort: QUICK_START_PORT,
+                    volumeName: `${DEFAULT_ALIAS}-data`,
+                    dataPath: '/data',
+                    volume: 'new',
+                    username: 'testuser',
+                },
+                {
+                    kind: 'starting',
+                    running: true,
+                    startedAtMs: Date.parse('2026-10-28T10:42:17Z'),
+                    boundPort: 10273,
+                    boundPortReported: true,
+                },
+            ]);
+            expect(events.at(-1)?.stage).toBe('done');
+            const serialized = JSON.stringify(events);
+            for (const forbidden of [password, 'environmentVariables', 'PASSWORD', 'private-inspect-raw', 'private-container-raw', 'durationMs']) {
+                expect(serialized).not.toContain(forbidden);
+            }
+            expect(JSON.stringify(await listInstances())).not.toContain('sha256:image');
+        });
+
+        it.each([
+            ['absent', { id: 'new' }, 'downloaded'],
+            [{ id: 'same' }, { id: 'same' }, 'upToDate'],
+            [{ id: 'old' }, { id: 'new' }, 'updated'],
+            [undefined, { id: 'new' }, undefined],
+            [{ id: 'old' }, undefined, undefined],
+            ['absent', undefined, undefined],
+            [{ id: 'old' }, 'absent', undefined],
+        ])('compares only established before/after image IDs (%j → %j)', async (before, after, result) => {
+            const runtime = runtimeFor({
+                overrides: { inspectImage: vi.fn().mockResolvedValueOnce(before).mockResolvedValueOnce(after) },
+            });
+            const events = await collect(new QuickStartServiceImpl(runtime).provision(new AbortController().signal));
+            const facts = events.find((event) => event.stage === 'pulling' && event.status === 'done')?.facts;
+            expect(facts).toMatchObject({ kind: 'pulling', result });
+            expect(events.at(-1)?.stage).toBe('done');
+        });
+
+        it('captures failed port evidence and records previous removal only after it succeeded', async () => {
+            const runtime = runtimeFor({
+                containers: [{ id: 'old-container' }],
+                portFree: false,
+            });
+            const events = await collect(new QuickStartServiceImpl(runtime).provision(
+                new AbortController().signal,
+                { startFresh: true },
+            ));
+            expect(events.at(-1)).toMatchObject({
+                stage: 'checking',
+                status: 'error',
+                facts: { kind: 'checking', port: QUICK_START_PORT, portFree: false, removedContainerId: 'old-container' },
+            });
+        });
+
+        it('never claims removal on failure or a port probe that did not run', async () => {
+            const runtime = runtimeFor({
+                containers: [{ id: 'old-container' }],
+                portFree: false,
+                overrides: { removeContainer: vi.fn().mockRejectedValue(new Error('remove failed')) },
+            });
+            const events = await collect(new QuickStartServiceImpl(runtime).provision(
+                new AbortController().signal,
+                { startFresh: true },
+            ));
+            expect(events.at(-1)?.facts).toMatchObject({ kind: 'checking', removedContainerId: undefined });
+            const notReady = runtimeFor({
+                overrides: { isDockerReady: vi.fn().mockResolvedValue({ cliInstalled: false, daemonReachable: false }) },
+            });
+            const earlyEvents = await collect(new QuickStartServiceImpl(notReady).provision(new AbortController().signal));
+            expect(earlyEvents.at(-1)?.facts).toBeUndefined();
+            expect(notReady.isPortFree).not.toHaveBeenCalled();
+        });
+
+        it.each(['pulling', 'creating', 'starting'] as const)('retains known %s facts on a terminal error', async (stage) => {
+            const fail = vi.fn().mockRejectedValue(new Error('operation failed'));
+            const runtime = runtimeFor({
+                overrides: {
+                    ...(stage === 'pulling' ? { pullImage: fail } : {}),
+                    ...(stage === 'creating' ? { createAndRunContainer: fail } : {}),
+                    ...(stage === 'starting' ? { inspectContainer: fail } : {}),
+                },
+            });
+            const events = await collect(new QuickStartServiceImpl(runtime).provision(new AbortController().signal));
+            expect(events.at(-1)).toMatchObject({ stage: 'error', status: 'error', facts: { kind: stage } });
+        });
+
+        it.each(['removal failure', 'cancellation'] as const)(
+            'does not claim replacement when %s preserves the existing volume',
+            async (failure) => {
+                const controller = new AbortController();
+                const runtime = runtimeFor({
+                    overrides: {
+                        volumeExists: vi.fn(async () => {
+                            if (failure === 'cancellation') controller.abort();
+                            return true;
+                        }),
+                        removeVolume: vi.fn().mockRejectedValue(new Error('volume is in use')),
+                    },
+                });
+                const events = await collect(new QuickStartServiceImpl(runtime).provision(
+                    controller.signal,
+                    { startFresh: true },
+                ));
+                expect(events.at(-1)).toMatchObject({
+                    stage: 'error',
+                    status: 'error',
+                    message: { key: failure === 'cancellation' ? 'setupCancelled' : 'unexpectedFailure' },
+                    facts: {
+                        kind: 'creating',
+                        volumeName: `${DEFAULT_ALIAS}-data`,
+                        dataPath: '/data',
+                    },
+                });
+                expect(events.at(-1)?.facts).toMatchObject({ volume: undefined });
+                expect(runtime.removeVolume).toHaveBeenCalledTimes(failure === 'cancellation' ? 0 : 1);
+                expect(runtime.createAndRunContainer).not.toHaveBeenCalled();
+            },
+        );
+
+        it.each([false, true])('omits the volume outcome when creation fails (existing volume=%s)', async (exists) => {
+            const runtime = runtimeFor({
+                volumeExists: exists,
+                createAndRunContainer: vi.fn().mockRejectedValue(new Error('create failed')),
+            });
+            const events = await collect(new QuickStartServiceImpl(runtime).provision(
+                new AbortController().signal,
+                { startFresh: exists },
+            ));
+            expect(events.at(-1)).toMatchObject({
+                stage: 'error',
+                status: 'error',
+                facts: { kind: 'creating', volume: undefined },
+            });
+            expect(events.at(-1)?.facts).not.toHaveProperty('containerId');
+            expect(runtime.createAndRunContainer).toHaveBeenCalledOnce();
+            expect(runtime.removeVolume).toHaveBeenCalledTimes(exists ? 1 : 0);
+            expect(events.some((event) => event.stage === 'creating' && event.status === 'done')).toBe(false);
+        });
+
+        it('retains confirmed existing-volume evidence when creation fails', async () => {
+            await upsertInstance({
+                alias: DEFAULT_ALIAS,
+                displayName: 'DocumentDB Local',
+                port: QUICK_START_PORT,
+                phase: 'ready',
+            });
+            const previous = `mongodb://previous:password@localhost:${QUICK_START_PORT}/`;
+            await writeConnectionString(DEFAULT_ALIAS, previous, {
+                displayName: 'DocumentDB Local',
+                port: QUICK_START_PORT,
+            });
+            const runtime = runtimeFor({
+                volumeExists: true,
+                createAndRunContainer: vi.fn().mockRejectedValue(new Error('create failed')),
+            });
+            const events = await collect(new QuickStartServiceImpl(runtime).provision(new AbortController().signal));
+            expect(events.at(-1)).toMatchObject({
+                stage: 'error',
+                status: 'error',
+                facts: { kind: 'creating', volume: 'reused' },
+            });
+            expect(runtime.removeVolume).not.toHaveBeenCalled();
+            expect(await readConnectionString(DEFAULT_ALIAS)).toBe(previous);
+            expect((await getInstance(DEFAULT_ALIAS))?.phase).toBe('ready');
+        });
+
+        it('omits a container-name fallback ID and inspected state and timestamp when inspect fails', async () => {
+            const runtime = runtimeFor({
+                createAndRunContainer: vi.fn().mockResolvedValue(undefined),
+                overrides: { inspectContainer: vi.fn().mockResolvedValue(undefined) },
+            });
+            const events = await collect(new QuickStartServiceImpl(runtime).provision(new AbortController().signal));
+            expect(events.find((event) => event.stage === 'creating' && event.status === 'done')?.facts).toMatchObject({
+                kind: 'creating',
+                containerId: undefined,
+            });
+            expect(events.find((event) => event.stage === 'starting' && event.status === 'done')?.facts).toEqual({
+                kind: 'starting',
+                running: undefined,
+                startedAtMs: undefined,
+                boundPort: QUICK_START_PORT,
+                boundPortReported: false,
+            });
+        });
+
+        it('masks textual facts with the run secrets without reading inspect environment', async () => {
+            const password = 'private-password-123';
+            const runtime = runtimeFor({
+                createAndRunContainer: vi.fn().mockResolvedValue(`container-${password}`),
+                overrides: {
+                    inspectImage: vi.fn().mockResolvedValue({ id: `image-${password}`, version: password, digest: password }),
+                },
+            });
+            const events = await collect(new QuickStartServiceImpl(runtime).provision(new AbortController().signal, {
+                username: `user-${password}`,
+                password,
+            }));
+            expect(events.at(-1)?.stage).toBe('done');
+            const serialized = JSON.stringify(events.map((event) => event.facts));
+            expect(serialized).not.toContain(password);
+            expect(serialized).toContain('***');
+        });
+
+        it.each([
+            ['new', false, false, false, 'default'],
+            ['replaced', false, true, true, 'default'],
+            ['reused', true, true, false, 'reused'],
+        ] as const)('reports a %s volume and the actual image origin', async (volume, reuse, exists, startFresh, origin) => {
+            if (reuse) {
+                await upsertInstance({ alias: DEFAULT_ALIAS, displayName: 'DocumentDB Local', port: QUICK_START_PORT, phase: 'ready' });
+                await writeConnectionString(DEFAULT_ALIAS, `mongodb://admin:stored-pass@localhost:${QUICK_START_PORT}/`, {
+                    displayName: 'DocumentDB Local',
+                    port: QUICK_START_PORT,
+                });
+            }
+            const runtime = runtimeFor({ volumeExists: exists });
+            const events = await collect(new QuickStartServiceImpl(runtime).provision(
+                new AbortController().signal,
+                { startFresh, ...(reuse ? { imageTag: 'ignored-tag' } : {}) },
+            ));
+            expect(events.find((event) => event.stage === 'creating' && event.status === 'done')?.facts).toMatchObject({ volume });
+            expect(events.find((event) => event.stage === 'pulling' && event.status === 'done')?.facts).toMatchObject({ imageOrigin: origin });
+        });
+
+        it('identifies custom image tags without changing the configured reference', async () => {
+            const events = await collect(new QuickStartServiceImpl(runtimeFor()).provision(
+                new AbortController().signal,
+                { imageTag: '0.116.0' },
+            ));
+            expect(events.find((event) => event.stage === 'pulling' && event.status === 'done')?.facts).toMatchObject({
+                imageRef: `${QUICK_START_IMAGE_REPOSITORY}:0.116.0`,
+                imageOrigin: 'custom',
+            });
+        });
     });
 
     // H3: the credentials used to be written only AFTER readiness succeeded, so a window reload

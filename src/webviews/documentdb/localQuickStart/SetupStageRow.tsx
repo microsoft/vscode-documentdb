@@ -21,6 +21,7 @@ interface SetupStageRowProps {
     readonly onExpandedChange: (stage: ProvisionStage, expanded: boolean) => void;
     readonly focusFallback: RefObject<HTMLButtonElement | null>;
     readonly mutedClassName: string;
+    readonly onShowOutput: () => void;
 }
 
 export const SetupStageRow = ({
@@ -34,6 +35,7 @@ export const SetupStageRow = ({
     onExpandedChange,
     focusFallback,
     mutedClassName,
+    onShowOutput,
 }: SetupStageRowProps): JSX.Element => {
     const attachedRef = useRef<HTMLButtonElement | null>(null);
     const toggleRef = useCallback(
@@ -56,7 +58,13 @@ export const SetupStageRow = ({
             disclosure={
                 settledFacts
                     ? {
-                          content: <SetupStageDetails facts={settledFacts} mutedClassName={mutedClassName} />,
+                          content: (
+                              <SetupStageDetails
+                                  facts={settledFacts}
+                                  mutedClassName={mutedClassName}
+                                  onShowOutput={onShowOutput}
+                              />
+                          ),
                           toggleText: l10n.t('Details'),
                           toggleLabel: l10n.t('Details for {0}', label),
                           toggleDescription: status === 'error' ? failureTitle : undefined,
