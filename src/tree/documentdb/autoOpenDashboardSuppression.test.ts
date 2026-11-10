@@ -21,6 +21,33 @@ describe('automatic dashboard suppression', (): void => {
         expect(isAutoOpenDashboardSuppressed('cluster')).toBe(false);
     });
 
+    it('keeps overlapping acquisitions suppressed until each owner releases exactly once', (): void => {
+        const clusterId = 'overlapping-cluster';
+        const releaseFirst = suppressAutoOpenDashboard(clusterId);
+        const releaseSecond = suppressAutoOpenDashboard(clusterId);
+        try {
+            releaseFirst();
+            expect(isAutoOpenDashboardSuppressed(clusterId)).toBe(true);
+            releaseFirst();
+            expect(isAutoOpenDashboardSuppressed(clusterId)).toBe(true);
+            releaseSecond();
+            expect(isAutoOpenDashboardSuppressed(clusterId)).toBe(false);
+
+            const releaseNext = suppressAutoOpenDashboard(clusterId);
+            try {
+                releaseFirst();
+                releaseSecond();
+                expect(isAutoOpenDashboardSuppressed(clusterId)).toBe(true);
+            } finally {
+                releaseNext();
+            }
+            expect(isAutoOpenDashboardSuppressed(clusterId)).toBe(false);
+        } finally {
+            releaseFirst();
+            releaseSecond();
+        }
+    });
+
     it('keeps suppression independent for different cluster ids', (): void => {
         const releaseFirst = suppressAutoOpenDashboard('first-cluster');
         const releaseSecond = suppressAutoOpenDashboard('second-cluster');
