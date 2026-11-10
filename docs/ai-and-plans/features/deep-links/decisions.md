@@ -717,7 +717,7 @@ built-in service suffixes are `mongocluster.cosmos.azure.com`, `mongocluster.cos
 and `mongocluster.cosmos.azure.cn`. Government is included on the operator
 confirmation recorded in the plan, not on new live or service-owner evidence.
 
-### Operator-requested picker amendment (2026-11-10; implementation pending)
+### Operator-requested picker amendment (2026-11-10)
 
 The operator approved replacing the earlier direct-navigation picker behavior with a modal-first
 flow. Keep the existing unavailable row label, **Microsoft Entra ID: not available**, and detail,
@@ -727,13 +727,14 @@ modal titled **Microsoft Entra ID isn't available for this server.** Its detail 
 > Microsoft Entra ID is available only for Azure DocumentDB
 > or servers allowed by the trusted-server setting.
 
-The optional instruction **Choose another authentication method, or select Learn More.** may be
-added if needed, within a four-short-line limit. **Back** or Escape closes the modal and returns to
+The two-line detail needs no additional instruction. **Back** or Escape closes the modal and returns to
 the picker without opening a browser. **Learn More** opens the trusted-server page and then returns
 to the picker; if opening the page fails, show a nonblocking warning. This presentation change does
 not change destination policy, trust, settings, authentication, or token behavior. The prior
 direct-navigation choice is superseded prospectively; no rationale beyond the operator's request
-is inferred.
+is inferred. Implemented in `49e1bf6e7` after the plan-first commit `c86ff2fc6`; Opus 5.5 approved
+the behavior, and Case 1 passed the build plus all 67 focused tests. Full Case 2, including
+formatting and localization generation, is deferred until ready-for-review.
 
 ### Advisor and implementation choices
 

@@ -79,11 +79,11 @@ Interactive sign-in remains eager **after** the destination check; deferring con
 60-second callback would not cancel a pending VS Code prompt. Each worker token relay checks the
 current suffix against the original session connection, but uses the captured authentication
 identity and audience, not request-message identity fields or live `CredentialCache` entries.
-Untrusted OIDC declarations cannot preselect Entra. In the current implementation, selecting the
-unavailable Entra row opens Learn More and returns to the picker. The operator-approved
-[modal-first follow-up](./iterations/04-entra-token-destination-hardening.md#approved-modal-first-picker-follow-up-2026-11-10-pending)
-will replace that direct navigation: Back or Escape returns without opening a browser, while Learn
-More opens the trusted-server page and then returns. Neither path grants trust. Editing an approved
+Untrusted OIDC declarations cannot preselect Entra. Selecting the unavailable Entra row opens an
+informational modal, not a browser. In the implemented
+[modal-first follow-up](./iterations/04-entra-token-destination-hardening.md#approved-modal-first-picker-follow-up-2026-11-10),
+Back or Escape returns to the picker without navigation; only the explicit Learn More action
+opens the trusted-server page and then returns. Neither path grants trust. Editing an approved
 connection to a rejected destination saves the string and clears an Entra/managed-identity
 selection; saved rejected connections offer explicit recovery, never a silent authentication
 fallback.

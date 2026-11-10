@@ -31,8 +31,8 @@ code:
 > **Status:** B1–B7 implemented; final Case 1 and Case 2 passed locally on 2026-11-10.
 > Live-cloud, workbench UX and human author review remain pending.
 > Those implementation and verification results describe the prior B0–B7 revision. The
-> operator-approved modal-first picker follow-up below is pending and has not shipped or been
-> verified.
+> operator-approved modal-first picker follow-up below is implemented with passing Case 1
+> checks. Its full Case 2 checks are deferred until ready-for-review.
 > The execution plan below records the accepted scope. The research and proposal remain as
 > supporting evidence, not a claim that the vulnerability has been fixed.
 >
@@ -79,8 +79,9 @@ The implementation branch is `dev/tnaum/entra-token-destination-hardening`, stac
   trust boundary; an untrusted connection string cannot supply its own.
 - Recheck current policy at each token relay, using the worker's original connection and captured
   authentication identity, never request-message identity fields or live credential-cache entries.
-- Use a selectable explanatory picker row that opens **Learn More**, then returns to the picker.
-  It cannot select Entra or change trust. Use the proposed short English copy.
+- Use a selectable explanatory picker row that opens details, with an explicit optional
+  **Learn More** button, then returns to the picker. It cannot select Entra or change trust.
+  The dated modal-first amendment below supersedes the earlier direct-navigation choice.
 - Editing to a rejected destination saves the string, clears a selected Entra/managed-identity
   method and recomputes methods; editing between approved destinations retains the selection.
 - Rejected saved connections fail through the existing modal flow, with **Learn More** and
@@ -94,19 +95,18 @@ The advisor's source-backed packet identified the driver callback timeout, URI c
 TLS-option precedence, worker serialization boundary and session identity requirements.
 Confidence is high for the inspected local behavior; live endpoint support remains unverified.
 
-### Approved modal-first picker follow-up (2026-11-10; pending)
+### Approved modal-first picker follow-up (2026-11-10)
 
 This follow-up supersedes only the prior picker direct-navigation choice above. B0–B7 and their
-recorded results remain accurate for that earlier revision; the modal-first flow is not implemented
-or verified yet. Keep the unavailable row label **Microsoft Entra ID: not available** and detail
+recorded results remain accurate for that earlier revision. The modal-first implementation and
+its new Case 1 evidence are recorded below. Keep the unavailable row label **Microsoft Entra ID: not available** and detail
 **Entra ID is used only with Azure DocumentDB clusters.** Selecting that row must await a shared
 informational modal:
 
 - Title: **Microsoft Entra ID isn't available for this server.**
 - Detail: **Microsoft Entra ID is available only for Azure DocumentDB**
   **or servers allowed by the trusted-server setting.**
-- Optional instruction, if needed: **Choose another authentication method, or select Learn More.**
-  Keep the modal body within four short lines.
+- Keep the modal body to those two short lines; no additional instruction was needed.
 - Actions: **Learn More** and **Back** (the close affordance).
 - Back or Escape closes the modal and returns to the picker without opening a browser. Selecting
   **Learn More** awaits `openUrl(Links.EntraTrustedServers)`, checks for `false`, and displays a
@@ -140,6 +140,69 @@ npx vitest run \
   src/commands/newConnection/PromptAuthMethodStep.test.ts \
   src/commands/updateCredentials/PromptAuthMethodStep.test.ts
 ```
+
+#### Completion and validation
+
+- **M1 — Done (2026-11-10), commit `c86ff2fc6`, `gpt-6-luna`:** amended the plan and active
+  decision before coding. The operator's approval supersedes only automatic picker navigation.
+  Leader removed two Markdown trailing-space markers; no behavior decision was added.
+- **M2 — Done (2026-11-10), commit `49e1bf6e7`, `gpt-6.1-terra`:** implemented the shared helper
+  and all three awaited picker branches. Added 16 tests; the four focused files pass 67 tests.
+  No auth, trust, settings, token or rejected-connection behavior changed.
+- **M3 — Done (2026-11-10), `claude-opus-5.5`:** approved with high confidence in code-level
+  behavior, medium confidence in unexercised workbench presentation. No findings or rework.
+  MessageItem identity matching, direct-API dismissal, awaited browser opening and nonblocking
+  false-result warning follow the inspected VS Code/repository behavior. The
+  [review record](./05-entra-token-destination-hardening-review.md#modal-first-picker-follow-up-review-2026-11-10)
+  records the exact review scope and remaining manual checks.
+- **M4 — Done (2026-11-10), leader:** leader ran `npm run build` and the exact
+  four-file command above: **4 files, 67 tests passed**. Terra also ran root TypeScript successfully.
+  This is **Case 1**, updating the existing draft PR. Full Case 2, including `prettier-fix`,
+  localization generation, lint and package, is explicitly deferred until ready-for-review.
+  The earlier B0–B7 full-suite results do not assert coverage of this follow-up.
+  Completion/review notes and the PR description distinguish these revisions; the update stays
+  on the existing stacked draft PR #1077 rather than creating another branch or changing its base.
+
+The operator chose modal-first behavior and the advisor's model assignment. The leader carried out
+that approved choice without changing policy (high confidence); no additional operator decision,
+parked item or model substitution was needed.
+
+**Workbench checks still unverified:** in each picker select the unavailable row, dismiss with
+Back/Escape, repeat and choose Learn More, then confirm the picker returns with focus. Escape in
+the picker itself must still cancel the wizard. Check modal line breaks and warning presentation
+on supported operating systems. Browser-failure behavior is covered in unit tests, not a live
+external-browser session.
+
+#### Modal follow-up usage snapshot
+
+Window: 2026-11-10 18:27:04 UTC through 18:35 UTC (about eight minutes wall-clock).
+This is the follow-up only, separate from the earlier B0–B7 snapshot below, and excludes later
+publication/documentation work and the final response. Source: #1073 usage helper over host events,
+with explicit coding/advisor roles. All three approved models were used without retries.
+
+| Model | Role | Requests | Summed model time | AIU | Share |
+| --- | --- | ---: | ---: | ---: | ---: |
+| `gpt-6.1-sol` | leader | 9 | 2m06s | 65.5 | 57.2% |
+| `gpt-6.1-terra` | coding | 17 | 2m16s | 16.3 | 14.2% |
+| `gpt-6-luna` | coding | 15 | 2m17s | 2.0 | 1.7% |
+| `claude-opus-5.5` | advisor | 6 | 25s | 30.7 | 26.8% |
+
+Role totals: leader **65.5 AIU**, coding **18.3 AIU** (32 requests, 4m33s summed),
+advisor **30.7 AIU**; subagents **48.9 AIU**; run **114.5 AIU**. Rounded rows may not sum
+exactly. These are host-reported usage units, not dollars.
+
+| Model / role | Input | Output | Cache read | Cache write | Reasoning |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `gpt-6.1-sol` / leader | 1,557,212 | 6,725 | 1,377,081 | 180,104 | 1,410 |
+| `gpt-6.1-terra` / coding | 834,903 | 9,903 | 775,151 | 59,701 | 1,264 |
+| `gpt-6-luna` / coding | 632,425 | 14,050 | 577,635 | 54,745 | 9,137 |
+| `claude-opus-5.5` / advisor | 220,512 | 2,252 | 175,170 | 45,328 | 657 |
+
+Cache/reasoning counts may overlap input/output and are not an additive total. Model request spans
+overlap and are not wall time. Focused tests took 1.66 seconds in the leader's final run; separate
+end-to-end build/CI time is not reported here. No hosted CI result is claimed.
+Leading was the largest measured cost category, driven in part by the long inherited context;
+a fresh continuation from this concise work-item record would reduce future coordination overhead.
 
 ### Shared interfaces
 

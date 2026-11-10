@@ -111,3 +111,30 @@ Driver-wrapped destination failures can use the generic diagnostics modal/docume
 than the dedicated seed-policy modal.
 
 The PR remains a draft for human author review and the explicitly recorded live/manual checks.
+
+## Modal-first picker follow-up review (2026-11-10)
+
+The operator approved replacing automatic browser navigation from the unavailable Entra row
+with an explanation modal. Luna recorded that plan before coding (`c86ff2fc6`); Terra implemented
+the helper, three call sites and tests (`49e1bf6e7`).
+
+Opus 5.5 reviewed only that follow-up's eight source/test files. **Approved with no findings**:
+high confidence in code-level behavior, medium confidence in real-window presentation. The
+reviewer inspected code/API behavior but ran no tests or builds and did not repeat the prior
+security-policy or rejected-connection review.
+
+- The direct VS Code information modal returns Back/undefined without invoking wizard cancellation.
+- Only the explicit Learn More action opens documentation. Its promise is awaited before the
+  picker returns; a false result warns without blocking, and thrown failures propagate.
+- All three picker loops await the same helper. Tests preserve real picker cancellation after
+  modal dismissal and cover deferred ordering, both dismissal paths and browser failures.
+- No setting, trust, authentication selection or token behavior changed.
+
+Leader validation: **Case 1** build passed; **67 tests in four files passed**. Terra's root
+TypeScript check also passed. Full Case 2, including formatting/localization generation, is
+deferred until this draft is ready for review. Earlier full-suite results apply to the prior
+revision, not this incremental flow change.
+
+Human checks remain: per-OS modal line breaks and Back/Escape, picker focus on return, and
+browser-failure warning presentation alongside the restored picker. This advisor approval is not
+a claim of human author sign-off.
