@@ -25,8 +25,9 @@ cases, `TDD:` contracts, git safety and terminology.
   record and report.
 - **Advisor:** the model the operator names after the command (for example
   `/lead advisor: claude-opus-5.5 <task>` or "your advisor is gpt-6-astra"). It resolves technical
-  choices within the approved scope, weighs conflicting evidence and reviews risky logic. It never
-  writes code, runs builds or writes progress reports.
+  choices within the approved scope, weighs conflicting evidence and reviews risky logic. When
+  asked to prepare or revise the plan, it also breaks down the work and recommends a coding model
+  for every item. It never writes code, runs builds or writes progress reports.
 - **Workers:** coding subagents on the tiers below, plus `task` and `explore` agents for checks and
   broad reading.
 - **Operator:** every always-ask decision (see Decisions).
@@ -87,6 +88,10 @@ tier. A model the operator names for a task overrides the tiers for that task. F
 state which model you chose and why. All coding models are eager: give each one a precise, bounded
 task.
 
+When the advisor prepares the work items, use its per-item model recommendations within these
+rules. Record the recommendation alongside the actual model; explain any substitution rather than
+silently changing the model plan. A recommendation does not authorize an otherwise gated model.
+
 ## Planning and parallel work
 
 For items that add or change types or APIs, put the exact interfaces in the prompt. When interfaces
@@ -120,6 +125,22 @@ not changed twice.
 You may split a large item into lettered sub-items (1.1a, 1.1b), each with its own commit. Order
 items so each commit builds; a short-lived placeholder is fine if a later item removes it. A tightly
 coupled follow-up on the same files may go to the same agent; it still gets its own commit.
+
+## Responsive delegation
+
+Launch every worker, advisor (including the first planning consultation), checks and exploration
+agent with `task(..., mode: "background")` explicitly. Omitting the mode can run the call
+synchronously and keep the leader from picking up pending steering until the subagent returns.
+Background mode keeps the leader available; it does not relax file ownership or dependency rules.
+
+Record each returned agent ID with its work item and role. Continue only safe, independent leader
+work while it runs. If none remains, end the turn and wait for the completion notification; do not
+block on `read_agent`, poll, sleep, or fill the wait with unnecessary work. After notification, read
+the result once using the known ID and post the normal progress checkpoint.
+
+Process operator steering before the next dispatch or follow-up. Relay relevant changes to a
+running same-task agent with `write_agent` when it supports messages; otherwise arrange a follow-up
+after it returns. Do not assume steering sent to the leader was also delivered to its workers.
 
 ## Subagent prompts
 
@@ -203,6 +224,19 @@ Use one subagent per work item, except for coupled follow-ups and chains (above)
   `decisions.md`. Never invent the operator's rationale.
 
 ## Advisor
+
+**Initial planning consultation.** If the operator asks the advisor to analyze or revise the plan
+and prepare work items, do that before coding. Include the source plan, accepted decisions,
+constraints and the Models rules in the first packet. Ask for a numbered breakdown with each
+item's goal, scope, dependencies, interfaces where needed, acceptance criteria, tests, and a
+**recommended coding model (full model ID) with a short reason**. The advisor must assign a model
+to every item, not leave model selection as a later leader-only step.
+
+Keep the response concise per item; the 250-word verdict limit below applies to ordinary decision
+packets, not the whole planning breakdown. Present and record the proposed items and model
+assignments with the plan. Preserve accepted decisions, operator-specified models, model permission
+gates and the Input approval rules; asking for plan analysis alone is not approval to implement
+new or changed scope.
 
 **Advisor gates.** Consult the advisor, whatever your confidence, for:
 
