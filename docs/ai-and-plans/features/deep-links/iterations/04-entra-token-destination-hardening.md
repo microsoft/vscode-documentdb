@@ -134,12 +134,12 @@ evidence; current implementation and checks are recorded in
 
 #### Work items and dependencies
 
-| Item | Owner / approved model | Scope and deliverable | Depends on |
-| ---- | ---------------------- | --------------------- | ---------- |
-| M1 | Leader, docs editor (`gpt-6-luna`; mechanical docs-only edits) | This plan and the active feature decision/README accurately record the approved flow and pending work. Owned paths: `docs/ai-and-plans/features/deep-links/README.md`, `docs/ai-and-plans/features/deep-links/decisions.md`, and this plan. `docs/ai-and-plans/README.md` was read only as the layout reference. No code, tests, or other docs. The leader commits these docs before M2 starts. | — |
-| M2 | Coding agent (`gpt-6.1-terra`; implementation/tests) | Sources: `src/documentdb/auth/showEntraUnavailableDetails.ts`, `src/documentdb/wizards/authenticate/ChooseAuthMethodStep.ts`, `src/commands/newConnection/PromptAuthMethodStep.ts`, and `src/commands/updateCredentials/PromptAuthMethodStep.ts`. Update `src/documentdb/wizards/authenticate/ChooseAuthMethodStep.test.ts`; add `src/documentdb/auth/showEntraUnavailableDetails.test.ts`, `src/commands/newConnection/PromptAuthMethodStep.test.ts`, and `src/commands/updateCredentials/PromptAuthMethodStep.test.ts`. Cover awaited modal/action ordering, both dismissal paths, open failure warning, return to picker, and quick-pick Escape cancellation. | M1 |
-| M3 | Advisor (`claude-opus-5.5`; independent review) | Review the implemented modal-first flow and focused tests against the accepted behavior and verify rejection-modal Learn More and destination/trust policy remain unchanged. | M2 |
-| M4 | Leader | After M2 and M3, run Case 1 (`npm run build` and the focused Vitest command below); resolve blockers and publish the implementation update. Case 1 does not run localization, formatting, lint, packaging, or the full suite. If a later handoff is for review, Case 2 also runs `npm run l10n` when localized strings changed. | M2, M3 |
+| Item | Owner / approved model                                         | Scope and deliverable                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Depends on |
+| ---- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| M1   | Leader, docs editor (`gpt-6-luna`; mechanical docs-only edits) | This plan and the active feature decision/README accurately record the approved flow and pending work. Owned paths: `docs/ai-and-plans/features/deep-links/README.md`, `docs/ai-and-plans/features/deep-links/decisions.md`, and this plan. `docs/ai-and-plans/README.md` was read only as the layout reference. No code, tests, or other docs. The leader commits these docs before M2 starts.                                                                                                                                                                                                                                                                  | —          |
+| M2   | Coding agent (`gpt-6.1-terra`; implementation/tests)           | Sources: `src/documentdb/auth/showEntraUnavailableDetails.ts`, `src/documentdb/wizards/authenticate/ChooseAuthMethodStep.ts`, `src/commands/newConnection/PromptAuthMethodStep.ts`, and `src/commands/updateCredentials/PromptAuthMethodStep.ts`. Update `src/documentdb/wizards/authenticate/ChooseAuthMethodStep.test.ts`; add `src/documentdb/auth/showEntraUnavailableDetails.test.ts`, `src/commands/newConnection/PromptAuthMethodStep.test.ts`, and `src/commands/updateCredentials/PromptAuthMethodStep.test.ts`. Cover awaited modal/action ordering, both dismissal paths, open failure warning, return to picker, and quick-pick Escape cancellation. | M1         |
+| M3   | Advisor (`claude-opus-5.5`; independent review)                | Review the implemented modal-first flow and focused tests against the accepted behavior and verify rejection-modal Learn More and destination/trust policy remain unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | M2         |
+| M4   | Leader                                                         | After M2 and M3, run Case 1 (`npm run build` and the focused Vitest command below); resolve blockers and publish the implementation update. Case 1 does not run localization, formatting, lint, packaging, or the full suite. If a later handoff is for review, Case 2 also runs `npm run l10n` when localized strings changed.                                                                                                                                                                                                                                                                                                                                  | M2, M3     |
 
 Focused test command for M2/M4:
 
@@ -190,23 +190,23 @@ This is the follow-up only, separate from the earlier B0–B7 snapshot below, an
 publication/documentation work and the final response. Source: #1073 usage helper over host events,
 with explicit coding/advisor roles. All three approved models were used without retries.
 
-| Model | Role | Requests | Summed model time | AIU | Share |
-| --- | --- | ---: | ---: | ---: | ---: |
-| `gpt-6.1-sol` | leader | 9 | 2m06s | 65.5 | 57.2% |
-| `gpt-6.1-terra` | coding | 17 | 2m16s | 16.3 | 14.2% |
-| `gpt-6-luna` | coding | 15 | 2m17s | 2.0 | 1.7% |
-| `claude-opus-5.5` | advisor | 6 | 25s | 30.7 | 26.8% |
+| Model             | Role    | Requests | Summed model time |  AIU | Share |
+| ----------------- | ------- | -------: | ----------------: | ---: | ----: |
+| `gpt-6.1-sol`     | leader  |        9 |             2m06s | 65.5 | 57.2% |
+| `gpt-6.1-terra`   | coding  |       17 |             2m16s | 16.3 | 14.2% |
+| `gpt-6-luna`      | coding  |       15 |             2m17s |  2.0 |  1.7% |
+| `claude-opus-5.5` | advisor |        6 |               25s | 30.7 | 26.8% |
 
 Role totals: leader **65.5 AIU**, coding **18.3 AIU** (32 requests, 4m33s summed),
 advisor **30.7 AIU**; subagents **48.9 AIU**; run **114.5 AIU**. Rounded rows may not sum
 exactly. These are host-reported usage units, not dollars.
 
-| Model / role | Input | Output | Cache read | Cache write | Reasoning |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| `gpt-6.1-sol` / leader | 1,557,212 | 6,725 | 1,377,081 | 180,104 | 1,410 |
-| `gpt-6.1-terra` / coding | 834,903 | 9,903 | 775,151 | 59,701 | 1,264 |
-| `gpt-6-luna` / coding | 632,425 | 14,050 | 577,635 | 54,745 | 9,137 |
-| `claude-opus-5.5` / advisor | 220,512 | 2,252 | 175,170 | 45,328 | 657 |
+| Model / role                |     Input | Output | Cache read | Cache write | Reasoning |
+| --------------------------- | --------: | -----: | ---------: | ----------: | --------: |
+| `gpt-6.1-sol` / leader      | 1,557,212 |  6,725 |  1,377,081 |     180,104 |     1,410 |
+| `gpt-6.1-terra` / coding    |   834,903 |  9,903 |    775,151 |      59,701 |     1,264 |
+| `gpt-6-luna` / coding       |   632,425 | 14,050 |    577,635 |      54,745 |     9,137 |
+| `claude-opus-5.5` / advisor |   220,512 |  2,252 |    175,170 |      45,328 |       657 |
 
 Cache/reasoning counts may overlap input/output and are not an additive total. Model request spans
 overlap and are not wall time. Focused tests took 1.66 seconds in the leader's final run; separate

@@ -27,16 +27,16 @@ acquisition after destination approval, mandatory TLS, captured identity/audienc
 Native/NoAuth isolation. New trust settings, automatic trust adoption, termination of
 already-authenticated sessions, and general connected-edit lifecycle changes are out of scope.
 
-| Comment | Finding | Item |
-| --- | --- | --- |
-| 4529518469 | Missing localization; operator also requests shorter title | WI-2, WI-3 |
-| 4529518550 | Trust removed during token acquisition | WI-1 |
-| 4529518602 | Existing clients retain stale socket/callback trust | WI-1 |
-| 4529518636 | Rejected browser launch escapes authentication picker | WI-2 |
-| 4529518681 | Native sanitization occurs after SRV fallback | WI-1 |
-| 4529518724 | Browser launch interrupts original failure cleanup | WI-2 |
-| 4529518778 | Successful recovery edit leaves stale client/credentials/children | WI-2 |
-| 4529518823 | Cached command-connect rejection lacks bounded telemetry | WI-2 |
+| Comment    | Finding                                                           | Item       |
+| ---------- | ----------------------------------------------------------------- | ---------- |
+| 4529518469 | Missing localization; operator also requests shorter title        | WI-2, WI-3 |
+| 4529518550 | Trust removed during token acquisition                            | WI-1       |
+| 4529518602 | Existing clients retain stale socket/callback trust               | WI-1       |
+| 4529518636 | Rejected browser launch escapes authentication picker             | WI-2       |
+| 4529518681 | Native sanitization occurs after SRV fallback                     | WI-1       |
+| 4529518724 | Browser launch interrupts original failure cleanup                | WI-2       |
+| 4529518778 | Successful recovery edit leaves stale client/credentials/children | WI-2       |
+| 4529518823 | Cached command-connect rejection lacks bounded telemetry          | WI-2       |
 
 ### WI-1: token/socket revocation and worker preparation order
 
@@ -179,3 +179,79 @@ Tokens: 51k input (34k cache read, 17k cache write), 646 output.
 **Integrated Case 1 passed:** `npm run build`; 577 tests in 19 files, 7.92s runtime.
 Snapshot totals: leader 66.2 AIU; subagents 928.3 AIU; run 994.6 AIU.
 Next: commit active documentation and completion notes, then run all Case 2 commands.
+
+### Checkpoint: first full Case 2 returned, 20:13 UTC
+
+The full list ran, but this was **not a green handoff**. Source code, strict package-test types
+and packaging passed; four lint violations and four stale protocol-fixture expectations remain.
+
+| Command | Result | Duration |
+| --- | --- | --- |
+| `npm run l10n` | Passed; generated short title verified | Not captured |
+| `npm run prettier-fix` | Passed | 59.418s |
+| `npm run l10n:check` | Passed | 54.454s |
+| `npm run lint` | Failed: three forbidden inline import types and one redundant assertion | 107.233s |
+| `npm run build` | Passed | 36.541s |
+| `npm run typecheck:tests` | Passed | 12.645s |
+| `npx vitest run` | 350 files passed, one failed; 6,413 tests passed, four failed, one skipped | 91.361s |
+| `npm run package` | Passed; VSIX 8,973,700 bytes | 25.572s |
+| `git diff --check` | Passed | 0.043s |
+
+The runtime failures all assert the removed `oidcCustomHostnameSuffix` field in the Government
+shell/playground initialization fixture. WI-1's owner will assert the replacement policy payload,
+original URI and active shared latch while retaining the token/scope/telemetry checks.
+WI-2's owner will replace the three inline import types with top-level type-only namespace imports
+and remove the redundant assertion. No production behavior or accepted policy changes.
+The leader extended only the necessary test-file ownership; no new work item/model was introduced.
+
+Checker `f85d9c3a-32d6-4434-a3b3-bbe57b2945bc`, `gpt-5.6-luna`: 8m40s elapsed,
+1.6 AIU, 16 requests (1m08s summed), 7m29s tool spans. Tokens: 339k input
+(328k cache read, 11k cache write), 6k output. Host command-success detection is not the check
+verdict; the explicit exit-code results above are authoritative.
+Snapshot totals: leader 78.8 AIU; subagents 929.9 AIU; run 1008.7 AIU.
+Next: bounded test-only fixes, local follow-up commits, then rerun the full Case 2 list.
+
+### Checkpoint: test-only repairs returned, 20:15 UTC
+
+WI-1 follow-up **done**, commit `1d096b9b8`: the four Government cases now assert the
+original connection, serialized policy and active one-Int32 shared latch. All original token,
+scope and telemetry assertions remain; all 38 tests in the integration file passed.
+Leader, 95% confidence: this updates the required internal protocol fixture without changing behavior.
+
+WI-2 follow-up **blocked on lint typing**, not runtime: all 69 focused tests passed.
+The leader's proposed type-only namespace import conflicts with the repository's restricted-import
+rule. The same WI-2 advisor is assessing a named-type/narrow-shape alternative; no lint exemption
+or production change has been authorized. No new accepted item or coding model.
+
+Aggregate worker snapshots: WI-1 130.6 AIU, 52 requests (7m32s summed), 2m33s tool spans,
+4.6M input (4.3M cache read, 231k cache write), 30k output; WI-2 47.6 AIU, 20 requests
+(3m31s summed), 2m03s tool spans, 1.4M input (1.4M cache read, 77k cache write), 15k output.
+The helper's multi-turn elapsed fields are not used as follow-up durations.
+Snapshot totals: leader 88.3 AIU; subagents 970.2 AIU; run 1058.5 AIU.
+
+### Checkpoint: lint advisor returned, 20:16 UTC
+
+Astra approved named type-only `AzureWizardPromptStep` imports and a narrow `importOriginal`
+shape containing that constructor and `UserCancelledError`. The full real-module spread remains,
+so no exports or cancellation identity are lost; no assertions, runtime behavior or lint rules
+are weakened. The leader relayed the exact approved shape to the same Sol worker.
+Advised (`gpt-6-astra`), high confidence; no parked question.
+
+The WI-2 advisor's aggregate snapshot: 162.9 AIU, 14 requests (2m52s summed), 19s tool spans;
+657k input (599k cache read, 57k cache write), 6k output. No checks run by the advisor.
+Snapshot totals: leader 95.4 AIU; subagents 1019.8 AIU; run 1115.3 AIU.
+
+### Checkpoint: lint repair returned green, 20:17 UTC
+
+WI-2 follow-up **done**, commit `4877f701f`: approved named-type mock shapes and redundant-cast
+removal only; all behavioral assertions retained. Focused ESLint, all 69 tests and root TypeScript
+passed. The leader followed Astra's revised typing recommendation without exemptions.
+
+WI-3 generated localization and test formatting committed separately as `89ecc82ce`.
+The generated bundle contains the exact short title. The docs-only integration commit is
+`8e1dd8d8d`; subsequent completion notes remain separate from code/generated commits.
+
+WI-2 aggregate worker snapshot: 51.9 AIU, 23 requests (3m46s summed), 2m49s tool spans;
+1.7M input (1.7M cache read, 79k cache write), 16k output.
+Snapshot totals: leader 101.0 AIU; subagents 1024.1 AIU; run 1125.1 AIU.
+Next: rerun every Case 2 command against the corrected final source.
