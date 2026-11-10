@@ -54,7 +54,7 @@ export const SetupStageRow = ({
             label={label}
             status={status}
             detail={detail}
-            reserveDetailSpace={stage === 'checking'}
+            reserveDetailSpace
             disclosure={
                 settledFacts
                     ? {

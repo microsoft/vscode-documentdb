@@ -11,10 +11,12 @@ import { createRoot, type Root } from 'react-dom/client'; // eslint-disable-line
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     InstanceState,
+    PROVISION_STAGES,
     type DockerReadiness,
     type StageEvent,
 } from '../../../services/localQuickStart/quickStartTypes';
 import { LocalQuickStart } from './LocalQuickStart';
+import { SetupStageRow } from './SetupStageRow';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -148,6 +150,85 @@ describe('Local Quick Start stage details', () => {
         await act(async () => root.unmount());
         host.remove();
         vi.restoreAllMocks();
+    });
+
+    it('reserves an inaccessible blank detail line for every pending and active stage', async () => {
+        const focusFallback = { current: null };
+        for (const stageStatus of ['pending', 'active'] as const) {
+            await act(async () =>
+                root.render(
+                    <SSRProvider>
+                        {PROVISION_STAGES.map((stage) => (
+                            <SetupStageRow
+                                key={stage}
+                                stage={stage}
+                                label={stage}
+                                status={stageStatus}
+                                facts={[{ label: 'Fact', value: 'Value' }]}
+                                expanded={false}
+                                onExpandedChange={() => undefined}
+                                focusFallback={focusFallback}
+                                mutedClassName=""
+                                onShowOutput={() => undefined}
+                            />
+                        ))}
+                    </SSRProvider>,
+                ),
+            );
+            const rows = [...host.querySelectorAll('[role="listitem"]')];
+            expect(rows).toHaveLength(5);
+            for (const row of rows) {
+                const text = row.querySelectorAll('.fui-Text');
+                expect(text).toHaveLength(2);
+                expect(text[1].textContent).toBe('\u00a0');
+                expect(text[1].firstElementChild?.getAttribute('aria-hidden')).toBe('true');
+                expect(row.querySelector('button')).toBeNull();
+            }
+        }
+    });
+
+    it('keeps the Creating summary and Details on the reserved line with full ID evidence', async () => {
+        await start();
+        const row = [...host.querySelectorAll('[role="listitem"]')].find((item) =>
+            item.textContent?.includes('Creating container'),
+        );
+        expect(row).toBeDefined();
+        const detail = row!.querySelectorAll('.fui-Text')[1];
+        expect(detail?.textContent).toBe('\u00a0');
+        expect(detail?.firstElementChild?.getAttribute('aria-hidden')).toBe('true');
+        await event({ stage: 'creating', status: 'active' });
+        expect(row!.querySelectorAll('.fui-Text')[1]).toBe(detail);
+        expect(toggle('Creating container')).toBeNull();
+        const containerId = '123456789012345678';
+        await event({
+            stage: 'creating',
+            status: 'done',
+            facts: {
+                kind: 'creating',
+                containerName: 'test-instance',
+                containerId,
+                hostPort: 10273,
+                containerPort: 10260,
+                volumeName: 'test-volume',
+                dataPath: '/data',
+                volume: 'new',
+                username: 'test-user',
+            },
+        });
+        expect(row!.querySelectorAll('.fui-Text')).toHaveLength(2);
+        expect(row!.querySelectorAll('.fui-Text')[1]).toBe(detail);
+        expect(detail.textContent).toContain('Container test-instance');
+        expect(detail.querySelectorAll('button')).toHaveLength(1);
+        expect(detail.querySelector('button')).toBe(toggle('Creating container'));
+        await click(toggle('Creating container')!);
+        const id = row!.querySelector<HTMLElement>('code[tabindex="0"]');
+        expect(id?.textContent).toBe('123456789012…');
+        await act(async () => {
+            id!.focus();
+            await new Promise((resolve) => setTimeout(resolve, 600));
+        });
+        const description = id?.getAttribute('aria-describedby');
+        expect(description && document.getElementById(description)?.textContent).toBe(containerId);
     });
 
     it('reports only openings, once each in StrictMode, including reopenings on Done', async () => {
