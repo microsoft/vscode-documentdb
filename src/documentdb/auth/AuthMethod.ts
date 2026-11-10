@@ -182,6 +182,7 @@ export function createAuthMethodQuickPickItems(
         items.push({
             label: vscode.l10n.t('Microsoft Entra ID: not available'),
             detail: vscode.l10n.t('Entra ID is used only with Azure DocumentDB clusters.'),
+            iconPath: getAuthMethodIconPath(MicrosoftEntraIDAuthMethod),
             entraUnavailable: true,
             alwaysShow: true,
         });

@@ -78,6 +78,18 @@ describe('authentication family quick pick', () => {
         expect(iconId(AuthMethodId.NoAuth)).toBe('unlock');
     });
 
+    it('keeps the same Azure icon when Microsoft Entra ID is unavailable', () => {
+        const available = createAuthMethodQuickPickItemsWithSupportInfo(undefined, true).find(
+            (item) => item.authMethod === AuthMethodId.MicrosoftEntraID,
+        );
+        const unavailable = createAuthMethodQuickPickItemsWithSupportInfo(undefined, false).find(
+            (item) => item.entraUnavailable,
+        );
+
+        expect(available?.iconPath).toMatchObject({ id: 'azure' });
+        expect(unavailable?.iconPath).toEqual(available?.iconPath);
+    });
+
     it.each([{ methods: undefined }, { methods: [] }])(
         'does not treat unknown or empty supported methods as destination approval ($methods)',
         ({ methods }) => {
