@@ -2,6 +2,7 @@
 feature: local-quickstart
 kind: review
 status: active
+prs: [1072]
 created: 2026-11-10
 ---
 

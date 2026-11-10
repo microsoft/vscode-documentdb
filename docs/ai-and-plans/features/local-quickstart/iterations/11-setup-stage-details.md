@@ -2,7 +2,7 @@
 feature: local-quickstart
 kind: plan
 status: active
-prs: [1065]
+prs: [1065, 1072]
 created: 2026-11-10
 code:
   - src/webviews/documentdb/localQuickStart/LocalQuickStart.tsx
@@ -325,7 +325,9 @@ pending operator workbench review.
 
 ### Final verification and handoff
 
-All four accepted items are implemented. The leader assembled
+All four accepted items are implemented in draft PR [#1072](https://github.com/microsoft/vscode-documentdb/pull/1072),
+targeting `dev/guanzhousong/quickstart-podman-fallback`, milestone 1.1.0.
+The leader assembled
 `dev/tnaum/quickstart-setup-stage-details-pr` in an isolated worktree from the
 unchanged target `76524f3a`, cherry-picking only this task's commits. An unrelated
 plan-12 documentation commit appeared in the shared history during planning;
@@ -375,8 +377,9 @@ contract, each phase and its correction, and final lint typing. Technical verdic
 were followed; the initial suggestion to lint/format before each commit was not
 followed because the accepted verification cases require batching those checks.
 No operator decisions were invented, no questions remain parked, and W5 stays out
-of scope. Host snapshot at 07:59 UTC: leader 139.8 AIU, subagents 990.5 AIU,
-run 1130.4 AIU. Monetary cost is not reported by the host.
+of scope. Host snapshot at 08:02 UTC (1h27m23s since the run began): leader
+166.6 AIU, subagents 990.5 AIU, run 1157.2 AIU. Monetary cost is not reported
+by the host.
 
 **Workbench checks still needed before requesting review/pushing further:** inspect
 Set up and Done in a short panel, use keyboard recheck and confirm footer focus,
