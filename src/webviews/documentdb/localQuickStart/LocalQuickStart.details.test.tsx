@@ -27,6 +27,7 @@ window.ResizeObserver ??= NoopResizeObserver;
 
 interface StreamHandlers {
     readonly onData: (event: StageEvent) => void;
+    readonly onError: (error: unknown) => void;
 }
 
 const client = vi.hoisted(() => {
@@ -406,6 +407,129 @@ describe('Local Quick Start stage details', () => {
         await event({ stage: 'done', status: 'done' });
         expect(host.textContent).toContain('Updated');
         expect(toggle('Pulling official image')).not.toBeNull();
+    });
+
+    it('updates literal pull output below the image without live announcements or repeated step effects', async () => {
+        await start();
+        const pullingFacts = { kind: 'pulling', imageRef: 'image:custom', imageOrigin: 'custom' } as const;
+        await event({ stage: 'pulling', status: 'active', facts: pullingFacts });
+        const summary = 'Image image:custom · Custom tag';
+        expect(host.textContent).toContain(summary);
+        expect(host.textContent).not.toContain('Engine output:');
+        const announcement = [...host.querySelectorAll('[role="status"][aria-live="polite"]')].find(
+            (node) => node.textContent === 'Pulling official image…',
+        );
+        expect(announcement).toBeDefined();
+        const mutations: MutationRecord[] = [];
+        const observer = new MutationObserver((records) => mutations.push(...records));
+        observer.observe(announcement!, { childList: true, characterData: true, subtree: true });
+        const stepCalls = client.trpc.localQuickStart.reportStepChange.mutate.mock.calls.length;
+        const detailsCalls = client.trpc.localQuickStart.reportDetailsOpened.mutate.mock.calls.length;
+        const timer = vi.spyOn(globalThis, 'setInterval');
+        const stopTimer = vi.spyOn(globalThis, 'clearInterval');
+        const cancel = button('Cancel');
+        const primary = button('Setting up…');
+        const focus = document.activeElement;
+        try {
+            for (const progress of ['<b>Downloading layer</b>', 'Extracting layer']) {
+                await event({ stage: 'pulling', status: 'active', facts: { ...pullingFacts, progress } });
+                const output = [...host.querySelectorAll('span')].find(
+                    (node) => node.textContent === `Engine output: ${progress}`,
+                );
+                expect(output).toBeDefined();
+                expect(output?.previousElementSibling?.textContent).toBe(summary);
+                expect(output?.querySelector('b')).toBeNull();
+                expect(output?.closest('[aria-live], [role="status"], [role="alert"], [role="log"]')).toBeNull();
+                expect(announcement?.textContent).toBe('Pulling official image…');
+                expect(toggle('Pulling official image')).toBeNull();
+                expect(button('Cancel')).toBe(cancel);
+                expect(button('Setting up…')).toBe(primary);
+                expect(primary.disabled).toBe(true);
+                expect(document.activeElement).toBe(focus);
+                expect(client.trpc.localQuickStart.reportStepChange.mutate).toHaveBeenCalledTimes(stepCalls);
+                expect(client.trpc.localQuickStart.reportDetailsOpened.mutate).toHaveBeenCalledTimes(detailsCalls);
+                expect(client.trpc.common.reportEvent.mutate).not.toHaveBeenCalled();
+            }
+            expect(host.textContent).not.toContain('Downloading layer');
+            expect(mutations).toEqual([]);
+            expect(timer).not.toHaveBeenCalled();
+            expect(stopTimer).not.toHaveBeenCalled();
+        } finally {
+            observer.disconnect();
+        }
+        await event({ stage: 'pulling', status: 'done' });
+        expect(host.textContent).not.toContain('Engine output:');
+        expect(host.textContent).toContain('Image image:custom');
+        expect(announcement?.textContent).toBe('');
+        await event({ stage: 'done', status: 'done' });
+        expect(host.textContent).not.toContain('Engine output:');
+        expect(host.textContent).toContain('Image image:custom');
+    });
+
+    it.each([undefined, '', ' \n\t'])(
+        'replaces active pull output when the next facts have no nonblank line (%s)',
+        async (progress) => {
+            await start();
+            const pullingFacts = { kind: 'pulling', imageRef: 'image:custom', imageOrigin: 'custom' } as const;
+            await event({
+                stage: 'pulling',
+                status: 'active',
+                facts: { ...pullingFacts, progress: 'Downloading layer' },
+            });
+            expect(host.textContent).toContain('Engine output: Downloading layer');
+            await event({ stage: 'pulling', status: 'active', facts: { ...pullingFacts, progress } });
+            expect(host.textContent).not.toContain('Engine output:');
+            expect(host.textContent).not.toContain('Downloading layer');
+            expect(host.textContent).toContain('Image image:custom · Custom tag');
+            expect(toggle('Pulling official image')).toBeNull();
+        },
+    );
+
+    it.each(['pulling', 'error'] as const)('clears pull output on a %s failure and retry', async (stage) => {
+        await start();
+        await event({
+            stage: 'pulling',
+            status: 'active',
+            facts: { kind: 'pulling', imageRef: 'image:custom', imageOrigin: 'custom', progress: 'Downloading layer' },
+        });
+        await event({ stage, status: 'error' });
+        expect(host.textContent).not.toContain('Engine output:');
+        expect(host.textContent).toContain('Image image:custom');
+        await click(button('Retry setup'));
+        await event({ stage: 'pulling', status: 'active' });
+        expect(host.textContent).not.toContain('Engine output:');
+        expect(host.textContent).not.toContain('image:custom');
+    });
+
+    it('clears pull output on a stream error', async () => {
+        await start();
+        await event({
+            stage: 'pulling',
+            status: 'active',
+            facts: { kind: 'pulling', imageRef: 'image:custom', imageOrigin: 'custom', progress: 'Downloading layer' },
+        });
+        await act(async () => client.streams.at(-1)?.onError(new Error('Stream failed')));
+        expect(host.textContent).not.toContain('Engine output:');
+        expect(host.textContent).toContain('Image image:custom · Custom tag');
+        expect(host.textContent).toContain('Stream failed');
+    });
+
+    it('clears pull output on cancellation and ignores trailing output before a fresh run', async () => {
+        await start();
+        const activity: StageEvent = {
+            stage: 'pulling',
+            status: 'active',
+            facts: { kind: 'pulling', imageRef: 'image:custom', imageOrigin: 'custom', progress: 'Downloading layer' },
+        };
+        await event(activity);
+        await click(button('Cancel'));
+        await event(activity);
+        expect(host.textContent).not.toContain('Engine output:');
+        await start();
+        await event({ stage: 'pulling', status: 'active' });
+        expect(host.textContent).not.toContain('Engine output:');
+        expect(host.textContent).not.toContain('image:custom');
+        expect(toggle('Pulling official image')).toBeNull();
     });
 
     it('keeps the image summary ahead of engine failure details', async () => {

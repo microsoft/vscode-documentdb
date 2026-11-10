@@ -187,6 +187,7 @@ const useStyles = makeStyles({
         color: tokens.colorPaletteRedForeground1,
     },
     imagePath: { overflowWrap: 'anywhere' },
+    pullActivity: { display: 'flex', flexDirection: 'column' },
     dockerStatus: { display: 'flex', flexDirection: 'column', gap: '10px' },
     recoveryCommand: { display: 'flex', flexDirection: 'column', gap: '8px' },
     // Copy stays pinned top-right: a multi-line command must not push it down or wrap it away.
@@ -970,14 +971,26 @@ export const LocalQuickStart = (): JSX.Element => {
             const subscription = subscribe({
                 onData(event: StageEvent) {
                     if (myGeneration !== streamGenerationRef.current) return; // superseded/cancelled stream
-                    if (event.facts) {
+                    if (event.facts || event.status !== 'active') {
                         const stageFacts = event.facts;
-                        setFacts((previous) => ({ ...previous, [stageFacts.kind]: stageFacts }));
+                        setFacts((previous) => {
+                            const next = stageFacts ? { ...previous, [stageFacts.kind]: stageFacts } : previous;
+                            if (
+                                event.status === 'active' ||
+                                next.pulling?.kind !== 'pulling' ||
+                                next.pulling.progress === undefined
+                            ) {
+                                return next;
+                            }
+                            return { ...next, pulling: { ...next.pulling, progress: undefined } };
+                        });
                     }
                     if (event.stage === 'done' && event.status === 'done') {
                         settled = true;
                         stopTimer();
-                        setStageStatus((prev) => ({ ...prev, [event.stage]: event.status }));
+                        setStageStatus((prev) =>
+                            prev[event.stage] === event.status ? prev : { ...prev, [event.stage]: event.status },
+                        );
                         setSuccessMessage(event.message && formatQuickStartMessage(event.message));
                         setPhase('success');
                     } else if (event.status === 'error') {
@@ -987,8 +1000,9 @@ export const LocalQuickStart = (): JSX.Element => {
                         // icon + "failed" status instead of a stuck spinner / "in progress" that would
                         // contradict the failure message for sighted and screen-reader users alike.
                         setStageStatus((prev) => {
-                            const next = { ...prev, [event.stage]: event.status };
                             const active = PROVISION_STAGES.find((s) => prev[s] === 'active');
+                            if (prev[event.stage] === event.status && !active) return prev;
+                            const next = { ...prev, [event.stage]: event.status };
                             if (active) next[active] = 'error';
                             return next;
                         });
@@ -1011,7 +1025,9 @@ export const LocalQuickStart = (): JSX.Element => {
                         }
                         setPhase('failed');
                     } else {
-                        setStageStatus((prev) => ({ ...prev, [event.stage]: event.status }));
+                        setStageStatus((prev) =>
+                            prev[event.stage] === event.status ? prev : { ...prev, [event.stage]: event.status },
+                        );
                         if (
                             event.stage === 'checking' &&
                             event.status === 'done' &&
@@ -1027,6 +1043,11 @@ export const LocalQuickStart = (): JSX.Element => {
                     if (myGeneration !== streamGenerationRef.current) return; // superseded/cancelled stream
                     settled = true;
                     stopTimer();
+                    setFacts((previous) =>
+                        previous.pulling?.kind === 'pulling' && previous.pulling.progress !== undefined
+                            ? { ...previous, pulling: { ...previous.pulling, progress: undefined } }
+                            : previous,
+                    );
                     setErrorMessage(error instanceof Error ? error.message : String(error));
                     setTimedOut(false);
                     setPhase('failed');
@@ -1342,6 +1363,11 @@ export const LocalQuickStart = (): JSX.Element => {
         subscriptionRef.current = null;
         streamGenerationRef.current++; // ignore any trailing callbacks from the cancelled stream
         stopTimer();
+        setFacts((previous) =>
+            previous.pulling?.kind === 'pulling' && previous.pulling.progress !== undefined
+                ? { ...previous, pulling: { ...previous.pulling, progress: undefined } }
+                : previous,
+        );
         if (isWaitLongerRef.current) {
             // Cancelling a "Wait longer" resume leaves the container running, so return to the
             // timed-out actions (Wait longer / Start over) rather than the settings page.
@@ -2037,6 +2063,20 @@ export const LocalQuickStart = (): JSX.Element => {
         const text = evidence && meta ? l10n.t('{0} · {1}', evidence, meta) : (evidence ?? meta);
         if (!text && !action) {
             return undefined;
+        }
+        const stageFacts = facts[stage];
+        if (
+            stage === 'pulling' &&
+            stageStatus.pulling === 'active' &&
+            stageFacts?.kind === 'pulling' &&
+            stageFacts.progress?.trim()
+        ) {
+            return (
+                <span className={styles.pullActivity}>
+                    <span>{text}</span>
+                    <span>{l10n.t('Engine output: {0}', stageFacts.progress)}</span>
+                </span>
+            );
         }
         return (
             <>
