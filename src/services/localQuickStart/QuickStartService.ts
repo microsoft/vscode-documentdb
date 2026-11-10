@@ -493,6 +493,7 @@ export class QuickStartServiceImpl {
     private hydration: Promise<void> | undefined;
     private reconciliation: Promise<void> | undefined;
     private hydrated = false;
+    private metadataHydration: Promise<void> | undefined;
     private readonly engineReadiness = new Map<ContainerCli, DockerReadiness>();
 
     private async engineRequestFor(alias: string, preferred: ContainerCli = 'docker'): Promise<ContainerEngineRequest> {
@@ -756,6 +757,69 @@ export class QuickStartServiceImpl {
         }
 
         await this.hydration;
+    }
+
+    /**
+     * Load wizard metadata without resolving or contacting a container engine. Do not emit status
+     * changes here: tree listeners may respond by starting engine reconciliation.
+     */
+    public async hydrateMetadata(): Promise<void> {
+        if (!this.metadataHydration) {
+            this.metadataHydration = (async (): Promise<void> => {
+                for (const record of await listInstances()) {
+                    const entry = this.stateFor(record.alias);
+                    if (
+                        this.hydrated ||
+                        entry.dataRemoved ||
+                        entry.state !== InstanceState.NotInstalled ||
+                        entry.metadata ||
+                        entry.provisioning
+                    ) {
+                        continue;
+                    }
+                    entry.displayName = record.displayName;
+                    entry.port = record.port;
+                    entry.engineCli = record.engineCli;
+                }
+            })().finally(() => {
+                this.metadataHydration = undefined;
+            });
+        }
+        await this.metadataHydration;
+    }
+
+    public async getWizardContext(): Promise<{
+        status: QuickStartStatus;
+        busy: boolean;
+        canReuseExistingData: boolean;
+        suggestedPort: number;
+        instanceEngine?: ContainerCli | 'notRecorded';
+    }> {
+        await this.hydrateMetadata();
+        const record = await getInstance(DEFAULT_ALIAS);
+        const entry = this.stateFor(DEFAULT_ALIAS);
+        const canReuseExistingData = await this.canReuseExistingData();
+        let status = this.getStatus();
+        if (
+            !this.hydrated &&
+            !entry.dataRemoved &&
+            record?.phase === 'ready' &&
+            status.state === InstanceState.NotInstalled &&
+            !canReuseExistingData
+        ) {
+            // This is a wizard warning, not a live container diagnosis. Reconciliation may still
+            // recover credentials from the container environment.
+            status = { ...status, state: InstanceState.CredentialsMissing, error: { key: 'credentialsUnavailable' } };
+        }
+        return {
+            status,
+            busy: this.isBusy,
+            // Stored credentials permit offering reuse; execution revalidates the owning engine's
+            // container and volume before creating or deleting anything.
+            canReuseExistingData,
+            suggestedPort: await this.suggestPort(),
+            instanceEngine: record ? record.engineCli ?? 'notRecorded' : entry.engineCli,
+        };
     }
 
     /** Whether the initial durable-store/Docker reconciliation has completed. */

@@ -238,6 +238,249 @@ describe('QuickStartService — stored-credential volume safety', () => {
         expect(await service.canReuseExistingData()).toBe(true);
     });
 
+    it.each(['docker', 'podman', undefined] as const)(
+        'reads the recorded %s engine and reusable credentials without any engine calls',
+        async (engineCli) => {
+            ext.secretStorage = fakeSecretStorage({});
+            ext.context = fakeContext(fakeMemento());
+            await seedInstance(DEFAULT_ALIAS, STORED_CONN);
+            await upsertInstance({
+                alias: DEFAULT_ALIAS, displayName: 'Existing', phase: 'ready', port: 10273, engineCli,
+            });
+            const runtime = mockRuntime({});
+            const service = new QuickStartServiceImpl(runtime);
+            const changed = vi.fn();
+            service.onDidChangeStatus(changed);
+
+            await service.hydrateMetadata();
+            expect(service.getStatus().metadata).toBeUndefined();
+            const context = await service.getWizardContext();
+
+            expect(context).toMatchObject({
+                busy: false,
+                canReuseExistingData: true,
+                suggestedPort: 10273,
+                instanceEngine: engineCli ?? 'notRecorded',
+                status: { state: InstanceState.NotInstalled, missing: false, dataRemoved: false },
+            });
+            expect(runtime.resolveCli).not.toHaveBeenCalled();
+            expect(runtime.forCli).not.toHaveBeenCalled();
+            expect(runtime.isDockerReady).not.toHaveBeenCalled();
+            expect(runtime.listByLabel).not.toHaveBeenCalled();
+            expect(runtime.inspectContainer).not.toHaveBeenCalled();
+            expect(runtime.volumeExists).not.toHaveBeenCalled();
+            expect(changed).not.toHaveBeenCalled();
+            expect(service.isHydrated).toBe(false);
+            service.dispose();
+        },
+    );
+
+    it('metadata hydration preserves the credential-missing Start fresh gate without checking the volume', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await upsertInstance({
+            alias: DEFAULT_ALIAS, displayName: 'Existing', phase: 'ready', port: 10273, engineCli: 'podman',
+        });
+        const runtime = mockRuntime({});
+        const service = new QuickStartServiceImpl(runtime);
+
+        const context = await service.getWizardContext();
+
+        expect(context.canReuseExistingData).toBe(false);
+        expect(context.status.state).toBe(InstanceState.CredentialsMissing);
+        expect(context.instanceEngine).toBe('podman');
+        expect(service.getStatus()).toMatchObject({ state: InstanceState.NotInstalled, error: undefined });
+        expect(service.getStatus().metadata).toBeUndefined();
+        expect(runtime.resolveCli).not.toHaveBeenCalled();
+        expect(runtime.volumeExists).not.toHaveBeenCalled();
+        service.dispose();
+    });
+
+    it('wizard metadata preserves an authoritative data-removed state without resurrecting metadata', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, STORED_CONN);
+        const runtime = mockRuntime({});
+        const service = new QuickStartServiceImpl(runtime);
+        await service.reconcile();
+        const before = service.getStatus();
+        expect(before).toMatchObject({ state: InstanceState.NotInstalled, dataRemoved: true });
+        expect(before.metadata).toBeUndefined();
+        vi.mocked(runtime.resolveCli).mockClear();
+        vi.mocked(runtime.forCli).mockClear();
+
+        await service.hydrateMetadata();
+        const context = await service.getWizardContext();
+
+        expect(service.getStatus()).toEqual(before);
+        expect(context.status).toEqual(before);
+        expect(context.canReuseExistingData).toBe(false);
+        expect(context.status.metadata).toBeUndefined();
+        expect(runtime.resolveCli).not.toHaveBeenCalled();
+        expect(runtime.forCli).not.toHaveBeenCalled();
+        service.dispose();
+    });
+
+    it('does not reseed shared live fields from wizard metadata after full hydration', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        const runtime = mockRuntime({});
+        const service = new QuickStartServiceImpl(runtime);
+        await service.ensureHydrated();
+        const before = service.getStatus();
+        await upsertInstance({
+            alias: DEFAULT_ALIAS, displayName: 'New record', phase: 'ready', port: 10273, engineCli: 'podman',
+        });
+        vi.mocked(runtime.resolveCli).mockClear();
+        vi.mocked(runtime.forCli).mockClear();
+
+        const context = await service.getWizardContext();
+
+        expect(service.getStatus()).toEqual(before);
+        expect(context.status).toEqual(before);
+        expect(context.instanceEngine).toBe('podman');
+        expect(runtime.resolveCli).not.toHaveBeenCalled();
+        expect(runtime.forCli).not.toHaveBeenCalled();
+        service.dispose();
+    });
+
+    it('reconciliation still restores credentials from the real container after a wizard-local missing-credentials warning', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await upsertInstance({
+            alias: DEFAULT_ALIAS, displayName: 'Existing', phase: 'ready', port: 10273,
+        });
+        const runtime = mockRuntime({
+            listByLabel: vi.fn().mockResolvedValue([{ id: 'existing' }]),
+            inspectContainer: vi.fn().mockResolvedValue({
+                id: 'existing',
+                status: 'exited',
+                ports: [{ containerPort: 10260, hostPort: 10273 }],
+                environmentVariables: { USERNAME: 'restoredUser', PASSWORD: 'restoredPassword' },
+            }),
+        });
+        const service = new QuickStartServiceImpl(runtime);
+        expect((await service.getWizardContext()).status.state).toBe(InstanceState.CredentialsMissing);
+        expect(service.getStatus().state).toBe(InstanceState.NotInstalled);
+
+        await service.ensureHydrated();
+
+        expect(service.getStatus().state).toBe(InstanceState.Stopped);
+        expect(service.getStatus().metadata?.containerId).toBe('existing');
+        expect(service.wereCredentialsRestored()).toBe(true);
+        expect(await service.canReuseExistingData()).toBe(true);
+        expect(runtime.removeContainer).not.toHaveBeenCalled();
+        expect(runtime.removeVolume).not.toHaveBeenCalled();
+        service.dispose();
+    });
+
+    it.each([true, false])(
+        'wizard-before-tree with stored credentials=%s does not seed fake metadata or a live credential diagnosis when the engine is down',
+        async (hasCredentials) => {
+            ext.secretStorage = fakeSecretStorage({});
+            ext.context = fakeContext(fakeMemento());
+            if (hasCredentials) {
+                await seedInstance(DEFAULT_ALIAS, STORED_CONN);
+            } else {
+                await upsertInstance({
+                    alias: DEFAULT_ALIAS, displayName: 'Existing', phase: 'ready', port: 10273,
+                });
+            }
+            const runtime = mockRuntime({
+                listByLabel: vi.fn().mockRejectedValue(new Error('Engine unavailable')),
+                isDockerReady: vi.fn().mockResolvedValue({
+                    outcome: 'diagnosed', cliInstalled: true, daemonReachable: false,
+                }),
+            });
+            const service = new QuickStartServiceImpl(runtime);
+
+            await service.getWizardContext();
+            expect(service.getStatus().state).toBe(InstanceState.NotInstalled);
+            expect(service.getStatus().metadata).toBeUndefined();
+            expect(runtime.resolveCli).not.toHaveBeenCalled();
+            await expect(service.ensureHydrated()).rejects.toThrow('Engine unavailable');
+
+            expect(service.getStatus()).toMatchObject({
+                state: InstanceState.Error,
+                error: { key: 'dockerDaemonUnreachable' },
+            });
+            expect(service.getStatus().metadata).toBeUndefined();
+            expect(service.listStatuses()[0].metadata).toBeUndefined();
+            service.dispose();
+        },
+    );
+
+    it('metadata hydration leaves live state intact and does not replace full tree reconciliation', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, STORED_CONN);
+        const runtime = mockRuntime({
+            listByLabel: vi.fn().mockResolvedValue([{ id: 'existing' }]),
+            inspectContainer: vi.fn().mockResolvedValue({
+                id: 'existing', status: 'exited', ports: [{ containerPort: 10260, hostPort: 10273 }],
+            }),
+        });
+        const service = new QuickStartServiceImpl(runtime);
+        await service.hydrateMetadata();
+        expect(runtime.listByLabel).not.toHaveBeenCalled();
+
+        await service.ensureHydrated();
+        expect(runtime.listByLabel).toHaveBeenCalled();
+        expect(service.getStatus().state).toBe(InstanceState.Stopped);
+        await service.hydrateMetadata();
+        expect(service.getStatus().state).toBe(InstanceState.Stopped);
+        service.dispose();
+    });
+
+    it('does not resolve an engine for a fresh metadata-only wizard context', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        const runtime = mockRuntime({});
+        const service = new QuickStartServiceImpl(runtime);
+
+        const context = await service.getWizardContext();
+
+        expect(context.instanceEngine).toBeUndefined();
+        expect(context.canReuseExistingData).toBe(false);
+        expect(context.status.state).toBe(InstanceState.NotInstalled);
+        expect(runtime.resolveCli).not.toHaveBeenCalled();
+        expect(runtime.forCli).not.toHaveBeenCalled();
+        expect(runtime.isDockerReady).not.toHaveBeenCalled();
+        expect(runtime.listByLabel).not.toHaveBeenCalled();
+        expect(runtime.inspectContainer).not.toHaveBeenCalled();
+        service.dispose();
+    });
+
+    it('revalidates reuse credentials at execution and protects the volume when metadata became stale', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, STORED_CONN);
+        const runtime = mockRuntime({
+            volumeExists: vi.fn().mockResolvedValue(true),
+            isDockerReady: vi.fn().mockResolvedValue({
+                outcome: 'ready', cliInstalled: true, daemonReachable: true,
+            }),
+        });
+        const service = new QuickStartServiceImpl(runtime);
+        expect((await service.getWizardContext()).canReuseExistingData).toBe(true);
+        expect(runtime.volumeExists).not.toHaveBeenCalled();
+        vi.spyOn(service, 'readStoredConnectionString').mockResolvedValue(undefined);
+
+        const events: StageEvent[] = [];
+        for await (const event of service.provision(new AbortController().signal)) {
+            events.push(event);
+        }
+
+        expect(runtime.volumeExists).toHaveBeenCalled();
+        expect(runtime.removeVolume).not.toHaveBeenCalled();
+        expect(runtime.removeContainer).not.toHaveBeenCalled();
+        expect(events).toContainEqual(expect.objectContaining({
+            stage: 'checking', status: 'error', message: { key: 'credentialsUnavailable' },
+        }));
+        expect(service.getStatus().state).toBe(InstanceState.CredentialsMissing);
+        service.dispose();
+    });
+
     it('reconcile() with NO stored secret surfaces the orphan as credential-unavailable (never removes it or its volume)', async () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());

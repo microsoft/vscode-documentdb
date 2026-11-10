@@ -27,7 +27,7 @@ describe('openLocalQuickStart', () => {
         [undefined, 'commandPalette'],
         [{ activationSource: 'treeReviewSetupRow' as const }, 'treeReviewSetupRow'],
     ])('records where the wizard was opened from (%o)', async (options, expected) => {
-        vi.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
+        vi.spyOn(QuickStartService, 'hydrateMetadata').mockResolvedValue(undefined);
         vi.mocked(openLocalQuickStartWebview).mockReturnValue({
             panel: { viewColumn: undefined },
             revealToForeground: vi.fn(),
@@ -39,9 +39,11 @@ describe('openLocalQuickStart', () => {
         expect(context.telemetry.properties.activationSource).toBe(expected);
     });
 
-    it('waits for authoritative hydration before revealing the webview', async () => {
+    it('waits for metadata hydration without reconciling engines before revealing the webview', async () => {
         let finishHydration: (() => void) | undefined;
-        vi.spyOn(QuickStartService, 'ensureHydrated').mockImplementation(
+        const reconcile = vi.spyOn(QuickStartService, 'ensureHydrated');
+        const readiness = vi.spyOn(QuickStartService, 'checkInstanceDockerReadiness');
+        vi.spyOn(QuickStartService, 'hydrateMetadata').mockImplementation(
             () =>
                 new Promise<void>((resolve) => {
                     finishHydration = resolve;
@@ -61,10 +63,12 @@ describe('openLocalQuickStart', () => {
 
         expect(openLocalQuickStartWebview).toHaveBeenCalledWith(expect.objectContaining({ id: 'localQuickStart' }));
         expect(revealToForeground).toHaveBeenCalledTimes(1);
+        expect(reconcile).not.toHaveBeenCalled();
+        expect(readiness).not.toHaveBeenCalled();
     });
 
-    it('still opens the webview when hydration fails because Docker is unavailable', async () => {
-        vi.spyOn(QuickStartService, 'ensureHydrated').mockRejectedValue(new Error('Docker unavailable'));
+    it('still opens the webview when metadata storage is unavailable', async () => {
+        vi.spyOn(QuickStartService, 'hydrateMetadata').mockRejectedValue(new Error('Storage unavailable'));
         const revealToForeground = vi.fn();
         vi.mocked(openLocalQuickStartWebview).mockReturnValue({
             panel: { viewColumn: undefined },
@@ -78,7 +82,7 @@ describe('openLocalQuickStart', () => {
     });
 
     it('passes the hydrated instance status so the webview can open on the right step', async () => {
-        vi.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
+        vi.spyOn(QuickStartService, 'hydrateMetadata').mockResolvedValue(undefined);
         vi.spyOn(QuickStartService, 'getStatus').mockReturnValue({
             state: InstanceState.CredentialsMissing,
         } as QuickStartStatus);

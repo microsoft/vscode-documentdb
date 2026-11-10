@@ -6,7 +6,8 @@
 /**
  * tRPC router for the Local Quick Start webview (WI-2).
  *
- * - `getDockerStatus` (query): readiness pre-check + current instance status.
+ * - `getWizardContext` (query): metadata-only Configure facts, without engine checks.
+ * - `getDockerStatus` (query): execution-time readiness + current instance status.
  * - `startQuickStart` (subscription): drives {@link QuickStartService.provision}
  *   and yields one {@link StageEvent} per stage. Cancellation flows from the
  *   subscription's `ctx.signal` (aborted on unsubscribe) into a mirrored
@@ -152,6 +153,12 @@ function toWebviewStatus(status: QuickStartStatus): QuickStartStatus {
 }
 
 export const localQuickStartRouter = router({
+    /** Configure reads stored instance facts only; readiness belongs to execution. */
+    getWizardContext: publicProcedure.query(async () => {
+        const context = await QuickStartService.getWizardContext();
+        return { ...context, status: toWebviewStatus(context.status) };
+    }),
+
     /** Readiness pre-check + current managed-instance status (powers the review cards). */
     getDockerStatus: publicProcedureWithTelemetry
         .input(

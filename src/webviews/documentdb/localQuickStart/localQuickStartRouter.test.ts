@@ -16,6 +16,7 @@ const mockCanReuseExistingData = vi.fn();
 const mockSuggestPort = vi.fn();
 const mockProvision = vi.fn();
 const mockProcedureTelemetry = vi.fn();
+const mockGetWizardContext = vi.fn();
 
 vi.mock('../../../services/survey/SurveyService', (): object => ({ recordSurveyActivity: vi.fn() }));
 
@@ -44,6 +45,7 @@ vi.mock('../../../services/localQuickStart/QuickStartService', () => ({
         refreshLiveState: (...args: unknown[]) => mockRefreshLiveState(...args) as unknown,
         canReuseExistingData: (...args: unknown[]) => mockCanReuseExistingData(...args) as unknown,
         suggestPort: (...args: unknown[]) => mockSuggestPort(...args) as unknown,
+        getWizardContext: (...args: unknown[]) => mockGetWizardContext(...args) as unknown,
         checkPort: vi.fn(),
         onDidChangeStatus: (listener: () => void) => {
             statusListeners.add(listener);
@@ -128,6 +130,36 @@ describe('localQuickStartRouter', () => {
     beforeEach(() => {
         mockSuggestPort.mockResolvedValue(10260);
     });
+
+    it.each(['docker', 'podman', 'notRecorded', undefined] as const)(
+        'returns metadata-only wizard context for engine %s without leaking credentials or probing',
+        async (instanceEngine) => {
+            mockIsDockerReady.mockClear();
+            mockRefreshLiveState.mockClear();
+            mockGetWizardContext.mockResolvedValue({
+                status: {
+                    state: 'NotInstalled',
+                    canResumeReadiness: true,
+                    metadata: { connectionString: 'secret', username: 'secret' },
+                },
+                busy: false,
+                canReuseExistingData: true,
+                suggestedPort: 10273,
+                instanceEngine,
+            });
+            const caller = createCallerFactory(localQuickStartRouter)(createContext());
+
+            const result = await caller.getWizardContext();
+
+            expect(result).toMatchObject({
+                status: { state: 'NotInstalled', canResumeReadiness: true },
+                busy: false, canReuseExistingData: true, suggestedPort: 10273, instanceEngine,
+            });
+            expect(result.status.metadata).toBeUndefined();
+            expect(mockIsDockerReady).not.toHaveBeenCalled();
+            expect(mockRefreshLiveState).not.toHaveBeenCalled();
+        },
+    );
 
     /**
      * The success screen's primary action. It used to be wired to `connectionsView.focus` alone,

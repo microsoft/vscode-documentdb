@@ -45,6 +45,7 @@ import {
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { Fragment, type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ContainerCli } from '../../../services/localQuickStart/containerCli';
 import { formatQuickStartMessage } from '../../../services/localQuickStart/quickStartMessages';
 import {
     type AdvancedQuickStartOptions,
@@ -291,7 +292,7 @@ function planItems(): readonly PlanItem[] {
         {
             label: l10n.t('Check your container engine'),
             detail: l10n.t(
-                'Confirms Docker or Podman is installed and can run Linux containers on this machine. Docker is used when both are installed.',
+                'Confirms Docker or Podman is installed and can run Linux containers on this machine. You choose a preferred engine in the next step; setup uses the other if it is not installed.',
             ),
         },
         {
@@ -593,13 +594,15 @@ export const LocalQuickStart = (): JSX.Element => {
     }, [phase, trpcClient]);
     /**
      * Readiness backing the `Checking container engine` stage: its detail line in both
-     * directions, and its remediation when that stage failed. Loaded in the background while the
-     * user reads the Introduction — nothing about it is rendered before the Set up step.
+     * directions, and its remediation when that stage failed. Collected only during execution.
      */
     const [checkReadiness, setCheckReadiness] = useState<DockerReadiness | undefined>(undefined);
     /** A Docker problem reported by a later stage (pull / run), backing that stage's remediation. */
     const [stageDockerFailure, setStageDockerFailure] = useState<DockerReadiness | undefined>(undefined);
     const [canReuseExistingData, setCanReuseExistingData] = useState(false);
+    const [instanceEngine, setInstanceEngine] = useState<ContainerCli | 'notRecorded'>();
+    const [preferredEngine, setPreferredEngine] = useState<ContainerCli>('docker');
+    const [editingEngine, setEditingEngine] = useState(false);
     /**
      * Live state of the managed instance, backing the Configure step's guard (review §9.2 Q2).
      * Reaching the wizard while an instance exists should not normally be possible — the tree does
@@ -802,6 +805,7 @@ export const LocalQuickStart = (): JSX.Element => {
         advancedRef.current = advError
             ? undefined
             : buildAdvancedOptions({
+                  preferredEngine,
                   port: advPort,
                   suggestedPort,
                   username: advUser,
@@ -813,6 +817,7 @@ export const LocalQuickStart = (): JSX.Element => {
                   startFresh,
               });
     }, [
+        preferredEngine,
         advPort,
         suggestedPort,
         advUser,
@@ -879,9 +884,10 @@ export const LocalQuickStart = (): JSX.Element => {
             const abortController = new AbortController();
             readinessAbortRef.current = abortController;
             try {
-                const result = await trpcClient.localQuickStart.getDockerStatus.query(request, {
-                    signal: abortController.signal,
-                });
+                const result = await trpcClient.localQuickStart.getDockerStatus.query(
+                    { ...request, preferredEngine },
+                    { signal: abortController.signal },
+                );
                 if (abortController.signal.aborted) {
                     return undefined;
                 }
@@ -910,7 +916,7 @@ export const LocalQuickStart = (): JSX.Element => {
                 }
             }
         },
-        [applyReadiness, trpcClient],
+        [applyReadiness, preferredEngine, trpcClient],
     );
 
     const stopTimer = useCallback((): void => {
@@ -1040,8 +1046,7 @@ export const LocalQuickStart = (): JSX.Element => {
                             event.status === 'done' &&
                             checkReadinessRef.current?.outcome !== 'ready'
                         ) {
-                            // Prove which Docker was accepted, even when the background load ran
-                            // before the user installed, started, or fixed Docker.
+                            // Read the engine evidence only after execution's check has completed.
                             void syncDockerStatus();
                         }
                     }
@@ -1125,7 +1130,7 @@ export const LocalQuickStart = (): JSX.Element => {
         const abortController = new AbortController();
         dockerPollAbortRef.current = abortController;
         void trpcClient.localQuickStart.startDockerProvider
-            .mutate(undefined, { signal: abortController.signal })
+            .mutate({ preferredEngine }, { signal: abortController.signal })
             .then(async (launchResult) => {
                 if (abortController.signal.aborted) return;
                 if (launchResult === 'notAvailable' || launchResult === 'failed') {
@@ -1140,7 +1145,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     signal: abortController.signal,
                     query: (suppressCommandEcho) =>
                         trpcClient.localQuickStart.getDockerStatus.query(
-                            { forceRefresh: true, polled: true, suppressCommandEcho },
+                            { forceRefresh: true, polled: true, suppressCommandEcho, preferredEngine },
                             { signal: abortController.signal },
                         ),
                     onResult: (result) => {
@@ -1170,7 +1175,7 @@ export const LocalQuickStart = (): JSX.Element => {
                 stopDockerWait();
                 setDockerActionMessage(l10n.t('The Docker readiness check failed.'));
             });
-    }, [applyDockerRecovery, applyReadiness, stopDockerWait, trpcClient]);
+    }, [applyDockerRecovery, applyReadiness, preferredEngine, stopDockerWait, trpcClient]);
 
     // Re-run only the Docker check, after the user follows the guidance. It never starts or resumes
     // provisioning: a pass clears the blocker in place, a fresh failure updates the evidence.
@@ -1228,32 +1233,44 @@ export const LocalQuickStart = (): JSX.Element => {
     }, [trpcClient]);
 
     useEffect(() => {
-        // Load the instance facts the settings page needs (and rehydrate a resumable readiness
-        // timeout) while the user reads the Introduction. Nothing about this check is shown before
-        // the Set up step, and a failure here never blocks the wizard.
-        void syncDockerStatus().then((result) => {
-            if (result?.readiness.outcome === 'ready' && result.status.canResumeReadiness) {
-                setStageStatus({
-                    checking: 'done',
-                    pulling: 'done',
-                    creating: 'done',
-                    starting: 'done',
-                    waiting: 'error',
-                    done: 'pending',
-                    error: 'pending',
-                });
-                setTimedOut(true);
-                setPhase('failed');
-            }
-        });
+        const abortController = new AbortController();
+        void trpcClient.localQuickStart.getWizardContext
+            .query(undefined, { signal: abortController.signal })
+            .then((result) => {
+                if (abortController.signal.aborted) return;
+                setCanReuseExistingData(result.canReuseExistingData);
+                setInstanceState(result.status.state);
+                setInstanceMissing(result.status.missing === true);
+                setInstanceDataRemoved(result.status.dataRemoved === true);
+                setInstanceEngine(result.instanceEngine);
+                setSuggestedPort(result.suggestedPort);
+                if (!portTouchedRef.current) {
+                    setAdvPort(String(result.suggestedPort));
+                }
+                if (result.status.canResumeReadiness) {
+                    setStageStatus({
+                        checking: 'done',
+                        pulling: 'done',
+                        creating: 'done',
+                        starting: 'done',
+                        waiting: 'error',
+                        done: 'pending',
+                        error: 'pending',
+                    });
+                    setTimedOut(true);
+                    setPhase('failed');
+                }
+            })
+            .catch(() => undefined);
         return () => {
+            abortController.abort();
             readinessAbortRef.current?.abort();
             dockerPollAbortRef.current?.abort();
             subscriptionRef.current?.unsubscribe();
             if (timerRef.current) clearInterval(timerRef.current);
             if (dockerWaitTimerRef.current) clearInterval(dockerWaitTimerRef.current);
         };
-    }, [syncDockerStatus]);
+    }, [trpcClient]);
 
     useEffect(() => {
         const relativeTimeTimer = setInterval(() => setRelativeTimeNow(Date.now()), 30_000);
@@ -1614,6 +1631,41 @@ export const LocalQuickStart = (): JSX.Element => {
     );
 
     const settingItems: readonly SettingItem[] = [
+        {
+            key: 'engine',
+            label: l10n.t('Container engine'),
+            value: instanceEngine
+                ? instanceEngine === 'notRecorded'
+                    ? l10n.t('Not recorded')
+                    : l10n.t('{0} · kept from the existing instance', instanceEngine === 'docker' ? 'Docker' : 'Podman')
+                : preferredEngine === 'docker'
+                  ? 'Docker'
+                  : 'Podman',
+            action: instanceEngine
+                ? undefined
+                : rowAction(
+                      editingEngine
+                          ? l10n.t('Hide the container engine setting')
+                          : l10n.t('Change the container engine'),
+                      editingEngine,
+                      () => setEditingEngine((value) => !value),
+                  ),
+            editorOpen: editingEngine && !instanceEngine,
+            editor: instanceEngine ? undefined : (
+                <Field
+                    label={l10n.t('Preferred container engine')}
+                    hint={l10n.t('Setup uses your preferred engine if installed, or the other one otherwise.')}
+                >
+                    <RadioGroup
+                        value={preferredEngine}
+                        onChange={(_event, data) => setPreferredEngine(data.value === 'podman' ? 'podman' : 'docker')}
+                    >
+                        <Radio value="docker" label="Docker" />
+                        <Radio value="podman" label="Podman" />
+                    </RadioGroup>
+                </Field>
+            ),
+        },
         {
             key: 'address',
             label: l10n.t('Address'),

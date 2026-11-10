@@ -32,8 +32,8 @@ describe('L2-dev manifest and routes', (): void => {
 
     it('round-trips every scenario and theme, without duplicate routes', (): void => {
         const routes = scenarioRoutes();
-        expect(routes).toHaveLength(141);
-        expect(new Set(routes.map((route): string => route.path)).size).toBe(141);
+        expect(routes).toHaveLength(150);
+        expect(new Set(routes.map((route): string => route.path)).size).toBe(150);
         for (const route of routes) expect(parseScenarioRoute(route.path)).toEqual(route);
     });
 
@@ -71,10 +71,10 @@ describe('L2-dev manifest and routes', (): void => {
     });
 
     it('provides path-only all/view/theme helpers and rejects unknown subsets', (): void => {
-        expect(runnerRoutes('/scenarios/run-all.js')).toHaveLength(141);
+        expect(runnerRoutes('/scenarios/run-all.js')).toHaveLength(150);
         expect(runnerRoutes('/scenarios/run-all/connectionDiagnostics.js')).toHaveLength(84);
-        expect(runnerRoutes('/scenarios/run-all/localQuickStart.js')).toHaveLength(45);
-        expect(runnerRoutes('/scenarios/run-all/localQuickStart/dark.js')).toHaveLength(15);
+        expect(runnerRoutes('/scenarios/run-all/localQuickStart.js')).toHaveLength(54);
+        expect(runnerRoutes('/scenarios/run-all/localQuickStart/dark.js')).toHaveLength(18);
         expect(runnerRoutes('/scenarios/run-all/unknown.js')).toBeUndefined();
         expect(runnerRoutes('/scenarios/run-all.js?view=localQuickStart')).toBeUndefined();
         const snippet = scenarioRunner(scenarioRoutes());
@@ -82,6 +82,25 @@ describe('L2-dev manifest and routes', (): void => {
         expect(snippet).not.toContain('waitForFunction');
         expect(snippet).not.toContain('networkidle');
     });
+
+    it.each(['configure-engine-default', 'configure-engine-choice', 'configure-engine-recreate'] as const)(
+        'covers %s in every theme with metadata and no pre-execution readiness',
+        (name): void => {
+            expect(scenarioRoutes().filter((route): boolean => route.scenario === name).map((route) => route.theme))
+                .toEqual(['dark', 'light', 'high-contrast']);
+            const scenario = scenarios.localQuickStart[name];
+            expect(scenario.rpc['localQuickStart.getWizardContext']).toBeDefined();
+            expect(scenario.assertions).toContainEqual(expect.objectContaining({
+                kind: 'calls', path: 'localQuickStart.getDockerStatus', count: 0,
+            }));
+            expect(scenario.assertions).toContainEqual(expect.objectContaining({
+                kind: 'calls', path: 'localQuickStart.startDockerProvider', count: 0,
+            }));
+            expect(scenario.assertions).toContainEqual(expect.objectContaining({
+                kind: 'text', excludes: expect.arrayContaining(['Found', 'Not found on PATH', 'Detected']),
+            }));
+        },
+    );
 
     it('emits the host initial-data contract and theme kind before the Vite boot', (): void => {
         for (const route of scenarioRoutes()) {

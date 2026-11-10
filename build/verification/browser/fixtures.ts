@@ -590,6 +590,12 @@ export const fixtures = {
         styles: [{ selector: 'table', property: 'border-collapse', expected: 'collapse' }],
         rpc: {
             ...common,
+            'localQuickStart.getWizardContext': reply<Outputs['localQuickStart']['getWizardContext']>('query', {
+                status: docker.status,
+                busy: false,
+                canReuseExistingData: false,
+                suggestedPort: 10260,
+            }),
             'localQuickStart.getDockerStatus': reply('query', docker),
             'localQuickStart.getStatus': reply<Outputs['localQuickStart']['getStatus']>('query', docker.status),
             'localQuickStart.checkPort': reply<Outputs['localQuickStart']['checkPort']>('query', 'available'),

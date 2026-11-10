@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type StageEvent } from '../../../src/services/localQuickStart/quickStartTypes';
+import { InstanceState, type StageEvent } from '../../../src/services/localQuickStart/quickStartTypes';
 import { type WebviewName } from '../../../src/webviews/_integration/WebviewRegistry';
 import {
     type FixtureAtPath,
@@ -45,7 +45,7 @@ export interface ScenarioReadiness {
 }
 
 export type ScenarioStep =
-    | { readonly action: 'click'; readonly role: 'button' | 'link' | 'switch' | 'menuitem'; readonly name: string }
+    | { readonly action: 'click'; readonly role: 'button' | 'link' | 'switch' | 'menuitem' | 'radio'; readonly name: string }
     | { readonly action: 'fill'; readonly role: 'textbox'; readonly name: string; readonly value: string };
 
 type CallAssertion = {
@@ -2357,7 +2357,7 @@ export const scenarios = {
                     'Develop and test locally',
                     'Set up DocumentDB locally for development and testing with Docker or Podman.',
                     'Check your container engine',
-                    'Confirms Docker or Podman is installed and can run Linux containers on this machine. Docker is used when both are installed.',
+                    'Confirms Docker or Podman is installed and can run Linux containers on this machine. You choose a preferred engine in the next step; setup uses the other if it is not installed.',
                     'Continue',
                 ],
                 selectors: ['h2'],
@@ -2384,6 +2384,125 @@ export const scenarios = {
                     input: { url: 'https://github.com/documentdb/documentdb/blob/main/documentdb-local/PRIVACY.md' },
                     count: 1,
                     steps: [{ action: 'click', role: 'button', name: 'Open DocumentDB Local privacy statement' }],
+                },
+            ],
+        },
+        'configure-engine-default': {
+            config: base.config,
+            rpc: base.rpc,
+            steps: [...continueSteps, { action: 'click', role: 'button', name: 'Change the container engine' }],
+            readiness: {
+                content: ['Configure setup', 'Container engine', 'Docker', 'Podman'],
+                selectors: ['input[value="docker"]:checked', 'input[value="podman"]:not(:disabled)'],
+                noProgressbar: true,
+            },
+            assertions: [
+                {
+                    kind: 'text',
+                    name: 'Configure offers only the preference and static fallback explanation',
+                    selector: 'table',
+                    includes: [
+                        'Container engine',
+                        'Docker',
+                        'Podman',
+                        'Setup uses your preferred engine if installed, or the other one otherwise.',
+                    ],
+                    excludes: ['Found', 'Not found on PATH', 'Detected', 'CLI', 'Runs on this machine'],
+                },
+                {
+                    kind: 'calls', name: 'Opening Configure does not check readiness',
+                    path: 'localQuickStart.getDockerStatus', input: undefined, count: 0, steps: [],
+                },
+                {
+                    kind: 'calls', name: 'Opening Configure does not start an engine',
+                    path: 'localQuickStart.startDockerProvider', input: undefined, count: 0, steps: [],
+                },
+            ],
+        },
+        'configure-engine-choice': {
+            config: base.config,
+            rpc: {
+                ...base.rpc,
+                'localQuickStart.startQuickStart': { type: 'subscription', results: [], keepOpen: true },
+            },
+            steps: [
+                ...continueSteps,
+                { action: 'click', role: 'button', name: 'Change the container engine' },
+                { action: 'click', role: 'radio', name: 'Podman' },
+                { action: 'click', role: 'button', name: 'Back' },
+                { action: 'click', role: 'button', name: 'Continue' },
+            ],
+            readiness: {
+                content: ['Configure setup', 'Container engine', 'Podman'],
+                selectors: ['input[value="podman"]:checked', 'input[value="docker"]:not(:disabled)'],
+                noProgressbar: true,
+            },
+            assertions: [
+                {
+                    kind: 'text', name: 'The Podman preference is not an availability prediction',
+                    selector: 'table', includes: ['Container engine', 'Podman'],
+                    excludes: ['Found', 'Not found on PATH', 'Detected', 'CLI'],
+                },
+                {
+                    kind: 'calls', name: 'Changing preference and navigating does not check readiness',
+                    path: 'localQuickStart.getDockerStatus', input: undefined, count: 0, steps: [],
+                },
+                {
+                    kind: 'calls', name: 'Changing preference does not start an engine',
+                    path: 'localQuickStart.startDockerProvider', input: undefined, count: 0, steps: [],
+                },
+                {
+                    kind: 'calls', name: 'Execution receives the unchanged Podman preference',
+                    path: 'localQuickStart.startQuickStart',
+                    input: { preferredEngine: 'podman', port: 10260 },
+                    count: 1,
+                    steps: [{ action: 'click', role: 'button', name: 'Start DocumentDB Local' }],
+                },
+            ],
+        },
+        'configure-engine-recreate': {
+            config: base.config,
+            rpc: {
+                ...base.rpc,
+                'localQuickStart.getWizardContext': {
+                    type: 'query',
+                    results: [{
+                        status: { state: InstanceState.Stopped, missing: true },
+                        busy: false, canReuseExistingData: true, suggestedPort: 10260, instanceEngine: 'podman',
+                    }],
+                },
+                'localQuickStart.onInstanceChanged': {
+                    type: 'subscription',
+                    results: [{
+                        status: { state: InstanceState.Stopped, missing: true }, canReuseExistingData: true,
+                    }],
+                    keepOpen: true,
+                },
+            },
+            steps: continueSteps,
+            readiness: {
+                content: ['Configure setup', 'Podman · kept from the existing instance'],
+                selectors: ['table'],
+                noProgressbar: true,
+            },
+            assertions: [
+                {
+                    kind: 'text', name: 'The existing engine is read-only, with no detected availability',
+                    selector: 'table', includes: ['Container engine', 'Podman · kept from the existing instance'],
+                    excludes: ['Found', 'Not found on PATH', 'Detected', 'Preferred container engine'],
+                },
+                {
+                    kind: 'attribute', name: 'Recreate has no engine editor',
+                    selector: '[aria-label="Change the container engine"]',
+                    attribute: 'aria-expanded', expected: null,
+                },
+                {
+                    kind: 'calls', name: 'Reading the recorded engine does not check readiness',
+                    path: 'localQuickStart.getDockerStatus', input: undefined, count: 0, steps: [],
+                },
+                {
+                    kind: 'calls', name: 'Reading the recorded engine does not start an engine',
+                    path: 'localQuickStart.startDockerProvider', input: undefined, count: 0, steps: [],
                 },
             ],
         },
