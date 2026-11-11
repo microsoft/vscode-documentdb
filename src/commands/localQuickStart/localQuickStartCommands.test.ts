@@ -78,6 +78,33 @@ describe('buildQuickStartCopyCredentials (UX review #7)', () => {
             disposeQuickStartLogFollow();
         });
 
+        it('says in the log why following could not start instead of leaving a rejection unhandled', async () => {
+            vi.mocked(QuickStartService.getStatus).mockReturnValue({
+                state: InstanceState.Running,
+                metadata: {
+                    alias: 'owned-instance',
+                    containerId: 'podman-container',
+                    connectionString: 'mongodb://admin:private-password@localhost:10260',
+                },
+            } as ReturnType<typeof QuickStartService.getStatus>);
+            // Resolving the owning engine reads storage before the runtime's own best-effort handling.
+            vi.mocked(QuickStartService.followLogs).mockRejectedValue(
+                new Error('storage read failed for private-password'),
+            );
+
+            viewQuickStartLogs({} as Parameters<typeof viewQuickStartLogs>[0]);
+            await Promise.resolve();
+            await Promise.resolve();
+
+            const channel = vi.mocked(getQuickStartOutputChannel).mock.results.at(-1)?.value as {
+                appendLine: Mock;
+            };
+            expect(channel.appendLine).toHaveBeenCalledExactlyOnceWith(
+                'Could not follow the DocumentDB Local container logs: storage read failed for ***',
+            );
+            disposeQuickStartLogFollow();
+        });
+
         it('shows the setup log but starts no follow without an instance', () => {
             vi.mocked(QuickStartService.getStatus).mockReturnValue({ state: InstanceState.NotInstalled });
 
