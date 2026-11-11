@@ -164,6 +164,61 @@ describe('live Podman machine readiness', () => {
     });
 
     it.each([
+        {
+            setting: 'DOCKER_HOST=tcp',
+            platform: 'darwin',
+            environmentVariables: { DOCKER_HOST: 'tcp://docker.example:2375' },
+        },
+        {
+            setting: 'DOCKER_HOST=ssh',
+            platform: 'win32',
+            environmentVariables: { DOCKER_HOST: 'ssh://user@docker.example' },
+        },
+        { setting: 'DOCKER_CONTEXT', platform: 'darwin', environmentVariables: { DOCKER_CONTEXT: 'remote-docker' } },
+    ] as const)(
+        'offers the Podman machine although $setting points Docker elsewhere',
+        async ({ platform, environmentVariables }) => {
+            // Podman ignores Docker's endpoint settings, so only a local endpoint can be refused.
+            const { service } = machineService({
+                platform,
+                environmentVariables,
+                probeEndpoint: async (endpoint) => ({
+                    kind: endpoint.kind,
+                    source: endpoint.source,
+                    ...(endpoint.kind === 'unixSocket' || endpoint.kind === 'namedPipe'
+                        ? { accessErrorCode: 'ECONNREFUSED' }
+                        : {}),
+                }),
+            });
+            expect(await service.getReadiness()).toMatchObject({
+                cli: 'podman',
+                failureKind: 'daemonUnavailable',
+                endpointSource: 'platformDefault',
+                startAction: 'startPodmanMachine',
+                podmanMachine: { kind: 'stopped', name: 'custom-vm' },
+            });
+        },
+    );
+
+    it('does not describe a ready Podman with the Docker endpoint setting', async () => {
+        const { service } = machineService({
+            environmentVariables: { DOCKER_HOST: 'tcp://docker.example:2375' },
+            runProbe: async (options) =>
+                evidence(
+                    options.probe,
+                    options.probe === 'info'
+                        ? { stdout: JSON.stringify({ host: { os: 'linux', arch: 'arm64' } }) }
+                        : { stdout: 'podman version 6.0.2' },
+                ),
+        });
+        expect(await service.getReadiness()).toMatchObject({
+            outcome: 'ready',
+            cli: 'podman',
+            endpointKind: 'unknown',
+        });
+    });
+
+    it.each([
         { platform: 'linux', remoteName: undefined },
         { platform: 'linux', remoteName: 'wsl' },
         { platform: 'darwin', remoteName: 'ssh-remote' },

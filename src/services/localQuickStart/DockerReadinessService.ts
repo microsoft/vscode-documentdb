@@ -520,6 +520,8 @@ export class DockerReadinessService {
             }
 
             const cliVersion = isSuccessfulProbe(versionProbe) ? versionProbe.stdout.trim() : undefined;
+            // Podman ignores DOCKER_HOST and DOCKER_CONTEXT, so they must not describe or classify it.
+            const endpointSettings: NodeJS.ProcessEnv = cli === 'podman' ? {} : this.dependencies.environmentVariables;
             const cliNotFound = isDockerCliNotFound(infoProbe);
             const cliInstalled = isSuccessfulProbe(versionProbe) || !cliNotFound;
             if (cliNotFound) {
@@ -553,7 +555,7 @@ export class DockerReadinessService {
             const infoSucceeded = isSuccessfulProbe(infoProbe) && infoFacts !== undefined;
             const hasServerErrors = (infoFacts?.serverErrors.length ?? 0) > 0;
             if (infoSucceeded && !hasServerErrors) {
-                const configuredEndpoint = this.dependencies.environmentVariables['DOCKER_HOST'];
+                const configuredEndpoint = endpointSettings['DOCKER_HOST'];
                 let engine = classifyContainerEngine({ ...engineInput, endpointAddress: configuredEndpoint });
                 if (cli === 'docker' && engine.engine !== 'podman') {
                     try {
@@ -656,7 +658,7 @@ export class DockerReadinessService {
 
             let contexts: ListContextItem[] = [];
             let contextsResolved = false;
-            if (!deadlineExpired && !this.dependencies.environmentVariables['DOCKER_HOST']) {
+            if (!deadlineExpired && cli !== 'podman' && !endpointSettings['DOCKER_HOST']) {
                 const contextResult = await this.readContexts(
                     client,
                     cancellationToken,
@@ -670,11 +672,7 @@ export class DockerReadinessService {
                 throw new vscode.CancellationError();
             }
 
-            const endpoint = resolveDockerEndpoint(
-                this.dependencies.platform,
-                this.dependencies.environmentVariables,
-                contexts,
-            );
+            const endpoint = resolveDockerEndpoint(this.dependencies.platform, endpointSettings, contexts);
             const endpointProbe = await this.dependencies.probeEndpoint(endpoint, cancellationToken);
             if (callerCancelled) {
                 throw new vscode.CancellationError();
@@ -698,7 +696,7 @@ export class DockerReadinessService {
                 }
             }
 
-            const requestedContext = this.dependencies.environmentVariables['DOCKER_CONTEXT'];
+            const requestedContext = endpointSettings['DOCKER_CONTEXT'];
             const contextUnavailable =
                 !!requestedContext &&
                 contextsResolved &&
