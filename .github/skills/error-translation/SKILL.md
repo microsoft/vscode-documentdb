@@ -127,7 +127,8 @@ Existing call sites:
 | Surface                                           | File                                                                                  |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | Every tree view, below a cluster                  | [BaseExtendedTreeDataProvider.ts](../../../src/tree/BaseExtendedTreeDataProvider.ts)  |
-| Cluster connect and list databases                | [ClusterItemBase.ts](../../../src/tree/documentdb/ClusterItemBase.ts)                 |
+| Cached cluster connect and list databases         | [ClusterItemBase.ts](../../../src/tree/documentdb/ClusterItemBase.ts)                 |
+| First cluster connect, in every view and plugin   | [showClusterConnectFailure.ts](../../../src/documentdb/showClusterConnectFailure.ts)  |
 | Shell connect banner                              | [DocumentDBShellPty.ts](../../../src/documentdb/shell/DocumentDBShellPty.ts)          |
 | Query playground                                  | [executePlaygroundCode.ts](../../../src/commands/playground/executePlaygroundCode.ts) |
 | Tree-node commands (create, drop, …)              | [commandErrorHandling.ts](../../../src/utils/commandErrorHandling.ts)                 |
@@ -137,6 +138,10 @@ Tree views need no per-view wiring: `wrapGetChildrenWithErrorAndStateHandling` t
 out, so any provider built on the base class is covered. Commands registered with
 `registerCommandWithTreeNodeUnwrappingAndModalErrors` are covered the same way, via the tree node
 they receive.
+
+A cluster item's first-connect catch must render through `showClusterConnectFailure()` and await
+it **before** evicting `CredentialCache` or deleting the client: the Entra and Atlas providers read
+the cached credentials.
 
 ### Do not call it from background paths
 

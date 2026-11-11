@@ -258,9 +258,10 @@ export class ClustersClient {
     //     }
     // }
 
-    private async initClient(abortSignal?: AbortSignal): Promise<void> {
+    private async initClient(abortSignal?: AbortSignal, onStartup?: (id: string) => void): Promise<void> {
         const startupId = randomUUID();
         this.connectionCorrelationId = startupId;
+        onStartup?.(startupId);
         let originalFailure: { error: unknown } | undefined;
 
         try {
@@ -538,9 +539,16 @@ export class ClustersClient {
      * the in-progress connection is closed and a `UserCancelledError` is thrown.
      * @returns A promise that resolves to an instance of `ClustersClient`.
      */
-    public static async getClient(clusterId: string, abortSignal?: AbortSignal): Promise<ClustersClient> {
+    public static async getClient(
+        clusterId: string,
+        abortSignal?: AbortSignal,
+        onStartup?: (id: string) => void,
+    ): Promise<ClustersClient> {
         if (ClustersClient._clients.has(clusterId)) {
             const client = ClustersClient._clients.get(clusterId) as ClustersClient;
+            if (client.connectionCorrelationId) {
+                onStartup?.(client.connectionCorrelationId);
+            }
 
             // Wire up abort for cached client reconnection so the cancellable
             // progress UI can also cancel a reconnection attempt.
@@ -577,7 +585,7 @@ export class ClustersClient {
         const client = new ClustersClient(clusterId);
         try {
             // Cluster metadata is set in initClient
-            await client.initClient(abortSignal);
+            await client.initClient(abortSignal, onStartup);
             ClustersClient._clients.set(clusterId, client);
             ClustersClient._lastFailedStartups.delete(clusterId);
         } catch (error) {

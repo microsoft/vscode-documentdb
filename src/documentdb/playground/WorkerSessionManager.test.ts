@@ -5,7 +5,9 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest';
 
+import { rewriteSrvUri } from '@documentdb-js/srv-resolver';
 import { UserCancelledError, type IActionContext, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
+import { MongoClient } from 'mongodb';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import * as workerThreads from 'worker_threads';
@@ -13,6 +15,7 @@ import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
 import { traceAuthFlow, type AuthTraceContext } from '../../utils/authTrace';
 import { AuthMethodId } from '../auth/AuthMethod';
+import { EntraDestinationRejectedError } from '../auth/oidcAllowedHosts';
 import { CredentialCache } from '../CredentialCache';
 import { ShellSessionManager } from '../shell/ShellSessionManager';
 import {
@@ -144,8 +147,10 @@ describe('WorkerSessionManager', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.mocked(vscode.workspace.onDidChangeConfiguration).mockReset();
         vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
             get: vi.fn().mockReturnValue(undefined),
+            inspect: vi.fn().mockReturnValue(undefined),
         } as unknown as vscode.WorkspaceConfiguration);
         mockTelemetryEvents.length = 0;
         vi.mocked(prepareDriverConnectionString).mockImplementation(async (input) => ({
@@ -275,22 +280,277 @@ describe('WorkerSessionManager', () => {
             return mockTelemetryEvents.find((event) => event.eventName === 'worker.startup')!;
         }
 
+        it.each(['MicrosoftEntraID', 'ManagedIdentity'] as const)(
+            'rejects mixed saved %s destinations before preparing SRV or spawning',
+            async (authMechanism): Promise<void> => {
+                const manager = new WorkerSessionManager(callbacks);
+                await expect(
+                    manager.ensureWorker('cluster-id', {
+                        ...initMessage(),
+                        authMechanism,
+                        connectionString:
+                            'mongodb://cluster.mongocluster.cosmos.azure.com,attacker.cloudapp.azure.com/',
+                    }),
+                ).rejects.toBeInstanceOf(EntraDestinationRejectedError);
+                expect(prepareDriverConnectionString).not.toHaveBeenCalled();
+                expect(Worker).not.toHaveBeenCalled();
+                expect(startupEvent().telemetry.properties).toMatchObject({
+                    entraDestinationClass: 'otherAzure',
+                    microsoftCloudDomain: 'true',
+                    serviceLabel: 'false',
+                    result: 'Failed',
+                });
+                expect(JSON.stringify(startupEvent())).not.toMatch(/attacker|mongodb:\/\//);
+                manager.dispose();
+            },
+        );
+
+        it('does not serialize a malformed machine suffix', async (): Promise<void> => {
+            vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+                inspect: vi.fn().mockReturnValue({ globalValue: { hostnameSuffix: { invalid: true } } }),
+            } as unknown as vscode.WorkspaceConfiguration);
+            const manager = new WorkerSessionManager(callbacks);
+            const initializing = manager.ensureWorker('cluster-id', {
+                ...initMessage(),
+                authMechanism: 'ManagedIdentity',
+            });
+            await Promise.resolve();
+            const posted = replyInit();
+            await initializing;
+            expect(posted.oidcDestinationPolicy?.customHostnameSuffix).toBeUndefined();
+            manager.dispose();
+        });
+
+        it('restores a worker destination rejection as the explicit localized error', async (): Promise<void> => {
+            const manager = new WorkerSessionManager(callbacks);
+            const initializing = manager.ensureWorker('cluster-id', {
+                ...initMessage(),
+                authMechanism: 'ManagedIdentity',
+            });
+            await Promise.resolve();
+            const worker = workerMock();
+            const posted = worker.postMessage.mock.calls.at(-1)?.[0] as Extract<MainToWorkerMessage, { type: 'init' }>;
+            worker._emit('message', {
+                type: 'initResult',
+                requestId: posted.requestId,
+                success: false,
+                error: "Microsoft Entra ID isn't allowed for this server.",
+                errorName: 'EntraDestinationRejectedError',
+            });
+            await expect(initializing).rejects.toBeInstanceOf(EntraDestinationRejectedError);
+            manager.dispose();
+        });
+
         it('passes the configured custom hostname suffix to the worker allowlist', async (): Promise<void> => {
             vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
                 get: vi.fn().mockReturnValue({ hostnameSuffix: '.database.example.com' }),
+                inspect: vi.fn().mockReturnValue({ globalValue: { hostnameSuffix: '.database.example.com' } }),
             } as unknown as vscode.WorkspaceConfiguration);
             const manager = new WorkerSessionManager(callbacks);
             const initializing = manager.ensureWorker(
                 'cluster-id',
-                { ...initMessage(), connectionString: 'mongodb://cluster.database.example.com/' },
+                {
+                    ...initMessage(),
+                    authMechanism: 'MicrosoftEntraID',
+                    connectionString: 'mongodb://cluster.database.example.com/',
+                },
                 1000,
             );
             await Promise.resolve();
             const posted = replyInit();
             await initializing;
-            expect(posted.oidcAllowedHosts).toEqual(['*.database.example.com']);
+            expect(posted.oidcDestinationPolicy?.customHostnameSuffix).toBe('database.example.com');
             manager.dispose();
         });
+
+        it('revokes custom trust permanently on normalized suffix changes without worker messages', async (): Promise<void> => {
+            let suffix = '.database.example.com';
+            vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+                inspect: vi.fn(() => ({ globalValue: { hostnameSuffix: suffix } })),
+            } as unknown as vscode.WorkspaceConfiguration);
+            let changed!: (event: vscode.ConfigurationChangeEvent) => void;
+            const dispose = vi.fn();
+            vi.mocked(vscode.workspace.onDidChangeConfiguration).mockImplementation((listener) => {
+                changed = listener;
+                return { dispose };
+            });
+            const manager = new WorkerSessionManager(callbacks);
+            const initializing = manager.ensureWorker('custom', {
+                ...initMessage(),
+                authMechanism: 'ManagedIdentity',
+                connectionString: 'mongodb+srv://original.database.example.com/',
+            });
+            await Promise.resolve();
+            const posted = replyInit();
+            await initializing;
+            const policy = posted.oidcDestinationPolicy!;
+            expect(policy.originalConnectionString).toBe('mongodb+srv://original.database.example.com/');
+            const revoked = new Int32Array(policy.revoked);
+            const notify = (): void => changed({ affectsConfiguration: () => true } as vscode.ConfigurationChangeEvent);
+            const worker = workerMock();
+            worker.postMessage.mockClear();
+            suffix = ' DATABASE.EXAMPLE.COM ';
+            notify();
+            expect(Atomics.load(revoked, 0)).toBe(0);
+            suffix = 'example.com';
+            notify();
+            expect(Atomics.load(revoked, 0)).toBe(1);
+            suffix = 'database.example.com';
+            notify();
+            expect(Atomics.load(revoked, 0)).toBe(1);
+            expect(worker.postMessage).not.toHaveBeenCalled();
+            manager.dispose();
+            expect(dispose).toHaveBeenCalledTimes(1);
+        });
+
+        it('does not subscribe or revoke built-in-only generations for unrelated custom settings', async (): Promise<void> => {
+            const manager = new WorkerSessionManager(callbacks);
+            const initializing = manager.ensureWorker('built-in', {
+                ...initMessage(),
+                authMechanism: 'ManagedIdentity',
+            });
+            await Promise.resolve();
+            const posted = replyInit();
+            await initializing;
+            const revoked = new Int32Array(posted.oidcDestinationPolicy!.revoked);
+            expect(vscode.workspace.onDidChangeConfiguration).not.toHaveBeenCalled();
+            expect(Atomics.load(revoked, 0)).toBe(0);
+            manager.dispose();
+            expect(Atomics.load(revoked, 0)).toBe(1);
+        });
+
+        it.each(['failedPreparation', 'failedInit', 'exit', 'shutdown', 'replacement'] as const)(
+            'disposes the custom-policy listener and revokes before %s detaches the generation',
+            async (lifecycle): Promise<void> => {
+                vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+                    inspect: vi.fn(() => ({ globalValue: { hostnameSuffix: 'database.example.com' } })),
+                } as unknown as vscode.WorkspaceConfiguration);
+                const dispose = vi.fn();
+                vi.mocked(vscode.workspace.onDidChangeConfiguration).mockReturnValue({ dispose });
+                const manager = new WorkerSessionManager(callbacks);
+                if (lifecycle === 'failedPreparation') {
+                    vi.mocked(prepareDriverConnectionString).mockRejectedValueOnce(new Error('preparation failed'));
+                }
+                const initializing = manager.ensureWorker('custom', {
+                    ...initMessage(),
+                    authMechanism: 'MicrosoftEntraID',
+                    connectionString: 'mongodb://original.database.example.com/',
+                });
+                if (lifecycle === 'failedPreparation') {
+                    await expect(initializing).rejects.toThrow('preparation failed');
+                    expect(dispose).toHaveBeenCalledTimes(1);
+                    manager.dispose();
+                    return;
+                }
+                await Promise.resolve();
+                const worker = workerMock();
+                const posted = worker.postMessage.mock.calls.at(-1)![0] as Extract<
+                    MainToWorkerMessage,
+                    { type: 'init' }
+                >;
+                const revoked = new Int32Array(posted.oidcDestinationPolicy!.revoked);
+                if (lifecycle === 'failedInit') {
+                    worker._emit('message', {
+                        type: 'initResult',
+                        requestId: posted.requestId,
+                        success: false,
+                        error: 'failed',
+                    });
+                    await expect(initializing).rejects.toThrow('failed');
+                } else {
+                    replyInit();
+                    await initializing;
+                    if (lifecycle === 'exit') {
+                        worker._emit('exit', 1);
+                    } else if (lifecycle === 'shutdown') {
+                        const stopping = manager.shutdown();
+                        expect(Atomics.load(revoked, 0)).toBe(1);
+                        const shutdown = worker.postMessage.mock.calls.at(-1)![0] as MainToWorkerMessage;
+                        worker._emit('message', { type: 'shutdownComplete', requestId: shutdown.requestId });
+                        await stopping;
+                    } else {
+                        const replacing = manager.ensureWorker('replacement', {
+                            ...initMessage(),
+                            authMechanism: 'ManagedIdentity',
+                            connectionString: 'mongodb://new.database.example.com/',
+                        });
+                        expect(Atomics.load(revoked, 0)).toBe(1);
+                        await Promise.resolve();
+                        const next = replyInit();
+                        await replacing;
+                        expect(next.oidcDestinationPolicy!.revoked).not.toBe(posted.oidcDestinationPolicy!.revoked);
+                        expect(Atomics.load(new Int32Array(next.oidcDestinationPolicy!.revoked), 0)).toBe(0);
+                    }
+                }
+                expect(Atomics.load(revoked, 0)).toBe(1);
+                expect(dispose).toHaveBeenCalledTimes(1);
+                manager.dispose();
+            },
+        );
+
+        it('rejects revocation during pending preparation and cleans up its listener', async (): Promise<void> => {
+            let suffix: string | undefined = 'database.example.com';
+            vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+                inspect: vi.fn(() => ({ globalValue: { hostnameSuffix: suffix } })),
+            } as unknown as vscode.WorkspaceConfiguration);
+            let changed!: (event: vscode.ConfigurationChangeEvent) => void;
+            const dispose = vi.fn();
+            vi.mocked(vscode.workspace.onDidChangeConfiguration).mockImplementation((listener) => {
+                changed = listener;
+                return { dispose };
+            });
+            const pending = deferred<PreparedDriverConnectionString>();
+            vi.mocked(prepareDriverConnectionString).mockReturnValueOnce(pending.promise);
+            const manager = new WorkerSessionManager(callbacks);
+            const initializing = manager.ensureWorker('custom', {
+                ...initMessage(),
+                authMechanism: 'ManagedIdentity',
+                connectionString: 'mongodb+srv://original.database.example.com/',
+            });
+            suffix = undefined;
+            changed({ affectsConfiguration: () => true } as vscode.ConfigurationChangeEvent);
+            pending.resolve({
+                connectionString: 'mongodb://resolved.database.example.com/',
+                options: {},
+                srvResolution: 'fallback',
+            });
+            await expect(initializing).rejects.toBeInstanceOf(EntraDestinationRejectedError);
+            expect(Worker).not.toHaveBeenCalled();
+            expect(dispose).toHaveBeenCalledTimes(1);
+            manager.dispose();
+        });
+
+        it.each(['NativeAuth', 'NoAuth'] as const)(
+            'strips conflicting OIDC before %s fallback so TXT authSource applies and explicit native authSource wins',
+            async (authMechanism): Promise<void> => {
+                for (const explicit of [false, true]) {
+                    const original = `mongodb+srv://user:password@cluster.database.example.com/appdb?authMechanism=MONGODB-OIDC&authMechanismProperties=ENVIRONMENT:azure${explicit ? '&authSource=explicitdb' : ''}`;
+                    vi.mocked(prepareDriverConnectionString).mockImplementationOnce(async (input) => {
+                        expect(input.connectionString).not.toMatch(/authMechanism/i);
+                        const rewritten = rewriteSrvUri({
+                            connectionString: input.connectionString,
+                            options: input.options,
+                            srvRecords: [
+                                { name: 'resolved.database.example.com', port: 10260, weight: 0, priority: 0 },
+                            ],
+                            txtRecords: [['authSource=authdb']],
+                        });
+                        return { ...rewritten, srvResolution: 'fallback' };
+                    });
+                    const manager = new WorkerSessionManager(callbacks);
+                    const input = Object.freeze({ ...initMessage(), authMechanism, connectionString: original });
+                    const initializing = manager.ensureWorker('native', input);
+                    await Promise.resolve();
+                    const posted = replyInit();
+                    await initializing;
+                    const client = new MongoClient(posted.connectionString, posted.clientOptions);
+                    expect(client.options.credentials?.source).toBe(explicit ? 'explicitdb' : 'authdb');
+                    expect(input.connectionString).toBe(original);
+                    expect(posted.oidcDestinationPolicy).toBeUndefined();
+                    manager.dispose();
+                }
+            },
+        );
 
         it('posts only serializable prepared options without changing the input', async (): Promise<void> => {
             const input = Object.freeze({
@@ -316,7 +576,7 @@ describe('WorkerSessionManager', () => {
             expect(posted).toMatchObject({
                 connectionString: rewrittenUri,
                 clientOptions: { serverSelectionTimeoutMS: 8000, tls: true },
-                oidcAllowedHosts: ['*.azure.us'],
+                oidcDestinationPolicy: undefined,
             });
             expect(() => structuredClone(posted)).not.toThrow();
             expect(input).toEqual(snapshot);
@@ -520,7 +780,8 @@ describe('WorkerSessionManager', () => {
                 {
                     type: 'init',
                     requestId: '',
-                    connectionString: 'mongodb://private-user:private-password@private-host:27017',
+                    connectionString:
+                        'mongodb://private-user:private-password@private-host.mongocluster.cosmos.azure.com:27017',
                     clientOptions: {},
                     databaseName: 'private-database',
                     authMechanism: 'MicrosoftEntraID',

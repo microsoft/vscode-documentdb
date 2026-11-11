@@ -58,6 +58,12 @@ export interface SerializableExecutionResult {
 
 // ─── Main → Worker messages ─────────────────────────────────────────────────
 
+export interface SerializableOidcDestinationPolicy {
+    readonly originalConnectionString: string;
+    readonly customHostnameSuffix?: string;
+    readonly revoked: SharedArrayBuffer;
+}
+
 export type MainToWorkerMessage =
     | {
           readonly type: 'init';
@@ -65,8 +71,7 @@ export type MainToWorkerMessage =
           /** Connection string (with embedded credentials for SCRAM, without for Entra ID) */
           readonly connectionString: string;
           readonly clientOptions: SerializableMongoClientOptions;
-          /** OIDC security allowlist computed on the host from the original connection string. */
-          readonly oidcAllowedHosts?: readonly string[];
+          readonly oidcDestinationPolicy?: SerializableOidcDestinationPolicy;
           readonly databaseName: string;
           readonly authMechanism: 'NativeAuth' | 'MicrosoftEntraID' | 'ManagedIdentity' | 'NoAuth';
           /** Tenant ID for Entra ID clusters */
@@ -105,6 +110,7 @@ export type MainToWorkerMessage =
           readonly type: 'tokenError';
           readonly requestId: string;
           readonly error: string;
+          readonly errorName?: 'EntraDestinationRejectedError';
       };
 
 // ─── Worker → Main messages ─────────────────────────────────────────────────
@@ -135,6 +141,7 @@ export type WorkerToMainMessage =
           readonly requestId: string;
           readonly success: boolean;
           readonly error?: string;
+          readonly errorName?: 'EntraDestinationRejectedError';
       }
     | {
           readonly type: 'evalResult';

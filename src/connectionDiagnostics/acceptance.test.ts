@@ -396,6 +396,7 @@ beforeEach((): void => {
     );
     vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
         get: vi.fn().mockReturnValue(undefined),
+        inspect: vi.fn().mockReturnValue(undefined),
     } as unknown as vscode.WorkspaceConfiguration);
     Object.defineProperty(vscode.env, 'remoteName', { value: undefined, configurable: true });
     Object.defineProperty(vscode.env, 'clipboard', {
@@ -530,6 +531,10 @@ describe('Acceptance (design §8.1)', (): void => {
             activeDirectoryEndpointUrl: 'https://login.example.com/',
             resourceManagerEndpointUrl: 'https://management.example.com/',
         });
+        vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+            get: vi.fn().mockReturnValue(undefined),
+            inspect: vi.fn().mockReturnValue({ globalValue: { hostnameSuffix: 'private.example' } }),
+        } as unknown as vscode.WorkspaceConfiguration);
         const custom = await finish(context(AuthMethodId.MicrosoftEntraID, 'mongodb://cluster.private.example/'));
         expect(custom.result).toMatchObject({ outcome: 'failed', headline: { code: 'auth.tokenResourceUnresolved' } });
         expect(custom.result.headline?.nextStep).toContain('documentDB.customEnvironment.ossrdbmsEndpoint');

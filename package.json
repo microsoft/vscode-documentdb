@@ -2014,7 +2014,7 @@
                 "type": "string",
                 "pattern": "^\\s*(?:\\.?(?!(?:[cC][oO][mM]|[cC][oO]|[nN][eE][tT]|[oO][rR][gG]|[gG][oO][vV])\\.[a-zA-Z]{2}\\s*$)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+)?\\s*$",
                 "patternErrorMessage": "Use a trusted service hostname suffix such as .mongocluster.cosmos.example, with valid DNS labels and no wildcard, URL, port, or path. Bare top-level domains and common public suffixes such as com.cn are not allowed. Leave it empty to clear.",
-                "description": "Trusted DocumentDB hostname suffix, such as .mongocluster.cosmos.example. Applies in any cloud: Microsoft Entra ID tokens are sent only to hosts ending with this suffix or a built-in Azure cloud domain. It never selects a token audience. Leave empty to trust only the built-in domains."
+                "markdownDescription": "Microsoft Entra ID tokens are sent to servers ending with this suffix. Add only a suffix you have confirmed belongs to Azure DocumentDB. Applies in any cloud; never selects a token audience. Leave empty to trust only built-in service suffixes. [Learn more](https://microsoft.github.io/vscode-documentdb/user-manual/entra-id-trusted-servers/)"
               }
             },
             "additionalProperties": false

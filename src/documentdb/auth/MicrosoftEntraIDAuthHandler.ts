@@ -7,10 +7,10 @@
 import { getSessionFromVSCode } from '@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode';
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
-import { type MongoClientOptions, type OIDCCallbackParams, type OIDCResponse } from 'mongodb';
-import * as vscode from 'vscode';
-import { settingsKeys } from '../../settingsKeys';
-import { traceAuthFlow, traceAuthOperation, type AuthTraceContext } from '../../utils/authTrace';
+import { type OIDCCallbackParams, type OIDCResponse } from 'mongodb';
+import type * as vscode from 'vscode';
+import { ext } from '../../extensionVariables';
+import { traceAuthFlow, traceAuthOperation, traceEntraDestination, type AuthTraceContext } from '../../utils/authTrace';
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { withTokenAcquisitionTiming, type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import {
@@ -19,17 +19,13 @@ import {
     type AuthCallerPolicy,
     type AuthPhaseObserver,
 } from './authCallerPolicy';
-import { buildAuthConnectionTarget } from './authConnectionTarget';
 import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
-import { AuthMethodId } from './AuthMethod';
-import {
-    resolveInteractiveTokenResource,
-    TokenResourceResolutionError,
-    type DocumentDBCustomEnvironment,
-} from './documentdbTokenResource';
+import { resolveInteractiveTokenResource, TokenResourceResolutionError } from './documentdbTokenResource';
+import { evaluateEntraDestinationFromSettings, getEntraCustomHostnameSuffix } from './entraDestinationSettings';
 import { classifyEntraError } from './entraErrors/classifyEntraError';
 import { clearEntraTokenFailure, recordEntraTokenFailure } from './entraErrors/entraTokenFailures';
-import { getOidcAllowedHosts } from './oidcAllowedHosts';
+import { EntraDestinationRejectedError } from './oidcAllowedHosts';
+import { buildOidcClientConfiguration, createOidcDestinationPolicy } from './oidcClientOptions';
 
 /**
  * Handler for Microsoft Entra ID authentication via OIDC.
@@ -52,9 +48,17 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         traceContext?: AuthTraceContext,
     ): Promise<AuthHandlerResponse> {
         const authCorrelationId = randomUUID();
+        const { connectionString, clusterId } = this.clusterCredentials;
+        const tenantId = this.clusterCredentials.entraIdConfig?.tenantId;
+        const decision = evaluateEntraDestinationFromSettings(connectionString);
+        traceEntraDestination(decision, authCorrelationId, traceContext);
+        if (!decision.allowed) {
+            throw new EntraDestinationRejectedError(decision);
+        }
+        const policy = createOidcDestinationPolicy(connectionString, getEntraCustomHostnameSuffix);
         let resolved: Awaited<ReturnType<typeof resolveInteractiveTokenResource>>;
         try {
-            resolved = await resolveInteractiveTokenResource(this.clusterCredentials.connectionString);
+            resolved = await resolveInteractiveTokenResource(connectionString);
             traceAuthFlow('entraCloud.resolved', resolved.details, authCorrelationId, traceContext);
         } catch (error) {
             if (error instanceof TokenResourceResolutionError) {
@@ -69,23 +73,19 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
             );
             throw error;
         }
-        const customHostnameSuffix = vscode.workspace
-            .getConfiguration()
-            .get<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment)?.hostnameSuffix;
-        const allowedHosts = getOidcAllowedHosts(this.clusterCredentials.connectionString, customHostnameSuffix);
+        policy.assertAllowed();
         this.notify((observer) =>
             observer.onSignInConfigurationResolved?.({
                 details: resolved.details,
                 cloudCategory: resolved.cloudCategory,
                 tokenResourceReason: resolved.reason,
-                allowedHosts,
+                allowedHosts: policy.allowedHostPatterns,
             }),
         );
 
         // Get Microsoft Entra ID token. Only an interactive caller may open sign-in; a non-interactive
         // caller looks up an existing session silently and never forces a new one.
         const interactive = this.policy.interactive;
-        const tenantId = this.clusterCredentials.entraIdConfig?.tenantId;
         let session: vscode.AuthenticationSession | undefined;
         this.notify((observer) => observer.onTokenStarted?.());
         try {
@@ -128,7 +128,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                 if (traceContext?.startupProperties) {
                     traceContext.startupProperties.entraFailureKind = 'tokenAcquisitionFailed';
                 }
-                recordEntraTokenFailure(this.clusterCredentials.clusterId, {
+                recordEntraTokenFailure(clusterId, {
                     cloudCategory: resolved.cloudCategory,
                     authMethod: 'interactive',
                     ruleId: classifyEntraError(error instanceof Error ? error.message : String(error))?.ruleId,
@@ -138,7 +138,8 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
             throw error;
         }
 
-        clearEntraTokenFailure(this.clusterCredentials.clusterId);
+        policy.assertAllowed();
+        clearEntraTokenFailure(clusterId);
         const acquiredSession = session;
         this.notify((observer) =>
             observer.onTokenAcquired?.({
@@ -150,35 +151,30 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
             }),
         );
 
-        // Prepare the credential-free connection string and the OIDC network options (forced TLS and
-        // the TLS exception)
-        const { connectionString, networkOptions } = buildAuthConnectionTarget(
-            AuthMethodId.MicrosoftEntraID,
-            this.clusterCredentials,
-        );
-
-        // Configure MongoDB client options for OIDC
-        const options: MongoClientOptions = {
-            ...networkOptions,
-            authMechanismProperties: {
-                ALLOWED_HOSTS: allowedHosts,
-                OIDC_CALLBACK: (_params: OIDCCallbackParams): Promise<OIDCResponse> =>
-                    Promise.resolve({
-                        accessToken: session.accessToken,
-                        expiresInSeconds: 0,
-                    }),
-            },
-        };
+        const configuration = buildOidcClientConfiguration({
+            connectionString,
+            policy,
+            oidcCallback: (_params: OIDCCallbackParams): Promise<OIDCResponse> =>
+                Promise.resolve({
+                    accessToken: session.accessToken,
+                    expiresInSeconds: 0,
+                }),
+        });
+        if (configuration.ignoredTlsBypass || this.clusterCredentials.emulatorConfiguration?.disableEmulatorSecurity) {
+            ext.outputChannel.info(
+                l10n.t('[Auth] TLS validation bypass parameters are ignored for Microsoft Entra ID connections.'),
+            );
+        }
 
         traceAuthFlow(
             'interactiveEntra.oidcConfigured',
-            { sessionAvailable: true, tls: true, allowedHosts: allowedHosts.join(',') },
+            { sessionAvailable: true, tls: true },
             authCorrelationId,
             traceContext,
         );
         return {
-            connectionString,
-            options,
+            connectionString: configuration.connectionString,
+            options: configuration.options,
         };
     }
 }

@@ -27,6 +27,11 @@ import { type BaseRouterContext as FrameworkBaseRouterContext } from '@microsoft
 import * as vscode from 'vscode';
 import { z } from 'zod';
 import { type API } from '../../DocumentDBExperiences';
+import {
+    readDeepLinkTelemetry,
+    trackDeepLinkTelemetry,
+    type DeepLinkTelemetry,
+} from '../../deepLinks/deepLinkTelemetry';
 import { ext } from '../../extensionVariables';
 import { ErrorExplanationService } from '../../services/errorExplanationService';
 import { getSurveyService } from '../../services/survey/SurveyService';
@@ -74,18 +79,19 @@ export { publicProcedure, publicProcedureWithTelemetry, router };
  * })
  * ```
  */
-export type BaseRouterContext = FrameworkBaseRouterContext & {
-    dbExperience: API;
-    /**
-     * Label used in telemetry event names to identify the source webview
-     * (combined with `WEBVIEW_CONFIG.telemetry.webviewEventPrefix` to form
-     * the final event name, e.g. `documentDB.webview.event.${webviewName}.${eventName}`).
-     *
-     * This is **not** the same as the registry key (`viewType`) passed to the
-     * `openAppWebview` factory / framework `openWebview` options.
-     */
-    webviewName: string;
-};
+export type BaseRouterContext = FrameworkBaseRouterContext &
+    Partial<DeepLinkTelemetry> & {
+        dbExperience: API;
+        /**
+         * Label used in telemetry event names to identify the source webview
+         * (combined with `WEBVIEW_CONFIG.telemetry.webviewEventPrefix` to form
+         * the final event name, e.g. `documentDB.webview.event.${webviewName}.${eventName}`).
+         *
+         * This is **not** the same as the registry key (`viewType`) passed to the
+         * `openAppWebview` factory / framework `openWebview` options.
+         */
+        webviewName: string;
+    };
 
 /**
  * eventName: string,
@@ -137,6 +143,7 @@ const commonRouter = router({
                     context.telemetry.properties.experience = myCtx.dbExperience;
                     Object.assign(context.telemetry.properties, input.properties ?? {});
                     Object.assign(context.telemetry.measurements, input.measurements ?? {});
+                    trackDeepLinkTelemetry(context, readDeepLinkTelemetry(myCtx));
                 },
             );
         }),
@@ -161,6 +168,7 @@ const commonRouter = router({
                     context.telemetry.properties.experience = myCtx.dbExperience;
 
                     Object.assign(context.telemetry.properties, input.properties ?? {});
+                    trackDeepLinkTelemetry(context, readDeepLinkTelemetry(myCtx));
 
                     const newError = new Error(input.message);
                     // If it's a rendering error in the webview, swap the stack with the componentStack which is more helpful

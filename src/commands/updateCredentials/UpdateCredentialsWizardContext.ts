@@ -20,6 +20,7 @@ export interface UpdateCredentialsWizardContext extends IActionContext {
     storageId: string;
 
     availableAuthenticationMethods: AuthMethodId[];
+    connectionString?: string;
 
     // structured authentication configurations
     nativeAuthConfig?: NativeAuthConfig;

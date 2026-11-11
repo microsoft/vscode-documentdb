@@ -135,6 +135,13 @@ const clouds = [
         cloud: 'AzureChinaCloud',
         scope: 'https://ossrdbms-aad.database.chinacloudapi.cn/.default',
     },
+    {
+        setting: 'AzureCloud',
+        suffix: 'com',
+        category: 'public',
+        cloud: 'AzureCloud',
+        scope: 'https://ossrdbms-aad.database.windows.net/.default',
+    },
 ] as const;
 
 const workerSessions = [
@@ -195,8 +202,9 @@ describe('sovereign authentication with real audience resolvers', () => {
             credentials(AuthMethodId.MicrosoftEntraID, cloud.suffix),
         ).configureAuth(undefined, { startupCorrelationId: 'startup-id', surface: 'extension', startupProperties });
         expect(getSession).toHaveBeenCalledExactlyOnceWith([cloud.scope], 'private-tenant', { createIfNone: true });
-        expect(options.authMechanismProperties?.ALLOWED_HOSTS).toEqual([`*.azure.${cloud.suffix}`]);
+        expect(options.authMechanismProperties?.ALLOWED_HOSTS).toEqual([`*.mongocluster.cosmos.azure.${cloud.suffix}`]);
         expect(startupProperties).toEqual({
+            entraDestinationClass: 'documentdbService',
             cloudCategory: cloud.category,
             tokenResourceReason: 'setting',
             configuredCloud: cloud.cloud,
@@ -214,7 +222,9 @@ describe('sovereign authentication with real audience resolvers', () => {
                 credentials(AuthMethodId.ManagedIdentity, cloud.suffix),
             ).configureAuth();
             expect(getManagedToken).not.toHaveBeenCalled();
-            expect(options.authMechanismProperties?.ALLOWED_HOSTS).toEqual([`*.azure.${cloud.suffix}`]);
+            expect(options.authMechanismProperties?.ALLOWED_HOSTS).toEqual([
+                `*.mongocluster.cosmos.azure.${cloud.suffix}`,
+            ]);
             const callback = options.authMechanismProperties?.OIDC_CALLBACK;
             if (!callback) {
                 throw new Error('Expected the OIDC token callback');
@@ -264,9 +274,17 @@ describe('sovereign authentication with real audience resolvers', () => {
                     expect.objectContaining({
                         type: 'init',
                         connectionString: stored.connectionString,
-                        oidcAllowedHosts: ['*.azure.us'],
+                        oidcDestinationPolicy: {
+                            originalConnectionString: stored.connectionString,
+                            customHostnameSuffix: undefined,
+                            revoked: expect.any(SharedArrayBuffer),
+                        },
                     }),
                 );
+                const init = postedMessages.find((message) => message.type === 'init');
+                const revoked = init?.oidcDestinationPolicy?.revoked;
+                expect(revoked?.byteLength).toBe(Int32Array.BYTES_PER_ELEMENT);
+                expect(Atomics.load(new Int32Array(revoked!), 0)).toBe(0);
                 expect(postedMessages).toContainEqual({
                     type: 'tokenResponse',
                     requestId: 'token-request',

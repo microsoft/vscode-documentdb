@@ -27,7 +27,12 @@ VM's managed identity instead of an interactive user sign-in. The UI presents bo
 choices in the Microsoft Entra ID family. Their persisted method IDs, configurations, token
 handlers, cache identities, and telemetry remain separate.
 
-Today this is impossible: our Entra ID path only ever asks the signed-in VS Code user for a token.
+Destination approval now precedes identity inference and token acquisition. Both token sources
+use the shared service-suffix policy and OIDC builder from
+[deep-links iteration 4](../deep-links/iterations/04-entra-token-destination-hardening.md#accepted-execution-plan-2026-11-10).
+The existing machine-scoped, single-string `hostnameSuffix` is the only explicit custom trust
+route; it does not waive certificate/hostname validation or all-host checks. No new setting or
+per-connection bypass is added. See [D14](decisions.md#d14-managed-identity-shares-the-entra-destination-boundary).
 
 > **Platform scope.** Azure VMs only, per [D0](decisions.md#d0-supported-platforms-azure-vms-only).
 > The credential library we use also works on App Service, Container Apps, Arc-enabled servers and
@@ -216,76 +221,30 @@ export type AuthConfig = NativeAuthConfig | EntraIdAuthConfig | ManagedIdentityA
 
 ### 3. `ManagedIdentityAuthHandler`
 
-New file `src/documentdb/auth/ManagedIdentityAuthHandler.ts`, structurally parallel to
-`MicrosoftEntraIDAuthHandler`:
+`src/documentdb/auth/ManagedIdentityAuthHandler.ts` remains separate from the interactive handler.
+It checks every seed using `evaluateEntraDestinationFromSettings` before loading/requesting a
+managed identity token. The audience is resolved on the main thread. The callback delegates to the
+managed identity token provider using the captured client selector and resolved audience.
 
-```ts
-export class ManagedIdentityAuthHandler implements AuthHandler {
-  constructor(private readonly clusterCredentials: CachedClusterCredentials) {}
-
-  public async configureAuth(): Promise<AuthHandlerResponse> {
-    // Dynamic import: @azure/identity pulls in MSAL and must stay out of the activation path.
-    const { ManagedIdentityCredential } = await import('@azure/identity');
-
-    const clientId = this.clusterCredentials.managedIdentityConfig?.clientId;
-    const credential = clientId ? new ManagedIdentityCredential({ clientId }) : new ManagedIdentityCredential();
-
-    const dbConnectionString = new DocumentDBConnectionString(this.clusterCredentials.connectionString);
-    dbConnectionString.username = '';
-    dbConnectionString.password = '';
-    dbConnectionString.searchParams.delete('authMechanism');
-    dbConnectionString.searchParams.delete('authMechanismProperties');
-    dbConnectionString.searchParams.delete('tls');
-
-    const options: MongoClientOptions = {
-      authMechanism: 'MONGODB-OIDC',
-      tls: true,
-      authMechanismProperties: {
-        ALLOWED_HOSTS: getOidcAllowedHosts(this.clusterCredentials.connectionString),
-        OIDC_CALLBACK: async (): Promise<OIDCResponse> => {
-          let token: AccessToken | null;
-          try {
-            token = await credential.getToken(ENTRA_DOCUMENTDB_SCOPE);
-          } catch (error) {
-            throw new Error(describeManagedIdentityError(error, clientId));
-          }
-          if (!token) {
-            throw new Error(describeManagedIdentityError(undefined, clientId));
-          }
-          return {
-            accessToken: token.token,
-            expiresInSeconds: expiresInSecondsFromTimestamp(token.expiresOnTimestamp),
-          };
-        },
-      },
-    };
-
-    // Same host-gated TLS exception policy as every other handler.
-    if (
-      resolveAllowInvalidCertificates(
-        this.clusterCredentials.emulatorConfiguration?.disableEmulatorSecurity,
-        this.clusterCredentials.connectionString,
-      )
-    ) {
-      options.tlsAllowInvalidCertificates = true;
-    }
-
-    return { connectionString: dbConnectionString.toString(), options };
-  }
-}
-```
+Both handlers call `buildOidcClientConfiguration`, also used by the shell/playground worker.
+It removes credentials and every case variant of competing URI auth/TLS options and URI-supplied
+CA/proxy overrides, narrows `ALLOWED_HOSTS` to the connection's approved suffixes, and forces TLS,
+certificate validation and policy-first `checkServerIdentity`. The old emulator/hostname TLS
+exception is not applied to either Entra token source. Native/password and no-auth handlers retain
+their existing behavior.
 
 Notes:
 
 - **`authMechanismProperties` must be stripped from the URL.** We pass `authMechanismProperties` via
   `MongoClientOptions`; leaving a competing `authMechanismProperties=ENVIRONMENT:azure,...` in the
   connection string risks the driver merging or preferring the URL form and taking its own IMDS path.
-  Needs an explicit test (WI14).
-- The scope constant `https://ossrdbms-aad.database.windows.net/.default` is currently duplicated in
-  three places (`MicrosoftEntraIDAuthHandler.ts`, `playgroundWorker.ts`, and implicitly in the shell
-  path). Extract it to a shared constant while adding the fourth consumer.
-- `ALLOWED_HOSTS` alongside a machine callback matches the official Node.js sample in the DocumentDB
-  RBAC documentation, so the two are expected to coexist. Confirm empirically during WI14.
+  The shared builder removes every case variant; no URI `ENVIRONMENT` reaches runtime OIDC.
+- Audiences follow the [sovereign-cloud resolver](../sovereign-clouds/README.md), not a pasted
+  `TOKEN_RESOURCE`. The public audience remains shared with PostgreSQL and MySQL; it is not
+  cluster-bound.
+- Driver seed `ALLOWED_HOSTS` is not sufficient for topology members, polling and reconnects. The
+  composed TLS hook checks those sockets too; the local dummy-token harness supplies offline
+  evidence, not live sovereign/private-link certification.
 
 Register in the `ClustersClient.initClient()` switch:
 
@@ -377,7 +336,7 @@ export interface ConnectionStringAuthFacts {
 export function getConnectionStringAuthFacts(cs: DocumentDBConnectionString): ConnectionStringAuthFacts;
 ```
 
-Wizard rules:
+Wizard rules, **only after every seed passes the destination policy**:
 
 | Connection string shape                               | Result                                                                                           |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -390,8 +349,9 @@ Wizard rules:
 
 Normalisation for the Azure machine workflow:
 
-1. Set `selectedAuthMethod = AuthMethodId.ManagedIdentity` only when the source and identity are
-   fully determined.
+1. Set `selectedAuthMethod = AuthMethodId.ManagedIdentity` only when the destination is admitted
+   and the source and identity are fully determined. Untrusted OIDC declarations never bypass
+   the destination gate.
 2. Set `managedIdentityAuthConfig` to `{ clientId }`, or `{}` when there was no username.
 3. **Strip `authMechanism`, `authMechanismProperties`, and the username from the stored connection
    string.** They were inputs to a decision; keeping them risks the driver later preferring the URL
@@ -413,25 +373,25 @@ This supersedes the original `ManagedIdentityHint` `weak`/`explicit` model. The 
 
 The Microsoft Entra ID family is offered wherever either interactive Entra ID or managed identity
 is supported, because on the wire they are the same mechanism and differ only in token source
-(`research-findings.md` §5.3). OIDC facts also make that family available when a private endpoint,
-CNAME, or custom domain prevents host-based vCore classification.
+(`research-findings.md` §5.3). OIDC facts do not authorize a private endpoint, CNAME or custom
+domain. Availability requires every seed to match the service-suffix policy or an explicitly
+trusted narrow custom suffix, with valid certificates still required at connection time.
 
 **Pasted connection string**, `src/commands/newConnection/PromptConnectionStringStep.ts`:
 
 ```ts
 const supportedAuthMethods: AuthMethodId[] = [AuthMethodId.NativeAuth];
 
-if (hasDomainSuffix(AzureDomains.vCore, ...parsedConnectionString.hosts)) {
+if (evaluateEntraDestinationFromSettings(parsedConnectionString.toString()).allowed) {
   supportedAuthMethods.push(AuthMethodId.MicrosoftEntraID);
-  supportedAuthMethods.push(AuthMethodId.ManagedIdentity);
-}
-
-if (authFacts.usesOidc && !supportedAuthMethods.includes(AuthMethodId.ManagedIdentity)) {
   supportedAuthMethods.push(AuthMethodId.ManagedIdentity);
 }
 
 supportedAuthMethods.push(AuthMethodId.NoAuth);
 ```
+
+For a rejected destination, show the explanatory Learn More row rather than adding an Entra
+method because `authFacts.usesOidc` is true.
 
 **ARM metadata**, `src/plugins/service-azure-mongo-vcore/utils/clusterHelpers.ts`:
 
@@ -810,7 +770,7 @@ completed VM validation taught us, otherwise they would need rewriting.
   `authMechanism`, no `authMechanismProperties`, and no username, and the config carries the client
   ID (or `{}` for system-assigned).
 - `ManagedIdentityAuthHandler`: with a mocked credential, assert `authMechanism`, `tls`,
-  `ALLOWED_HOSTS`, the TLS exception, and specifically that `authMechanismProperties` and
+  narrowed `ALLOWED_HOSTS`, mandatory certificate/hostname validation, and specifically that `authMechanismProperties` and
   `authMechanism` are **removed from the returned connection string**.
 - `buildParsedConnectionString`: the copy output for a system-assigned and a user-assigned identity,
   that existing query parameters survive, and that no password is ever added (§5.1).

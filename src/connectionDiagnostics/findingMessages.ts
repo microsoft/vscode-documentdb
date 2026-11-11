@@ -1164,9 +1164,7 @@ export const findingMessages: {
     },
     'auth.oidcHostNotAllowed': (): FindingMessage => ({
         title: vscode.l10n.t('Host not allowed for sign-in'),
-        explanation: vscode.l10n.t(
-            'The driver does not allow this cluster host for Microsoft Entra ID authentication.',
-        ),
+        explanation: vscode.l10n.t("Microsoft Entra ID isn't allowed for this server."),
         nextStep: vscode.l10n.t(
             'Verify the trusted service domain with your cloud administrator and set documentDB.customEnvironment.hostnameSuffix in user settings. Only trust your service domain.',
         ),
