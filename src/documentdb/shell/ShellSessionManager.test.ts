@@ -16,7 +16,11 @@ import {
     TokenResourceResolutionError,
 } from '../auth/documentdbTokenResource';
 import { EntraErrorExplainer } from '../auth/entraErrors/EntraErrorExplainer';
-import { getRecentEntraTokenFailure, recordEntraTokenFailure, resetEntraTokenFailuresForTests } from '../auth/entraErrors/entraTokenFailures';
+import {
+    getRecentEntraTokenFailure,
+    recordEntraTokenFailure,
+    resetEntraTokenFailuresForTests,
+} from '../auth/entraErrors/entraTokenFailures';
 import { CredentialCache } from '../CredentialCache';
 import { PlaygroundEvaluator } from '../playground/PlaygroundEvaluator';
 import { type WorkerSessionCallbacks } from '../playground/WorkerSessionManager';
@@ -334,8 +338,13 @@ describe('ShellSessionManager', () => {
                 recordEntraTokenFailure(clusterId, { cloudCategory: 'custom', authMethod: 'interactive' });
                 const failure = getRecentEntraTokenFailure(clusterId);
                 let finish!: () => void;
-                const gate = new Promise<void>((resolve) => { finish = resolve; });
-                const provider = authMethod === AuthMethodId.ManagedIdentity ? mockGetManagedIdentityAccessToken : mockGetSessionFromVSCode;
+                const gate = new Promise<void>((resolve) => {
+                    finish = resolve;
+                });
+                const provider =
+                    authMethod === AuthMethodId.ManagedIdentity
+                        ? mockGetManagedIdentityAccessToken
+                        : mockGetSessionFromVSCode;
                 provider.mockImplementationOnce(async () => {
                     await gate;
                     return { accessToken: 'must-not-post', account: { label: 'private-account' } };
@@ -343,7 +352,10 @@ describe('ShellSessionManager', () => {
                 const response = vi.fn();
                 const startupProperties: Record<string, string> = {};
                 const pending = workerCallbacks.onTokenRequest!(
-                    { type: 'tokenRequest', requestId: 'pending' }, response, () => true, undefined,
+                    { type: 'tokenRequest', requestId: 'pending' },
+                    response,
+                    () => true,
+                    undefined,
                     { startupCorrelationId: 'startup', surface, startupProperties },
                 );
                 await vi.waitFor(() => expect(provider).toHaveBeenCalledTimes(1));
@@ -351,7 +363,9 @@ describe('ShellSessionManager', () => {
                 finish();
                 await pending;
                 expect(response).toHaveBeenCalledExactlyOnceWith({
-                    type: 'tokenError', requestId: 'pending', error: "Microsoft Entra ID isn't allowed for this server.",
+                    type: 'tokenError',
+                    requestId: 'pending',
+                    error: "Microsoft Entra ID isn't allowed for this server.",
                     errorName: 'EntraDestinationRejectedError',
                 });
                 expect(getRecentEntraTokenFailure(clusterId)).toBe(failure);

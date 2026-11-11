@@ -2936,7 +2936,6 @@
   "The driver also could not reach a server.": "The driver also could not reach a server.",
   "The driver could not select a server before its time limit. This does not show that credentials were rejected.": "The driver could not select a server before its time limit. This does not show that credentials were rejected.",
   "The driver could not select a server within the short time limit the extension uses for emulator and local connections. This does not show that credentials were rejected.": "The driver could not select a server within the short time limit the extension uses for emulator and local connections. This does not show that credentials were rejected.",
-  "The driver does not allow this cluster host for Microsoft Entra ID authentication.": "The driver does not allow this cluster host for Microsoft Entra ID authentication.",
   "The driver does not appear to allow this server for Microsoft Entra ID authentication. Microsoft Entra ID is available only for Azure DocumentDB or trusted servers. Learn More: {link}": "The driver does not appear to allow this server for Microsoft Entra ID authentication. Microsoft Entra ID is available only for Azure DocumentDB or trusted servers. Learn More: {link}",
   "The driver does not recognize the connection option {0}.": "The driver does not recognize the connection option {0}.",
   "The driver rejected the connection options before connecting, so nothing was sent to the server.": "The driver rejected the connection options before connecting, so nothing was sent to the server.",

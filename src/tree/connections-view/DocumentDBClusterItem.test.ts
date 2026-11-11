@@ -20,7 +20,12 @@ import { ChooseAuthMethodStep } from '../../documentdb/wizards/authenticate/Choo
 import { API, DocumentDBExperience } from '../../DocumentDBExperiences';
 import { ConnectionReachabilityService } from '../../services/connectionReachabilityService';
 import type * as storageModule from '../../services/connectionStorageService';
-import { ConnectionStorageService, ItemType, StorageZone, type ConnectionItem } from '../../services/connectionStorageService';
+import {
+    ConnectionStorageService,
+    ItemType,
+    StorageZone,
+    type ConnectionItem,
+} from '../../services/connectionStorageService';
 import { DocumentDBClusterItem } from './DocumentDBClusterItem';
 
 const { prompt, wizardCreated, showQuickPick, showErrorMessage } = vi.hoisted(() => ({

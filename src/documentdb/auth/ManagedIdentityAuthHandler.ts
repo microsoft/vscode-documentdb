@@ -140,9 +140,7 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
                 }
                 policy.assertAllowed();
                 clearEntraTokenFailure(clusterId);
-                this.notify((observer) =>
-                    observer.onTokenAcquired?.({ accessToken: token.accessToken, tenantId }),
-                );
+                this.notify((observer) => observer.onTokenAcquired?.({ accessToken: token.accessToken, tenantId }));
                 return {
                     accessToken: token.accessToken,
                     expiresInSeconds: expiresInSecondsFromTimestamp(token.expiresOnTimestamp),
