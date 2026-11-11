@@ -407,7 +407,7 @@ describe('rejected OIDC explanation', () => {
         await makeStep().prompt(context as never);
 
         expect(showQuickPick.mock.calls[0][1].placeHolder).toBe(
-            "This server can't use Microsoft Entra ID. Choose another method.",
+            "Microsoft Entra ID isn't enabled for this server address. Choose another method, or select it for details.",
         );
     });
 

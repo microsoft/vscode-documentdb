@@ -180,8 +180,9 @@ export function createAuthMethodQuickPickItems(
     // Legacy callers that do not supply a destination cannot offer Entra, or handle this action.
     if (options.entraDestinationAllowed === false) {
         items.push({
-            label: vscode.l10n.t('Microsoft Entra ID: not available'),
-            detail: vscode.l10n.t('Entra ID is used only with Azure DocumentDB clusters.'),
+            label: MicrosoftEntraIDAuthMethod.label,
+            description: vscode.l10n.t('not enabled for this address'),
+            detail: vscode.l10n.t('Select to see when Entra ID can be used.'),
             iconPath: getAuthMethodIconPath(MicrosoftEntraIDAuthMethod),
             entraUnavailable: true,
             alwaysShow: true,

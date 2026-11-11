@@ -92,7 +92,9 @@ export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWiza
                     context.ui.showQuickPick(quickPickItems, {
                         placeHolder:
                             !entraDestinationAllowed && context.connectionStringAuthFacts?.usesOidc
-                                ? l10n.t("This server can't use Microsoft Entra ID. Choose another method.")
+                                ? l10n.t(
+                                      "Microsoft Entra ID isn't enabled for this server address. Choose another method, or select it for details.",
+                                  )
                                 : l10n.t('Select an authentication method for "{resourceName}"', {
                                       resourceName: context.resourceName,
                                   }),

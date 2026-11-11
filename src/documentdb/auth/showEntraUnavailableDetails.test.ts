@@ -49,10 +49,10 @@ describe('showEntraUnavailableDetails', () => {
         await expect(showEntraUnavailableDetails()).resolves.toBeUndefined();
 
         expect(mocks.showInformationMessage).toHaveBeenCalledExactlyOnceWith(
-            'Microsoft Entra ID unavailable',
+            'Using Microsoft Entra ID with this server',
             {
                 modal: true,
-                detail: 'Microsoft Entra ID is available only for Azure DocumentDB\nor servers allowed by the trusted-server setting.',
+                detail: 'This is a server-address check, not a sign-in failure.\n\nTo protect your sign-in tokens, the extension enables Microsoft Entra ID only for recognized Azure DocumentDB addresses or explicitly configured trusted servers.\n\nConnecting to Azure DocumentDB? Compare your connection string with the one in the Azure portal. If that address is still unrecognized, or you use a custom address, select Learn More for endpoint verification and trusted-server setup guidance.\n\nConnecting to another service? Choose an authentication method supported by that service.',
             },
             { title: 'Learn More' },
             { title: 'Back', isCloseAffordance: true },

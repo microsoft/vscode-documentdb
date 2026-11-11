@@ -746,6 +746,26 @@ launch now show the existing nonblocking warning and return normally, preserving
 and original connection-failure cleanup. This supersedes the earlier rejection-propagation behavior,
 not wizard cancellation.
 
+### Operator-requested reassuring wording (2026-11-11)
+
+The operator observed that users with a valid domain who are unaware of the options may be
+worried by the unavailable row, and that "server" can suggest a problem in the server's
+configuration. The earlier row and modal wording above is superseded prospectively:
+
+- Picker row: label **Microsoft Entra ID** (unchanged method label), dimmed description
+  **not enabled for this address**, detail **Select to see when Entra ID can be used.** The
+  operator rejected a "(needs attention)" suffix and a "connection options" label.
+- Picker placeholder when the string requests OIDC: **Microsoft Entra ID isn't enabled for this
+  server address. Choose another method, or select it for details.**
+- Modal title **Using Microsoft Entra ID with this server**; the detail states that this is a
+  server-address check, not a sign-in failure, explains token protection, and separates guidance
+  for Azure DocumentDB users from users of other services. No em dashes.
+
+The modal keeps only **Learn More** and **Back**. A "Sign in anyway" action was reconsidered and
+not added: it would be the per-connection bypass this decision excludes. Opening an empty Settings
+page was offered as the only compatible addition and was not requested. Destination policy, trust
+and token behavior are unchanged.
+
 The [follow-up plan](./iterations/06-copilot-review-follow-up.md) also closes gaps in the already
 accepted boundary: recheck after acquisition and on every new socket, and atomically revoke
 custom-trusted worker generations when the suffix changes. Original connection restrictions,

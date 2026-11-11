@@ -100,8 +100,9 @@ describe('authentication family quick pick', () => {
                 AuthMethodId.NoAuth,
             ]);
             expect(items.find((item) => item.entraUnavailable)).toMatchObject({
-                label: 'Microsoft Entra ID: not available',
-                detail: 'Entra ID is used only with Azure DocumentDB clusters.',
+                label: 'Microsoft Entra ID',
+                description: 'not enabled for this address',
+                detail: 'Select to see when Entra ID can be used.',
                 alwaysShow: true,
             });
             expect(items.find((item) => item.entraUnavailable)?.authMethod).toBeUndefined();

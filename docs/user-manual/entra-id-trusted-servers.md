@@ -20,6 +20,10 @@ If you see **Microsoft Entra ID isn't allowed for this server**, check the conne
 before changing any setting. Choosing **Learn More** opens this page; it does not grant trust or
 fill in settings.
 
+When the server address is unrecognized, the authentication picker shows **Microsoft Entra ID** as
+_not enabled for this address_. Select it for guidance. This is a server-address check, not a sign-in
+failure.
+
 ## Recognized service names
 
 The built-in suffixes are:

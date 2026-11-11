@@ -38,7 +38,9 @@ export class PromptAuthMethodStep extends AzureWizardPromptStep<NewConnectionWiz
                     context.ui.showQuickPick(quickPickItems, {
                         placeHolder:
                             !entraDestinationAllowed && context.connectionStringAuthFacts?.usesOidc
-                                ? vscode.l10n.t("This server can't use Microsoft Entra ID. Choose another method.")
+                                ? vscode.l10n.t(
+                                      "Microsoft Entra ID isn't enabled for this server address. Choose another method, or select it for details.",
+                                  )
                                 : vscode.l10n.t('Select an authentication method'),
                         stepName: 'selectAuthMethod',
                         ignoreFocusOut: true,
