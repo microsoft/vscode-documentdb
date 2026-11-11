@@ -45,7 +45,10 @@ describe('AuthMethod NoAuth support', () => {
     });
 
     it('does not annotate methods with unknown cluster support', () => {
-        const items = createAuthMethodQuickPickItems([AuthMethodId.MicrosoftEntraID], { showSupportInfo: true });
+        const items = createAuthMethodQuickPickItems([AuthMethodId.MicrosoftEntraID], {
+            showSupportInfo: true,
+            entraDestinationAllowed: true,
+        });
 
         expect(items.every((item) => item.description === undefined)).toBe(true);
     });
@@ -53,7 +56,7 @@ describe('AuthMethod NoAuth support', () => {
 
 describe('authentication family quick pick', () => {
     it('presents managed identity under the Microsoft Entra ID family', () => {
-        const items = createAuthMethodQuickPickItemsWithSupportInfo();
+        const items = createAuthMethodQuickPickItemsWithSupportInfo(undefined, true);
         const entraItem = items.find((item) => item.authMethod === AuthMethodId.MicrosoftEntraID);
 
         expect(items.some((item) => item.authMethod === AuthMethodId.ManagedIdentity)).toBe(false);
@@ -66,12 +69,64 @@ describe('authentication family quick pick', () => {
     });
 
     it('renders a familiar icon for each authentication family', () => {
-        const items = createAuthMethodQuickPickItemsWithSupportInfo();
+        const items = createAuthMethodQuickPickItemsWithSupportInfo(undefined, true);
         const iconId = (method: AuthMethodId): string | undefined =>
             (items.find((item) => item.authMethod === method)?.iconPath as { id?: string } | undefined)?.id;
 
         expect(iconId(AuthMethodId.NativeAuth)).toBe('key');
         expect(iconId(AuthMethodId.MicrosoftEntraID)).toBe('azure');
         expect(iconId(AuthMethodId.NoAuth)).toBe('unlock');
+    });
+
+    it('keeps the same Azure icon when Microsoft Entra ID is unavailable', () => {
+        const available = createAuthMethodQuickPickItemsWithSupportInfo(undefined, true).find(
+            (item) => item.authMethod === AuthMethodId.MicrosoftEntraID,
+        );
+        const unavailable = createAuthMethodQuickPickItemsWithSupportInfo(undefined, false).find(
+            (item) => item.entraUnavailable,
+        );
+
+        expect(available?.iconPath).toMatchObject({ id: 'azure' });
+        expect(unavailable?.iconPath).toEqual(available?.iconPath);
+    });
+
+    it.each([{ methods: undefined }, { methods: [] }])(
+        'does not treat unknown or empty supported methods as destination approval ($methods)',
+        ({ methods }) => {
+            const items = createAuthMethodQuickPickItemsWithSupportInfo(methods);
+
+            expect(items.flatMap((item) => (item.authMethod ? [item.authMethod] : []))).toEqual([
+                AuthMethodId.NativeAuth,
+                AuthMethodId.NoAuth,
+            ]);
+            expect(items.find((item) => item.entraUnavailable)).toMatchObject({
+                label: 'Microsoft Entra ID',
+                description: 'not enabled for this address',
+                detail: 'Select to see when Entra ID can be used.',
+                alwaysShow: true,
+            });
+            expect(items.find((item) => item.entraUnavailable)?.authMethod).toBeUndefined();
+        },
+    );
+
+    it('does not accept stale Entra or managed-identity metadata as destination approval', () => {
+        const items = createAuthMethodQuickPickItems([AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity], {
+            entraDestinationAllowed: false,
+        });
+
+        expect(
+            items.some(
+                (item) =>
+                    item.authMethod === AuthMethodId.MicrosoftEntraID ||
+                    item.authMethod === AuthMethodId.ManagedIdentity,
+            ),
+        ).toBe(false);
+    });
+
+    it('keeps legacy non-Entra helper callers free of an unhandled Learn More action', () => {
+        const items = createAuthMethodQuickPickItems([AuthMethodId.MicrosoftEntraID]);
+
+        expect(items.map((item) => item.authMethod)).toEqual([AuthMethodId.NativeAuth, AuthMethodId.NoAuth]);
+        expect(items.some((item) => item.entraUnavailable)).toBe(false);
     });
 });

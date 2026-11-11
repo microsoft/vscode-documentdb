@@ -41,6 +41,7 @@ vi.mock('./resolveNamespaceNode', () => ({
 
 import * as vscode from 'vscode';
 import { openCollectionViewInternal } from '../../../commands/openCollectionView/openCollectionView';
+import { openAppWebview } from '../../_integration/openAppWebview';
 import { CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS } from './clusterDashboardContextMenu';
 import { openClusterDashboardWebview, registerClusterDashboardContextMenuCommands } from './clusterDashboardController';
 import { resolveNamespaceNode } from './resolveNamespaceNode';
@@ -88,6 +89,30 @@ function open(clusterId: string, selectedDatabaseName?: string): FakeController 
 }
 
 describe('openClusterDashboardWebview panel lifecycle', () => {
+    it('attributes the original session without retagging it when another URL reuses the panel', (): void => {
+        vi.clearAllMocks();
+        const config = {
+            clusterId: 'url-dashboard',
+            clusterDisplayName: 'Cluster',
+            viewId: 'discoveryView',
+            refreshIntervalMs: 5000,
+            showDashboardOnConnect: false,
+        };
+        const firstLink = { deepLinkCorrelationId: 'first-click', deepLinkSource: 'portal' };
+        const first = openClusterDashboardWebview(config, firstLink);
+        const second = openClusterDashboardWebview(config, {
+            deepLinkCorrelationId: 'second-click',
+            deepLinkSource: 'docs',
+        });
+        expect(second).toBe(first);
+        expect(openAppWebview).toHaveBeenCalledExactlyOnceWith(
+            expect.objectContaining({
+                context: expect.objectContaining(firstLink),
+            }),
+        );
+        first.dispose();
+    });
+
     it('reuses the existing panel instead of opening a duplicate', () => {
         const first = open(CLUSTER);
         const second = open(CLUSTER);

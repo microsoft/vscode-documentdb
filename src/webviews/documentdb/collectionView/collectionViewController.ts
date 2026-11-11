@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { type DeepLinkTelemetry } from '../../../deepLinks/deepLinkTelemetry';
 
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
@@ -49,6 +50,7 @@ export type CollectionViewWebviewConfigurationType = {
 
 export function openCollectionWebview(
     initialData: Omit<CollectionViewWebviewConfigurationType, 'defaultPageSize' | 'enableAIQueryGeneration'>,
+    deepLink?: DeepLinkTelemetry,
 ): AppWebviewController<CollectionViewWebviewConfigurationType> {
     const title: string = `${initialData.databaseName}/${initialData.collectionName}`;
 
@@ -65,6 +67,7 @@ export function openCollectionWebview(
     };
 
     const trpcContext: RouterContext = {
+        ...deepLink,
         dbExperience: API.DocumentDB,
         webviewName: 'collectionView',
         sessionId: initialData.sessionId,

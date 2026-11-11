@@ -6,6 +6,7 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
+import { readDeepLinkTelemetry } from '../../deepLinks/deepLinkTelemetry';
 import { QuickStartService } from '../../services/localQuickStart/QuickStartService';
 import { InstanceState, type OpenLocalQuickStartOptions } from '../../services/localQuickStart/quickStartTypes';
 import { openLocalQuickStartWebview } from '../../webviews/documentdb/localQuickStart/localQuickStartController';
@@ -30,13 +31,16 @@ export async function openLocalQuickStart(
     context.telemetry.properties.instanceState = status.state;
     context.telemetry.properties.initialStep = initialPhase;
     context.telemetry.properties.quickStartSessionId = quickStartSessionId;
-    const view = openLocalQuickStartWebview({
-        id: 'localQuickStart',
-        initialInstanceState: status.state,
-        initialInstanceMissing: status.missing === true,
-        initialPhase,
-        quickStartSessionId,
-    });
+    const view = openLocalQuickStartWebview(
+        {
+            id: 'localQuickStart',
+            initialInstanceState: status.state,
+            initialInstanceMissing: status.missing === true,
+            initialPhase,
+            quickStartSessionId,
+        },
+        readDeepLinkTelemetry(context.telemetry.properties),
+    );
     // Reveal in the panel's own column when it already has one (so reopening the create-or-reveal
     // singleton doesn't move a panel the user parked in another group), falling back to the active
     // column instead of the framework default (ViewColumn.One), which would yank the tab to column 1

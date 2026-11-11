@@ -7,7 +7,7 @@ import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
-import { traceAuthFlow, traceAuthOperation, type AuthTraceContext } from '../../utils/authTrace';
+import { traceAuthFlow, traceAuthOperation, traceEntraDestination, type AuthTraceContext } from '../../utils/authTrace';
 import { getBatchSizeSetting, getConnectionTimeoutMs } from '../../utils/workspacUtils';
 import { CredentialCache } from '../CredentialCache';
 import { AuthMethodId } from '../auth/AuthMethod';
@@ -17,7 +17,9 @@ import {
     TokenResourceResolutionError,
     type ResolvedTokenResource,
 } from '../auth/documentdbTokenResource';
+import { evaluateEntraDestinationFromSettings } from '../auth/entraDestinationSettings';
 import { clearEntraTokenFailure, recordEntraTokenFailure } from '../auth/entraErrors/entraTokenFailures';
+import { EntraDestinationRejectedError } from '../auth/oidcAllowedHosts';
 import {
     WorkerSessionManager,
     type WorkerSessionCallbacks,
@@ -90,7 +92,7 @@ export interface ShellSessionCallbacks {
  */
 export class ShellSessionManager implements vscode.Disposable {
     private readonly _workerManager: WorkerSessionManager;
-    private _sessionConnectionString: string | undefined;
+    private _sessionInitMessage: Extract<MainToWorkerMessage, { type: 'init' }> | undefined;
     private _resolvedTokenResource: ResolvedTokenResource | undefined;
     private readonly _connectionInfo: ShellConnectionInfo;
     private readonly _callbacks: ShellSessionCallbacks | undefined;
@@ -196,10 +198,10 @@ export class ShellSessionManager implements vscode.Disposable {
      */
     async initialize(): Promise<ShellConnectionMetadata> {
         const initMsg = this.buildInitMessage();
-        this._sessionConnectionString = CredentialCache.getCredentials(
-            this._connectionInfo.clusterId,
-        )?.connectionString;
-        this._resolvedTokenResource = undefined;
+        if (!this._initialized || !this._workerManager.isAlive) {
+            this._sessionInitMessage = initMsg;
+            this._resolvedTokenResource = undefined;
+        }
 
         const timeoutMs = getConnectionTimeoutMs();
         await this._workerManager.ensureWorker(
@@ -323,9 +325,8 @@ export class ShellSessionManager implements vscode.Disposable {
                 )
                     ? 4000
                     : undefined,
-            // TLS-allow-invalid is keyed off `disableEmulatorSecurity` (design §7), honored ONLY for
-            // local/private hosts ("hybrid" runtime policy): an orphaned flag on a public host is not
-            // activated; an explicit URL param is still honored by the driver (we never force `false`).
+            // Non-OIDC connections keep the local/private TLS exception. The worker's OIDC builder
+            // removes this option and URI bypasses for Entra connections.
             tlsAllowInvalidCertificates: resolveAllowInvalidCertificates(
                 credentials.emulatorConfiguration?.disableEmulatorSecurity,
                 connectionString,
@@ -373,15 +374,28 @@ export class ShellSessionManager implements vscode.Disposable {
         traceContext?: AuthTraceContext,
     ): Promise<void> {
         try {
-            const connectionString = this._sessionConnectionString;
-            if (!connectionString) {
+            const sessionInit = this._sessionInitMessage;
+            if (
+                !sessionInit ||
+                (sessionInit.authMechanism !== 'MicrosoftEntraID' && sessionInit.authMechanism !== 'ManagedIdentity')
+            ) {
                 throw new Error(l10n.t('No credentials found for cluster {0}', this._connectionInfo.clusterId));
             }
+            if (!isCurrent()) {
+                return;
+            }
+            const connectionString = sessionInit.connectionString;
+            const decision = evaluateEntraDestinationFromSettings(connectionString);
+            traceEntraDestination(decision, msg.requestId, traceContext);
+            if (!decision.allowed) {
+                throw new EntraDestinationRejectedError(decision);
+            }
+            const usesManagedIdentity = sessionInit.authMechanism === 'ManagedIdentity';
             let resolved: ResolvedTokenResource;
             try {
                 resolved =
                     this._resolvedTokenResource ??
-                    (msg.source === 'managedIdentity'
+                    (usesManagedIdentity
                         ? await resolveManagedIdentityTokenResource(connectionString)
                         : await resolveInteractiveTokenResource(connectionString));
                 if (isCurrent()) {
@@ -396,15 +410,15 @@ export class ShellSessionManager implements vscode.Disposable {
             }
             let accessToken: string;
 
-            if (msg.source === 'managedIdentity') {
+            if (usesManagedIdentity) {
                 const { getManagedIdentityAccessToken } = await import('../auth/managedIdentityTokenProvider');
                 try {
                     accessToken = (
                         await withTokenAcquisitionTiming(timings, () =>
                             getManagedIdentityAccessToken(
                                 [resolved.scope],
-                                msg.clientId,
-                                msg.tenantId,
+                                sessionInit.managedIdentityClientId,
+                                sessionInit.tenantId,
                                 this._managedIdentityTokenCorrelationId,
                                 traceContext,
                             ),
@@ -433,10 +447,10 @@ export class ShellSessionManager implements vscode.Disposable {
                         'interactiveEntra.getSession',
                         () =>
                             withTokenAcquisitionTiming(timings, () =>
-                                getSessionFromVSCode([resolved.scope], msg.tenantId, { createIfNone: true }),
+                                getSessionFromVSCode([resolved.scope], sessionInit.tenantId, { createIfNone: true }),
                             ),
                         {
-                            tenantSpecified: !!msg.tenantId,
+                            tenantSpecified: !!sessionInit.tenantId,
                             createIfNone: true,
                             cloudCategory: resolved.cloudCategory,
                             tokenResourceReason: resolved.reason,
@@ -465,6 +479,11 @@ export class ShellSessionManager implements vscode.Disposable {
                 this._displayName = session.account.label || undefined;
             }
 
+            const currentDecision = evaluateEntraDestinationFromSettings(connectionString);
+            traceEntraDestination(currentDecision, msg.requestId, traceContext);
+            if (!currentDecision.allowed) {
+                throw new EntraDestinationRejectedError(currentDecision);
+            }
             if (isCurrent()) {
                 clearEntraTokenFailure(this._connectionInfo.clusterId);
             }
@@ -479,6 +498,9 @@ export class ShellSessionManager implements vscode.Disposable {
                 type: 'tokenError',
                 requestId: msg.requestId,
                 error: errorMessage,
+                ...(error instanceof EntraDestinationRejectedError
+                    ? { errorName: 'EntraDestinationRejectedError' as const }
+                    : {}),
             });
         }
     }

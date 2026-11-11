@@ -288,13 +288,15 @@ describe('localized finding messages', () => {
     });
 
     it('points disallowed sign-in hosts to the current hostname suffix setting', (): void => {
-        expect(
-            describeFinding({
-                code: 'auth.oidcHostNotAllowed',
-                severity: 'error',
-                detail: { language: 'en', text: sentinel },
-            }).nextStep,
-        ).toBe(
+        const message = describeFinding({
+            code: 'auth.oidcHostNotAllowed',
+            severity: 'error',
+            detail: { language: 'en', text: sentinel },
+        });
+
+        expect(message.title).toBe('Host not allowed for sign-in');
+        expect(message.explanation).toBe("Microsoft Entra ID isn't allowed for this server.");
+        expect(message.nextStep).toBe(
             'Verify the trusted service domain with your cloud administrator and set documentDB.customEnvironment.hostnameSuffix in user settings. Only trust your service domain.',
         );
     });

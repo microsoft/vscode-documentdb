@@ -28,7 +28,7 @@ export const entraErrorRules: readonly EntraErrorRule[] = [
         aadsts: ['65002'],
         explain: (): string =>
             l10n.t(
-                'Microsoft Entra ID sign-in for Azure DocumentDB appears to require Microsoft to preauthorize VS Code. Only Microsoft can change this, not you or your tenant administrator. Use native DocumentDB authentication or managed identity on an Azure VM as a workaround, and report this on GitHub. See {link}',
+                'Microsoft Entra ID sign-in for Azure DocumentDB appears to require Microsoft to preauthorize VS Code. Only Microsoft can change this, not you or your tenant administrator. Use Username and Password authentication or managed identity on an Azure VM as a workaround, and report this on GitHub. See {link}',
                 { link: Links.SovereignClouds },
             ),
     },
@@ -117,7 +117,7 @@ export const entraErrorRules: readonly EntraErrorRule[] = [
         explain: (context): string => {
             if (context.recentTokenFailure && context.cloudCategory && context.cloudCategory !== 'public') {
                 return l10n.t(
-                    'Sign-in failed in {cloud}. If the sign-in window showed AADSTS65002 ("must be configured via preauthorization"), Microsoft Entra ID sign-in for Azure DocumentDB is not enabled yet for VS Code in this cloud. Only Microsoft can change this, not you or your tenant administrator. Use native DocumentDB authentication or managed identity on an Azure VM as a workaround, and report this on GitHub. See {link}',
+                    'Sign-in failed in {cloud}. If the sign-in window showed AADSTS65002 ("must be configured via preauthorization"), Microsoft Entra ID sign-in for Azure DocumentDB is not enabled yet for VS Code in this cloud. Only Microsoft can change this, not you or your tenant administrator. Use Username and Password authentication or managed identity on an Azure VM as a workaround, and report this on GitHub. See {link}',
                     { cloud: cloudDisplayName(context.cloudCategory), link: Links.SovereignClouds },
                 );
             }
@@ -137,8 +137,8 @@ export const entraErrorRules: readonly EntraErrorRule[] = [
         pattern: /^Host '[^'\r\n]+' is not valid for OIDC authentication with ALLOWED_HOSTS of '[^'\r\n]*'$/m,
         explain: (): string =>
             l10n.t(
-                'The driver does not appear to allow this cluster host for Microsoft Entra ID authentication. For a custom DNS endpoint, verify the trusted DocumentDB service hostname suffix with your cloud administrator and set "documentDB.customEnvironment.hostnameSuffix" in user settings. Only trust your service\'s domain, then connect again. See {link}',
-                { link: Links.SovereignClouds },
+                'The driver does not appear to allow this server for Microsoft Entra ID authentication. Microsoft Entra ID is available only for Azure DocumentDB or trusted servers. Learn More: {link}',
+                { link: Links.EntraTrustedServers },
             ),
     },
     {
