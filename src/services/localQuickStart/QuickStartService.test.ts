@@ -2360,7 +2360,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
     );
 
     it.each(['docker', 'podman'] as const)(
-        'records the pinned %s owner rather than a conflicting Configure preference',
+        'records no preference for a run pinned to its %s owner, whatever Configure submitted',
         async (engineCli) => {
             ext.secretStorage = fakeSecretStorage({});
             ext.context = fakeContext(fakeMemento());
@@ -2373,22 +2373,26 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
             });
             const runtime = provisionRuntime({ portFree: false });
             const service = new QuickStartServiceImpl(runtime);
+            const events: StageEvent[] = [];
 
-            await drain(
-                service.provision(new AbortController().signal, {
-                    preferredEngine: engineCli === 'docker' ? 'podman' : 'docker',
-                    startFresh: true,
-                }),
-            );
+            for await (const event of service.provision(new AbortController().signal, {
+                preferredEngine: engineCli === 'docker' ? 'podman' : 'docker',
+                startFresh: true,
+            })) {
+                events.push(event);
+            }
 
             expect(runtime.resolveCli).toHaveBeenCalledWith({ kind: 'pinned', cli: engineCli });
             const summary = mockTelemetryEvents
                 .filter((event) => event.eventName === 'documentDB.quickstart.provision')
                 .at(-1)?.telemetry;
-            expect(summary?.properties).toMatchObject({
-                preferredContainerEngine: engineCli,
-                containerCliFallback: 'false',
-            });
+            expect(summary?.properties).toMatchObject({ provisionResult: expect.any(String) });
+            expect(summary?.properties).not.toHaveProperty('preferredContainerEngine');
+            expect(summary?.properties).not.toHaveProperty('containerCliFallback');
+            const checked = events.find((event) => event.stage === 'checking' && event.dockerReadiness);
+            expect(checked?.dockerReadiness).toBeDefined();
+            expect(checked?.dockerReadiness).not.toHaveProperty('preferredEngine');
+            expect(checked?.dockerReadiness).not.toHaveProperty('cliFallback');
         },
     );
 

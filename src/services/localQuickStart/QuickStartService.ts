@@ -955,6 +955,8 @@ export class QuickStartServiceImpl {
         const priorState = this.stateFor(alias).state;
         const engineRequest = await this.engineRequestFor(alias, options?.preferredEngine);
         const resolved = this.runtime.resolveCli(engineRequest);
+        // Preference evidence exists only when this run chose its CLI; an instance's owner is not a preference.
+        const selection = engineRequest.kind === 'preferred' ? resolved : undefined;
         const engine = this.runtime.forCli(resolved);
         const stored = startFresh ? undefined : await this.getReusableCredentials(alias);
         const wantsCustomCredentials = !!(options?.username && options?.password);
@@ -1048,7 +1050,7 @@ export class QuickStartServiceImpl {
             const readiness = await this.runProvisionStage('checking', provisionCorrelationId, async () => {
                 const result = await this.checkDockerReadiness(
                     { engine: { kind: 'pinned', cli: resolved.cli } },
-                    resolved,
+                    selection,
                 );
                 checkedReadiness = result;
                 this.throwIfAborted(signal);
@@ -1429,7 +1431,9 @@ export class QuickStartServiceImpl {
             const aborted = signal.aborted;
             createTimedOut = error instanceof DockerCommandTimeoutError;
             const dockerReadiness =
-                !aborted && activeDockerStage ? await this.getProvisioningDockerReadiness(resolved) : undefined;
+                !aborted && activeDockerStage
+                    ? await this.getProvisioningDockerReadiness(resolved.cli, selection)
+                    : undefined;
             provisioningDockerFailureKind = dockerReadiness?.failureKind;
             const detail = errMessage(error);
             if (error instanceof ReadinessTimeoutError || error instanceof ReadinessFailedError) {
@@ -1590,9 +1594,11 @@ export class QuickStartServiceImpl {
                 telemetryContext.telemetry.properties.refusedCredentialsUnavailable = refusedCredentialsUnavailable
                     ? 'true'
                     : 'false';
-                telemetryContext.telemetry.properties.preferredContainerEngine =
-                    resolved.preferred === 'podman' ? 'podman' : 'docker';
-                telemetryContext.telemetry.properties.containerCliFallback = resolved.fellBack ? 'true' : 'false';
+                if (selection) {
+                    telemetryContext.telemetry.properties.preferredContainerEngine =
+                        selection.preferred === 'podman' ? 'podman' : 'docker';
+                    telemetryContext.telemetry.properties.containerCliFallback = selection.fellBack ? 'true' : 'false';
+                }
                 telemetryContext.telemetry.properties.provisionCorrelationId = provisionCorrelationId;
                 telemetryContext.telemetry.measurements.provisionMs = Date.now() - provisionStartedAt;
             });
@@ -1608,7 +1614,8 @@ export class QuickStartServiceImpl {
     }
 
     private async getProvisioningDockerReadiness(
-        selection: ResolvedContainerCli,
+        cli: ContainerCli,
+        selection: ResolvedContainerCli | undefined,
     ): Promise<DockerReadiness | undefined> {
         try {
             // Echo only failing probes: a healthy `docker info` dump would bury the real error in the setup log.
@@ -1616,7 +1623,7 @@ export class QuickStartServiceImpl {
                 {
                     forceRefresh: true,
                     suppressCommandEcho: true,
-                    engine: { kind: 'pinned', cli: selection.cli },
+                    engine: { kind: 'pinned', cli },
                 },
                 selection,
             );

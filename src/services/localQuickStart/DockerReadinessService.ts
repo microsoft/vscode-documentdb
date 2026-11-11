@@ -286,7 +286,9 @@ export class DockerReadinessService {
                 : this.suppliedClient && !request.engine
                   ? resolvePinnedContainerCli(this.suppliedClient.id === PodmanClient.ClientId ? 'podman' : 'docker')
                   : resolveContainerCli(request.engine?.kind === 'preferred' ? request.engine.preferred : 'docker');
-        const key = `${resolved.cli}|${resolved.executable}|${resolved.preferred}|${resolved.onPath.docker}|${resolved.onPath.podman}`;
+        // A check pinned to an instance's owner reports no preference, so it cannot share a memo with one that does.
+        const pinned = request.engine?.kind === 'pinned';
+        const key = `${resolved.cli}|${resolved.executable}|${resolved.preferred}|${resolved.onPath.docker}|${resolved.onPath.podman}|${pinned}`;
         let state = this.checks.get(key);
         if (!state) {
             state = {};
@@ -355,8 +357,10 @@ export class DockerReadinessService {
             (readiness): DockerReadiness => ({
                 ...readiness,
                 cli,
-                preferredEngine: resolved.preferred,
-                cliFallback: resolved.fellBack,
+                // The owner of an existing instance was not chosen for this run.
+                ...(request.engine?.kind === 'pinned'
+                    ? {}
+                    : { preferredEngine: resolved.preferred, cliFallback: resolved.fellBack }),
                 ...(cliOnPath !== undefined ? { cliOnPath } : {}),
             }),
         );

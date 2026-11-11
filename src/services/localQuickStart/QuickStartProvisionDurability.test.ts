@@ -709,13 +709,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         it.each(['pulling', 'creating'] as const)(
             'retains the original fallback in the forced terminal snapshot after %s fails',
             async (stage) => {
-                await upsertInstance({
-                    alias: DEFAULT_ALIAS,
-                    displayName: 'DocumentDB Local',
-                    port: QUICK_START_PORT,
-                    phase: 'ready',
-                    engineCli: 'podman',
-                });
+                // A fresh run: only a run that chose its CLI by preference can have fallen back.
                 const selection = {
                     cli: 'podman',
                     executable: 'podman',
@@ -768,11 +762,6 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                     forceRefresh: true,
                     suppressCommandEcho: true,
                     engine: { kind: 'pinned', cli: 'podman' },
-                });
-                expect(service.getDockerReadinessSnapshot()).toBe(events.at(-1)?.dockerReadiness);
-                expect(service.getDockerReadinessSnapshot()).toMatchObject({
-                    preferredEngine: 'docker',
-                    cliFallback: true,
                 });
                 expect(await runtime.isDockerReady({ engine: { kind: 'pinned', cli: 'podman' } })).toBe(unavailable);
                 expect(unavailable).toMatchObject({ preferredEngine: 'podman', cliFallback: false });

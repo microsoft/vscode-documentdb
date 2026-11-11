@@ -379,6 +379,34 @@ describe('DockerReadinessService', () => {
             },
         );
 
+        it('omits preference evidence from an ownership-pinned check and keeps its memo apart', async () => {
+            const selection = {
+                cli: 'podman',
+                executable: 'podman',
+                preferred: 'podman',
+                fellBack: false,
+                onPath: { docker: true, podman: true },
+            } as const;
+            vi.spyOn(containerCli, 'resolvePinnedContainerCli').mockReturnValue(selection);
+            vi.spyOn(containerCli, 'resolveContainerCli').mockReturnValue(selection);
+            const service = createService();
+            const pinnedRequest = { engine: { kind: 'pinned', cli: 'podman' } } as const;
+
+            // The owner is not a preference: nobody chose it for this run.
+            const pinned = await service.getReadiness(pinnedRequest);
+            expect(pinned).toMatchObject({ cli: 'podman', outcome: 'ready' });
+            expect(pinned).not.toHaveProperty('preferredEngine');
+            expect(pinned).not.toHaveProperty('cliFallback');
+
+            // Same CLI and executable, but chosen by preference: the pinned memo must not answer.
+            expect(await service.getReadiness({ engine: { kind: 'preferred', preferred: 'podman' } })).toMatchObject({
+                cli: 'podman',
+                preferredEngine: 'podman',
+                cliFallback: false,
+            });
+            expect(await service.getReadiness(pinnedRequest)).toBe(pinned);
+        });
+
         it('returns fallback evidence from this execution and re-resolves before a memo hit', async () => {
             const resolve = vi.spyOn(containerCli, 'resolveContainerCli').mockReturnValue({
                 cli: 'docker',
