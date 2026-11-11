@@ -240,6 +240,10 @@ class ContainerRuntimeImpl implements IContainerRuntime {
 
     public async startAvailableDockerProvider(request: ContainerEngineRequest): Promise<DockerLaunchResult> {
         const readiness = await this.readinessService.getReadiness({ engine: request, forceRefresh: true });
+        if (readiness.outcome === 'ready') {
+            // The engine came up between showing the button and the click; the caller's poll confirms it.
+            return 'started';
+        }
         if (!readiness.startAction) {
             if (readiness.podmanMachine?.kind === 'running') {
                 return 'started';

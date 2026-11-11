@@ -372,6 +372,30 @@ describe('ContainerRuntime output channel', () => {
     );
 
     it.each([
+        { kind: 'preferred', preferred: 'podman' },
+        { kind: 'pinned', cli: 'podman' },
+    ] as const)('reports an engine that is already ready as started, without launching ($kind)', async (request) => {
+        vi.spyOn(DockerReadinessService.prototype, 'getReadiness').mockResolvedValue({
+            outcome: 'ready',
+            cliInstalled: true,
+            daemonReachable: true,
+            environment: 'macos',
+            endpointKind: 'unixSocket',
+            provider: 'podman',
+            providerEvidence: 'none',
+            executionTarget: 'local',
+            checkedAtMs: 1,
+            canContinueAnyway: false,
+            cli: 'podman',
+        });
+        const launch = vi.spyOn(DockerProviderLauncher, 'startDockerProvider');
+        const record = vi.spyOn(DockerReadinessService.prototype, 'recordLaunchResult');
+        expect(await ContainerRuntime.startAvailableDockerProvider(request)).toBe('started');
+        expect(launch).not.toHaveBeenCalled();
+        expect(record).not.toHaveBeenCalled();
+    });
+
+    it.each([
         ['running', 'started'],
         ['starting', 'launchAttempted'],
     ] as const)('continues waiting if click-time readiness finds the machine %s', async (kind, expected) => {
