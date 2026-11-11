@@ -802,13 +802,12 @@ export class QuickStartServiceImpl {
         return entry.metadata && !entry.dataRemoved ? entry.engineCli : undefined;
     }
 
-    public async getWizardContext(): Promise<{
-        status: QuickStartStatus;
-        busy: boolean;
-        canReuseExistingData: boolean;
-        suggestedPort: number;
-        instanceEngine?: ContainerCli | 'notRecorded';
-    }> {
+    /** The status the wizard opens with, from stored facts only; it never resolves or contacts an engine. */
+    public async getWizardStatus(): Promise<QuickStartStatus> {
+        return (await this.readWizardStatus()).status;
+    }
+
+    private async readWizardStatus(): Promise<{ status: QuickStartStatus; canReuseExistingData: boolean }> {
         await this.hydrateMetadata();
         const record = await getInstance(DEFAULT_ALIAS);
         const entry = this.stateFor(DEFAULT_ALIAS);
@@ -825,6 +824,17 @@ export class QuickStartServiceImpl {
             // recover credentials from the container environment.
             status = { ...status, state: InstanceState.CredentialsMissing, error: { key: 'credentialsUnavailable' } };
         }
+        return { status, canReuseExistingData };
+    }
+
+    public async getWizardContext(): Promise<{
+        status: QuickStartStatus;
+        busy: boolean;
+        canReuseExistingData: boolean;
+        suggestedPort: number;
+        instanceEngine?: ContainerCli | 'notRecorded';
+    }> {
+        const { status, canReuseExistingData } = await this.readWizardStatus();
         return {
             status,
             busy: this.isBusy,

@@ -376,6 +376,11 @@ describe('QuickStartService — stored-credential volume safety', () => {
         });
         const service = new QuickStartServiceImpl(runtime);
         expect((await service.getWizardContext()).status.state).toBe(InstanceState.CredentialsMissing);
+        expect(await service.getWizardStatus()).toMatchObject({
+            state: InstanceState.CredentialsMissing,
+            error: { key: 'credentialsUnavailable' },
+        });
+        expect(runtime.resolveCli).not.toHaveBeenCalled();
         expect(service.getStatus().state).toBe(InstanceState.NotInstalled);
 
         await service.ensureHydrated();
