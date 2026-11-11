@@ -919,6 +919,7 @@
   "Could not find parent folder.": "Could not find parent folder.",
   "Could not find the Azure Resource Groups extension": "Could not find the Azure Resource Groups extension",
   "Could not find unique name for new file.": "Could not find unique name for new file.",
+  "Could not follow the DocumentDB Local container logs: {0}": "Could not follow the DocumentDB Local container logs: {0}",
   "Could not list the collections of \"{database}\": {reason}": "Could not list the collections of \"{database}\": {reason}",
   "Could not load indexes.": "Could not load indexes.",
   "Could not open \"{0}\" for preview.": "Could not open \"{0}\" for preview.",
