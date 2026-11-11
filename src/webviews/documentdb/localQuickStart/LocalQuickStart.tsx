@@ -1158,6 +1158,10 @@ export const LocalQuickStart = (): JSX.Element => {
                         setDockerActionMessage(
                             isPodman ? l10n.t('Podman could not be started.') : l10n.t('Docker could not be started.'),
                         );
+                        if (launchResult === 'notAvailable') {
+                            // The click-time check no longer offers this action; show what it found instead.
+                            void syncDockerStatus();
+                        }
                         return;
                     }
                     let latestResult: DockerStatusResult | undefined;
@@ -1208,13 +1212,15 @@ export const LocalQuickStart = (): JSX.Element => {
                     );
                 });
         },
-        [applyDockerRecovery, applyReadiness, preferredEngine, stopDockerWait, trpcClient],
+        [applyDockerRecovery, applyReadiness, preferredEngine, stopDockerWait, syncDockerStatus, trpcClient],
     );
 
     const handleStartDocker = useCallback((): void => {
+        // The host re-checks before launching; naming the displayed action keeps it from starting another engine.
+        const expectedAction = lastDockerProblemRef.current?.problem.startAction;
         beginDockerWait(
-            () => trpcClient.localQuickStart.startDockerProvider.mutate({ preferredEngine }),
-            lastDockerProblemRef.current?.problem.startAction === 'startPodmanMachine',
+            () => trpcClient.localQuickStart.startDockerProvider.mutate({ preferredEngine, expectedAction }),
+            expectedAction === 'startPodmanMachine',
         );
     }, [beginDockerWait, preferredEngine, trpcClient]);
 

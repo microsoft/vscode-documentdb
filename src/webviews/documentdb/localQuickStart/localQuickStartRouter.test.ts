@@ -310,7 +310,7 @@ describe('localQuickStartRouter', () => {
                 await stream.next();
 
                 expect(mockIsDockerReady).toHaveBeenLastCalledWith(expect.anything(), preferredEngine);
-                expect(mockStartDockerProvider).toHaveBeenLastCalledWith(preferredEngine);
+                expect(mockStartDockerProvider).toHaveBeenLastCalledWith(preferredEngine, undefined);
                 expect(mockProvision).toHaveBeenLastCalledWith(
                     expect.anything(),
                     { preferredEngine },
@@ -321,12 +321,23 @@ describe('localQuickStartRouter', () => {
             },
         );
 
+        it('forwards the start action the button named and rejects an unknown one', async () => {
+            const caller = createCallerFactory(localQuickStartRouter)(createContext());
+            await caller.startDockerProvider({ preferredEngine: 'docker', expectedAction: 'startPodmanMachine' });
+            expect(mockStartDockerProvider).toHaveBeenLastCalledWith('docker', 'startPodmanMachine');
+            await expect(
+                caller.startDockerProvider({ expectedAction: 'startAnything' } as unknown as Parameters<
+                    typeof caller.startDockerProvider
+                >[0]),
+            ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+        });
+
         it('defaults provider start to Docker for omitted input and an empty object', async () => {
             const caller = createCallerFactory(localQuickStartRouter)(createContext());
             await caller.startDockerProvider();
-            expect(mockStartDockerProvider).toHaveBeenLastCalledWith('docker');
+            expect(mockStartDockerProvider).toHaveBeenLastCalledWith('docker', undefined);
             await caller.startDockerProvider({});
-            expect(mockStartDockerProvider).toHaveBeenLastCalledWith('docker');
+            expect(mockStartDockerProvider).toHaveBeenLastCalledWith('docker', undefined);
         });
 
         it.each(['containerd', 'Docker', '', null, 1])(

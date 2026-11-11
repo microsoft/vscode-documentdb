@@ -29,6 +29,7 @@ import { getPasswordEncodingProblem } from '../../../services/localQuickStart/qu
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import {
     type AdvancedQuickStartOptions,
+    DOCKER_START_ACTIONS,
     type DockerStatusResult,
     type InstanceStatusUpdate,
     type PasswordEncodingProblem,
@@ -290,10 +291,21 @@ export const localQuickStartRouter = router({
 
     /** Revalidate and launch the provider action selected by the extension host. */
     startDockerProvider: publicProcedureWithTelemetry
-        .input(z.object({ preferredEngine: z.enum(['docker', 'podman']).default('docker') }).optional())
+        .input(
+            z
+                .object({
+                    preferredEngine: z.enum(['docker', 'podman']).default('docker'),
+                    /** The action the clicked button named; the host launches nothing else. */
+                    expectedAction: z.enum(DOCKER_START_ACTIONS).optional(),
+                })
+                .optional(),
+        )
         .mutation(async ({ ctx, input }) => {
             const tctx = sessionContext(ctx);
-            const result = await QuickStartService.startDockerProvider(input?.preferredEngine ?? 'docker');
+            const result = await QuickStartService.startDockerProvider(
+                input?.preferredEngine ?? 'docker',
+                input?.expectedAction,
+            );
             tctx.actionContext.telemetry.properties.dockerLaunchResult = result;
             return result;
         }),

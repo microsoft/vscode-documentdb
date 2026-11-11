@@ -389,13 +389,16 @@ export type DockerFailureKind =
 
 export type DockerEndpointKind = 'unixSocket' | 'namedPipe' | 'tcp' | 'ssh' | 'unknown';
 
-export type DockerStartAction =
-    | 'startDockerDesktopWindows'
-    | 'startDockerDesktopMacOS'
-    | 'startDockerDesktopLinux'
-    | 'startDockerDesktopWindowsFromWsl'
-    | 'startRootlessDockerEngineLinux'
-    | 'startPodmanMachine';
+export const DOCKER_START_ACTIONS = [
+    'startDockerDesktopWindows',
+    'startDockerDesktopMacOS',
+    'startDockerDesktopLinux',
+    'startDockerDesktopWindowsFromWsl',
+    'startRootlessDockerEngineLinux',
+    'startPodmanMachine',
+] as const;
+
+export type DockerStartAction = (typeof DOCKER_START_ACTIONS)[number];
 
 export interface PodmanMachineFact {
     readonly name: string;

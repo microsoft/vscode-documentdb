@@ -78,6 +78,7 @@ import {
     type DockerHostEnvironment,
     type DockerLaunchResult,
     type DockerReadiness,
+    type DockerStartAction,
     type InstanceMetadata,
     InstanceState,
     type InstanceStatus,
@@ -647,9 +648,10 @@ export class QuickStartServiceImpl {
 
     public async startDockerProvider(
         preferred: ContainerCli = 'docker',
+        expectedAction?: DockerStartAction,
         alias: string = DEFAULT_ALIAS,
     ): Promise<DockerLaunchResult> {
-        return this.runtime.startAvailableDockerProvider(await this.engineRequestFor(alias, preferred));
+        return this.runtime.startAvailableDockerProvider(await this.engineRequestFor(alias, preferred), expectedAction);
     }
 
     public getStatus(alias: string = DEFAULT_ALIAS): QuickStartStatus {

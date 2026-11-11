@@ -494,10 +494,10 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                     engine: { kind: 'preferred', preferred: preferredEngine },
                 });
                 await service.startDockerProvider(preferredEngine);
-                expect(runtime.startAvailableDockerProvider).toHaveBeenLastCalledWith({
-                    kind: 'preferred',
-                    preferred: preferredEngine,
-                });
+                expect(runtime.startAvailableDockerProvider).toHaveBeenLastCalledWith(
+                    { kind: 'preferred', preferred: preferredEngine },
+                    undefined,
+                );
                 expect(await getInstance(DEFAULT_ALIAS)).toBeUndefined();
 
                 await collect(service.provision(new AbortController().signal, { preferredEngine }));
@@ -538,16 +538,26 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                     engine: { kind: 'pinned', cli: engineCli },
                 });
                 await service.startDockerProvider(preferredEngine);
-                expect(runtime.startAvailableDockerProvider).toHaveBeenLastCalledWith({
-                    kind: 'pinned',
-                    cli: engineCli,
-                });
+                expect(runtime.startAvailableDockerProvider).toHaveBeenLastCalledWith(
+                    { kind: 'pinned', cli: engineCli },
+                    undefined,
+                );
                 await collect(service.provision(new AbortController().signal, { preferredEngine, startFresh: true }));
                 expect(runtime.resolveCli).toHaveBeenCalledWith({ kind: 'pinned', cli: engineCli });
                 expect(runtime.resolveCli).not.toHaveBeenCalledWith(expect.objectContaining({ kind: 'preferred' }));
                 expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ engineCli, phase: 'ready' });
             },
         );
+
+        it('passes the start action the button named to the click-time check', async () => {
+            const runtime = runtimeFor();
+            const service = new QuickStartServiceImpl(runtime);
+            await service.startDockerProvider('docker', 'startPodmanMachine');
+            expect(runtime.startAvailableDockerProvider).toHaveBeenLastCalledWith(
+                { kind: 'preferred', preferred: 'docker' },
+                'startPodmanMachine',
+            );
+        });
 
         it('ignores a new preference for a legacy record across readiness, launch and provision', async () => {
             await upsertInstance({
@@ -564,10 +574,10 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                 engine: { kind: 'preferred', preferred: 'docker' },
             });
             await service.startDockerProvider('podman');
-            expect(runtime.startAvailableDockerProvider).toHaveBeenLastCalledWith({
-                kind: 'preferred',
-                preferred: 'docker',
-            });
+            expect(runtime.startAvailableDockerProvider).toHaveBeenLastCalledWith(
+                { kind: 'preferred', preferred: 'docker' },
+                undefined,
+            );
             await collect(
                 service.provision(new AbortController().signal, {
                     preferredEngine: 'podman',

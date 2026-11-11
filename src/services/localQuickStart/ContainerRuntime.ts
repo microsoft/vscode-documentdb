@@ -49,6 +49,7 @@ import {
     type DockerLaunchResult,
     type DockerReadiness,
     type DockerReadinessRequest,
+    type DockerStartAction,
     QUICK_START_PORT,
 } from './quickStartTypes';
 
@@ -148,7 +149,11 @@ export interface RuntimeImageFacts {
  */
 export interface IContainerRuntime {
     isDockerReady(request?: DockerReadinessRequest): Promise<DockerReadiness>;
-    startAvailableDockerProvider(request: ContainerEngineRequest): Promise<DockerLaunchResult>;
+    /** `expectedAction` is the action the button named; a check that now selects another one launches nothing. */
+    startAvailableDockerProvider(
+        request: ContainerEngineRequest,
+        expectedAction?: DockerStartAction,
+    ): Promise<DockerLaunchResult>;
     isPortFree(port?: number): Promise<boolean>;
     resolveCli(request: ContainerEngineRequest): ResolvedContainerCli;
     forCli(resolved: Pick<ResolvedContainerCli, 'cli' | 'executable'>): IContainerEngineOps;
@@ -238,11 +243,21 @@ class ContainerRuntimeImpl implements IContainerRuntime {
         return this.readinessService.getReadiness(request);
     }
 
-    public async startAvailableDockerProvider(request: ContainerEngineRequest): Promise<DockerLaunchResult> {
+    public async startAvailableDockerProvider(
+        request: ContainerEngineRequest,
+        expectedAction?: DockerStartAction,
+    ): Promise<DockerLaunchResult> {
         const readiness = await this.readinessService.getReadiness({ engine: request, forceRefresh: true });
         if (readiness.outcome === 'ready') {
             // The engine came up between showing the button and the click; the caller's poll confirms it.
             return 'started';
+        }
+        if (expectedAction && readiness.startAction && readiness.startAction !== expectedAction) {
+            // A fresh run re-resolves the preference, so a CLI installed since the check can select another engine.
+            getQuickStartOutputChannel().appendLine(
+                `[readiness] start action changed from ${expectedAction} to ${readiness.startAction}; nothing was started`,
+            );
+            return 'notAvailable';
         }
         if (!readiness.startAction) {
             if (readiness.podmanMachine?.kind === 'running') {
@@ -662,6 +677,7 @@ export const ContainerRuntime: IContainerRuntime = containerRuntime;
  */
 export async function startDockerProvider(
     request: ContainerEngineRequest = { kind: 'preferred', preferred: 'docker' },
+    expectedAction?: DockerStartAction,
 ): Promise<DockerLaunchResult> {
-    return containerRuntime.startAvailableDockerProvider(request);
+    return containerRuntime.startAvailableDockerProvider(request, expectedAction);
 }

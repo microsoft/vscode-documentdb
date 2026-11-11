@@ -200,7 +200,7 @@ describe('L2-dev manifest and routes', (): void => {
                 kind: 'calls',
                 path: 'localQuickStart.startDockerProvider',
                 count: 2,
-                input: { preferredEngine: 'podman' },
+                input: { preferredEngine: 'podman', expectedAction: 'startPodmanMachine' },
             }),
         );
         expect(socket.assertions).toContainEqual(

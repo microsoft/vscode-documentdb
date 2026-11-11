@@ -301,6 +301,7 @@ describe('Local Quick Start stage details', () => {
 
             expect(client.trpc.localQuickStart.startDockerProvider.mutate).toHaveBeenCalledWith({
                 preferredEngine: 'podman',
+                expectedAction: 'startDockerDesktopWindows',
             });
             expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenLastCalledWith(
                 expect.objectContaining({ preferredEngine: 'podman', forceRefresh: true, polled: true }),
@@ -462,6 +463,7 @@ describe('Local Quick Start stage details', () => {
             expect(host.textContent).toContain('Waiting for Podman to start');
             expect(client.trpc.localQuickStart.startDockerProvider.mutate).toHaveBeenCalledExactlyOnceWith({
                 preferredEngine: 'podman',
+                expectedAction: 'startPodmanMachine',
             });
             await click(button('Stop waiting'));
             await act(async () => vi.advanceTimersByTimeAsync(100));
@@ -520,6 +522,44 @@ describe('Local Quick Start stage details', () => {
             }
         },
     );
+
+    it('names the displayed start action on click and shows the current check when it no longer applies', async () => {
+        // Docker stays the preference; Podman was the fallback when setup ran.
+        const fallback: DockerReadiness = { ...stoppedPodman, preferredEngine: 'docker', cliFallback: true };
+        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(fallback));
+        await start();
+        await event({ stage: 'checking', status: 'error', dockerReadiness: fallback });
+        client.trpc.localQuickStart.startDockerProvider.mutate.mockResolvedValueOnce('notAvailable');
+        client.trpc.localQuickStart.getDockerStatus.query.mockClear().mockResolvedValue(
+            status({
+                ...failed,
+                cli: 'docker',
+                failureKind: 'daemonUnavailable',
+                provider: 'dockerDesktop',
+                environment: 'macos',
+                startAction: 'startDockerDesktopMacOS',
+            }),
+        );
+        vi.useFakeTimers();
+        try {
+            await click(button('Start Podman machine'));
+            await act(async () => vi.advanceTimersByTimeAsync(1_000));
+        } finally {
+            vi.useRealTimers();
+        }
+
+        expect(client.trpc.localQuickStart.startDockerProvider.mutate).toHaveBeenCalledExactlyOnceWith({
+            preferredEngine: 'docker',
+            expectedAction: 'startPodmanMachine',
+        });
+        expect(host.textContent).toContain('Podman could not be started.');
+        expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenCalledExactlyOnceWith(
+            { preferredEngine: 'docker' },
+            expect.any(Object),
+        );
+        expect(button('Start Docker Desktop')).toBeTruthy();
+        expect(() => button('Start Podman machine')).toThrow();
+    });
 
     it('stops active Podman readiness polling without sending a startup cancellation', async () => {
         client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(stoppedPodman));

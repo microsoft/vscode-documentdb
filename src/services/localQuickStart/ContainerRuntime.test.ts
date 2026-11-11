@@ -294,6 +294,63 @@ describe('ContainerRuntime output channel', () => {
         expect(launch).not.toHaveBeenCalled();
     });
 
+    it('does not launch a start action other than the one the button named', async () => {
+        // Docker preferred, Podman used as the fallback, then a Docker CLI appears before the click.
+        vi.spyOn(DockerReadinessService.prototype, 'getReadiness').mockResolvedValue({
+            outcome: 'diagnosed',
+            failureKind: 'daemonUnavailable',
+            cliInstalled: true,
+            daemonReachable: false,
+            environment: 'macos',
+            endpointKind: 'unixSocket',
+            provider: 'dockerDesktop',
+            providerEvidence: 'activeContext',
+            executionTarget: 'local',
+            checkedAtMs: 1,
+            canContinueAnyway: false,
+            startAction: 'startDockerDesktopMacOS',
+            cli: 'docker',
+        });
+        const launch = vi.spyOn(DockerProviderLauncher, 'startDockerProvider');
+        const record = vi.spyOn(DockerReadinessService.prototype, 'recordLaunchResult');
+        expect(
+            await ContainerRuntime.startAvailableDockerProvider(
+                { kind: 'preferred', preferred: 'docker' },
+                'startPodmanMachine',
+            ),
+        ).toBe('notAvailable');
+        expect(launch).not.toHaveBeenCalled();
+        expect(record).not.toHaveBeenCalled();
+        expect(lines.join('\n')).toContain('startPodmanMachine to startDockerDesktopMacOS');
+    });
+
+    it('launches the start action the button named when the click-time check still selects it', async () => {
+        vi.spyOn(DockerReadinessService.prototype, 'getReadiness').mockResolvedValue({
+            outcome: 'diagnosed',
+            failureKind: 'daemonUnavailable',
+            cliInstalled: true,
+            daemonReachable: false,
+            environment: 'macos',
+            endpointKind: 'unixSocket',
+            provider: 'dockerDesktop',
+            providerEvidence: 'activeContext',
+            executionTarget: 'local',
+            checkedAtMs: 1,
+            canContinueAnyway: false,
+            startAction: 'startDockerDesktopMacOS',
+            cli: 'docker',
+        });
+        const launch = vi.spyOn(DockerProviderLauncher, 'startDockerProvider').mockResolvedValue('launchAttempted');
+        vi.spyOn(DockerReadinessService.prototype, 'recordLaunchResult').mockResolvedValue(undefined);
+        expect(
+            await ContainerRuntime.startAvailableDockerProvider(
+                { kind: 'preferred', preferred: 'docker' },
+                'startDockerDesktopMacOS',
+            ),
+        ).toBe('launchAttempted');
+        expect(launch).toHaveBeenCalledExactlyOnceWith('startDockerDesktopMacOS');
+    });
+
     it('re-resolves the Podman executable on click and sends startup output to the setup log', async () => {
         const readiness = vi.spyOn(DockerReadinessService.prototype, 'getReadiness').mockResolvedValue({
             outcome: 'diagnosed',
