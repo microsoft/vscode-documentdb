@@ -152,8 +152,44 @@ the default Docker preference fell back to Podman. Driven through the real webvi
 | `DOCKER_HOST=tcp://127.0.0.1:1` in the extension host (finding 2)                                                 | **Start Podman machine** was offered and worked                                                                                                            |
 | **Continue setup** with sample data, **Open Connection**, **View Logs**, **Delete Container…**                    | Setup finished in 15 seconds, the sample database opened, the container's logs followed, and the container and volume were removed                         |
 
-Not run: the Windows timeout retry (decision 0011.2) on a build that contains it, and a click
-that would launch Docker Desktop.
+Not run here: a click that would launch Docker Desktop. The Windows timeout retry was run
+separately; see the next section.
+
+## Native Windows re-test of the timeout retry (2026-11-11)
+
+Run by a second session on native Windows 11 (10.0.26200) with Podman 6.1.4, a rootless WSL
+machine, no Docker CLI and VS Code 1.143.1, on a local `npm run package` build of `6165960d`
+(CI had not run on that commit). The wizard was driven through the real webview. This covers
+decision 0011 item 2.
+
+Standalone `podman machine list --format json` calls after `podman machine stop` took 0.25 to
+0.4 seconds, except one call started 60.6 seconds after the stop, which took 11.75 seconds. WSL's
+shutdown is one block of about 11 seconds starting about 60 seconds after the stop; a call
+exceeds 10 seconds only if it starts within about the first 1.5 seconds of it.
+
+| Run | Retry setup clicked after the stop | `machine list`                           | Start Podman machine offered |
+| --- | ---------------------------------- | ---------------------------------------- | ---------------------------- |
+| 1   | 61.6 s                             | Fast; `info` took the block, so no retry | Yes                          |
+| 2   | 59.9 s                             | Killed at 10 s; retry finished in 1.4 s  | Yes                          |
+| 3   | 59.4 s                             | Finished before the block                | Yes                          |
+| 4   | 60.6 s                             | Killed at 10 s; retry finished in 0.6 s  | Yes                          |
+| 5   | 60.6 s                             | Killed at 10 s; retry finished in 0.4 s  | Yes                          |
+
+Runs 2, 4 and 5 logged `[readiness] podman machine list timed out; retrying once`. No run logged
+`podmanMachine=unknown`. With the machine stopped, **Start Podman machine** reached "Ready to set
+up. Podman is ready now." in about 4 seconds.
+
+Observed, not changed:
+
+- The retry starts 0.2 to 0.4 seconds after the kill, while WSL is still shutting down. A
+  shutdown longer than about 20 seconds would time out the retry as well; the longest seen was
+  11.75 seconds.
+- The timed-out attempt writes only the retry line to the log, with no duration or stderr.
+- On the Ready screen the page text still begins with "Setup did not finish. Docker or Podman is
+  installed, but its engine is not reachable. Start it and retry." before "Podman is ready. Setup
+  has not run yet." What a screen reader announces was not checked.
+- `code serve-web` cannot be used for this test: the extension reports an `otherRemote`
+  environment there and never lists machines.
 
 ## Manual checks and remaining operator decisions
 
