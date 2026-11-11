@@ -112,11 +112,55 @@ This covers manual check 1 below for Windows; macOS is still untested.
 | The check stage showed "Podman podman.EXE version 6.1.4", the raw `podman -v` output                                                                                                                  | Fixed in the webview: only the version number is shown. `cliVersion` itself is unchanged                                                            |
 | Configure kept "DocumentDB Local is already running" after the container was removed outside VS Code                                                                                                  | Not changed. Opening the wizard is metadata-only by decision (iteration 12, P3); a tree Refresh clears it. Operator decision                        |
 
+## Copilot review of `8821b17f` (2026-11-11)
+
+GitHub Copilot posted seven findings on the PR. Each was checked against the code; the five fixed
+ones were first reproduced by a failing test.
+
+| #   | Finding                                                                                                                           | Check                                                                                                                                                           | Disposition                                                                                                                                                                              |
+| --- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | After a Docker-to-Podman fallback, a Docker CLI installed before the click makes **Start Podman machine** launch Docker Desktop   | Confirmed: the click re-resolved the Docker preference and launched `startDockerDesktopMacOS`                                                                   | Fixed in `4539cf3f`: the click names the displayed action; a check that selects another one starts nothing, and the panel then shows the current check                                   |
+| 2   | An unrelated `DOCKER_HOST=tcp://…` or `ssh://…` hides the start button for a stopped Podman machine                               | Confirmed: the failure became `endpointUnreachable`; `DOCKER_CONTEXT` made it `unknown`. Podman 6.1.4 ignores both settings                                     | Fixed in `1e6a1b5a`: a check that runs the Podman CLI no longer reads Docker's endpoint settings. The Docker CLI shim is unchanged                                                       |
+| 3   | Podman that became ready between showing the button and the click is reported as "could not be started"                           | Confirmed: a ready check has no start action, so the click returned `notAvailable`                                                                              | Fixed in `d7c77bcc`: a ready engine counts as started and the existing poll clears the blocker                                                                                           |
+| 4   | A storage failure while resolving the owning engine leaves View Logs with an unhandled rejection                                  | Confirmed by trace: `followLogs` reads the record before the runtime's own error handling, and the command did not observe the promise                          | Fixed in `8ce2e4f7`: the reason is written to the setup log the command just opened, with the password masked                                                                            |
+| 5   | Opened before the first reconciliation, the wizard starts on Introduction and reports `NotInstalled` when credentials are missing | Confirmed: an existing test already showed `getWizardContext()` and `getStatus()` disagreeing                                                                   | Fixed in `8881c241`: the command reads the same stored facts as the wizard context, still without an engine                                                                              |
+| 6   | An ownership-pinned run reports the owner as `preferredContainerEngine` and as "Preferred engine" in Details                      | Confirmed in three places: the readiness result, the provisioning overlay and the provision summary                                                             | Open, operator decision. A test pins this behavior and the P6 review above declined a pinned-mode classification. Omitting the two fields for pinned runs would follow "omit, not guess" |
+| 7   | Every status event reads SecretStorage for each open panel, before the unchanged-status check                                     | Confirmed: `getInstanceEngine()` uses `getInstance()`, and `StorageService.getItem()` always reads the secret. The base branch did no storage read on this path | Open, operator decision. No accessor reads a record without its secret; adding one changes the shared `Storage` interface and its four test doubles                                      |
+
+Noticed while checking, not changed:
+
+- A legacy record without a recorded engine is checked as "preferred Docker" whatever Configure
+  submitted, so it has the same reporting question as finding 6.
+- Podman pointed at a remote host (`CONTAINER_HOST`, or a remote default connection) is still
+  diagnosed from the local machines. With a remote default connection and two stopped machines,
+  setup showed the "several machines" guidance and no button.
+
+## Native macOS Podman test (2026-11-11)
+
+Run on `8881c241` (`npm run build-prod`, development host, VS Code 1.146.0) on macOS arm64 with
+Podman 6.1.4 and a rootful libkrun machine. The window's `PATH` had Podman and no Docker CLI, so
+the default Docker preference fell back to Podman. Driven through the real webview.
+
+| Scenario                                                                                                          | Result                                                                                                                                                     |
+| ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Machine stopped, setup started                                                                                    | "Podman 6.1.4 (Docker not found)", "Engine unavailable", the machine named, **Check Podman again**, **Start Podman machine**, "the container engine check" |
+| A `docker` CLI added to `PATH` after the check, then **Start Podman machine** (finding 1)                         | Nothing started and the panel changed to the Docker check. Docker Desktop is not installed here, so the launch itself is covered by unit tests only        |
+| **Start Podman machine**, then **Stop waiting**                                                                   | The wait ended and the machine kept starting                                                                                                               |
+| The stale **Start Podman machine** clicked once that machine was up (finding 3)                                   | "Ready to set up. Podman is ready now."                                                                                                                    |
+| Two stopped machines, neither `Default: true`, default connection `podman-machine-default-root` (decision 0011.1) | `podman-machine-default` was named and offered; the click started it and left the other machine stopped                                                    |
+| The same two machines with an unrelated default connection (a scratch `PODMAN_CONNECTIONS_CONF`)                  | "Several Podman machines were found without a unique default", both named, no button, nothing started                                                      |
+| `DOCKER_HOST=tcp://127.0.0.1:1` in the extension host (finding 2)                                                 | **Start Podman machine** was offered and worked                                                                                                            |
+| **Continue setup** with sample data, **Open Connection**, **View Logs**, **Delete Container…**                    | Setup finished in 15 seconds, the sample database opened, the container's logs followed, and the container and volume were removed                         |
+
+Not run: the Windows timeout retry (decision 0011.2) on a build that contains it, and a click
+that would launch Docker Desktop.
+
 ## Manual checks and remaining operator decisions
 
 1. Native macOS/Windows: initialize a Podman machine, leave it stopped, choose Podman and
    execute setup. Confirm the named start action, output, waiting and cancellation behavior.
    This cannot be live-tested from the WSL extension host.
+   Done on Windows (`ba85263e`) and macOS (`8881c241`); see the two native tests above.
 2. WSL using a Windows-shared Podman socket needs Windows-machine guidance rather than native
    socket guidance. The approved platform gate remains unchanged; connection-specific wording
    is explicitly deferred in the source plan rather than silently added.
