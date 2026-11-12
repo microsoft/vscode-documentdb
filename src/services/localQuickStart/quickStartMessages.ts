@@ -36,7 +36,12 @@ export function formatQuickStartMessage(message: QuickStartMessage): string {
                 String(message.port ?? ''),
             );
         case 'dockerCliMissing':
-            return l10n.t('Neither Docker nor Podman was found on your PATH. Install Docker or Podman and retry.');
+            return message.engineCli
+                ? l10n.t(
+                      '{0} was not found on your PATH. Install it to use the existing instance and retry.',
+                      message.engineCli === 'podman' ? 'Podman' : 'Docker',
+                  )
+                : l10n.t('Neither Docker nor Podman was found on your PATH. Install Docker or Podman and retry.');
         case 'dockerDaemonUnreachable':
             return l10n.t('Docker or Podman is installed, but its engine is not reachable. Start it and retry.');
         case 'dockerUnavailableDuringSetup':

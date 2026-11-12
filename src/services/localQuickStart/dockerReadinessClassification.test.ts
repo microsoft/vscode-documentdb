@@ -12,14 +12,179 @@ import {
     classifyContainerEngine,
     classifyDockerFailure,
     classifyDockerProvider,
+    classifyPodmanMachineState,
+    classifyPodmanTarget,
     getDockerDiagnosticFingerprint,
+    parsePodmanDefaultConnection,
+    parsePodmanDialTarget,
+    parsePodmanMachineList,
     type ContainerEngineInput,
 } from './dockerReadinessClassification';
 import { type DockerEndpointProbe, type DockerHostEnvironment, type DockerProbeEvidence } from './quickStartTypes';
 
+describe('Podman machine facts', () => {
+    it('parses the strict public JSON fields without altering the machine name', () => {
+        expect(
+            parsePodmanMachineList(
+                '[{"Name":"custom machine","Default":true,"Running":false,"Starting":false,"VMType":"qemu"}]',
+            ),
+        ).toEqual([{ name: 'custom machine', isDefault: true, running: false, starting: false }]);
+        expect(parsePodmanMachineList('[]')).toEqual([]);
+    });
+
+    it.each([
+        'not json',
+        'null',
+        '{}',
+        '[null]',
+        '[true]',
+        '[[]]',
+        '[{"Name":"","Default":true,"Running":false,"Starting":false}]',
+        '[{"Name":"   ","Default":true,"Running":false,"Starting":false}]',
+        '[{"Name":1,"Default":true,"Running":false,"Starting":false}]',
+        '[{"Name":"vm","Default":"true","Running":false,"Starting":false}]',
+        '[{"Name":"vm","Default":true,"Running":0,"Starting":false}]',
+        '[{"Name":"vm","Default":true,"Running":false,"Starting":null}]',
+        '[{"Name":"vm","Running":false,"Starting":false}]',
+        '[{"Name":"vm","Default":true,"Running":false}]',
+    ])('rejects unknown machine facts: %s', (output) => {
+        expect(parsePodmanMachineList(output)).toBeUndefined();
+    });
+
+    const stopped = { name: 'custom-vm', isDefault: false, running: false, starting: false };
+    it.each([
+        { machines: [], expected: { kind: 'none' } },
+        { machines: [stopped], expected: { kind: 'stopped', name: 'custom-vm' } },
+        {
+            machines: [stopped, { ...stopped, name: 'default-vm', isDefault: true }],
+            expected: { kind: 'stopped', name: 'default-vm' },
+        },
+        {
+            machines: [stopped, { ...stopped, name: 'other' }],
+            expected: { kind: 'ambiguous', names: ['custom-vm', 'other'] },
+        },
+        {
+            machines: [{ ...stopped, starting: true, running: true }],
+            expected: { kind: 'starting', name: 'custom-vm' },
+        },
+        { machines: [{ ...stopped, running: true }], expected: { kind: 'running', name: 'custom-vm' } },
+        {
+            machines: [
+                { ...stopped, isDefault: true },
+                { ...stopped, name: 'busy', running: true },
+            ],
+            expected: { kind: 'otherActive', active: 'busy' },
+        },
+        {
+            machines: [
+                { ...stopped, isDefault: true },
+                { ...stopped, name: 'busy', starting: true },
+            ],
+            expected: { kind: 'otherActive', active: 'busy' },
+        },
+        {
+            machines: [
+                { ...stopped, isDefault: true },
+                { ...stopped, name: 'other', isDefault: true },
+            ],
+            expected: { kind: 'ambiguous', names: ['custom-vm', 'other'] },
+        },
+    ])('selects live machine state $expected.kind', ({ machines, expected }) => {
+        expect(classifyPodmanMachineState(machines)).toEqual(expected);
+    });
+
+    // Podman 6.1.4 on Windows, rootful machine: `machine list` reports Default false for it.
+    const rootfulConnections = JSON.stringify([
+        { Name: 'custom-vm', URI: 'ssh://user@127.0.0.1:65532/run/user/1000/podman/podman.sock', Default: false },
+        { Name: 'custom-vm-root', URI: 'ssh://root@127.0.0.1:65532/run/podman/podman.sock', Default: true },
+    ]);
+
+    it('reads the default connection name', () => {
+        expect(parsePodmanDefaultConnection(rootfulConnections)).toBe('custom-vm-root');
+    });
+
+    it.each(['not json', 'null', '{}', '[]', '[null]', '[{"Name":"vm","Default":false}]', '[{"Default":true}]'])(
+        'finds no default connection in %s',
+        (output) => {
+            expect(parsePodmanDefaultConnection(output)).toBeUndefined();
+        },
+    );
+
+    it.each([
+        { connection: 'custom-vm-root', expected: { kind: 'stopped', name: 'custom-vm' } },
+        { connection: 'elsewhere', expected: { kind: 'ambiguous', names: ['custom-vm', 'other'] } },
+        { connection: undefined, expected: { kind: 'ambiguous', names: ['custom-vm', 'other'] } },
+    ])('targets the rootful machine behind default connection $connection', ({ connection, expected }) => {
+        expect(classifyPodmanMachineState([stopped, { ...stopped, name: 'other' }], connection)).toEqual(expected);
+    });
+});
+
 function readFixture(name: string): string {
     return fs.readFileSync(path.join(__dirname, '__fixtures__', 'docker', name), 'utf8');
 }
+
+describe('Podman target from the dialled address', () => {
+    const cannotConnect = 'Cannot connect to Podman. Please verify your connection to the Linux system.\n';
+    it.each([
+        {
+            name: 'a Windows machine from WSL',
+            environment: 'wsl',
+            stderr: 'Error: unable to connect to Podman socket: failed to connect: dial unix /mnt/wsl/podman-sockets/podman-machine-default/podman-user.sock: connect: no such file or directory',
+            target: { kind: 'windowsMachineFromWsl', name: 'podman-machine-default' },
+        },
+        {
+            name: 'the rootless user socket',
+            environment: 'linux',
+            stderr: 'Error: unable to connect to Podman socket: dial unix /run/user/1000/podman/podman.sock: connect: connection refused',
+            target: { kind: 'userSocket' },
+        },
+        {
+            name: 'the root socket',
+            environment: 'wsl',
+            stderr: 'Error: unable to connect to Podman socket: dial unix /run/podman/podman.sock: connect: permission denied',
+            target: { kind: 'local' },
+        },
+        {
+            name: 'a machine on 127.0.0.1',
+            environment: 'macos',
+            stderr: 'Error: unable to connect to Podman socket: failed to connect: dial tcp 127.0.0.1:63483: connect: connection refused',
+            target: { kind: 'local' },
+        },
+        {
+            name: 'another host',
+            environment: 'macos',
+            stderr: 'Error: unable to connect to Podman socket: failed to connect: dial tcp 10.0.0.5:22: i/o timeout',
+            target: { kind: 'remote' },
+        },
+        {
+            name: 'an IPv6 host',
+            environment: 'linux',
+            stderr: 'Error: unable to connect to Podman socket: dial tcp [fd00::5]:22: connect: no route to host',
+            target: { kind: 'remote' },
+        },
+        {
+            name: 'an unresolvable host',
+            environment: 'wsl',
+            stderr: 'Error: unable to connect to Podman socket: dial tcp: lookup podman.example on 10.255.255.254:53: no such host',
+            target: { kind: 'remote' },
+        },
+        { name: 'no address', environment: 'linux', stderr: 'Error: unexpected', target: { kind: 'unknown' } },
+    ] as const)('classifies $name', ({ environment, stderr, target }) => {
+        expect(classifyPodmanTarget(parsePodmanDialTarget(cannotConnect + stderr), environment)).toEqual(target);
+    });
+
+    it('treats the WSL machine socket path outside WSL as merely local', () => {
+        const dial = parsePodmanDialTarget(
+            'dial unix /mnt/wsl/podman-sockets/podman-machine-default/podman-user.sock: connect: refused',
+        );
+        expect(classifyPodmanTarget(dial, 'linux')).toEqual({ kind: 'local' });
+    });
+
+    it('never puts an unsafe machine name into a target', () => {
+        const dial = parsePodmanDialTarget('dial unix /mnt/wsl/podman-sockets/-vm/podman-user.sock: connect: refused');
+        expect(classifyPodmanTarget(dial, 'wsl')).toEqual({ kind: 'local' });
+    });
+});
 
 describe('classifyContainerEngine', () => {
     it.each([

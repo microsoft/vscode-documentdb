@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type ContainerCli } from '../../../services/localQuickStart/containerCli';
 import {
     type AdvancedQuickStartOptions,
     QUICK_START_DEFAULT_TAG,
@@ -15,6 +16,7 @@ export function getEffectivePort(portField: string, suggestedPort: number): stri
 
 /** The options the Configure step sends to `startQuickStart`. Only call it once the settings are valid. */
 export function buildAdvancedOptions(settings: {
+    readonly preferredEngine?: ContainerCli;
     readonly port: string;
     readonly suggestedPort: number;
     readonly username: string;
@@ -29,6 +31,7 @@ export function buildAdvancedOptions(settings: {
     // rather than relocating on a conflict. An empty field shows the suggested port, and leaving it
     // out would make the service bind the default instead, which may be the busy one.
     const options: AdvancedQuickStartOptions = {
+        preferredEngine: settings.preferredEngine ?? 'docker',
         port: Number(getEffectivePort(settings.port, settings.suggestedPort)),
     };
     // Credentials and image tag are ignored by the service when reusing an existing instance, so

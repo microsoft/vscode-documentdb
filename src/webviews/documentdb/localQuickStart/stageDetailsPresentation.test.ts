@@ -102,6 +102,65 @@ describe('buildDockerDetailRows', () => {
         expect(rows.some((row) => row.label === 'Docker CLI' || row.label === 'Podman CLI')).toBe(false);
     });
 
+    it('does not create preferred-engine evidence when the check did not establish it', () => {
+        const rows = buildDockerDetailRows({ ...ready, cli: 'podman', cliOnPath: { docker: false, podman: true } });
+
+        expect(rows.some((row) => row.label === 'Preferred engine')).toBe(false);
+    });
+
+    it.each([
+        ['docker', 'docker', false, 'Docker'],
+        ['podman', 'podman', false, 'Podman'],
+        ['docker', 'podman', true, 'Docker · not found, used Podman'],
+        ['podman', 'docker', true, 'Podman · not found, used Docker'],
+        ['docker', 'podman', undefined, 'Docker'],
+        ['podman', 'docker', false, 'Podman'],
+    ] as const)(
+        'shows preferred %s next to the selected %s CLI using fallback evidence %s',
+        (preferredEngine, cli, cliFallback, expected) => {
+            const rows = buildDockerDetailRows({ ...ready, preferredEngine, cli, cliFallback });
+            const index = rows.findIndex((row) => row.label === 'Preferred engine');
+
+            expect(rows[index]).toEqual({ label: 'Preferred engine', value: expected });
+            expect(rows[index + 1]?.label).toBe(cli === 'docker' ? 'Docker CLI' : 'Podman CLI');
+        },
+    );
+
+    it.each(['docker', 'podman'] as const)(
+        'shows the preferred %s without claiming fallback when neither CLI exists',
+        (cli) => {
+            const rows = buildDockerDetailRows({
+                ...ready,
+                outcome: 'diagnosed',
+                failureKind: 'cliMissing',
+                cliInstalled: false,
+                daemonReachable: false,
+                preferredEngine: cli,
+                cli,
+                cliFallback: false,
+                cliOnPath: { docker: false, podman: false },
+            });
+
+            expect(rows.find((row) => row.label === 'Preferred engine')).toEqual({
+                label: 'Preferred engine',
+                value: cli === 'docker' ? 'Docker' : 'Podman',
+            });
+        },
+    );
+
+    it('names the fallback CLI rather than an engine detected behind it', () => {
+        const rows = buildDockerDetailRows({
+            ...ready,
+            preferredEngine: 'podman',
+            cli: 'docker',
+            cliFallback: true,
+            engine: 'podman',
+            provider: 'podman',
+        });
+
+        expect(rows.find((row) => row.label === 'Preferred engine')?.value).toBe('Podman · not found, used Docker');
+    });
+
     it('shows both CLI paths absent when discovery established neither', () => {
         const rows = buildDockerDetailRows({
             ...ready,

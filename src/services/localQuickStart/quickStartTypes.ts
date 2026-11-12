@@ -11,6 +11,7 @@
  */
 
 import { type CancellationToken } from 'vscode';
+import { type ContainerCli, type ContainerEngineRequest } from './containerCli';
 
 /** Official DocumentDB local image (github.com/microsoft/documentdb README). */
 export const QUICK_START_IMAGE_REPOSITORY = 'ghcr.io/documentdb/documentdb/documentdb-local';
@@ -37,6 +38,7 @@ export function resolveQuickStartImage(imageTag?: string): string {
  * onto an existing data volume — the stored credentials must be reused there.
  */
 export interface AdvancedQuickStartOptions {
+    preferredEngine?: ContainerCli;
     /** Explicit host port. Unlike the default, a conflict ERRORS (never auto-relocated). */
     port?: number;
     /** Custom username (requires a password). Ignored on a Missing-recreate. */
@@ -226,6 +228,8 @@ export interface QuickStartMessage {
     readonly environment?: DockerHostEnvironment;
     /** Image reference, for `imageNotFound`. */
     readonly image?: string;
+    /** Owning engine, when its pinned CLI is missing. */
+    readonly engineCli?: ContainerCli;
     /** The container's exit code, for `containerExited`. */
     readonly exitCode?: number;
     /** Raw daemon / driver text, rendered verbatim beside the localized copy. */
@@ -309,7 +313,7 @@ export interface StageEvent {
      * webview offers "Wait longer" / "View logs" / "Start over" instead of a hard failure.
      */
     readonly timedOut?: boolean;
-    /** Typed recovery result when Docker became unavailable during pull or run. */
+    /** Execution's checking snapshot, or typed recovery when the engine became unavailable during pull or run. */
     readonly dockerReadiness?: DockerReadiness;
     /** Set on a setup's terminal event: whether data can be reused once the failed run rolled back. */
     readonly canReuseExistingData?: boolean;
@@ -385,12 +389,42 @@ export type DockerFailureKind =
 
 export type DockerEndpointKind = 'unixSocket' | 'namedPipe' | 'tcp' | 'ssh' | 'unknown';
 
-export type DockerStartAction =
-    | 'startDockerDesktopWindows'
-    | 'startDockerDesktopMacOS'
-    | 'startDockerDesktopLinux'
-    | 'startDockerDesktopWindowsFromWsl'
-    | 'startRootlessDockerEngineLinux';
+export const DOCKER_START_ACTIONS = [
+    'startDockerDesktopWindows',
+    'startDockerDesktopMacOS',
+    'startDockerDesktopLinux',
+    'startDockerDesktopWindowsFromWsl',
+    'startRootlessDockerEngineLinux',
+    'startPodmanMachine',
+] as const;
+
+export type DockerStartAction = (typeof DOCKER_START_ACTIONS)[number];
+
+export interface PodmanMachineFact {
+    readonly name: string;
+    readonly isDefault: boolean;
+    readonly running: boolean;
+    readonly starting: boolean;
+}
+
+/** Where a failed Podman check tried to connect, from the address in its error. */
+export type PodmanTarget =
+    /** WSL: the socket of a Podman machine running on Windows. */
+    | { readonly kind: 'windowsMachineFromWsl'; readonly name: string }
+    /** Linux / WSL: the rootless user socket. */
+    | { readonly kind: 'userSocket' }
+    /** Another address on this host, such as a machine's SSH port on 127.0.0.1. */
+    | { readonly kind: 'local' }
+    /** A host other than this one. */
+    | { readonly kind: 'remote' }
+    | { readonly kind: 'unknown' };
+
+export type PodmanMachineState =
+    | { readonly kind: 'stopped' | 'starting' | 'running'; readonly name: string }
+    | { readonly kind: 'otherActive'; readonly active: string }
+    | { readonly kind: 'none' }
+    | { readonly kind: 'ambiguous'; readonly names: readonly string[] }
+    | { readonly kind: 'unknown' };
 
 export type DockerLaunchResult = 'started' | 'launchAttempted' | 'notAvailable' | 'failed';
 
@@ -425,7 +459,15 @@ export interface DockerSocketGroupFacts {
 }
 
 export interface DockerRecoveryCommand {
-    readonly id: 'linuxDockerGroup' | 'linuxStartService' | 'wslStartServiceNoSystemd' | 'wslRestartFromWindows';
+    readonly id:
+        | 'linuxDockerGroup'
+        | 'linuxStartService'
+        | 'wslStartServiceNoSystemd'
+        | 'wslRestartFromWindows'
+        | 'linuxStartPodmanSocket'
+        | 'podmanMachineInit'
+        | 'podmanMachineStartOnWindows';
+    readonly machineName?: string;
     readonly commandLine: string;
     readonly requiresElevation: boolean;
 }
@@ -440,6 +482,7 @@ export interface DockerProviderMemory {
 }
 
 export interface DockerReadinessRequest {
+    readonly engine?: ContainerEngineRequest;
     readonly forceRefresh?: boolean;
     readonly resetProviderMemory?: boolean;
     readonly suppressCommandEcho?: boolean;
@@ -455,13 +498,17 @@ interface DockerReadinessBase {
     readonly providerRecordedAtMs?: number;
     readonly executionTarget: DockerExecutionTarget;
     readonly startAction?: DockerStartAction;
+    readonly podmanMachine?: PodmanMachineState;
+    readonly podmanTarget?: PodmanTarget;
     readonly permissionDetail?: DockerPermissionDetail;
     readonly recoveryCommand?: DockerRecoveryCommand;
     readonly checkedAtMs: number;
     readonly cliInstalled: boolean;
     readonly cliVersion?: string;
-    /** Which CLI ran the check; `podman` only when Docker's was missing. */
-    readonly cli?: 'docker' | 'podman';
+    /** Which CLI ran the check. */
+    readonly cli?: ContainerCli;
+    readonly preferredEngine?: ContainerCli;
+    readonly cliFallback?: boolean;
     readonly cliOnPath?: ContainerCliPresence;
     readonly engine?: ContainerEngine;
     readonly engineEvidence?: ContainerEngineEvidence;
@@ -570,6 +617,7 @@ export interface DockerStatusResult {
 export interface InstanceStatusUpdate {
     readonly status: QuickStartStatus;
     readonly canReuseExistingData: boolean;
+    readonly instanceEngine?: ContainerCli | 'notRecorded';
 }
 
 /** Why a host port cannot be used, or `'available'` when it can (Configure-step validation, L3). */

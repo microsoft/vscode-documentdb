@@ -14,7 +14,7 @@
  *   chunk splits it across a buffer boundary. Inspect stdout is the exception:
  *   it carries the container env, so it is not echoed at all.
  * - `docker run` is detached (D4); because a detached run streams nothing back,
- *   {@link ContainerRuntime.followLogs} streams `docker logs -f` so the channel
+ *   {@link IContainerEngineOps.followLogs} streams `docker logs -f` so the channel
  *   isn't silent during the readiness wait.
  * - Credentials reach the container through a temp `--env-file`, never argv.
  */
@@ -32,7 +32,14 @@ import * as net from 'net';
 import { Writable } from 'stream';
 import * as vscode from 'vscode';
 import { meterSilentCatch as meterQuickStartSilentCatch } from '../../utils/accumulatingTelemetry';
-import { createContainerClient, resolveContainerCli, type ResolvedContainerCli } from './containerCli';
+import {
+    type ContainerEngineRequest,
+    createContainerClient,
+    findOnPath,
+    resolveContainerCli,
+    type ResolvedContainerCli,
+    resolvePinnedContainerCli,
+} from './containerCli';
 import { type DockerCommandResponse, getDockerShellProvider, runDockerCommand } from './dockerCommand';
 import { CapturingTeeWritable } from './dockerProbes';
 import { startDockerProvider as launchDockerProvider } from './DockerProviderLauncher';
@@ -42,6 +49,7 @@ import {
     type DockerLaunchResult,
     type DockerReadiness,
     type DockerReadinessRequest,
+    type DockerStartAction,
     QUICK_START_PORT,
 } from './quickStartTypes';
 
@@ -141,7 +149,17 @@ export interface RuntimeImageFacts {
  */
 export interface IContainerRuntime {
     isDockerReady(request?: DockerReadinessRequest): Promise<DockerReadiness>;
+    /** `expectedAction` is the action the button named; a check that now selects another one launches nothing. */
+    startAvailableDockerProvider(
+        request: ContainerEngineRequest,
+        expectedAction?: DockerStartAction,
+    ): Promise<DockerLaunchResult>;
     isPortFree(port?: number): Promise<boolean>;
+    resolveCli(request: ContainerEngineRequest): ResolvedContainerCli;
+    forCli(resolved: Pick<ResolvedContainerCli, 'cli' | 'executable'>): IContainerEngineOps;
+}
+
+export interface IContainerEngineOps {
     pullImage(imageRef: string, token?: vscode.CancellationToken, onProgress?: (line: string) => void): Promise<void>;
     inspectImage(imageRef: string, token?: vscode.CancellationToken): Promise<RuntimeImageFacts | 'absent' | undefined>;
     createAndRunContainer(
@@ -185,11 +203,10 @@ export interface IContainerRuntime {
  * line-buffered stdout/stderr writables don't leak state between commands.
  */
 class ContainerRuntimeImpl implements IContainerRuntime {
-    private cli: ResolvedContainerCli = resolveContainerCli();
-    private client: DockerClient | PodmanClient = createContainerClient(this.cli);
+    private readonly engines = new Map<string, ContainerEngineOps>();
     private readonly readinessService = new DockerReadinessService({
-        getClient: () => this.refreshClient(),
-        getCliOnPath: () => this.cli.onPath,
+        getClient: (resolved) => this.engineFor(resolved).client,
+        getCliOnPath: (resolved) => resolved.onPath,
         shellProvider: SHELL_PROVIDER,
         createProbeOutput: () => {
             const channel = getQuickStartOutputChannel();
@@ -202,15 +219,88 @@ class ContainerRuntimeImpl implements IContainerRuntime {
         },
     });
 
-    /** Re-resolved on every readiness check so installing or moving Docker or Podman needs no reload. */
-    private refreshClient(): DockerClient | PodmanClient {
-        const cli = resolveContainerCli();
-        if (cli.cli !== this.cli.cli || cli.executable !== this.cli.executable) {
-            this.client = createContainerClient(cli);
-        }
-        this.cli = cli;
-        return this.client;
+    public resolveCli(request: ContainerEngineRequest): ResolvedContainerCli {
+        return request.kind === 'pinned'
+            ? resolvePinnedContainerCli(request.cli)
+            : resolveContainerCli(request.preferred);
     }
+
+    private engineFor(resolved: Pick<ResolvedContainerCli, 'cli' | 'executable'>): ContainerEngineOps {
+        const key = `${resolved.cli}|${resolved.executable}`;
+        let engine = this.engines.get(key);
+        if (!engine) {
+            engine = new ContainerEngineOps(createContainerClient(resolved));
+            this.engines.set(key, engine);
+        }
+        return engine;
+    }
+
+    public forCli(resolved: Pick<ResolvedContainerCli, 'cli' | 'executable'>): IContainerEngineOps {
+        return this.engineFor(resolved);
+    }
+
+    public isDockerReady(request?: DockerReadinessRequest): Promise<DockerReadiness> {
+        return this.readinessService.getReadiness(request);
+    }
+
+    public async startAvailableDockerProvider(
+        request: ContainerEngineRequest,
+        expectedAction?: DockerStartAction,
+    ): Promise<DockerLaunchResult> {
+        const readiness = await this.readinessService.getReadiness({ engine: request, forceRefresh: true });
+        if (readiness.outcome === 'ready') {
+            // The engine came up between showing the button and the click; the caller's poll confirms it.
+            return 'started';
+        }
+        if (expectedAction && readiness.startAction && readiness.startAction !== expectedAction) {
+            // A fresh run re-resolves the preference, so a CLI installed since the check can select another engine.
+            getQuickStartOutputChannel().appendLine(
+                `[readiness] start action changed from ${expectedAction} to ${readiness.startAction}; nothing was started`,
+            );
+            return 'notAvailable';
+        }
+        if (!readiness.startAction) {
+            if (readiness.podmanMachine?.kind === 'running') {
+                return 'started';
+            }
+            if (readiness.podmanMachine?.kind === 'starting') {
+                return 'launchAttempted';
+            }
+            return 'notAvailable';
+        }
+        const result =
+            readiness.startAction === 'startPodmanMachine'
+                ? await launchDockerProvider(
+                      readiness.startAction,
+                      { onOutput: (output) => getQuickStartOutputChannel().appendLine(sanitizeOutput(output, [])) },
+                      {
+                          environment: readiness.environment,
+                          provider: 'podman',
+                          providerEvidence: 'none',
+                          podmanExecutable: findOnPath('podman'),
+                      },
+                  )
+                : await launchDockerProvider(readiness.startAction);
+        await this.readinessService.recordLaunchResult(
+            result,
+            readiness.startAction === 'startPodmanMachine' ? 'podman' : (readiness.cli ?? 'docker'),
+        );
+        return result;
+    }
+
+    /** True if the TCP port can be bound on loopback right now (pre-check, design §8.3). */
+    public isPortFree(port: number = QUICK_START_PORT): Promise<boolean> {
+        return new Promise<boolean>((resolve) => {
+            const server = net.createServer();
+            server.once('error', () => resolve(false));
+            server.once('listening', () => server.close(() => resolve(true)));
+            server.listen(port, '127.0.0.1');
+        });
+    }
+}
+
+class ContainerEngineOps implements IContainerEngineOps {
+    public constructor(public readonly client: DockerClient | PodmanClient) {}
 
     private makeRunner(
         secrets: ReadonlyArray<string>,
@@ -252,31 +342,6 @@ class ContainerRuntimeImpl implements IContainerRuntime {
             stdErrPipe: new MaskedChannelWritable(channel, secrets, onLine),
             cancellationToken: token,
             timeoutMs,
-        });
-    }
-
-    /** CLI-on-PATH + daemon-reachable check (design §9 prereq cards). */
-    public isDockerReady(request?: DockerReadinessRequest): Promise<DockerReadiness> {
-        return this.readinessService.getReadiness(request);
-    }
-
-    public async startAvailableDockerProvider(): Promise<DockerLaunchResult> {
-        const readiness = await this.readinessService.getReadiness({ forceRefresh: true });
-        if (!readiness.startAction) {
-            return 'notAvailable';
-        }
-        const result = await launchDockerProvider(readiness.startAction);
-        await this.readinessService.recordLaunchResult(result);
-        return result;
-    }
-
-    /** True if the TCP port can be bound on loopback right now (pre-check, design §8.3). */
-    public isPortFree(port: number = QUICK_START_PORT): Promise<boolean> {
-        return new Promise<boolean>((resolve) => {
-            const server = net.createServer();
-            server.once('error', () => resolve(false));
-            server.once('listening', () => server.close(() => resolve(true)));
-            server.listen(port, '127.0.0.1');
         });
     }
 
@@ -610,6 +675,9 @@ export const ContainerRuntime: IContainerRuntime = containerRuntime;
 /**
  * Recompute provider capability and revalidate the selected action immediately before launch.
  */
-export async function startDockerProvider(): Promise<DockerLaunchResult> {
-    return containerRuntime.startAvailableDockerProvider();
+export async function startDockerProvider(
+    request: ContainerEngineRequest = { kind: 'preferred', preferred: 'docker' },
+    expectedAction?: DockerStartAction,
+): Promise<DockerLaunchResult> {
+    return containerRuntime.startAvailableDockerProvider(request, expectedAction);
 }

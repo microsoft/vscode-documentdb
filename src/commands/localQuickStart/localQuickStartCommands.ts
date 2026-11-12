@@ -8,7 +8,8 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
-import { ContainerRuntime, getQuickStartOutputChannel } from '../../services/localQuickStart/ContainerRuntime';
+import { getQuickStartOutputChannel } from '../../services/localQuickStart/ContainerRuntime';
+import { sanitizeOutput } from '../../services/localQuickStart/outputMasking';
 import { secretVariants } from '../../services/localQuickStart/quickStartCredentials';
 import { QuickStartService } from '../../services/localQuickStart/QuickStartService';
 import { InstanceState, type OpenLocalQuickStartOptions } from '../../services/localQuickStart/quickStartTypes';
@@ -259,5 +260,12 @@ export function viewQuickStartLogs(_context: IActionContext): void {
     } catch {
         password = '';
     }
-    void ContainerRuntime.followLogs(metadata.containerId, secretVariants(password), token);
+    const secrets = secretVariants(password);
+    void QuickStartService.followLogs(metadata.alias, secrets, token).catch((error: unknown) => {
+        // Finding the owning engine can fail before any log is read; the channel is open, so say it there.
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        channel.appendLine(
+            l10n.t('Could not follow the DocumentDB Local container logs: {0}', sanitizeOutput(errorMessage, secrets)),
+        );
+    });
 }

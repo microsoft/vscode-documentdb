@@ -48,7 +48,7 @@ export class QuickStartErrorExplainer implements ErrorExplanationProvider {
                     'We found a container using the DocumentDB Local name, but it very likely was not created by this extension, so we cannot open it.',
                 );
             case 'dockerUnreachable': {
-                const engine = QuickStartService.getDockerReadinessSnapshot()?.engine;
+                const engine = QuickStartService.getDockerReadinessSnapshot(alias)?.engine;
                 let engineLabel = l10n.t('The container engine');
                 if (engine === 'docker') {
                     engineLabel = 'Docker';

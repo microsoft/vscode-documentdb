@@ -21,8 +21,17 @@ export function getDockerReadinessTelemetryProperties(readiness: DockerReadiness
         containerEngine: readiness.engine ?? 'unknown',
         containerEngineEvidence: readiness.engineEvidence ?? 'none',
     };
+    if (readiness.preferredEngine !== undefined) {
+        properties.preferredContainerEngine = readiness.preferredEngine === 'podman' ? 'podman' : 'docker';
+    }
+    if (readiness.cliFallback !== undefined) {
+        properties.containerCliFallback = readiness.cliFallback ? 'true' : 'false';
+    }
     if (readiness.cli) {
         properties.containerCli = readiness.cli;
+    }
+    if (readiness.podmanTarget) {
+        properties.podmanTargetKind = readiness.podmanTarget.kind;
     }
     if (readiness.failureKind === 'unknown' && readiness.diagnosticFingerprint) {
         properties.dockerDiagnosticFingerprint = readiness.diagnosticFingerprint;

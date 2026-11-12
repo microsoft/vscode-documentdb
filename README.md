@@ -32,7 +32,7 @@ Connect to your databases, explore your data, run and tune queries, and move col
 
 ## Connect in Seconds, Wherever Your Data Lives
 
-- **No database yet?** Select **Set up DocumentDB Local** and the extension starts [DocumentDB](https://documentdb.io) in Docker for you, with a persistent volume, generated credentials and optional sample data. No `docker run` command to assemble. [Learn more](https://microsoft.github.io/vscode-documentdb/user-manual/local-quick-start)
+- **No database yet?** Select **Set up DocumentDB Local** and the extension starts [DocumentDB](https://documentdb.io) in Docker or Podman for you, with a persistent volume, generated credentials and optional sample data. Choose your container engine in Configure; no `docker run` or `podman run` command to assemble. [Learn more](https://microsoft.github.io/vscode-documentdb/user-manual/local-quick-start)
 - **On Azure?** Browse your Azure DocumentDB clusters and Azure Cosmos DB for MongoDB (RU) accounts across accounts, tenants and subscriptions, and sign in with **Microsoft Entra ID** or a managed identity. They also show up in the Azure Resources view. [Learn more](https://microsoft.github.io/vscode-documentdb/user-manual/service-discovery)
 - **On MongoDB Atlas?** Sign in with an Atlas service account or API key and pick a cluster from your organizations and projects instead of copying endpoints. [Learn more](https://microsoft.github.io/vscode-documentdb/user-manual/service-discovery-mongodb-atlas)
 - **In Kubernetes?** DocumentDB clusters on AKS, EKS, GKE, kind, minikube or Docker Desktop are found from your kubeconfig, and port forwarding is handled for you. [Learn more](https://microsoft.github.io/vscode-documentdb/user-manual/service-discovery-kubernetes)
@@ -80,7 +80,7 @@ Everything happens in the open on [GitHub](https://github.com/microsoft/vscode-d
 
 # Prerequisites
 
-No external tools or runtimes are required. Install the extension and start working. Only DocumentDB Local needs Docker (Docker Engine or Docker Desktop).
+No external tools or runtimes are required to connect to an existing database. Setting up DocumentDB Local requires Docker (Docker Engine or Docker Desktop) or Podman, with a CLI available to the VS Code extension host and an engine running Linux containers. See the [setup requirements](https://microsoft.github.io/vscode-documentdb/user-manual/local-quick-start#container-engine-requirement).
 
 <!-- region exclude-from-marketplace -->
 

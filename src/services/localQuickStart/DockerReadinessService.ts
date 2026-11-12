@@ -3,16 +3,19 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-    DockerClient,
-    PodmanClient,
-    type ListContextItem,
-    type PromiseCommandResponse,
-} from '@microsoft/vscode-container-client';
+import { PodmanClient, type ListContextItem, type PromiseCommandResponse } from '@microsoft/vscode-container-client';
 import { CancellationTokenLike, type Shell } from '@microsoft/vscode-processutils';
 import { type Writable } from 'stream';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
+import {
+    createContainerClient,
+    findOnPath,
+    resolveContainerCli,
+    resolvePinnedContainerCli,
+    type ContainerCli,
+    type ResolvedContainerCli,
+} from './containerCli';
 import { getDockerShellProvider } from './dockerCommand';
 import {
     detectDockerServiceManager,
@@ -27,13 +30,15 @@ import {
     type ResolvedDockerEndpoint,
     type RunDockerProbeOptions,
 } from './dockerProbes';
-import { getDockerStartCapability } from './DockerProviderLauncher';
+import { getDockerStartCapability, type DockerStartCapability } from './DockerProviderLauncher';
 import {
     classifyContainerEngine,
     classifyDockerFailure,
     classifyDockerProvider,
+    classifyPodmanTarget,
     getDockerDiagnosticFingerprint,
     isDockerCliNotFound,
+    parsePodmanDialTarget,
 } from './dockerReadinessClassification';
 import { getDockerRecoveryCommand } from './dockerRecoveryCommands';
 import {
@@ -48,6 +53,7 @@ import {
     type DockerReadiness,
     type DockerReadinessRequest,
     type DockerSocketGroupFacts,
+    type PodmanTarget,
 } from './quickStartTypes';
 
 export const READINESS_DEADLINE_MS = 15_000;
@@ -73,8 +79,8 @@ export interface DockerProbeOutput {
 export interface DockerReadinessServiceDependencies {
     readonly client?: DockerReadinessClient;
     /** Called once per check, so a CLI installed or removed since the last one is picked up. */
-    readonly getClient?: () => DockerReadinessClient;
-    readonly getCliOnPath?: () => ContainerCliPresence | undefined;
+    readonly getClient?: (resolved: ResolvedContainerCli) => DockerReadinessClient;
+    readonly getCliOnPath?: (resolved: ResolvedContainerCli) => ContainerCliPresence | undefined;
     readonly shellProvider?: Shell;
     readonly platform?: NodeJS.Platform;
     readonly arch?: string;
@@ -95,8 +101,8 @@ export interface DockerReadinessServiceDependencies {
 }
 
 interface ResolvedDependencies {
-    readonly getClient: () => DockerReadinessClient;
-    readonly getCliOnPath: () => ContainerCliPresence | undefined;
+    readonly getClient: (resolved: ResolvedContainerCli) => DockerReadinessClient;
+    readonly getCliOnPath: (resolved: ResolvedContainerCli) => ContainerCliPresence | undefined;
     readonly shellProvider: Shell;
     readonly platform: NodeJS.Platform;
     readonly arch: string;
@@ -238,17 +244,23 @@ function isProviderMemoryCurrent(
     return memory.endpointKind === 'unknown' || endpointKind === 'unknown' || memory.endpointKind === endpointKind;
 }
 
+interface ReadinessCheckState {
+    inFlight?: Promise<DockerReadiness>;
+    forcedRefresh?: Promise<DockerReadiness>;
+    memoized?: DockerReadiness;
+}
+
 export class DockerReadinessService {
     private readonly dependencies: ResolvedDependencies;
-    private inFlight: Promise<DockerReadiness> | undefined;
-    private forcedRefresh: Promise<DockerReadiness> | undefined;
-    private memoized: DockerReadiness | undefined;
+    private readonly checks = new Map<string, ReadinessCheckState>();
+    private readonly suppliedClient: DockerReadinessClient | undefined;
 
     public constructor(dependencies: DockerReadinessServiceDependencies = {}) {
         const platform = dependencies.platform ?? process.platform;
-        const client = dependencies.client ?? new DockerClient();
+        const client = dependencies.client;
+        this.suppliedClient = dependencies.client;
         this.dependencies = {
-            getClient: dependencies.getClient ?? (() => client),
+            getClient: dependencies.getClient ?? (client ? () => client : createContainerClient),
             getCliOnPath: dependencies.getCliOnPath ?? (() => undefined),
             shellProvider: dependencies.shellProvider ?? getDockerShellProvider(platform),
             platform,
@@ -271,52 +283,74 @@ export class DockerReadinessService {
     }
 
     public async getReadiness(request: DockerReadinessRequest = {}): Promise<DockerReadiness> {
+        const resolved =
+            request.engine?.kind === 'pinned'
+                ? resolvePinnedContainerCli(request.engine.cli)
+                : this.suppliedClient && !request.engine
+                  ? resolvePinnedContainerCli(this.suppliedClient.id === PodmanClient.ClientId ? 'podman' : 'docker')
+                  : resolveContainerCli(request.engine?.kind === 'preferred' ? request.engine.preferred : 'docker');
+        // A check pinned to an instance's owner reports no preference, so it cannot share a memo with one that does.
+        const pinned = request.engine?.kind === 'pinned';
+        const key = `${resolved.cli}|${resolved.executable}|${resolved.preferred}|${resolved.onPath.docker}|${resolved.onPath.podman}|${pinned}`;
+        let state = this.checks.get(key);
+        if (!state) {
+            state = {};
+            this.checks.set(key, state);
+        }
         if (request.forceRefresh) {
-            if (this.forcedRefresh) {
-                return this.forcedRefresh;
+            if (state.forcedRefresh) {
+                return state.forcedRefresh;
             }
-            const refresh = this.runForcedRefresh(request);
-            this.forcedRefresh = refresh;
+            const refresh = this.runForcedRefresh(request, resolved, state);
+            state.forcedRefresh = refresh;
             try {
                 return await refresh;
             } finally {
-                if (this.forcedRefresh === refresh) {
-                    this.forcedRefresh = undefined;
+                if (state.forcedRefresh === refresh) {
+                    state.forcedRefresh = undefined;
                 }
             }
         }
 
-        if (this.inFlight) {
-            return this.inFlight;
+        if (state.inFlight) {
+            return state.inFlight;
         }
 
         const now = this.dependencies.now();
-        if (this.memoized && now - this.memoized.checkedAtMs < this.dependencies.memoTtlMs) {
-            return this.memoized;
+        if (state.memoized && now - state.memoized.checkedAtMs < this.dependencies.memoTtlMs) {
+            return state.memoized;
         }
 
-        return this.runAndMemoize(request);
+        return this.runAndMemoize(request, resolved, state);
     }
 
-    private async runForcedRefresh(request: DockerReadinessRequest): Promise<DockerReadiness> {
-        if (this.inFlight) {
+    private async runForcedRefresh(
+        request: DockerReadinessRequest,
+        resolved: ResolvedContainerCli,
+        state: ReadinessCheckState,
+    ): Promise<DockerReadiness> {
+        if (state.inFlight) {
             try {
-                await this.inFlight;
+                await state.inFlight;
             } catch {
                 // A forced refresh supersedes a canceled or failed prior check.
             }
         }
-        this.memoized = undefined;
-        if (request.resetProviderMemory) {
+        state.memoized = undefined;
+        if (resolved.cli === 'docker' && request.resetProviderMemory) {
             await this.dependencies.writeProviderMemory(undefined);
         }
-        return this.runAndMemoize(request);
+        return this.runAndMemoize(request, resolved, state);
     }
 
-    private async runAndMemoize(request: DockerReadinessRequest): Promise<DockerReadiness> {
-        const client = this.dependencies.getClient();
-        const cliOnPath = this.dependencies.getCliOnPath();
-        const cli = client.id === PodmanClient.ClientId ? 'podman' : 'docker';
+    private async runAndMemoize(
+        request: DockerReadinessRequest,
+        resolved: ResolvedContainerCli,
+        state: ReadinessCheckState,
+    ): Promise<DockerReadiness> {
+        const client = this.dependencies.getClient(resolved);
+        const cliOnPath = this.dependencies.getCliOnPath(resolved);
+        const cli = resolved.cli;
         const check = this.runReadiness(
             client,
             cli,
@@ -326,17 +360,21 @@ export class DockerReadinessService {
             (readiness): DockerReadiness => ({
                 ...readiness,
                 cli,
+                // The owner of an existing instance was not chosen for this run.
+                ...(request.engine?.kind === 'pinned'
+                    ? {}
+                    : { preferredEngine: resolved.preferred, cliFallback: resolved.fellBack }),
                 ...(cliOnPath !== undefined ? { cliOnPath } : {}),
             }),
         );
-        this.inFlight = check;
+        state.inFlight = check;
         try {
             const result = await check;
-            this.memoized = result;
+            state.memoized = result;
             return result;
         } finally {
-            if (this.inFlight === check) {
-                this.inFlight = undefined;
+            if (state.inFlight === check) {
+                state.inFlight = undefined;
             }
         }
     }
@@ -414,10 +452,14 @@ export class DockerReadinessService {
         }
     }
 
-    public async recordLaunchResult(result: DockerLaunchResult): Promise<void> {
+    public async recordLaunchResult(result: DockerLaunchResult, cli: ContainerCli): Promise<void> {
         if (result === 'notAvailable' || result === 'failed') {
-            this.memoized = undefined;
-            await this.dependencies.writeProviderMemory(undefined);
+            for (const state of this.checks.values()) {
+                state.memoized = undefined;
+            }
+            if (cli === 'docker') {
+                await this.dependencies.writeProviderMemory(undefined);
+            }
         }
     }
 
@@ -485,6 +527,8 @@ export class DockerReadinessService {
             }
 
             const cliVersion = isSuccessfulProbe(versionProbe) ? versionProbe.stdout.trim() : undefined;
+            // Podman ignores DOCKER_HOST and DOCKER_CONTEXT, so they must not describe or classify it.
+            const endpointSettings: NodeJS.ProcessEnv = cli === 'podman' ? {} : this.dependencies.environmentVariables;
             const cliNotFound = isDockerCliNotFound(infoProbe);
             const cliInstalled = isSuccessfulProbe(versionProbe) || !cliNotFound;
             if (cliNotFound) {
@@ -518,7 +562,7 @@ export class DockerReadinessService {
             const infoSucceeded = isSuccessfulProbe(infoProbe) && infoFacts !== undefined;
             const hasServerErrors = (infoFacts?.serverErrors.length ?? 0) > 0;
             if (infoSucceeded && !hasServerErrors) {
-                const configuredEndpoint = this.dependencies.environmentVariables['DOCKER_HOST'];
+                const configuredEndpoint = endpointSettings['DOCKER_HOST'];
                 let engine = classifyContainerEngine({ ...engineInput, endpointAddress: configuredEndpoint });
                 if (cli === 'docker' && engine.engine !== 'podman') {
                     try {
@@ -568,14 +612,16 @@ export class DockerReadinessService {
                     daemonOperatingSystem: infoFacts.operatingSystem,
                     engine: engine.engine,
                 });
-                await this.dependencies.writeProviderMemory({
-                    provider: provider.provider === 'podman' ? 'unknown' : provider.provider,
-                    endpointKind,
-                    hostEnvironment: environment,
-                    daemonArchitecture,
-                    osType,
-                    recordedAtMs: this.dependencies.now(),
-                });
+                if (cli === 'docker') {
+                    await this.dependencies.writeProviderMemory({
+                        provider: provider.provider === 'podman' ? 'unknown' : provider.provider,
+                        endpointKind,
+                        hostEnvironment: environment,
+                        daemonArchitecture,
+                        osType,
+                        recordedAtMs: this.dependencies.now(),
+                    });
+                }
                 if (osType === 'windows') {
                     return {
                         outcome: 'diagnosed',
@@ -619,7 +665,7 @@ export class DockerReadinessService {
 
             let contexts: ListContextItem[] = [];
             let contextsResolved = false;
-            if (!deadlineExpired && !this.dependencies.environmentVariables['DOCKER_HOST']) {
+            if (!deadlineExpired && cli !== 'podman' && !endpointSettings['DOCKER_HOST']) {
                 const contextResult = await this.readContexts(
                     client,
                     cancellationToken,
@@ -633,11 +679,7 @@ export class DockerReadinessService {
                 throw new vscode.CancellationError();
             }
 
-            const endpoint = resolveDockerEndpoint(
-                this.dependencies.platform,
-                this.dependencies.environmentVariables,
-                contexts,
-            );
+            const endpoint = resolveDockerEndpoint(this.dependencies.platform, endpointSettings, contexts);
             const endpointProbe = await this.dependencies.probeEndpoint(endpoint, cancellationToken);
             if (callerCancelled) {
                 throw new vscode.CancellationError();
@@ -661,12 +703,12 @@ export class DockerReadinessService {
                 }
             }
 
-            const requestedContext = this.dependencies.environmentVariables['DOCKER_CONTEXT'];
+            const requestedContext = endpointSettings['DOCKER_CONTEXT'];
             const contextUnavailable =
                 !!requestedContext &&
                 contextsResolved &&
                 !contexts.some((context) => context.name === requestedContext);
-            const storedMemory = this.dependencies.readProviderMemory();
+            const storedMemory = cli === 'docker' ? this.dependencies.readProviderMemory() : undefined;
             let rememberedProvider = storedMemory;
             if (contextUnavailable && rememberedProvider) {
                 rememberedProvider = undefined;
@@ -679,13 +721,21 @@ export class DockerReadinessService {
                 rememberedProvider = undefined;
                 await this.dependencies.writeProviderMemory(undefined);
             }
-            const provider = classifyDockerProvider({
-                environment,
-                daemonReachable: false,
-                contexts,
-                activeEndpoint: endpoint,
-                rememberedProvider,
+            const engine = classifyContainerEngine({
+                ...engineInput,
+                endpointAddress: endpoint.address,
+                dockerSocketTarget,
             });
+            const isPodman = cli === 'podman' || engine.engineEvidence === 'podmanShim';
+            const provider = !isPodman
+                ? classifyDockerProvider({
+                      environment,
+                      daemonReachable: false,
+                      contexts,
+                      activeEndpoint: endpoint,
+                      rememberedProvider,
+                  })
+                : { provider: 'unknown' as const, providerEvidence: 'none' as const };
             if (
                 rememberedProvider &&
                 provider.providerEvidence === 'activeContext' &&
@@ -693,7 +743,7 @@ export class DockerReadinessService {
             ) {
                 await this.dependencies.writeProviderMemory(undefined);
             }
-            const classification = classifyDockerFailure({
+            let classification = classifyDockerFailure({
                 infoProbe,
                 endpointProbe,
                 serverErrors: infoFacts?.serverErrors,
@@ -701,18 +751,67 @@ export class DockerReadinessService {
                 providerMayBeStarting:
                     provider.provider === 'dockerDesktop' && provider.providerEvidence === 'rememberedProvider',
             });
-            const startCapability = await this.dependencies.getStartCapability({
-                environment,
-                ...provider,
-                endpointAddress: endpoint.address,
-                cancellationToken,
-            });
+            let podmanTarget: PodmanTarget | undefined;
+            if (isPodman && classification.failureKind === 'daemonUnavailable') {
+                // The Podman CLI names the address it dialled; the Docker CLI shim uses the endpoint it resolved.
+                podmanTarget = classifyPodmanTarget(
+                    cli === 'podman'
+                        ? parsePodmanDialTarget(infoProbe.stderr)
+                        : endpoint.kind === 'unixSocket'
+                          ? { transport: 'unix', path: dockerSocketTarget ?? endpoint.address }
+                          : undefined,
+                    environment,
+                );
+                this.dependencies
+                    .createProbeOutput?.()
+                    ?.appendDiagnostic?.(`[readiness] podmanTarget=${podmanTarget.kind}`);
+                if (podmanTarget.kind === 'remote') {
+                    classification = { failureKind: 'endpointUnreachable', outcome: 'diagnosed' };
+                }
+            }
+            let startCapability: DockerStartCapability = provider;
+            if (
+                isPodman &&
+                classification.failureKind === 'daemonUnavailable' &&
+                (environment === 'macos' || environment === 'windows')
+            ) {
+                const podmanExecutable = findOnPath('podman', {
+                    platform: this.dependencies.platform,
+                    environmentVariables: this.dependencies.environmentVariables,
+                });
+                if (podmanExecutable) {
+                    startCapability = await this.dependencies.getStartCapability(
+                        {
+                            environment,
+                            provider: 'podman',
+                            providerEvidence: 'none',
+                            podmanExecutable,
+                            cancellationToken,
+                        },
+                        { onOutput: (output) => this.dependencies.createProbeOutput?.().appendDiagnostic?.(output) },
+                    );
+                    if (callerCancelled) {
+                        throw new vscode.CancellationError();
+                    }
+                }
+                if (startCapability.podmanMachine?.kind === 'starting') {
+                    classification = { failureKind: 'daemonStarting', outcome: 'diagnosed' };
+                }
+            } else if (!isPodman) {
+                startCapability = await this.dependencies.getStartCapability({
+                    environment,
+                    ...provider,
+                    endpointAddress: endpoint.address,
+                    cancellationToken,
+                });
+            }
             let permissionDetail: DockerPermissionDetail | undefined;
-            if (classification.failureKind === 'permissionDenied' && endpoint.kind === 'unixSocket') {
+            if (!isPodman && classification.failureKind === 'permissionDenied' && endpoint.kind === 'unixSocket') {
                 const groupFacts = await this.dependencies.probeSocketGroup(endpoint.address);
                 permissionDetail = resolveDockerPermissionDetail(groupFacts);
             }
             const serviceManager =
+                !isPodman &&
                 classification.failureKind === 'daemonUnavailable' &&
                 endpoint.kind === 'unixSocket' &&
                 environment === 'wsl'
@@ -720,10 +819,13 @@ export class DockerReadinessService {
                     : 'unknown';
             const failureResult = {
                 environment,
-                ...classifyContainerEngine({ ...engineInput, endpointAddress: endpoint.address, dockerSocketTarget }),
-                endpointKind: endpoint.kind,
-                endpointSource: endpoint.source,
+                ...engine,
+                // Podman ignores Docker's endpoint settings, so Docker's endpoint does not describe it.
+                ...(cli === 'podman'
+                    ? { endpointKind: 'unknown' as const }
+                    : { endpointKind: endpoint.kind, endpointSource: endpoint.source }),
                 ...startCapability,
+                ...(podmanTarget ? { podmanTarget } : {}),
                 providerRecordedAtMs:
                     startCapability.providerEvidence === 'rememberedProvider'
                         ? rememberedProvider?.recordedAtMs
@@ -736,6 +838,7 @@ export class DockerReadinessService {
                     endpoint.kind,
                     permissionDetail,
                     serviceManager,
+                    isPodman ? { machine: startCapability.podmanMachine, target: podmanTarget } : undefined,
                 ),
                 checkedAtMs: this.dependencies.now(),
                 cliInstalled,

@@ -242,7 +242,7 @@ function buildEmptyStateTooltip(): vscode.MarkdownString {
 
 function buildInstanceTooltip(status: QuickStartStatus, baseTooltip?: vscode.MarkdownString): vscode.MarkdownString {
     const metadata = status.metadata;
-    const readiness = QuickStartService.getDockerReadinessSnapshot();
+    const readiness = QuickStartService.getDockerReadinessSnapshot(metadata?.alias);
     const tooltip = new vscode.MarkdownString(baseTooltip?.value ?? `### ${l10n.t('DocumentDB Local')}\n\n`);
     tooltip.isTrusted = false;
 

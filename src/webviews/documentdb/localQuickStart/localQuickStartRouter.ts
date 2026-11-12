@@ -6,7 +6,8 @@
 /**
  * tRPC router for the Local Quick Start webview (WI-2).
  *
- * - `getDockerStatus` (query): readiness pre-check + current instance status.
+ * - `getWizardContext` (query): metadata-only Configure facts, without engine checks.
+ * - `getDockerStatus` (query): execution-time readiness + current instance status.
  * - `startQuickStart` (subscription): drives {@link QuickStartService.provision}
  *   and yields one {@link StageEvent} per stage. Cancellation flows from the
  *   subscription's `ctx.signal` (aborted on unsubscribe) into a mirrored
@@ -22,12 +23,14 @@ import { CancellationTokenLike } from '@microsoft/vscode-processutils';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { z } from 'zod';
-import { getQuickStartOutputChannel, startDockerProvider } from '../../../services/localQuickStart/ContainerRuntime';
+import { getQuickStartOutputChannel } from '../../../services/localQuickStart/ContainerRuntime';
+import { PODMAN_MACHINE_NAME } from '../../../services/localQuickStart/dockerReadinessClassification';
 import { getDockerRecoveryCommandById } from '../../../services/localQuickStart/dockerRecoveryCommands';
 import { getPasswordEncodingProblem } from '../../../services/localQuickStart/quickStartCredentials';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import {
     type AdvancedQuickStartOptions,
+    DOCKER_START_ACTIONS,
     type DockerStatusResult,
     type InstanceStatusUpdate,
     type PasswordEncodingProblem,
@@ -70,6 +73,7 @@ function getCustomCredentialProblem(username = '', password = ''): CredentialVal
  */
 const advancedOptionsSchema = z
     .object({
+        preferredEngine: z.enum(['docker', 'podman']).optional(),
         port: z.number().int().min(1024).max(65535).optional(),
         // Not trimmed: the credentials are stored exactly as sent, so surrounding whitespace is
         // rejected rather than silently removed.
@@ -151,6 +155,12 @@ function toWebviewStatus(status: QuickStartStatus): QuickStartStatus {
 }
 
 export const localQuickStartRouter = router({
+    /** Configure reads stored instance facts only; readiness belongs to execution. */
+    getWizardContext: publicProcedure.query(async () => {
+        const context = await QuickStartService.getWizardContext();
+        return { ...context, status: toWebviewStatus(context.status) };
+    }),
+
     /** Readiness pre-check + current managed-instance status (powers the review cards). */
     getDockerStatus: publicProcedureWithTelemetry
         .input(
@@ -160,6 +170,7 @@ export const localQuickStartRouter = router({
                     polled: z.boolean().optional(),
                     resetProviderMemory: z.boolean().optional(),
                     suppressCommandEcho: z.boolean().optional(),
+                    preferredEngine: z.enum(['docker', 'podman']).optional(),
                 })
                 .optional(),
         )
@@ -169,12 +180,15 @@ export const localQuickStartRouter = router({
                 tctx.actionContext.telemetry.suppressAll = true;
             }
             const cancellationToken = ctx.signal ? CancellationTokenLike.fromAbortSignal(ctx.signal) : undefined;
-            const readiness = await QuickStartService.checkDockerReadiness({
-                forceRefresh: input?.forceRefresh,
-                resetProviderMemory: input?.resetProviderMemory,
-                suppressCommandEcho: input?.suppressCommandEcho,
-                cancellationToken,
-            });
+            const readiness = await QuickStartService.checkInstanceDockerReadiness(
+                {
+                    forceRefresh: input?.forceRefresh,
+                    resetProviderMemory: input?.resetProviderMemory,
+                    suppressCommandEcho: input?.suppressCommandEcho,
+                    cancellationToken,
+                },
+                input?.preferredEngine,
+            );
             // Refresh the live container state so the panel opens with an accurate badge
             // (e.g. Missing when the container was removed in another window), which drives
             // whether the Advanced credential/image fields are shown (§12).
@@ -259,21 +273,56 @@ export const localQuickStartRouter = router({
 
     /** Copy one fixed, never-executed recovery command selected by the extension host. */
     copyRecoveryCommand: publicProcedureWithTelemetry
-        .input(z.enum(['linuxDockerGroup', 'linuxStartService', 'wslStartServiceNoSystemd', 'wslRestartFromWindows']))
+        .input(
+            z
+                .object({
+                    id: z.enum([
+                        'linuxDockerGroup',
+                        'linuxStartService',
+                        'wslStartServiceNoSystemd',
+                        'wslRestartFromWindows',
+                        'linuxStartPodmanSocket',
+                        'podmanMachineInit',
+                        'podmanMachineStartOnWindows',
+                    ]),
+                    machineName: z
+                        .string()
+                        .refine((name) => PODMAN_MACHINE_NAME.exec(name)?.[0] === name)
+                        .optional(),
+                })
+                .superRefine((input, ctx) => {
+                    if ((input.id === 'podmanMachineStartOnWindows') !== (input.machineName !== undefined)) {
+                        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['machineName'] });
+                    }
+                }),
+        )
         .mutation(async ({ input, ctx }): Promise<void> => {
-            const command = getDockerRecoveryCommandById(input);
+            const command = getDockerRecoveryCommandById(input.id, input.machineName);
             await vscode.env.clipboard.writeText(command.commandLine);
             const tctx = sessionContext(ctx);
             tctx.actionContext.telemetry.properties.recoveryCommandId = command.id;
         }),
 
     /** Revalidate and launch the provider action selected by the extension host. */
-    startDockerProvider: publicProcedureWithTelemetry.mutation(async ({ ctx }) => {
-        const tctx = sessionContext(ctx);
-        const result = await startDockerProvider();
-        tctx.actionContext.telemetry.properties.dockerLaunchResult = result;
-        return result;
-    }),
+    startDockerProvider: publicProcedureWithTelemetry
+        .input(
+            z
+                .object({
+                    preferredEngine: z.enum(['docker', 'podman']).default('docker'),
+                    /** The action the clicked button named; the host launches nothing else. */
+                    expectedAction: z.enum(DOCKER_START_ACTIONS).optional(),
+                })
+                .optional(),
+        )
+        .mutation(async ({ ctx, input }) => {
+            const tctx = sessionContext(ctx);
+            const result = await QuickStartService.startDockerProvider(
+                input?.preferredEngine ?? 'docker',
+                input?.expectedAction,
+            );
+            tctx.actionContext.telemetry.properties.dockerLaunchResult = result;
+            return result;
+        }),
 
     /**
      * Success hand-off (§5.5): open the managed instance in the Connections view.
@@ -342,12 +391,17 @@ export const localQuickStartRouter = router({
                 if (dirty) {
                     dirty = false;
                     const status = toWebviewStatus(QuickStartService.getStatus());
-                    const statusKey = JSON.stringify(status);
+                    const instanceEngine = await QuickStartService.getInstanceEngine();
+                    const statusKey = JSON.stringify({ status, instanceEngine });
                     // The status event also fires when nothing user-visible changed; skipping those
                     // keeps the credential read below off the repeating path.
                     if (statusKey !== lastStatusKey) {
                         lastStatusKey = statusKey;
-                        yield { status, canReuseExistingData: await QuickStartService.canReuseExistingData() };
+                        yield {
+                            status,
+                            canReuseExistingData: await QuickStartService.canReuseExistingData(),
+                            instanceEngine,
+                        };
                     }
                     continue;
                 }
@@ -398,6 +452,12 @@ export const localQuickStartRouter = router({
                 undefined,
                 provisionCorrelationId,
             )) {
+                if (event.stage === 'checking' && event.dockerReadiness) {
+                    Object.assign(
+                        myCtx.actionContext.telemetry.properties,
+                        getDockerReadinessTelemetryProperties(event.dockerReadiness),
+                    );
+                }
                 recordSetupResult(session, event);
                 yield event;
             }

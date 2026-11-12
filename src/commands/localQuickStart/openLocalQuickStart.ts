@@ -22,9 +22,9 @@ export async function openLocalQuickStart(
 ): Promise<void> {
     // Every other entry point passes its source; the Command Palette passes no arguments.
     context.telemetry.properties.activationSource = options?.activationSource ?? 'commandPalette';
-    // Never gate the webview on Docker: diagnosing a missing or stopped Docker is its whole job.
-    await QuickStartService.ensureHydrated().catch(() => undefined);
-    const status = QuickStartService.getStatus();
+    // Opening the wizard must not resolve or contact an engine; checks belong to execution.
+    // Stored facts alone can already say the credentials are missing, which the live status cannot yet.
+    const status = await QuickStartService.getWizardStatus().catch(() => QuickStartService.getStatus());
     // Credentials missing: the explanation and the only way forward are on Configure, so start there.
     const initialPhase = status.state === InstanceState.CredentialsMissing ? 'configure' : 'introduction';
     const quickStartSessionId = randomUUID();

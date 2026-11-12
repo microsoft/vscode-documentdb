@@ -590,12 +590,23 @@ export const fixtures = {
         styles: [{ selector: 'table', property: 'border-collapse', expected: 'collapse' }],
         rpc: {
             ...common,
+            'localQuickStart.getWizardContext': reply<Outputs['localQuickStart']['getWizardContext']>('query', {
+                status: docker.status,
+                busy: false,
+                canReuseExistingData: false,
+                suggestedPort: 10260,
+            }),
             'localQuickStart.getDockerStatus': reply('query', docker),
             'localQuickStart.getStatus': reply<Outputs['localQuickStart']['getStatus']>('query', docker.status),
             'localQuickStart.checkPort': reply<Outputs['localQuickStart']['checkPort']>('query', 'available'),
             'localQuickStart.checkPassword': reply<Outputs['localQuickStart']['checkPassword']>('query', 'ok'),
             'localQuickStart.reportStepChange': reply<void>('mutation', undefined),
             'localQuickStart.reportDetailsOpened': reply<void>('mutation', undefined),
+            'localQuickStart.startDockerProvider': reply<Outputs['localQuickStart']['startDockerProvider']>(
+                'mutation',
+                'launchAttempted',
+            ),
+            'localQuickStart.copyRecoveryCommand': reply<void>('mutation', undefined),
             'localQuickStart.onInstanceChanged': { type: 'subscription', results: [instance], keepOpen: true },
         },
     },

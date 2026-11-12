@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { type DockerReadiness } from '../../../services/localQuickStart/quickStartTypes';
+import { type DockerReadiness, type PodmanTarget } from '../../../services/localQuickStart/quickStartTypes';
 import { getDockerReadinessTelemetryProperties } from './dockerReadinessTelemetry';
 
 function unknownReadiness(): DockerReadiness {
@@ -27,6 +27,13 @@ function unknownReadiness(): DockerReadiness {
 }
 
 describe('getDockerReadinessTelemetryProperties', () => {
+    it('records only the Podman target kind, never the machine name', () => {
+        const podmanTarget: PodmanTarget = { kind: 'windowsMachineFromWsl', name: 'private-machine' };
+        const properties = getDockerReadinessTelemetryProperties({ ...unknownReadiness(), podmanTarget });
+        expect(properties.podmanTargetKind).toBe('windowsMachineFromWsl');
+        expect(JSON.stringify(properties)).not.toContain('private-machine');
+    });
+
     it('returns categorized fields and a pre-redacted unknown fingerprint', () => {
         expect(getDockerReadinessTelemetryProperties(unknownReadiness())).toEqual({
             dockerReadinessOutcome: 'indeterminate',
@@ -44,6 +51,24 @@ describe('getDockerReadinessTelemetryProperties', () => {
             containerEngineEvidence: 'none',
             dockerDiagnosticFingerprint: '0123456789abcdef',
         });
+    });
+
+    it('omits preference and fallback when execution did not establish them', () => {
+        const properties = getDockerReadinessTelemetryProperties(unknownReadiness());
+        expect(properties).not.toHaveProperty('preferredContainerEngine');
+        expect(properties).not.toHaveProperty('containerCliFallback');
+    });
+
+    it('does not infer fallback from an established preference', () => {
+        const properties = getDockerReadinessTelemetryProperties({ ...unknownReadiness(), preferredEngine: 'podman' });
+        expect(properties.preferredContainerEngine).toBe('podman');
+        expect(properties).not.toHaveProperty('containerCliFallback');
+    });
+
+    it('does not infer preference from an established fallback', () => {
+        const properties = getDockerReadinessTelemetryProperties({ ...unknownReadiness(), cliFallback: true });
+        expect(properties.containerCliFallback).toBe('true');
+        expect(properties).not.toHaveProperty('preferredContainerEngine');
     });
 
     it('records the selected CLI independently from the detected engine', () => {
@@ -109,5 +134,70 @@ describe('getDockerReadinessTelemetryProperties', () => {
         const properties = getDockerReadinessTelemetryProperties(readiness);
 
         expect(properties.dockerDiagnosticFingerprint).toBeUndefined();
+    });
+
+    it.each([
+        ['docker', 'docker', false],
+        ['podman', 'podman', false],
+        ['docker', 'podman', true],
+        ['podman', 'docker', true],
+    ] as const)(
+        'records the execution preference %s with selected CLI %s and fallback=%s',
+        (preferredEngine, cli, cliFallback) => {
+            const properties = getDockerReadinessTelemetryProperties({
+                ...unknownReadiness(),
+                preferredEngine,
+                cli,
+                cliFallback,
+            });
+
+            expect(properties).toMatchObject({
+                preferredContainerEngine: preferredEngine,
+                containerCli: cli,
+                containerCliFallback: cliFallback ? 'true' : 'false',
+            });
+        },
+    );
+
+    it.each(['docker', 'podman'] as const)('reports no fallback when the requested %s CLI is missing', (cli) => {
+        const properties = getDockerReadinessTelemetryProperties({
+            ...unknownReadiness(),
+            outcome: 'diagnosed',
+            failureKind: 'cliMissing',
+            canContinueAnyway: false,
+            cliInstalled: false,
+            preferredEngine: cli,
+            cli,
+            cliFallback: false,
+        });
+
+        expect(properties).toMatchObject({
+            preferredContainerEngine: cli,
+            containerCli: cli,
+            containerCliFallback: 'false',
+        });
+    });
+
+    it('does not copy execution details into preference telemetry', () => {
+        const properties = getDockerReadinessTelemetryProperties({
+            ...unknownReadiness(),
+            preferredEngine: 'docker',
+            cli: 'podman',
+            cliFallback: true,
+            cliVersion: 'private-cli-version',
+            podmanMachine: { kind: 'stopped', name: 'private-machine-name' },
+            recoveryCommand: {
+                id: 'linuxStartPodmanSocket',
+                commandLine: 'private-command',
+                requiresElevation: false,
+            },
+            ...{ executable: 'private-executable-path', username: 'private-user', environmentVariables: 'private-env' },
+        });
+
+        expect(properties).toMatchObject({
+            preferredContainerEngine: 'docker',
+            containerCliFallback: 'true',
+        });
+        expect(JSON.stringify(properties)).not.toContain('private-');
     });
 });

@@ -19,6 +19,7 @@
  */
 
 import { type Storage, type StorageItem, StorageService } from '../storageService';
+import { type ContainerCli } from './containerCli';
 
 /** Storage name for the Quick Start subsystem (namespaces the keys under the extension id). */
 export const QUICK_START_STORAGE_NAME = 'local-quickstart';
@@ -42,6 +43,7 @@ export const PROVISIONING_LEASE_TTL_MS = 20 * 60_000;
 /** One managed instance's durable record — the non-secret half of its storage item. */
 export interface QuickStartInstanceRecord {
     readonly alias: string;
+    engineCli?: ContainerCli;
     displayName: string;
     /**
      * The host port. Authoritative for a **stopped** instance: `docker ps -a` omits the host-port
@@ -61,6 +63,7 @@ export interface QuickStartInstanceRecord {
 /** Properties persisted on the storage item. Structurally the record, minus the readonly marker. */
 type QuickStartInstanceProperties = Record<string, unknown> & {
     alias: string;
+    engineCli?: ContainerCli;
     displayName: string;
     port: number;
     phase: 'provisioning' | 'ready';
@@ -92,6 +95,7 @@ function toRecord(item: StorageItem<QuickStartInstanceProperties>): QuickStartIn
     }
     return {
         alias: properties.alias ?? item.id,
+        engineCli: properties.engineCli,
         displayName: properties.displayName || item.name,
         port: properties.port,
         phase: properties.phase === 'provisioning' ? 'provisioning' : 'ready',
@@ -111,6 +115,7 @@ function toItem(
         version: QUICK_START_ITEM_VERSION,
         properties: {
             alias: record.alias,
+            engineCli: record.engineCli,
             displayName: record.displayName,
             port: record.port,
             phase: record.phase,
