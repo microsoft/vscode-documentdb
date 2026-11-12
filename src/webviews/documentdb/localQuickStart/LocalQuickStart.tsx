@@ -275,7 +275,7 @@ const useStyles = makeStyles({
 // it avoids freezing strings if the module is imported before configuration elsewhere.
 function stageLabels(): Record<ProvisionStage, string> {
     return {
-        checking: l10n.t('Checking Docker'),
+        checking: l10n.t('Checking container engine'),
         pulling: l10n.t('Pulling official image'),
         creating: l10n.t('Creating container'),
         starting: l10n.t('Starting container'),
@@ -315,8 +315,10 @@ interface SettingItem {
 function planItems(): readonly PlanItem[] {
     return [
         {
-            label: l10n.t('Verify your Docker setup'),
-            detail: l10n.t('Confirms Docker is installed and can run containers on this machine.'),
+            label: l10n.t('Check your container engine'),
+            detail: l10n.t(
+                'Confirms Docker or Podman is installed and can run Linux containers on this machine. Docker is used when both are installed.',
+            ),
         },
         {
             label: l10n.t('Download the official image'),
@@ -354,7 +356,7 @@ function dockerDaemonValues(): Readonly<Record<DockerReadinessPresentationState,
 
 function dockerFailureLabels(): Readonly<Record<DockerFailureKind, string>> {
     return {
-        cliMissing: l10n.t('Docker CLI not found'),
+        cliMissing: l10n.t('Docker or Podman CLI not found'),
         permissionDenied: l10n.t('Docker access denied'),
         daemonUnavailable: l10n.t('Docker daemon unavailable'),
         daemonStarting: l10n.t('Docker daemon starting'),
@@ -371,6 +373,7 @@ function dockerProviderLabels(): Readonly<Record<DockerProvider, string>> {
     return {
         dockerDesktop: l10n.t('Docker Desktop'),
         dockerEngine: l10n.t('Docker Engine'),
+        podman: 'Podman',
         unknown: l10n.t('Unknown'),
     };
 }
@@ -438,15 +441,15 @@ function dockerPermissionDetailValues(): Readonly<Record<DockerPermissionDetail,
 
 function dockerGuidance(): Readonly<Record<DockerGuidanceKey, string>> {
     return {
-        installDocker: l10n.t('Install Docker Engine or Docker Desktop, then reopen DocumentDB Local setup.'),
+        installDocker: l10n.t('Install Docker or Podman, then reopen DocumentDB Local setup.'),
         installDockerWindows: l10n.t(
-            'Install Docker Desktop, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so Docker stays undetected until it is restarted. Reloading the window is not enough. Start Docker Desktop and wait until it is ready, then check again.',
+            'Install Docker Desktop or Podman, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so the CLI stays undetected until it is restarted. Reloading the window is not enough. Start Docker Desktop or the Podman machine and wait until it is ready, then check again.',
         ),
         installDockerMac: l10n.t(
-            'Install Docker Desktop, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so Docker stays undetected until it is restarted. Start Docker Desktop and wait until it is ready, then check again.',
+            'Install Docker Desktop or Podman, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so the CLI stays undetected until it is restarted. Start Docker Desktop or the Podman machine and wait until it is ready, then check again.',
         ),
         installDockerWsl: l10n.t(
-            'Docker was not found in this WSL distribution. If you use Docker Desktop, turn on its WSL integration for this distribution. Otherwise install Docker Engine here. Then check again.',
+            'Neither Docker nor Podman was found in this WSL distribution. If you use Docker Desktop, turn on its WSL integration for this distribution. Otherwise install Docker Engine or Podman here. Then check again.',
         ),
         accessDeniedLinux: l10n.t(
             'Your user cannot access the Docker socket. Run this command, then sign out and sign back in.',
@@ -471,6 +474,9 @@ function dockerGuidance(): Readonly<Record<DockerGuidanceKey, string>> {
         ),
         dockerDesktopNotRunning: l10n.t('Start Docker Desktop and wait until it is ready.'),
         daemonNotRunning: l10n.t('Start the Docker service, then check again.'),
+        podmanNotRunning: l10n.t(
+            'Podman is installed but its machine is not running. Run "podman machine start" or start it from Podman Desktop, then check again.',
+        ),
         daemonStarting: l10n.t('Waiting for Docker to start. This can take a minute.'),
         wslIntegrationUnavailable: l10n.t(
             'Enable Docker Desktop integration for this WSL distribution, then check again.',
@@ -509,6 +515,10 @@ function dockerGuides(): Readonly<Record<DockerGuideKey, { readonly label: strin
         dockerTroubleshooting: {
             label: l10n.t('Open Docker troubleshooting guide'),
             href: 'https://docs.docker.com/engine/daemon/troubleshoot/',
+        },
+        podmanMachine: {
+            label: l10n.t('Open Podman machine guide'),
+            href: 'https://docs.podman.io/en/latest/markdown/podman-machine-start.1.html',
         },
         dockerContexts: {
             label: l10n.t('Open Docker context guide'),
@@ -563,6 +573,7 @@ function dockerDetailProviderLabels(): Readonly<Record<DockerProvider, string>> 
     return {
         dockerDesktop: l10n.t('Docker Desktop'),
         dockerEngine: l10n.t('Docker Engine'),
+        podman: 'Podman',
         unknown: l10n.t('Docker'),
     };
 }
@@ -587,7 +598,7 @@ function dockerDetailTargetLabels(): Readonly<Record<ReturnType<typeof getDocker
 
 function dockerDetailFailureLabels(): Readonly<Record<DockerDetailFailureKey, string>> {
     return {
-        noCli: l10n.t('no Docker CLI found'),
+        noCli: l10n.t('no Docker or Podman CLI found'),
         accessDenied: l10n.t('access denied'),
         notRunning: l10n.t('not running'),
         daemonNotRunning: l10n.t('daemon not running'),
@@ -823,9 +834,9 @@ export const LocalQuickStart = (): JSX.Element => {
         void trpcClient.localQuickStart.reportStepChange.mutate({ to: phase, trigger }).catch(() => undefined);
     }, [phase, trpcClient]);
     /**
-     * Readiness backing the `Checking Docker` stage: its detail line in both directions, and its
-     * remediation when that stage failed. Loaded in the background while the user reads the
-     * Introduction — nothing about it is rendered before the Set up step.
+     * Readiness backing the `Checking container engine` stage: its detail line in both
+     * directions, and its remediation when that stage failed. Loaded in the background while the
+     * user reads the Introduction — nothing about it is rendered before the Set up step.
      */
     const [checkReadiness, setCheckReadiness] = useState<DockerReadiness | undefined>(undefined);
     /** A Docker problem reported by a later stage (pull / run), backing that stage's remediation. */
@@ -1071,9 +1082,9 @@ export const LocalQuickStart = (): JSX.Element => {
     }, []);
 
     /**
-     * Refresh the Docker facts backing the `Checking Docker` stage. The host memoizes readiness
-     * briefly, so a call made right after that stage settles returns exactly the result the
-     * service acted on rather than probing Docker a second time.
+     * Refresh the Docker facts backing the `Checking container engine` stage. The host memoizes
+     * readiness briefly, so a call made right after that stage settles returns exactly the result
+     * the service acted on rather than probing Docker a second time.
      */
     const syncDockerStatus = useCallback(
         async (request?: {
@@ -1687,7 +1698,7 @@ export const LocalQuickStart = (): JSX.Element => {
         <ContainerHeader
             media={<RocketRegular aria-hidden />}
             title={l10n.t('DocumentDB Local')}
-            subtitle={l10n.t('Set up DocumentDB locally for development and testing with Docker.')}
+            subtitle={l10n.t('Set up DocumentDB locally for development and testing with Docker or Podman.')}
             action={
                 configuration.feedbackPermitted === true ? (
                     <Button

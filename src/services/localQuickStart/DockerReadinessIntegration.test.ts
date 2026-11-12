@@ -24,6 +24,7 @@ function createClient(): NonNullable<DockerReadinessServiceDependencies['client'
     return {
         checkInstall: async () => commandResponse(['-v'], (output) => output),
         info: async () => commandResponse(['info'], (output) => JSON.parse(output) as unknown),
+        version: async () => commandResponse(['version', '--format', '{{json .}}'], () => undefined),
         listContexts: async () =>
             commandResponse<ListContextItem[]>(['context', 'ls'], (output) => JSON.parse(output) as ListContextItem[]),
     };
@@ -59,6 +60,7 @@ describe('DockerReadinessService integration scenarios', () => {
             return evidence('cliVersion', { stdout: 'Docker version 28.1.1' });
         });
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'linux',
@@ -103,6 +105,7 @@ describe('DockerReadinessService integration scenarios', () => {
             return evidence(options.probe, { stdout: 'Docker version 28.1.1' });
         });
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'linux',

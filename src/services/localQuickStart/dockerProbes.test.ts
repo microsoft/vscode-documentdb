@@ -14,8 +14,10 @@ import {
     getDockerProbeRunnerOptions,
     normalizeDaemonArchitecture,
     parseDockerInfoFacts,
+    parseDockerServerComponentNames,
     probeDockerEndpoint,
     probeDockerSocketGroup,
+    resolveDockerSocketTarget,
     runDockerProbe,
     type DockerEndpointProbeDependencies,
     type DockerSocketGroupProbeDependencies,
@@ -106,6 +108,43 @@ describe('parseDockerInfoFacts', () => {
         });
     });
 
+    it('reads the same facts from podman info', () => {
+        const podmanInfo = JSON.stringify({
+            host: { arch: 'arm64', os: 'linux', distribution: { distribution: 'fedora' } },
+            version: { Version: '6.0.2' },
+        });
+        expect(parseDockerInfoFacts(podmanInfo)).toEqual({
+            podmanInfo: true,
+            osType: 'linux',
+            operatingSystem: undefined,
+            architecture: 'arm64',
+            serverVersion: '6.0.2',
+            serverErrors: [],
+        });
+    });
+
+    it.each([
+        ['empty object', {}],
+        ['Docker info', { OSType: 'linux', OperatingSystem: 'Docker Desktop', ServerVersion: '28.1.1' }],
+        ['host only', { host: { os: 'linux' } }],
+        ['version only', { version: { Version: '6.0.2' } }],
+        ['missing host OS', { host: { arch: 'arm64' }, version: { Version: '6.0.2' } }],
+        ['non-string host OS', { host: { os: 1 }, version: { Version: '6.0.2' } }],
+        ['non-string version', { host: { os: 'linux' }, version: { Version: 6 } }],
+    ])('does not identify %s as Podman', (_name, info) => {
+        expect(parseDockerInfoFacts(JSON.stringify(info))?.podmanInfo).toBeUndefined();
+    });
+
+    it('identifies Podman without optional architecture metadata', () => {
+        expect(
+            parseDockerInfoFacts(JSON.stringify({ host: { os: 'linux' }, version: { Version: '6.0.2' } })),
+        ).toMatchObject({
+            podmanInfo: true,
+            osType: 'linux',
+            serverVersion: '6.0.2',
+        });
+    });
+
     it('returns undefined for invalid JSON', () => {
         expect(parseDockerInfoFacts('not json')).toBeUndefined();
     });
@@ -118,6 +157,113 @@ describe('normalizeDaemonArchitecture', () => {
         ['riscv64', 'riscv64'],
     ])('normalizes %s to %s', (input, expected) => {
         expect(normalizeDaemonArchitecture(input)).toBe(expected);
+    });
+});
+
+describe('parseDockerServerComponentNames', () => {
+    it('reads component names from raw server JSON without requiring client API metadata', () => {
+        expect(
+            parseDockerServerComponentNames(
+                JSON.stringify({
+                    Client: { Version: '28.1.1' },
+                    Server: {
+                        Version: '6.0.2',
+                        Components: [{ Name: 'Podman Engine', Version: '6.0.2' }, { Name: 'conmon' }],
+                    },
+                }),
+            ),
+        ).toEqual(['Podman Engine', 'conmon']);
+    });
+
+    it('accepts an empty components array without inventing evidence', () => {
+        expect(parseDockerServerComponentNames('{"Server":{"Components":[]}}')).toEqual([]);
+    });
+
+    it.each([
+        '',
+        'not json',
+        '{"Server":',
+        'null',
+        '[]',
+        '{}',
+        '{"Server":null}',
+        '{"Components":[{"Name":"Podman Engine"}]}',
+        '{"Client":{"Components":[{"Name":"Podman Engine"}]}}',
+        '{"Server":{}}',
+        '{"Server":{"Components":null}}',
+        '{"Server":{"Components":{}}}',
+        '{"Server":{"Components":["Podman Engine"]}}',
+        '{"Server":{"Components":[{}]}}',
+        '{"Server":{"Components":[{"Name":1}]}}',
+        '{"Server":{"Components":[{"Name":"Podman Engine"},{"Name":null}]}}',
+    ])('makes no partial claim for invalid output %s', (stdout) => {
+        expect(parseDockerServerComponentNames(stdout)).toBeUndefined();
+    });
+});
+
+describe('resolveDockerSocketTarget', () => {
+    const socketPath = '/var/run/docker.sock';
+
+    it('uses realpath without reading the link when the target exists', async () => {
+        const realpath = vi.fn().mockResolvedValue('/run/podman/podman.sock');
+        const readlink = vi.fn();
+
+        await expect(resolveDockerSocketTarget(socketPath, { realpath, readlink })).resolves.toEqual({
+            target: '/run/podman/podman.sock',
+        });
+        expect(realpath).toHaveBeenCalledWith(socketPath);
+        expect(readlink).not.toHaveBeenCalled();
+    });
+
+    it.each(['ENOENT', 'ENOTDIR', 'ELOOP', 'EINVAL'])(
+        'reads the link after realpath returns %s, including a dangling target',
+        async (code) => {
+            const realpath = vi.fn().mockRejectedValue(Object.assign(new Error('unavailable'), { code }));
+            const readlink = vi.fn().mockResolvedValue('../run/podman/podman.sock');
+
+            await expect(resolveDockerSocketTarget(socketPath, { realpath, readlink })).resolves.toEqual({
+                target: '../run/podman/podman.sock',
+            });
+            expect(realpath).toHaveBeenCalledTimes(1);
+            expect(readlink).toHaveBeenCalledExactlyOnceWith(socketPath);
+        },
+    );
+
+    it.each(['ENOENT', 'ENOTDIR', 'ELOOP', 'EINVAL'])(
+        'silently returns no evidence when readlink returns %s',
+        async (code) => {
+            const realpath = vi.fn().mockRejectedValue({ code: 'ENOENT' });
+            const readlink = vi.fn().mockRejectedValue({ code });
+
+            await expect(resolveDockerSocketTarget(socketPath, { realpath, readlink })).resolves.toEqual({});
+            expect(readlink).toHaveBeenCalledTimes(1);
+        },
+    );
+
+    it.each([
+        [{ code: 'EACCES' }, 'EACCES'],
+        [{ code: 'EIO' }, 'EIO'],
+        [new Error('private path'), 'unknown'],
+        [{ code: 5 }, 'unknown'],
+    ] as const)('reports an unexpected realpath failure without retrying: %j', async (error, errorCode) => {
+        const realpath = vi.fn().mockRejectedValue(error);
+        const readlink = vi.fn();
+
+        await expect(resolveDockerSocketTarget(socketPath, { realpath, readlink })).resolves.toEqual({ errorCode });
+        expect(realpath).toHaveBeenCalledTimes(1);
+        expect(readlink).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        [{ code: 'EACCES' }, 'EACCES'],
+        [new Error('private path'), 'unknown'],
+    ] as const)('reports an unexpected readlink failure without retrying: %j', async (error, errorCode) => {
+        const realpath = vi.fn().mockRejectedValue({ code: 'ENOENT' });
+        const readlink = vi.fn().mockRejectedValue(error);
+
+        await expect(resolveDockerSocketTarget(socketPath, { realpath, readlink })).resolves.toEqual({ errorCode });
+        expect(realpath).toHaveBeenCalledTimes(1);
+        expect(readlink).toHaveBeenCalledTimes(1);
     });
 });
 

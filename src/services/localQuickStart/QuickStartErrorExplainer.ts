@@ -47,10 +47,19 @@ export class QuickStartErrorExplainer implements ErrorExplanationProvider {
                 return l10n.t(
                     'We found a container using the DocumentDB Local name, but it very likely was not created by this extension, so we cannot open it.',
                 );
-            case 'dockerUnreachable':
+            case 'dockerUnreachable': {
+                const engine = QuickStartService.getDockerReadinessSnapshot()?.engine;
+                let engineLabel = l10n.t('The container engine');
+                if (engine === 'docker') {
+                    engineLabel = 'Docker';
+                } else if (engine === 'podman') {
+                    engineLabel = 'Podman';
+                }
                 return l10n.t(
-                    'Docker does not appear to be running, so DocumentDB Local cannot be reached. Start Docker, then try again.',
+                    '{0} does not appear to be running, so DocumentDB Local cannot be reached. Start it, then try again.',
+                    engineLabel,
                 );
+            }
             case 'unavailable':
                 return l10n.t(
                     'We cannot reach DocumentDB Local at the moment. Review its setup in the Connections view.',

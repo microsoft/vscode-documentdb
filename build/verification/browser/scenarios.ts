@@ -263,7 +263,7 @@ function dockerMissing(
         } as const satisfies TypedRpcFixtures,
         steps: setupSteps,
         readiness: {
-            content: ['Docker CLI not found', label],
+            content: ['Checking container engine', 'Docker or Podman CLI not found', label],
             selectors: ['[role="button"], button'],
             noProgressbar: true,
         },
@@ -2234,7 +2234,17 @@ export const scenarios = {
         introduction: {
             config: base.config,
             rpc: base.rpc,
-            readiness: { content: ['Develop and test locally', 'Continue'], selectors: ['h2'], noProgressbar: true },
+            readiness: {
+                content: [
+                    'Develop and test locally',
+                    'Set up DocumentDB locally for development and testing with Docker or Podman.',
+                    'Check your container engine',
+                    'Confirms Docker or Podman is installed and can run Linux containers on this machine. Docker is used when both are installed.',
+                    'Continue',
+                ],
+                selectors: ['h2'],
+                noProgressbar: true,
+            },
         },
         configure: {
             config: base.config,
@@ -2274,7 +2284,12 @@ export const scenarios = {
             },
             steps: setupSteps,
             readiness: {
-                content: ['Setting up DocumentDB Local', 'Pulling official image', 'View setup log'],
+                content: [
+                    'Setting up DocumentDB Local',
+                    'Checking container engine',
+                    'Pulling official image',
+                    'View setup log',
+                ],
                 selectors: ['[aria-label="Setup progress"] [role="listitem"]:nth-child(2) .fui-Spinner'],
                 noProgressbar: false,
             },
@@ -2299,7 +2314,7 @@ export const scenarios = {
             },
             steps: setupSteps,
             readiness: {
-                content: ['DocumentDB Local is ready', 'All set', 'Open Connection'],
+                content: ['DocumentDB Local is ready', 'Checking container engine', 'All set', 'Open Connection'],
                 selectors: ['h2'],
                 noProgressbar: true,
             },
@@ -2314,7 +2329,10 @@ export const scenarios = {
                 },
             },
             steps: setupSteps,
-            readiness: { content: ['Port 10260 is already in use.', 'Retry setup'], noProgressbar: true },
+            readiness: {
+                content: ['Checking container engine', 'Port 10260 is already in use.', 'Retry setup'],
+                noProgressbar: true,
+            },
         },
         'failed-timeout': {
             config: base.config,
@@ -2330,7 +2348,12 @@ export const scenarios = {
             },
             steps: setupSteps,
             readiness: {
-                content: ['DocumentDB did not accept connections in time.', 'Wait longer', 'Start over'],
+                content: [
+                    'Checking container engine',
+                    'DocumentDB did not accept connections in time.',
+                    'Wait longer',
+                    'Start over',
+                ],
                 noProgressbar: true,
             },
         },

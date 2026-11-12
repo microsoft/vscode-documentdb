@@ -337,7 +337,7 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
         const children = await (await getClusterItem()).getChildren();
         const treeItems = await Promise.all(children.map(async (child) => child.getTreeItem()));
 
-        expect(treeItems.map((item) => item.label)).toEqual(['Review Docker setup', 'View setup log']);
+        expect(treeItems.map((item) => item.label)).toEqual(['Review container engine setup', 'View setup log']);
         expect(mockGetClient).not.toHaveBeenCalled();
     });
 
@@ -353,6 +353,8 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
             checkedAtMs: 1,
             cliInstalled: true,
             cliVersion: 'Docker version 28.1.1',
+            engine: 'docker',
+            serverVersion: '28.1.0',
             daemonReachable: true,
             osType: 'linux',
             daemonArchitecture: 'amd64',
@@ -364,13 +366,58 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
         expect(tooltip.value).toContain('**Container ID:** deaaf74c6923');
         expect(tooltip.value).not.toContain('`deaaf74c6923`');
         expect(tooltip.value).not.toContain('deaaf74c692312345678901234567890');
-        expect(tooltip.value).toContain('Docker Engine');
-        expect(tooltip.value).toContain('Docker version 28.1.1');
+        expect(tooltip.value).toContain('**Container engine:** Docker Engine');
+        expect(tooltip.value).toContain('**Engine version:** 28.1.0');
+        expect(tooltip.value).not.toContain('Docker version 28.1.1');
+        expect(tooltip.value).toContain('**Engine endpoint:** Unix socket');
         expect(tooltip.value).toContain('amd64');
         expect(tooltip.value).toContain('WSL');
         expect(tooltip.value).toContain('Unix socket');
         expect(tooltip.value).toContain('Linux');
     });
+
+    it.each([
+        ['podman', 'podman', 'dockerDesktop', 'Podman'],
+        ['podman', 'docker', 'dockerDesktop', 'Podman (through the Docker CLI)'],
+        ['docker', 'docker', 'dockerDesktop', 'Docker Desktop'],
+        ['docker', 'docker', 'unknown', 'Docker'],
+        ['unknown', 'docker', 'dockerDesktop', 'Container engine'],
+        [undefined, 'docker', 'dockerDesktop', 'Container engine'],
+    ] as const)('shows the actual %s engine with %s CLI and %s provider', async (engine, cli, provider, expected) => {
+        vi.spyOn(QuickStartService, 'getDockerReadinessSnapshot').mockReturnValue({
+            engine,
+            cli,
+            provider,
+            cliVersion: 'raw CLI output',
+            serverVersion: '  5.8.3  ',
+            endpointKind: 'unixSocket',
+        } as DockerReadiness);
+
+        const tooltip = (await getClusterItem()).getTreeItem().tooltip as vscode.MarkdownString;
+
+        expect(tooltip.value).toContain(`**Container engine:** ${expected}\n`);
+        expect(tooltip.value).toContain('**Engine version:** 5.8.3');
+        expect(tooltip.value).not.toContain('raw CLI output');
+    });
+
+    it.each([undefined, '', '  '])(
+        'omits empty server version %j instead of showing the CLI',
+        async (serverVersion) => {
+            vi.spyOn(QuickStartService, 'getDockerReadinessSnapshot').mockReturnValue({
+                engine: 'podman',
+                cli: 'podman',
+                provider: 'podman',
+                cliVersion: 'raw CLI output',
+                serverVersion,
+                endpointKind: 'unixSocket',
+            } as DockerReadiness);
+
+            const tooltip = (await getClusterItem()).getTreeItem().tooltip as vscode.MarkdownString;
+
+            expect(tooltip.value).not.toContain('Engine version');
+            expect(tooltip.value).not.toContain('raw CLI output');
+        },
+    );
 
     it('returns no credentials and no client when the secret is gone', async () => {
         vi.spyOn(QuickStartService, 'readStoredConnectionString').mockResolvedValue(undefined);

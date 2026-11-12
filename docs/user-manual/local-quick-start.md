@@ -6,13 +6,13 @@ nav_order: 1
 
 # Set up DocumentDB Local
 
-Set up and manage a DocumentDB Local container from the Connections view. The extension pulls the official image, creates a persistent Docker volume, waits for DocumentDB to accept connections, and saves the connection in VS Code.
+Set up and manage a DocumentDB Local container from the Connections view. The extension pulls the official image, creates a persistent data volume, waits for DocumentDB to accept connections, and saves the connection in VS Code.
 
-[DocumentDB](https://documentdb.io/) is an open-source, fully MongoDB-compatible database for modern application development. DocumentDB Local lets you run it in a Docker container for development and testing.
+[DocumentDB](https://documentdb.io/) is an open-source, fully MongoDB-compatible database for modern application development. DocumentDB Local lets you run it in a local container for development and testing.
 
 ## Happy path
 
-With Docker running, setup takes only a few clicks:
+With Docker or Podman available to the extension host, and any required Podman machine already started, setup takes only a few clicks:
 
 1. Open the **Connections** view.
 2. Expand **Your own DocumentDB**, then select **Set up DocumentDB Local**.
@@ -24,19 +24,23 @@ The extension generates the credentials, includes sample data, and chooses an av
 
 The note above **Start DocumentDB Local** also says that the container follows your VS Code telemetry setting. See [Usage telemetry](#usage-telemetry) for what that means.
 
-## Docker requirement
+## Container engine requirement
 
 Setting up DocumentDB Local requires:
 
-- A Docker CLI available to the VS Code extension host.
-- Access from that CLI to a Docker daemon running Linux containers.
+- A Docker CLI available to the VS Code extension host, or the Podman CLI when Docker is not available. Docker is preferred whenever both CLIs are available; there is no setting to change this.
+- Access from the selected CLI to an engine running Linux containers.
 - An x64 or arm64 extension host. DocumentDB Local images are published for those architectures.
 
-Both Docker Engine and Docker Desktop are supported. Docker Desktop is not required when Docker Engine is already available. The extension never installs Docker, silently starts a provider, runs `sudo`, changes group membership, or switches Docker contexts.
+Both Docker Engine and Docker Desktop are supported. Docker Desktop is not required when Docker Engine is already available. The extension falls back to Podman only when the Docker CLI is unavailable; it does not switch to Podman just because Docker cannot connect. The extension never installs Docker or Podman, silently starts a provider, runs `sudo`, changes group membership, or switches Docker contexts.
 
-The extension host matters. In a local VS Code window, Docker and DocumentDB Local run on your machine. In WSL, SSH, a dev container, or Codespaces, they run in that extension-host environment. In remote sessions, `localhost:10260` refers to the extension host, not necessarily your local computer.
+The extension host matters. In a local VS Code window, the container engine and DocumentDB Local run on your machine. In WSL, SSH, a dev container, or Codespaces, they run in that extension-host environment. In remote sessions, `localhost:10260` refers to the extension host, not necessarily your local computer.
 
-The setup view shows pull, create, start, and connection-readiness progress. Docker command output is written to the **DocumentDB Local Setup** output channel.
+The instance tooltip names an engine only when positive evidence identifies it. When evidence identifies a Podman engine reached through the Docker CLI, the tooltip reports **Podman (through the Docker CLI)**. It shows the server version, not the CLI version. Some host error messages use neutral container-engine wording.
+
+The first setup stage heading reads **Checking container engine**, and its detail line still uses the raw CLI version output. Redesigned findings and engine-specific guides have not shipped yet.
+
+The setup view shows pull, create, start, and connection-readiness progress. Container-engine command output is written to the **DocumentDB Local Setup** output channel.
 
 ## Port
 
@@ -95,13 +99,13 @@ It prints `false` when usage telemetry is turned off. It prints nothing when the
 
 Images older than 1.0-rc2, which you can pick with the image-tag setting on the **Configure** step, send no usage data and ignore this setting.
 
-## Docker is not ready
+## Container engine is not ready
 
-The readiness screen separates Docker CLI, daemon, and daemon-platform facts. Use **View Docker output** for command details. Use **Refresh** to discard cached and remembered provider facts and run every check again.
+Readiness checks identify the selected CLI and, where positive evidence permits, the engine and platform. Use **View setup log** for command details. Use **Refresh** to discard cached and remembered provider facts and run every check again.
 
-### Docker CLI not found
+### Container engine CLI not found
 
-Install [Docker Engine](https://docs.docker.com/engine/install/) or Docker Desktop, then open **Set up DocumentDB Local** again. If Docker works in a terminal but not in VS Code, confirm that the extension host inherited the same `PATH`, `DOCKER_HOST`, and `DOCKER_CONTEXT` configuration.
+Install [Docker Engine](https://docs.docker.com/engine/install/), Docker Desktop, or [Podman](https://podman.io/docs/installation), then open **Set up DocumentDB Local** again. The extension uses `docker` when it is on `PATH` and falls back to `podman` only when Docker is unavailable. If Docker works in a terminal but not in VS Code, confirm that the extension host inherited the same `PATH`, `DOCKER_HOST`, and `DOCKER_CONTEXT` configuration.
 
 ### Linux or WSL socket access denied
 
@@ -147,6 +151,10 @@ If Docker Desktop is running but unavailable in a WSL distribution:
 
 See [Docker Desktop WSL integration](https://docs.docker.com/desktop/features/wsl/).
 
+### Podman machine is not running
+
+On macOS and Windows, Podman uses a machine. The extension does not initialize or start that machine, and there is currently no **Start Podman machine** button. If no machine exists, run `podman machine init` in a terminal; then run `podman machine start`. If a machine already exists but is stopped, run `podman machine start`. Afterward, return to setup and select **Refresh**.
+
 ### Context or remote endpoint unavailable
 
 Setup respects `DOCKER_HOST`, `DOCKER_CONTEXT`, the current Docker context, and then the platform default endpoint, in that order. It never changes the selected context.
@@ -161,6 +169,6 @@ DocumentDB Local requires a Linux-container Docker daemon. If a reachable Window
 
 ## Recovery during setup
 
-If Docker becomes unavailable during image pull or container creation, setup returns to the same Docker recovery screen. Registry, proxy, image-manifest, and other image-specific failures remain setup errors and are not presented as daemon diagnoses.
+If the selected container engine becomes unavailable during image pull or container creation, setup returns to its recovery stage. Registry, proxy, image-manifest, and other image-specific failures remain setup errors and are not presented as engine diagnoses.
 
-If a dev-container setup creates the container but times out waiting for DocumentDB, Docker may be running on the dev-container host. A published `localhost` port is not always reachable from inside the dev container. Use **View Docker output** and verify port reachability in the extension-host environment.
+If a dev-container setup creates the container but times out waiting for DocumentDB, the container engine may be running on the dev-container host. A published `localhost` port is not always reachable from inside the dev container. Use **View setup log** and verify port reachability in the extension-host environment.

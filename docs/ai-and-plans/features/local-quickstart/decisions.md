@@ -167,6 +167,9 @@ Modified during implementation: the dedicated readiness page was not merely depr
 removed as a concept, and `getDockerLastCheckedAtMs` was deleted with it because a remembered
 timestamp could report evidence that was days old.
 
+**Amendment, 2026-11-09:** The operator requested a neutral stage heading. Stage 1 now reads
+`Checking container engine`.
+
 ### Why
 
 F is the strongest simplification available. Both A and C must design a healthy-state readiness

@@ -57,11 +57,22 @@ export interface DockerSocketGroupProbeDependencies {
     readonly getUsername: () => string | undefined;
 }
 
+export interface DockerSocketTargetDependencies {
+    readonly realpath: (p: string) => Promise<string>;
+    readonly readlink: (p: string) => Promise<string>;
+}
+
+export interface DockerSocketTargetResult {
+    readonly target?: string;
+    readonly errorCode?: string;
+}
+
 export interface DockerServiceManagerProbeDependencies {
     readonly pathExists: (path: string) => Promise<boolean>;
 }
 
 export interface DockerInfoFacts {
+    readonly podmanInfo?: true;
     readonly osType?: string;
     readonly operatingSystem?: string;
     readonly architecture?: string;
@@ -78,6 +89,22 @@ const DockerInfoSchema = z.object({
     ServerVersion: z.string().optional(),
     ServerErrors: z.array(z.string()).nullish(),
 });
+
+const PodmanInfoSchema = z.object({
+    host: z.object({ arch: z.string().optional(), os: z.string() }),
+    version: z.object({ Version: z.string() }),
+});
+
+const DockerServerComponentsSchema = z.object({
+    Server: z.object({
+        Components: z.array(z.object({ Name: z.string() })),
+    }),
+});
+
+const productionFsDeps: DockerSocketTargetDependencies = {
+    realpath: (p: string): Promise<string> => fs.promises.realpath(p),
+    readlink: (p: string): Promise<string> => fs.promises.readlink(p),
+};
 
 export class CapturingTeeWritable extends Writable {
     private readonly chunks: string[] = [];
@@ -106,7 +133,7 @@ export class CapturingTeeWritable extends Writable {
     }
 }
 
-function getErrorCode(error: unknown): string | undefined {
+export function getErrorCode(error: unknown): string | undefined {
     if (!error || typeof error !== 'object' || !('code' in error)) {
         return undefined;
     }
@@ -187,19 +214,55 @@ export async function runDockerProbe(options: RunDockerProbeOptions): Promise<Do
 
 export function parseDockerInfoFacts(output: string): DockerInfoFacts | undefined {
     try {
-        const result = DockerInfoSchema.safeParse(JSON.parse(output));
+        const json: unknown = JSON.parse(output);
+        const result = DockerInfoSchema.safeParse(json);
         if (!result.success) {
             return undefined;
         }
+        // `podman info` nests the same facts under `host` and `version`.
+        const podman = PodmanInfoSchema.safeParse(json).data;
         return {
-            osType: result.data.OSType,
+            ...(podman ? { podmanInfo: true as const } : {}),
+            osType: result.data.OSType ?? podman?.host?.os,
             operatingSystem: result.data.OperatingSystem,
-            architecture: result.data.Architecture,
-            serverVersion: result.data.ServerVersion,
+            architecture: result.data.Architecture ?? podman?.host?.arch,
+            serverVersion: result.data.ServerVersion ?? podman?.version?.Version,
             serverErrors: result.data.ServerErrors ?? [],
         };
     } catch {
         return undefined;
+    }
+}
+
+export function parseDockerServerComponentNames(stdout: string): ReadonlyArray<string> | undefined {
+    try {
+        const json: unknown = JSON.parse(stdout);
+        const result = DockerServerComponentsSchema.safeParse(json);
+        return result.success ? result.data.Server.Components.map((component) => component.Name) : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+export async function resolveDockerSocketTarget(
+    socketPath: string,
+    deps: DockerSocketTargetDependencies = productionFsDeps,
+): Promise<DockerSocketTargetResult> {
+    try {
+        return { target: await deps.realpath(socketPath) };
+    } catch (error) {
+        const errorCode = getErrorCode(error);
+        if (!['ENOENT', 'ENOTDIR', 'ELOOP', 'EINVAL'].includes(errorCode ?? '')) {
+            return { errorCode: errorCode ?? 'unknown' };
+        }
+    }
+    try {
+        return { target: await deps.readlink(socketPath) };
+    } catch (error) {
+        const errorCode = getErrorCode(error);
+        return ['ENOENT', 'ENOTDIR', 'ELOOP', 'EINVAL'].includes(errorCode ?? '')
+            ? {}
+            : { errorCode: errorCode ?? 'unknown' };
     }
 }
 
