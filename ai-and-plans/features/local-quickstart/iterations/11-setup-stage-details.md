@@ -2,7 +2,7 @@
 feature: local-quickstart
 kind: plan
 status: active
-prs: [1065]
+prs: [1065, 1072]
 created: 2026-11-10
 code:
   - src/webviews/documentdb/localQuickStart/LocalQuickStart.tsx
@@ -23,6 +23,11 @@ code:
 > each stage actually did: which engine, which image and digest, which container and volume, which
 > port, how readiness was confirmed, and whether sample data loaded. The default view does not
 > change: the labels stay fixed, there is one evidence line, and Details start collapsed.
+
+> **Follow-up:** The operator's [2026-11-10 follow-up](./11-setup-stage-details-followup.md)
+> supersedes the statements that checking's explanatory notes stay (§3.1) and that the default
+> evidence lines remain unchanged: settled rows have summaries and active pulls show known image
+> facts and bounded engine output. Details still start collapsed, and durations remain excluded.
 
 - **Builds on:** `StatusListItem.disclosure` and the `StatusListDetails*` building blocks
   (package 1.3.0), merged from `main` with #1066.
@@ -226,6 +231,169 @@ Rules:
   diagnostic reference (Q4).
 
 ## 6. Sequencing
+
+### Execution record — 2026-11-10
+
+Operator instruction: implement this accepted plan, use Opus 5.5 for the work-item
+plan, run Case 1 and Case 2 until green, and create a PR against the current
+`dev/guanzhousong/quickstart-podman-fallback` branch. Work starts at
+2026-11-10 06:34:52 UTC on `dev/tnaum/quickstart-setup-stage-details`.
+The pre-existing untracked Podman archive is outside this work.
+
+| Item | Scope                                                                            | Model and reason                                   | Prerequisite | Status                            |
+| ---- | -------------------------------------------------------------------------------- | -------------------------------------------------- | ------------ | --------------------------------- |
+| P1   | Shared checking-row disclosure, focus/reset behavior; remove accordion           | Terra: self-contained webview migration            | —            | Done `90cc28f3`                   |
+| P2   | Typed runtime image inspection, per-stage facts, non-readiness presentation      | Sol: host/webview contract and runtime lifecycle   | P1           | Done `3c13d1aa`                   |
+| P3   | Readiness attempts, best-effort hello, sample-data outcomes and success sentence | Sol: readiness lifecycle and cross-module behavior | P2           | Done `6d366944`                   |
+| P4   | Aggregate disclosure telemetry, browser scenarios, docs and decision record      | Sol: telemetry; Terra: isolated scenarios/docs     | P3           | Done `b791aef9` (docs separately) |
+
+Contract review advised by Opus 5.5 (high confidence): store terminal facts by
+`facts.kind`, not `event.stage`; preserve mid-setup Docker failure evidence on the
+owning failed row; leave W5 wording untouched; use the accepted absolute check
+timestamp inside Details. Unknown optional facts are omitted. Inspect results are
+allow-listed; never forward raw records or environment variables. Image creation
+dates must be validated from actual source fields, not the client's synthesized
+date. Readiness facts can omit sample-data outcome before finalization; `hello`
+failure must not retry a successful ping. These refine the illustrative internal
+contract without changing persisted data, authentication, or the accepted UI.
+
+The leader chose sequential ownership and the four commits above (confidence
+100%: phases overlap in service, presentation, and scenario files). No additional
+work items, W5 redesign, step timings, or optional hardening are in scope.
+
+**P1 Done (2026-11-10), commit `90cc28f3`:** Terra moved checking evidence into
+shared, collapsed Set up/Done row disclosures and added pure presentation tests.
+Accepted operator decisions control wording, disclosure state and absolute check
+time; advised (Opus 5.5, high confidence) that mid-setup Docker evidence remains on
+the owning failed row. Advisor found the real recheck link could lose focus;
+Terra applied the approved footer handoff and added a link-focused regression
+without weakening the original toggle-focused test. Final advisor approval: high
+confidence, no remaining findings. Focused webview suite: 155 passed, followed by
+7 focused disclosure tests after correction; root `tsc --noEmit -p .` passed.
+Full build/Case 2 are scheduled after the implementation batch. Thirteen tests
+added across presentation and disclosure behavior.
+
+**P2 Done (2026-11-10), commit `3c13d1aa`:** Sol added the allow-listed
+`StageFacts` contract, bounded image inspection, checking/pulling/creating/starting
+evidence, per-run fact storage and presentation. Advised (Opus 5.5, high
+confidence): absence requires a successful strict image listing; synthesized
+creation dates are not evidence; IDs never fall back to names. Advisor found
+volume outcomes were recorded before operations completed. The approved
+correction makes that internal optional fact unknown until established, preserving
+all actual volume operations and durability assertions. The operator's existing
+unknown-fact rule authorizes omission, not a new user-visible outcome.
+Final advisor approval: high confidence. Added 63 tests; 706 focused tests passed
+before the correction, 112 targeted tests afterward, root type check passed.
+Four regressions were observed failing before the correction.
+
+**P3 Done (2026-11-10), commit `6d366944`:** Sol added readiness attempts,
+bounded best-effort `hello` on the successful ping client, allow-listed server
+facts, masked timeout/exit evidence and sample-data outcomes in both provisioning
+and Wait longer. Requested-but-failed sample loading stays successful and is
+visible in Details and the success block, as accepted by the operator.
+Advised (Opus 5.5, high confidence): isolated `hello` failure cannot retry ping;
+timer, abort-listener and client cleanup are correct; Saved as appears only after
+finalization. The advisor noticed an incidental retry-delay shift; Sol restored
+500 ms then 750 ms and pinned that cadence in a regression test. Singular
+one-attempt wording was corrected. Final advisor found no significant issue.
+Added 29 tests; 738 focused tests passed before correction, 136 targeted tests
+afterward; root type check passed before correction. Published-image metadata
+was verified, but the first isolated live probe failed before container startup
+and was cleaned up; live `hello` verification is being retried separately.
+
+**P4 Done (2026-11-10), commit `b791aef9`:** P4 was split into disjoint
+telemetry (Sol) and scenario/documentation (Terra) sub-items; the accepted-item
+count remains four. Leader authorized the directly related exact route-count
+test updates (coordination, 100% confidence). Details openings use an
+uninstrumented, bounded mutation and aggregate only on the existing close event.
+Added 14 focused tests and three browser scenarios in all three themes.
+Focused webview tests: 205 passed; browser scenario contract tests: 31 passed;
+all 39 Local Quick Start live browser routes and named disclosure regions passed,
+plus 19 focus tests. Root type check passed.
+Advised (Opus 5.5, high confidence): no significant issue; accepted crash-before-close
+telemetry limitation unchanged. Documentation is committed separately with this note.
+
+**Live image validation:** the isolated retry used the existing official image,
+OCI version `1.0.0`, digest
+`sha256:4a341daca29b02dabd0d64c357bc9231868b59ef08c8059058b1e5cedbe3899d`.
+One ping/hello attempt succeeded: `maxWireVersion=21`, product-version field absent
+(correctly omitted). Total probe setup/check/cleanup: 3526 ms; ping 3 ms, hello
+2 ms. Only its new container, volume and credential file were used, then removed.
+The first probe attempt failed before startup without retaining the CLI error;
+the retry used a named temporary credential file and succeeded.
+
+**Batch Case 1:** `npm run build` passed; focused service/webview Vitest passed
+755 tests in 27 files (19.57 s). The check runner also launched a separate
+read-only branch review, which reported no significant issue. Full Case 2 follows
+at the operator's explicit request, even though the stacked PR will remain draft
+pending operator workbench review.
+
+### Final verification and handoff
+
+All four accepted items are implemented in draft PR [#1072](https://github.com/microsoft/vscode-documentdb/pull/1072),
+targeting `dev/guanzhousong/quickstart-podman-fallback`, milestone 1.1.0.
+The leader assembled
+`dev/tnaum/quickstart-setup-stage-details-pr` in an isolated worktree from the
+unchanged target `76524f3a`, cherry-picking only this task's commits. An unrelated
+plan-12 documentation commit appeared in the shared history during planning;
+it remains on the original local branch and is not included in this PR. No
+existing history was rewritten. The implementation and tests are byte-identical
+to the checked tree; only that unrelated document was excluded and these handoff
+notes updated. Commit references above identify the PR-branch copies.
+
+| Check                                  | Result                                        |
+| -------------------------------------- | --------------------------------------------- |
+| Case 1: `npm run build`                | Passed                                        |
+| Case 1: focused service/webview Vitest | 755 passed, 27 files                          |
+| Case 2: `npm run l10n`                 | Passed; generated bundle committed separately |
+| Case 2: `npm run prettier-fix`         | Passed; formatting committed separately       |
+| Case 2: `npm run l10n:check`           | Passed, including final rerun                 |
+| Case 2: `npm run lint`                 | Passed after two type-only corrections        |
+| Case 2: `npm run build`                | Passed, including final rerun                 |
+| Case 2: `npm run typecheck:tests`      | Passed, including final rerun                 |
+| Case 2: `npx vitest run`               | 388 files; 8,128 passed, 1 skipped            |
+| Case 2: `npm run package`              | Passed                                        |
+| Browser scenario contracts             | 31 passed                                     |
+| Live Local Quick Start scenarios       | 39 routes across all three themes passed      |
+| Final focused disclosure test          | 19 passed                                     |
+
+Final lint corrections preserve behavior: the execution-target helper is a
+type-only import, and the native-selector test mock returns an explicit boolean.
+Advised (Opus 5.5, high confidence): both exact corrections are safe. The final
+root lint, build, strict package-test type check, 755 focused tests, localization
+check and focused formatting check all passed.
+
+### Execution summary
+
+Times below sum implementation-agent turns, not concurrent wall time; costs are
+host-reported AIU and exclude advisor/check/leader costs from the item rows.
+
+| Item | Implementation models          | Agent time                           | Implementation AIU |
+| ---- | ------------------------------ | ------------------------------------ | ------------------ |
+| P1   | `gpt-6.1-terra`                | 8m15s                                | 45.4               |
+| P2   | `gpt-6.1-sol`                  | 10m57s                               | 103.9              |
+| P3   | `gpt-6.1-sol`                  | 7m18s                                | 71.1               |
+| P4   | `gpt-6.1-sol`, `gpt-6.1-terra` | 12m11s (parallel sub-items included) | 103.9              |
+
+The P4 row includes its initial ownership-blocked turn. Lint-only corrections
+used `gpt-6-luna`; check/live-image runners used `gpt-5.6-luna`. Leader:
+`gpt-6.1-sol`. Advisor: `claude-opus-5.5`, ten consultations covering planning,
+contract, each phase and its correction, and final lint typing. Technical verdicts
+were followed; the initial suggestion to lint/format before each commit was not
+followed because the accepted verification cases require batching those checks.
+No operator decisions were invented, no questions remain parked, and W5 stays out
+of scope. Host snapshot at 08:02 UTC (1h27m23s since the run began): leader
+166.6 AIU, subagents 990.5 AIU, run 1157.2 AIU. Monetary cost is not reported
+by the host.
+
+**Workbench checks still needed before requesting review/pushing further:** inspect
+Set up and Done in a short panel, use keyboard recheck and confirm footer focus,
+try Retry/Start over/Wait longer, and listen with a real screen reader. Live
+browser naming/focus checks are not a substitute for spoken-output validation.
+The draft PR deliberately leaves operator author review and later Copilot PR
+comments pending; see the [review record](./11-setup-stage-details-review.md).
+
+### Planned sequencing
 
 1. **A PR stacked on #1065.** Branch from `dev/guanzhousong/quickstart-podman-fallback` and open
    the PR against that branch, not `main`. When #1065 merges, retarget it to `main`. Keep the
