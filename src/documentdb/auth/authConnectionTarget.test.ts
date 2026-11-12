@@ -181,6 +181,26 @@ describe('buildAuthConnectionTarget', () => {
         expect(target.networkOptions.tls).toBeUndefined();
     });
 
+    it.each([AuthMethodId.NativeAuth, AuthMethodId.NoAuth])(
+        '%s strips conflicting OIDC declarations from diagnostic probe targets',
+        (method): void => {
+            const query = '?authMechanism=MONGODB-OIDC&authMechanismProperties=ENVIRONMENT:azure&tls=false';
+            const target = buildAuthConnectionTarget(method, {
+                clusterId: 'cluster-1',
+                connectionString: `mongodb://db.example.com:27017/${query}`,
+                connectionStringWithPassword: `mongodb://user:password@db.example.com:27017/${query}`,
+                authMechanism: method,
+            });
+
+            expect(target.connectionString).toBe(
+                method === AuthMethodId.NativeAuth
+                    ? 'mongodb://user:password@db.example.com:27017/?tls=false'
+                    : 'mongodb://db.example.com:27017/?tls=false',
+            );
+            expect(target.networkOptions).toStrictEqual({});
+        },
+    );
+
     it('NativeAuth gates the TLS exception on the hosts of the password-bearing connection string', () => {
         const target = buildAuthConnectionTarget(AuthMethodId.NativeAuth, {
             clusterId: 'cluster-1',

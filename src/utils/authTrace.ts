@@ -6,6 +6,7 @@
 import { type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
+import { type EntraDestinationDecision } from '../documentdb/auth/oidcAllowedHosts';
 import { ext } from '../extensionVariables';
 
 const knownErrorNames = new Set([
@@ -23,6 +24,7 @@ const knownErrorNames = new Set([
     'AbortError',
     'UserCancelledError',
     'GoBackError',
+    'EntraDestinationRejectedError',
 ]);
 
 const knownErrorCodes = new Set([
@@ -74,6 +76,27 @@ export interface AuthTraceContext {
     readonly startupCorrelationId: string;
     readonly surface: string;
     readonly startupProperties?: ITelemetryContext['properties'];
+}
+
+export function traceEntraDestination(
+    decision: EntraDestinationDecision,
+    correlationId?: string,
+    context?: AuthTraceContext,
+): void {
+    traceAuthFlow(
+        'entraDestination.evaluated',
+        {
+            entraDestinationClass: decision.destinationClass,
+            ...(decision.rejection ? decision.rejection : {}),
+        },
+        correlationId,
+        context,
+    );
+    if (decision.allowed && decision.customSuffixUsed) {
+        ext.outputChannel.info(
+            l10n.t('[Auth] Microsoft Entra ID destination admitted by custom suffix: {0}', decision.customSuffixUsed),
+        );
+    }
 }
 
 function recordCloudResolution(details: AuthTraceDetails, properties: ITelemetryContext['properties']): void {
@@ -128,6 +151,28 @@ export function traceAuthFlow(
     correlationId?: string,
     context?: AuthTraceContext,
 ): void {
+    if (operation === 'entraDestination.evaluated') {
+        const destinationClass =
+            typeof details.entraDestinationClass === 'string' &&
+            ['documentdbService', 'customSuffix', 'otherAzure', 'other'].includes(details.entraDestinationClass)
+                ? details.entraDestinationClass
+                : 'other';
+        details = {
+            entraDestinationClass: destinationClass,
+            ...(typeof details.microsoftCloudDomain === 'boolean'
+                ? { microsoftCloudDomain: details.microsoftCloudDomain }
+                : {}),
+            ...(typeof details.serviceLabel === 'boolean' ? { serviceLabel: details.serviceLabel } : {}),
+        };
+        if (context?.startupProperties) {
+            context.startupProperties.entraDestinationClass = destinationClass;
+            for (const key of ['microsoftCloudDomain', 'serviceLabel'] as const) {
+                if (typeof details[key] === 'boolean') {
+                    context.startupProperties[key] = details[key] ? 'true' : 'false';
+                }
+            }
+        }
+    }
     if (context?.startupProperties && (operation === 'entraCloud.resolved' || operation === 'entraCloud.unresolved')) {
         recordCloudResolution(details, context.startupProperties);
     }

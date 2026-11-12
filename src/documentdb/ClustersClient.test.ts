@@ -364,12 +364,14 @@ describe('regular connection startup diagnostics', () => {
 
     it('preserves auth failures and records their partial stage without private error data', async () => {
         const originalError = new Error('private-token private-account');
+        const onStartup = vi.fn<(id: string) => void>();
         vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockImplementationOnce(async () => {
             vi.advanceTimersByTime(15);
             throw originalError;
         });
 
-        await expect(ClustersClient.getClient(clusterId)).rejects.toBe(originalError);
+        await expect(ClustersClient.getClient(clusterId, undefined, onStartup)).rejects.toBe(originalError);
+        expect(onStartup).toHaveBeenCalledExactlyOnceWith(startupEvent().telemetry.properties.connectionCorrelationId);
         expect(startupEvent().telemetry.properties).toMatchObject({
             result: 'Failed',
             startupOutcome: 'failed',

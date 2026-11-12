@@ -78,8 +78,9 @@ describe('EntraErrorExplainer', () => {
                 expect(getRecentEntraTokenFailure(clusterId)).toBeUndefined();
                 const explanation = await ErrorExplanationService.explain({ clusterId, error });
                 expect(explanation?.providerId).toBe('entra-sign-in');
-                expect(explanation?.message).toContain('documentDB.customEnvironment.hostnameSuffix');
-                expect(explanation?.message).toContain('user settings');
+                expect(explanation?.message).toContain('Learn More');
+                expect(explanation?.message).toContain(Links.EntraTrustedServers);
+                expect(explanation?.message).not.toContain('documentDB.customEnvironment.hostnameSuffix');
                 expect(explanation?.message).not.toMatch(/private-cluster|example.com|10255|azure.com/);
                 expect(Object.getOwnPropertyDescriptors(error)).toEqual(descriptors);
                 expect(telemetryContext.telemetry.properties.ruleId).toBe('oidcHostNotAllowed');
@@ -96,7 +97,7 @@ describe('EntraErrorExplainer', () => {
                 clusterId,
                 error: "Host 'private.example.com' is not valid for OIDC authentication with ALLOWED_HOSTS of '*.azure.us,*.azure.cn'",
             }),
-        ).toContain('documentDB.customEnvironment.hostnameSuffix');
+        ).toContain(Links.EntraTrustedServers);
         expect(getRecentEntraTokenFailure(clusterId)).toBeUndefined();
     });
 
@@ -106,7 +107,7 @@ describe('EntraErrorExplainer', () => {
             const message = await provider.explain({ clusterId, error });
             expect(message).toContain('Only Microsoft can change this');
             expect(message).toContain('not you or your tenant administrator');
-            expect(message).toContain('native DocumentDB authentication');
+            expect(message).toContain('Username and Password authentication');
             expect(message).toContain('managed identity on an Azure VM');
             expect(message).toContain('GitHub');
             expect(message).toContain(Links.SovereignClouds);
@@ -237,7 +238,7 @@ describe('EntraErrorExplainer', () => {
             expect(message).toContain(`Sign-in failed in ${cloud}. If the sign-in window showed AADSTS65002`);
             expect(message).toContain('must be configured via preauthorization');
             expect(message).toContain('Only Microsoft can change this');
-            expect(message).toContain('native DocumentDB authentication or managed identity on an Azure VM');
+            expect(message).toContain('Username and Password authentication or managed identity on an Azure VM');
             expect(message).not.toContain('msal-no-broker');
         },
     );

@@ -10,6 +10,7 @@ import { type CachedClusterCredentials } from '../CredentialCache';
 import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString';
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 import { AuthMethodId } from './AuthMethod';
+import { removeConflictingOidcMechanism } from './nonOidcConnectionString';
 
 /**
  * The network-level driver options an auth handler contributes. Secrets, callbacks and
@@ -50,10 +51,12 @@ export function buildAuthConnectionTarget(
 }
 
 function buildNativeTarget(credentials: CachedClusterCredentials): AuthConnectionTarget {
-    const connectionString = nonNullValue(
-        credentials.connectionStringWithPassword,
-        'clusterCredentials.connectionStringWithPassword',
-        'NativeAuthHandler.ts',
+    const connectionString = removeConflictingOidcMechanism(
+        nonNullValue(
+            credentials.connectionStringWithPassword,
+            'clusterCredentials.connectionStringWithPassword',
+            'NativeAuthHandler.ts',
+        ),
     );
 
     return {
@@ -63,8 +66,8 @@ function buildNativeTarget(credentials: CachedClusterCredentials): AuthConnectio
 }
 
 /**
- * Anonymous ("no authentication") connections pass the connection string through verbatim,
- * including any user-supplied `tls`/`ssl` overrides, and embed no credentials. TLS is never forced
+ * Anonymous ("no authentication") connections remove conflicting OIDC declarations, otherwise
+ * preserving the string, including user-supplied `tls`/`ssl` overrides, and embed no credentials. TLS is never forced
  * here; the only options added are the TLS exception and its fail-fast timeout, applied exactly as
  * for native authentication.
  */
@@ -72,7 +75,7 @@ function buildNoAuthTarget(credentials: CachedClusterCredentials): AuthConnectio
     // Use the credential-free connection string. `connectionStringWithPassword` is
     // built with empty credentials for NoAuth and is therefore identical, but we
     // prefer the base `connectionString` to make the credential-free intent explicit.
-    const { connectionString } = credentials;
+    const connectionString = removeConflictingOidcMechanism(credentials.connectionString);
 
     return {
         connectionString,

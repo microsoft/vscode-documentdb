@@ -7,7 +7,7 @@ import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCallerFactory, publicProcedureWithTelemetry, router } from './trpc';
 
-const contexts = vi.hoisted((): IActionContext[] => []);
+const recordedContexts = vi.hoisted((): IActionContext[] => []);
 
 vi.mock('vscode', async (importOriginal) => {
     const actual = await importOriginal<Record<string, unknown>>();
@@ -22,15 +22,53 @@ vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
         _eventId: string,
         callback: (context: IActionContext) => Promise<T>,
     ): Promise<T> => {
-        const context = {
+        const context: IActionContext = {
             telemetry: { properties: { result: 'Succeeded' }, measurements: {} },
-            errorHandling: {},
+            errorHandling: { issueProperties: {} },
             valuesToMask: [],
-        } as unknown as IActionContext;
-        contexts.push(context);
+            ui: {} as IActionContext['ui'],
+        };
+        recordedContexts.push(context);
         return callback(context);
     },
 }));
+
+beforeEach(() => {
+    recordedContexts.length = 0;
+});
+
+describe('destination RPC attribution', () => {
+    const testRouter = router({
+        load: publicProcedureWithTelemetry.query(() => 'loaded'),
+        fail: publicProcedureWithTelemetry.query(() => {
+            throw new Error('load failed');
+        }),
+    });
+
+    it('carries the originating URL source and attempt through actual RPC middleware', async (): Promise<void> => {
+        const caller = createCallerFactory(testRouter)({
+            deepLinkCorrelationId: 'url-attempt',
+            deepLinkSource: 'docs',
+        });
+        expect(await caller.load()).toBe('loaded');
+        await expect(caller.fail()).rejects.toThrow('load failed');
+        expect(recordedContexts).toHaveLength(2);
+        for (const context of recordedContexts) {
+            expect(context.telemetry.properties).toMatchObject({
+                deepLinkCorrelationId: 'url-attempt',
+                deepLinkSource: 'docs',
+                activationSource: 'deepLink',
+            });
+        }
+        expect(recordedContexts[1].telemetry.properties.result).toBe('Failed');
+    });
+
+    it('does not attribute ordinary webviews to URL handling', async (): Promise<void> => {
+        await createCallerFactory(testRouter)({}).load();
+        expect(recordedContexts[0].telemetry.properties.activationSource).toBeUndefined();
+        expect(recordedContexts[0].telemetry.properties.deepLinkCorrelationId).toBeUndefined();
+    });
+});
 
 const testRouter = router({
     dismissed: publicProcedureWithTelemetry.mutation((): never => {
@@ -48,21 +86,17 @@ function caller(): ReturnType<typeof createCaller> {
 }
 
 describe('publicProcedureWithTelemetry', (): void => {
-    beforeEach((): void => {
-        contexts.length = 0;
-    });
-
     it('records a procedure that throws UserCancelledError as Canceled, without error fields', async (): Promise<void> => {
         await expect(caller().dismissed()).rejects.toMatchObject({ cause: expect.any(UserCancelledError) });
-        expect(contexts).toHaveLength(1);
-        expect(contexts[0].telemetry.properties.result).toBe('Canceled');
-        expect(contexts[0].telemetry.properties.error).toBeUndefined();
-        expect(contexts[0].telemetry.properties.errorMessage).toBeUndefined();
+        expect(recordedContexts).toHaveLength(1);
+        expect(recordedContexts[0].telemetry.properties.result).toBe('Canceled');
+        expect(recordedContexts[0].telemetry.properties.error).toBeUndefined();
+        expect(recordedContexts[0].telemetry.properties.errorMessage).toBeUndefined();
     });
 
     it('still records other thrown errors as Failed', async (): Promise<void> => {
         await expect(caller().broken()).rejects.toBeDefined();
-        expect(contexts[0].telemetry.properties.result).toBe('Failed');
-        expect(contexts[0].telemetry.properties.errorMessage).toBe('broken');
+        expect(recordedContexts[0].telemetry.properties.result).toBe('Failed');
+        expect(recordedContexts[0].telemetry.properties.errorMessage).toBe('broken');
     });
 });

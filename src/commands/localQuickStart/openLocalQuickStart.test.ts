@@ -61,7 +61,10 @@ describe('openLocalQuickStart', () => {
         finishHydration?.();
         await opening;
 
-        expect(openLocalQuickStartWebview).toHaveBeenCalledWith(expect.objectContaining({ id: 'localQuickStart' }));
+        expect(openLocalQuickStartWebview).toHaveBeenCalledWith(
+            expect.objectContaining({ id: 'localQuickStart' }),
+            undefined,
+        );
         expect(revealToForeground).toHaveBeenCalledTimes(1);
         expect(reconcile).not.toHaveBeenCalled();
         expect(readiness).not.toHaveBeenCalled();
@@ -77,7 +80,10 @@ describe('openLocalQuickStart', () => {
 
         await expect(openLocalQuickStart(testContext())).resolves.toBeUndefined();
 
-        expect(openLocalQuickStartWebview).toHaveBeenCalledWith(expect.objectContaining({ id: 'localQuickStart' }));
+        expect(openLocalQuickStartWebview).toHaveBeenCalledWith(
+            expect.objectContaining({ id: 'localQuickStart' }),
+            undefined,
+        );
         expect(revealToForeground).toHaveBeenCalledTimes(1);
     });
 
@@ -101,12 +107,15 @@ describe('openLocalQuickStart', () => {
         });
         const sessionId = context.telemetry.properties.quickStartSessionId;
         expect(sessionId).toEqual(expect.any(String));
-        expect(openLocalQuickStartWebview).toHaveBeenCalledWith({
-            id: 'localQuickStart',
-            initialInstanceState: InstanceState.CredentialsMissing,
-            initialInstanceMissing: false,
-            initialPhase: 'configure',
-            quickStartSessionId: sessionId,
-        });
+        expect(openLocalQuickStartWebview).toHaveBeenCalledWith(
+            {
+                id: 'localQuickStart',
+                initialInstanceState: InstanceState.CredentialsMissing,
+                initialInstanceMissing: false,
+                initialPhase: 'configure',
+                quickStartSessionId: sessionId,
+            },
+            undefined,
+        );
     });
 });

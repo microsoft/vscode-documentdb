@@ -111,16 +111,6 @@ This project may contain trademarks or logos for projects, products, or services
 
 <!-- endregion exclude-from-marketplace -->
 
-## Designed for Every Theme
-
-The extension feels at home in your workspace, whether you prefer a light or dark theme.
-
-<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/readme/documentdb-logo_dark.png"><img src="resources/readme/documentdb-logo.png" alt="DocumentDB logo" width="320" style="max-width:100%;height:auto;"></picture></p>
-
-The extension keeps its features clear and readable while matching the appearance you chose for VS Code.
-
-<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/readme/cluster-dashboard_dark.png"><img src="resources/readme/cluster-dashboard.png" alt="Cluster Dashboard adapted to a light or dark background" width="800" style="max-width:100%;height:auto;"></picture></p>
-
 # Telemetry
 
 VS Code collects usage data and sends it to Microsoft to help improve our products and services. Read our [privacy statement](https://go.microsoft.com/fwlink/?LinkId=521839) to learn more. If you don't wish to send usage data to Microsoft, you can set the `telemetry.telemetryLevel` setting to `off`. Learn more in our [FAQ](https://code.visualstudio.com/docs/supporting/faq#_how-to-disable-telemetry-reporting).

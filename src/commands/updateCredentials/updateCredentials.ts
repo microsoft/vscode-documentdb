@@ -6,9 +6,13 @@
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { AuthMethodId, authMethodFromString, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
-import { type DocumentDBCustomEnvironment } from '../../documentdb/auth/documentdbTokenResource';
-import { hasDocumentDBHost } from '../../documentdb/auth/oidcAllowedHosts';
+import {
+    AuthMethodId,
+    authMethodFromString,
+    authMethodsFromString,
+    getAuthMethodFamily,
+} from '../../documentdb/auth/AuthMethod';
+import { evaluateEntraDestinationFromSettings } from '../../documentdb/auth/entraDestinationSettings';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { getRegisteredShellTerminals } from '../../documentdb/shell/ShellTerminalLinkProvider';
@@ -17,7 +21,6 @@ import { Views } from '../../documentdb/Views';
 import { SelectEntraTokenSourceStep } from '../../documentdb/wizards/authenticate/SelectEntraTokenSourceStep';
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, isConnection } from '../../services/connectionStorageService';
-import { settingsKeys } from '../../settingsKeys';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
 import { resolveStorageZone } from '../../tree/connections-view/models/ConnectionClusterModel';
 import { shutdownEvaluator } from '../playground/executePlaygroundCode';
@@ -68,13 +71,11 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     const connectionString = connectionCredentials?.secrets?.connectionString || '';
     context.valuesToMask.push(connectionString);
 
-    const parsedCS = new DocumentDBConnectionString(connectionCredentials?.secrets.connectionString ?? '');
-    const supportedAuthMethods = [...(connectionCredentials?.properties.availableAuthMethods ?? [])];
-
-    const customHostnameSuffix = vscode.workspace
-        .getConfiguration()
-        .get<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment)?.hostnameSuffix;
-    if (hasDocumentDBHost(parsedCS.hosts, customHostnameSuffix)) {
+    const entraDestinationAllowed = evaluateEntraDestinationFromSettings(connectionString).allowed;
+    const supportedAuthMethods = authMethodsFromString(connectionCredentials?.properties.availableAuthMethods).filter(
+        (method) => entraDestinationAllowed || getAuthMethodFamily(method) !== AuthMethodId.MicrosoftEntraID,
+    );
+    if (entraDestinationAllowed) {
         if (!supportedAuthMethods.includes(AuthMethodId.MicrosoftEntraID)) {
             supportedAuthMethods.push(AuthMethodId.MicrosoftEntraID);
         }
@@ -90,13 +91,19 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
 
     context.telemetry.properties.calledFrom = isErrorState ? 'errorNode' : 'contextMenu';
 
+    const selectedMethod = authMethodFromString(connectionCredentials?.properties.selectedAuthMethod);
     const wizardContext: UpdateCredentialsWizardContext = {
         ...context,
+        connectionString,
         nativeAuthConfig: connectionCredentials?.secrets.nativeAuthConfig,
         entraIdAuthConfig: connectionCredentials?.secrets.entraIdAuthConfig,
         managedIdentityAuthConfig: connectionCredentials?.secrets.managedIdentityAuthConfig,
         availableAuthenticationMethods: authMethodsFromString(supportedAuthMethods),
-        selectedAuthenticationMethod: authMethodFromString(connectionCredentials?.properties.selectedAuthMethod),
+        selectedAuthenticationMethod:
+            selectedMethod &&
+            (entraDestinationAllowed || getAuthMethodFamily(selectedMethod) !== AuthMethodId.MicrosoftEntraID)
+                ? selectedMethod
+                : undefined,
         isEmulator: Boolean(node.cluster.emulatorConfiguration?.isEmulator),
         storageZone: resolveStorageZone(node.cluster),
         storageId: node.storageId,

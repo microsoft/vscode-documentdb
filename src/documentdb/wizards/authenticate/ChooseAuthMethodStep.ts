@@ -11,9 +11,12 @@ import {
     AuthMethodId,
     authMethodsFromString,
     createAuthMethodQuickPickItems,
+    getAllAuthMethods,
     getAuthMethodFamily,
     isSupportedAuthMethod,
 } from '../../auth/AuthMethod';
+import { evaluateEntraDestinationFromSettings } from '../../auth/entraDestinationSettings';
+import { showEntraUnavailableDetails } from '../../auth/showEntraUnavailableDetails';
 import { type AuthenticateWizardContext } from './AuthenticateWizardContext';
 
 export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWizardContext> {
@@ -27,8 +30,22 @@ export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWiza
             managedIdentityKind: undefined,
             managedIdentityClientIdSource: undefined,
         });
+        const entraDestinationAllowed =
+            context.connectionString !== undefined
+                ? evaluateEntraDestinationFromSettings(context.connectionString).allowed
+                : (context.entraDestinationAllowed ?? false);
+        if (context.availableAuthMethods?.length === 0) {
+            context.availableAuthMethods = getAllAuthMethods()
+                .filter(
+                    (method) =>
+                        entraDestinationAllowed || getAuthMethodFamily(method.id) !== AuthMethodId.MicrosoftEntraID,
+                )
+                .map((method) => method.id);
+        }
         const availableMethods = context.availableAuthMethods ?? [AuthMethodId.NativeAuth];
-        const supportedMethods = authMethodsFromString(availableMethods);
+        const supportedMethods = authMethodsFromString(availableMethods).filter(
+            (method) => entraDestinationAllowed || getAuthMethodFamily(method) !== AuthMethodId.MicrosoftEntraID,
+        );
         const availableFamilies = [...new Set(supportedMethods.map(getAuthMethodFamily))];
 
         if (availableMethods.length === 1 && !isSupportedAuthMethod(availableMethods[0])) {
@@ -52,6 +69,7 @@ export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWiza
         const quickPickItems = createAuthMethodQuickPickItems(supportedMethods, {
             showSupportInfo: true,
             filterUnsupported: false,
+            entraDestinationAllowed,
         });
 
         const unknownMethodIds = availableMethods.filter((methodId) => !isSupportedAuthMethod(methodId));
@@ -66,23 +84,34 @@ export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWiza
             });
         }
 
-        const selectedItem = await traceAuthOperation(
-            'authenticate.authMethodPicker',
-            () =>
-                context.ui.showQuickPick(quickPickItems, {
-                    placeHolder: l10n.t('Select an authentication method for "{resourceName}"', {
-                        resourceName: context.resourceName,
+        let selectedItem: (typeof quickPickItems)[number];
+        do {
+            selectedItem = await traceAuthOperation(
+                'authenticate.authMethodPicker',
+                () =>
+                    context.ui.showQuickPick(quickPickItems, {
+                        placeHolder:
+                            !entraDestinationAllowed && context.connectionStringAuthFacts?.usesOidc
+                                ? l10n.t(
+                                      "Microsoft Entra ID isn't enabled for this server address. Choose another method, or select it for details.",
+                                  )
+                                : l10n.t('Select an authentication method for "{resourceName}"', {
+                                      resourceName: context.resourceName,
+                                  }),
+                        title: l10n.t('Authenticate to connect with your DocumentDB cluster'),
+                        suppressPersistence: true,
+                        ignoreFocusOut: true,
                     }),
-                    title: l10n.t('Authenticate to connect with your DocumentDB cluster'),
-                    suppressPersistence: true,
-                    ignoreFocusOut: true,
-                }),
-            {
-                options: quickPickItems.map((item) => item.authMethod ?? 'unsupported').join(','),
-                unknownMethodCount: unknownMethodIds.length,
-                reason: 'multipleOrUnknownFamilies',
-            },
-        );
+                {
+                    options: quickPickItems.map((item) => item.authMethod ?? 'unsupported').join(','),
+                    unknownMethodCount: unknownMethodIds.length,
+                    reason: 'multipleOrUnknownFamilies',
+                },
+            );
+            if (selectedItem.entraUnavailable) {
+                await showEntraUnavailableDetails();
+            }
+        } while (selectedItem.entraUnavailable);
         if (isSupportedAuthMethod(selectedItem.authMethod) === false) {
             throw new Error(l10n.t('The selected authentication method is not supported.'));
         }
