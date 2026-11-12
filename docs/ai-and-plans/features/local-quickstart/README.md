@@ -52,6 +52,21 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 - [docs/user-manual/local-quick-start.md](../../../user-manual/local-quick-start.md)
 - [docs/user-manual/local-connection-documentdb-local.md](../../../user-manual/local-connection-documentdb-local.md)
 
+### Screenshot status for the Podman stack (#1065, #1072, #1076)
+
+- **Updated:** the [walkthrough image](../../../../resources/walkthroughs/documentdb-local.png) and
+  its [dark variant](../../../../resources/walkthroughs/documentdb-local_dark.png) now show the
+  Docker or Podman introduction.
+- **Added:** the [setup guide](../../../user-manual/local-quick-start.md) now shows the Introduction
+  step and the Configure step with the Container engine choice, in light and dark mode.
+- **Parked:** the same Configure screenshot is listed in
+  [parked images](../../../parked-images/README.md) as a release-notes candidate.
+- **Still useful:** a Set up or Done capture with Details expanded would illustrate the new evidence
+  rows.
+- The root README's images and the manual-connection picker images do not show the changed setup
+  controls and need no update for this stack. Historical release notes and the dated 1.0 blog
+  announcement are left unchanged.
+
 ## Related skills
 
 - [.github/skills/error-translation](../../../../.github/skills/error-translation/SKILL.md) —
@@ -69,8 +84,8 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 - **Engine readiness is a setup stage, not a separate concept.** The wizard runs
   `Introduction → Configure → Set up → Done`; the stage 1 heading is `Checking container engine`
   ([0003](./decisions.md#0003--concept-f-docker-verified-as-the-first-setup-stage)). Redesigned
-  findings and engine-specific guides are pending W5; the detail includes raw CLI version output
-  and names the missing preferred CLI when setup falls back.
+  findings and engine-specific guides are partially implemented; the summary identifies the selected
+  CLI and its reported version and names the missing preferred CLI when setup falls back.
 - **Settled setup stages offer evidence in Details.** Rows with facts start collapsed on both Set up
   and Done and have concise factual summaries; explanations and recovery actions remain in the
   failure block. Full image and container IDs are available through mouse and keyboard tooltips.
@@ -164,5 +179,6 @@ settled setup stages (0008), preferred-engine ownership and platform-gated Podma
 3. [decisions.md](./decisions.md) — why the model is what it is
 
 `design-iteration-1.md` and implemented or superseded iterations are history. Read a specific
-iteration only when you need provenance for a particular behavior. Iteration 12 is an approved,
-not-yet-implemented plan; its intended behavior must not be mistaken for current product behavior.
+iteration only when you need provenance for a particular behavior. Iteration 12 records the
+implemented preferred-engine plan and its verification; the code remains authoritative for current
+product behavior.

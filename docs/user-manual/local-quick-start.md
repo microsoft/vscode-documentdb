@@ -17,11 +17,15 @@ A fresh Configure step defaults to Docker; choose Podman there if you prefer it.
 Windows, setup can offer an explicit button to start an eligible stopped Podman machine. Creating a
 machine or choosing among ambiguous machines remains manual.
 
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./images/local-quick-start-introduction_dark.png"><img src="./images/local-quick-start-introduction.png" alt="DocumentDB Local Introduction step next to Set up DocumentDB Local in the Connections view, listing the container engine check, image download, container creation and saved connection" width="800" style="max-width:100%;height:auto;"></picture></p>
+
 1. Open the **Connections** view.
 2. Expand **Your own DocumentDB**, then select **Set up DocumentDB Local**.
 3. On the **Introduction** step, select **Continue**.
-4. On the **Configure** step, keep the Docker default or select **Podman**, then select **Start DocumentDB Local**.
+4. On the **Configure** step, keep the Docker default or choose **Podman** under **Container engine**, then select **Start DocumentDB Local**.
 5. When **DocumentDB Local is ready** appears, select **Open Connection**.
+
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./images/local-quick-start-configure_dark.png"><img src="./images/local-quick-start-configure.png" alt="DocumentDB Local Configure step with Docker selected as the preferred container engine and Podman available" width="800" style="max-width:100%;height:auto;"></picture></p>
 
 The extension generates the credentials, includes sample data, and chooses an available port. The new **DocumentDB Local** connection appears under **Your own DocumentDB**, ready to browse.
 
@@ -53,20 +57,25 @@ execution, never guessed in Configure.
 The extension never installs Docker or Podman, starts an engine automatically, runs `sudo`, changes
 group membership, or switches Docker contexts. On macOS and Windows, you can explicitly select
 **Start Podman machine** when setup identifies a stopped default machine, or the sole machine when
-none is marked default. The extension does not initialize a machine; if the selection is ambiguous,
-choose and start the intended machine manually. Linux and WSL have no machine-start button; setup
+none is marked default, provided no other machine is running or starting. The extension does not
+initialize a machine; if the selection is ambiguous, choose and start the intended machine manually.
+Linux and WSL have no machine-start button; setup
 uses the address in Podman's error to choose copy-only guidance (see
-[Linux or WSL socket access denied](#linux-or-wsl-socket-access-denied)).
+[Podman on Linux or WSL](#podman-on-linux-or-wsl)).
 If that address is on another computer, setup offers no start button on any platform.
 
-The extension host matters. In a local VS Code window, the container engine and DocumentDB Local run on your machine. In WSL, SSH, a dev container, or Codespaces, they run in that extension-host environment. In remote sessions, `localhost:10260` refers to the extension host, not necessarily your local computer.
-Remote sessions do not start a container engine on your local machine.
+The extension host matters: it runs the CLI and must be able to reach both the selected engine and
+DocumentDB's published port. The engine can run in a separate environment, such as a Podman machine
+or Docker Desktop on Windows reached from WSL. In WSL, SSH, a dev container, or Codespaces,
+`localhost:10260` refers to the extension-host environment, not necessarily your local computer.
+SSH, dev-container, Codespaces, and other remote sessions do not launch a container engine on your
+local computer.
 
 The instance tooltip names an engine only when positive evidence identifies it. When evidence identifies a Podman engine reached through the Docker CLI, the tooltip reports **Podman (through the Docker CLI)**. It shows the server version, not the CLI version. Some host error messages use neutral container-engine wording.
 
-The first setup stage heading reads **Checking container engine**, and its detail line includes
-raw CLI version output. If setup falls back, it also names the missing preferred CLI. Redesigned
-findings and engine-specific guides have not shipped yet.
+The first setup stage heading reads **Checking container engine**. Its summary identifies the
+selected CLI and its version when reported. If setup falls back, it also names the missing preferred
+CLI.
 
 The setup view shows pull, create, start, and connection-readiness progress. While pulling, one
 status line shows the known image and origin until engine output is available, then shows that
@@ -81,6 +90,9 @@ only the engine selected for this run. If setup falls back because the preferred
 the details show that result. For shortened image or container IDs, hover or focus the ID to see
 the full value. An updated image also shows its previous ID when already available. Failure
 explanations and recovery actions stay visible below the stages.
+
+If sample data could not be loaded, the success message and Details call this out. The instance is
+still ready to use; select **View setup log** for the reason.
 
 ## Port
 
@@ -144,7 +156,10 @@ Images older than 1.0-rc2, which you can pick with the image-tag setting on the 
 
 ## Container engine is not ready
 
-Readiness checks identify the selected CLI and, where positive evidence permits, the engine and platform. Use **View setup log** for command details. Use **Refresh** to run the readiness checks again.
+Readiness checks identify the selected CLI and, where positive evidence permits, the engine and
+platform. Use **View setup log** for command details. Select **Check Docker again** or **Check Podman
+again** beside the **Checking container engine** stage to recheck readiness. This does not restart
+provisioning; select **Continue setup** when offered to proceed.
 
 ### Container engine CLI not found
 
@@ -152,10 +167,12 @@ Install [Docker Engine](https://docs.docker.com/engine/install/), Docker Desktop
 [Podman](https://podman.io/docs/installation), then open **Set up DocumentDB Local** again. The
 extension uses the preferred CLI when it is on `PATH` and falls back only when that CLI is
 unavailable; if neither CLI is found, setup reports the preferred engine as missing. If a CLI
-works in a terminal but not in VS Code, confirm that the extension host inherited the same `PATH`,
-`DOCKER_HOST`, and `DOCKER_CONTEXT` configuration.
+works in a terminal but not in VS Code, confirm that the extension host inherited the same `PATH`.
+After an installation changes `PATH`, fully quit and restart VS Code; reloading the window may keep
+the old environment. For Docker, also check `DOCKER_HOST` and `DOCKER_CONTEXT`. Podman uses its own
+connection configuration, not Docker's endpoint settings.
 
-### Linux or WSL socket access denied
+### Docker socket access denied on Linux or WSL
 
 The card may offer this fixed command as copy-only text:
 
@@ -172,6 +189,10 @@ The extension never runs the command. Group changes apply only to new login sess
 
 See [Linux post-installation steps for Docker Engine](https://docs.docker.com/engine/install/linux-postinstall/) for details and security considerations.
 
+After following the guidance, select **Check Docker again**.
+
+### Podman on Linux or WSL
+
 For Podman on Linux or WSL, there is no machine-start button. Setup reads the address in Podman's
 error to decide what to suggest. When Podman could not reach its user socket, setup can offer this
 command as copy-only text:
@@ -185,11 +206,11 @@ In WSL, when Podman uses a Podman machine running on Windows, setup instead offe
 start the machine from Podman Desktop. For any other address, setup asks you to check the connection
 with `podman system connection list`.
 
-Run the command yourself, then select **Refresh**.
+Run the command yourself, then select **Check Podman again**.
 
 ### Native Docker Engine is stopped
 
-Start the system service outside the extension, then select **Retry** or **Refresh**. Depending on the Linux environment, the card may offer one of these commands as copy-only text:
+Start the system service outside the extension, then select **Check Docker again**. Depending on the Linux environment, the card may offer one of these commands as copy-only text:
 
 ```bash
 sudo systemctl start docker
@@ -210,7 +231,7 @@ If Docker Desktop is running but unavailable in a WSL distribution:
 1. Open Docker Desktop settings.
 2. Open **Resources > WSL Integration**.
 3. Enable integration for the distribution where VS Code is running.
-4. Reopen the WSL folder, open **Set up DocumentDB Local**, and select **Refresh**.
+4. Reopen the WSL folder, open **Set up DocumentDB Local**, and retry setup.
 
 See [Docker Desktop WSL integration](https://docs.docker.com/desktop/features/wsl/).
 
@@ -219,6 +240,10 @@ See [Docker Desktop WSL integration](https://docs.docker.com/desktop/features/ws
 On macOS and Windows, Podman uses a machine. If setup identifies a stopped default machine—or the
 only machine when none is marked default—it offers **Start Podman machine**. Select the button to
 start that machine, then let setup check readiness.
+
+The button is not offered if another machine is already running or starting. If the selected
+machine is already starting, setup waits for it without launching it again. **Stop waiting** cancels
+only the readiness wait, not machine startup. You can select **Check Podman again** later.
 
 If no machine exists, initialize it manually with `podman machine init`, then start it with
 `podman machine start`. If several machines exist and none is marked default, setup offers no
@@ -241,7 +266,7 @@ platform default endpoint, in that order. It never changes the selected context.
 ### Linux containers required
 
 DocumentDB Local requires a Linux-container engine. If a reachable Windows Docker daemon reports
-Windows-container mode, switch Docker to Linux containers and select **Retry**.
+Windows-container mode, switch Docker to Linux containers and select **Check Docker again**.
 
 ## Recovery during setup
 

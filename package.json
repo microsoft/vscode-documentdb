@@ -2228,10 +2228,15 @@
           {
             "id": "documentdb-local-v1.0.0",
             "title": "No Database Yet? Start DocumentDB Local",
-            "description": "Run the open-source DocumentDB engine on your own machine, no `docker run` command needed. The extension pulls the official image, creates a persistent volume, generates credentials, picks a free port, loads optional sample data and saves the connection for you. Requires Docker. [Learn more](https://microsoft.github.io/vscode-documentdb/user-manual/local-quick-start)\n[Set up DocumentDB Local](command:vscode-documentdb.command.localQuickStart.open)",
+            "description": "Run the open-source DocumentDB engine on your own machine, no `docker run` or `podman run` command needed. The extension pulls the official image, creates a persistent volume, generates credentials, picks a free port, loads optional sample data and saves the connection for you. Requires Docker or Podman with Linux containers. Choose your preferred engine in Configure. [Learn more](https://microsoft.github.io/vscode-documentdb/user-manual/local-quick-start)\n[Set up DocumentDB Local](command:vscode-documentdb.command.localQuickStart.open)",
             "media": {
-              "image": "resources/walkthroughs/documentdb-local.png",
-              "altText": "DocumentDB Local setup view with Set up DocumentDB Local highlighted in the Connections view"
+              "image": {
+                "light": "resources/walkthroughs/documentdb-local.png",
+                "dark": "resources/walkthroughs/documentdb-local_dark.png",
+                "hc": "resources/walkthroughs/documentdb-local_dark.png",
+                "hcLight": "resources/walkthroughs/documentdb-local.png"
+              },
+              "altText": "DocumentDB Local setup introduction for Docker or Podman, listing the container engine check, image download, container creation and saved connection"
             }
           },
           {
