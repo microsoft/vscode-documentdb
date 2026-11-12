@@ -19,6 +19,7 @@ const moduleLoads = vi.hoisted(() => ({
         ConnectionDiagnostics: (): string => 'connectionDiagnostics',
     })),
     atlasCredentials: vi.fn(() => ({ AtlasCredentialsView: (): string => 'atlasCredentials' })),
+    queryInsightsStandalone: vi.fn(() => ({ QueryInsightsStandalone: (): string => 'queryInsightsStandalone' })),
 }));
 
 vi.mock('../documentdb/clusterDashboard/ClusterDashboard', moduleLoads.clusterDashboard);
@@ -27,6 +28,7 @@ vi.mock('../documentdb/documentView/documentView', moduleLoads.documentView);
 vi.mock('../documentdb/localQuickStart/LocalQuickStart', moduleLoads.localQuickStart);
 vi.mock('../documentdb/connectionDiagnostics/ConnectionDiagnostics', moduleLoads.connectionDiagnostics);
 vi.mock('../documentdb/atlasCredentials/AtlasCredentialsView', moduleLoads.atlasCredentials);
+vi.mock('../documentdb/queryInsightsStandalone/QueryInsightsStandalone', moduleLoads.queryInsightsStandalone);
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -38,6 +40,7 @@ describe('WebviewRegistry', () => {
             | 'documentView'
             | 'localQuickStart'
             | 'atlasCredentials'
+            | 'queryInsightsStandalone'
             | 'connectionDiagnostics'
         >();
         expect(Object.keys(WebviewRegistry).sort()).toEqual(Object.keys(moduleLoads).sort());
@@ -50,6 +53,7 @@ describe('WebviewRegistry', () => {
         const root = createRoot(host);
         const loaded = new Set<WebviewName>();
         const names: WebviewName[] = [
+            'queryInsightsStandalone',
             'connectionDiagnostics',
             'atlasCredentials',
             'localQuickStart',

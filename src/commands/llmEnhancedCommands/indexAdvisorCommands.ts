@@ -12,6 +12,7 @@ import { ClusterSession } from '../../documentdb/ClusterSession';
 import { type CollectionStats, type IndexStats } from '../../documentdb/LlmEnhancedFeatureApis';
 import { type ClusterMetadata } from '../../documentdb/utils/getClusterMetadata';
 import { ext } from '../../extensionVariables';
+import { getAvailableModels } from '../../services/ai/modelSelection';
 import { CopilotService, type CopilotTokenUsage } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
 import { getLastPromptSource, type FilledPromptResult } from './promptTemplates';
@@ -70,6 +71,13 @@ export interface QueryOptimizationContext {
     staticAnalysisSummary?: string;
     // AbortSignal for cancellation support
     signal?: AbortSignal;
+    // POC: explicit model id from the model picker (falls back to the saved choice / first model)
+    modelId?: string;
+    // POC: connectionless mode. When set, no ClusterSession is used; all inputs come from here
+    // together with `executionPlan`, `collectionStats` and `indexStats`.
+    providedData?: {
+        clusterInfo: ClusterMetadata;
+    };
 }
 
 /**
@@ -95,6 +103,8 @@ export interface OptimizationResult {
     // request. Optional fields (see CopilotTokenUsage) — may be undefined when
     // the model rejects countTokens or the request is cancelled.
     usage?: CopilotTokenUsage;
+    // The data messages sent with the request (query + context), for export.
+    modelInputs?: OptimizationModelInputs;
 }
 
 /**
@@ -124,6 +134,21 @@ interface PreparedOptimizationRequest {
      * on the post-LLM telemetry call.
      */
     promptTotalLength: number;
+    /** The data messages exactly as sent (never the instruction prompt). */
+    modelInputs: OptimizationModelInputs;
+}
+
+/**
+ * What the model received besides the instruction prompt, for the user-facing
+ * "copy as Markdown" export and debugging.
+ */
+export interface OptimizationModelInputs {
+    /** Second message: the user's query. */
+    userQuery: string;
+    /** Third message: cluster info, collection/index stats, execution stats, static analysis. */
+    contextData: string;
+    /** Where the instruction prompt came from (built-in resource, local resource, custom file, …). */
+    promptSource: string;
 }
 
 /**
@@ -392,6 +417,8 @@ export async function optimizeQuery(
     const response = await CopilotService.sendMessage(prepared.messages, {
         signal: queryContext.signal,
         featureSource: 'queryInsights',
+        modelSelection: 'user',
+        modelId: queryContext.modelId,
     });
 
     return finalizeOptimizationResponse(context, prepared, response);
@@ -431,6 +458,8 @@ export async function optimizeQueryStreaming(
     const streamHandle = CopilotService.streamMessage(prepared.messages, {
         signal: queryContext.signal,
         featureSource: 'queryInsights',
+        modelSelection: 'user',
+        modelId: queryContext.modelId,
     });
 
     const completion: Promise<OptimizationResult> = streamHandle.completion.then((response) =>
@@ -469,14 +498,18 @@ async function prepareOptimizationRequest(
         throw new UserCancelledError('AbortSignal');
     }
 
-    // Check if Copilot is available
-    const copilotAvailable = await CopilotService.isAvailable();
+    // Check if any Copilot model is available (POC: the user may pick a non-utility model)
+    const copilotAvailable = (await getAvailableModels()).models.length > 0;
     if (!copilotAvailable) {
         throw new Error(
             l10n.t(
                 'GitHub Copilot is not available. Please install the GitHub Copilot extension and ensure you have an active subscription.',
             ),
         );
+    }
+
+    if (queryContext.providedData) {
+        return buildProvidedDataRequest(context, queryContext, queryContext.providedData.clusterInfo);
     }
 
     let explainResult: unknown;
@@ -709,7 +742,7 @@ async function prepareOptimizationRequest(
 
     // Fill the prompt template
     const commandType = queryContext.commandType;
-    const { craftedPrompt, userQuery, contextData } = await fillPromptTemplate(
+    const filledPrompt = await fillPromptTemplate(
         commandType,
         queryContext,
         collectionStats,
@@ -720,6 +753,45 @@ async function prepareOptimizationRequest(
         queryContext.staticAnalysisSummary,
     );
 
+    return buildOptimizationMessages(context, queryContext, filledPrompt);
+}
+
+async function buildProvidedDataRequest(
+    context: IActionContext,
+    queryContext: QueryOptimizationContext,
+    clusterInfo: ClusterMetadata,
+): Promise<PreparedOptimizationRequest> {
+    if (queryContext.executionPlan === undefined || queryContext.executionPlan === null) {
+        throw new Error(vscode.l10n.t('An execution plan is required for connectionless query optimization.'));
+    }
+
+    context.telemetry.properties.connectionless = 'true';
+    context.telemetry.properties.commandType = queryContext.commandType;
+    context.telemetry.properties.isAzure = clusterInfo.domainInfo_isAzure || 'false';
+    context.telemetry.properties.azureApi = clusterInfo.domainInfo_api || 'unknown';
+    context.telemetry.properties.hasPreloadedExecutionPlan = 'true';
+    context.telemetry.properties.hasPreloadedCollectionStats = queryContext.collectionStats ? 'true' : 'false';
+    context.telemetry.properties.hasPreloadedIndexStats = queryContext.indexStats ? 'true' : 'false';
+    context.telemetry.properties.hasCollectionStats = queryContext.collectionStats ? 'true' : 'false';
+    context.telemetry.measurements.indexCount = queryContext.indexStats?.length ?? 0;
+
+    const filledPrompt = await fillPromptTemplate(
+        queryContext.commandType,
+        queryContext,
+        queryContext.collectionStats,
+        queryContext.indexStats,
+        JSON.stringify(queryContext.executionPlan, null, 2),
+        clusterInfo,
+        queryContext.staticAnalysisSummary,
+    );
+    return buildOptimizationMessages(context, queryContext, filledPrompt);
+}
+
+function buildOptimizationMessages(
+    context: IActionContext,
+    queryContext: QueryOptimizationContext,
+    { craftedPrompt, userQuery, contextData }: FilledPromptResult,
+): PreparedOptimizationRequest {
     // Track prompt source and static analysis inclusion
     context.telemetry.properties.promptSource = getLastPromptSource();
     context.telemetry.properties.hasStaticAnalysisSummary = queryContext.staticAnalysisSummary ? 'true' : 'false';
@@ -738,6 +810,7 @@ async function prepareOptimizationRequest(
     return {
         messages,
         promptTotalLength: craftedPrompt.length + userQuery.length + contextData.length,
+        modelInputs: { userQuery, contextData, promptSource: getLastPromptSource() },
     };
 }
 
@@ -814,6 +887,7 @@ function finalizeOptimizationResponse(
         modelDisplayName: response.modelDisplayName,
         modelVersion: response.modelVersion,
         usage: response.usage,
+        modelInputs: prepared.modelInputs,
     };
 }
 

@@ -177,6 +177,14 @@ export interface QueryInsightsStage3Model {
      * Surfaced (in seconds) in the post-response "Powered by …" byline.
      */
     durationMs?: number;
+    /** Data messages sent with the request, used by "copy as Markdown". */
+    modelInputs?: QueryInsightsStage3ModelInputs;
+}
+
+export interface QueryInsightsStage3ModelInputs {
+    userQuery: string;
+    contextData: string;
+    promptSource: string;
 }
 
 /**

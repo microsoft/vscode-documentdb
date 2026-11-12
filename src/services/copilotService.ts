@@ -12,6 +12,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../extensionVariables';
 import { formatTokenCount } from '../utils/formatTokenCount';
+import { resolveQueryInsightsModel } from './ai/modelSelection';
 
 /**
  * Identifies which extension feature is calling `CopilotService` so we can
@@ -36,6 +37,16 @@ export interface CopilotMessageOptions {
      * call that should be attributable in analytics.
      */
     featureSource?: CopilotFeatureSource;
+
+    /**
+     * POC: `'user'` resolves the model from the Query Insights model picker
+     * (explicit `modelId` → saved preference → first available). Defaults to
+     * the free `copilot-utility` alias.
+     */
+    modelSelection?: 'utility' | 'user';
+
+    /** POC: explicit model id, only honoured with `modelSelection: 'user'`. */
+    modelId?: string;
 }
 
 /**
@@ -58,16 +69,16 @@ export interface CopilotMessageOptions {
  * so we do NOT attempt to target those families directly — calling them by
  * name from a third-party extension would fall outside the chat-fallback
  * path and bill the user. The alias is the only target that preserves the
- * "free for the user" guarantee, and is therefore intentionally the only
- * model this service requests.
+ * "free for the user" guarantee. Query generation retains this default;
+ * Query Insights can explicitly opt into user-selected models.
  */
 const UTILITY_MODEL_FAMILY = 'copilot-utility';
 
 /**
  * Token-usage metrics for a Copilot request.
  *
- * The VS Code Language Model API does not expose token counts on responses,
- * so we compute them client-side via `LanguageModelChat.countTokens(...)`.
+ * Provider usage data parts take precedence over best-effort client-side
+ * `LanguageModelChat.countTokens(...)` estimates.
  * All fields are optional because token counting can fail (e.g., when the
  * model rejects the count request, or when the request is cancelled mid-flight)
  * and we never want to fail the user-facing flow because telemetry is
@@ -84,6 +95,13 @@ export interface CopilotTokenUsage {
     maxInputTokens?: number;
     /** `promptTokens / maxInputTokens * 100`, rounded to one decimal place. */
     promptUtilizationPct?: number;
+    reportedPromptTokens?: number;
+    reportedCompletionTokens?: number;
+    cachedPromptTokens?: number;
+    reasoningTokens?: number;
+    /** Exact billed AI credits, not a calculation from model pricing. */
+    credits?: number;
+    usageSource?: 'provider' | 'estimated';
 }
 
 /**
@@ -200,10 +218,10 @@ export class CopilotService {
                 // review rather than at runtime).
                 context.telemetry.properties.featureSource = options?.featureSource ?? 'unknown';
 
-                const selectedModel = await this.selectUtilityModel();
+                const { model: selectedModel, outcome } = await this.selectModel(options);
 
                 if (!selectedModel) {
-                    context.telemetry.properties.modelSelectionOutcome = 'no-utility-model-available';
+                    context.telemetry.properties.modelSelectionOutcome = outcome;
                     throw new Error(
                         l10n.t(
                             'No suitable language model is available. Please ensure GitHub Copilot is installed and signed in with an active subscription, and that you accepted the language-model access consent prompt the first time this feature was used (you can re-trigger it by running the feature again).',
@@ -218,7 +236,7 @@ export class CopilotService {
                 if (typeof selectedModel.maxInputTokens === 'number') {
                     context.telemetry.measurements.modelMaxInputTokens = selectedModel.maxInputTokens;
                 }
-                context.telemetry.properties.modelSelectionOutcome = 'utility-model';
+                context.telemetry.properties.modelSelectionOutcome = outcome;
 
                 try {
                     const response = await this.sendToModel(selectedModel, messages, options);
@@ -244,6 +262,7 @@ export class CopilotService {
                         if (promptUtilizationPct !== undefined) {
                             context.telemetry.measurements.promptUtilizationPct = promptUtilizationPct;
                         }
+                        this.recordReportedUsage(context, response.usage);
                     }
 
                     return {
@@ -343,10 +362,10 @@ export class CopilotService {
                     // calling feature so analytics can split telemetry by source.
                     context.telemetry.properties.featureSource = options?.featureSource ?? 'unknown';
 
-                    const selectedModel = await this.selectUtilityModel();
+                    const { model: selectedModel, outcome } = await this.selectModel(options);
 
                     if (!selectedModel) {
-                        context.telemetry.properties.modelSelectionOutcome = 'no-utility-model-available';
+                        context.telemetry.properties.modelSelectionOutcome = outcome;
                         throw new Error(
                             l10n.t(
                                 'No suitable language model is available. Please ensure GitHub Copilot is installed and signed in with an active subscription, and that you accepted the language-model access consent prompt the first time this feature was used (you can re-trigger it by running the feature again).',
@@ -361,7 +380,7 @@ export class CopilotService {
                     if (typeof selectedModel.maxInputTokens === 'number') {
                         context.telemetry.measurements.modelMaxInputTokens = selectedModel.maxInputTokens;
                     }
-                    context.telemetry.properties.modelSelectionOutcome = 'utility-model';
+                    context.telemetry.properties.modelSelectionOutcome = outcome;
 
                     try {
                         const response = await this.streamToModel(selectedModel, messages, options, (fragment) =>
@@ -386,6 +405,7 @@ export class CopilotService {
                             if (promptUtilizationPct !== undefined) {
                                 context.telemetry.measurements.promptUtilizationPct = promptUtilizationPct;
                             }
+                            this.recordReportedUsage(context, response.usage);
                         }
 
                         return {
@@ -439,20 +459,26 @@ export class CopilotService {
         );
     }
 
-    /**
-     * Resolves the Copilot **utility** model.
-     *
-     * We always ask for {@link UTILITY_MODEL_FAMILY} (`copilot-utility`) — the
-     * Copilot extension's documented alias for the chat-fallback path — and
-     * never fall back to billed picker models. If the alias is unavailable
-     * (e.g. the Copilot extension is not installed, the user is signed out,
-     * or the consent prompt has not been accepted) the caller is responsible
-     * for surfacing the failure; we never silently degrade onto a model that
-     * would consume the user's premium request budget.
-     *
-     * Returns `undefined` when no model is available so the caller can map
-     * that to its own user-facing error.
-     */
+    /** User model selection is opt-in; other callers remain utility-only. */
+    private static async selectModel(
+        options: CopilotMessageOptions | undefined,
+    ): Promise<{ model: vscode.LanguageModelChat | undefined; outcome: string }> {
+        if (options?.modelSelection !== 'user') {
+            const model = await this.selectUtilityModel();
+            return { model, outcome: model ? 'utility-model' : 'no-utility-model-available' };
+        }
+
+        const resolved = await resolveQueryInsightsModel(options.modelId);
+        if (!resolved) {
+            return { model: undefined, outcome: 'no-model-available' };
+        }
+        ext.outputChannel.trace(
+            l10n.t('[Copilot] Selected model ({0}): {1}', resolved.source, this.formatModelDetails(resolved.model)),
+        );
+        return { model: resolved.model, outcome: `user-${resolved.source}` };
+    }
+
+    /** Never fall back to a billed model for utility-only requests. */
     private static async selectUtilityModel(): Promise<vscode.LanguageModelChat | undefined> {
         const matches = await vscode.lm.selectChatModels({
             vendor: 'copilot',
@@ -551,10 +577,19 @@ export class CopilotService {
             // Collect the streaming response, checking for cancellation between chunks
             let fullResponse = '';
             let firstTokenTraced = false;
-            for await (const fragment of chatResponse.text) {
+            let reportedUsage: Partial<CopilotTokenUsage> = {};
+            for await (const part of chatResponse.stream) {
                 if (signal?.aborted) {
                     break;
                 }
+                if (part instanceof vscode.LanguageModelDataPart && part.mimeType === 'usage') {
+                    reportedUsage = { ...reportedUsage, ...this.readProviderUsage(part.data) };
+                    continue;
+                }
+                if (!(part instanceof vscode.LanguageModelTextPart)) {
+                    continue;
+                }
+                const fragment = part.value;
                 if (!firstTokenTraced) {
                     firstTokenTraced = true;
                     // Time-to-first-token: the headline latency users feel as
@@ -588,18 +623,21 @@ export class CopilotService {
             // reject (e.g., if the model rejects the count request); we never want
             // a telemetry failure to break the user-facing flow, so each step is
             // wrapped in its own try/catch and falls back to `undefined`.
-            const usage = await this.measureTokenUsage(model, messages, fullResponse);
+            const usage = await this.measureTokenUsage(model, messages, fullResponse, reportedUsage);
 
             // Trace token usage in compact form so the output channel stays scannable.
             // The numeric measurements are still emitted to telemetry verbatim.
+            const locale = vscode.env?.language || 'en-US';
             ext.outputChannel.trace(
                 l10n.t(
-                    '[Copilot] Tokens: prompt={0}, response={1}, total={2}, context={3}, utilization={4}%',
-                    usage.promptTokens !== undefined ? formatTokenCount(usage.promptTokens) : '?',
-                    usage.responseTokens !== undefined ? formatTokenCount(usage.responseTokens) : '?',
-                    usage.totalTokens !== undefined ? formatTokenCount(usage.totalTokens) : '?',
-                    usage.maxInputTokens !== undefined ? formatTokenCount(usage.maxInputTokens) : '?',
+                    '[Copilot] Usage ({5}): prompt={0}, response={1}, total={2}, context={3}, utilization={4}%, credits={6}',
+                    usage.promptTokens !== undefined ? formatTokenCount(usage.promptTokens, locale) : '?',
+                    usage.responseTokens !== undefined ? formatTokenCount(usage.responseTokens, locale) : '?',
+                    usage.totalTokens !== undefined ? formatTokenCount(usage.totalTokens, locale) : '?',
+                    usage.maxInputTokens !== undefined ? formatTokenCount(usage.maxInputTokens, locale) : '?',
                     usage.promptUtilizationPct !== undefined ? usage.promptUtilizationPct.toString() : '?',
+                    usage.usageSource ?? 'estimated',
+                    usage.credits !== undefined ? String(usage.credits) : '?',
                 ),
             );
 
@@ -613,16 +651,14 @@ export class CopilotService {
     /**
      * Computes best-effort token counts for the prompt and response.
      *
-     * The VS Code Language Model API does not return token usage on responses,
-     * so we ask the model to count tokens client-side via `countTokens`. Both
-     * the prompt and the response counts are issued in parallel to minimise
-     * latency, and any failure is logged and degraded to `undefined` instead
-     * of bubbling up to the caller.
+     * Count only missing provider fields, in parallel. Failures degrade to
+     * undefined rather than interrupting the response.
      */
     private static async measureTokenUsage(
         model: vscode.LanguageModelChat,
         messages: vscode.LanguageModelChatMessage[],
         responseText: string,
+        reported: Partial<CopilotTokenUsage>,
     ): Promise<CopilotTokenUsage> {
         const maxInputTokens = typeof model.maxInputTokens === 'number' ? model.maxInputTokens : undefined;
 
@@ -641,25 +677,80 @@ export class CopilotService {
         // Count prompt tokens per-message in parallel, then sum. If any single
         // message count fails the total is still useful as a lower bound, but
         // we err on the side of reporting `undefined` to avoid skewed metrics.
-        const [perMessageCounts, responseTokens] = await Promise.all([
-            Promise.all(messages.map((m) => countSafely(m))),
-            responseText.length > 0 ? countSafely(responseText) : Promise.resolve<number | undefined>(0),
+        const [perMessageCounts, estimatedResponseTokens] = await Promise.all([
+            reported.reportedPromptTokens === undefined
+                ? Promise.all(messages.map((m) => countSafely(m)))
+                : Promise.resolve<(number | undefined)[]>([]),
+            reported.reportedCompletionTokens !== undefined
+                ? undefined
+                : responseText.length > 0
+                  ? countSafely(responseText)
+                  : Promise.resolve<number | undefined>(0),
         ]);
 
-        let promptTokens: number | undefined;
-        if (perMessageCounts.every((c) => typeof c === 'number')) {
+        let promptTokens = reported.reportedPromptTokens;
+        if (promptTokens === undefined && perMessageCounts.every((c) => typeof c === 'number')) {
             promptTokens = perMessageCounts.reduce<number>((sum, c) => sum + (c as number), 0);
         }
 
+        const responseTokens = reported.reportedCompletionTokens ?? estimatedResponseTokens;
         const totalTokens =
-            promptTokens !== undefined && responseTokens !== undefined ? promptTokens + responseTokens : undefined;
+            reported.totalTokens ??
+            (promptTokens !== undefined && responseTokens !== undefined ? promptTokens + responseTokens : undefined);
 
         let promptUtilizationPct: number | undefined;
         if (promptTokens !== undefined && maxInputTokens && maxInputTokens > 0) {
             promptUtilizationPct = Math.round((promptTokens / maxInputTokens) * 1000) / 10;
         }
 
-        return { promptTokens, responseTokens, totalTokens, maxInputTokens, promptUtilizationPct };
+        return {
+            ...reported,
+            promptTokens,
+            responseTokens,
+            totalTokens,
+            maxInputTokens,
+            promptUtilizationPct,
+            usageSource: Object.keys(reported).length > 0 ? 'provider' : 'estimated',
+        };
+    }
+
+    private static recordReportedUsage(context: IActionContext, usage: CopilotTokenUsage): void {
+        for (const key of ['credits', 'reportedPromptTokens', 'reportedCompletionTokens'] as const) {
+            if (usage[key] !== undefined) {
+                context.telemetry.measurements[key] = usage[key];
+            }
+        }
+    }
+
+    private static readProviderUsage(data: Uint8Array): Partial<CopilotTokenUsage> {
+        try {
+            const parsed: unknown = JSON.parse(new TextDecoder().decode(data));
+            const object = (value: unknown): Record<string, unknown> =>
+                typeof value === 'object' && value !== null && !Array.isArray(value)
+                    ? (value as Record<string, unknown>)
+                    : {};
+            const number = (value: unknown): number | undefined =>
+                typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
+            const usage = object(parsed);
+            const fields = {
+                reportedPromptTokens: number(usage.prompt_tokens),
+                reportedCompletionTokens: number(usage.completion_tokens),
+                totalTokens: number(usage.total_tokens),
+                cachedPromptTokens: number(object(usage.prompt_tokens_details).cached_tokens),
+                reasoningTokens: number(object(usage.completion_tokens_details).reasoning_tokens),
+                credits: number(object(usage.copilot_usage).total_nano_aiu),
+            };
+            const result: Partial<CopilotTokenUsage> = {};
+            for (const key of Object.keys(fields) as (keyof typeof fields)[]) {
+                const value = fields[key];
+                if (value !== undefined) {
+                    result[key] = key === 'credits' ? value / 1_000_000_000 : value;
+                }
+            }
+            return result;
+        } catch {
+            return {};
+        }
     }
 
     /**
@@ -683,12 +774,13 @@ export class CopilotService {
      * Dumps the selected model's stable metadata (and any other own enumerable
      * properties present at runtime) to the trace stream.
      *
-     * Pricing and cost-per-token fields live on the proposed
-     * `languageModelPricing` API and are intentionally **not** consumed here —
-     * the extension stays on stable VS Code APIs. This dump is purely a
+     * Shipped code deliberately avoided the proposed `languageModelPricing`
+     * API. Query Insights now defensively reads its ungated runtime properties
+     * in modelSelection (F7/F10), without declaring enabledApiProposals.
+     * This dump remains purely a
      * diagnostic so we can observe what the runtime exposes today (and tell
      * when richer information becomes available on stable in the future)
-     * without depending on it.
+     * without assuming these undocumented fields remain available.
      *
      * Memoised by model id within a single extension host process — the
      * metadata is static for a given id, so we only need to emit it the first
@@ -713,9 +805,7 @@ export class CopilotService {
         };
         ext.outputChannel.trace(l10n.t('[Copilot] Selected model metadata: {0}', JSON.stringify(stable)));
 
-        // 2) Best-effort runtime introspection. We never read pricing or other
-        // proposed-API fields by name; we only enumerate whatever the host
-        // happens to expose and skip methods. This is observation only.
+        // 2) Best-effort diagnostic introspection, skipping methods.
         try {
             const own: Record<string, unknown> = {};
             for (const [key, value] of Object.entries(model as unknown as Record<string, unknown>)) {

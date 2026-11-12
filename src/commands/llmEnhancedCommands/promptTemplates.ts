@@ -59,6 +59,14 @@ const INDEX_ADVISOR_PROMPT_RESOURCE_FILES: Record<string, string> = {
 };
 
 /**
+ * Optional local prompt within `resources/prompts/`. The folder is gitignored, so the file is
+ * never committed, but the build copies `resources/` and packaging includes it when present.
+ * It replaces the built-in index advisor prompt for every command type and must be complete,
+ * including its own priority and security sections.
+ */
+export const LOCAL_INDEX_ADVISOR_PROMPT_FILE = 'local/query-insights.prompt.md';
+
+/**
  * Cache for loaded prompt bodies to avoid re-reading files on every call.
  */
 const promptBodyCache: Map<string, string> = new Map();
@@ -98,7 +106,8 @@ export function loadPromptBody(
 /**
  * Builds a complete index advisor prompt by composing the dynamic header
  * (PRIORITY DECLARATION + SECURITY INSTRUCTIONS) with the body loaded from
- * a resource file. Falls back to the inline constant if the file cannot be loaded.
+ * a resource file. A packaged {@link LOCAL_INDEX_ADVISOR_PROMPT_FILE} takes precedence and is
+ * returned as-is. Falls back to the inline constant if the file cannot be loaded.
  *
  * @param commandType - 'find' | 'aggregate' | 'count'
  * @param role - The role string for the priority declaration
@@ -118,6 +127,12 @@ export function buildIndexAdvisorPrompt(
     if (!resourceFile) {
         lastPromptSource = 'inline-fallback';
         return inlineFallback;
+    }
+
+    const local = loadPromptBody(LOCAL_INDEX_ADVISOR_PROMPT_FILE);
+    if ('body' in local) {
+        lastPromptSource = 'local-resource-file';
+        return local.body;
     }
 
     const result = loadPromptBody(resourceFile);
@@ -140,6 +155,7 @@ ${result.body}`;
  */
 export type PromptSource =
     | 'resource-file'
+    | 'local-resource-file'
     | 'inline-fallback'
     | 'inline-fallback-no-context'
     | 'inline-fallback-read-error'

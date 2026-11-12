@@ -578,6 +578,7 @@ export const queryInsightsEventsRouter = router({
                         modelFamily: aiResponse.modelFamily,
                         usage: aiResponse.usage,
                         durationMs: elapsed(),
+                        modelInputs: aiResponse.modelInputs,
                     };
                     if (abortController.signal.aborted) {
                         return;

@@ -14,9 +14,10 @@ import {
     Text,
     tokens,
 } from '@fluentui/react-components';
-import { InfoRegular, SparkleRegular } from '@fluentui/react-icons';
+import { SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import type * as React from 'react';
+import { Fragment } from 'react';
 import { Announcer } from '../../../../../../components/accessibility';
 import '../baseOptimizationCard.scss';
 import './GetPerformanceInsightsCard.scss';
@@ -41,6 +42,11 @@ export interface GetPerformanceInsightsCardProps {
      * Whether the card actions are enabled. When false, action buttons are disabled.
      */
     enabled?: boolean;
+
+    modelPicker?: React.ReactNode;
+    /** Optional link to the Query Insights Explorer, shown in the footer line. */
+    secondaryLink?: React.ReactNode;
+    mayUsePremiumRequests?: boolean;
 
     /**
      * Optional error message. If provided, shows error state with retry button
@@ -99,6 +105,9 @@ export function GetPerformanceInsightsCard({
     recommendation,
     isLoading,
     enabled = true,
+    modelPicker,
+    secondaryLink,
+    mayUsePremiumRequests = false,
     errorMessage,
     onGetInsights,
     onLearnMore,
@@ -124,15 +133,8 @@ export function GetPerformanceInsightsCard({
                 <div style={{ flex: 1 }}>
                     <CardHeader
                         header={
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                <Text weight="semibold" size={500}>
-                                    {l10n.t('AI Performance Insights')}
-                                </Text>
-                            </div>
-                        }
-                        action={
-                            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                {l10n.t('AI responses may be inaccurate')}
+                            <Text weight="semibold" size={500}>
+                                {l10n.t('AI Performance Insights')}
                             </Text>
                         }
                         style={{ marginBottom: '8px' }}
@@ -172,7 +174,9 @@ export function GetPerformanceInsightsCard({
                             </Button>
                         </div>
                     ) : (
+                        // Configuration first, then the action (as in the VS Code Chat input).
                         <div className="get-performance-insights-card-actions">
+                            {modelPicker && <div className="get-performance-insights-card-model">{modelPicker}</div>}
                             <Button
                                 appearance="primary"
                                 icon={<SparkleRegular />}
@@ -181,41 +185,35 @@ export function GetPerformanceInsightsCard({
                             >
                                 {errorMessage ? l10n.t('Retry') : l10n.t('Get AI Performance Insights')}
                             </Button>
-                            <Button appearance="subtle" onClick={onLearnMore} disabled={!enabled}>
-                                {l10n.t('Learn more about AI Performance Insights')}
-                            </Button>
                         </div>
                     )}
-                    {/* Cost-neutral disclosure row.
-                        Always rendered so users see the disclosure both before clicking and during loading.
-                        The "Learn more" link wires to `onLearnMoreUtilityModel` (the utility-model
-                        cost-disclosure page), distinct from the general feature `onLearnMore` used by
-                        the button above. Keeping the two URLs separate lets the parent panel update
-                        each independently. */}
-                    <div
-                        style={{
-                            display: 'flex',
-                            alignItems: 'flex-start',
-                            gap: '6px',
-                            marginTop: '12px',
-                            color: tokens.colorNeutralForeground3,
-                        }}
-                    >
-                        <InfoRegular aria-hidden="true" style={{ flexShrink: 0, marginTop: '2px' }} />
-                        <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                            {l10n.t('No additional cost for most GitHub Copilot subscribers.')}{' '}
-                            <Link
-                                appearance="subtle"
-                                onClick={onLearnMoreUtilityModel}
-                                inline
-                                style={{
-                                    fontSize: tokens.fontSizeBase200,
-                                    lineHeight: tokens.lineHeightBase200,
-                                }}
-                            >
-                                {l10n.t('Learn more about the utility model used.')}
-                            </Link>
-                        </Text>
+                    {/* One muted footer line, shown before and during loading. The utility-model link opens
+                        `onLearnMoreUtilityModel`, separate from the feature docs behind `onLearnMore`. */}
+                    <div className="get-performance-insights-card-meta">
+                        {[
+                            mayUsePremiumRequests ? (
+                                <span key="cost">{l10n.t('The selected model may use premium requests.')}</span>
+                            ) : (
+                                <span key="cost">
+                                    {l10n.t('No additional cost for most GitHub Copilot subscribers.')}{' '}
+                                    <Link inline onClick={onLearnMoreUtilityModel}>
+                                        {l10n.t('Learn more about the utility model used.')}
+                                    </Link>
+                                </span>
+                            ),
+                            <span key="accuracy">{l10n.t('AI responses may be inaccurate')}</span>,
+                            secondaryLink ? <span key="explore">{secondaryLink}</span> : undefined,
+                            <Link key="learn" inline onClick={onLearnMore}>
+                                {l10n.t('Learn more about AI Performance Insights')}
+                            </Link>,
+                        ]
+                            .filter(Boolean)
+                            .map((item, index) => (
+                                <Fragment key={index}>
+                                    {index > 0 && <span aria-hidden="true">·</span>}
+                                    {item}
+                                </Fragment>
+                            ))}
                     </div>
                 </div>
             </div>

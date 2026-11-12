@@ -45,6 +45,8 @@ import { indexViewRouter } from '../documentdb/collectionView/indexesTab/indexVi
 import { connectionDiagnosticsRouter } from '../documentdb/connectionDiagnostics/connectionDiagnosticsRouter';
 import { documentsViewRouter as documentViewRouter } from '../documentdb/documentView/documentsViewRouter';
 import { localQuickStartRouter } from '../documentdb/localQuickStart/localQuickStartRouter';
+import { queryInsightsModelsRouter } from '../documentdb/queryInsightsShared/queryInsightsModelsRouter';
+import { queryInsightsStandaloneRouter } from '../documentdb/queryInsightsStandalone/queryInsightsStandaloneRouter';
 import { confirmInput, showModalConfirmation, type ConfirmResult } from './commonDialogs';
 import { WEBVIEW_CONFIG } from './configuration';
 import { publicProcedure, publicProcedureWithTelemetry, router } from './trpc';
@@ -99,6 +101,10 @@ export type BaseRouterContext = FrameworkBaseRouterContext &
         measurements?: Record<string, number>
  */
 const commonRouter = router({
+    copyToClipboard: publicProcedure.input(z.object({ text: z.string() })).mutation(async ({ input }) => {
+        await vscode.env.clipboard.writeText(input.text);
+        return true;
+    }),
     openFeedback: publicProcedure
         .input(z.object({ collectionTab: z.enum(['documents', 'indexes', 'queryInsights']).optional() }))
         .mutation(async ({ input, ctx }): Promise<void> => {
@@ -295,6 +301,8 @@ const commonRouter = router({
 });
 
 export const appRouter = router({
+    queryInsightsStandalone: queryInsightsStandaloneRouter,
+    ai: queryInsightsModelsRouter,
     common: commonRouter,
     atlasCredentials: atlasCredentialsRouter,
     clusterDashboard: clusterDashboardRouter,

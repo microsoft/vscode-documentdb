@@ -173,6 +173,7 @@ describe('Stage 0 L2 production browser harness', (): void => {
             'connectionDiagnostics',
             'documentView',
             'localQuickStart',
+            'queryInsightsStandalone',
         ]);
         for (const fixture of Object.values(fixtures)) {
             expect(fixture.content.length).toBeGreaterThan(0);

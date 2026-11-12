@@ -11,6 +11,7 @@ import * as l10n from '@vscode/l10n';
 import type * as React from 'react';
 import { useMemo } from 'react';
 import { type PerformanceDiagnostic } from '../../../../../../documentdb/collectionView/types/queryInsights';
+import { getVisibleDiagnostics } from '../../../../utils/visibleDiagnostics';
 import '../SummaryCard.scss';
 import './PerformanceRatingCell.scss';
 
@@ -113,17 +114,9 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
     // Determine the content to display based on rating value
     let customContent: React.ReactNode;
 
-    // Step 1 — Filter: keep only high-signal positive badges + all neutral/negative
-    const SHOWN_POSITIVE_IDS: string[] = ['high_efficiency_ratio', 'fast_execution', 'index_used'];
-    const filteredDiagnostics = (diagnostics ?? []).filter(
-        (d) => d.type !== 'positive' || SHOWN_POSITIVE_IDS.includes(d.diagnosticId),
-    );
-
-    // Step 2 — Sort: positive → neutral → negative (standard UX convention)
-    const TYPE_ORDER: Record<string, number> = { positive: 0, neutral: 1, negative: 2 };
-    const visibleDiagnostics = [...filteredDiagnostics].sort(
-        (a, b) => (TYPE_ORDER[a.type] ?? 1) - (TYPE_ORDER[b.type] ?? 1),
-    );
+    // High-signal positive badges plus all neutral/negative ones, positive → neutral → negative
+    // (standard UX convention). Shared with the rich-text report.
+    const visibleDiagnostics = getVisibleDiagnostics(diagnostics);
 
     if (rating === null) {
         // Explicit null: data unavailable, so the cell renders nullValuePlaceholder

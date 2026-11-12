@@ -23,6 +23,7 @@ const PRIMARY_GRAPHS = {
     atlasCredentials: 'Atlas Credentials page',
     clusterDashboard: 'Cluster Dashboard page',
     connectionDiagnostics: 'Diagnose Connection page',
+    queryInsightsStandalone: 'Query Insights Explorer page',
     mainStartup: 'Activation',
     main: 'Extension host',
     playgroundWorker: 'Playground worker',

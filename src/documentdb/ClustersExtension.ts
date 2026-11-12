@@ -78,6 +78,7 @@ import { playgroundOpenQueryInShell } from '../commands/playground/playgroundOpe
 import { runAll } from '../commands/playground/runAll';
 import { runSelected } from '../commands/playground/runSelected';
 import { scanCollectionSchema } from '../commands/playground/scanCollectionSchema';
+import { exploreWithOwnInput } from '../commands/queryInsights/exploreWithOwnInput';
 import { refreshTreeElement } from '../commands/refreshTreeElement/refreshTreeElement';
 import { refreshView } from '../commands/refreshView/refreshView';
 import { removeConnection } from '../commands/removeConnection/removeConnection';
@@ -668,6 +669,10 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommand(
                     'vscode-documentdb.command.localQuickStart.open',
                     withCommandCorrelation(openLocalQuickStart),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.queryInsights.exploreWithOwnInput',
+                    withCommandCorrelation(exploreWithOwnInput),
                 );
                 registerCommand(
                     'vscode-documentdb.command.localQuickStart.start',

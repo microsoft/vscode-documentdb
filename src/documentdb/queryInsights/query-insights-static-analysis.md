@@ -40,6 +40,8 @@ revert without understanding the context.
        v
   ExplainPlanAnalyzer.analyzeExecutionStats(explainResult, queryFilter)
        |
+       |--- explain-plan-helper           -->  first pass: engine-neutral access facts
+       |--- refineDocumentDbPlanFacts()   -->  second pass: DocumentDB-only corrections
        |--- calculatePerformanceRating()   -->  score + 4 diagnostic badges
        |
        v
@@ -185,12 +187,15 @@ These always appear (one per dimension):
 
 #### Index Usage
 
-| diagnosticId           | Condition                       | Type     | Message              |
-| ---------------------- | ------------------------------- | -------- | -------------------- |
-| `index_used`           | Index scan used                 | positive | Index used           |
-| `full_collection_scan` | Collection scan, no filter      | neutral  | Full collection scan |
-| `full_collection_scan` | Collection scan, filter present | negative | Full collection scan |
-| `no_index_used`        | No index, no collection scan    | neutral  | No index used        |
+| diagnosticId             | Condition                                                                                      | Type     | Message                       |
+| ------------------------ | ---------------------------------------------------------------------------------------------- | -------- | ----------------------------- |
+| `index_used`             | Index scan used                                                                                | positive | Index used                    |
+| `full_collection_scan`   | Collection scan, no filter                                                                     | neutral  | Full collection scan          |
+| `full_collection_scan`   | Collection scan, filter present                                                                | negative | Full collection scan          |
+| `no_index_used`          | No index, no collection scan                                                                   | neutral  | No index used                 |
+| `primary_key_order_scan` | DocumentDB walked `_id_` only to page (see [Decision 6](#6-primary-key-order-scan-documentdb)) | neutral  | Collection read in \_id order |
+
+`primary_key_order_scan` is added by the second pass, right after `full_collection_scan`.
 
 **Empty query detection:** The `queryFilter` parameter is passed directly
 from the user's parsed filter (via `ClusterSession`), not extracted from the
@@ -463,6 +468,35 @@ Decision 2). After fixing filter detection, the messages were refined:
 The with-filter message is `negative` type (orange badge) while the
 no-filter message is `neutral` (blue/gray) because scanning everything
 when you asked for everything is expected behavior.
+
+### 6. Primary-Key Order Scan (DocumentDB)
+
+**Problem:** A DocumentDB `find` on a field without an index was shown as
+**Index Used: `_id_`** with a positive "Index used" badge. A batched `find`
+runs as a streaming cursor that resumes from the last `(shard key, _id)` it
+returned, so DocumentDB turns the sequential scan into a walk of the `_id_`
+index. The explain reports `IXSCAN` on `_id_`, but:
+
+- `queryPlanner.winningPlan` has `cursorScanType: "streamingPrimaryKey"`;
+- the `_id_` stage has no `indexFilterSet`: every condition is in
+  `runtimeFilterSet` and is checked after reading the document;
+- `totalDocsExamined` equals the collection size, while `totalKeysExamined`
+  counts only the documents that passed the filter.
+
+**Decision:** a second analysis pass (`documentDbPlanRefinements.ts`) runs
+after the engine-neutral extraction and **before** the rating. When all of
+the above hold and `_id_` is the only index in the plan, it reports a
+collection scan (no index, `Collection scan` fetch overhead) and adds the
+neutral `primary_key_order_scan` badge. The rules key off fields only
+DocumentDB emits (`cursorScanType`, `indexFilterSet`), so MongoDB plans are
+unchanged. A real `_id` lookup keeps its condition in `indexFilterSet` and is
+still reported as an index scan. The applied corrections are recorded in
+`ExecutionStatsAnalysis.planRefinements` and the Stage 2 telemetry property
+`planRefinements`.
+
+Source: `cursorScanType` in DocumentDB's explain output schema
+(`pg_documentdb_gw/.../explain/documentdb_explain_output.schema.json`) and the
+cursor continuation planner (`pg_documentdb/src/customscan/custom_scan_continuation.c`).
 
 ---
 

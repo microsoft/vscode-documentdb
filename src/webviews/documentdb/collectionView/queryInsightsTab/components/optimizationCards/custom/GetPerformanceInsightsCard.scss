@@ -9,7 +9,31 @@
 
     &-actions {
         display: flex;
-        gap: 8px;
+        align-items: center;
+        gap: var(--spacingHorizontalM);
         flex-wrap: wrap;
+    }
+
+    // Keeps the picker's own error text under the dropdown instead of beside the button.
+    &-model {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    &-meta {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        column-gap: var(--spacingHorizontalS);
+        row-gap: var(--spacingVerticalXXS);
+        margin-top: var(--spacingVerticalM);
+        color: var(--colorNeutralForeground3);
+        font-size: var(--fontSizeBase200);
+        line-height: var(--lineHeightBase200);
+
+        .fui-Link {
+            font-size: inherit;
+            line-height: inherit;
+        }
     }
 }
