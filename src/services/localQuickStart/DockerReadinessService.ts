@@ -37,6 +37,7 @@ import {
 } from './dockerReadinessClassification';
 import { getDockerRecoveryCommand } from './dockerRecoveryCommands';
 import {
+    type ContainerCliPresence,
     type DockerEndpointKind,
     type DockerExecutionTarget,
     type DockerHostEnvironment,
@@ -73,6 +74,7 @@ export interface DockerReadinessServiceDependencies {
     readonly client?: DockerReadinessClient;
     /** Called once per check, so a CLI installed or removed since the last one is picked up. */
     readonly getClient?: () => DockerReadinessClient;
+    readonly getCliOnPath?: () => ContainerCliPresence | undefined;
     readonly shellProvider?: Shell;
     readonly platform?: NodeJS.Platform;
     readonly arch?: string;
@@ -94,6 +96,7 @@ export interface DockerReadinessServiceDependencies {
 
 interface ResolvedDependencies {
     readonly getClient: () => DockerReadinessClient;
+    readonly getCliOnPath: () => ContainerCliPresence | undefined;
     readonly shellProvider: Shell;
     readonly platform: NodeJS.Platform;
     readonly arch: string;
@@ -246,6 +249,7 @@ export class DockerReadinessService {
         const client = dependencies.client ?? new DockerClient();
         this.dependencies = {
             getClient: dependencies.getClient ?? (() => client),
+            getCliOnPath: dependencies.getCliOnPath ?? (() => undefined),
             shellProvider: dependencies.shellProvider ?? getDockerShellProvider(platform),
             platform,
             arch: dependencies.arch ?? process.arch,
@@ -311,13 +315,20 @@ export class DockerReadinessService {
 
     private async runAndMemoize(request: DockerReadinessRequest): Promise<DockerReadiness> {
         const client = this.dependencies.getClient();
+        const cliOnPath = this.dependencies.getCliOnPath();
         const cli = client.id === PodmanClient.ClientId ? 'podman' : 'docker';
         const check = this.runReadiness(
             client,
             cli,
             request.cancellationToken,
             request.suppressCommandEcho === true,
-        ).then((readiness): DockerReadiness => ({ ...readiness, cli }));
+        ).then(
+            (readiness): DockerReadiness => ({
+                ...readiness,
+                cli,
+                ...(cliOnPath !== undefined ? { cliOnPath } : {}),
+            }),
+        );
         this.inFlight = check;
         try {
             const result = await check;

@@ -232,6 +232,67 @@ export interface QuickStartMessage {
     readonly detail?: string;
 }
 
+/** Allow-listed, per-run setup evidence. Omitted optional fields were not established. */
+export interface CheckingStageFacts {
+    readonly kind: 'checking';
+    readonly port: number;
+    readonly portFree: boolean;
+    readonly removedContainerId?: string;
+}
+
+export interface PullingStageFacts {
+    readonly kind: 'pulling';
+    readonly imageRef: string;
+    readonly imageOrigin: 'default' | 'custom' | 'reused';
+    readonly result?: 'downloaded' | 'updated' | 'upToDate';
+    readonly imageId?: string;
+    readonly previousImageId?: string;
+    readonly progress?: string;
+    readonly digest?: string;
+    readonly imageVersion?: string;
+    readonly createdAtMs?: number;
+}
+
+export interface CreatingStageFacts {
+    readonly kind: 'creating';
+    readonly containerName: string;
+    readonly containerId?: string;
+    readonly hostPort: number;
+    readonly containerPort: number;
+    readonly volumeName: string;
+    readonly dataPath: string;
+    readonly volume?: 'new' | 'reused' | 'replaced';
+    readonly username: string;
+}
+
+export interface StartingStageFacts {
+    readonly kind: 'starting';
+    readonly running?: boolean;
+    readonly startedAtMs?: number;
+    readonly boundPort: number;
+    readonly boundPortReported: boolean;
+}
+
+export interface WaitingStageFacts {
+    readonly kind: 'waiting';
+    readonly port: number;
+    readonly displayName?: string;
+    readonly attempts?: number;
+    readonly documentdbVersions?: readonly string[];
+    readonly maxWireVersion?: number;
+    readonly sampleData?: 'loaded' | 'notRequested' | 'keptExisting' | 'failed';
+    readonly lastProbeError?: string;
+    readonly exitCode?: number;
+    readonly lastLogLine?: string;
+}
+
+export type StageFacts =
+    | CheckingStageFacts
+    | PullingStageFacts
+    | CreatingStageFacts
+    | StartingStageFacts
+    | WaitingStageFacts;
+
 /** A single stage transition pushed through the service-level event sink (D13). */
 export interface StageEvent {
     readonly stage: ProvisionStage;
@@ -252,6 +313,7 @@ export interface StageEvent {
     readonly dockerReadiness?: DockerReadiness;
     /** Set on a setup's terminal event: whether data can be reused once the failed run rolled back. */
     readonly canReuseExistingData?: boolean;
+    readonly facts?: StageFacts;
 }
 
 /** Metadata describing the currently-managed instance. */
@@ -287,6 +349,8 @@ export type DockerHostEnvironment =
     | 'unsupported';
 
 export type ContainerEngine = 'docker' | 'podman' | 'unknown';
+
+export type ContainerCliPresence = Readonly<Record<'docker' | 'podman', boolean>>;
 
 export type ContainerEngineEvidence =
     | 'selectedCli'
@@ -398,6 +462,7 @@ interface DockerReadinessBase {
     readonly cliVersion?: string;
     /** Which CLI ran the check; `podman` only when Docker's was missing. */
     readonly cli?: 'docker' | 'podman';
+    readonly cliOnPath?: ContainerCliPresence;
     readonly engine?: ContainerEngine;
     readonly engineEvidence?: ContainerEngineEvidence;
     readonly serverVersion?: string;

@@ -6,6 +6,7 @@
 import { DockerClient, PodmanClient } from '@microsoft/vscode-container-client';
 import * as fs from 'fs';
 import * as path from 'path';
+import { type ContainerCliPresence } from './quickStartTypes';
 
 export type ContainerCli = 'docker' | 'podman';
 
@@ -28,6 +29,7 @@ export interface ResolvedContainerCli {
     readonly cli: ContainerCli;
     /** What the client runs: the bare name, or on Windows the absolute path. */
     readonly executable: string;
+    readonly onPath: ContainerCliPresence;
 }
 
 /** The first match on PATH, honouring PATHEXT on Windows. */
@@ -58,14 +60,19 @@ export function findOnPath(command: string, lookup: ContainerCliLookup = {}): st
  * missing CLI the way it always has.
  */
 export function resolveContainerCli(lookup: ContainerCliLookup = {}): ResolvedContainerCli {
-    const cli: ContainerCli = findOnPath('docker', lookup) || !findOnPath('podman', lookup) ? 'docker' : 'podman';
-    const found = findOnPath(cli, lookup);
+    const docker = findOnPath('docker', lookup);
+    const podman = findOnPath('podman', lookup);
+    const cli: ContainerCli = docker || !podman ? 'docker' : 'podman';
+    const found = cli === 'docker' ? docker : podman;
     // On Windows the container client caches each bare name's `which` result for the process
     // lifetime, so a CLI that moved would keep failing; an absolute path skips that cache.
     const executable = (lookup.platform ?? process.platform) === 'win32' && found ? found : cli;
-    return { cli, executable };
+    return { cli, executable, onPath: { docker: !!docker, podman: !!podman } };
 }
 
-export function createContainerClient({ cli, executable }: ResolvedContainerCli): DockerClient | PodmanClient {
+export function createContainerClient({
+    cli,
+    executable,
+}: Pick<ResolvedContainerCli, 'cli' | 'executable'>): DockerClient | PodmanClient {
     return cli === 'podman' ? new PodmanClient(executable) : new DockerClient(executable);
 }

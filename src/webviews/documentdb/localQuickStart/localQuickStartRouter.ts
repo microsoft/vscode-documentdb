@@ -47,7 +47,7 @@ import {
     getCredentialValidation,
 } from './credentialValidation';
 import { getDockerReadinessTelemetryProperties } from './dockerReadinessTelemetry';
-import { type QuickStartWizardSession, reportWizardStep } from './wizardTelemetry';
+import { type QuickStartWizardSession, reportWizardDetailsOpened, reportWizardStep } from './wizardTelemetry';
 
 /**
  * The Configure step's credential rules plus the driver's SASLprep, which only the host can run.
@@ -244,6 +244,16 @@ export const localQuickStartRouter = router({
             const session = (ctx as RouterContext).wizardSession;
             if (session) {
                 reportWizardStep(session, input.to, input.trigger);
+            }
+        }),
+
+    /** Keep disclosure usage in the panel session; only the close event emits the aggregates. */
+    reportDetailsOpened: publicProcedure
+        .input(z.object({ stage: z.enum(['checking', 'pulling', 'creating', 'starting', 'waiting']) }))
+        .mutation(({ ctx, input }): void => {
+            const session = (ctx as RouterContext).wizardSession;
+            if (session) {
+                reportWizardDetailsOpened(session, input.stage);
             }
         }),
 

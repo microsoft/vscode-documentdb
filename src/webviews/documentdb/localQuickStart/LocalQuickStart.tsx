@@ -4,10 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    Accordion,
-    AccordionHeader,
-    AccordionItem,
-    AccordionPanel,
     Button,
     CounterBadge,
     Field,
@@ -42,7 +38,6 @@ import {
     ContainerFooter,
     ContainerHeader,
     StatusList,
-    StatusListItem,
     type StatusListItemStatus,
     Wizard,
     WizardStep,
@@ -53,15 +48,8 @@ import { Fragment, type JSX, type ReactNode, useCallback, useEffect, useMemo, us
 import { formatQuickStartMessage } from '../../../services/localQuickStart/quickStartMessages';
 import {
     type AdvancedQuickStartOptions,
-    type DockerEndpointKind,
-    type DockerEndpointProbe,
-    type DockerFailureKind,
-    type DockerHostEnvironment,
-    type DockerPermissionDetail,
     type DockerProvider,
-    type DockerProviderEvidence,
     type DockerReadiness,
-    type DockerReadinessOutcome,
     type DockerRecoveryCommand,
     type DockerStatusResult,
     InstanceState,
@@ -77,6 +65,7 @@ import {
     type QuickStartWizardPhase,
     type QuickStartWizardStepTrigger,
     type StageEvent,
+    type StageFacts,
 } from '../../../services/localQuickStart/quickStartTypes';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility/Announcer';
@@ -96,15 +85,21 @@ import {
     type DockerGuidanceKey,
     type DockerGuideKey,
     type DockerReadinessPresentation,
-    type DockerReadinessPresentationState,
     type DockerRecoveryNoteKey,
     type DockerStartLabelKey,
-    getDockerExecutionTargetKey,
+    type getDockerExecutionTargetKey,
     getDockerReadinessPresentation,
 } from './dockerReadinessPresentation';
 import { getExistingInstanceGuard, guardBlocksSetup } from './existingInstanceGuard';
 import './localQuickStart.scss';
 import { type LocalQuickStartConfigurationType } from './localQuickStartController';
+import { SetupStageRow } from './SetupStageRow';
+import {
+    buildDockerDetailRows,
+    buildStageDetailRows,
+    buildStageSummary,
+    dockerFailureLabels,
+} from './stageDetailsPresentation';
 
 /**
  * Wizard phases. `provisioning` and `failed` are both the "Set up" step: a setup failure — Docker
@@ -192,6 +187,14 @@ const useStyles = makeStyles({
         color: tokens.colorPaletteRedForeground1,
     },
     imagePath: { overflowWrap: 'anywhere' },
+    pullActivity: {
+        display: 'block',
+        minWidth: 0,
+        maxWidth: '100%',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+    },
     dockerStatus: { display: 'flex', flexDirection: 'column', gap: '10px' },
     recoveryCommand: { display: 'flex', flexDirection: 'column', gap: '8px' },
     // Copy stays pinned top-right: a multi-line command must not push it down or wrap it away.
@@ -219,35 +222,6 @@ const useStyles = makeStyles({
     },
     recoveryCommandCopy: { flexShrink: 0 },
     waitingStatus: { display: 'flex', alignItems: 'center', gap: '8px' },
-    dockerAccordionHeader: { minHeight: '30px' },
-    accordionHeaderBrand: { color: tokens.colorBrandForeground1 },
-    dockerAccordionPanel: { paddingTop: '4px' },
-    dockerDetailsIntro: { display: 'block', paddingBottom: '8px', color: tokens.colorNeutralForeground2 },
-    dockerDetails: {
-        display: 'grid',
-        gridTemplateColumns: '150px minmax(0, 1fr)',
-        margin: 0,
-        borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
-        '@media (max-width: 480px)': { gridTemplateColumns: '110px minmax(0, 1fr)' },
-    },
-    dockerDetailLabel: {
-        margin: 0,
-        padding: '9px 0',
-        color: tokens.colorNeutralForeground2,
-        borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-    },
-    dockerDetailValue: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '2px',
-        margin: 0,
-        padding: '9px 0',
-        overflowWrap: 'anywhere',
-        borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-    },
-    // How the fact above was established — the part that is worth the extra room behind a
-    // collapsed panel.
-    dockerDetailNote: { color: tokens.colorNeutralForeground3 },
     lastCheckedRow: {
         display: 'flex',
         alignItems: 'center',
@@ -333,110 +307,6 @@ function planItems(): readonly PlanItem[] {
             detail: l10n.t('The connection appears in the Connections view, ready to open.'),
         },
     ];
-}
-
-function dockerDaemonValues(): Readonly<Record<DockerReadinessPresentationState, string>> {
-    return {
-        ready: l10n.t('Reachable'),
-        cliMissing: l10n.t('Unknown'),
-        accessDenied: l10n.t('Access denied'),
-        accessDeniedPendingRestart: l10n.t('Access denied'),
-        dockerDesktopNotRunning: l10n.t('Docker Desktop not running'),
-        notRunning: l10n.t('Not running'),
-        starting: l10n.t('Starting…'),
-        notAccessibleFromWsl: l10n.t('Not accessible from WSL'),
-        endpointUnreachable: l10n.t('Endpoint unreachable'),
-        contextUnavailable: l10n.t('Context unavailable'),
-        checkTimedOut: l10n.t('Check timed out'),
-        unsupported: l10n.t('Unsupported'),
-        windowsContainers: l10n.t('Linux containers required'),
-        notAccessible: l10n.t('Not accessible'),
-    };
-}
-
-function dockerFailureLabels(): Readonly<Record<DockerFailureKind, string>> {
-    return {
-        cliMissing: l10n.t('Docker or Podman CLI not found'),
-        permissionDenied: l10n.t('Docker access denied'),
-        daemonUnavailable: l10n.t('Docker daemon unavailable'),
-        daemonStarting: l10n.t('Docker daemon starting'),
-        contextUnavailable: l10n.t('Docker context unavailable'),
-        endpointUnreachable: l10n.t('Docker endpoint unreachable'),
-        probeTimedOut: l10n.t('Docker check timed out'),
-        unsupportedHost: l10n.t('Unsupported host'),
-        windowsContainers: l10n.t('Windows containers enabled'),
-        unknown: l10n.t('Unknown Docker problem'),
-    };
-}
-
-function dockerProviderLabels(): Readonly<Record<DockerProvider, string>> {
-    return {
-        dockerDesktop: l10n.t('Docker Desktop'),
-        dockerEngine: l10n.t('Docker Engine'),
-        podman: 'Podman',
-        unknown: l10n.t('Unknown'),
-    };
-}
-
-function dockerOutcomeValues(): Readonly<Record<DockerReadinessOutcome, string>> {
-    return {
-        ready: l10n.t('Docker is ready'),
-        diagnosed: l10n.t('A specific problem was identified'),
-        indeterminate: l10n.t('No clear answer'),
-    };
-}
-
-function dockerEndpointKindValues(): Readonly<Record<DockerEndpointKind, string>> {
-    return {
-        unixSocket: l10n.t('Unix socket'),
-        namedPipe: l10n.t('Windows named pipe'),
-        tcp: l10n.t('TCP address'),
-        ssh: l10n.t('SSH tunnel'),
-        unknown: l10n.t('Could not be resolved'),
-    };
-}
-
-/** How the endpoint the check dialled was chosen. */
-function dockerEndpointSourceNotes(): Readonly<Record<DockerEndpointProbe['source'], string>> {
-    return {
-        dockerHostEnv: l10n.t('Taken from the DOCKER_HOST environment variable, which overrides everything else.'),
-        dockerContextEnv: l10n.t('Taken from the DOCKER_CONTEXT environment variable.'),
-        currentContext: l10n.t('Taken from the Docker context that is currently active.'),
-        platformDefault: l10n.t('No override was set, so the default location for this platform was used.'),
-    };
-}
-
-/** How the provider above was identified — strongest evidence first. */
-function dockerProviderEvidenceNotes(): Readonly<Record<DockerProviderEvidence, string>> {
-    return {
-        liveDaemon: l10n.t('Read from the daemon that answered the check.'),
-        activeContext: l10n.t('Inferred from the Docker context that is currently active.'),
-        installedApplication: l10n.t('Inferred from the Docker application installed on this machine.'),
-        rememberedProvider: l10n.t('Remembered from the last check on this machine that did reach a daemon.'),
-        none: l10n.t('Nothing identified it: the check reached neither a daemon nor a usable context.'),
-    };
-}
-
-function dockerHostEnvironmentValues(): Readonly<Record<DockerHostEnvironment, string>> {
-    return {
-        windows: l10n.t('Windows'),
-        macos: l10n.t('macOS'),
-        linux: l10n.t('Linux'),
-        wsl: l10n.t('Windows Subsystem for Linux'),
-        ssh: l10n.t('Remote SSH host'),
-        devContainer: l10n.t('Dev container'),
-        codespaces: l10n.t('GitHub Codespaces'),
-        otherRemote: l10n.t('Remote extension host'),
-        unsupported: l10n.t('Unsupported platform'),
-    };
-}
-
-function dockerPermissionDetailValues(): Readonly<Record<DockerPermissionDetail, string>> {
-    return {
-        notInGroup: l10n.t('Your user is not a member of the docker group'),
-        pendingSessionRestart: l10n.t('Your user is in the docker group, but this session predates the change'),
-        unknown: l10n.t('Denied for a reason the check could not narrow down'),
-    };
 }
 
 function dockerGuidance(): Readonly<Record<DockerGuidanceKey, string>> {
@@ -547,17 +417,6 @@ function dockerStartLabels(): Readonly<Record<DockerStartLabelKey, string>> {
     };
 }
 
-function executionTargetValues(): Readonly<Record<ReturnType<typeof getDockerExecutionTargetKey>, string>> {
-    return {
-        local: l10n.t('This machine (Docker)'),
-        wsl: l10n.t('This WSL environment (Docker)'),
-        ssh: l10n.t('Remote SSH host (Docker)'),
-        devContainer: l10n.t('This dev container environment (Docker)'),
-        codespaces: l10n.t('This Codespaces environment (Docker)'),
-        otherRemote: l10n.t('This remote extension host (Docker)'),
-    };
-}
-
 function dockerRecoveryNotes(): Readonly<Record<DockerRecoveryNoteKey, string>> {
     return {
         groupMembershipNewSession: l10n.t('Group membership applies to new login sessions only.'),
@@ -568,13 +427,13 @@ function dockerRecoveryNotes(): Readonly<Record<DockerRecoveryNoteKey, string>> 
     };
 }
 
-/** Provider names for the stage detail line; an unidentified provider is still "Docker". */
+/** Provider names for the stage detail line. */
 function dockerDetailProviderLabels(): Readonly<Record<DockerProvider, string>> {
     return {
         dockerDesktop: l10n.t('Docker Desktop'),
         dockerEngine: l10n.t('Docker Engine'),
         podman: 'Podman',
-        unknown: l10n.t('Docker'),
+        unknown: l10n.t('Engine'),
     };
 }
 
@@ -587,40 +446,45 @@ function dockerDetailOsLabels(): Readonly<Record<'linux' | 'windows', string>> {
 
 function dockerDetailTargetLabels(): Readonly<Record<ReturnType<typeof getDockerExecutionTargetKey>, string>> {
     return {
-        local: l10n.t('runs on this machine'),
-        wsl: l10n.t('runs in this WSL environment'),
-        ssh: l10n.t('runs on the remote SSH host'),
-        devContainer: l10n.t('runs in this dev container'),
-        codespaces: l10n.t('runs in this Codespace'),
-        otherRemote: l10n.t('runs on the remote extension host'),
+        local: l10n.t('Runs on this machine'),
+        wsl: l10n.t('Runs in this WSL environment'),
+        ssh: l10n.t('Runs on the remote SSH host'),
+        devContainer: l10n.t('Runs in this dev container'),
+        codespaces: l10n.t('Runs in this Codespace'),
+        otherRemote: l10n.t('Runs on the remote extension host'),
     };
 }
 
 function dockerDetailFailureLabels(): Readonly<Record<DockerDetailFailureKey, string>> {
     return {
-        noCli: l10n.t('no Docker or Podman CLI found'),
-        accessDenied: l10n.t('access denied'),
-        notRunning: l10n.t('not running'),
-        daemonNotRunning: l10n.t('daemon not running'),
-        daemonStarting: l10n.t('daemon starting'),
-        notAvailableInWsl: l10n.t('not available in this WSL distribution'),
-        endpointUnreachable: l10n.t('endpoint unreachable'),
-        contextUnavailable: l10n.t('context unavailable'),
-        checkTimedOut: l10n.t('check timed out'),
-        unsupportedHost: l10n.t('unsupported host'),
+        noCli: l10n.t('No Docker or Podman CLI found'),
+        accessDenied: l10n.t('Access denied'),
+        notRunning: l10n.t('Not running'),
+        daemonNotRunning: l10n.t('Daemon not running'),
+        daemonStarting: l10n.t('Daemon starting'),
+        notAvailableInWsl: l10n.t('Not available in this WSL distribution'),
+        endpointUnreachable: l10n.t('Endpoint unreachable'),
+        contextUnavailable: l10n.t('Context unavailable'),
+        checkTimedOut: l10n.t('Check timed out'),
+        unsupportedHost: l10n.t('Unsupported host'),
         windowsContainers: l10n.t('Windows containers enabled'),
-        daemonUnreachable: l10n.t('daemon unreachable'),
+        daemonUnreachable: l10n.t('Daemon unreachable'),
     };
 }
 
 function formatDockerDetailSegment(segment: DockerDetailSegment): string | undefined {
     switch (segment.kind) {
-        case 'provider': {
-            const name = dockerDetailProviderLabels()[segment.provider];
-            return segment.version ? l10n.t('{0} {1}', name, segment.version) : name;
+        case 'provider':
+            return dockerDetailProviderLabels()[segment.provider];
+        case 'cli': {
+            const name =
+                segment.cli === 'docker'
+                    ? l10n.t('Docker CLI')
+                    : segment.cli === 'podman'
+                      ? l10n.t('Podman CLI')
+                      : l10n.t('Container CLI');
+            return segment.version ? l10n.t('{0} {1} found', name, segment.version) : l10n.t('{0} found', name);
         }
-        case 'cli':
-            return segment.version ? l10n.t('Docker CLI {0} found', segment.version) : l10n.t('Docker CLI found');
         case 'platform': {
             const osName = segment.osType ? dockerDetailOsLabels()[segment.osType] : undefined;
             if (osName && segment.architecture) {
@@ -678,124 +542,6 @@ function formatElapsed(elapsedMs: number): string {
     return `${minutes}:${seconds}`;
 }
 
-interface DockerDetailRow {
-    readonly label: string;
-    readonly value: string;
-    /** How the value above was established, or why it could not be. */
-    readonly note?: string;
-}
-
-/**
- * Full report of the Docker readiness check, for the collapsed "What the Docker check found"
- * panel. Every fact carries how it was established, because the panel's job is to show the user
- * what was actually probed rather than to be scanned quickly.
- */
-function buildDockerDetailRows(
-    readiness: DockerReadiness,
-    daemonState: DockerReadinessPresentationState,
-    now: number,
-): readonly DockerDetailRow[] {
-    const rows: DockerDetailRow[] = [
-        {
-            label: l10n.t('Check result'),
-            value: dockerOutcomeValues()[readiness.outcome],
-            note:
-                readiness.outcome === 'indeterminate'
-                    ? l10n.t('Docker answered too vaguely to name a cause, so setup can still be attempted.')
-                    : undefined,
-        },
-    ];
-
-    if (readiness.outcome !== 'ready') {
-        rows.push({
-            label: l10n.t('Detected problem'),
-            value: dockerFailureLabels()[readiness.failureKind ?? 'unknown'],
-        });
-    }
-
-    rows.push({
-        label: l10n.t('Docker CLI'),
-        value: readiness.cliInstalled
-            ? readiness.cliVersion
-                ? l10n.t('Found, version {0}', readiness.cliVersion)
-                : l10n.t('Found, version not reported')
-            : l10n.t('Not found'),
-        note: readiness.cliInstalled
-            ? l10n.t('The docker command was located and run to read its version.')
-            : l10n.t('The docker command is not on PATH, so no further probe could run.'),
-    });
-
-    rows.push({
-        label: l10n.t('Docker daemon'),
-        value: dockerDaemonValues()[daemonState],
-        note: readiness.daemonReachable
-            ? l10n.t('The daemon answered, so everything below was reported by Docker itself.')
-            : l10n.t('The daemon did not answer, so anything only Docker can report is still unknown.'),
-    });
-
-    rows.push({
-        label: l10n.t('Docker endpoint'),
-        value: dockerEndpointKindValues()[readiness.endpointKind],
-        note: readiness.endpointSource
-            ? dockerEndpointSourceNotes()[readiness.endpointSource]
-            : l10n.t('No endpoint could be resolved, so the check had nothing to dial.'),
-    });
-
-    if (readiness.permissionDetail) {
-        rows.push({
-            label: l10n.t('Socket access'),
-            value: dockerPermissionDetailValues()[readiness.permissionDetail],
-            note: l10n.t('Checked by comparing the Docker socket owner group against your user and this process.'),
-        });
-    }
-
-    rows.push({
-        label: l10n.t('Provider'),
-        value: dockerProviderLabels()[readiness.provider],
-        note: dockerProviderEvidenceNotes()[readiness.providerEvidence],
-    });
-
-    const daemonOs = readiness.osType ? dockerDetailOsLabels()[readiness.osType] : undefined;
-    const daemonPlatform =
-        daemonOs && readiness.daemonArchitecture
-            ? l10n.t('{0} {1}', daemonOs, readiness.daemonArchitecture)
-            : (daemonOs ?? readiness.daemonArchitecture);
-    rows.push({
-        label: l10n.t('Containers run on'),
-        value: daemonPlatform ?? l10n.t('Not reported yet'),
-        note: daemonPlatform
-            ? l10n.t('The operating system and CPU architecture the daemon builds and runs containers for.')
-            : l10n.t('Docker reports this only once a connection succeeds, so it stays unknown until then.'),
-    });
-
-    rows.push({
-        label: l10n.t('This machine'),
-        value: readiness.arch
-            ? l10n.t('{0}, {1}', dockerHostEnvironmentValues()[readiness.environment], readiness.arch)
-            : dockerHostEnvironmentValues()[readiness.environment],
-        note:
-            readiness.platformSupported === false
-                ? l10n.t('DocumentDB Local images are published for x64 and arm64 only.')
-                : l10n.t('Where VS Code is running the extension, detected before Docker was contacted.'),
-    });
-
-    rows.push({
-        label: l10n.t('Container host'),
-        value: executionTargetValues()[getDockerExecutionTargetKey(readiness.executionTarget)],
-        note: l10n.t('The container is created here, so localhost refers to this environment.'),
-    });
-
-    rows.push({
-        label: l10n.t('Check run'),
-        value: formatLastChecked(readiness.checkedAtMs, now),
-        note: readiness.diagnosticFingerprint
-            ? l10n.t('Diagnostic reference {0}. Quote it when reporting this.', readiness.diagnosticFingerprint)
-            : undefined,
-    });
-
-    return rows;
-}
-
 function emptyStageStatus(): Record<ProvisionStage, StageStatus> {
     return {
         checking: 'pending',
@@ -805,6 +551,18 @@ function emptyStageStatus(): Record<ProvisionStage, StageStatus> {
         waiting: 'pending',
         done: 'pending',
         error: 'pending',
+    };
+}
+
+function emptyStageFacts(): Record<ProvisionStage, StageFacts | undefined> {
+    return {
+        checking: undefined,
+        pulling: undefined,
+        creating: undefined,
+        starting: undefined,
+        waiting: undefined,
+        done: undefined,
+        error: undefined,
     };
 }
 
@@ -864,6 +622,32 @@ export const LocalQuickStart = (): JSX.Element => {
      */
     const [dataChoice, setDataChoice] = useState<'reuse' | 'fresh'>('reuse');
     const [stageStatus, setStageStatus] = useState<Record<ProvisionStage, StageStatus>>(emptyStageStatus);
+    const [facts, setFacts] = useState<Record<ProvisionStage, StageFacts | undefined>>(emptyStageFacts);
+    const [expandedStages, setExpandedStages] = useState<ReadonlySet<ProvisionStage>>(() => new Set());
+    const handleExpandedChange = useCallback(
+        (stage: ProvisionStage, expanded: boolean): void => {
+            if (expanded && !expandedStages.has(stage) && stage !== 'done' && stage !== 'error') {
+                void trpcClient.localQuickStart.reportDetailsOpened.mutate({ stage }).catch((error: unknown) => {
+                    void trpcClient.common.reportError
+                        .mutate({
+                            message: error instanceof Error ? error.message : String(error),
+                            stack: error instanceof Error ? (error.stack ?? '') : '',
+                        })
+                        .catch(() => undefined);
+                });
+            }
+            setExpandedStages((previous) => {
+                const next = new Set(previous);
+                if (expanded) {
+                    next.add(stage);
+                } else {
+                    next.delete(stage);
+                }
+                return next;
+            });
+        },
+        [expandedStages, trpcClient],
+    );
     const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
     const [successMessage, setSuccessMessage] = useState<string | undefined>(undefined);
     const [elapsedMs, setElapsedMs] = useState(0);
@@ -1169,10 +953,14 @@ export const LocalQuickStart = (): JSX.Element => {
             // Supersede any prior stream: its in-flight callbacks will see a newer generation and no-op.
             const myGeneration = ++streamGenerationRef.current;
 
+            setExpandedStages(new Set());
             // "Wait longer" resumes at the waiting stage, so keep the earlier stages' done state
             // rather than resetting the whole list to pending.
             if (options?.resetStages !== false) {
                 setStageStatus(emptyStageStatus());
+                setFacts(emptyStageFacts());
+            } else {
+                setFacts((previous) => ({ ...previous, waiting: undefined }));
             }
             setErrorMessage(undefined);
             setSuccessMessage(undefined);
@@ -1190,10 +978,26 @@ export const LocalQuickStart = (): JSX.Element => {
             const subscription = subscribe({
                 onData(event: StageEvent) {
                     if (myGeneration !== streamGenerationRef.current) return; // superseded/cancelled stream
+                    if (event.facts || event.status !== 'active') {
+                        const stageFacts = event.facts;
+                        setFacts((previous) => {
+                            const next = stageFacts ? { ...previous, [stageFacts.kind]: stageFacts } : previous;
+                            if (
+                                event.status === 'active' ||
+                                next.pulling?.kind !== 'pulling' ||
+                                next.pulling.progress === undefined
+                            ) {
+                                return next;
+                            }
+                            return { ...next, pulling: { ...next.pulling, progress: undefined } };
+                        });
+                    }
                     if (event.stage === 'done' && event.status === 'done') {
                         settled = true;
                         stopTimer();
-                        setStageStatus((prev) => ({ ...prev, [event.stage]: event.status }));
+                        setStageStatus((prev) =>
+                            prev[event.stage] === event.status ? prev : { ...prev, [event.stage]: event.status },
+                        );
                         setSuccessMessage(event.message && formatQuickStartMessage(event.message));
                         setPhase('success');
                     } else if (event.status === 'error') {
@@ -1203,8 +1007,9 @@ export const LocalQuickStart = (): JSX.Element => {
                         // icon + "failed" status instead of a stuck spinner / "in progress" that would
                         // contradict the failure message for sighted and screen-reader users alike.
                         setStageStatus((prev) => {
-                            const next = { ...prev, [event.stage]: event.status };
                             const active = PROVISION_STAGES.find((s) => prev[s] === 'active');
+                            if (prev[event.stage] === event.status && !active) return prev;
+                            const next = { ...prev, [event.stage]: event.status };
                             if (active) next[active] = 'error';
                             return next;
                         });
@@ -1227,7 +1032,9 @@ export const LocalQuickStart = (): JSX.Element => {
                         }
                         setPhase('failed');
                     } else {
-                        setStageStatus((prev) => ({ ...prev, [event.stage]: event.status }));
+                        setStageStatus((prev) =>
+                            prev[event.stage] === event.status ? prev : { ...prev, [event.stage]: event.status },
+                        );
                         if (
                             event.stage === 'checking' &&
                             event.status === 'done' &&
@@ -1243,6 +1050,11 @@ export const LocalQuickStart = (): JSX.Element => {
                     if (myGeneration !== streamGenerationRef.current) return; // superseded/cancelled stream
                     settled = true;
                     stopTimer();
+                    setFacts((previous) =>
+                        previous.pulling?.kind === 'pulling' && previous.pulling.progress !== undefined
+                            ? { ...previous, pulling: { ...previous.pulling, progress: undefined } }
+                            : previous,
+                    );
                     setErrorMessage(error instanceof Error ? error.message : String(error));
                     setTimedOut(false);
                     setPhase('failed');
@@ -1365,6 +1177,12 @@ export const LocalQuickStart = (): JSX.Element => {
     const handleCheckDockerAgain = useCallback((): void => {
         setDockerActionMessage(undefined);
         setCheckingDockerAgain(true);
+        setFacts((previous) => ({ ...previous, checking: undefined }));
+        setExpandedStages((previous) => {
+            const next = new Set(previous);
+            next.delete('checking');
+            return next;
+        });
         // The stage's own status carries the in-flight signal, so its icon spins and a screen
         // reader stops hearing "failed" while a re-check is actively running.
         setStageStatus((prev) => ({ ...prev, checking: 'active' }));
@@ -1398,6 +1216,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     setTimedOut(false);
                     setErrorMessage(undefined);
                     setStageStatus(emptyStageStatus());
+                    setFacts(emptyStageFacts());
                     setPhase((current) => (current === 'failed' ? 'configure' : current));
                 }
             },
@@ -1516,6 +1335,7 @@ export const LocalQuickStart = (): JSX.Element => {
     // return to the settings page. If the discard no-ops because a just-cancelled resume is still
     // unwinding, keep the timed-out actions (the container is intact) so nothing is stranded.
     const handleStartOver = useCallback((): void => {
+        setExpandedStages(new Set());
         subscriptionRef.current?.unsubscribe();
         subscriptionRef.current = null;
         streamGenerationRef.current++; // ignore any trailing callbacks from the cancelled stream
@@ -1528,6 +1348,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     setTimedOut(false);
                     setErrorMessage(undefined);
                     setStageStatus(emptyStageStatus());
+                    setFacts(emptyStageFacts());
                     navigate('configure', 'startOver');
                 } else {
                     setTimedOut(true);
@@ -1549,6 +1370,11 @@ export const LocalQuickStart = (): JSX.Element => {
         subscriptionRef.current = null;
         streamGenerationRef.current++; // ignore any trailing callbacks from the cancelled stream
         stopTimer();
+        setFacts((previous) =>
+            previous.pulling?.kind === 'pulling' && previous.pulling.progress !== undefined
+                ? { ...previous, pulling: { ...previous.pulling, progress: undefined } }
+                : previous,
+        );
         if (isWaitLongerRef.current) {
             // Cancelling a "Wait longer" resume leaves the container running, so return to the
             // timed-out actions (Wait longer / Start over) rather than the settings page.
@@ -1645,7 +1471,6 @@ export const LocalQuickStart = (): JSX.Element => {
         lastDockerProblemRef.current = { problem: dockerProblem, presentation: dockerPresentation };
     }
     const shownDocker = lastDockerProblemRef.current;
-    const dockerPresentationState = startingDocker ? 'starting' : (shownDocker?.presentation.state ?? 'notAccessible');
     const recoveryCommand = shownDocker?.presentation.showCopyCommand ? shownDocker.problem.recoveryCommand : undefined;
     // A Docker-only re-check cleared the blocker. When that blocker was the check stage itself,
     // nothing has run yet, so the run can simply go ahead; a later stage's failure still stands.
@@ -1671,12 +1496,32 @@ export const LocalQuickStart = (): JSX.Element => {
 
     const stageDetailFor = (stage: ProvisionStage): string | undefined => {
         if (stage === 'checking') {
-            return checkStageDetail;
+            if (checkStageDetail) return checkStageDetail;
         }
+        const status = stageStatus[stage];
+        const summary =
+            status === 'active' || status === 'done' || status === 'error'
+                ? buildStageSummary(facts[stage], status)
+                : undefined;
+        if (summary) return summary;
         if (stage === failedStage && stageDockerFailure) {
             return formatDockerDetail(getDockerReadinessPresentation(stageDockerFailure).detail);
         }
         return undefined;
+    };
+
+    const stageFactsFor = (stage: ProvisionStage): ReturnType<typeof buildDockerDetailRows> | undefined => {
+        const rows = buildStageDetailRows(facts[stage]).filter(
+            (row) => stageStatus[stage] !== 'error' || row.action !== 'showOutput',
+        );
+        if (stage === 'checking') {
+            if (checkReadiness && (stageStatus.checking === 'done') === (checkReadiness.outcome === 'ready')) {
+                rows.unshift(...buildDockerDetailRows(checkReadiness));
+            }
+        } else if (stage === failedStage && stageDockerFailure) {
+            rows.unshift(...buildDockerDetailRows(stageDockerFailure));
+        }
+        return rows.length ? rows : undefined;
     };
 
     // Human-readable message for the current in-flight stage, mirrored into a polite live
@@ -2166,41 +2011,6 @@ export const LocalQuickStart = (): JSX.Element => {
                             </div>
                         )}
                     </MessageBlock>
-                    <Accordion collapsible>
-                        <AccordionItem value="docker-details">
-                            <AccordionHeader className={styles.dockerAccordionHeader}>
-                                <Text weight="semibold" className={styles.accordionHeaderBrand}>
-                                    {l10n.t('What the Docker check found')}
-                                </Text>
-                            </AccordionHeader>
-                            <AccordionPanel className={styles.dockerAccordionPanel}>
-                                <Text size={200} className={styles.dockerDetailsIntro}>
-                                    {l10n.t(
-                                        'Everything the readiness check established, in the order it was established.',
-                                    )}
-                                </Text>
-                                <dl className={styles.dockerDetails}>
-                                    {buildDockerDetailRows(
-                                        shownDocker.problem,
-                                        dockerPresentationState,
-                                        relativeTimeNow,
-                                    ).map((row) => (
-                                        <Fragment key={row.label}>
-                                            <dt className={styles.dockerDetailLabel}>{row.label}</dt>
-                                            <dd className={styles.dockerDetailValue}>
-                                                <span>{row.value}</span>
-                                                {row.note && (
-                                                    <Text size={200} className={styles.dockerDetailNote}>
-                                                        {row.note}
-                                                    </Text>
-                                                )}
-                                            </dd>
-                                        </Fragment>
-                                    ))}
-                                </dl>
-                            </AccordionPanel>
-                        </AccordionItem>
-                    </Accordion>
                 </>
             )}
         </div>
@@ -2232,7 +2042,18 @@ export const LocalQuickStart = (): JSX.Element => {
         ) {
             return undefined;
         }
-        return <Link onClick={handleCheckDockerAgain}>{l10n.t('Check Docker again')}</Link>;
+        return (
+            <Link
+                onClick={(event) => {
+                    if (event.currentTarget.ownerDocument.activeElement === event.currentTarget) {
+                        primaryButtonRef.current?.focus();
+                    }
+                    handleCheckDockerAgain();
+                }}
+            >
+                {l10n.t('Check Docker again')}
+            </Link>
+        );
     };
 
     // When the evidence was gathered belongs next to the evidence, not at the foot of the block.
@@ -2251,6 +2072,18 @@ export const LocalQuickStart = (): JSX.Element => {
         if (!text && !action) {
             return undefined;
         }
+        const stageFacts = facts[stage];
+        if (stage === 'pulling' && stageStatus.pulling === 'active') {
+            const activity =
+                stageFacts?.kind === 'pulling' && stageFacts.progress?.trim()
+                    ? l10n.t('Engine output: {0}', stageFacts.progress)
+                    : text;
+            return (
+                <span className={styles.pullActivity} title={activity}>
+                    {activity}
+                </span>
+            );
+        }
         return (
             <>
                 {text}
@@ -2262,14 +2095,25 @@ export const LocalQuickStart = (): JSX.Element => {
 
     const setup = (
         <>
-            <StatusList ariaLabel={l10n.t('Setup progress')} statusLabels={stageStatusLabels}>
+            <StatusList ariaLabel={l10n.t('Setup progress')} statusLabels={stageStatusLabels} highlightRowsOnHover>
                 {PROVISION_STAGES.map((stage) => (
-                    <StatusListItem
+                    <SetupStageRow
                         key={stage}
+                        stage={stage}
                         label={stageLabelsMap[stage]}
                         status={stageStatus[stage]}
                         detail={stageDetailNode(stage)}
-                        reserveDetailSpace={stage === 'checking'}
+                        facts={stageFactsFor(stage)}
+                        failureTitle={
+                            stage === failedStage && dockerProblem
+                                ? dockerFailureLabelMap[dockerProblem.failureKind ?? 'unknown']
+                                : undefined
+                        }
+                        expanded={expandedStages.has(stage)}
+                        onExpandedChange={handleExpandedChange}
+                        focusFallback={primaryButtonRef}
+                        mutedClassName={styles.muted}
+                        onShowOutput={handleViewOutput}
                     />
                 ))}
             </StatusList>
@@ -2319,19 +2163,32 @@ export const LocalQuickStart = (): JSX.Element => {
 
     const done = (
         <>
-            <StatusList ariaLabel={l10n.t('Completed setup steps')} statusLabels={stageStatusLabels}>
+            <StatusList
+                ariaLabel={l10n.t('Completed setup steps')}
+                statusLabels={stageStatusLabels}
+                highlightRowsOnHover
+            >
                 {PROVISION_STAGES.map((stage) => (
-                    <StatusListItem
+                    <SetupStageRow
                         key={stage}
+                        stage={stage}
                         label={stageLabelsMap[stage]}
                         status="done"
-                        detail={stage === 'checking' ? checkStageDetail : undefined}
-                        reserveDetailSpace={stage === 'checking'}
+                        detail={stageDetailFor(stage)}
+                        facts={stageFactsFor(stage)}
+                        expanded={expandedStages.has(stage)}
+                        onExpandedChange={handleExpandedChange}
+                        focusFallback={primaryButtonRef}
+                        mutedClassName={styles.muted}
+                        onShowOutput={handleViewOutput}
                     />
                 ))}
             </StatusList>
             <MessageBlock intent="success" title={l10n.t('All set')}>
                 {l10n.t('The instance is ready in the Connections view as “DocumentDB Local”.')}
+                {facts.waiting?.kind === 'waiting' && facts.waiting.sampleData === 'failed' && (
+                    <> {l10n.t('Sample data was not loaded. View the setup log for the reason.')}</>
+                )}
             </MessageBlock>
             <div className={styles.nextSteps}>
                 <Text size={300} weight="regular">
@@ -2567,6 +2424,7 @@ export const LocalQuickStart = (): JSX.Element => {
                             ref={primaryButtonRef}
                             icon={primaryIcon}
                             disabled={primaryDisabled}
+                            disabledFocusable={checkingDockerAgain}
                             onClick={onPrimary}
                         >
                             {primaryLabel}

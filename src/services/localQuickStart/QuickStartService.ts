@@ -42,10 +42,11 @@ import {
     hasExited,
     type IContainerRuntime,
     isRunning,
+    type RuntimeImageFacts,
     SETUP_CLEANUP_TIMEOUT_MS,
 } from './ContainerRuntime';
 import { DockerCommandError, DockerCommandTimeoutError } from './dockerCommand';
-import { maskSecrets } from './outputMasking';
+import { maskSecrets, sanitizeOutput } from './outputMasking';
 import {
     composeConnectionString,
     generateCredentials,
@@ -80,6 +81,7 @@ import {
     type OpenLocalQuickStartOptions,
     type PortAvailability,
     type ProvisionStage,
+    type PullingStageFacts,
     QUICK_START_ALIAS_LABEL_KEY,
     QUICK_START_DATA_PATH,
     QUICK_START_IMAGE,
@@ -92,7 +94,9 @@ import {
     type QuickStartStatus,
     resolveQuickStartImage,
     type StageEvent,
+    type StageFacts,
     volumeName,
+    type WaitingStageFacts,
 } from './quickStartTypes';
 
 /** Stable cache key for CredentialCache / ClustersClient (the default instance). Ephemeral. */
@@ -196,6 +200,7 @@ const READINESS_TIMEOUT_MS = 180_000;
 const EXITED_CONTAINER_LOG_LINES = 20;
 /** Per-attempt server-selection timeout so a Cancel is observed within ~3s. */
 const PROBE_SERVER_SELECTION_TIMEOUT_MS = 3_000;
+const READINESS_HELLO_TIMEOUT_MS = 2_000;
 /**
  * The image ships a native init script + sample-data directory (see
  * `Dockerfile_documentdb_local`). We run that script ONCE via `docker exec` after
@@ -259,7 +264,11 @@ function meterQuickStartSilentCatch(location: string): undefined {
  * than tearing everything down like a pull/create/start failure.
  */
 class ReadinessTimeoutError extends Error {
-    constructor(message: string) {
+    constructor(
+        message: string,
+        readonly attempts: number,
+        readonly lastError: unknown,
+    ) {
         super(message);
         this.name = 'ReadinessTimeoutError';
     }
@@ -271,10 +280,40 @@ class ReadinessTimeoutError extends Error {
  * because it can quote a custom username and error messages reach telemetry.
  */
 class ReadinessFailedError extends Error {
-    constructor(readonly reason: QuickStartMessage) {
+    constructor(
+        readonly reason: QuickStartMessage,
+        readonly attempts: number,
+        readonly lastError: unknown,
+    ) {
         super(reason.key);
         this.name = 'ReadinessFailedError';
     }
+}
+
+interface ReadinessResult {
+    readonly attempts: number;
+    readonly documentdbVersions?: readonly string[];
+    readonly maxWireVersion?: number;
+}
+
+function readinessFailureFacts(
+    error: ReadinessTimeoutError | ReadinessFailedError,
+    port: number,
+    secrets: readonly string[],
+): WaitingStageFacts {
+    const masked = (value: string): string =>
+        maskSecrets(value, secrets)
+            .replace(/mongodb(?:\+srv)?:\/\/[^\s]+/gi, '(hidden)')
+            .slice(0, 1000);
+    const reason = error instanceof ReadinessFailedError ? error.reason : undefined;
+    return {
+        kind: 'waiting',
+        port,
+        attempts: error.attempts,
+        lastProbeError: error.lastError === undefined ? undefined : masked(errMessage(error.lastError)),
+        exitCode: reason?.exitCode,
+        lastLogLine: reason?.key === 'containerExited' && reason.detail ? masked(reason.detail) : undefined,
+    };
 }
 
 /**
@@ -778,6 +817,7 @@ export class QuickStartServiceImpl {
             (reusing || (dataRemoved && !wantsCustomCredentials) ? stored : undefined) ??
             resolveProvisionCredentials(options);
         const secrets: string[] = secretVariants(credentials.password);
+        const masked = (value: string): string => maskSecrets(value, secrets);
 
         // Advanced overrides (P1-4). When reusing an existing instance we keep its data volume,
         // so custom credentials AND a custom image tag are intentionally IGNORED: the stored
@@ -796,7 +836,11 @@ export class QuickStartServiceImpl {
         const chosenPort = explicitPort ?? QUICK_START_PORT;
         const sampleDataRequested = options?.loadSampleData !== false;
         const cts = new vscode.CancellationTokenSource();
-        const onAbort = (): void => cts.cancel();
+        let wakePullOnAbort: (() => void) | undefined;
+        const onAbort = (): void => {
+            cts.cancel();
+            wakePullOnAbort?.();
+        };
         signal.addEventListener('abort', onAbort, { once: true });
         if (signal.aborted) {
             cts.cancel();
@@ -830,6 +874,16 @@ export class QuickStartServiceImpl {
         // (provisioning/lifecycleBusy) are already clean — otherwise a fast click could hit the
         // "already in progress" guard (opus-4.7).
         let terminalEvent: StageEvent | undefined;
+        let facts: StageFacts | undefined;
+        const pullingFacts = (image: RuntimeImageFacts | 'absent' | undefined): PullingStageFacts => ({
+            kind: 'pulling',
+            imageRef: masked(imageRef),
+            imageOrigin: reusing ? 'reused' : usedCustomImage ? 'custom' : 'default',
+            imageId: image && image !== 'absent' ? masked(image.id) : undefined,
+            digest: image && image !== 'absent' && image.digest ? masked(image.digest) : undefined,
+            imageVersion: image && image !== 'absent' && image.version ? masked(image.version) : undefined,
+            createdAtMs: image && image !== 'absent' ? image.createdAtMs : undefined,
+        });
         const provisionStartedAt = Date.now();
 
         try {
@@ -877,24 +931,30 @@ export class QuickStartServiceImpl {
                     return;
                 }
             }
+            let removedContainerId: string | undefined;
             if (existing) {
                 channel.appendLine(`Removing existing Quick Start container ${existing.id} for a clean run…`);
                 await this.runtime
                     .removeContainer(existing.id)
+                    .then(() => {
+                        removedContainerId = masked(existing.id);
+                    })
                     .catch(() => meterQuickStartSilentCatch('provision_removeExistingContainer'));
             }
 
             // The host port is ALWAYS explicit (review L3, "no magic after execute"): the Configure
             // step suggests a free port, validates it while the user can still react, and sends it.
             // Setup never relocates it — a conflict here is a hard, explained error.
-            if (!(await this.runtime.isPortFree(chosenPort))) {
+            const portFree = await this.runtime.isPortFree(chosenPort);
+            facts = { kind: 'checking', port: chosenPort, portFree, removedContainerId };
+            if (!portFree) {
                 const message: QuickStartMessage = { key: 'portInUse', port: chosenPort };
                 this.setStatus(alias, InstanceState.Error, undefined, message);
-                yield stageEvent('checking', 'error', message);
+                yield { ...stageEvent('checking', 'error', message), facts };
                 return;
             }
             this.throwIfAborted(signal);
-            yield stageEvent('checking', 'done');
+            yield { ...stageEvent('checking', 'done'), facts };
 
             // Take the durable provisioning lease BEFORE the pull (H3): a host killed anywhere from
             // here to `finalizeReadyInstance` then reconciles as "Provisioning…" (fresh lease) or is
@@ -907,22 +967,104 @@ export class QuickStartServiceImpl {
             }
 
             // --- pulling ---
-            yield stageEvent('pulling', 'active');
+            facts = pullingFacts(undefined);
+            yield { ...stageEvent('pulling', 'active'), facts };
             activeDockerStage = 'pulling';
-            await this.runProvisionStage(
+            const imageBefore = await this.runtime.inspectImage(imageRef, cts.token);
+            facts = pullingFacts(imageBefore);
+            const activePullFacts = facts;
+            // Keep only the latest line, waking on output or settlement rather than polling a quiet pull.
+            let latestProgress: string | undefined;
+            let lastProgressAt = -Infinity;
+            let pullSettled = false;
+            let wakePull: (() => void) | undefined;
+            let progressTimer: ReturnType<typeof setTimeout> | undefined;
+            const wake = (): void => {
+                clearTimeout(progressTimer);
+                progressTimer = undefined;
+                wakePull?.();
+                wakePull = undefined;
+            };
+            const onProgress = (line: string): void => {
+                if (pullSettled || cts.token.isCancellationRequested) {
+                    return;
+                }
+                const sanitized = sanitizeOutput(line, secrets);
+                const progress = sanitized
+                    .slice(sanitized.lastIndexOf('\r') + 1)
+                    .replace(/\p{Cc}/gu, '')
+                    .trim()
+                    .slice(0, 160);
+                if (progress) {
+                    latestProgress = progress;
+                    if (progressTimer === undefined) {
+                        wake();
+                    }
+                }
+            };
+            const pullPromise = this.runProvisionStage(
                 'pulling',
                 provisionCorrelationId,
                 async () => {
-                    await this.runtime.pullImage(imageRef, cts.token);
+                    await this.runtime.pullImage(imageRef, cts.token, onProgress);
                     this.throwIfAborted(signal);
                 },
                 [imageRef],
             );
+            const settle = (): void => {
+                pullSettled = true;
+                wake();
+            };
+            // Observe rejection immediately, including while the generator is suspended at a yield.
+            void pullPromise.then(settle, settle);
+            wakePullOnAbort = wake;
+            try {
+                while (!pullSettled && !cts.token.isCancellationRequested) {
+                    if (latestProgress !== undefined && Date.now() - lastProgressAt >= 250) {
+                        const progress = latestProgress;
+                        latestProgress = undefined;
+                        lastProgressAt = Date.now();
+                        yield { ...stageEvent('pulling', 'active'), facts: { ...activePullFacts, progress } };
+                        continue;
+                    }
+                    await new Promise<void>((resolve) => {
+                        wakePull = resolve;
+                        if (latestProgress !== undefined) {
+                            progressTimer = setTimeout(wake, Math.max(0, 250 - (Date.now() - lastProgressAt)));
+                        }
+                    });
+                }
+                await pullPromise;
+            } finally {
+                wakePullOnAbort = undefined;
+                wake();
+                latestProgress = undefined;
+                if (!pullSettled) {
+                    cts.cancel();
+                }
+            }
+            const imageAfter = await this.runtime.inspectImage(imageRef, cts.token);
+            const result =
+                imageBefore !== undefined && imageAfter && imageAfter !== 'absent'
+                    ? imageBefore === 'absent'
+                        ? 'downloaded'
+                        : imageBefore.id === imageAfter.id
+                          ? 'upToDate'
+                          : 'updated'
+                    : undefined;
+            facts = {
+                ...pullingFacts(imageAfter),
+                result,
+                ...(result === 'updated' && imageBefore && imageBefore !== 'absent'
+                    ? { previousImageId: masked(imageBefore.id) }
+                    : {}),
+            };
             activeDockerStage = undefined;
-            yield stageEvent('pulling', 'done');
+            yield { ...stageEvent('pulling', 'done'), facts };
 
             // --- creating (docker run -d creates and starts) ---
             yield stageEvent('creating', 'active');
+            facts = undefined;
             if (leaseHeld) {
                 await this.renewProvisioningLease(alias, operationId, chosenPort);
             }
@@ -944,6 +1086,16 @@ export class QuickStartServiceImpl {
             // Retained credentials don't prove the volume survived (e.g. Start over after a timeout
             // removed it), and only data that is really kept should skip the sample seed.
             reusesVolume = reusing && volumeOnDisk;
+            facts = {
+                kind: 'creating',
+                containerName: masked(containerName(alias)),
+                hostPort: chosenPort,
+                containerPort: QUICK_START_PORT,
+                volumeName: masked(volumeName(alias)),
+                dataPath: masked(QUICK_START_DATA_PATH),
+                volume: reusesVolume ? 'reused' : undefined,
+                username: masked(credentials.username),
+            };
             this.throwIfAborted(signal);
             // Drop the old data volume only now that the port is checked and the image is local, so a
             // failed check, pull or Cancel leaves it intact (#946). Fresh credentials need a clean
@@ -1029,15 +1181,23 @@ export class QuickStartServiceImpl {
             );
             activeDockerStage = undefined;
             containerCreated = true;
+            let reportedContainerId = containerId;
             if (!containerId) {
                 const item = await this.runtime.inspectContainer(containerName(alias));
+                reportedContainerId = item?.id;
                 containerId = item?.id ?? containerName(alias);
             }
             const provisionedContainerId = containerId;
-            yield stageEvent('creating', 'done');
+            facts = {
+                ...facts,
+                volume: reusesVolume ? 'reused' : !reusing && volumeOnDisk ? 'replaced' : 'new',
+                containerId: reportedContainerId ? masked(reportedContainerId) : undefined,
+            };
+            yield { ...stageEvent('creating', 'done'), facts };
 
             // --- starting (confirm running, read bound port, follow logs) ---
             yield stageEvent('starting', 'active');
+            facts = { kind: 'starting', boundPort: chosenPort, boundPortReported: false };
             const inspected = await this.runProvisionStage('starting', provisionCorrelationId, async () => {
                 const result = await this.runtime.inspectContainer(provisionedContainerId);
                 this.throwIfAborted(signal);
@@ -1046,13 +1206,23 @@ export class QuickStartServiceImpl {
             // Fall back to the port we actually requested (not the canonical default) if the
             // inspect can't report the binding, so a custom port stays correct in the success
             // message + stored connection string.
-            const boundPort = (inspected && getBoundHostPort(inspected)) || chosenPort;
+            const reportedPort = inspected && getBoundHostPort(inspected);
+            const boundPort = reportedPort || chosenPort;
+            const startedAtMs = inspected?.startedAt?.getTime();
+            facts = {
+                kind: 'starting',
+                running: inspected ? isRunning(inspected) : undefined,
+                startedAtMs: startedAtMs !== undefined && Number.isFinite(startedAtMs) ? startedAtMs : undefined,
+                boundPort,
+                boundPortReported: !!reportedPort,
+            };
             // Stream container logs to the channel during the wait (compensates for -dt detach, D2).
             void this.runtime.followLogs(provisionedContainerId, secrets, cts.token);
-            yield stageEvent('starting', 'done');
+            yield { ...stageEvent('starting', 'done'), facts };
 
             // --- waiting (wire-protocol readiness, D7) ---
             yield stageEvent('waiting', 'active');
+            facts = undefined;
             const connectionString = composeConnectionString(credentials.username, credentials.password, boundPort);
             // Retain everything a "Wait longer" resume needs BEFORE probing, so a readiness
             // timeout can keep this running container and finish adoption later (§9.1).
@@ -1078,14 +1248,22 @@ export class QuickStartServiceImpl {
                 await this.renewProvisioningLease(alias, operationId, boundPort);
             }
             await this.runProvisionStage('waiting', provisionCorrelationId, async () => {
-                await this.waitForReadiness(connectionString, provisionedContainerId, secrets, signal, cts.token);
+                const readiness = await this.waitForReadiness(
+                    connectionString,
+                    provisionedContainerId,
+                    secrets,
+                    signal,
+                    cts.token,
+                );
+                facts = { kind: 'waiting', port: boundPort, ...readiness };
                 this.throwIfAborted(signal);
 
                 // --- success (seed sample data, store creds, adopt as Running) ---
-                await this.finalizeReadyInstance(pending, cts.token, signal);
+                const sampleData = await this.finalizeReadyInstance(pending, cts.token, signal);
+                facts = { ...facts, displayName: pending.displayName, sampleData };
             });
             success = true;
-            yield stageEvent('waiting', 'done');
+            yield { ...stageEvent('waiting', 'done'), facts };
             yield stageEvent('done', 'done', { key: 'instanceRunning', port: boundPort }, boundPort);
         } catch (error) {
             const aborted = signal.aborted;
@@ -1094,6 +1272,13 @@ export class QuickStartServiceImpl {
                 !aborted && activeDockerStage ? await this.getProvisioningDockerReadiness() : undefined;
             provisioningDockerFailureKind = dockerReadiness?.failureKind;
             const detail = errMessage(error);
+            if (error instanceof ReadinessTimeoutError || error instanceof ReadinessFailedError) {
+                facts = readinessFailureFacts(
+                    error,
+                    this.stateFor(alias).pendingReadiness?.boundPort ?? chosenPort,
+                    secrets,
+                );
+            }
             let message: QuickStartMessage = aborted ? { key: 'setupCancelled' } : { key: 'unexpectedFailure', detail };
             if (!aborted && error instanceof DockerNotReadyError) {
                 this.stateFor(alias).pendingReadiness = undefined;
@@ -1139,6 +1324,9 @@ export class QuickStartServiceImpl {
                 // driven by this event can't race the still-set `provisioning` guard either
                 // (opus-4.7). On unsubscribe/return() the post-finally yield is simply skipped.
                 terminalEvent = stageEvent('error', 'error', message, undefined, undefined, dockerReadiness);
+            }
+            if (terminalEvent && facts) {
+                terminalEvent = { ...terminalEvent, facts };
             }
         } finally {
             // Stop the followLogs stream (started with cts.token). Disposing alone
@@ -1274,13 +1462,17 @@ export class QuickStartServiceImpl {
         pending: PendingReadiness,
         token: vscode.CancellationToken,
         signal: AbortSignal,
-    ): Promise<void> {
+    ): Promise<NonNullable<WaitingStageFacts['sampleData']>> {
         // Seed the image's built-in sample data ONCE — only when requested (Advanced "Load
         // sample data", default on) and only into a fresh volume. A reused volume already had its
         // first setup; seeding it again would restore documents the user deleted (#946). Best-effort.
-        if (pending.sampleDataRequested && !pending.reusing) {
-            await this.seedSampleData(pending.containerId, secretVariants(pending.password), token);
-        }
+        const sampleData = pending.reusing
+            ? 'keptExisting'
+            : !pending.sampleDataRequested
+              ? 'notRequested'
+              : (await this.seedSampleData(pending.containerId, secretVariants(pending.password), token))
+                ? 'loaded'
+                : 'failed';
         this.throwIfAborted(signal);
         // One write covers the credentials, the image the volume was created with (so a recreate
         // after a window reload keeps it) and the ready phase the tree and reconcile enumerate.
@@ -1317,6 +1509,7 @@ export class QuickStartServiceImpl {
         );
         this.stateFor(pending.alias).pendingReadiness = undefined;
         this.stateFor(pending.alias).credentialsRestored = false;
+        return sampleData;
     }
 
     /**
@@ -1351,6 +1544,7 @@ export class QuickStartServiceImpl {
         let finalized = false;
         let terminalEvent: StageEvent | undefined;
         let resumeResult: 'success' | 'timeout' | 'cancelled' | 'error' = 'error';
+        let facts: WaitingStageFacts | undefined;
         try {
             this.setStatus(alias, InstanceState.Provisioning, undefined, undefined);
             yield stageEvent('waiting', 'active');
@@ -1358,19 +1552,21 @@ export class QuickStartServiceImpl {
             // startup rather than only the stale first-attempt output (opus-4.8).
             void this.runtime.followLogs(pending.containerId, secretVariants(pending.password), cts.token);
             await this.runProvisionStage('waiting', pending.provisionCorrelationId, async () => {
-                await this.waitForReadiness(
+                const readiness = await this.waitForReadiness(
                     pending.connectionString,
                     pending.containerId,
                     secretVariants(pending.password),
                     signal,
                     cts.token,
                 );
+                facts = { kind: 'waiting', port: pending.boundPort, ...readiness };
                 this.throwIfAborted(signal);
-                await this.finalizeReadyInstance(pending, cts.token, signal);
+                const sampleData = await this.finalizeReadyInstance(pending, cts.token, signal);
+                facts = { ...facts, displayName: pending.displayName, sampleData };
             });
             finalized = true;
             resumeResult = 'success';
-            yield stageEvent('waiting', 'done');
+            yield { ...stageEvent('waiting', 'done'), facts };
             terminalEvent = stageEvent(
                 'done',
                 'done',
@@ -1385,6 +1581,9 @@ export class QuickStartServiceImpl {
             // (transport-impossible) case of a throw after adoption already succeeded.
             const aborted = signal.aborted;
             const isTimeout = error instanceof ReadinessTimeoutError;
+            if (isTimeout || error instanceof ReadinessFailedError) {
+                facts = readinessFailureFacts(error, pending.boundPort, secretVariants(pending.password));
+            }
             const timedOut = !finalized && (isTimeout || aborted);
             resumeResult = aborted ? 'cancelled' : isTimeout ? 'timeout' : 'error';
             // A repeat timeout is the same situation as the first one, so it earns the same
@@ -1406,7 +1605,7 @@ export class QuickStartServiceImpl {
             if (!timedOut) {
                 this.stateFor(alias).pendingReadiness = undefined;
             }
-            terminalEvent = stageEvent('waiting', 'error', message, undefined, timedOut);
+            terminalEvent = { ...stageEvent('waiting', 'error', message, undefined, timedOut), facts };
         } finally {
             signal.removeEventListener('abort', onAbort);
             // Stop the followLogs stream (started with cts.token) before disposing.
@@ -1530,7 +1729,7 @@ export class QuickStartServiceImpl {
         secrets: ReadonlyArray<string>,
         signal: AbortSignal,
         token: vscode.CancellationToken,
-    ): Promise<void> {
+    ): Promise<ReadinessResult> {
         const deadline = Date.now() + READINESS_TIMEOUT_MS;
         let attempt = 0;
         let lastError: unknown;
@@ -1543,30 +1742,77 @@ export class QuickStartServiceImpl {
                 serverSelectionTimeoutMS: PROBE_SERVER_SELECTION_TIMEOUT_MS,
                 tlsAllowInvalidCertificates: true,
             });
+            attempt += 1;
             try {
                 await client.connect();
                 await client.db('admin').command({ ping: 1 });
-                return;
+                let helloTimer: ReturnType<typeof setTimeout> | undefined;
+                let onAbort: (() => void) | undefined;
+                try {
+                    this.throwIfAborted(signal);
+                    const hello: unknown = await Promise.race([
+                        client.db('admin').command({ hello: 1 }),
+                        new Promise<never>((_resolve, reject) => {
+                            helloTimer = setTimeout(
+                                () => reject(new Error('hello timed out')),
+                                READINESS_HELLO_TIMEOUT_MS,
+                            );
+                            onAbort = (): void => reject(new Error('aborted'));
+                            signal.addEventListener('abort', onAbort, { once: true });
+                        }),
+                    ]);
+                    if (hello && typeof hello === 'object') {
+                        const internal = 'internal' in hello ? hello.internal : undefined;
+                        const versions =
+                            internal && typeof internal === 'object' && 'documentdb_versions' in internal
+                                ? internal.documentdb_versions
+                                : undefined;
+                        const maxWireVersion = 'maxWireVersion' in hello ? hello.maxWireVersion : undefined;
+                        return {
+                            attempts: attempt,
+                            documentdbVersions:
+                                Array.isArray(versions) &&
+                                versions.every((version): version is string => typeof version === 'string')
+                                    ? versions.slice(0, 8)
+                                    : undefined,
+                            maxWireVersion:
+                                typeof maxWireVersion === 'number' &&
+                                Number.isInteger(maxWireVersion) &&
+                                maxWireVersion >= 0
+                                    ? maxWireVersion
+                                    : undefined,
+                        };
+                    }
+                } catch {
+                    meterQuickStartSilentCatch('readiness_hello');
+                } finally {
+                    clearTimeout(helloTimer);
+                    if (onAbort) signal.removeEventListener('abort', onAbort);
+                }
+                this.throwIfAborted(signal);
+                return { attempts: attempt };
             } catch (error) {
+                this.throwIfAborted(signal);
                 const rejection = describeCredentialRejection(error);
                 // SASLprep fails on this machine and cannot change; a server refusal has to repeat,
                 // in case an image starts its gateway before the user exists.
                 if (rejection && (rejection.key === 'passwordNotSupported' || rejectedLastAttempt)) {
-                    throw new ReadinessFailedError(rejection);
+                    throw new ReadinessFailedError(rejection, attempt, error);
                 }
                 rejectedLastAttempt = rejection !== undefined;
                 lastError = error;
             } finally {
-                await client.close().catch(() => undefined);
+                await client.close().catch(() => meterQuickStartSilentCatch('readiness_closeClient'));
             }
-            await this.throwIfContainerExited(containerId, secrets, token);
-            attempt += 1;
-            const backoff = Math.min(3000, 500 + attempt * 250);
+            await this.throwIfContainerExited(containerId, secrets, token, attempt, lastError);
+            const backoff = Math.min(3000, 500 + (attempt - 1) * 250);
             await delay(backoff, signal);
         }
-        await this.throwIfContainerExited(containerId, secrets, token);
+        await this.throwIfContainerExited(containerId, secrets, token, attempt, lastError);
         throw new ReadinessTimeoutError(
             `Timed out waiting for DocumentDB to accept connections.${lastError ? ` (${errMessage(lastError)})` : ''}`,
+            attempt,
+            lastError,
         );
     }
 
@@ -1574,6 +1820,8 @@ export class QuickStartServiceImpl {
         containerId: string,
         secrets: ReadonlyArray<string>,
         token: vscode.CancellationToken,
+        attempts: number,
+        lastError: unknown,
     ): Promise<void> {
         const inspected = await this.runtime.inspectContainer(containerId, { quiet: true, token });
         // An inspect that failed says nothing about the container, so keep waiting.
@@ -1586,11 +1834,15 @@ export class QuickStartServiceImpl {
                 meterQuickStartSilentCatch('readiness_readExitedContainerLogs');
                 return '';
             });
-        throw new ReadinessFailedError({
-            key: 'containerExited',
-            exitCode: getExitCode(inspected),
-            detail: lastContainerErrorLine(logs),
-        });
+        throw new ReadinessFailedError(
+            {
+                key: 'containerExited',
+                exitCode: getExitCode(inspected),
+                detail: lastContainerErrorLine(logs),
+            },
+            attempts,
+            lastError,
+        );
     }
 
     /**
@@ -1614,11 +1866,14 @@ export class QuickStartServiceImpl {
         containerId: string,
         secrets: ReadonlyArray<string>,
         token: vscode.CancellationToken,
-    ): Promise<void> {
+    ): Promise<boolean> {
         try {
             await this.runtime.execShellInContainer(containerId, buildSampleDataSeedScript(), secrets, token);
+            return true;
         } catch (error) {
+            meterQuickStartSilentCatch('seedSampleData');
             getQuickStartOutputChannel().appendLine(`Sample data load skipped: ${errMessage(error)}`);
+            return false;
         }
     }
 

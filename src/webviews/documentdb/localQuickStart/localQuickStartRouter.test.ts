@@ -15,6 +15,7 @@ const mockRefreshLiveState = vi.fn();
 const mockCanReuseExistingData = vi.fn();
 const mockSuggestPort = vi.fn();
 const mockProvision = vi.fn();
+const mockProcedureTelemetry = vi.fn();
 
 vi.mock('../../../services/survey/SurveyService', (): object => ({ recordSurveyActivity: vi.fn() }));
 
@@ -68,15 +69,20 @@ vi.mock('../../_integration/trpc', async () => {
     return {
         createCallerFactory: trpc.createCallerFactory,
         publicProcedure: trpc.publicProcedure,
-        publicProcedureWithTelemetry: trpc.publicProcedure,
+        publicProcedureWithTelemetry: trpc.publicProcedure.use(({ next }): ReturnType<typeof next> => {
+            mockProcedureTelemetry();
+            return next();
+        }),
         router: trpc.router,
     };
 });
 
 // Emits through azext-utils, which this file's minimal `vscode` stub cannot load (see above).
 const mockReportWizardStep = vi.fn();
+const mockReportWizardDetailsOpened = vi.fn();
 vi.mock('./wizardTelemetry', () => ({
     reportWizardStep: (...args: unknown[]) => mockReportWizardStep(...args) as unknown,
+    reportWizardDetailsOpened: (...args: unknown[]) => mockReportWizardDetailsOpened(...args) as unknown,
 }));
 
 import { createCallerFactory } from '../../_integration/trpc';
@@ -93,6 +99,8 @@ function wizardSession(): QuickStartWizardSession {
         stepChangeCount: 1,
         setupAttemptCount: 0,
         waitLongerCount: 0,
+        detailsOpenedStages: new Set(),
+        detailsOpenCount: 0,
         setupSucceeded: false,
     };
 }
@@ -246,6 +254,54 @@ describe('localQuickStartRouter', () => {
     });
 
     describe('wizard session', () => {
+        beforeEach(() => {
+            mockProcedureTelemetry.mockClear();
+            mockReportWizardDetailsOpened.mockClear();
+        });
+
+        it.each(['checking', 'pulling', 'creating', 'starting', 'waiting'] as const)(
+            'records a %s disclosure without procedure telemetry or an action context',
+            async (stage) => {
+                const session = wizardSession();
+                const context: RouterContext = {
+                    dbExperience: API.DocumentDB,
+                    webviewName: 'localQuickStart',
+                    closePanel: vi.fn(),
+                    wizardSession: session,
+                };
+                const caller = createCallerFactory(localQuickStartRouter)(context);
+
+                await caller.reportDetailsOpened({ stage });
+
+                expect(mockReportWizardDetailsOpened).toHaveBeenCalledExactlyOnceWith(session, stage);
+                expect(mockProcedureTelemetry).not.toHaveBeenCalled();
+            },
+        );
+
+        it.each(['unknown', 'done', 'error'])('rejects the non-disclosure stage %s', async (stage) => {
+            const context = {
+                ...createContext(),
+                wizardSession: wizardSession(),
+            };
+            const caller = createCallerFactory(localQuickStartRouter)(context);
+
+            await expect(
+                caller.reportDetailsOpened({ stage } as Parameters<typeof caller.reportDetailsOpened>[0]),
+            ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+            expect(mockReportWizardDetailsOpened).not.toHaveBeenCalled();
+            expect(mockProcedureTelemetry).not.toHaveBeenCalled();
+        });
+
+        it('ignores a disclosure when no panel session is present', async () => {
+            const caller = createCallerFactory(localQuickStartRouter)(createContext());
+
+            await expect(caller.reportDetailsOpened({ stage: 'checking' })).resolves.toBeUndefined();
+
+            expect(mockReportWizardDetailsOpened).not.toHaveBeenCalled();
+            expect(mockProcedureTelemetry).not.toHaveBeenCalled();
+        });
+
         it('reports a step change against the panel session', async () => {
             const session = wizardSession();
             const context = { ...createContext(), wizardSession: session };

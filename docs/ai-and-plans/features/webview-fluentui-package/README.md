@@ -192,12 +192,12 @@ bounded-parent embedding workarounds for both `Container` and `Wizard`.
   browser measurements. Evaluate `dom-accessibility-api` with the broader testing infrastructure
   in [#918](https://github.com/microsoft/vscode-documentdb/issues/918). Manual acceptance is complete,
   not blocked on this dependency.
-- **The details building blocks have one consumer.** `StatusListDetailsSection`, `...Facts` and
+- **The details building blocks have two consumers.** `StatusListDetailsSection`, `...Facts` and
   `...Message` (1.3.0) are parts of `StatusList`, added on the operator's request that the package own
-  how row details are shown; only Diagnose connection uses them today. The components gate's
-  condition 3 ("who is the second consumer?") was not applied to them as to a new component. Facts
-  lists also exist, separately styled, in the cluster dashboard, Local Quick Start and index details;
-  none is inside a `StatusList`, so none was migrated.
+  how row details are shown; Diagnose connection and Local Quick Start use them. The components
+  gate's condition 3 ("who is the second consumer?") was not applied to them as to a new component.
+  Facts lists also exist, separately styled, in the cluster dashboard and index details; neither is
+  inside a `StatusList`, so neither was migrated.
 - **API Extractor remains deferred.** No dependency or lockfile change was made as a side effect
   of the component extractions.
 

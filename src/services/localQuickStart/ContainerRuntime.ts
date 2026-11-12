@@ -31,6 +31,7 @@ import { type Shell, type ShellQuotedString, ShellQuoting } from '@microsoft/vsc
 import * as net from 'net';
 import { Writable } from 'stream';
 import * as vscode from 'vscode';
+import { meterSilentCatch as meterQuickStartSilentCatch } from '../../utils/accumulatingTelemetry';
 import { createContainerClient, resolveContainerCli, type ResolvedContainerCli } from './containerCli';
 import { type DockerCommandResponse, getDockerShellProvider, runDockerCommand } from './dockerCommand';
 import { CapturingTeeWritable } from './dockerProbes';
@@ -91,9 +92,12 @@ export function disposeQuickStartOutputChannel(): void {
 class MaskedChannelWritable extends Writable {
     private readonly lineBuffer: MaskingLineBuffer;
 
-    constructor(channel: vscode.OutputChannel, secrets: ReadonlyArray<string>) {
+    constructor(channel: vscode.OutputChannel, secrets: ReadonlyArray<string>, onLine?: (line: string) => void) {
         super();
-        this.lineBuffer = new MaskingLineBuffer((line) => channel.appendLine(line), secrets);
+        this.lineBuffer = new MaskingLineBuffer((line) => {
+            channel.appendLine(line);
+            onLine?.(line);
+        }, secrets);
     }
 
     public override _write(chunk: unknown, _encoding: BufferEncoding, callback: (error?: Error | null) => void): void {
@@ -122,6 +126,13 @@ export interface CreateContainerOptions {
     readonly command?: ReadonlyArray<string>;
 }
 
+export interface RuntimeImageFacts {
+    readonly id: string;
+    readonly digest?: string;
+    readonly version?: string;
+    readonly createdAtMs?: number;
+}
+
 /**
  * IO surface of the Docker-backed runtime (WI-0). Extracted so {@link QuickStartService}
  * can be unit-tested against a mock runtime with no real Docker daemon. The pure inspectors
@@ -131,7 +142,8 @@ export interface CreateContainerOptions {
 export interface IContainerRuntime {
     isDockerReady(request?: DockerReadinessRequest): Promise<DockerReadiness>;
     isPortFree(port?: number): Promise<boolean>;
-    pullImage(imageRef: string, token?: vscode.CancellationToken): Promise<void>;
+    pullImage(imageRef: string, token?: vscode.CancellationToken, onProgress?: (line: string) => void): Promise<void>;
+    inspectImage(imageRef: string, token?: vscode.CancellationToken): Promise<RuntimeImageFacts | 'absent' | undefined>;
     createAndRunContainer(
         options: CreateContainerOptions,
         secrets: ReadonlyArray<string>,
@@ -177,6 +189,7 @@ class ContainerRuntimeImpl implements IContainerRuntime {
     private client: DockerClient | PodmanClient = createContainerClient(this.cli);
     private readonly readinessService = new DockerReadinessService({
         getClient: () => this.refreshClient(),
+        getCliOnPath: () => this.cli.onPath,
         shellProvider: SHELL_PROVIDER,
         createProbeOutput: () => {
             const channel = getQuickStartOutputChannel();
@@ -193,9 +206,9 @@ class ContainerRuntimeImpl implements IContainerRuntime {
     private refreshClient(): DockerClient | PodmanClient {
         const cli = resolveContainerCli();
         if (cli.cli !== this.cli.cli || cli.executable !== this.cli.executable) {
-            this.cli = cli;
             this.client = createContainerClient(cli);
         }
+        this.cli = cli;
         return this.client;
     }
 
@@ -228,14 +241,15 @@ class ContainerRuntimeImpl implements IContainerRuntime {
         secrets: ReadonlyArray<string> = [],
         token?: vscode.CancellationToken,
         timeoutMs?: number,
+        onLine?: (line: string) => void,
     ): Promise<T | undefined> {
         const channel = getQuickStartOutputChannel();
         return runDockerCommand(command, {
             shellProvider: SHELL_PROVIDER,
             secrets,
             onCommand: (commandLine: string) => channel.appendLine('$ ' + maskSecrets(commandLine, secrets)),
-            stdOutPipe: new MaskedChannelWritable(channel, secrets),
-            stdErrPipe: new MaskedChannelWritable(channel, secrets),
+            stdOutPipe: new MaskedChannelWritable(channel, secrets, onLine),
+            stdErrPipe: new MaskedChannelWritable(channel, secrets, onLine),
             cancellationToken: token,
             timeoutMs,
         });
@@ -266,8 +280,66 @@ class ContainerRuntimeImpl implements IContainerRuntime {
         });
     }
 
-    public async pullImage(imageRef: string, token?: vscode.CancellationToken): Promise<void> {
-        await this.runCommand(this.client.pullImage({ imageRef }), [], token);
+    public async pullImage(
+        imageRef: string,
+        token?: vscode.CancellationToken,
+        onProgress?: (line: string) => void,
+    ): Promise<void> {
+        await this.runCommand(this.client.pullImage({ imageRef }), [], token, undefined, onProgress);
+    }
+
+    public async inspectImage(
+        imageRef: string,
+        token?: vscode.CancellationToken,
+    ): Promise<RuntimeImageFacts | 'absent' | undefined> {
+        const bounds = {
+            shellProvider: SHELL_PROVIDER,
+            cancellationToken: token,
+            timeoutMs: POLLED_QUERY_TIMEOUT_MS,
+        };
+        try {
+            const command = await this.client.inspectImages({ imageRefs: [imageRef] });
+            const items = await runDockerCommand(
+                { ...command, parse: (output) => command.parse(output, true) },
+                bounds,
+            );
+            const item = items?.[0];
+            if (item) {
+                const parsed: unknown = JSON.parse(item.raw);
+                const isRecord = (value: unknown): value is Record<string, unknown> =>
+                    typeof value === 'object' && value !== null && !Array.isArray(value);
+                const record: unknown = Array.isArray(parsed)
+                    ? parsed.find((value: unknown) => isRecord(value) && value.Id === item.id)
+                    : parsed;
+                const created = isRecord(record) && record.Id === item.id ? record.Created : undefined;
+                const createdAtMs = typeof created === 'string' ? Date.parse(created) : NaN;
+                const repository = imageRef.split('@')[0].replace(/:[^/:]+$/, '');
+                const digest = item.repoDigests.find((value) => value.split('@')[0] === repository)?.split('@')[1];
+                const version = item.labels['org.opencontainers.image.version'];
+                return {
+                    id: item.id,
+                    digest,
+                    version: version && version.length <= 64 ? version : undefined,
+                    // The client turns a missing Created into today's date; only trust the source field.
+                    createdAtMs:
+                        Number.isFinite(createdAtMs) && createdAtMs >= Date.UTC(2000, 0, 1) ? createdAtMs : undefined,
+                };
+            }
+        } catch {
+            meterQuickStartSilentCatch('quickStart_inspectImage');
+        }
+        try {
+            const command = await this.client.listImages({ references: [imageRef] });
+            const items = await runDockerCommand(
+                { ...command, parse: (output) => command.parse(output, true) },
+                bounds,
+            );
+            // Reference filters cannot reliably prove absence for a digest reference.
+            return items?.length === 0 && !imageRef.includes('@') ? 'absent' : undefined;
+        } catch {
+            meterQuickStartSilentCatch('quickStart_inspectImage_listImages');
+            return undefined;
+        }
     }
 
     /** `docker run` detached, returning the new container id. */

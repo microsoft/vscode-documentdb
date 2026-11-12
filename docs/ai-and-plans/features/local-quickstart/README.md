@@ -58,6 +58,16 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
   `Introduction → Configure → Set up → Done`; the stage 1 heading is `Checking container engine`
   ([0003](./decisions.md#0003--concept-f-docker-verified-as-the-first-setup-stage)). Redesigned
   findings and engine-specific guides are pending W5; the detail still shows raw CLI version output.
+- **Settled setup stages offer evidence in Details.** Rows with facts start collapsed on both Set up
+  and Done and have concise factual summaries; explanations and recovery actions remain in the
+  failure block. Full image and container IDs are available through mouse and keyboard tooltips.
+  Below the unchanged main labels, summaries, facts and links use one regular proportional text
+  style; only optional context is muted, while important qualifications remain prominent.
+  Checking reports which Docker and Podman executables are on PATH but probes only the selected engine, without
+  explanatory notes in its Details. Active pulling uses one non-wrapping summary line: known image
+  and origin initially, replaced by bounded engine output when available, not an estimated percentage. Sample-data loading
+  failure is also called out on success. No step durations are recorded
+  ([0008](./decisions.md#0008---set-up-stages-expand-to-show-what-each-stage-did)).
 - **Docker is preferred; Podman is the fallback.** Docker Engine and Docker Desktop are supported.
   The extension uses Docker when its CLI is available, and falls back to Podman only when it is
   not; there is no preference setting. Engine identification uses positive evidence. When evidence
@@ -66,6 +76,11 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
   appropriate.
 - **Podman machine startup is manual for now.** On macOS and Windows, users initialize and start
   the machine from a terminal; the extension does not provide a Podman start button yet.
+- **Approved follow-up, not implemented:** [iteration 12](./iterations/12-preferred-engine-and-podman-start.md)
+  adds a check-free Container engine preference in Configure, always defaulting to Docker.
+  Only execution detects both CLIs, uses the preference if installed and otherwise falls back.
+  Instances retain their owning engine, and a Podman machine start button is gated to macOS
+  and Windows. This replaces iteration 10's parked W1/W8 proposal, not the current behavior above.
 - **Collision safety is non-negotiable.** A pre-existing container holding a planned name or port is
   never recreated over. Ours gets re-adopted; anything else is rejected with an inline error.
 - **Existing data is preserved.** A managed container with no stored credentials has them restored
@@ -78,25 +93,26 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 
 ## Timeline
 
-| Date       | PR    | What changed                                                   | Docs                                                                                                                                                           |
-| ---------- | ----- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-06-15 | #653  | Initial design, benchmarked against the PostgreSQL extension   | [iterations/01-initial-design.md](./iterations/01-initial-design.md)                                                                                           |
-| 2026-06-22 | —     | POC scope, plan, and 5-agent review                            | [iterations/02-poc/](./iterations/02-poc/)                                                                                                                     |
-| 2026-06-25 | —     | Instance model locked to one instance                          | [decisions.md#0001](./decisions.md#0001--single-managed-instance-ownership-bounded)                                                                            |
-| 2026-06-26 | —     | v1 production-readiness gap analysis                           | [v1-readiness-gaps.md](./v1-readiness-gaps.md)                                                                                                                 |
-| 2026-07-06 | —     | Single → multi instance reversal                               | [decisions.md#0002](./decisions.md#0002--multiple-managed-instances-in-v1-reconstructed)                                                                       |
-| 2026-08-02 | —     | Provider-neutral Docker readiness                              | [iterations/04-ui-redesign/](./iterations/04-ui-redesign/)                                                                                                     |
-| 2026-08-04 | #798  | UI redesign shipped (Concept F)                                | [iterations/04-ui-redesign/](./iterations/04-ui-redesign/)                                                                                                     |
-| 2026-08-09 | #876  | State sync + infrastructure error translation                  | [iterations/05-error-translation.md](./iterations/05-error-translation.md)                                                                                     |
-| 2026-09-23 | #958  | Setup never wipes a data volume before it can succeed (#946)   | [iterations/06-data-volume-protection/](./iterations/06-data-volume-protection/)                                                                               |
-| 2026-09-24 | #954  | Setup failures show Docker's error, not an exit code           | [iterations/07-setup-failures.md](./iterations/07-setup-failures.md)                                                                                           |
-| 2026-09-24 | #953  | Reject credentials and ports setup can't honor (#949)          | [iterations/08-input-validation.md](./iterations/08-input-validation.md)                                                                                       |
-| 2026-09-24 | #955  | Tree and wizard stop showing a stale instance (#950)           | [iterations/09-state-recovery.md](./iterations/09-state-recovery.md)                                                                                           |
-| 2026-09-29 | #979  | Restore missing credentials from the container                 | [decisions.md#0005](./decisions.md#0005---restore-missing-credentials-from-the-managed-container)                                                              |
-| 2026-09-29 | #979  | Wizard journey telemetry and correlation ids                   | [decisions.md#0006](./decisions.md#0006---wizard-journey-telemetry-and-correlation-ids)                                                                        |
-| 2026-10-15 | #1018 | Image usage telemetry follows VS Code's setting                | [decisions.md#0007](./decisions.md#0007---image-usage-telemetry-follows-vs-codes-setting)                                                                      |
-| 2026-11-09 | —     | Partial container-runtime transparency; W1/W5/W8 pending       | [iterations/10-container-runtime-transparency.md](./iterations/10-container-runtime-transparency.md); [user manual](../../../user-manual/local-quick-start.md) |
-| 2026-11-10 | —     | Plan accepted: Details on the Set up stages, no step durations | [iterations/11-setup-stage-details.md](./iterations/11-setup-stage-details.md)                                                                                 |
+| Date       | PR    | What changed                                                                                    | Docs                                                                                                                                                           |
+| ---------- | ----- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-06-15 | #653  | Initial design, benchmarked against the PostgreSQL extension                                    | [iterations/01-initial-design.md](./iterations/01-initial-design.md)                                                                                           |
+| 2026-06-22 | —     | POC scope, plan, and 5-agent review                                                             | [iterations/02-poc/](./iterations/02-poc/)                                                                                                                     |
+| 2026-06-25 | —     | Instance model locked to one instance                                                           | [decisions.md#0001](./decisions.md#0001--single-managed-instance-ownership-bounded)                                                                            |
+| 2026-06-26 | —     | v1 production-readiness gap analysis                                                            | [v1-readiness-gaps.md](./v1-readiness-gaps.md)                                                                                                                 |
+| 2026-07-06 | —     | Single → multi instance reversal                                                                | [decisions.md#0002](./decisions.md#0002--multiple-managed-instances-in-v1-reconstructed)                                                                       |
+| 2026-08-02 | —     | Provider-neutral Docker readiness                                                               | [iterations/04-ui-redesign/](./iterations/04-ui-redesign/)                                                                                                     |
+| 2026-08-04 | #798  | UI redesign shipped (Concept F)                                                                 | [iterations/04-ui-redesign/](./iterations/04-ui-redesign/)                                                                                                     |
+| 2026-08-09 | #876  | State sync + infrastructure error translation                                                   | [iterations/05-error-translation.md](./iterations/05-error-translation.md)                                                                                     |
+| 2026-09-23 | #958  | Setup never wipes a data volume before it can succeed (#946)                                    | [iterations/06-data-volume-protection/](./iterations/06-data-volume-protection/)                                                                               |
+| 2026-09-24 | #954  | Setup failures show Docker's error, not an exit code                                            | [iterations/07-setup-failures.md](./iterations/07-setup-failures.md)                                                                                           |
+| 2026-09-24 | #953  | Reject credentials and ports setup can't honor (#949)                                           | [iterations/08-input-validation.md](./iterations/08-input-validation.md)                                                                                       |
+| 2026-09-24 | #955  | Tree and wizard stop showing a stale instance (#950)                                            | [iterations/09-state-recovery.md](./iterations/09-state-recovery.md)                                                                                           |
+| 2026-09-29 | #979  | Restore missing credentials from the container                                                  | [decisions.md#0005](./decisions.md#0005---restore-missing-credentials-from-the-managed-container)                                                              |
+| 2026-09-29 | #979  | Wizard journey telemetry and correlation ids                                                    | [decisions.md#0006](./decisions.md#0006---wizard-journey-telemetry-and-correlation-ids)                                                                        |
+| 2026-10-15 | #1018 | Image usage telemetry follows VS Code's setting                                                 | [decisions.md#0007](./decisions.md#0007---image-usage-telemetry-follows-vs-codes-setting)                                                                      |
+| 2026-11-09 | —     | Partial container-runtime transparency; W1/W5/W8 pending                                        | [iterations/10-container-runtime-transparency.md](./iterations/10-container-runtime-transparency.md); [user manual](../../../user-manual/local-quick-start.md) |
+| 2026-11-10 | —     | Details on settled Set up and Done stages; no step durations                                    | [iterations/11-setup-stage-details.md](./iterations/11-setup-stage-details.md)                                                                                 |
+| 2026-11-10 | —     | Approved plan only: check-free Docker-default preference, execution-time fallback, Podman start | [iterations/12-preferred-engine-and-podman-start.md](./iterations/12-preferred-engine-and-podman-start.md)                                                     |
 
 ## Decisions
 
@@ -123,5 +139,6 @@ correlation ids (0006), and the image's usage telemetry following VS Code's sett
 2. [design.md](./design.md) — the current UX and architecture design (iteration 2)
 3. [decisions.md](./decisions.md) — why the model is what it is
 
-`design-iteration-1.md` and everything under `iterations/` is history. Read a specific iteration
-only when you need provenance for a particular behavior.
+`design-iteration-1.md` and implemented or superseded iterations are history. Read a specific
+iteration only when you need provenance for a particular behavior. Iteration 12 is an approved,
+not-yet-implemented plan; its intended behavior must not be mistaken for current product behavior.

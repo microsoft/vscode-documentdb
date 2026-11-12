@@ -27,6 +27,15 @@ verified: 2026-08-14
 > supersedes the Docker Desktop-only examples in this historical design. Docker
 > Engine and Docker Desktop are supported providers; the prerequisite is a Docker
 > CLI that can reach a Linux-container daemon from the extension host.
+>
+> **Approved follow-up, not implemented (2026-11-10):**
+> [iteration 12](./iterations/12-preferred-engine-and-podman-start.md) adds a Container engine
+> preference in Configure with Docker always the default and no availability checks.
+> Execution detects both Docker and Podman CLIs, selects the preferred one if installed,
+> and otherwise falls back to the other. Existing instances keep their owning engine;
+> Podman machine start is offered only on macOS and Windows with a detected eligible machine.
+> This approved plan supersedes the older Docker-only assumptions below for future work,
+> not as a statement of implemented behavior.
 
 ---
 
@@ -226,109 +235,43 @@ instead of the start flow:
 
 ### 5.4 Webview: Progress
 
-After the user clicks **Start DocumentDB Local**, the webview transitions
-to a progress view. The user can keep working — the webview is not modal
-(yet — modal webview API is expected from VS Code; once available we
-switch).
+After **Start DocumentDB Local**, Set up shows five stages: checking the container engine, pulling
+the image, creating and starting the container, and waiting for DocumentDB to accept connections.
+Command output is available through **View setup log**.
 
-The heavy container work (pull / create / start) runs as **VS Code
-terminal tasks**, so the raw `docker` commands and their streaming output
-are visible in the integrated terminal. This mirrors the PostgreSQL
-"Local Docker Server" reference (see §16): the webview shows friendly step
-status while the terminal provides full command transparency. The
-webview's **View Docker output** expander surfaces the same stream inline
-for users who prefer not to switch to the terminal.
+Both Set up and Done enable the shared StatusList row highlight for pointer hover and
+keyboard-visible focus, including its high-contrast outline and reduced-motion behavior.
 
-**v1.0 keeps the webview side minimal** — matching the PostgreSQL reference,
-which shows _no_ in-webview progress at all. While the container work runs,
-the **Start** button is disabled and shows a spinner, and a failure renders
-as a single inline error message with a **Retry** (the terminal carries the
-detail). The staged progress list, per-stage percentages, and per-step
-inline expansion shown below are the **v1.2** enriched view (§15); the
-diagram illustrates that target, not the v1.0 surface.
+A settled row with facts offers **Details** alongside a concise factual summary. It starts collapsed
+and shows available evidence, not step durations. Every stage reserves one summary line while pending
+or active, so adding its summary does not move the following rows. Longer content can still wrap
+naturally in narrow panels. Checking reports PATH presence for both CLI
+executables but probes only the selected engine; its Details omit explanatory notes. Long image
+and container IDs are shortened visually and their full values are available via mouse and keyboard
+tooltips. An updated image includes its previous ID when already known. While pulling, one summary
+line initially shows the known image and origin; the latest bounded engine output replaces it once
+available. This active line never wraps: long text is ellipsized visually, with the full value in its
+title and the setup log. It reports literal activity, not an estimated completion percentage.
+A failed stage does not expand automatically: the
+explanation and recovery actions remain visible in the message block below the list. The checking
+row retains its last-checked time and re-check action; its Details replaces the old Docker-check
+accordion. See [0008](./decisions.md#0008---set-up-stages-expand-to-show-what-each-stage-did).
 
-```
-+======================================================================+
-|  DocumentDB Local - Quick Start                              [x]     |
-+======================================================================+
-|                                                                      |
-|  ┌────────────────────────────────────────────────────────────────┐  |
-|  │  Setting up DocumentDB Local...                  00:18        │  |
-|  └────────────────────────────────────────────────────────────────┘  |
-|                                                                      |
-|  ┌────────────────────────────────────────────────────────────────┐  |
-|  │  [✅] Checking Docker                                         │  |
-|  │  [✅] Reserving port 10260                                    │  |
-|  │  [🔄] Pulling official image                          42%     │  |
-|  │  [  ] Creating container                                      │  |
-|  │  [  ] Starting container                                      │  |
-|  │  [  ] Waiting for DocumentDB to accept connections            │  |
-|  └────────────────────────────────────────────────────────────────┘  |
-|                                                                      |
-|  ┌────────────────────────────────────────────────────────────────┐  |
-|  │  ▸ View Docker output                                         │  |
-|  └────────────────────────────────────────────────────────────────┘  |
-|                                                                      |
-|                                                      [ Cancel ]      |
-|                                                                      |
-+======================================================================+
-```
-
-On failure (v1.2 enriched view), the failed step expands with guidance; in
-v1.0 the same guidance is a single inline error message with **Retry** (the
-terminal carries the detail). When `docker run` fails, distinguish the cause
-via `docker inspect` — if the container exists it is a **start** failure,
-otherwise a **create** failure — and word the message accordingly (matching
-the PostgreSQL reference):
-
-```
-|  │  [✅] Checking Docker                                         │  |
-|  │  [✅] Reserving port 10260                                    │  |
-|  │  [❌] Pulling official image                       Failed     │  |
-|  │       We couldn't pull the image from ghcr.io.                │  |
-|  │       Check your network connection or proxy settings.        │  |
-|  │                                                               │  |
-|  │       [ Retry ]   [ Troubleshooting ]                         │  |
-|  │  [  ] Creating container                                      │  |
-|  │  [  ] Starting container                                      │  |
-|  │  [  ] Waiting for DocumentDB to accept connections            │  |
-```
+The main stage labels and status icons retain their existing typography. Everything ordinary below
+them uses one proportional UI font at base200 (12 px, 16 px line height), regular weight. Summaries,
+fact labels and values share the primary foreground; ports, names and identifiers do not switch to
+monospace. Links retain their interaction colour and focus styling but use the same text size.
+Only supplementary context uses the theme's description foreground, with a secondary-foreground
+fallback. Important qualifications such as a port shown "As requested" remain primary text.
+Severity messages retain their semantic emphasis. These are Local Quick Start overrides; the shared
+StatusList defaults and other consumers, including Diagnose connection, are unchanged.
 
 ### 5.5 Webview: Success
 
-```
-+======================================================================+
-|  DocumentDB Local - Quick Start                              [x]     |
-+======================================================================+
-|                                                                      |
-|  ┌────────────────────────────────────────────────────────────────┐  |
-|  │  ✅  DocumentDB Local is running on localhost:10260           │  |
-|  └────────────────────────────────────────────────────────────────┘  |
-|                                                                      |
-|  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌────────────┐  |
-|  │  Status      │ │  Endpoint    │ │  Image       │ │  Data      │  |
-|  │  ✅ Running  │ │  localhost    │ │  v1.2.3      │ │  Persisted │  |
-|  │              │ │  :10260      │ │  (latest)    │ │            │  |
-|  └──────────────┘ └──────────────┘ └──────────────┘ └────────────┘  |
-|                                                                      |
-|  ┌────────────────────────────────────────────────────────────────┐  |
-|  │  [ Open Connection ]       [ Copy Connection String ]         │  |
-|  │  [ Load Sample Data ]      [ View Logs ]                      │  |
-|  └────────────────────────────────────────────────────────────────┘  |
-|                                                                      |
-+======================================================================+
-```
-
-On readiness success the webview **auto-closes** and hands off to the
-tree, which becomes the persistent control surface (this matches the
-prototype: "progress in the terminal, and the webview closes
-automatically"). The success card above is shown only briefly.
-**Open Connection** expands the managed cluster in the tree (user browses
-databases/collections from the Quick Start subtree).
-
-**Load Sample Data** is rendered only when a seed dataset is available at
-ship time (see §8.4); otherwise it appears disabled with a "Coming soon"
-tooltip, since it is a v1.2 item (§15).
+On readiness success, Done retains the five completed rows and their Details, followed by the
+success message and next steps. **Open Connection** reveals the managed cluster in the tree. If
+requested sample data was not loaded, the success message says so and the waiting row's Details
+provides an informational message and a link to the setup log.
 
 ### 5.6 Cancel rules
 
@@ -782,6 +725,9 @@ gets a `quickStartSessionId` from the open command, and every event the panel pr
 
 ## 15. Scope split
 
+This section records the original proposed scope, not the current setup and success behavior in
+§§5.4–5.5.
+
 ### v1.0 (must ship)
 
 - Quick Start webview (review, success, Docker diagnosis); create progress
@@ -840,6 +786,8 @@ gets a `quickStartSessionId` from the open command, and every event the panel pr
 ---
 
 ## 16. Webview implementation notes
+
+These are the original implementation notes; current setup and success behavior is in §§5.4–5.5.
 
 The Quick Start webview follows existing extension patterns:
 
@@ -903,6 +851,8 @@ The Quick Start webview follows existing extension patterns:
 ---
 
 ## 18. Review resolutions (iteration 2)
+
+These review resolutions are historical; current setup and success behavior is in §§5.4–5.5.
 
 This revision folds in the PR review feedback (notably @xgerman's
 comments), the design intent shown in @tnaum-ms's prototype screenshots,
