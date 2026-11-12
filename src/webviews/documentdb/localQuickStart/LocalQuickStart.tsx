@@ -57,6 +57,7 @@ import {
     InstanceState,
     type InstanceStatusUpdate,
     type PodmanMachineState,
+    type PodmanTarget,
     type PortAvailability,
     PROVISION_STAGES,
     type ProvisionStage,
@@ -312,7 +313,10 @@ function planItems(): readonly PlanItem[] {
     ];
 }
 
-function dockerGuidance(podmanMachine?: PodmanMachineState): Readonly<Record<DockerGuidanceKey, string>> {
+function dockerGuidance(
+    podmanMachine?: PodmanMachineState,
+    podmanTarget?: PodmanTarget,
+): Readonly<Record<DockerGuidanceKey, string>> {
     return {
         installDocker: l10n.t('Install Docker or Podman, then reopen DocumentDB Local setup.'),
         installDockerWindows: l10n.t(
@@ -350,7 +354,17 @@ function dockerGuidance(podmanMachine?: PodmanMachineState): Readonly<Record<Doc
         podmanNotRunning: l10n.t(
             'Podman is not reachable. Start its machine in Podman Desktop or check its connection, then check again.',
         ),
+        podmanNotRunningLinux: l10n.t(
+            'Podman is not reachable. Check its connection with "podman system connection list", then check again.',
+        ),
         podmanSocketNotRunning: l10n.t('Start the Podman user socket with this command, then check again.'),
+        podmanWindowsMachineFromWsl: l10n.t(
+            'Podman in this WSL distribution uses the Podman machine "{0}" on Windows, and that machine is not reachable. Start it on Windows with this command or from Podman Desktop, then check again.',
+            podmanTarget?.kind === 'windowsMachineFromWsl' ? podmanTarget.name : '',
+        ),
+        podmanRemoteUnreachable: l10n.t(
+            'Podman is connected to another computer, which cannot be reached from here. Check its connection with "podman system connection list", then check again.',
+        ),
         podmanMachineMissing: l10n.t('No Podman machine was found. Run this command to create one, then check again.'),
         podmanMachineStopped: l10n.t(
             'The Podman machine "{0}" is not running. Start it and wait until it is ready.',
@@ -446,6 +460,7 @@ function dockerRecoveryNotes(): Readonly<Record<DockerRecoveryNoteKey, string>> 
             'This stops all running WSL distributions so the new group membership applies when WSL starts again.',
         ),
         runsDockerService: l10n.t('Runs the system Docker service.'),
+        runInWindowsTerminal: l10n.t('Run in a Windows terminal'),
     };
 }
 
@@ -1474,9 +1489,12 @@ export const LocalQuickStart = (): JSX.Element => {
     );
 
     const handleCopyRecoveryCommand = useCallback(
-        (id: DockerRecoveryCommand['id']): void => {
+        (command: DockerRecoveryCommand): void => {
             void trpcClient.localQuickStart.copyRecoveryCommand
-                .mutate(id)
+                .mutate({
+                    id: command.id,
+                    ...(command.machineName !== undefined ? { machineName: command.machineName } : {}),
+                })
                 .then(() => setCopyAnnouncementKey((current) => current + 1))
                 .catch(() => undefined);
         },
@@ -1552,8 +1570,8 @@ export const LocalQuickStart = (): JSX.Element => {
     }
     const shownDocker = lastDockerProblemRef.current;
     const dockerGuidanceMap = useMemo(
-        () => dockerGuidance(shownDocker?.problem.podmanMachine),
-        [shownDocker?.problem.podmanMachine],
+        () => dockerGuidance(shownDocker?.problem.podmanMachine, shownDocker?.problem.podmanTarget),
+        [shownDocker?.problem.podmanMachine, shownDocker?.problem.podmanTarget],
     );
     const shownPodman = shownDocker?.problem.cli === 'podman' || shownDocker?.problem.engineEvidence === 'podmanShim';
     const recoveryCommand = shownDocker?.presentation.showCopyCommand ? shownDocker.problem.recoveryCommand : undefined;
@@ -2114,7 +2132,7 @@ export const LocalQuickStart = (): JSX.Element => {
                                         size="small"
                                         className={styles.recoveryCommandCopy}
                                         icon={<CopyRegular />}
-                                        onClick={() => handleCopyRecoveryCommand(recoveryCommand.id)}
+                                        onClick={() => handleCopyRecoveryCommand(recoveryCommand)}
                                     >
                                         {l10n.t('Copy')}
                                     </Button>

@@ -42,7 +42,10 @@ export type DockerGuidanceKey =
     | 'dockerDesktopNotRunning'
     | 'daemonNotRunning'
     | 'podmanNotRunning'
+    | 'podmanNotRunningLinux'
     | 'podmanSocketNotRunning'
+    | 'podmanWindowsMachineFromWsl'
+    | 'podmanRemoteUnreachable'
     | 'podmanMachineMissing'
     | 'podmanMachineStopped'
     | 'podmanMachineAmbiguous'
@@ -58,7 +61,11 @@ export type DockerGuidanceKey =
     | 'windowsContainers'
     | 'notAccessible';
 
-export type DockerRecoveryNoteKey = 'groupMembershipNewSession' | 'restartWslDistribution' | 'runsDockerService';
+export type DockerRecoveryNoteKey =
+    | 'groupMembershipNewSession'
+    | 'restartWslDistribution'
+    | 'runsDockerService'
+    | 'runInWindowsTerminal';
 
 export type DockerGuideKey =
     | 'install'
@@ -284,7 +291,14 @@ function getGuidance(readiness: DockerReadiness): DockerGuidanceKey {
         case 'daemonUnavailable':
             if (readiness.cli === 'podman' || readiness.engineEvidence === 'podmanShim') {
                 if (readiness.environment === 'linux' || readiness.environment === 'wsl') {
-                    return 'podmanSocketNotRunning';
+                    switch (readiness.podmanTarget?.kind) {
+                        case 'windowsMachineFromWsl':
+                            return 'podmanWindowsMachineFromWsl';
+                        case 'userSocket':
+                            return 'podmanSocketNotRunning';
+                        default:
+                            return 'podmanNotRunningLinux';
+                    }
                 }
                 switch (readiness.podmanMachine?.kind) {
                     case 'none':
@@ -318,6 +332,9 @@ function getGuidance(readiness: DockerReadiness): DockerGuidanceKey {
         case 'contextUnavailable':
             return 'contextUnavailable';
         case 'endpointUnreachable':
+            if (readiness.podmanTarget?.kind === 'remote') {
+                return 'podmanRemoteUnreachable';
+            }
             return 'endpointUnreachable';
         case 'probeTimedOut':
             return 'checkTimedOut';
@@ -501,6 +518,8 @@ function getRecoveryNote(readiness: DockerReadiness): DockerRecoveryNoteKey | un
             return 'groupMembershipNewSession';
         case 'wslRestartFromWindows':
             return 'restartWslDistribution';
+        case 'podmanMachineStartOnWindows':
+            return 'runInWindowsTerminal';
         case 'linuxStartService':
         case 'wslStartServiceNoSystemd':
             return 'runsDockerService';

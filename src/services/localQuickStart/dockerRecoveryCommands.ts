@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { PODMAN_MACHINE_NAME } from './dockerReadinessClassification';
 import {
     type DockerEndpointKind,
     type DockerFailureKind,
@@ -11,9 +12,12 @@ import {
     type DockerRecoveryCommand,
     type DockerServiceManager,
     type PodmanMachineState,
+    type PodmanTarget,
 } from './quickStartTypes';
 
-const RECOVERY_COMMANDS: Readonly<Record<DockerRecoveryCommand['id'], DockerRecoveryCommand>> = {
+const RECOVERY_COMMANDS: Readonly<
+    Record<Exclude<DockerRecoveryCommand['id'], 'podmanMachineStartOnWindows'>, DockerRecoveryCommand>
+> = {
     linuxDockerGroup: {
         id: 'linuxDockerGroup',
         commandLine: 'sudo usermod -aG docker $USER',
@@ -46,7 +50,24 @@ const RECOVERY_COMMANDS: Readonly<Record<DockerRecoveryCommand['id'], DockerReco
     },
 };
 
-export function getDockerRecoveryCommandById(id: DockerRecoveryCommand['id']): DockerRecoveryCommand {
+export function getDockerRecoveryCommandById(
+    id: DockerRecoveryCommand['id'],
+    machineName?: string,
+): DockerRecoveryCommand {
+    if (id === 'podmanMachineStartOnWindows') {
+        if (!machineName || !PODMAN_MACHINE_NAME.test(machineName)) {
+            throw new Error('Invalid recovery command machine name');
+        }
+        return {
+            id,
+            machineName,
+            commandLine: `podman machine start ${machineName}`,
+            requiresElevation: false,
+        };
+    }
+    if (machineName !== undefined) {
+        throw new Error('Invalid recovery command machine name');
+    }
     return RECOVERY_COMMANDS[id];
 }
 
@@ -56,14 +77,17 @@ export function getDockerRecoveryCommand(
     endpointKind: DockerEndpointKind,
     permissionDetail: DockerPermissionDetail = 'unknown',
     serviceManager: DockerServiceManager = 'unknown',
-    podman?: { readonly machine?: PodmanMachineState },
+    podman?: { readonly machine?: PodmanMachineState; readonly target?: PodmanTarget },
 ): DockerRecoveryCommand | undefined {
     if (podman) {
         if (failureKind !== 'daemonUnavailable') {
             return undefined;
         }
         if (environment === 'linux' || environment === 'wsl') {
-            return RECOVERY_COMMANDS.linuxStartPodmanSocket;
+            if (podman.target?.kind === 'windowsMachineFromWsl') {
+                return getDockerRecoveryCommandById('podmanMachineStartOnWindows', podman.target.name);
+            }
+            return podman.target?.kind === 'userSocket' ? RECOVERY_COMMANDS.linuxStartPodmanSocket : undefined;
         }
         if ((environment === 'macos' || environment === 'windows') && podman.machine?.kind === 'none') {
             return RECOVERY_COMMANDS.podmanMachineInit;

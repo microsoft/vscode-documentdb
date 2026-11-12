@@ -35,8 +35,10 @@ import {
     classifyContainerEngine,
     classifyDockerFailure,
     classifyDockerProvider,
+    classifyPodmanTarget,
     getDockerDiagnosticFingerprint,
     isDockerCliNotFound,
+    parsePodmanDialTarget,
 } from './dockerReadinessClassification';
 import { getDockerRecoveryCommand } from './dockerRecoveryCommands';
 import {
@@ -51,6 +53,7 @@ import {
     type DockerReadiness,
     type DockerReadinessRequest,
     type DockerSocketGroupFacts,
+    type PodmanTarget,
 } from './quickStartTypes';
 
 export const READINESS_DEADLINE_MS = 15_000;
@@ -748,6 +751,24 @@ export class DockerReadinessService {
                 providerMayBeStarting:
                     provider.provider === 'dockerDesktop' && provider.providerEvidence === 'rememberedProvider',
             });
+            let podmanTarget: PodmanTarget | undefined;
+            if (isPodman && classification.failureKind === 'daemonUnavailable') {
+                // The Podman CLI names the address it dialled; the Docker CLI shim uses the endpoint it resolved.
+                podmanTarget = classifyPodmanTarget(
+                    cli === 'podman'
+                        ? parsePodmanDialTarget(infoProbe.stderr)
+                        : endpoint.kind === 'unixSocket'
+                          ? { transport: 'unix', path: dockerSocketTarget ?? endpoint.address }
+                          : undefined,
+                    environment,
+                );
+                this.dependencies
+                    .createProbeOutput?.()
+                    ?.appendDiagnostic?.(`[readiness] podmanTarget=${podmanTarget.kind}`);
+                if (podmanTarget.kind === 'remote') {
+                    classification = { failureKind: 'endpointUnreachable', outcome: 'diagnosed' };
+                }
+            }
             let startCapability: DockerStartCapability = provider;
             if (
                 isPodman &&
@@ -799,9 +820,12 @@ export class DockerReadinessService {
             const failureResult = {
                 environment,
                 ...engine,
-                endpointKind: endpoint.kind,
-                endpointSource: endpoint.source,
+                // Podman ignores Docker's endpoint settings, so Docker's endpoint does not describe it.
+                ...(cli === 'podman'
+                    ? { endpointKind: 'unknown' as const }
+                    : { endpointKind: endpoint.kind, endpointSource: endpoint.source }),
                 ...startCapability,
+                ...(podmanTarget ? { podmanTarget } : {}),
                 providerRecordedAtMs:
                     startCapability.providerEvidence === 'rememberedProvider'
                         ? rememberedProvider?.recordedAtMs
@@ -814,7 +838,7 @@ export class DockerReadinessService {
                     endpoint.kind,
                     permissionDetail,
                     serviceManager,
-                    isPodman ? { machine: startCapability.podmanMachine } : undefined,
+                    isPodman ? { machine: startCapability.podmanMachine, target: podmanTarget } : undefined,
                 ),
                 checkedAtMs: this.dependencies.now(),
                 cliInstalled,

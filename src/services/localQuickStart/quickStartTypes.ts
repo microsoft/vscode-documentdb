@@ -407,6 +407,18 @@ export interface PodmanMachineFact {
     readonly starting: boolean;
 }
 
+/** Where a failed Podman check tried to connect, from the address in its error. */
+export type PodmanTarget =
+    /** WSL: the socket of a Podman machine running on Windows. */
+    | { readonly kind: 'windowsMachineFromWsl'; readonly name: string }
+    /** Linux / WSL: the rootless user socket. */
+    | { readonly kind: 'userSocket' }
+    /** Another address on this host, such as a machine's SSH port on 127.0.0.1. */
+    | { readonly kind: 'local' }
+    /** A host other than this one. */
+    | { readonly kind: 'remote' }
+    | { readonly kind: 'unknown' };
+
 export type PodmanMachineState =
     | { readonly kind: 'stopped' | 'starting' | 'running'; readonly name: string }
     | { readonly kind: 'otherActive'; readonly active: string }
@@ -453,7 +465,9 @@ export interface DockerRecoveryCommand {
         | 'wslStartServiceNoSystemd'
         | 'wslRestartFromWindows'
         | 'linuxStartPodmanSocket'
-        | 'podmanMachineInit';
+        | 'podmanMachineInit'
+        | 'podmanMachineStartOnWindows';
+    readonly machineName?: string;
     readonly commandLine: string;
     readonly requiresElevation: boolean;
 }
@@ -485,6 +499,7 @@ interface DockerReadinessBase {
     readonly executionTarget: DockerExecutionTarget;
     readonly startAction?: DockerStartAction;
     readonly podmanMachine?: PodmanMachineState;
+    readonly podmanTarget?: PodmanTarget;
     readonly permissionDetail?: DockerPermissionDetail;
     readonly recoveryCommand?: DockerRecoveryCommand;
     readonly checkedAtMs: number;

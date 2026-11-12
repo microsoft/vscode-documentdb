@@ -286,6 +286,7 @@ describe('getDockerReadinessPresentation', () => {
                     readiness({
                         environment,
                         cli: 'podman',
+                        podmanTarget: { kind: 'userSocket' },
                         recoveryCommand: {
                             id: 'linuxStartPodmanSocket',
                             commandLine: 'systemctl --user start podman.socket',
@@ -298,6 +299,73 @@ describe('getDockerReadinessPresentation', () => {
                 showCopyCommand: true,
                 showStartDockerProvider: false,
                 recoveryNote: undefined,
+            });
+        });
+
+        it.each([
+            {
+                target: { kind: 'windowsMachineFromWsl', name: 'podman-machine-default' },
+                failureKind: 'daemonUnavailable',
+                environment: 'wsl',
+                guidance: 'podmanWindowsMachineFromWsl',
+            },
+            {
+                target: { kind: 'remote' },
+                failureKind: 'endpointUnreachable',
+                environment: 'macos',
+                guidance: 'podmanRemoteUnreachable',
+            },
+            {
+                target: { kind: 'local' },
+                failureKind: 'daemonUnavailable',
+                environment: 'linux',
+                guidance: 'podmanNotRunningLinux',
+            },
+            {
+                target: { kind: 'unknown' },
+                failureKind: 'daemonUnavailable',
+                environment: 'wsl',
+                guidance: 'podmanNotRunningLinux',
+            },
+        ] as const)(
+            'presents $target.kind on $environment with $guidance and no start or copy action',
+            ({ target, failureKind, environment, guidance }) => {
+                for (const cli of ['podman', 'docker'] as const) {
+                    expect(
+                        getDockerReadinessPresentation(
+                            readiness({
+                                environment,
+                                cli,
+                                engineEvidence: cli === 'docker' ? 'podmanShim' : 'selectedCli',
+                                failureKind,
+                                podmanTarget: target,
+                            }),
+                        ),
+                    ).toMatchObject({ guidance, showStartDockerProvider: false, showCopyCommand: false });
+                }
+            },
+        );
+
+        it('labels the WSL Windows-machine command for a Windows terminal', () => {
+            expect(
+                getDockerReadinessPresentation(
+                    readiness({
+                        environment: 'wsl',
+                        cli: 'podman',
+                        podmanTarget: { kind: 'windowsMachineFromWsl', name: 'vm' },
+                        recoveryCommand: {
+                            id: 'podmanMachineStartOnWindows',
+                            machineName: 'vm',
+                            commandLine: 'podman machine start vm',
+                            requiresElevation: false,
+                        },
+                    }),
+                ),
+            ).toMatchObject({
+                guidance: 'podmanWindowsMachineFromWsl',
+                recoveryNote: 'runInWindowsTerminal',
+                showCopyCommand: true,
+                showStartDockerProvider: false,
             });
         });
 

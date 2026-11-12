@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { type DockerReadiness } from '../../../services/localQuickStart/quickStartTypes';
+import { type DockerReadiness, type PodmanTarget } from '../../../services/localQuickStart/quickStartTypes';
 import { getDockerReadinessTelemetryProperties } from './dockerReadinessTelemetry';
 
 function unknownReadiness(): DockerReadiness {
@@ -27,6 +27,13 @@ function unknownReadiness(): DockerReadiness {
 }
 
 describe('getDockerReadinessTelemetryProperties', () => {
+    it('records only the Podman target kind, never the machine name', () => {
+        const podmanTarget: PodmanTarget = { kind: 'windowsMachineFromWsl', name: 'private-machine' };
+        const properties = getDockerReadinessTelemetryProperties({ ...unknownReadiness(), podmanTarget });
+        expect(properties.podmanTargetKind).toBe('windowsMachineFromWsl');
+        expect(JSON.stringify(properties)).not.toContain('private-machine');
+    });
+
     it('returns categorized fields and a pre-redacted unknown fingerprint', () => {
         expect(getDockerReadinessTelemetryProperties(unknownReadiness())).toEqual({
             dockerReadinessOutcome: 'indeterminate',

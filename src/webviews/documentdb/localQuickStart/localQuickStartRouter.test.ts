@@ -239,10 +239,52 @@ describe('localQuickStartRouter', () => {
     ] as const)('copies the fixed %s command without starting an engine', async (id, commandLine) => {
         const context = createContext();
         const caller = createCallerFactory(localQuickStartRouter)(context);
-        await caller.copyRecoveryCommand(id);
+        await caller.copyRecoveryCommand({ id });
         expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith(commandLine);
         expect(mockStartDockerProvider).not.toHaveBeenCalled();
         expect(context.actionContext.telemetry.properties.recoveryCommandId).toBe(id);
+    });
+
+    it('builds the Windows machine clipboard command on the host and records only its id', async () => {
+        vi.mocked(vscode.env.clipboard.writeText).mockClear();
+        mockStartDockerProvider.mockClear();
+        const context = createContext();
+        const caller = createCallerFactory(localQuickStartRouter)(context);
+
+        await caller.copyRecoveryCommand({ id: 'podmanMachineStartOnWindows', machineName: 'podman-machine-default' });
+
+        expect(vscode.env.clipboard.writeText).toHaveBeenCalledExactlyOnceWith(
+            'podman machine start podman-machine-default',
+        );
+        expect(mockStartDockerProvider).not.toHaveBeenCalled();
+        expect(context.actionContext.telemetry.properties).toEqual({
+            recoveryCommandId: 'podmanMachineStartOnWindows',
+        });
+    });
+
+    it.each([undefined, 'vm;whoami', '-vm'])(
+        'rejects Windows copy with invalid machine name %j without touching the clipboard',
+        async (machineName) => {
+            vi.mocked(vscode.env.clipboard.writeText).mockClear();
+            const caller = createCallerFactory(localQuickStartRouter)(createContext());
+
+            await expect(
+                caller.copyRecoveryCommand({ id: 'podmanMachineStartOnWindows', machineName }),
+            ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+            expect(vscode.env.clipboard.writeText).not.toHaveBeenCalled();
+        },
+    );
+
+    it('rejects a machine name on a fixed command', async () => {
+        vi.mocked(vscode.env.clipboard.writeText).mockClear();
+        const caller = createCallerFactory(localQuickStartRouter)(createContext());
+
+        await expect(
+            caller.copyRecoveryCommand({ id: 'linuxStartPodmanSocket', machineName: 'vm' }),
+        ).rejects.toMatchObject({
+            code: 'BAD_REQUEST',
+        });
+        expect(vscode.env.clipboard.writeText).not.toHaveBeenCalled();
     });
 
     it('returns and records the typed provider launch result', async () => {

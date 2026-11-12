@@ -32,8 +32,8 @@ describe('L2-dev manifest and routes', (): void => {
 
     it('round-trips every scenario and theme, without duplicate routes', (): void => {
         const routes = scenarioRoutes();
-        expect(routes).toHaveLength(162);
-        expect(new Set(routes.map((route): string => route.path)).size).toBe(162);
+        expect(routes).toHaveLength(171);
+        expect(new Set(routes.map((route): string => route.path)).size).toBe(171);
         for (const route of routes) expect(parseScenarioRoute(route.path)).toEqual(route);
     });
 
@@ -71,10 +71,10 @@ describe('L2-dev manifest and routes', (): void => {
     });
 
     it('provides path-only all/view/theme helpers and rejects unknown subsets', (): void => {
-        expect(runnerRoutes('/scenarios/run-all.js')).toHaveLength(162);
+        expect(runnerRoutes('/scenarios/run-all.js')).toHaveLength(171);
         expect(runnerRoutes('/scenarios/run-all/connectionDiagnostics.js')).toHaveLength(84);
-        expect(runnerRoutes('/scenarios/run-all/localQuickStart.js')).toHaveLength(66);
-        expect(runnerRoutes('/scenarios/run-all/localQuickStart/dark.js')).toHaveLength(22);
+        expect(runnerRoutes('/scenarios/run-all/localQuickStart.js')).toHaveLength(75);
+        expect(runnerRoutes('/scenarios/run-all/localQuickStart/dark.js')).toHaveLength(25);
         expect(runnerRoutes('/scenarios/run-all/unknown.js')).toBeUndefined();
         expect(runnerRoutes('/scenarios/run-all.js?view=localQuickStart')).toBeUndefined();
         const snippet = scenarioRunner(scenarioRoutes());
@@ -214,7 +214,7 @@ describe('L2-dev manifest and routes', (): void => {
             expect.objectContaining({
                 kind: 'calls',
                 path: 'localQuickStart.copyRecoveryCommand',
-                input: 'linuxStartPodmanSocket',
+                input: { id: 'linuxStartPodmanSocket' },
                 count: 1,
             }),
         );

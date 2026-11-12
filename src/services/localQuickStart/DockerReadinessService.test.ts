@@ -190,15 +190,75 @@ describe('live Podman machine readiness', () => {
                         : {}),
                 }),
             });
-            expect(await service.getReadiness()).toMatchObject({
+            const result = await service.getReadiness();
+            expect(result).toMatchObject({
                 cli: 'podman',
                 failureKind: 'daemonUnavailable',
-                endpointSource: 'platformDefault',
+                endpointKind: 'unknown',
                 startAction: 'startPodmanMachine',
                 podmanMachine: { kind: 'stopped', name: 'custom-vm' },
             });
+            expect(result.endpointSource).toBeUndefined();
         },
     );
+
+    function failingInfo(stderr: string): DockerReadinessServiceDependencies['runProbe'] {
+        return async (options) =>
+            evidence(
+                options.probe,
+                options.probe === 'info'
+                    ? {
+                          exitCode: 125,
+                          stderr: `Cannot connect to Podman.\nError: unable to connect to Podman socket: ${stderr}`,
+                      }
+                    : { stdout: 'podman version 6.1.4' },
+            );
+    }
+
+    it('reports an unreachable remote Podman host without offering the local machine', async () => {
+        const { service, list, capability } = machineService({
+            runProbe: failingInfo('failed to connect: dial tcp 10.0.0.5:22: i/o timeout'),
+        });
+        const result = await service.getReadiness();
+        expect(result).toMatchObject({ failureKind: 'endpointUnreachable', podmanTarget: { kind: 'remote' } });
+        expect(result.startAction).toBeUndefined();
+        expect(result.recoveryCommand).toBeUndefined();
+        expect(list).not.toHaveBeenCalled();
+        expect(capability).not.toHaveBeenCalled();
+    });
+
+    it('still offers the local machine when Podman dialled it on 127.0.0.1', async () => {
+        const { service } = machineService({
+            runProbe: failingInfo('failed to connect: dial tcp 127.0.0.1:63483: connect: connection refused'),
+        });
+        expect(await service.getReadiness()).toMatchObject({
+            failureKind: 'daemonUnavailable',
+            podmanTarget: { kind: 'local' },
+            startAction: 'startPodmanMachine',
+        });
+    });
+
+    it('tells WSL to start the Windows machine on Windows, never the user socket', async () => {
+        const { service, list } = machineService({
+            platform: 'linux',
+            remoteName: 'wsl',
+            runProbe: failingInfo(
+                'dial unix /mnt/wsl/podman-sockets/podman-machine-default/podman-user.sock: connect: no such file or directory',
+            ),
+        });
+        const result = await service.getReadiness();
+        expect(result).toMatchObject({
+            environment: 'wsl',
+            failureKind: 'daemonUnavailable',
+            podmanTarget: { kind: 'windowsMachineFromWsl', name: 'podman-machine-default' },
+            recoveryCommand: {
+                id: 'podmanMachineStartOnWindows',
+                commandLine: 'podman machine start podman-machine-default',
+            },
+        });
+        expect(result.startAction).toBeUndefined();
+        expect(list).not.toHaveBeenCalled();
+    });
 
     it('does not describe a ready Podman with the Docker endpoint setting', async () => {
         const { service } = machineService({
@@ -1441,7 +1501,10 @@ describe('DockerReadinessService', () => {
             environmentVariables: { DOCKER_HOST: host },
             runProbe: async (options) =>
                 options.probe === 'info' && failure
-                    ? evidence('info', { exitCode: 1, stderr: 'Cannot connect to Podman' })
+                    ? evidence('info', {
+                          exitCode: 1,
+                          stderr: 'Cannot connect to Podman\nError: unable to connect to Podman socket: dial unix /run/user/1000/podman/podman.sock: connect: connection refused',
+                      })
                     : evidence(options.probe, {
                           stdout: options.probe === 'info' ? '{"OSType":"linux"}' : 'podman version 6.0.2',
                       }),

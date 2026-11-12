@@ -13,8 +13,10 @@ import {
     classifyDockerFailure,
     classifyDockerProvider,
     classifyPodmanMachineState,
+    classifyPodmanTarget,
     getDockerDiagnosticFingerprint,
     parsePodmanDefaultConnection,
+    parsePodmanDialTarget,
     parsePodmanMachineList,
     type ContainerEngineInput,
 } from './dockerReadinessClassification';
@@ -120,6 +122,69 @@ describe('Podman machine facts', () => {
 function readFixture(name: string): string {
     return fs.readFileSync(path.join(__dirname, '__fixtures__', 'docker', name), 'utf8');
 }
+
+describe('Podman target from the dialled address', () => {
+    const cannotConnect = 'Cannot connect to Podman. Please verify your connection to the Linux system.\n';
+    it.each([
+        {
+            name: 'a Windows machine from WSL',
+            environment: 'wsl',
+            stderr: 'Error: unable to connect to Podman socket: failed to connect: dial unix /mnt/wsl/podman-sockets/podman-machine-default/podman-user.sock: connect: no such file or directory',
+            target: { kind: 'windowsMachineFromWsl', name: 'podman-machine-default' },
+        },
+        {
+            name: 'the rootless user socket',
+            environment: 'linux',
+            stderr: 'Error: unable to connect to Podman socket: dial unix /run/user/1000/podman/podman.sock: connect: connection refused',
+            target: { kind: 'userSocket' },
+        },
+        {
+            name: 'the root socket',
+            environment: 'wsl',
+            stderr: 'Error: unable to connect to Podman socket: dial unix /run/podman/podman.sock: connect: permission denied',
+            target: { kind: 'local' },
+        },
+        {
+            name: 'a machine on 127.0.0.1',
+            environment: 'macos',
+            stderr: 'Error: unable to connect to Podman socket: failed to connect: dial tcp 127.0.0.1:63483: connect: connection refused',
+            target: { kind: 'local' },
+        },
+        {
+            name: 'another host',
+            environment: 'macos',
+            stderr: 'Error: unable to connect to Podman socket: failed to connect: dial tcp 10.0.0.5:22: i/o timeout',
+            target: { kind: 'remote' },
+        },
+        {
+            name: 'an IPv6 host',
+            environment: 'linux',
+            stderr: 'Error: unable to connect to Podman socket: dial tcp [fd00::5]:22: connect: no route to host',
+            target: { kind: 'remote' },
+        },
+        {
+            name: 'an unresolvable host',
+            environment: 'wsl',
+            stderr: 'Error: unable to connect to Podman socket: dial tcp: lookup podman.example on 10.255.255.254:53: no such host',
+            target: { kind: 'remote' },
+        },
+        { name: 'no address', environment: 'linux', stderr: 'Error: unexpected', target: { kind: 'unknown' } },
+    ] as const)('classifies $name', ({ environment, stderr, target }) => {
+        expect(classifyPodmanTarget(parsePodmanDialTarget(cannotConnect + stderr), environment)).toEqual(target);
+    });
+
+    it('treats the WSL machine socket path outside WSL as merely local', () => {
+        const dial = parsePodmanDialTarget(
+            'dial unix /mnt/wsl/podman-sockets/podman-machine-default/podman-user.sock: connect: refused',
+        );
+        expect(classifyPodmanTarget(dial, 'linux')).toEqual({ kind: 'local' });
+    });
+
+    it('never puts an unsafe machine name into a target', () => {
+        const dial = parsePodmanDialTarget('dial unix /mnt/wsl/podman-sockets/-vm/podman-user.sock: connect: refused');
+        expect(classifyPodmanTarget(dial, 'wsl')).toEqual({ kind: 'local' });
+    });
+});
 
 describe('classifyContainerEngine', () => {
     it.each([

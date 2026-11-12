@@ -18,7 +18,58 @@ import {
     type DockerReadinessOutcome,
     type PodmanMachineFact,
     type PodmanMachineState,
+    type PodmanTarget,
 } from './quickStartTypes';
+
+/** Where a failed Podman call tried to connect, read from its `dial unix|tcp …:` error text. */
+export type PodmanDialTarget =
+    | { readonly transport: 'unix'; readonly path: string }
+    | { readonly transport: 'tcp'; readonly host: string };
+
+export function parsePodmanDialTarget(stderr: string): PodmanDialTarget | undefined {
+    const unix = /\bdial unix (\/[^\r\n]*?): /.exec(stderr);
+    if (unix) {
+        return { transport: 'unix', path: unix[1] };
+    }
+    const tcp = /\bdial tcp (?:\[([^\]\s]+)\]|([^\s:[\]]+)):\d+: /.exec(stderr);
+    if (tcp) {
+        return { transport: 'tcp', host: tcp[1] ?? tcp[2] };
+    }
+    const lookup = /\bdial tcp: lookup ([^\s:]+)/.exec(stderr);
+    return lookup ? { transport: 'tcp', host: lookup[1] } : undefined;
+}
+
+/** Podman machine names that are safe to show in a copy-only `podman machine start <name>` command. */
+export const PODMAN_MACHINE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+function isLoopbackHost(host: string): boolean {
+    const normalized = host.toLowerCase();
+    return normalized === 'localhost' || normalized === '::1' || /^127\.\d+\.\d+\.\d+$/.test(normalized);
+}
+
+export function classifyPodmanTarget(
+    dial: PodmanDialTarget | undefined,
+    environment: DockerHostEnvironment,
+): PodmanTarget {
+    if (dial?.transport === 'tcp') {
+        // Podman machines are reached over SSH on 127.0.0.1, so only another host is remote.
+        return isLoopbackHost(dial.host) ? { kind: 'local' } : { kind: 'remote' };
+    }
+    if (dial?.transport !== 'unix') {
+        return { kind: 'unknown' };
+    }
+    const windowsMachine = /^\/mnt\/wsl\/podman-sockets\/([^/]+)\/podman-(?:user|root)\.sock$/.exec(dial.path);
+    if (environment === 'wsl' && windowsMachine && PODMAN_MACHINE_NAME.test(windowsMachine[1])) {
+        return { kind: 'windowsMachineFromWsl', name: windowsMachine[1] };
+    }
+    if (
+        (environment === 'linux' || environment === 'wsl') &&
+        /^\/run\/user\/\d+\/podman\/podman\.sock$/.test(dial.path)
+    ) {
+        return { kind: 'userSocket' };
+    }
+    return { kind: 'local' };
+}
 
 export function parsePodmanMachineList(output: string): readonly PodmanMachineFact[] | undefined {
     try {

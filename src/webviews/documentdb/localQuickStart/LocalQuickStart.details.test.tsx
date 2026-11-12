@@ -14,6 +14,7 @@ import {
     PROVISION_STAGES,
     type DockerReadiness,
     type InstanceStatusUpdate,
+    type PodmanTarget,
     type StageEvent,
 } from '../../../services/localQuickStart/quickStartTypes';
 import { LocalQuickStart } from './LocalQuickStart';
@@ -609,43 +610,111 @@ describe('Local Quick Start stage details', () => {
         {
             environment: 'macos',
             machine: { kind: 'none' },
+            target: { kind: 'unknown' },
             id: 'podmanMachineInit',
             commandLine: 'podman machine init',
+            machineName: undefined,
         },
         {
             environment: 'linux',
             machine: undefined,
+            target: { kind: 'userSocket' },
             id: 'linuxStartPodmanSocket',
             commandLine: 'systemctl --user start podman.socket',
+            machineName: undefined,
         },
         {
             environment: 'wsl',
             machine: undefined,
+            target: { kind: 'userSocket' },
             id: 'linuxStartPodmanSocket',
             commandLine: 'systemctl --user start podman.socket',
+            machineName: undefined,
+        },
+        {
+            environment: 'wsl',
+            machine: undefined,
+            target: { kind: 'windowsMachineFromWsl', name: 'podman-machine-default' },
+            id: 'podmanMachineStartOnWindows',
+            commandLine: 'podman machine start podman-machine-default',
+            machineName: 'podman-machine-default',
         },
     ] as const)(
         'copies Podman recovery without starting anything on $environment',
-        async ({ environment, machine, id, commandLine }) => {
+        async ({ environment, machine, target, id, commandLine, machineName }) => {
             const readiness: DockerReadiness = {
                 ...stoppedPodman,
                 environment,
                 startAction: undefined,
                 podmanMachine: machine,
-                recoveryCommand: { id, commandLine, requiresElevation: false },
+                podmanTarget: target,
+                recoveryCommand: { id, commandLine, machineName, requiresElevation: false },
             };
             client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(readiness));
             await start();
             await event({ stage: 'checking', status: 'error', dockerReadiness: readiness });
             expect(host.textContent).toContain(commandLine);
+            if (id === 'podmanMachineStartOnWindows') {
+                expect(host.textContent).toContain(
+                    'Podman in this WSL distribution uses the Podman machine "podman-machine-default" on Windows, and that machine is not reachable. Start it on Windows with this command or from Podman Desktop, then check again.',
+                );
+                expect(host.textContent).toContain('Run in a Windows terminal');
+                expect(host.textContent).not.toContain('systemctl --user start podman.socket');
+            }
             await click(button('Copy'));
-            expect(client.trpc.localQuickStart.copyRecoveryCommand.mutate).toHaveBeenCalledExactlyOnceWith(id);
+            expect(client.trpc.localQuickStart.copyRecoveryCommand.mutate).toHaveBeenCalledExactlyOnceWith({
+                id,
+                ...(machineName !== undefined ? { machineName } : {}),
+            });
+            if (id === 'podmanMachineStartOnWindows') {
+                await act(async () => new Promise((resolve) => setTimeout(resolve, 110)));
+                expect(host.textContent).toContain('Recovery command copied.');
+            }
             expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
             expect(
                 [...host.querySelectorAll('button')].some((candidate) =>
                     /Start (?:Podman machine|Docker)/.test(candidate.textContent ?? ''),
                 ),
             ).toBe(false);
+        },
+    );
+
+    it.each([
+        {
+            target: { kind: 'remote' },
+            text: 'Podman is connected to another computer, which cannot be reached from here. Check its connection with "podman system connection list", then check again.',
+        },
+        {
+            target: { kind: 'local' },
+            text: 'Podman is not reachable. Check its connection with "podman system connection list", then check again.',
+        },
+    ] as const)(
+        'shows $target.kind guidance without an inappropriate action on Linux/WSL',
+        async ({ target, text }) => {
+            const readiness: DockerReadiness = {
+                ...stoppedPodman,
+                environment: 'wsl',
+                startAction: undefined,
+                podmanMachine: undefined,
+                podmanTarget: target satisfies PodmanTarget,
+                failureKind: target.kind === 'remote' ? 'endpointUnreachable' : 'daemonUnavailable',
+            };
+            client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(readiness));
+            await start();
+            await event({ stage: 'checking', status: 'error', dockerReadiness: readiness });
+
+            expect(host.textContent).toContain(text);
+            expect(host.textContent).not.toContain('systemctl --user start podman.socket');
+            expect(() => button('Copy')).toThrow();
+            expect(() => button('Start Podman machine')).toThrow();
+            expect(() => button('Start Docker Desktop')).toThrow();
+            if (target.kind === 'local') {
+                const guidance = host.querySelector('.fui-MessageBarBody')?.textContent;
+                expect(guidance).not.toContain('Podman Desktop');
+                expect(guidance).not.toContain('Podman machine');
+            }
+            expect(client.trpc.localQuickStart.copyRecoveryCommand.mutate).not.toHaveBeenCalled();
+            expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
         },
     );
 

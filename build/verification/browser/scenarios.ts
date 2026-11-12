@@ -372,11 +372,34 @@ const linuxPodmanSocketDown = {
     environment: 'linux',
     startAction: undefined,
     podmanMachine: undefined,
+    podmanTarget: { kind: 'userSocket' },
     recoveryCommand: {
         id: 'linuxStartPodmanSocket',
         commandLine: 'systemctl --user start podman.socket',
         requiresElevation: false,
     },
+} as const satisfies QuickStartOutputs['getDockerStatus']['readiness'];
+const wslWindowsPodmanMachineDown = {
+    ...linuxPodmanSocketDown,
+    environment: 'wsl',
+    podmanTarget: { kind: 'windowsMachineFromWsl', name: 'podman-machine-default' },
+    recoveryCommand: {
+        id: 'podmanMachineStartOnWindows',
+        machineName: 'podman-machine-default',
+        commandLine: 'podman machine start podman-machine-default',
+        requiresElevation: false,
+    },
+} as const satisfies QuickStartOutputs['getDockerStatus']['readiness'];
+const remotePodmanConnectionDown = {
+    ...linuxPodmanSocketDown,
+    failureKind: 'endpointUnreachable',
+    podmanTarget: { kind: 'remote' },
+    recoveryCommand: undefined,
+} as const satisfies QuickStartOutputs['getDockerStatus']['readiness'];
+const linuxPodmanUnreachable = {
+    ...linuxPodmanSocketDown,
+    podmanTarget: { kind: 'local' },
+    recoveryCommand: undefined,
 } as const satisfies QuickStartOutputs['getDockerStatus']['readiness'];
 
 function dockerMissing(
@@ -3129,9 +3152,168 @@ export const scenarios = {
                     kind: 'calls',
                     name: 'Copy requests only the approved Podman socket command',
                     path: 'localQuickStart.copyRecoveryCommand',
-                    input: 'linuxStartPodmanSocket',
+                    input: { id: 'linuxStartPodmanSocket' },
                     count: 1,
                     steps: [{ action: 'click', role: 'button', name: 'Copy' }],
+                },
+            ],
+        },
+        'podman-wsl-windows-machine': {
+            config: base.config,
+            rpc: {
+                ...base.rpc,
+                'localQuickStart.getDockerStatus': {
+                    type: 'query',
+                    results: [{ ...readyDocker, readiness: wslWindowsPodmanMachineDown }],
+                },
+                'localQuickStart.startQuickStart': {
+                    type: 'subscription',
+                    results: [{ stage: 'checking', status: 'error', dockerReadiness: wslWindowsPodmanMachineDown }],
+                },
+            },
+            steps: podmanSetupSteps,
+            readiness: {
+                content: [
+                    'Podman in this WSL distribution uses the Podman machine "podman-machine-default" on Windows',
+                    'podman machine start podman-machine-default',
+                    'Run in a Windows terminal',
+                    'Copy',
+                ],
+                noProgressbar: true,
+            },
+            assertions: [
+                {
+                    kind: 'text',
+                    name: 'WSL names the Windows machine and the terminal for its copy-only recovery',
+                    selector: 'body',
+                    includes: [
+                        'Start it on Windows with this command or from Podman Desktop, then check again.',
+                        'podman machine start podman-machine-default',
+                        'Run in a Windows terminal',
+                    ],
+                    excludes: [
+                        'systemctl --user start podman.socket',
+                        'Start Podman machine',
+                        'Start Docker Desktop',
+                        'podman.exe',
+                    ],
+                },
+                {
+                    kind: 'calls',
+                    name: 'WSL never starts the Windows machine through interop',
+                    path: 'localQuickStart.startDockerProvider',
+                    input: undefined,
+                    count: 0,
+                    steps: [],
+                },
+                {
+                    kind: 'calls',
+                    name: 'Copy sends only the Windows command id and machine name to the host',
+                    path: 'localQuickStart.copyRecoveryCommand',
+                    input: { id: 'podmanMachineStartOnWindows', machineName: 'podman-machine-default' },
+                    count: 1,
+                    steps: [{ action: 'click', role: 'button', name: 'Copy' }],
+                },
+            ],
+        },
+        'podman-remote-connection': {
+            config: base.config,
+            rpc: {
+                ...base.rpc,
+                'localQuickStart.getDockerStatus': {
+                    type: 'query',
+                    results: [{ ...readyDocker, readiness: remotePodmanConnectionDown }],
+                },
+                'localQuickStart.startQuickStart': {
+                    type: 'subscription',
+                    results: [{ stage: 'checking', status: 'error', dockerReadiness: remotePodmanConnectionDown }],
+                },
+            },
+            steps: podmanSetupSteps,
+            readiness: {
+                content: ['Podman is connected to another computer, which cannot be reached from here.'],
+                noProgressbar: true,
+            },
+            assertions: [
+                {
+                    kind: 'text',
+                    name: 'A remote Podman connection has connection guidance, not local recovery',
+                    selector: 'body',
+                    includes: ['Check its connection with "podman system connection list", then check again.'],
+                    excludes: [
+                        'systemctl --user start podman.socket',
+                        'Start Podman machine',
+                        'Start Docker Desktop',
+                        'Copy',
+                    ],
+                },
+                {
+                    kind: 'calls',
+                    name: 'A remote Podman connection never starts a local engine',
+                    path: 'localQuickStart.startDockerProvider',
+                    input: undefined,
+                    count: 0,
+                    steps: [],
+                },
+                {
+                    kind: 'calls',
+                    name: 'A remote Podman connection has no recovery command to copy',
+                    path: 'localQuickStart.copyRecoveryCommand',
+                    input: { id: 'linuxStartPodmanSocket' },
+                    count: 0,
+                    steps: [],
+                },
+            ],
+        },
+        'podman-linux-unreachable': {
+            config: base.config,
+            rpc: {
+                ...base.rpc,
+                'localQuickStart.getDockerStatus': {
+                    type: 'query',
+                    results: [{ ...readyDocker, readiness: linuxPodmanUnreachable }],
+                },
+                'localQuickStart.startQuickStart': {
+                    type: 'subscription',
+                    results: [{ stage: 'checking', status: 'error', dockerReadiness: linuxPodmanUnreachable }],
+                },
+            },
+            steps: podmanSetupSteps,
+            readiness: {
+                content: [
+                    'Podman is not reachable. Check its connection with "podman system connection list", then check again.',
+                ],
+                noProgressbar: true,
+            },
+            assertions: [
+                {
+                    kind: 'text',
+                    name: 'An unrecognised Linux Podman target gets connection guidance, never machine or socket recovery',
+                    selector: 'body',
+                    includes: ['podman system connection list'],
+                    excludes: [
+                        'Podman Desktop',
+                        'systemctl --user start podman.socket',
+                        'Start Podman machine',
+                        'Start Docker Desktop',
+                        'Copy',
+                    ],
+                },
+                {
+                    kind: 'calls',
+                    name: 'An unrecognised Linux Podman target never starts a local engine',
+                    path: 'localQuickStart.startDockerProvider',
+                    input: undefined,
+                    count: 0,
+                    steps: [],
+                },
+                {
+                    kind: 'calls',
+                    name: 'An unrecognised Linux Podman target has no recovery command to copy',
+                    path: 'localQuickStart.copyRecoveryCommand',
+                    input: { id: 'linuxStartPodmanSocket' },
+                    count: 0,
+                    steps: [],
                 },
             ],
         },

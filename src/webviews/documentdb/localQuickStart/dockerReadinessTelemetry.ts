@@ -30,6 +30,9 @@ export function getDockerReadinessTelemetryProperties(readiness: DockerReadiness
     if (readiness.cli) {
         properties.containerCli = readiness.cli;
     }
+    if (readiness.podmanTarget) {
+        properties.podmanTargetKind = readiness.podmanTarget.kind;
+    }
     if (readiness.failureKind === 'unknown' && readiness.diagnosticFingerprint) {
         properties.dockerDiagnosticFingerprint = readiness.diagnosticFingerprint;
     }

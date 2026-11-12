@@ -24,6 +24,7 @@ import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { z } from 'zod';
 import { getQuickStartOutputChannel } from '../../../services/localQuickStart/ContainerRuntime';
+import { PODMAN_MACHINE_NAME } from '../../../services/localQuickStart/dockerReadinessClassification';
 import { getDockerRecoveryCommandById } from '../../../services/localQuickStart/dockerRecoveryCommands';
 import { getPasswordEncodingProblem } from '../../../services/localQuickStart/quickStartCredentials';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
@@ -273,17 +274,30 @@ export const localQuickStartRouter = router({
     /** Copy one fixed, never-executed recovery command selected by the extension host. */
     copyRecoveryCommand: publicProcedureWithTelemetry
         .input(
-            z.enum([
-                'linuxDockerGroup',
-                'linuxStartService',
-                'wslStartServiceNoSystemd',
-                'wslRestartFromWindows',
-                'linuxStartPodmanSocket',
-                'podmanMachineInit',
-            ]),
+            z
+                .object({
+                    id: z.enum([
+                        'linuxDockerGroup',
+                        'linuxStartService',
+                        'wslStartServiceNoSystemd',
+                        'wslRestartFromWindows',
+                        'linuxStartPodmanSocket',
+                        'podmanMachineInit',
+                        'podmanMachineStartOnWindows',
+                    ]),
+                    machineName: z
+                        .string()
+                        .refine((name) => PODMAN_MACHINE_NAME.exec(name)?.[0] === name)
+                        .optional(),
+                })
+                .superRefine((input, ctx) => {
+                    if ((input.id === 'podmanMachineStartOnWindows') !== (input.machineName !== undefined)) {
+                        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['machineName'] });
+                    }
+                }),
         )
         .mutation(async ({ input, ctx }): Promise<void> => {
-            const command = getDockerRecoveryCommandById(input);
+            const command = getDockerRecoveryCommandById(input.id, input.machineName);
             await vscode.env.clipboard.writeText(command.commandLine);
             const tctx = sessionContext(ctx);
             tctx.actionContext.telemetry.properties.recoveryCommandId = command.id;
