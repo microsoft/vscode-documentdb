@@ -2,7 +2,7 @@
 feature: local-quickstart
 kind: plan
 status: active
-prs: []
+prs: [1076]
 created: 2026-11-10
 code:
   - src/services/localQuickStart/containerCli.ts
@@ -22,7 +22,7 @@ code:
 
 # 12 — Preferred container engine, and starting Podman from a button
 
-> **Approved with the Configure-stage amendment, 2026-11-10; not implemented.** This replaces
+> **Implemented and verified, 2026-11-10, from the approved Configure-stage amendment.** This replaces
 > the parked **W1** and **W8** of [iteration 10](./10-container-runtime-transparency.md).
 > Configure gets a **Container engine** preference, Docker or Podman, defaulting to Docker
 > without any checks. Only execution detects both CLIs, uses the preferred one if installed,
@@ -54,7 +54,7 @@ The operator approved the proposal with this simpler Configure stage. This **ame
 draft engine-choice decision ("there is no setting to change this"). That draft's number 0008
 is not the accepted stage-Details decision now recorded as 0008 in [decisions.md](../decisions.md).
 
-## 2. How it works today
+## 2. Baseline before this implementation
 
 | Area                       | Today                                                                                                                                                                                                                                                                                                    | Source                                                           |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
@@ -240,20 +240,239 @@ This documentation-only approval does not start those implementation checks.
 1. **P1 — engine per instance.** `engineCli` on the record and lease, runtime calls with an explicit
    CLI, and legacy records resolving as today. This has no user-visible change, but it must come
    first: without it, P2 can strand an instance.
+
+   **Done (2026-11-10), commit `deecc32f`:** Sol implemented record/lease ownership,
+   engine-scoped operations and readiness, mixed-engine reconciliation, logs and credential
+   restoration. Opus review required removal of ephemeral lookup caching; the correction
+   preserves retry after installing an engine without reloading. Decisions: operator-approved
+   owning-engine pinning; advised (`claude-opus-5.5`), 90% confidence, that only actual
+   record/container ownership is cached. Case 1: `npm run build` passed; 605 focused tests
+   passed, including 22 new ownership, failure-isolation and retry regressions. Router
+   readiness/start selection remains P2's work.
+
 2. **P2 — preference and execution-time fallback.** `resolveContainerCli(preferred)` detects both
    CLIs using the existing `onPath` shape, `preferredEngine` in options and router, and readiness
    memoized per CLI. Fresh execution re-resolves both CLIs; no Configure result determines it.
+
+   **Done (2026-11-10), commit `7f5ad767`:** Sol implemented both-CLI resolution, strict
+   preference options, instance-aware readiness/start and evidence-sensitive memoization.
+   The leader identified that pinning readiness lost the original fallback evidence;
+   advised (`claude-opus-5.5`), high confidence, the service now overlays a clone after the
+   runtime memo so checking and terminal snapshots preserve the actual selection without
+   polluting pinned checks. Case 1: build passed; 679 focused tests passed, including
+   44 new preference, PATH-change, ownership and fallback-evidence cases.
+
 3. **P3 — check-free Configure and Introduction copy.** Add the row with Docker always the default,
    remove eager checks from wizard mount and pre-execution steps, and split metadata access from
    readiness where needed. No detection-dependent hints or validation.
+
+   **Done (2026-11-10), commit `346dc9cd`:** Sol added static engine selection,
+   metadata-only opening/context, explicit preference forwarding and three Configure
+   scenarios. Opus review required keeping recorded metadata and credential warnings out
+   of shared live state; five additional regressions preserve data-removed state and
+   container-environment credential recovery. Advised (`claude-opus-5.5`), 85% confidence.
+   Focused tests: 362 passed; browser harness: 34 passed. The first integration build
+   reported only P5's pending UI wiring; after that wiring, `npm run build` passed,
+   completing P3's Case 1 build verification.
+
 4. **P4 — W1 replaced.** No provider memory for Podman runs, and no Docker evidence or start action
    for them.
+
+   **Done (2026-11-10), commit `00fd6724`:** Terra guarded every provider-memory access,
+   including reset and launch recording, with the actual run's CLI. Podman no longer uses
+   Docker installed-app evidence, launch capabilities or recovery commands. Docker behavior
+   is unchanged. Advised (`claude-opus-5.5`), high confidence; 13 new regressions and all
+   155 focused tests passed, as did the Case 1 build. P4 ran independently of P3 on
+   disjoint files and was committed first; this does not change the accepted six-item scope.
+
 5. **P5 — W8.** Machine detection, the `startPodmanMachine` action, the platform gate, the button
    and the wait.
+
+   **Done (2026-11-10), commit `165bc3d1f`:** Sol implemented verified live machine
+   selection and platform gating, explicit-name startup, non-killing startup observation,
+   output draining, recovery copy and button/wait integration. Opus review required
+   preserving Docker memory for shim launches, quietly polling click-time state changes,
+   and automatically polling an already-starting Podman machine once per execution
+   generation. Advised (`claude-opus-5.5`), final 90% confidence. Added 134 regressions;
+   559 focused tests and 36 browser-harness tests passed; the Case 1 build passed.
+   The real WSL lifecycle smoke test passed separately. Native Windows/macOS startup is
+   still a manual-matrix item, not claimed as live-tested.
+
 6. **P6 — fallback display, telemetry, docs.** The detail-line segment, the Details fact, the user
    manual, the README timeline, and accepted decisions for engine preference and platform-gated
    startup. Use the next available decision numbers; iteration 10's draft numbers must not
    overwrite the accepted stage-Details decision 0008.
+
+   **Done (2026-11-10), code commit `2ccb3eb86`:** Sol added truthful fallback summaries,
+   execution-derived preference facts and bounded readiness/provision telemetry. Final
+   independent review and Opus validation led to captured checking-event snapshots,
+   per-execution evidence, lease-safe ownership caching and metadata-only ownership
+   updates across windows. Unknown telemetry is omitted rather than guessed. The final
+   ownership corrections were reproduced before implementation and approved by Opus at
+   85% confidence. Added 79 P6/revision regressions and three scenario-fixture regressions;
+   the final build and 1,191 focused tests passed. Browser harness: 121 tests passed;
+   the three corrected new scenarios passed nine real-browser theme routes. Luna updated
+   the user manual, current feature docs and accepted decisions 0009/0010; those docs are
+   committed separately as `7f4d203a9`. Full final verification results follow in iteration 13.
+
+### Execution record — 2026-11-10
+
+The operator requested implementation with the lead workflow from #1073 and Opus 5.5 as
+advisor. Work is on `dev/tnaum/preferred-engine-podman-start`, stacked on
+`dev/tnaum/quickstart-setup-stage-details-pr` (#1072), not `main`. The attached iteration 12
+document is the task source; iteration 11 is the existing stage-Details implementation.
+Implementation PR: **#1076**, draft, milestone **1.1.0**.
+
+Opus 5.5 prepared the work breakdown and approved the P1–P4 interfaces at 82% confidence.
+P5 requires verification against Podman 5.x/6.x source before implementation. The approved
+instance ownership rule also governs Start fresh: deleting and recreating existing data
+must not silently change engines. Opening the wizard includes metadata hydration only;
+live engine status remains unknown until execution.
+
+| Item | Assigned model  | Reason                                                          | State                                   |
+| ---- | --------------- | --------------------------------------------------------------- | --------------------------------------- |
+| P1   | `gpt-6.1-sol`   | Persisted ownership, lifecycle and concurrent runtime isolation | Done: `deecc32f`                        |
+| P2   | `gpt-6.1-sol`   | Resolver, readiness and execution interfaces cross modules      | Done: `7f5ad767`                        |
+| P3   | `gpt-6.1-sol`   | Check-free behavior spans command, service, router and webview  | Done: `346dc9cd`                        |
+| P4   | `gpt-6.1-terra` | Bounded provider-evidence isolation                             | Done: `00fd6724`                        |
+| P5   | `gpt-6.1-sol`   | Platform detection and long-running process lifecycle           | Done: `165bc3d1f`                       |
+| P6   | `gpt-6.1-sol`   | Evidence, telemetry and scenario integration                    | Done: `2ccb3eb86`; docs by `gpt-6-luna` |
+
+P1's first worker stopped after the runtime split exposed a command log consumer outside
+its initial file list. The leader authorized that necessary consumer migration; no
+behavioral scope was added. The continuation must finish the tests before P1 is committed.
+Case 1 runs per phase, as requested by this plan; the full Case 2 runs at handover and is
+repeated with Case 1 after any fixes until green, as explicitly requested by the operator.
+
+**P5 source gate, advised (`claude-opus-5.5`), 85% confidence:** Podman v5.8.0 and
+v6.0.0 both expose `Name`, `Default`, `Running` and `Starting` in JSON. JSON names do not
+include the human table's default marker. The verified same-machine startup error is
+`unable to start "<name>": already running`; another active machine produces a different
+failure and must not be treated as success. Detection may use the existing bounded
+process runner, but startup needs a non-killing process path that continues draining
+stdout/stderr after the user stops waiting. A long boot returns control to the readiness
+poller rather than blocking Cancel. Platform and machine evidence remain live and are
+rechecked on click.
+
+Source verification:
+[5.8 reporter](https://github.com/containers/podman/blob/v5.8.0/pkg/domain/entities/machine.go),
+[6.0 reporter](https://github.com/containers/podman/blob/v6.0.0/pkg/domain/entities/machine.go),
+[5.8 listing](https://github.com/containers/podman/blob/v5.8.0/cmd/podman/machine/list.go),
+[6.0 listing](https://github.com/containers/podman/blob/v6.0.0/cmd/podman/machine/list.go),
+[5.8 startup](https://github.com/containers/podman/blob/v5.8.0/pkg/machine/shim/host.go),
+[6.0 startup](https://github.com/containers/podman/blob/v6.0.0/pkg/machine/shim/host.go).
+
+**Remote Podman experiment, 2026-11-10:** after the operator authorized experiments against
+their WSL-to-Windows Podman connection, Opus recommended an isolated lifecycle smoke test
+after implementation, not as a prerequisite for P2. Read-only probes confirmed client and
+server 6.1.4, a reachable rootless remote Linux engine, and a default connection through the
+Windows-shared WSL socket. `machine list --format json` returned `[]` from this WSL client.
+This environment can validate provisioning and engine ownership but cannot exercise the
+native Windows/macOS machine-start button. No machine or existing container was stopped.
+
+**Live lifecycle result: passed.** An isolated Vitest harness used the real
+`QuickStartService` and `ContainerRuntime`, in-memory VS Code host state/secrets, and the
+remote Podman engine. It pulled the official DocumentDB Local image (version 1.0.1), bound
+only loopback on a free high port, provisioned and authenticated successfully, and verified
+Podman ownership in both the lease and ready record. Stop/start/reconcile passed; requesting
+Docker afterward still managed the record in Podman. Normal service deletion and independent
+CLI checks confirmed that only the uniquely named test container and volume were removed,
+pre-existing resources were unchanged, and no credential/scratch files remained. Runtime:
+39.27 seconds. The downloaded image remains in the shared cache. Sample data was disabled.
+Native machine startup remains unverified on this WSL extension host.
+
+**Deferred operator question:** the approved WSL socket-start guidance applies to native
+Podman, but a WSL client using the Windows-shared socket requires starting the Windows
+machine instead. Opus identified this separate wording gap. Connection-specific WSL
+guidance is not silently added to this implementation; the approved no-machine-button
+platform gate is unchanged.
+
+### Final review and verification loop
+
+The independent whole-feature sweep found four valid cross-phase defects: a rolled-back
+lease retaining an engine pin, post-check refresh losing captured selection evidence,
+checking evidence surviving into another execution, and Configure ownership not tracking
+instance changes. Opus validated the findings at 88–92% confidence; they are being corrected
+within P1/P3/P6's existing scope. The review and dispositions are recorded in
+[iteration 13](./13-preferred-engine-implementation-review.md).
+
+First full verification round: Case 1 build and 1,164 focused tests passed. Case 2
+localization generation/check, formatting, build, strict package-test typecheck, all
+8,493 runtime tests (one skipped), and packaging passed. Lint found five unsafe assignments
+in touched files, which the coding worker corrected. The second Case 1 build and 1,183
+focused tests passed, followed by regeneration and formatting. A later round caught three
+remaining unsafe accesses in a scenario assertion; an explicit scenario type fixed them
+without changing assertions or production behavior (`214f694d4`).
+
+**Final round 3: all ten Case 1 + Case 2 commands passed on the same application/test
+revision.** Case 1: build and 1,191 focused tests, 30 files. Case 2: localization generation,
+formatting, localization check, lint, build, strict `typecheck:tests`, all 8,520 runtime
+tests (one skipped), 388 files, and packaging. The final round took about nine minutes;
+this is local verification time, not CI time or model-request time.
+
+A fresh task-owned browser page ran all 66 Local Quick Start routes across dark, light
+and high-contrast: 240 assertions, zero errors. The eight critical scenarios also passed
+a focused 24-route run. Earlier attempts exposed fixture errors, a missing external timer
+in the browser-tool sandbox and a lost page handle; those results are not presented as
+product passes. The scenario runner itself was not changed. The temporary server was stopped.
+
+The final current-source Podman lifecycle rerun passed in 44.11 seconds, including captured
+checking evidence and independently confirmed cleanup. Native Windows/macOS machine startup
+remains a manual check. The PR remains draft for human review; full Case 2 was explicitly
+requested and ran, not deferred because of draft status.
+
+### Lead usage snapshot
+
+Window: 2026-11-10 13:36:04 UTC through the host's 16:35 UTC snapshot, about 2h59m wall time.
+The tables are copied from #1073's `agent-stats.mjs`, with explicit roles for all 19
+Opus advisor consultations, the independent review and the checks. They include partial
+attempts and review-driven rework. Publication/report-finalization and the final response
+after the snapshot are excluded. Summed model-request time is about 147 minutes; it is
+not wall time, and overlapping model, tool and check spans must not be added together.
+Browser elapsed time was not reported by the host. No CI timing is claimed.
+
+| Model           | Role    | Requests | Model time |    AIU | AIU share |
+| --------------- | ------- | -------: | ---------: | -----: | --------: |
+| claude-opus-5.5 | advisor |      294 |     29m18s | 1129.8 |     42.4% |
+| gpt-5.6-luna    | checks  |       18 |      1m44s |    2.7 |      0.1% |
+| gpt-6-luna      | coding  |       34 |      6m56s |    5.9 |      0.2% |
+| gpt-6.1-sol     | leader  |      157 |     34m44s |  444.2 |     16.7% |
+| gpt-6.1-sol     | coding  |      334 |     63m41s |  930.1 |     34.9% |
+| gpt-6.1-sol     | review  |       28 |      4m34s |   66.3 |      2.5% |
+| gpt-6.1-sol     | checks  |       28 |      3m58s |   68.5 |      2.6% |
+| gpt-6.1-terra   | coding  |       22 |      2m07s |   17.8 |      0.7% |
+
+| Role    | Requests | Model time |    AIU | AIU share |
+| ------- | -------: | ---------: | -----: | --------: |
+| leader  |      157 |     34m44s |  444.2 |     16.7% |
+| coding  |      390 |     72m43s |  953.8 |     35.8% |
+| advisor |      294 |     29m18s | 1129.8 |     42.4% |
+| review  |       28 |      4m34s |   66.3 |      2.5% |
+| checks  |       46 |      5m42s |   71.2 |      2.7% |
+
+| Model           | Role    |      Input |  Output | Cache read | Cache write | Reasoning |
+| --------------- | ------- | ---------: | ------: | ---------: | ----------: | --------: |
+| claude-opus-5.5 | advisor | 17,034,260 | 166,197 | 16,082,625 |     951,009 |    87,594 |
+| gpt-5.6-luna    | checks  |    355,612 |   7,352 |    309,254 |      46,304 |     4,553 |
+| gpt-6-luna      | coding  |  2,775,191 |  38,331 |  2,671,358 |     103,731 |    26,254 |
+| gpt-6.1-sol     | leader  | 23,825,301 |  91,971 | 23,350,443 |     474,387 |    41,773 |
+| gpt-6.1-sol     | coding  | 42,179,957 | 233,589 | 41,035,230 |   1,143,725 |    87,053 |
+| gpt-6.1-sol     | review  |  2,163,946 |  12,954 |  2,031,719 |     132,143 |     6,006 |
+| gpt-6.1-sol     | checks  |  1,883,631 |  18,085 |  1,752,018 |     131,529 |     2,810 |
+| gpt-6.1-terra   | coding  |  1,155,282 |   8,018 |  1,088,196 |      67,020 |     1,230 |
+
+Totals: leader **444.2 AIU**, subagents **2221.1 AIU**, run **2665.2 AIU**.
+AIU are not dollars. Displayed totals have independent rounding. Cache and reasoning
+counts can overlap input/output and are not an additive token total; none is inferred
+from model pricing.
+
+**Optimization note:** advising was the largest measured category (42.4%). The initial broad
+planning read, separate phase reviews and repeated corrections added context and review
+overhead; repeated full checks also added wall time. Future runs could specify captured
+checking-event evidence and transient-lease ownership upfront, lint typed scenario fixtures
+before expensive full rounds, retain a background advisor for same-item follow-ups, and use
+a dedicated browser page. These are workflow suggestions, not a silent change to this
+run's approved model assignments. There were no model substitutions.
 
 ## 5. Tests
 

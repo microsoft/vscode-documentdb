@@ -1,0 +1,204 @@
+---
+feature: local-quickstart
+kind: review
+status: active
+prs: [1076]
+created: 2026-11-10
+code:
+  - src/services/localQuickStart/**
+  - src/webviews/documentdb/localQuickStart/**
+  - src/commands/localQuickStart/openLocalQuickStart.ts
+  - build/verification/browser/scenarios.ts
+---
+
+# Preferred engine implementation review
+
+## Scope and method
+
+Implementation of the approved [iteration 12](./12-preferred-engine-and-podman-start.md),
+stacked on `dev/tnaum/quickstart-setup-stage-details-pr` (#1072), not `main`.
+Implementation PR: **#1076** (draft, milestone 1.1.0).
+
+The leader used the lead workflow from #1073. Opus 5.5 planned the interfaces and reviewed
+the risky logic after each phase. A fresh `gpt-6.1-sol` code-review agent then performed
+an independent whole-feature sweep; Opus 5.5 challenged and validated its findings against
+the implementation. Review was read-only; separate coding agents implemented corrections.
+The source plan records phase commits, decisions, confidence and focused checks.
+
+The operator requested the implementation and repeated checks/fixes until green.
+The dispositions below are the leader's implementation decisions within that scope,
+not a claim that the operator personally reviewed the findings. Human review remains due.
+
+## Phase-review corrections
+
+| Phase | Finding                                                                                           | Disposition                                                                     |
+| ----- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| P1    | Ephemeral legacy lookup cached as instance ownership prevented retry after installing Podman      | Fixed before `deecc32f`; only real ownership is cached                          |
+| P2    | Pinned readiness discarded the run's original preference and fallback evidence                    | Fixed before `7f5ad767`; overlay a clone after the runtime memo                 |
+| P3    | Metadata-only wizard opening fabricated live container metadata and mutated credential state      | Fixed before `346dc9cd`; shared live state is not fabricated                    |
+| P5    | Shim launches could clear Docker provider memory; click-time machine changes appeared unavailable | Fixed before `165bc3d1f`; actual action controls memory and races enter polling |
+| P5    | An initially starting Podman machine required a manual check instead of automatic waiting         | Fixed before `165bc3d1f`; read-only polling runs once per execution generation  |
+
+## Independent sweep and validated dispositions
+
+All four findings were validated against current code by Opus 5.5 at 88–92% confidence.
+They are meaningful incorrect behavior in supported workflows, not broad severe failures.
+
+| ID  | Severity | Finding                                                                                     | Decision and reason                                                                                                                                  | State                          |
+| --- | -------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| R1  | Medium   | A provisioning lease could leave an engine pin after rollback                               | Fix: keep lease routing pinned while active, but cache only durable ready-record/container ownership so fresh preferences work after failure         | Fixed in `2ccb3eb86`; verified |
+| R2  | Medium   | A post-check status query reconstructed selection from the lease and lost fallback evidence | Fix: send the captured checking snapshot on checking events; consume it directly and preserve readiness telemetry in the existing subscription event | Fixed in `2ccb3eb86`; verified |
+| R3  | Medium   | A successful checking snapshot survived into later executions                               | Fix: clear per-execution readiness when starting a new stream, but retain it for Wait longer                                                         | Fixed in `2ccb3eb86`; verified |
+| R4  | Medium   | Configure's engine lock did not update after an external instance change or deletion        | Fix: include metadata-only ownership in instance updates and their dedupe key; update the UI without rerunning wizard initialization                 | Fixed in `2ccb3eb86`; verified |
+
+P6 review also identified guessed telemetry when an older/synthetic snapshot has no
+preference evidence. The accepted correction omits unknown fields. Adding a new pinned-mode
+telemetry classification was not part of the approved plan and is not included.
+
+The final cross-window correction was reproduced by four failing service regressions
+before implementation. Ownership is retained for ready records and real live containers,
+but is not inferred from lease-only records or stale metadata after deletion. Opus
+approved the corrected routing at 85% confidence. Eight additional regressions preserve
+the legitimate ownership cases, and the final Case 1 build and 1,191 focused tests passed.
+The three initially failing new scenario fixtures were corrected without changing
+production behavior; their nine theme routes and 36 assertions passed in a real browser.
+
+## Verification
+
+| Check                             | First round                                                                                         | Final result                           |
+| --------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| Case 1 build and focused tests    | Passed; 1,164 tests                                                                                 | Passed; 1,191 tests, 30 files          |
+| Localization generation and check | Passed                                                                                              | Passed                                 |
+| Prettier                          | Passed                                                                                              | Passed                                 |
+| Lint                              | Five unsafe-assignment errors in touched files                                                      | Passed after typed-fixture corrections |
+| Case 2 build                      | Passed                                                                                              | Passed                                 |
+| `typecheck:tests`                 | Passed                                                                                              | Passed separately                      |
+| Full Vitest suite                 | 8,493 passed, one skipped, 388 files                                                                | 8,520 passed, one skipped, 388 files   |
+| Package                           | Passed                                                                                              | Passed                                 |
+| Browser scenarios, three themes   | First runner exposed fixture/evidence failures and a missing external timer in the tool environment | 66 routes, 240 assertions, zero errors |
+| Real remote Podman lifecycle      | Passed                                                                                              | Passed                                 |
+
+The real lifecycle smoke test used the real service/runtime and Podman 6.1.4 with isolated
+in-memory host state and secrets. Provisioning, authenticated wire readiness, lease/record
+ownership, stop/start/reconcile, opposite-preference management and normal deletion passed.
+Independent CLI checks confirmed cleanup of the exact test container and volume and
+preservation of pre-existing resources. Sample data was disabled.
+
+The smoke test was repeated after the final service corrections: one integration test
+passed in 44.11 seconds, captured checking readiness was verified, and the exact test
+container/volume and all harness/credential files were confirmed absent afterward.
+The temporary browser scenario server was stopped.
+
+The final verification round ran all ten Case 1 + Case 2 commands in sequence and passed.
+Earlier lint failures were not counted as green; the final annotation-only correction is
+`214f694d4`. Only documentation/reporting and PR provenance were finalized afterward.
+The full model/role usage, token breakdown, timing scope and optimization note are in
+the [source work-item document](./12-preferred-engine-and-podman-start.md#lead-usage-snapshot).
+
+## Native Windows Podman test (2026-11-10)
+
+A reviewer ran the CI build of `ba85263e` on native Windows 11 with Podman 6.1.4, a rootful WSL
+machine and no Docker CLI
+([report](https://github.com/microsoft/vscode-documentdb/pull/1076#issuecomment-6779412748)).
+Fallback, setup, lifecycle, recreate, delete, **Start Podman machine** and **Stop waiting** worked.
+This covers manual check 1 below for Windows; macOS is still untested.
+
+| Finding                                                                                                                                                                                               | Disposition                                                                                                                                         |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No start button about a minute after `podman machine stop`: WSL shuts down its idle VM then, `machine list` blocked for up to 11.3 s, and the 10 s process deadline turned the machine into `unknown` | Fixed: a timed-out `machine list` is retried once, inside the same readiness deadline                                                               |
+| The log said only "machine list failed or returned invalid JSON"                                                                                                                                      | Fixed: the log names a timeout, an exit code or invalid JSON, with the end of stderr                                                                |
+| `machine list` reports `Default: false` for a rootful machine, because its default connection is `<name>-root`. Several machines with a rootful default were therefore "ambiguous"                    | Fixed: when several machines exist and none is marked default, `system connection list` names the default. Unit-tested only; one machine was tested |
+| The Podman failure screen said "Docker daemon unavailable", "Check Docker again" and "the Docker check", and told the user to open Podman Desktop next to the in-app button                           | Fixed: engine-neutral or Podman wording, and a stopped machine is named                                                                             |
+| The check stage showed "Podman podman.EXE version 6.1.4", the raw `podman -v` output                                                                                                                  | Fixed in the webview: only the version number is shown. `cliVersion` itself is unchanged                                                            |
+| Configure kept "DocumentDB Local is already running" after the container was removed outside VS Code                                                                                                  | Not changed. Opening the wizard is metadata-only by decision (iteration 12, P3); a tree Refresh clears it. Operator decision                        |
+
+## Copilot review of `8821b17f` (2026-11-11)
+
+GitHub Copilot posted seven findings on the PR. Each was checked against the code; the six fixed
+ones were first reproduced by a failing test, except finding 4, which was traced.
+
+| #   | Finding                                                                                                                           | Check                                                                                                                                                           | Disposition                                                                                                                                                                                                  |
+| --- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | After a Docker-to-Podman fallback, a Docker CLI installed before the click makes **Start Podman machine** launch Docker Desktop   | Confirmed: the click re-resolved the Docker preference and launched `startDockerDesktopMacOS`                                                                   | Fixed in `4539cf3f`: the click names the displayed action; a check that selects another one starts nothing, and the panel then shows the current check                                                       |
+| 2   | An unrelated `DOCKER_HOST=tcp://…` or `ssh://…` hides the start button for a stopped Podman machine                               | Confirmed: the failure became `endpointUnreachable`; `DOCKER_CONTEXT` made it `unknown`. Podman 6.1.4 ignores both settings                                     | Fixed in `1e6a1b5a`: a check that runs the Podman CLI no longer reads Docker's endpoint settings. The Docker CLI shim is unchanged                                                                           |
+| 3   | Podman that became ready between showing the button and the click is reported as "could not be started"                           | Confirmed: a ready check has no start action, so the click returned `notAvailable`                                                                              | Fixed in `d7c77bcc`: a ready engine counts as started and the existing poll clears the blocker                                                                                                               |
+| 4   | A storage failure while resolving the owning engine leaves View Logs with an unhandled rejection                                  | Confirmed by trace: `followLogs` reads the record before the runtime's own error handling, and the command did not observe the promise                          | Fixed in `8ce2e4f7`: the reason is written to the setup log the command just opened, with the password masked                                                                                                |
+| 5   | Opened before the first reconciliation, the wizard starts on Introduction and reports `NotInstalled` when credentials are missing | Confirmed: an existing test already showed `getWizardContext()` and `getStatus()` disagreeing                                                                   | Fixed in `8881c241`: the command reads the same stored facts as the wizard context, still without an engine                                                                                                  |
+| 6   | An ownership-pinned run reports the owner as `preferredContainerEngine` and as "Preferred engine" in Details                      | Confirmed in three places: the readiness result, the provisioning overlay and the provision summary                                                             | Fixed in `558fc26f` on the operator's instruction (2026-11-11): a pinned check and its provision summary omit preference and fallback. This amends the P6 note above; no pinned-mode classification is added |
+| 7   | Every status event reads SecretStorage for each open panel, before the unchanged-status check                                     | Confirmed: `getInstanceEngine()` uses `getInstance()`, and `StorageService.getItem()` always reads the secret. The base branch did no storage read on this path | Deferred to a follow-up on the operator's instruction (2026-11-11). No accessor reads a record without its secret; adding one changes the shared `Storage` interface and its four test doubles               |
+
+Noticed while checking, not changed:
+
+- A legacy record without a recorded engine is checked as "preferred Docker" whatever Configure
+  submitted, so it has the same reporting question as finding 6.
+- Podman pointed at a remote host (`CONTAINER_HOST`, or a remote default connection) is still
+  diagnosed from the local machines. With a remote default connection and two stopped machines,
+  setup showed the "several machines" guidance and no button.
+
+## Native macOS Podman test (2026-11-11)
+
+Run on `8881c241` (`npm run build-prod`, development host, VS Code 1.146.0) on macOS arm64 with
+Podman 6.1.4 and a rootful libkrun machine. The window's `PATH` had Podman and no Docker CLI, so
+the default Docker preference fell back to Podman. Driven through the real webview.
+
+| Scenario                                                                                                          | Result                                                                                                                                                     |
+| ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Machine stopped, setup started                                                                                    | "Podman 6.1.4 (Docker not found)", "Engine unavailable", the machine named, **Check Podman again**, **Start Podman machine**, "the container engine check" |
+| A `docker` CLI added to `PATH` after the check, then **Start Podman machine** (finding 1)                         | Nothing started and the panel changed to the Docker check. Docker Desktop is not installed here, so the launch itself is covered by unit tests only        |
+| **Start Podman machine**, then **Stop waiting**                                                                   | The wait ended and the machine kept starting                                                                                                               |
+| The stale **Start Podman machine** clicked once that machine was up (finding 3)                                   | "Ready to set up. Podman is ready now."                                                                                                                    |
+| Two stopped machines, neither `Default: true`, default connection `podman-machine-default-root` (decision 0011.1) | `podman-machine-default` was named and offered; the click started it and left the other machine stopped                                                    |
+| The same two machines with an unrelated default connection (a scratch `PODMAN_CONNECTIONS_CONF`)                  | "Several Podman machines were found without a unique default", both named, no button, nothing started                                                      |
+| `DOCKER_HOST=tcp://127.0.0.1:1` in the extension host (finding 2)                                                 | **Start Podman machine** was offered and worked                                                                                                            |
+| **Continue setup** with sample data, **Open Connection**, **View Logs**, **Delete Container…**                    | Setup finished in 15 seconds, the sample database opened, the container's logs followed, and the container and volume were removed                         |
+
+Not run here: a click that would launch Docker Desktop. The Windows timeout retry was run
+separately; see the next section.
+
+## Native Windows re-test of the timeout retry (2026-11-11)
+
+Run by a second session on native Windows 11 (10.0.26200) with Podman 6.1.4, a rootless WSL
+machine, no Docker CLI and VS Code 1.143.1, on a local `npm run package` build of `6165960d`
+(CI had not run on that commit). The wizard was driven through the real webview. This covers
+decision 0011 item 2.
+
+Standalone `podman machine list --format json` calls after `podman machine stop` took 0.25 to
+0.4 seconds, except one call started 60.6 seconds after the stop, which took 11.75 seconds. WSL's
+shutdown is one block of about 11 seconds starting about 60 seconds after the stop; a call
+exceeds 10 seconds only if it starts within about the first 1.5 seconds of it.
+
+| Run | Retry setup clicked after the stop | `machine list`                           | Start Podman machine offered |
+| --- | ---------------------------------- | ---------------------------------------- | ---------------------------- |
+| 1   | 61.6 s                             | Fast; `info` took the block, so no retry | Yes                          |
+| 2   | 59.9 s                             | Killed at 10 s; retry finished in 1.4 s  | Yes                          |
+| 3   | 59.4 s                             | Finished before the block                | Yes                          |
+| 4   | 60.6 s                             | Killed at 10 s; retry finished in 0.6 s  | Yes                          |
+| 5   | 60.6 s                             | Killed at 10 s; retry finished in 0.4 s  | Yes                          |
+
+Runs 2, 4 and 5 logged `[readiness] podman machine list timed out; retrying once`. No run logged
+`podmanMachine=unknown`. With the machine stopped, **Start Podman machine** reached "Ready to set
+up. Podman is ready now." in about 4 seconds.
+
+Observed, not changed:
+
+- The retry starts 0.2 to 0.4 seconds after the kill, while WSL is still shutting down. A
+  shutdown longer than about 20 seconds would time out the retry as well; the longest seen was
+  11.75 seconds.
+- The timed-out attempt writes only the retry line to the log, with no duration or stderr.
+- On the Ready screen the page text still begins with "Setup did not finish. Docker or Podman is
+  installed, but its engine is not reachable. Start it and retry." before "Podman is ready. Setup
+  has not run yet." What a screen reader announces was not checked.
+- `code serve-web` cannot be used for this test: the extension reports an `otherRemote`
+  environment there and never lists machines.
+
+## Manual checks and remaining operator decisions
+
+1. Native macOS/Windows: initialize a Podman machine, leave it stopped, choose Podman and
+   execute setup. Confirm the named start action, output, waiting and cancellation behavior.
+   This cannot be live-tested from the WSL extension host.
+   Done on Windows (`ba85263e`) and macOS (`8881c241`); see the two native tests above.
+2. WSL using a Windows-shared Podman socket needs Windows-machine guidance rather than native
+   socket guidance. The approved platform gate remains unchanged; connection-specific wording
+   is explicitly deferred in the source plan rather than silently added.
+3. Human author review of these dispositions and the native-start workflow remains due.
+   The PR stays draft even when automated checks are green.
