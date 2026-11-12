@@ -140,7 +140,7 @@ Use the CLI of the instance's recorded engine in the commands below: replace `do
    ```
 
 2. In the **Connections** view, expand the **DocumentDB Local** instance and select **Recreate container**. If the row doesn't appear yet, refresh the view.
-3. In the setup view, select **Continue**, then **Start DocumentDB Local**. The extension creates a new container on the same data volume, with the same credentials and image, using your current telemetry level.
+3. In the setup view, select **Continue**, then **Start DocumentDB Local**. The extension creates a new container on the same data volume, with the same credentials and image version, using your current telemetry level.
 
 **Delete Container…** in the extension removes the data volume too, so use it only when you want to start over.
 

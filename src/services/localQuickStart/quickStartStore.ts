@@ -56,7 +56,7 @@ export interface QuickStartInstanceRecord {
     operationId?: string;
     /** Provisioning lease timestamp; a stale lease (crashed host) is scavenged at reconcile. */
     leaseAt?: number;
-    /** Image the instance's data volume was created with, so a recreate reuses it. */
+    /** Image the instance's data volume runs on, pinned by digest once known, so a recreate reuses it. */
     imageRef?: string;
 }
 

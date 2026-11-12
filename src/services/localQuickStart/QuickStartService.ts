@@ -82,6 +82,7 @@ import {
     type InstanceMetadata,
     InstanceState,
     type InstanceStatus,
+    isPinnedImageRef,
     type OpenLocalQuickStartOptions,
     type PortAvailability,
     type ProvisionStage,
@@ -89,6 +90,7 @@ import {
     QUICK_START_ALIAS_LABEL_KEY,
     QUICK_START_DATA_PATH,
     QUICK_START_IMAGE,
+    QUICK_START_IMAGE_REPOSITORY,
     QUICK_START_LABEL_KEY,
     QUICK_START_OPERATION_LABEL_KEY,
     QUICK_START_PORT,
@@ -1131,6 +1133,8 @@ export class QuickStartServiceImpl {
             yield { ...stageEvent('pulling', 'active'), facts };
             activeDockerStage = 'pulling';
             const imageBefore = await engine.inspectImage(imageRef, cts.token);
+            // Existing data stays on the image it ran on: a tag that has moved would upgrade it for good.
+            const keepLocalImage = reusing && imageBefore !== undefined && imageBefore !== 'absent';
             facts = pullingFacts(imageBefore);
             const activePullFacts = facts;
             // Keep only the latest line, waking on output or settlement rather than polling a quiet pull.
@@ -1166,7 +1170,18 @@ export class QuickStartServiceImpl {
                 'pulling',
                 provisionCorrelationId,
                 async () => {
-                    await engine.pullImage(imageRef, cts.token, onProgress);
+                    if (!keepLocalImage) {
+                        if (reusing && !isPinnedImageRef(imageRef) && (await engine.volumeExists(volumeName(alias)))) {
+                            throw new Error(
+                                l10n.t(
+                                    'We don\'t know which DocumentDB version this data was created with, and {0} is no longer on this machine. Downloading it could upgrade the data to a newer version, which can\'t be undone. To go ahead anyway, run "{1} pull {0}", then try again.',
+                                    imageRef,
+                                    resolved.cli,
+                                ),
+                            );
+                        }
+                        await engine.pullImage(imageRef, cts.token, onProgress);
+                    }
                     this.throwIfAborted(signal);
                 },
                 [imageRef],
@@ -1203,9 +1218,10 @@ export class QuickStartServiceImpl {
                     cts.cancel();
                 }
             }
-            const imageAfter = await engine.inspectImage(imageRef, cts.token);
+            const imageAfter = keepLocalImage ? imageBefore : await engine.inspectImage(imageRef, cts.token);
+            // Nothing was pulled, so whether a newer image exists is unknown.
             const result =
-                imageBefore !== undefined && imageAfter && imageAfter !== 'absent'
+                !keepLocalImage && imageBefore !== undefined && imageAfter && imageAfter !== 'absent'
                     ? imageBefore === 'absent'
                         ? 'downloaded'
                         : imageBefore.id === imageAfter.id
@@ -1376,6 +1392,7 @@ export class QuickStartServiceImpl {
                 boundPort,
                 boundPortReported: !!reportedPort,
             };
+            const runningImageRef = (await this.pinImage(engine, inspected?.imageId, cts.token)) ?? imageRef;
             // Stream container logs to the channel during the wait (compensates for -dt detach, D2).
             void engine.followLogs(provisionedContainerId, secrets, cts.token);
             yield { ...stageEvent('starting', 'done'), facts };
@@ -1395,7 +1412,7 @@ export class QuickStartServiceImpl {
                 boundPort,
                 username: credentials.username,
                 password: credentials.password,
-                imageRef,
+                imageRef: runningImageRef,
                 sampleDataRequested,
                 provisionCorrelationId: provisionCorrelationId,
                 reusing: reusesVolume,
@@ -2243,6 +2260,18 @@ export class QuickStartServiceImpl {
         if (attempt.leaseHeld && stillOurs) {
             await this.releaseProvisioningLease(alias, attempt.operationId);
         }
+    }
+
+    /** The image's `…@sha256:` digest, which still names exactly this image after its tag moves. */
+    private async pinImage(
+        engine: IContainerEngineOps,
+        imageId: string | undefined,
+        token?: vscode.CancellationToken,
+    ): Promise<string | undefined> {
+        const image = imageId ? await engine.inspectImage(imageId, token, QUICK_START_IMAGE_REPOSITORY) : undefined;
+        const pinned =
+            image && image !== 'absent' && image.digest ? `${QUICK_START_IMAGE_REPOSITORY}@${image.digest}` : '';
+        return isPinnedImageRef(pinned) ? pinned : undefined;
     }
 
     private async findManagedContainer(
@@ -3295,7 +3324,8 @@ export class QuickStartServiceImpl {
         containerId: string,
         stored: string,
     ): Promise<void> {
-        const inspected = await (await this.engineFor(alias)).inspectContainer(containerId);
+        const engine = await this.engineFor(alias);
+        const inspected = await engine.inspectContainer(containerId);
         const running = isRunning(inspected);
         const boundPort = (inspected && getBoundHostPort(inspected)) || record?.port || QUICK_START_PORT;
         let username = '';
@@ -3310,7 +3340,10 @@ export class QuickStartServiceImpl {
         if (running) {
             this.populateCredentialCache(alias, stored, username, password);
         }
-        const adoptedImageRef = inspected?.image?.originalName;
+        // Pins instances set up before digests were stored, while their container still says which image they run.
+        const adoptedImageRef = isPinnedImageRef(record?.imageRef)
+            ? record.imageRef
+            : ((await this.pinImage(engine, inspected?.imageId)) ?? inspected?.image?.originalName);
         // Make the store authoritative + clear any stale provisioning lease: an adopted container whose
         // credentials we hold IS ready (so a later container-loss becomes Missing, not scavenged). The
         // image is backfilled from the adopted container so a recreate AFTER this container is removed

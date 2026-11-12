@@ -5,7 +5,30 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { QUICK_START_IMAGE, QUICK_START_IMAGE_REPOSITORY, resolveQuickStartImage } from './quickStartTypes';
+import {
+    isPinnedImageRef,
+    QUICK_START_IMAGE,
+    QUICK_START_IMAGE_REPOSITORY,
+    resolveQuickStartImage,
+} from './quickStartTypes';
+
+describe('isPinnedImageRef', () => {
+    const digest = 'sha256:' + 'a'.repeat(64);
+
+    it('accepts a digest of the official repository', () => {
+        expect(isPinnedImageRef(`${QUICK_START_IMAGE_REPOSITORY}@${digest}`)).toBe(true);
+    });
+
+    it.each([
+        ['a tag', QUICK_START_IMAGE],
+        ['a bare image id', digest],
+        ['another repository', `ghcr.io/documentdb/documentdb/documentdb-localx@${digest}`],
+        ['another registry', `docker.io/documentdb/documentdb/documentdb-local@${digest}`],
+        ['nothing', undefined],
+    ])('rejects %s', (_case, imageRef) => {
+        expect(isPinnedImageRef(imageRef)).toBe(false);
+    });
+});
 
 describe('resolveQuickStartImage (Advanced image-tag override, P1-4)', () => {
     it('falls back to the default image when no tag is given', () => {

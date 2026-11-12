@@ -30,6 +30,11 @@ export function resolveQuickStartImage(imageTag?: string): string {
     return tag ? `${QUICK_START_IMAGE_REPOSITORY}:${tag}` : QUICK_START_IMAGE;
 }
 
+/** True for an immutable `…/documentdb-local@sha256:…` reference, the form Docker and Podman list in `RepoDigests`. */
+export function isPinnedImageRef(imageRef: string | undefined): imageRef is string {
+    return imageRef?.startsWith(`${QUICK_START_IMAGE_REPOSITORY}@sha256:`) === true;
+}
+
 /**
  * Optional Advanced provisioning overrides (design §5.2 Advanced panel, P1-4).
  * Every field is optional; omitted fields keep the zero-decision defaults
@@ -331,10 +336,10 @@ export interface InstanceMetadata {
     readonly connectionString: string;
     readonly username: string;
     /**
-     * The image reference the instance's data volume was created with (e.g.
-     * `…/documentdb-local:latest`). Reused on a recreate so the persisted cluster is
-     * not silently moved to a different image version. May be undefined for instances
-     * recovered without a readable image (then a recreate falls back to the default).
+     * The image the instance's data volume runs on, pinned to its `…@sha256:` digest once known
+     * (instances set up by earlier versions may still hold a tag such as `…:latest`). Reused on a
+     * recreate so the persisted cluster is not silently moved to a different image version. May be
+     * undefined for instances recovered without a readable image (then a recreate falls back to the default).
      */
     readonly imageRef?: string;
 }

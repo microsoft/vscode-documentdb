@@ -28,11 +28,18 @@ import { DockerCommandError } from './dockerCommand';
 
 import { formatQuickStartMessage } from './quickStartMessages';
 import { envFileName, QuickStartServiceImpl, sweepStaleQuickStartEnvFiles } from './QuickStartService';
-import { listInstances, PROVISIONING_LEASE_TTL_MS, upsertInstance, writeConnectionString } from './quickStartStore';
+import {
+    getInstance,
+    listInstances,
+    PROVISIONING_LEASE_TTL_MS,
+    upsertInstance,
+    writeConnectionString,
+} from './quickStartStore';
 import {
     DEFAULT_ALIAS,
     InstanceState,
     QUICK_START_ALIAS_LABEL_KEY,
+    QUICK_START_IMAGE_REPOSITORY,
     QUICK_START_LABEL_KEY,
     QUICK_START_OPERATION_LABEL_KEY,
     QUICK_START_PORT,
@@ -620,6 +627,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         removeContainer?: Mock;
         removeVolume?: Mock;
         volumeExists?: boolean;
+        inspectImage?: Mock;
     }): IContainerRuntime {
         const inspect = opts.inspect ?? {};
         return mockRuntime({
@@ -638,6 +646,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
             removeVolume: opts.removeVolume ?? vi.fn().mockResolvedValue(undefined),
             // Unlike the provision helpers: a recorded instance normally still has its data volume.
             volumeExists: vi.fn().mockResolvedValue(opts.volumeExists ?? true),
+            ...(opts.inspectImage ? { inspectImage: opts.inspectImage } : {}),
         });
     }
 
@@ -666,6 +675,47 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         // listStatuses is ordered DEFAULT-first; both instances are durable + ready.
         expect(service.listStatuses().map((status) => status.alias)).toEqual([DEFAULT_ALIAS, ALIAS_2]);
         expect((await listInstances()).map((record) => record.alias).sort()).toEqual([ALIAS_2, DEFAULT_ALIAS].sort());
+    });
+
+    // Instances set up before digests were stored only know their tag, which may since have moved.
+    it('pins a tag-only instance to the digest its container runs, then stops looking it up', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        const tag = `${QUICK_START_IMAGE_REPOSITORY}:latest`;
+        const pinned = `${QUICK_START_IMAGE_REPOSITORY}@sha256:${'a'.repeat(64)}`;
+        await upsertInstance({
+            alias: DEFAULT_ALIAS,
+            displayName: DEFAULT_ALIAS,
+            port: 10260,
+            phase: 'ready',
+            imageRef: tag,
+        });
+        await writeConnectionString(DEFAULT_ALIAS, CONN_1, { displayName: DEFAULT_ALIAS, port: 10260 });
+        const inspectImage = vi.fn().mockResolvedValue({ id: 'sha256:id', digest: `sha256:${'a'.repeat(64)}` });
+        const service = new QuickStartServiceImpl(
+            reconcileRuntime({
+                containers: [{ id: 'c1', alias: DEFAULT_ALIAS }],
+                inspect: {
+                    c1: {
+                        ...(inspectItem('c1', { running: false, port: 10260, image: tag }) as object),
+                        imageId: 'sha256:id',
+                    },
+                },
+                inspectImage,
+            }),
+        );
+
+        await service.reconcile();
+
+        expect(inspectImage).toHaveBeenCalledWith('sha256:id', undefined, QUICK_START_IMAGE_REPOSITORY);
+        expect((await getInstance(DEFAULT_ALIAS))?.imageRef).toBe(pinned);
+        expect(service.getStatus().metadata?.imageRef).toBe(pinned);
+
+        inspectImage.mockClear();
+        await service.reconcile();
+
+        expect(inspectImage).not.toHaveBeenCalled();
+        expect((await getInstance(DEFAULT_ALIAS))?.imageRef).toBe(pinned);
     });
 
     it('retains Docker host facts collected during reconciliation', async () => {

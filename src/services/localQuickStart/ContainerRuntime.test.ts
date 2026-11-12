@@ -545,6 +545,17 @@ describe('ContainerRuntime output channel', () => {
         });
     });
 
+    it("reports the named repository's digest for an image ID, which has no repository of its own", async () => {
+        vi.mocked(runDockerCommand)
+            .mockResolvedValueOnce([imageItem({ Id: 'sha256:image-id' })])
+            .mockResolvedValueOnce([imageItem({ Id: 'sha256:image-id' })]);
+        expect(await engine.inspectImage('sha256:image-id')).toMatchObject({ digest: undefined });
+        expect(await engine.inspectImage('sha256:image-id', undefined, IMAGE_REF.split(':')[0])).toMatchObject({
+            id: 'sha256:image-id',
+            digest: 'sha256:right',
+        });
+    });
+
     it('proves absence only with an empty strict reference-filtered listing', async () => {
         vi.mocked(runDockerCommand).mockRejectedValueOnce(new Error('missing')).mockResolvedValueOnce([]);
         expect(await engine.inspectImage(IMAGE_REF)).toBe('absent');
