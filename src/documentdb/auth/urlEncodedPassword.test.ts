@@ -7,11 +7,16 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { ErrorExplanationService } from '../../services/errorExplanationService';
 import {
     showConnectionFailedAndMaybeOfferDecodedRetry,
     tryDecodeUrlEncodedPassword,
     UrlEncodedPasswordTelemetry,
 } from './urlEncodedPassword';
+
+vi.mock('../../services/errorExplanationService', () => ({
+    ErrorExplanationService: { explain: vi.fn() },
+}));
 
 function createMockContext(): IActionContext {
     return {
@@ -78,6 +83,7 @@ describe('showConnectionFailedAndMaybeOfferDecodedRetry', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.mocked(ErrorExplanationService.explain).mockResolvedValue(undefined);
     });
 
     it('shows error dialog without retry button when password is not URL-encoded', async () => {
@@ -86,6 +92,7 @@ describe('showConnectionFailedAndMaybeOfferDecodedRetry', () => {
         showErrorMessage.mockResolvedValueOnce(undefined);
 
         const result = await showConnectionFailedAndMaybeOfferDecodedRetry({
+            clusterId: 'stable-cluster-id',
             clusterName: 'test-cluster',
             password: 'plainPassword',
             isNativeAuth: true,
@@ -109,6 +116,7 @@ describe('showConnectionFailedAndMaybeOfferDecodedRetry', () => {
         showErrorMessage.mockResolvedValueOnce(undefined);
 
         const result = await showConnectionFailedAndMaybeOfferDecodedRetry({
+            clusterId: 'stable-cluster-id',
             clusterName: 'test-cluster',
             password: 'p%40ss', // URL-encoded but non-native auth
             isNativeAuth: false,
@@ -126,6 +134,7 @@ describe('showConnectionFailedAndMaybeOfferDecodedRetry', () => {
         showErrorMessage.mockResolvedValueOnce(undefined);
 
         const result = await showConnectionFailedAndMaybeOfferDecodedRetry({
+            clusterId: 'stable-cluster-id',
             clusterName: 'test-cluster',
             password: 'p%40ss',
             isNativeAuth: true,
@@ -141,7 +150,7 @@ describe('showConnectionFailedAndMaybeOfferDecodedRetry', () => {
         expect(showErrorMessage).toHaveBeenCalledWith(
             expect.stringContaining('test-cluster'),
             expect.objectContaining({ modal: true }),
-            expect.stringContaining('Decoded Password'),
+            expect.stringContaining('decoded password'),
         );
     });
 
@@ -154,6 +163,7 @@ describe('showConnectionFailedAndMaybeOfferDecodedRetry', () => {
         );
 
         const result = await showConnectionFailedAndMaybeOfferDecodedRetry({
+            clusterId: 'stable-cluster-id',
             clusterName: 'test-cluster',
             password: 'p%40ss',
             isNativeAuth: true,
@@ -171,6 +181,7 @@ describe('showConnectionFailedAndMaybeOfferDecodedRetry', () => {
         showErrorMessage.mockResolvedValueOnce(undefined);
 
         await showConnectionFailedAndMaybeOfferDecodedRetry({
+            clusterId: 'stable-cluster-id',
             clusterName: 'test-cluster',
             password: undefined,
             isNativeAuth: true,
@@ -193,6 +204,7 @@ describe('showConnectionFailedAndMaybeOfferDecodedRetry', () => {
         showErrorMessage.mockResolvedValueOnce(undefined);
 
         const result = await showConnectionFailedAndMaybeOfferDecodedRetry({
+            clusterId: 'stable-cluster-id',
             clusterName: 'test-cluster',
             password: undefined,
             isNativeAuth: true,
@@ -202,5 +214,41 @@ describe('showConnectionFailedAndMaybeOfferDecodedRetry', () => {
 
         expect(result.decodedPassword).toBeUndefined();
         expect(context.telemetry.properties[UrlEncodedPasswordTelemetry.Detected]).toBe('false');
+    });
+
+    it('uses the diagnosis while retaining the decoded-password hint and retry button', async () => {
+        const context = createMockContext();
+        const originalError = new Error('auth failed');
+        vi.mocked(ErrorExplanationService.explain).mockResolvedValue({
+            providerId: 'test-provider',
+            message: 'Infrastructure explanation',
+        });
+        showErrorMessage.mockResolvedValueOnce('Try with decoded password');
+
+        const result = await showConnectionFailedAndMaybeOfferDecodedRetry({
+            clusterId: 'stable-cluster-id',
+            clusterName: 'test-cluster',
+            password: 'p%40ss',
+            isNativeAuth: true,
+            originalError,
+            context,
+        });
+
+        expect(ErrorExplanationService.explain).toHaveBeenCalledWith({
+            clusterId: 'stable-cluster-id',
+            error: originalError,
+        });
+        expect(showErrorMessage).toHaveBeenCalledWith(
+            'Infrastructure explanation',
+            {
+                modal: true,
+                detail:
+                    'auth failed\n\n' +
+                    '💡 Your password appears to contain URL-encoded characters (e.g. %40 instead of @). This often happens when copying a password from a connection string URL. Would you like to retry with the decoded version?',
+            },
+            'Try with decoded password',
+        );
+        expect(context.telemetry.properties.diagnosisProviderId).toBe('test-provider');
+        expect(result.decodedPassword).toBe('p@ss');
     });
 });

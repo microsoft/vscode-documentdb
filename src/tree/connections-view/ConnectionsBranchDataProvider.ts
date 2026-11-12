@@ -12,7 +12,7 @@ import { ConnectionStorageService, ConnectionType, isConnection } from '../../se
 import { isLegacyEmulatorMigrationComplete } from '../../services/legacyEmulatorMigration';
 import { createGenericElementWithContext } from '../api/createGenericElementWithContext';
 import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
-import { CLUSTER_ITEM_CONTEXT_VALUE } from '../documentdb/ClusterItemBase';
+import { CLUSTER_ITEM_CONTEXT_VALUE, ClusterItemBase } from '../documentdb/ClusterItemBase';
 import { type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue } from '../TreeElementWithContextValue';
@@ -134,6 +134,20 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
                                     commandId: 'vscode-documentdb.command.connectionsView.updateCredentials',
                                     commandArgs: [el],
                                 }) as TreeElement,
+                                ...(el instanceof ClusterItemBase &&
+                                el.lastConnectionFailureReason === 'entraDestinationRejected'
+                                    ? [
+                                          createGenericElementWithContext({
+                                              contextValue: 'error',
+                                              id: `${el.id}/updateConnectionString`,
+                                              label: vscode.l10n.t('Click here to update the connection string'),
+                                              iconPath: new vscode.ThemeIcon('edit'),
+                                              commandId:
+                                                  'vscode-documentdb.command.connectionsView.updateConnectionString',
+                                              commandArgs: [el],
+                                          }) as TreeElement,
+                                      ]
+                                    : []),
                             ],
                         },
                     ],

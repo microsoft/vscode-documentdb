@@ -14,9 +14,11 @@ import * as vscode from 'vscode';
 import { nonNullProp } from '../../utils/nonNull';
 
 import { authMethodFromString, AuthMethodId, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
+import { evaluateEntraDestinationFromSettings } from '../../documentdb/auth/entraDestinationSettings';
 import { showConnectionFailedAndMaybeOfferDecodedRetry } from '../../documentdb/auth/urlEncodedPassword';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
+import { showClusterConnectFailure } from '../../documentdb/showClusterConnectFailure';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
 import { type AuthenticateWizardContext } from '../../documentdb/wizards/authenticate/AuthenticateWizardContext';
@@ -140,6 +142,10 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
             if (!authMethod || needsNativeCredentials) {
                 const wizardContext: AuthenticateWizardContext = {
                     ...context,
+                    connectionString: connectionCredentials.secrets.connectionString,
+                    entraDestinationAllowed: evaluateEntraDestinationFromSettings(
+                        connectionCredentials.secrets.connectionString,
+                    ).allowed,
                     availableAuthMethods: authMethodsFromString(connectionCredentials.properties.availableAuthMethods),
                     selectedAuthMethod: authMethod,
 
@@ -159,6 +165,9 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
 
                 // If the wizard was aborted or failed, return null
                 if (!credentialsProvided) {
+                    this.lastConnectionOutcome = 'canceled';
+                    context.telemetry.properties.result = 'Canceled';
+                    context.telemetry.properties.connectionResult = 'cancelled';
                     return null;
                 }
 
@@ -270,6 +279,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                 // offer a single, user-confirmed retry with the decoded value. We never
                 // silently decode-and-retry to avoid tripping server-side lockout policies.
                 const { decodedPassword } = await showConnectionFailedAndMaybeOfferDecodedRetry({
+                    clusterId: this.cluster.clusterId,
                     clusterName: this.cluster.name,
                     password,
                     isNativeAuth: authMethod === AuthMethodId.NativeAuth,
@@ -301,16 +311,12 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                         ext.outputChannel.appendLine(l10n.t('Retry Error: {error}', { error: retryError.message }));
                         context.telemetry.properties.urlDecodePasswordResult = 'failed';
 
-                        void vscode.window.showErrorMessage(
-                            l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
-                            {
-                                modal: true,
-                                detail:
-                                    l10n.t('Revisit connection details and try again.') +
-                                    '\n\n' +
-                                    l10n.t('Error: {error}', { error: retryError.message }),
-                            },
-                        );
+                        await showClusterConnectFailure({
+                            clusterId: this.cluster.clusterId,
+                            clusterName: this.cluster.name,
+                            error: retryErr,
+                            context,
+                        });
                     }
 
                     if (retryClient) {
@@ -322,7 +328,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                         context.telemetry.properties.urlDecodePasswordResult = 'succeeded';
 
                         // Offer to persist the corrected password so the user does not have to retry next time.
-                        const updateButton = l10n.t('Update Saved Password');
+                        const updateButton = l10n.t('Update saved password');
                         const saveChoice = await vscode.window.showInformationMessage(
                             l10n.t(
                                 'Connected to "{cluster}" using the decoded password. Would you like to update your saved credentials?',

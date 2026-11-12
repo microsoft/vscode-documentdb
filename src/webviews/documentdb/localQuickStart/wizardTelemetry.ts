@@ -5,6 +5,7 @@
 
 import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 import { randomUUID } from 'crypto';
+import { trackDeepLinkTelemetry, type DeepLinkTelemetry } from '../../../deepLinks/deepLinkTelemetry';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import {
     type ProvisionStage,
@@ -17,6 +18,7 @@ import {
  * so a journey can be followed step by step and its exit point found.
  */
 export interface QuickStartWizardSession {
+    readonly deepLink?: DeepLinkTelemetry;
     readonly id: string;
     readonly openedAt: number;
     readonly initialPhase: QuickStartWizardPhase;
@@ -35,8 +37,10 @@ export function createWizardSession(
     id: string | undefined,
     initialPhase: QuickStartWizardPhase = 'introduction',
     now: number = Date.now(),
+    deepLink?: DeepLinkTelemetry,
 ): QuickStartWizardSession {
     return {
+        deepLink,
         id: id ?? randomUUID(),
         openedAt: now,
         initialPhase,
@@ -77,6 +81,7 @@ export function reportWizardStep(
     const stepChangeIndex = session.stepChangeCount;
 
     void callWithTelemetryAndErrorHandling('documentDB.quickstart.wizard.step', (context) => {
+        trackDeepLinkTelemetry(context, session.deepLink);
         context.errorHandling.suppressDisplay = true;
         context.telemetry.properties.quickStartSessionId = session.id;
         context.telemetry.properties.fromStep = from;
@@ -91,6 +96,7 @@ export function reportWizardStep(
 /** Record where the journey ended as `documentDB.quickstart.wizard.close`. */
 export function reportWizardClosed(session: QuickStartWizardSession, now: number = Date.now()): void {
     void callWithTelemetryAndErrorHandling('documentDB.quickstart.wizard.close', (context) => {
+        trackDeepLinkTelemetry(context, session.deepLink);
         context.errorHandling.suppressDisplay = true;
         context.telemetry.properties.quickStartSessionId = session.id;
         context.telemetry.properties.initialStep = session.initialPhase;

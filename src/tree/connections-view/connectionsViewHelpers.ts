@@ -6,6 +6,7 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { recordDeepLinkConnectionAttempt } from '../../deepLinks/deepLinkTelemetry';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
@@ -108,6 +109,23 @@ export async function buildFullTreePath(itemId: string, connectionType: Connecti
         treePath += `/${id}`;
     }
 
+    return treePath;
+}
+
+/** Folder-aware tree path of a saved connection, optionally extended by a database and collection. */
+export async function buildConnectionsViewTargetPath(
+    storageId: string,
+    isEmulator: boolean,
+    database?: string,
+    collection?: string,
+): Promise<string> {
+    let treePath = await buildFullTreePath(storageId, isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters);
+    if (database) {
+        treePath += `/${database}`;
+        if (collection) {
+            treePath += `/${collection}`;
+        }
+    }
     return treePath;
 }
 
@@ -296,17 +314,27 @@ export async function revealInConnectionsView(
         });
     }
 
+    const connectionPath = await buildConnectionsViewTargetPath(storageId, isEmulator);
+    const connectionNode = await ext.connectionsBranchDataProvider.findNodeById(connectionPath, true);
+    if (connectionNode && ext.connectionsBranchDataProvider.hasNodeErrorState(connectionNode.id)) {
+        ext.connectionsBranchDataProvider.resetNodeErrorState(connectionNode.id);
+        ext.connectionsBranchDataProvider.refresh(connectionNode);
+    }
+
     // Step 1: Reveal the connection
-    const connectionPath = buildConnectionsViewTreePath(storageId, isEmulator);
     await revealConnectionsViewElement(context, connectionPath, {
         select: true, // Only select if this is the final step
         focus: !database, // Only focus if this is the final step
         expand: true,
     });
+    recordDeepLinkConnectionAttempt(context, connectionNode);
+    if (context.telemetry.properties.deepLinkOutcome === 'canceled') {
+        return;
+    }
 
     // Step 2: Reveal the database (if provided)
     if (database) {
-        const databasePath = buildConnectionsViewTreePath(storageId, isEmulator, database);
+        const databasePath = await buildConnectionsViewTargetPath(storageId, isEmulator, database);
         await revealConnectionsViewElement(context, databasePath, {
             select: true, // Only select if this is the final step
             focus: !collection, // Only focus if this is the final step
@@ -315,7 +343,7 @@ export async function revealInConnectionsView(
 
         // Step 3: Reveal the collection (if provided)
         if (collection) {
-            const collectionPath = buildConnectionsViewTreePath(storageId, isEmulator, database, collection);
+            const collectionPath = await buildConnectionsViewTargetPath(storageId, isEmulator, database, collection);
             await revealConnectionsViewElement(context, collectionPath, {
                 select: true,
                 focus: true,

@@ -5,17 +5,14 @@
 
 import { AzureWizardPromptStep, parseError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import * as vscode from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
-import { type DocumentDBCustomEnvironment } from '../../documentdb/auth/documentdbTokenResource';
+import { evaluateEntraDestinationFromSettings } from '../../documentdb/auth/entraDestinationSettings';
 import {
     getConnectionStringAuthFacts,
     stripManagedIdentityMarkers,
 } from '../../documentdb/auth/managedIdentityConnectionString';
-import { hasDocumentDBHost } from '../../documentdb/auth/oidcAllowedHosts';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { canonicalizeTlsException } from '../../documentdb/utils/tlsException';
-import { settingsKeys } from '../../settingsKeys';
 import { traceAuthFlow } from '../../utils/authTrace';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 
@@ -38,6 +35,7 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
 
         const authFacts = getConnectionStringAuthFacts(parsedConnectionString);
         context.connectionStringAuthFacts = authFacts;
+        const entraHostRecognized = evaluateEntraDestinationFromSettings(trimmedConnectionString).allowed;
 
         // Extract credentials to structured nativeAuthConfig
         if (!authFacts.usesOidc && (parsedConnectionString.username || parsedConnectionString.password)) {
@@ -57,8 +55,9 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
         }
 
         if (authFacts.usesOidc) {
-            context.selectedAuthenticationMethod = AuthMethodId.MicrosoftEntraID;
+            context.selectedAuthenticationMethod = entraHostRecognized ? AuthMethodId.MicrosoftEntraID : undefined;
             context.nativeAuthConfig = undefined;
+            context.managedIdentityAuthConfig = undefined;
 
             if (authFacts.username) {
                 context.valuesToMask.push(authFacts.username);
@@ -68,6 +67,7 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
         // A managed identity declaration needs the OIDC mechanism, the Azure environment marker,
         // and either no username (system assigned) or a GUID username (user assigned).
         const hasUsableManagedIdentity =
+            entraHostRecognized &&
             authFacts.usesOidc &&
             authFacts.declaresAzureMachineWorkflow &&
             (!authFacts.username || authFacts.usernameIsGuid);
@@ -85,7 +85,7 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
             context.telemetry.properties.managedIdentityClientIdSource = authFacts.username
                 ? 'connectionString'
                 : 'none';
-        } else if (authFacts.usesOidc && authFacts.usernameIsGuid) {
+        } else if (entraHostRecognized && authFacts.usesOidc && authFacts.usernameIsGuid) {
             context.managedIdentityAuthConfig = { clientId: authFacts.username };
         }
 
@@ -107,19 +107,9 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
         // 3. Detect and/or guess available authentication methods
         const supportedAuthMethods: AuthMethodId[] = [AuthMethodId.NativeAuth];
 
-        const customHostnameSuffix = vscode.workspace
-            .getConfiguration()
-            .get<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment)?.hostnameSuffix;
-        const entraHostRecognized = hasDocumentDBHost(parsedConnectionString.hosts, customHostnameSuffix);
         if (entraHostRecognized) {
             supportedAuthMethods.push(AuthMethodId.MicrosoftEntraID);
             // Managed identity is Entra ID on the wire; wherever one is offered, so is the other.
-            supportedAuthMethods.push(AuthMethodId.ManagedIdentity);
-        }
-
-        if (authFacts.usesOidc && !supportedAuthMethods.includes(AuthMethodId.ManagedIdentity)) {
-            // An explicit or suggestive driver-native string remains internally consistent even when
-            // a private endpoint or CNAME prevents host-based vCore classification.
             supportedAuthMethods.push(AuthMethodId.ManagedIdentity);
         }
 

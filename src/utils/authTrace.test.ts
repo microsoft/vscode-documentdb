@@ -4,11 +4,63 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it, vi } from 'vitest';
-import { describeAuthError, traceAuthFlow } from './authTrace';
+import { ext } from '../extensionVariables';
+import { describeAuthError, traceAuthFlow, traceEntraDestination } from './authTrace';
 
 vi.mock('../extensionVariables', () => ({ ext: { outputChannel: { info: vi.fn() } } }));
 
 describe('describeAuthError', () => {
+    it.each(['documentdbService', 'customSuffix', 'otherAzure', 'other'])(
+        'preserves bounded destination class %s independently of error masking',
+        (entraDestinationClass): void => {
+            const properties: Record<string, string> = {};
+            traceAuthFlow(
+                'entraDestination.evaluated',
+                {
+                    entraDestinationClass,
+                    microsoftCloudDomain: true,
+                    serviceLabel: false,
+                    hostname: 'private-host.example.com',
+                    token: 'private-token',
+                },
+                undefined,
+                { startupCorrelationId: 'startup-id', surface: 'shell', startupProperties: properties },
+            );
+            expect(properties).toEqual({ entraDestinationClass, microsoftCloudDomain: 'true', serviceLabel: 'false' });
+            expect(ext.outputChannel.info).toHaveBeenLastCalledWith(expect.not.stringMatching(/private-/));
+        },
+    );
+
+    it('never copies dynamic destination classes or rejection details into telemetry or output', (): void => {
+        const properties: Record<string, string> = {};
+        traceAuthFlow(
+            'entraDestination.evaluated',
+            {
+                entraDestinationClass: 'private-host',
+                microsoftCloudDomain: 'private-host',
+                serviceLabel: 'private-token',
+            },
+            undefined,
+            { startupCorrelationId: 'startup-id', surface: 'shell', startupProperties: properties },
+        );
+        expect(properties).toEqual({ entraDestinationClass: 'other' });
+        expect(ext.outputChannel.info).toHaveBeenLastCalledWith(expect.not.stringMatching(/private-/));
+    });
+
+    it('logs only the admitted custom suffix, not the first host', (): void => {
+        traceEntraDestination({
+            allowed: true,
+            destinationClass: 'customSuffix',
+            allowedHostPatterns: ['*.database.example.com'],
+            customSuffixUsed: 'database.example.com',
+            firstHost: 'private-host.database.example.com',
+            hostCount: 1,
+        });
+        expect(ext.outputChannel.info).toHaveBeenLastCalledWith(
+            '[Auth] Microsoft Entra ID destination admitted by custom suffix: database.example.com',
+        );
+    });
+
     it.each(['12345678', '123456789'])('keeps the full bounded AADSTS code %s', (code): void => {
         expect(describeAuthError(new Error(`Sign-in failed (AADSTS${code}).`))).toContain(`aadsts=AADSTS${code};`);
     });

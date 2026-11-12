@@ -153,9 +153,9 @@ function getAuthMethodIconPath(method: AuthMethodInfo): vscode.IconPath | undefi
  */
 export function createAuthMethodQuickPickItems(
     availableMethods?: AuthMethodId[],
-    options: { showSupportInfo?: boolean; filterUnsupported?: boolean } = {},
-): Array<vscode.QuickPickItem & { authMethod?: AuthMethodId }> {
-    const { filterUnsupported = false } = options;
+    options: { showSupportInfo?: boolean; filterUnsupported?: boolean; entraDestinationAllowed?: boolean } = {},
+): Array<vscode.QuickPickItem & { authMethod?: AuthMethodId; entraUnavailable?: boolean }> {
+    const { filterUnsupported = false, entraDestinationAllowed = false } = options;
 
     let methodsToShow: AuthMethodInfo[];
 
@@ -167,25 +167,46 @@ export function createAuthMethodQuickPickItems(
         methodsToShow = authFamilyMethodsArray;
     }
 
-    return methodsToShow.map((method) => ({
-        label: method.label,
-        detail: method.detail,
-        authMethod: method.id,
-        iconPath: getAuthMethodIconPath(method),
-        alwaysShow: true,
-    }));
+    const items: Array<vscode.QuickPickItem & { authMethod?: AuthMethodId; entraUnavailable?: boolean }> = methodsToShow
+        .filter((method) => entraDestinationAllowed || method.id !== AuthMethodId.MicrosoftEntraID)
+        .map((method) => ({
+            label: method.label,
+            detail: method.detail,
+            authMethod: method.id,
+            iconPath: getAuthMethodIconPath(method),
+            alwaysShow: true,
+        }));
+
+    // Legacy callers that do not supply a destination cannot offer Entra, or handle this action.
+    if (options.entraDestinationAllowed === false) {
+        items.push({
+            label: MicrosoftEntraIDAuthMethod.label,
+            description: vscode.l10n.t('not enabled for this address'),
+            detail: vscode.l10n.t('Select to see when Entra ID can be used.'),
+            iconPath: getAuthMethodIconPath(MicrosoftEntraIDAuthMethod),
+            entraUnavailable: true,
+            alwaysShow: true,
+        });
+    }
+    return items;
 }
 
 /**
  * Convenience function for service discovery scenarios - only shows supported methods
  */
-export function createFilteredAuthMethodQuickPickItems(availableMethods: AuthMethodId[]) {
-    return createAuthMethodQuickPickItems(availableMethods, { filterUnsupported: true });
+export function createFilteredAuthMethodQuickPickItems(
+    availableMethods: AuthMethodId[],
+    entraDestinationAllowed: boolean = false,
+): ReturnType<typeof createAuthMethodQuickPickItems> {
+    return createAuthMethodQuickPickItems(availableMethods, { filterUnsupported: true, entraDestinationAllowed });
 }
 
 /**
- * Convenience function for manual connection scenarios - shows all methods with support info
+ * Convenience function for manual connection scenarios - shows policy-allowed families with support info
  */
-export function createAuthMethodQuickPickItemsWithSupportInfo(availableMethods?: AuthMethodId[]) {
-    return createAuthMethodQuickPickItems(availableMethods, { showSupportInfo: true });
+export function createAuthMethodQuickPickItemsWithSupportInfo(
+    availableMethods?: AuthMethodId[],
+    entraDestinationAllowed: boolean = false,
+): ReturnType<typeof createAuthMethodQuickPickItems> {
+    return createAuthMethodQuickPickItems(availableMethods, { showSupportInfo: true, entraDestinationAllowed });
 }

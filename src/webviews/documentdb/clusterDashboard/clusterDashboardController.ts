@@ -7,6 +7,7 @@ import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microso
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
+import { type DeepLinkTelemetry } from '../../../deepLinks/deepLinkTelemetry';
 
 import { openCollectionViewInternal } from '../../../commands/openCollectionView/openCollectionView';
 import { API } from '../../../DocumentDBExperiences';
@@ -337,6 +338,7 @@ export function registerClusterDashboardContextMenuCommands(context: vscode.Exte
 
 export function openClusterDashboardWebview(
     initialData: ClusterDashboardWebviewConfigurationType,
+    deepLink?: DeepLinkTelemetry,
 ): AppWebviewController<ClusterDashboardWebviewConfigurationType> {
     const panelKey = getPanelKey(initialData.clusterId, initialData.selectedDatabaseName);
     const existingPanel = openPanels.get(panelKey);
@@ -354,6 +356,7 @@ export function openClusterDashboardWebview(
     // eslint-disable-next-line prefer-const
     let controller: AppWebviewController<ClusterDashboardWebviewConfigurationType>;
     const trpcContext: RouterContext = {
+        ...deepLink,
         dbExperience: API.DocumentDB,
         webviewName: 'clusterDashboard',
         clusterId: initialData.clusterId,

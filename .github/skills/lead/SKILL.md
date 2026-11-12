@@ -1,6 +1,6 @@
 ---
 name: lead
-description: 'Operator-invoked only, with /lead. The leader runs a multi-item coding task: breaks it into work items, delegates coding to subagents on tiered models, consults an operator-named advisor model for technical judgment, reviews changes, commits each item separately, reports progress after every agent return and records progress inline in the source plan or review document. Never load this skill unless the operator typed /lead.'
+description: 'Operator-invoked only, with /lead. The leader runs a multi-item coding task: breaks it into work items, delegates coding to subagents on tiered models, consults an operator-named advisor model for technical judgment, reviews changes, commits each item separately, reports progress after every agent return, summarizes costs and tokens by model and role, and records progress inline in the source plan or review document. Never load this skill unless the operator typed /lead.'
 argument-hint: 'advisor: <model>; then a task description, issue, or path to a plan or review document'
 disable-model-invocation: true
 ---
@@ -25,8 +25,9 @@ cases, `TDD:` contracts, git safety and terminology.
   record and report.
 - **Advisor:** the model the operator names after the command (for example
   `/lead advisor: claude-opus-5.5 <task>` or "your advisor is gpt-6-astra"). It resolves technical
-  choices within the approved scope, weighs conflicting evidence and reviews risky logic. It never
-  writes code, runs builds or writes progress reports.
+  choices within the approved scope, weighs conflicting evidence and reviews risky logic. When
+  asked to prepare or revise the plan, it also breaks down the work and recommends a coding model
+  for every item. It never writes code, runs builds or writes progress reports.
 - **Workers:** coding subagents on the tiers below, plus `task` and `explore` agents for checks and
   broad reading.
 - **Operator:** every always-ask decision (see Decisions).
@@ -87,6 +88,10 @@ tier. A model the operator names for a task overrides the tiers for that task. F
 state which model you chose and why. All coding models are eager: give each one a precise, bounded
 task.
 
+When the advisor prepares the work items, use its per-item model recommendations within these
+rules. Record the recommendation alongside the actual model; explain any substitution rather than
+silently changing the model plan. A recommendation does not authorize an otherwise gated model.
+
 ## Planning and parallel work
 
 For items that add or change types or APIs, put the exact interfaces in the prompt. When interfaces
@@ -120,6 +125,22 @@ not changed twice.
 You may split a large item into lettered sub-items (1.1a, 1.1b), each with its own commit. Order
 items so each commit builds; a short-lived placeholder is fine if a later item removes it. A tightly
 coupled follow-up on the same files may go to the same agent; it still gets its own commit.
+
+## Responsive delegation
+
+Launch every worker, advisor (including the first planning consultation), checks and exploration
+agent with `task(..., mode: "background")` explicitly. Omitting the mode can run the call
+synchronously and keep the leader from picking up pending steering until the subagent returns.
+Background mode keeps the leader available; it does not relax file ownership or dependency rules.
+
+Record each returned agent ID with its work item and role. Continue only safe, independent leader
+work while it runs. If none remains, end the turn and wait for the completion notification; do not
+block on `read_agent`, poll, sleep, or fill the wait with unnecessary work. After notification, read
+the result once using the known ID and post the normal progress checkpoint.
+
+Process operator steering before the next dispatch or follow-up. Relay relevant changes to a
+running same-task agent with `write_agent` when it supports messages; otherwise arrange a follow-up
+after it returns. Do not assume steering sent to the leader was also delivered to its workers.
 
 ## Subagent prompts
 
@@ -203,6 +224,19 @@ Use one subagent per work item, except for coupled follow-ups and chains (above)
   `decisions.md`. Never invent the operator's rationale.
 
 ## Advisor
+
+**Initial planning consultation.** If the operator asks the advisor to analyze or revise the plan
+and prepare work items, do that before coding. Include the source plan, accepted decisions,
+constraints and the Models rules in the first packet. Ask for a numbered breakdown with each
+item's goal, scope, dependencies, interfaces where needed, acceptance criteria, tests, and a
+**recommended coding model (full model ID) with a short reason**. The advisor must assign a model
+to every item, not leave model selection as a later leader-only step.
+
+Keep the response concise per item; the 250-word verdict limit below applies to ordinary decision
+packets, not the whole planning breakdown. Present and record the proposed items and model
+assignments with the plan. Preserve accepted decisions, operator-specified models, model permission
+gates and the Input approval rules; asking for plan analysis alone is not approval to implement
+new or changed scope.
 
 **Advisor gates.** Consult the advisor, whatever your confidence, for:
 
@@ -355,6 +389,49 @@ End with a short report:
 - the decisions made, who made each, with confidence;
 - the questions you escalated and the questions you parked;
 - the advisor consultations: how many, for which items, and where you did not follow the advisor;
-- the run totals from the last checkpoint (leader, subagents, run);
+- usage grouped by model and role, including tokens where reported (see below);
 - the checks you ran and their results;
 - open questions for the operator.
+
+### Usage and cost optimization
+
+Always include the usage breakdown, without waiting for a separate request. Its purpose is
+**cost optimization across runs**, not exact billing reconciliation. Use full model IDs and
+keep **leading and coding separate**, even when both use the same model.
+
+Record each agent's role alongside its ID when delegating: `advisor`, `coding`, `review`,
+`checks`, or `exploration`. This is the work actually assigned, not the model's capability.
+Include failed, cancelled and retried attempts. Pass explicit roles to the helper, especially
+for advisors launched through a review agent:
+
+```bash
+node .github/skills/lead/scripts/agent-stats.mjs --session <your session folder> \
+  --since <ISO time /lead started> --summary \
+  --role <advisor_id>=advisor --role <coding_id>=coding
+```
+
+Repeat `--role` for the other agents. The helper separates leader usage automatically and uses
+known agent types for defaults; unknown types stay `unclassified`. `--summary` covers the whole
+window, even if `--agent` was supplied. Ordinary checkpoints remain short; reserve these tables
+for the final report.
+
+- **Outcome and work items:** status, commit and actual model per item; note substitutions from
+  the recommended model, retries and review-driven rework. List unverified work first.
+- **Usage:** copy the model/role table (requests, summed model-request time, AIU and share),
+  followed by role totals so leading, coding, advising and checks can be compared directly.
+  Keep the leader/subagent/run total too. Never omit advisor or leader overhead.
+- **Tokens:** include the helper's input, output, cache-read, cache-write and reasoning counts
+  by model and role where available. Cache and reasoning fields may overlap input/output;
+  do not sum them into a purported total. Missing data is "not reported by host", not zero;
+  retain partial-coverage labels. Never infer AIU from tokens, model prices or multipliers.
+- **Scope and timing:** give the start and snapshot times. For follow-ups, show this task's
+  usage separately from cumulative usage, labelled with each window. Report wall-clock elapsed,
+  summed model-request time, and check/CI time separately where available; overlapping spans
+  are not additive. State whether the final response is excluded. AIU are not dollars.
+- **Optimization note:** briefly identify the largest measured cost category and significant
+  retry/review overhead, with a possible change for a future run. Do not rank model quality
+  from unlike work or silently change the approved model plan.
+
+Use sensible rounding; small snapshot differences are not a blocker. Do not spend extra
+consultations or rerun work to reconcile pennies. Keep the chat report compact and record
+detailed evidence in the existing work-item document, not a new parallel reporting ledger.

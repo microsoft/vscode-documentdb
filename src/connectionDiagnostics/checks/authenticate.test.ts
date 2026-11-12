@@ -352,6 +352,7 @@ describe('createAuthenticateCheck', (): void => {
         });
         vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
             get: vi.fn().mockReturnValue(undefined),
+            inspect: vi.fn().mockReturnValue(undefined),
         } as unknown as vscode.WorkspaceConfiguration);
         connectBehavior = (): Promise<void> => Promise.resolve();
         clients = [];
@@ -603,6 +604,10 @@ describe('createAuthenticateCheck', (): void => {
                 (): void => undefined,
             ],
         ] as const)('fails %s with the resolver kind', async (_label, method, host, kind, configure): Promise<void> => {
+            vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+                get: vi.fn().mockReturnValue(undefined),
+                inspect: vi.fn().mockReturnValue({ globalValue: { hostnameSuffix: 'private.example.com' } }),
+            } as unknown as vscode.WorkspaceConfiguration);
             configure(resolverDeps());
             const deps = fakeDeps();
             const { result } = await runAuth(
@@ -622,7 +627,7 @@ describe('createAuthenticateCheck', (): void => {
             expect(deps.createClient).not.toHaveBeenCalled();
         });
 
-        it('fails a host outside the OIDC allowlist, as the real driver rejects it, without sending a token', async (): Promise<void> => {
+        it('fails a host outside the destination policy before creating a driver or requesting a token', async (): Promise<void> => {
             const created: MongoClient[] = [];
             const deps: AuthenticateCheckDeps = {
                 createClient: (connectionString, options): MongoClient => {
@@ -637,14 +642,26 @@ describe('createAuthenticateCheck', (): void => {
             const signIn = step(result, 'auth.signInConfiguration');
             expect(signIn).toMatchObject({
                 status: 'fail',
-                facts: { allHostsAllowed: false, allowedHostPatterns: ['*.azure.com'] },
+                facts: { allHostsAllowed: false },
             });
             expect(codes(signIn)).toEqual(['auth.oidcHostNotAllowed']);
+            expect(signIn.findings).toMatchObject([
+                {
+                    detail: { language: 'en', text: "Microsoft Entra ID isn't allowed for this server." },
+                },
+            ]);
             expect(step(result, 'auth.serverAuthentication')).toMatchObject({
                 status: 'skipped',
                 skippedBecause: { reason: 'dependencyFailed', stepId: 'auth.signInConfiguration' },
             });
-            expect(created).toHaveLength(1);
+            expect(step(result, 'auth.token')).toMatchObject({
+                status: 'skipped',
+                skippedBecause: { reason: 'dependencyFailed', stepId: 'auth.signInConfiguration' },
+            });
+            expect(created).toHaveLength(0);
+            expect(mocks.getSessionFromVSCode).not.toHaveBeenCalled();
+            expect(mocks.getManagedIdentityAccessToken).not.toHaveBeenCalled();
+            expect(recordEntraTokenFailure).not.toHaveBeenCalled();
             expect(JSON.stringify(result)).not.toContain(privateHost);
         });
 
@@ -898,7 +915,7 @@ describe('createAuthenticateCheck', (): void => {
                     cloudCategory: 'public',
                     tokenResource: 'AzureCloud',
                     tokenResourceReason: 'setting',
-                    allowedHostPatterns: ['*.azure.com'],
+                    allowedHostPatterns: ['*.mongocluster.cosmos.azure.com'],
                     allHostsAllowed: true,
                 },
             });

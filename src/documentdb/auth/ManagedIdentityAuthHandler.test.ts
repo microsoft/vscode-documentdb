@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type OIDCCallbackParams, type OIDCResponse } from 'mongodb';
+import { type PeerCertificate } from 'tls';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { type CachedClusterCredentials } from '../CredentialCache';
@@ -15,8 +16,13 @@ import { buildAuthConnectionTarget } from './authConnectionTarget';
 import { AuthMethodId } from './AuthMethod';
 import * as tokenResources from './documentdbTokenResource';
 import { EntraErrorExplainer } from './entraErrors/EntraErrorExplainer';
-import { getRecentEntraTokenFailure, resetEntraTokenFailuresForTests } from './entraErrors/entraTokenFailures';
+import {
+    getRecentEntraTokenFailure,
+    recordEntraTokenFailure,
+    resetEntraTokenFailuresForTests,
+} from './entraErrors/entraTokenFailures';
 import { ManagedIdentityAuthHandler } from './ManagedIdentityAuthHandler';
+import { EntraDestinationRejectedError } from './oidcAllowedHosts';
 import { expiresInSecondsFromTimestamp } from './tokenExpiry';
 
 const getManagedIdentityAccessToken = vi.fn();
@@ -89,6 +95,37 @@ describe('ManagedIdentityAuthHandler', () => {
         resetEntraTokenFailuresForTests();
     });
 
+    it.each([
+        'mongodb://attacker.cloudapp.azure.com/',
+        'mongodb://cluster.mongocluster.cosmos.azure.com,attacker.example.com/',
+        'mongodb://localhost:27017/',
+    ])('rejects %s before the audience resolver can invoke IMDS', async (connectionString): Promise<void> => {
+        const resolver = vi.spyOn(tokenResources, 'resolveManagedIdentityTokenResource');
+        await expect(
+            new ManagedIdentityAuthHandler(buildCredentials({ connectionString })).configureAuth(),
+        ).rejects.toBeInstanceOf(EntraDestinationRejectedError);
+        expect(resolver).not.toHaveBeenCalled();
+        expect(getManagedIdentityAccessToken).not.toHaveBeenCalled();
+    });
+
+    it('rechecks the current suffix before every deferred token acquisition', async (): Promise<void> => {
+        let suffix: unknown = '.database.example.com';
+        vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+            get: vi.fn().mockReturnValue({ ossrdbmsEndpoint: 'https://database.example.com' }),
+            inspect: vi.fn(() => ({ globalValue: { hostnameSuffix: suffix } })),
+        } as unknown as vscode.WorkspaceConfiguration);
+        const { options } = await new ManagedIdentityAuthHandler(
+            buildCredentials({
+                connectionString: 'mongodb://cluster.database.example.com/',
+            }),
+        ).configureAuth();
+        await invokeOidcCallback(options);
+        expect(getManagedIdentityAccessToken).toHaveBeenCalledTimes(1);
+        suffix = undefined;
+        await expect(invokeOidcCallback(options)).rejects.toBeInstanceOf(EntraDestinationRejectedError);
+        expect(getManagedIdentityAccessToken).toHaveBeenCalledTimes(1);
+    });
+
     it('configures the OIDC mechanism with a curated allowed-hosts list', async () => {
         const handler = new ManagedIdentityAuthHandler(buildCredentials());
 
@@ -98,7 +135,9 @@ describe('ManagedIdentityAuthHandler', () => {
             surface: 'extension',
             startupProperties,
         });
+
         expect(startupProperties).toEqual({
+            entraDestinationClass: 'documentdbService',
             cloudCategory: 'public',
             tokenResourceReason: 'host',
             configuredCloud: 'AzureCloud',
@@ -108,8 +147,50 @@ describe('ManagedIdentityAuthHandler', () => {
 
         expect(options.authMechanism).toBe('MONGODB-OIDC');
         expect(options.tls).toBe(true);
-        expect(options.authMechanismProperties?.ALLOWED_HOSTS).toEqual(['*.azure.com']);
+        expect(options.authMechanismProperties?.ALLOWED_HOSTS).toEqual(['*.mongocluster.cosmos.azure.com']);
     });
+
+    it.each([false, true])(
+        'blocks a pending token on trust removal without replacing failure context (prior=%s)',
+        async (prior): Promise<void> => {
+            let suffix: string | undefined = 'database.example.com';
+            vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+                get: vi.fn().mockReturnValue({ ossrdbmsEndpoint: 'https://database.example.com' }),
+                inspect: vi.fn(() => ({ globalValue: { hostnameSuffix: suffix } })),
+            } as unknown as vscode.WorkspaceConfiguration);
+            const startupProperties: Record<string, string> = {};
+            const onTokenStarted = vi.fn();
+            const onTokenAcquired = vi.fn();
+            const onTokenFailed = vi.fn();
+            const { options } = await new ManagedIdentityAuthHandler(
+                buildCredentials({ connectionString: 'mongodb://cluster.database.example.com/' }),
+                { interactive: false, observer: { onTokenStarted, onTokenAcquired, onTokenFailed } },
+            ).configureAuth(undefined, { startupCorrelationId: 'startup', surface: 'extension', startupProperties });
+            if (prior) {
+                recordEntraTokenFailure('cluster-1', { cloudCategory: 'custom', authMethod: 'managedIdentity' });
+            }
+            const failure = getRecentEntraTokenFailure('cluster-1');
+            let finish!: (value: { accessToken: string; expiresOnTimestamp: number }) => void;
+            getManagedIdentityAccessToken.mockReturnValueOnce(
+                new Promise((resolve) => {
+                    finish = resolve;
+                }),
+            );
+            const pending = invokeOidcCallback(options);
+            await vi.waitFor(() => expect(getManagedIdentityAccessToken).toHaveBeenCalledTimes(1));
+            suffix = undefined;
+            finish({ accessToken: 'must-not-return', expiresOnTimestamp: Date.now() + 3_600_000 });
+            await expect(pending).rejects.toBeInstanceOf(EntraDestinationRejectedError);
+            expect(startupProperties.entraFailureKind).not.toBe('tokenAcquisitionFailed');
+            expect(getRecentEntraTokenFailure('cluster-1')).toBe(failure);
+            expect(onTokenStarted).toHaveBeenCalledOnce();
+            expect(onTokenAcquired).not.toHaveBeenCalled();
+            expect(onTokenFailed).not.toHaveBeenCalled();
+            expect(options.checkServerIdentity?.('cluster.database.example.com', {} as PeerCertificate)).toBeInstanceOf(
+                EntraDestinationRejectedError,
+            );
+        },
+    );
 
     it('strips authMechanism, authMechanismProperties, and credentials from the connection string', async () => {
         const cs =
@@ -167,7 +248,7 @@ describe('ManagedIdentityAuthHandler', () => {
         );
         const { options } = await handler.configureAuth();
         await invokeOidcCallback(options);
-        expect(options.authMechanismProperties?.ALLOWED_HOSTS).toEqual(['*.azure.us']);
+        expect(options.authMechanismProperties?.ALLOWED_HOSTS).toEqual(['*.mongocluster.cosmos.azure.us']);
         expect(getManagedIdentityAccessToken).toHaveBeenCalledWith(
             ['https://ossrdbms-aad.database.usgovcloudapi.net/.default'],
             undefined,
@@ -222,6 +303,34 @@ describe('ManagedIdentityAuthHandler', () => {
         expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
     });
 
+    it('captures the original destination and identity before resolving the audience', async (): Promise<void> => {
+        const credentials = buildCredentials({
+            managedIdentityConfig: { clientId: 'original-client', tenantId: 'original-tenant' },
+        });
+        const original = credentials.connectionString;
+        vi.spyOn(tokenResources, 'resolveManagedIdentityTokenResource').mockImplementationOnce(async () => {
+            credentials.connectionString = 'mongodb://attacker.example/';
+            credentials.managedIdentityConfig = { clientId: 'changed-client', tenantId: 'changed-tenant' };
+            return {
+                resource: 'https://database.example',
+                scope: 'https://database.example/.default',
+                cloudCategory: 'public',
+                reason: 'host',
+                details: {},
+            };
+        });
+        const { options, connectionString } = await new ManagedIdentityAuthHandler(credentials).configureAuth();
+        expect(connectionString).toBe(original);
+        await expect(invokeOidcCallback(options)).resolves.toMatchObject({ accessToken: 'a-token' });
+        expect(getManagedIdentityAccessToken).toHaveBeenCalledWith(
+            ['https://database.example/.default'],
+            'original-client',
+            'original-tenant',
+            expect.any(String),
+            undefined,
+        );
+    });
+
     it('reuses one token correlation ID across OIDC callback retries', async () => {
         const handler = new ManagedIdentityAuthHandler(buildCredentials());
 
@@ -242,7 +351,7 @@ describe('ManagedIdentityAuthHandler', () => {
     });
 
     it('records failures only inside the deferred token callback and rethrows the same error', async (): Promise<void> => {
-        const connectionString = 'mongodb://cluster.azure.us/';
+        const connectionString = 'mongodb://cluster.mongocluster.cosmos.azure.us/';
         const handler = new ManagedIdentityAuthHandler(
             buildCredentials({ connectionString, connectionStringWithPassword: connectionString }),
         );
@@ -295,7 +404,7 @@ describe('ManagedIdentityAuthHandler', () => {
     });
 
     it('retains failure context through configureAuth and clears it only after a token succeeds', async (): Promise<void> => {
-        const connectionString = 'mongodb://cluster.azure.us/';
+        const connectionString = 'mongodb://cluster.mongocluster.cosmos.azure.us/';
         const handler = new ManagedIdentityAuthHandler(
             buildCredentials({ connectionString, connectionStringWithPassword: connectionString }),
         );
@@ -339,12 +448,12 @@ describe('ManagedIdentityAuthHandler', () => {
         expect(error.message).toBe('platform_broker_error');
     });
 
-    it('honors the host-gated TLS exception', async () => {
+    it('ignores TLS exceptions for an admitted Entra destination', async () => {
         vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
             get: vi.fn().mockReturnValue({ ossrdbmsEndpoint: 'https://ossrdbms-aad.database.windows.net' }),
             inspect: vi.fn().mockReturnValue(undefined),
         } as unknown as vscode.WorkspaceConfiguration);
-        const cs = 'mongodb://localhost:27017/';
+        const cs = 'mongodb://cluster.mongocluster.cosmos.azure.com/?tlsInsecure=true';
         const handler = new ManagedIdentityAuthHandler(
             buildCredentials({
                 connectionString: cs,
@@ -353,9 +462,15 @@ describe('ManagedIdentityAuthHandler', () => {
             }),
         );
 
-        const { options } = await handler.configureAuth();
+        const { connectionString, options } = await handler.configureAuth();
 
-        expect(options.tlsAllowInvalidCertificates).toBe(true);
+        expect(options.tlsAllowInvalidCertificates).toBeUndefined();
+        expect(options.rejectUnauthorized).toBe(true);
+        expect(options.checkServerIdentity).toBeTypeOf('function');
+        expect(connectionString).not.toContain('tlsInsecure');
+        expect(ext.outputChannel.info).toHaveBeenCalledWith(
+            '[Auth] TLS validation bypass parameters are ignored for Microsoft Entra ID connections.',
+        );
     });
 
     it('excludes managed-identity token acquisition from the database duration', async () => {
@@ -400,6 +515,14 @@ describe('ManagedIdentityAuthHandler', () => {
                 emulatorConfiguration,
             });
             const target = buildAuthConnectionTarget(AuthMethodId.ManagedIdentity, credentials);
+
+            if (connectionString.startsWith('mongodb://localhost:')) {
+                await expect(new ManagedIdentityAuthHandler(credentials).configureAuth()).rejects.toBeInstanceOf(
+                    EntraDestinationRejectedError,
+                );
+                expect(getManagedIdentityAccessToken).not.toHaveBeenCalled();
+                return;
+            }
 
             const { connectionString: actual, options } = await new ManagedIdentityAuthHandler(
                 credentials,
@@ -456,11 +579,15 @@ describe('ManagedIdentityAuthHandler', () => {
             );
 
             const { options } = await handler.configureAuth();
-            expect(events).toEqual(['resolved:public:host:*.azure.com']);
+            expect(events).toEqual(['resolved:public:host:*.mongocluster.cosmos.azure.com']);
             expect(getManagedIdentityAccessToken).not.toHaveBeenCalled();
 
             await invokeOidcCallback(options);
-            expect(events).toEqual(['resolved:public:host:*.azure.com', 'tokenStarted', 'tokenAcquired:tenant']);
+            expect(events).toEqual([
+                'resolved:public:host:*.mongocluster.cosmos.azure.com',
+                'tokenStarted',
+                'tokenAcquired:tenant',
+            ]);
             expect(tokens).toEqual(['a-token']);
             const output = JSON.stringify([
                 vi.mocked(ext.outputChannel.info).mock.calls,
@@ -479,9 +606,13 @@ describe('ManagedIdentityAuthHandler', () => {
             });
 
             const { options } = await handler.configureAuth();
-            expect(events).toEqual(['resolved:public:host:*.azure.com']);
+            expect(events).toEqual(['resolved:public:host:*.mongocluster.cosmos.azure.com']);
             await expect(invokeOidcCallback(options)).rejects.toBe(error);
-            expect(events).toEqual(['resolved:public:host:*.azure.com', 'tokenStarted', 'tokenFailed']);
+            expect(events).toEqual([
+                'resolved:public:host:*.mongocluster.cosmos.azure.com',
+                'tokenStarted',
+                'tokenFailed',
+            ]);
             expect(getRecentEntraTokenFailure('cluster-1')).toMatchObject({
                 authMethod: 'managedIdentity',
                 ruleId: 'applicationNotInDirectory',
