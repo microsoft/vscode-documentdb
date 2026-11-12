@@ -60,8 +60,8 @@ vi.mock('@microsoft/vscode-azext-utils', () => {
     };
 });
 
-vi.mock('../../../services/connectionDiagnosticsService', () => ({
-    ConnectionDiagnosticsService: { explain: vi.fn().mockResolvedValue(undefined) },
+vi.mock('../../../services/errorExplanationService', () => ({
+    ErrorExplanationService: { explain: vi.fn().mockResolvedValue(undefined) },
 }));
 
 vi.mock('../../../extensionVariables', () => ({
@@ -178,7 +178,7 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
         const databases = await (await getClusterItem()).getChildren();
 
         expect(readStored).toHaveBeenCalledWith(ALIAS);
-        expect(mockGetClient).toHaveBeenCalledWith(CLUSTER_ID, expect.anything());
+        expect(mockGetClient).toHaveBeenCalledWith(CLUSTER_ID, expect.anything(), expect.any(Function));
         expect(databases).toHaveLength(1);
         // The cache is a cache: it is filled by the connect, not depended on by it.
         expect(CredentialCache.hasCredentials(CLUSTER_ID)).toBe(true);
@@ -271,7 +271,7 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
 
             if (source === 'tree') {
                 const children = await item.getChildren();
-                expect(children).toHaveLength(cached ? 0 : 1);
+                expect(children).toHaveLength(cached ? 0 : 3);
             } else {
                 await expect(item.connect()).resolves.toBeNull();
             }

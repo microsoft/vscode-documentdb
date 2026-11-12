@@ -14,9 +14,18 @@ import { randomUUID } from 'crypto';
 import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
-import { traceAuthOperation, type AuthTraceContext } from '../../utils/authTrace';
+import { traceAuthFlow, traceAuthOperation, traceEntraDestination, type AuthTraceContext } from '../../utils/authTrace';
 import { getBatchSizeSetting, getConnectionTimeoutMs } from '../../utils/workspacUtils';
 import { AuthMethodId } from '../auth/AuthMethod';
+import {
+    resolveInteractiveTokenResource,
+    resolveManagedIdentityTokenResource,
+    TokenResourceResolutionError,
+    type ResolvedTokenResource,
+} from '../auth/documentdbTokenResource';
+import { evaluateEntraDestinationFromSettings } from '../auth/entraDestinationSettings';
+import { clearEntraTokenFailure, recordEntraTokenFailure } from '../auth/entraErrors/entraTokenFailures';
+import { EntraDestinationRejectedError } from '../auth/oidcAllowedHosts';
 import { CredentialCache } from '../CredentialCache';
 import { withTokenAcquisitionTiming, type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
@@ -68,6 +77,8 @@ import { type MainToWorkerMessage, type SerializableMongoClientOptions, type Wor
  */
 export class PlaygroundEvaluator implements vscode.Disposable {
     private readonly _workerManager: WorkerSessionManager;
+    private _sessionInitMessage: Extract<MainToWorkerMessage, { type: 'init' }> | undefined;
+    private _resolvedTokenResource: ResolvedTokenResource | undefined;
 
     /**
      * Telemetry session ID — generated on worker spawn, stable across evals within the
@@ -154,9 +165,10 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             onTokenRequest: (
                 msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
                 postResponse: (response: MainToWorkerMessage) => void,
+                isCurrent: () => boolean,
                 timings?: ConnectionStartupTimings,
                 traceContext?: AuthTraceContext,
-            ) => this.handleTokenRequest(msg, postResponse, timings, traceContext),
+            ) => this.handleTokenRequest(msg, postResponse, isCurrent, timings, traceContext),
             onWorkerExit: (exitCode: number) => {
                 ext.outputChannel.debug(`${logPrefix} Worker exited with code ${String(exitCode)}`);
                 this.resetSession();
@@ -191,6 +203,8 @@ export class PlaygroundEvaluator implements vscode.Disposable {
 
         // Start a new telemetry session if we're spawning a new worker
         if (needsSpawn) {
+            this._sessionInitMessage = initMsg;
+            this._resolvedTokenResource = undefined;
             this._sessionId = randomUUID();
             this._sessionEvalCount = 0;
             this._sessionAuthMethod = initMsg.authMechanism;
@@ -300,9 +314,8 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                 )
                     ? 4000
                     : undefined,
-            // TLS-allow-invalid is keyed off `disableEmulatorSecurity` (design §7), honored ONLY for
-            // local/private hosts ("hybrid" runtime policy): an orphaned flag on a public host is not
-            // activated; an explicit URL param is still honored by the driver (we never force `false`).
+            // Non-OIDC connections keep the local/private TLS exception. The worker's OIDC builder
+            // removes this option and URI bypasses for Entra connections.
             tlsAllowInvalidCertificates: resolveAllowInvalidCertificates(
                 credentials.emulatorConfiguration?.disableEmulatorSecurity,
                 connectionString,
@@ -370,49 +383,126 @@ export class PlaygroundEvaluator implements vscode.Disposable {
     private async handleTokenRequest(
         msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
         postResponse: (response: MainToWorkerMessage) => void,
+        isCurrent: () => boolean,
         timings?: ConnectionStartupTimings,
         traceContext?: AuthTraceContext,
     ): Promise<void> {
         try {
+            const clusterId = this._workerManager.workerClusterId;
+            const sessionInit = this._sessionInitMessage;
+            if (
+                !clusterId ||
+                !sessionInit ||
+                (sessionInit.authMechanism !== 'MicrosoftEntraID' && sessionInit.authMechanism !== 'ManagedIdentity')
+            ) {
+                throw new Error(l10n.t('No credentials found for the query playground connection.'));
+            }
+            if (!isCurrent()) {
+                return;
+            }
+            const connectionString = sessionInit.connectionString;
+            const decision = evaluateEntraDestinationFromSettings(connectionString);
+            traceEntraDestination(decision, msg.requestId, traceContext);
+            if (!decision.allowed) {
+                throw new EntraDestinationRejectedError(decision);
+            }
+            const usesManagedIdentity = sessionInit.authMechanism === 'ManagedIdentity';
+            let resolved: ResolvedTokenResource;
+            try {
+                resolved =
+                    this._resolvedTokenResource ??
+                    (usesManagedIdentity
+                        ? await resolveManagedIdentityTokenResource(connectionString)
+                        : await resolveInteractiveTokenResource(connectionString));
+                if (isCurrent()) {
+                    this._resolvedTokenResource = resolved;
+                }
+                traceAuthFlow('entraCloud.resolved', resolved.details, msg.requestId, traceContext);
+            } catch (error) {
+                if (error instanceof TokenResourceResolutionError) {
+                    traceAuthFlow('entraCloud.unresolved', error.details, msg.requestId, traceContext);
+                }
+                throw error;
+            }
             let accessToken: string;
 
-            if (msg.source === 'managedIdentity') {
+            if (usesManagedIdentity) {
                 const { getManagedIdentityAccessToken } = await import('../auth/managedIdentityTokenProvider');
                 this._sessionId ??= randomUUID();
-                accessToken = (
-                    await withTokenAcquisitionTiming(timings, () =>
-                        getManagedIdentityAccessToken(
-                            msg.scopes as string[],
-                            msg.clientId,
-                            msg.tenantId,
-                            this._sessionId,
-                            traceContext,
-                        ),
-                    )
-                ).accessToken;
+                try {
+                    accessToken = (
+                        await withTokenAcquisitionTiming(timings, () =>
+                            getManagedIdentityAccessToken(
+                                [resolved.scope],
+                                sessionInit.managedIdentityClientId,
+                                sessionInit.tenantId,
+                                this._sessionId,
+                                traceContext,
+                            ),
+                        )
+                    ).accessToken;
+                } catch (error) {
+                    if (traceContext?.startupProperties) {
+                        traceContext.startupProperties.entraFailureKind = 'tokenAcquisitionFailed';
+                    }
+                    if (isCurrent()) {
+                        recordEntraTokenFailure(clusterId, {
+                            cloudCategory: resolved.cloudCategory,
+                            authMethod: 'managedIdentity',
+                        });
+                    }
+                    throw error;
+                }
             } else {
                 const { getSessionFromVSCode } = await import(
                     // eslint-disable-next-line import/no-internal-modules
                     '@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode'
                 );
-                const session = await traceAuthOperation(
-                    'interactiveEntra.getSession',
-                    () =>
-                        withTokenAcquisitionTiming(timings, () =>
-                            getSessionFromVSCode(msg.scopes as string[], msg.tenantId, { createIfNone: true }),
-                        ),
-                    { tenantSpecified: !!msg.tenantId, createIfNone: true },
-                    msg.requestId,
-                    traceContext,
-                );
+                let session: vscode.AuthenticationSession | undefined;
+                try {
+                    session = await traceAuthOperation(
+                        'interactiveEntra.getSession',
+                        () =>
+                            withTokenAcquisitionTiming(timings, () =>
+                                getSessionFromVSCode([resolved.scope], sessionInit.tenantId, { createIfNone: true }),
+                            ),
+                        {
+                            tenantSpecified: !!sessionInit.tenantId,
+                            createIfNone: true,
+                            cloudCategory: resolved.cloudCategory,
+                            tokenResourceReason: resolved.reason,
+                        },
+                        msg.requestId,
+                        traceContext,
+                    );
 
-                if (!session) {
-                    throw new Error(l10n.t('Failed to obtain Entra ID token.'));
+                    if (!session) {
+                        throw new Error(l10n.t('Failed to obtain Entra ID token.'));
+                    }
+                } catch (error) {
+                    if (traceContext?.startupProperties) {
+                        traceContext.startupProperties.entraFailureKind = 'tokenAcquisitionFailed';
+                    }
+                    if (isCurrent()) {
+                        recordEntraTokenFailure(clusterId, {
+                            cloudCategory: resolved.cloudCategory,
+                            authMethod: 'interactive',
+                        });
+                    }
+                    throw error;
                 }
 
                 accessToken = session.accessToken;
             }
 
+            const currentDecision = evaluateEntraDestinationFromSettings(connectionString);
+            traceEntraDestination(currentDecision, msg.requestId, traceContext);
+            if (!currentDecision.allowed) {
+                throw new EntraDestinationRejectedError(currentDecision);
+            }
+            if (isCurrent()) {
+                clearEntraTokenFailure(clusterId);
+            }
             postResponse({
                 type: 'tokenResponse',
                 requestId: msg.requestId,
@@ -424,6 +514,9 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                 type: 'tokenError',
                 requestId: msg.requestId,
                 error: errorMessage,
+                ...(error instanceof EntraDestinationRejectedError
+                    ? { errorName: 'EntraDestinationRejectedError' as const }
+                    : {}),
             });
         }
     }
@@ -442,6 +535,8 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             });
         }
 
+        this._sessionInitMessage = undefined;
+        this._resolvedTokenResource = undefined;
         this._sessionId = undefined;
         this._sessionEvalCount = 0;
         this._sessionAuthMethod = undefined;

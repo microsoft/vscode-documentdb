@@ -5,12 +5,13 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type IActionContext, type ITelemetryContext, UserCancelledError } from '@microsoft/vscode-azext-utils';
+import { UserCancelledError, type IActionContext, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import type * as Mongodb from 'mongodb';
 import { MongoClient, type MongoClientOptions } from 'mongodb';
 import { ext } from '../extensionVariables';
-import { type AuthTraceContext } from '../utils/authTrace';
+import { traceAuthFlow, type AuthTraceContext } from '../utils/authTrace';
 import { AuthMethodId } from './auth/AuthMethod';
+import * as authHandlerFactory from './auth/createAuthHandler';
 import { ManagedIdentityAuthHandler } from './auth/ManagedIdentityAuthHandler';
 import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
 import { NativeAuthHandler } from './auth/NativeAuthHandler';
@@ -79,7 +80,7 @@ vi.mock('mongodb', async () => {
 });
 
 vi.mock('../extensionVariables', () => ({
-    ext: { outputChannel: { trace: vi.fn(), error: vi.fn(), debug: vi.fn() } },
+    ext: { outputChannel: { trace: vi.fn(), error: vi.fn(), debug: vi.fn(), info: vi.fn() } },
 }));
 
 vi.mock('./utils/getClusterMetadata', () => ({
@@ -90,6 +91,10 @@ vi.mock('./utils/getClusterMetadata', () => ({
 vi.mock('./LlmEnhancedFeatureApis', () => ({ llmEnhancedFeatureApis: vi.fn() }));
 vi.mock('./client/QueryInsightsApis', () => ({ QueryInsightsApis: vi.fn() }));
 vi.mock('./srv/prepareDriverConnectionString', () => ({ prepareDriverConnectionString: vi.fn() }));
+vi.mock('./auth/createAuthHandler', async () => {
+    const actual = await vi.importActual<typeof authHandlerFactory>('./auth/createAuthHandler');
+    return { ...actual, createAuthHandler: vi.fn(actual.createAuthHandler) };
+});
 vi.mock('./utils/tlsException', async () => {
     const actual = await vi.importActual<typeof tlsException>('./utils/tlsException');
     return { ...actual, resolveAllowInvalidCertificates: vi.fn(actual.resolveAllowInvalidCertificates) };
@@ -111,6 +116,7 @@ describe('regular connection startup diagnostics', () => {
         vi.useFakeTimers();
         mockTelemetryEvents.length = 0;
         ClustersClient._clients.clear();
+        ClustersClient._lastFailedStartups.clear();
         vi.mocked(prepareDriverConnectionString)
             .mockReset()
             .mockImplementation(async (input) => {
@@ -143,6 +149,7 @@ describe('regular connection startup diagnostics', () => {
     afterEach(() => {
         CredentialCache.deleteCredentials(clusterId);
         ClustersClient._clients.clear();
+        ClustersClient._lastFailedStartups.clear();
         vi.restoreAllMocks();
         vi.useRealTimers();
     });
@@ -152,6 +159,40 @@ describe('regular connection startup diagnostics', () => {
         expect(events).toHaveLength(1);
         return events[0];
     }
+
+    it.each([
+        ['cluster.mongocluster.cosmos.azure.com', 'test-extension'],
+        ['cluster.mongocluster.cosmos.azure.us:10255', 'test-extension'],
+        ['CLUSTER.mongocluster.cosmos.azure.cn:10255', 'test-extension'],
+        ['cluster.other.azure.us', 'test-extension'],
+        ['cluster.azure.cn.evil.com', undefined],
+        ['cluster.notazure.us', undefined],
+        ['cluster.notazure.com', undefined],
+        ['cluster.azure.tk', undefined],
+        ['cluster.example.com', undefined],
+        ['localhost:27017', undefined],
+    ])('sets the same Azure appName only for a known cloud domain: %s', async (host, appName) => {
+        vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockResolvedValueOnce({
+            connectionString: `mongodb://${host}/`,
+            options: {},
+        });
+        await ClustersClient.getClient(clusterId);
+        expect(vi.mocked(MongoClient).mock.calls[0]?.[1]?.appName).toBe(appName);
+    });
+
+    it.each([
+        ['us', '8bafc480', 'f3e87358'],
+        ['cn', '6a619114', '49133d63'],
+    ])('preserves historical domain telemetry hashes for azure.%s', async (tld, level2, level3) => {
+        const actual = await vi.importActual<{ getDomainMetadata: typeof getDomainMetadata }>(
+            './utils/getClusterMetadata',
+        );
+        expect(actual.getDomainMetadata([`cluster.mongocluster.cosmos.azure.${tld}`])).toMatchObject({
+            domainInfo_isAzure: 'false',
+            domainInfo_domain_l2: level2,
+            domainInfo_domain_l3: level3,
+        });
+    });
 
     it.each([
         AuthMethodId.MicrosoftEntraID,
@@ -218,6 +259,29 @@ describe('regular connection startup diagnostics', () => {
         expect(vi.mocked(MongoClient)).toHaveBeenCalledTimes(1);
     });
 
+    it.each([
+        [AuthMethodId.MicrosoftEntraID, MicrosoftEntraIDAuthHandler],
+        [AuthMethodId.ManagedIdentity, ManagedIdentityAuthHandler],
+        [AuthMethodId.NativeAuth, NativeAuthHandler],
+        [AuthMethodId.NoAuth, NoAuthHandler],
+    ] as const)(
+        'constructs the %s handler through the factory with the interactive policy',
+        async (authMethod, handlerClass): Promise<void> => {
+            CredentialCache.setAuthCredentials(clusterId, authMethod, 'mongodb://private-host:27017');
+            await ClustersClient.getClient(clusterId);
+
+            const factory = vi.mocked(authHandlerFactory.createAuthHandler);
+            expect(factory).toHaveBeenCalledTimes(1);
+            expect(factory).toHaveBeenCalledWith(authMethod, expect.objectContaining({ clusterId }), {
+                interactive: true,
+            });
+            const handler = factory.mock.results[0]?.value as unknown;
+            expect(handler).toBeInstanceOf(handlerClass);
+            expect(handler).toHaveProperty('policy', { interactive: true });
+            expect(handlerClass.prototype.configureAuth).toHaveBeenCalledTimes(1);
+        },
+    );
+
     it('passes its startup ID to auth configuration', async (): Promise<void> => {
         let traceContext: AuthTraceContext | undefined;
         vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockImplementationOnce(
@@ -227,17 +291,87 @@ describe('regular connection startup diagnostics', () => {
             },
         );
         const client = await ClustersClient.getClient(clusterId);
-        expect(traceContext).toEqual({ startupCorrelationId: client.connectionCorrelationId, surface: 'extension' });
+        expect(traceContext).toEqual({
+            startupCorrelationId: client.connectionCorrelationId,
+            surface: 'extension',
+            startupProperties: startupEvent().telemetry.properties,
+        });
     });
+
+    it('links a retry to the failed startup it follows, and forgets it once a startup succeeds', async () => {
+        vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockRejectedValueOnce(
+            new Error('private-failure'),
+        );
+        await expect(ClustersClient.getClient(clusterId)).rejects.toThrow('private-failure');
+        const failedId = startupEvent().telemetry.properties.startupCorrelationId;
+        expect(failedId).toEqual(expect.any(String));
+        expect(ClustersClient.getLastFailedStartupCorrelationId(clusterId)).toBe(failedId);
+
+        const client = await ClustersClient.getClient(clusterId);
+        const events = mockTelemetryEvents.filter((event) => event.eventName === 'connect.startup');
+        expect(events[0].telemetry.properties.previousFailedStartupCorrelationId).toBeUndefined();
+        expect(events[1].telemetry.properties).toMatchObject({
+            startupCorrelationId: client.connectionCorrelationId,
+            previousFailedStartupCorrelationId: failedId,
+        });
+        expect(ClustersClient.getLastFailedStartupCorrelationId(clusterId)).toBeUndefined();
+    });
+
+    it('does not record a cancelled startup as a failure to follow up on', async () => {
+        vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockRejectedValueOnce(new UserCancelledError());
+        await expect(ClustersClient.getClient(clusterId)).rejects.toBeInstanceOf(UserCancelledError);
+        expect(ClustersClient.getLastFailedStartupCorrelationId(clusterId)).toBeUndefined();
+    });
+
+    it.each([AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity])(
+        'isolates %s cloud telemetry from the next attempt on the same cluster',
+        async (authMethod) => {
+            CredentialCache.setAuthCredentials(clusterId, authMethod, 'mongodb://private-host:27017');
+            const handler =
+                authMethod === AuthMethodId.ManagedIdentity ? ManagedIdentityAuthHandler : MicrosoftEntraIDAuthHandler;
+            vi.mocked(handler.prototype.configureAuth).mockImplementationOnce(async (_timings, context) => {
+                traceAuthFlow(
+                    'entraCloud.unresolved',
+                    {
+                        cloudCategory: 'usgov',
+                        reason: 'host',
+                        configuredCloud: 'custom',
+                        hostCloud: 'AzureUSGovernment',
+                        errorKind: 'cloudMismatch',
+                        tokenResource: 'private-resource',
+                    },
+                    undefined,
+                    context,
+                );
+                throw new Error('private-resolution-failure');
+            });
+            await expect(ClustersClient.getClient(clusterId)).rejects.toThrow('private-resolution-failure');
+            const failedProperties = { ...startupEvent().telemetry.properties };
+            await ClustersClient.getClient(clusterId);
+            const events = mockTelemetryEvents.filter((event) => event.eventName === 'connect.startup');
+            expect(events[0].telemetry.properties).toEqual(failedProperties);
+            expect(failedProperties).toMatchObject({
+                cloudCategory: 'usgov',
+                tokenResourceReason: 'host',
+                configuredCloud: 'custom',
+                hostCloud: 'AzureUSGovernment',
+                entraFailureKind: 'cloudMismatch',
+            });
+            expect(events[1].telemetry.properties.cloudCategory).toBeUndefined();
+            expect(JSON.stringify(events)).not.toContain('private-');
+        },
+    );
 
     it('preserves auth failures and records their partial stage without private error data', async () => {
         const originalError = new Error('private-token private-account');
+        const onStartup = vi.fn<(id: string) => void>();
         vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockImplementationOnce(async () => {
             vi.advanceTimersByTime(15);
             throw originalError;
         });
 
-        await expect(ClustersClient.getClient(clusterId)).rejects.toBe(originalError);
+        await expect(ClustersClient.getClient(clusterId, undefined, onStartup)).rejects.toBe(originalError);
+        expect(onStartup).toHaveBeenCalledExactlyOnceWith(startupEvent().telemetry.properties.connectionCorrelationId);
         expect(startupEvent().telemetry.properties).toMatchObject({
             result: 'Failed',
             startupOutcome: 'failed',

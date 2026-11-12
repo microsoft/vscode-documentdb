@@ -23,8 +23,13 @@ import { EJSON } from 'bson';
 import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type MongoClient as MongoClientType } from 'mongodb';
 import { parentPort } from 'worker_threads';
-import { DOCUMENTDB_ENTRA_SCOPE } from '../auth/entraScopes';
-import { getOidcAllowedHosts } from '../auth/oidcAllowedHosts';
+import { removeConflictingOidcMechanism } from '../auth/nonOidcConnectionString';
+import { EntraDestinationRejectedError, normalizeCustomHostnameSuffix } from '../auth/oidcAllowedHosts';
+import {
+    buildOidcClientConfiguration,
+    createOidcDestinationPolicy,
+    type OidcDestinationPolicy,
+} from '../auth/oidcClientOptions';
 import { expiresInSecondsFromTimestamp } from '../auth/tokenExpiry';
 import { type MainToWorkerMessage, type WorkerStartupStage, type WorkerToMainMessage } from './workerTypes';
 
@@ -70,6 +75,9 @@ parentPort.on('message', (msg: MainToWorkerMessage) => {
                     requestId: msg.requestId,
                     success: false,
                     error: errorMessage,
+                    ...(err instanceof EntraDestinationRejectedError
+                        ? { errorName: 'EntraDestinationRejectedError' as const }
+                        : {}),
                 };
                 parentPort!.postMessage(response);
             });
@@ -138,20 +146,47 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
     const { MongoClient } = await import('mongodb');
 
     // Build client options from the serializable subset
-    const options: MongoClientOptions = {
+    let options: MongoClientOptions = {
         ...msg.clientOptions,
     };
 
     // Entra ID and managed identity are the same OIDC mechanism on the wire; only the token source
     // differs, and both are resolved on the main thread so there is one credential and one cache
     // per window, and so the worker never needs @azure/identity.
+    let connectionString = msg.connectionString;
     if (msg.authMechanism === 'MicrosoftEntraID' || msg.authMechanism === 'ManagedIdentity') {
+        const snapshot = msg.oidcDestinationPolicy;
+        if (
+            !snapshot ||
+            typeof snapshot.originalConnectionString !== 'string' ||
+            !(snapshot.revoked instanceof SharedArrayBuffer) ||
+            snapshot.revoked.byteLength !== Int32Array.BYTES_PER_ELEMENT ||
+            (snapshot.customHostnameSuffix !== undefined &&
+                (typeof snapshot.customHostnameSuffix !== 'string' ||
+                    normalizeCustomHostnameSuffix(snapshot.customHostnameSuffix) !== snapshot.customHostnameSuffix))
+        ) {
+            throw new EntraDestinationRejectedError({ hostCount: 0 });
+        }
+        const originalPolicy = createOidcDestinationPolicy(
+            snapshot.originalConnectionString,
+            () => snapshot.customHostnameSuffix,
+        );
+        const revoked = new Int32Array(snapshot.revoked);
+        const policy: OidcDestinationPolicy = {
+            allowedHostPatterns: originalPolicy.allowedHostPatterns,
+            assertAllowed(host?: string): void {
+                if (Atomics.load(revoked, 0) !== 0) {
+                    throw new EntraDestinationRejectedError({ firstHost: host, hostCount: 0 });
+                }
+                originalPolicy.assertAllowed(host);
+            },
+        };
         const usesManagedIdentity = msg.authMechanism === 'ManagedIdentity';
-        options.authMechanism = 'MONGODB-OIDC';
-        options.tls = true;
-        options.authMechanismProperties = {
-            ALLOWED_HOSTS: [...(msg.oidcAllowedHosts ?? getOidcAllowedHosts(msg.connectionString))],
-            OIDC_CALLBACK: async (): Promise<{ accessToken: string; expiresInSeconds: number }> => {
+        const configuration = buildOidcClientConfiguration({
+            connectionString,
+            policy,
+            baseOptions: options,
+            oidcCallback: async (): Promise<{ accessToken: string; expiresInSeconds: number }> => {
                 const requestId = randomUUID();
                 const tokenPromise = new Promise<string>((resolve, reject) => {
                     pendingTokenRequests.set(requestId, { resolve, reject });
@@ -159,7 +194,6 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
                 const tokenRequest: WorkerToMainMessage = {
                     type: 'tokenRequest',
                     requestId,
-                    scopes: [DOCUMENTDB_ENTRA_SCOPE],
                     tenantId: msg.tenantId,
                     source: usesManagedIdentity ? 'managedIdentity' : 'vscode',
                     clientId: usesManagedIdentity ? msg.managedIdentityClientId : undefined,
@@ -195,12 +229,19 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
 
                 return { accessToken, expiresInSeconds };
             },
-        };
+        });
+        connectionString = configuration.connectionString;
+        options = configuration.options;
+        if (configuration.ignoredTlsBypass) {
+            log('info', '[Auth] TLS validation bypass parameters are ignored for Microsoft Entra ID connections.');
+        }
+    } else {
+        connectionString = removeConflictingOidcMechanism(connectionString);
     }
 
     // Create and connect the database client
     reportProgress('connecting');
-    mongoClient = new MongoClient(msg.connectionString, options);
+    mongoClient = new MongoClient(connectionString, options);
     reportTiming('databaseConnect', msg.requestId, true);
     try {
         await mongoClient.connect();
@@ -343,7 +384,11 @@ function handleTokenResponse(msg: Extract<MainToWorkerMessage, { type: 'tokenRes
 function handleTokenError(msg: Extract<MainToWorkerMessage, { type: 'tokenError' }>): void {
     const pending = pendingTokenRequests.get(msg.requestId);
     if (pending) {
-        pending.reject(new Error(msg.error));
+        pending.reject(
+            msg.errorName === 'EntraDestinationRejectedError'
+                ? new EntraDestinationRejectedError({ hostCount: 0 })
+                : new Error(msg.error),
+        );
         pendingTokenRequests.delete(msg.requestId);
     }
 }

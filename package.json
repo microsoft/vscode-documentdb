@@ -151,7 +151,7 @@
     "typescript": "~6.0.3",
     "typescript-eslint": "~8.58.2",
     "vite": "~8.0.16",
-    "vitest": "~4.1.11"
+    "vitest": "~4.1.12"
   },
   "dependencies": {
     "@azure/arm-compute": "^22.4.0",
@@ -207,7 +207,7 @@
     "vscode-languageserver": "~9.0.1",
     "vscode-languageserver-textdocument": "~1.0.12",
     "vscode-uri": "~3.1.0",
-    "zod": "~4.3.6"
+    "zod": "~4.6.7"
   },
   "//overrides": "Pin transitive dependencies: glob 12.0.x for latest. vite follows the direct pin because npm 10.9.3 crashes (\"Cannot read properties of null (reading 'edgesOut')\") when it resolves vitest's vite peer chain from scratch without it (re-checked in Modernization Stage 6).",
   "overrides": {
@@ -590,6 +590,11 @@
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.copyConnectionString",
         "title": "Copy Connection String…"
+      },
+      {
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.diagnoseConnection",
+        "title": "Diagnose Connection…"
       },
       {
         "//": "[DiscoveryView] Rename Kubernetes kubeconfig source",
@@ -1339,6 +1344,11 @@
           "group": "2@1"
         },
         {
+          "command": "vscode-documentdb.command.diagnoseConnection",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
+          "group": "2@2"
+        },
+        {
           "//": "[Account] Open Interactive Shell",
           "command": "vscode-documentdb.command.shell.open",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
@@ -1933,7 +1943,7 @@
             "order": 2,
             "type": "boolean",
             "default": true,
-            "description": "Show confirmation dialogs when handling external URLs that open DocumentDB resources or setup experiences in VS Code."
+            "description": "Show confirmation dialogs when handling external URLs that open DocumentDB resources or setup experiences in VS Code. A link that adds a new connection or turns off TLS certificate validation always asks for confirmation."
           },
           "documentDB.userInterface.showOperationSummaries": {
             "order": 3,
@@ -1993,6 +2003,28 @@
             "maximum": 65535,
             "scope": "machine-overridable",
             "description": "Starting port for automatic local port selection when localPortStrategy is 'autoSelect'. The extension scans upward until a free port is found."
+          },
+          "documentDB.customEnvironment": {
+            "order": 5,
+            "type": "object",
+            "default": {},
+            "scope": "machine",
+            "markdownDescription": "DocumentDB settings for sovereign and custom clouds. Interactive sign-in uses `ossrdbmsEndpoint` only when `#microsoft-sovereign-cloud.environment#` is `custom`. Managed identity uses it first, before the cluster host and the virtual machine's metadata, for every managed-identity connection on this machine. `hostnameSuffix` applies in any cloud and never selects a token audience. Empty values restore automatic selection. Set this in User settings, or in Remote settings when VS Code is connected to a remote machine. [Learn more](https://microsoft.github.io/vscode-documentdb/user-manual/sovereign-clouds)",
+            "properties": {
+              "ossrdbmsEndpoint": {
+                "type": "string",
+                "pattern": "^\\s*(?:https://[^/?#:@\\\\\\s]+/?)?\\s*$",
+                "patternErrorMessage": "Use an HTTPS resource such as https://ossrdbms-aad.database.usgovcloudapi.net, with no path or /.default, or leave it empty.",
+                "description": "Microsoft Entra token audience for DocumentDB, such as https://ossrdbms-aad.database.usgovcloudapi.net. Interactive sign-in uses it only when the cloud is custom. Managed identity uses it first, for every connection on this machine. Leave empty for automatic selection."
+              },
+              "hostnameSuffix": {
+                "type": "string",
+                "pattern": "^\\s*(?:\\.?(?!(?:[cC][oO][mM]|[cC][oO]|[nN][eE][tT]|[oO][rR][gG]|[gG][oO][vV])\\.[a-zA-Z]{2}\\s*$)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+)?\\s*$",
+                "patternErrorMessage": "Use a trusted service hostname suffix such as .mongocluster.cosmos.example, with valid DNS labels and no wildcard, URL, port, or path. Bare top-level domains and common public suffixes such as com.cn are not allowed. Leave it empty to clear.",
+                "markdownDescription": "Microsoft Entra ID tokens are sent to servers ending with this suffix. Add only a suffix you have confirmed belongs to Azure DocumentDB. Applies in any cloud; never selects a token audience. Leave empty to trust only built-in service suffixes. [Learn more](https://microsoft.github.io/vscode-documentdb/user-manual/entra-id-trusted-servers/)"
+              }
+            },
+            "additionalProperties": false
           }
         }
       },

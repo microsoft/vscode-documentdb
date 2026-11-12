@@ -67,6 +67,7 @@ function isHarnessFixture(value: unknown): value is HarnessFixture {
         localQuickStart: true,
         atlasCredentials: true,
         queryInsightsStandalone: true,
+        connectionDiagnostics: true,
     } satisfies Record<WebviewName, boolean>;
     return (
         isObject(value) &&

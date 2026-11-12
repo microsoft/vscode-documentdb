@@ -12,10 +12,10 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
-import * as vscode from 'vscode';
 import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../documentdb/CredentialCache';
+import { showClusterConnectFailure } from '../../../documentdb/showClusterConnectFailure';
 import { Views } from '../../../documentdb/Views';
 import { type AuthenticateWizardContext } from '../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
 import { ChooseAuthMethodStep } from '../../../documentdb/wizards/authenticate/ChooseAuthMethodStep';
@@ -31,6 +31,8 @@ import { getThemeAgnosticIconPath } from '../../../utils/icons';
 import { nonNullValue } from '../../../utils/nonNull';
 import { type AzureClusterModel } from '../../azure-views/models/AzureClusterModel';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../documentdb/ClusterItemBase';
+import { type DiagnosticCredentialRead } from '../../documentdb/diagnosticCredentialRead';
+import { readCredentialsForDiagnostics } from '../../documentdb/readCredentialsForDiagnostics';
 import { type TreeCluster } from '../../models/BaseClusterModel';
 
 export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
@@ -44,20 +46,33 @@ export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
     }
 
     public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
-        return callWithTelemetryAndErrorHandling('getCredentials', async (context: IActionContext) => {
-            context.telemetry.properties.view = Views.AzureResourcesView;
-            context.telemetry.properties.branch = 'documentdb';
+        return callWithTelemetryAndErrorHandling('getCredentials', (context: IActionContext) =>
+            this.readCredentials(context),
+        );
+    }
 
-            // Retrieve and validate cluster information (throws if invalid)
-            const clusterInformation = await getClusterInformationFromAzure(
-                context,
-                this.subscription,
-                this.cluster.resourceGroup!,
-                this.cluster.name,
-            );
+    /** Same Azure Resource Manager read, without error UI; typed failures reach connection diagnostics. */
+    public override getCredentialsForDiagnostics(
+        read: DiagnosticCredentialRead,
+    ): Promise<EphemeralClusterCredentials | undefined> {
+        return readCredentialsForDiagnostics('getCredentials', 'azure', read, (context: IActionContext) =>
+            this.readCredentials(context),
+        );
+    }
 
-            return extractCredentialsFromCluster(context, clusterInformation, this.subscription);
-        });
+    private async readCredentials(context: IActionContext): Promise<EphemeralClusterCredentials> {
+        context.telemetry.properties.view = Views.AzureResourcesView;
+        context.telemetry.properties.branch = 'documentdb';
+
+        // Retrieve and validate cluster information (throws if invalid)
+        const clusterInformation = await getClusterInformationFromAzure(
+            context,
+            this.subscription,
+            this.cluster.resourceGroup!,
+            this.cluster.name,
+        );
+
+        return extractCredentialsFromCluster(context, clusterInformation, this.subscription);
     }
 
     /**
@@ -96,6 +111,7 @@ export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
             // Prepare wizard context
             const wizardContext: AuthenticateWizardContext = {
                 ...context,
+                connectionString: credentials.connectionString,
                 adminUserName: credentials.nativeAuthConfig?.connectionUser,
                 resourceName: this.cluster.name,
                 availableAuthMethods: credentials.availableAuthMethods,
@@ -177,16 +193,12 @@ export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
                     l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
                 );
 
-                void vscode.window.showErrorMessage(
-                    l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
-                    {
-                        modal: true,
-                        detail:
-                            l10n.t('Revisit connection details and try again.') +
-                            '\n\n' +
-                            l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
-                    },
-                );
+                await showClusterConnectFailure({
+                    clusterId: this.cluster.clusterId,
+                    clusterName: this.cluster.name,
+                    error,
+                    context,
+                });
 
                 // Clean up failed connection
                 await ClustersClient.deleteClient(this.cluster.clusterId);

@@ -164,17 +164,20 @@ describe('resolveSrvForDriver', (): void => {
     it('cancels a pending probe and rejects with the abort reason', async (): Promise<void> => {
         const controller = new AbortController();
         let rejectProbe!: (error: unknown) => void;
-        probe.mockImplementation(
-            (): Promise<never> =>
-                new Promise((_resolve, reject): void => {
-                    rejectProbe = reject;
-                }),
-        );
+        const probeStarted = new Promise<void>((resolve): void => {
+            probe.mockImplementation(
+                (): Promise<never> =>
+                    new Promise((_resolve, reject): void => {
+                        rejectProbe = reject;
+                        resolve();
+                    }),
+            );
+        });
         const cancel = vi
             .spyOn(dns.promises.Resolver.prototype, 'cancel')
             .mockImplementation((): void => rejectProbe(probeError('ECANCELLED')));
         const result = run({ signal: controller.signal });
-        await Promise.resolve();
+        await probeStarted;
         const reason = new Error('stop');
         controller.abort(reason);
         await expect(result).rejects.toBe(reason);

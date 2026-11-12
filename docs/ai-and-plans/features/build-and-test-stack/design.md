@@ -161,6 +161,29 @@ representative calls through every public entry point. The real-VS-Code unbundle
 CommonJS `await import()` and ESM loading to pass, and records synchronous CommonJS `require()` as the
 known unsupported case.
 
+### Post-release version bumps are root-only, idempotent, and reviewed
+
+The release-bump workflow checks out `main`, not the release tag or the manually selected ref.
+Automatic runs ignore GitHub prereleases and tags that do not match `main`'s package version.
+Both automatic and manual runs propose only the next patch's `alpha.0`; they never increment an
+existing development version to `alpha.1`. The root manifest and both root lockfile versions must
+agree before and after npm runs. Workspace package and dependency versions stay unchanged.
+
+The workflow pushes a version-specific branch and creates or updates an assigned reminder issue
+using `GITHUB_TOKEN`, with only contents and issues write permissions. A version marker identifies
+the reminder independently of its title or state; closed reminders are reopened on a retry.
+REST pagination avoids search-index delays causing duplicate issues. Matching branches are reused
+without rewriting commits. Branches with conflicting version content or unrelated changes fail
+explicitly instead of being overwritten.
+
+The issue and workflow summary include a formatted old/new version table and prefilled PR link.
+A maintainer submits the PR manually and normal PR CI runs; there is no bot PR or automatic CI
+dispatch. The prepared branch and link are summarized before the issue API call so they remain
+available if issue creation fails, without treating that failure as success. No release is
+published or tag modified. The development alpha must be replaced with a numeric release version
+before publication. [Decision 0016](./decisions.md#0016-prepare-a-version-branch-and-an-assigned-issue-instead-of-a-bot-pr)
+records the policy constraint and operator's approved alternative.
+
 ## Change discipline
 
 Change a config and the relevant rationale together. Package before claiming a bundle change works,

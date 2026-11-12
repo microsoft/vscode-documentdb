@@ -6,23 +6,39 @@
 import { describe, expect, it } from 'vitest';
 
 import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString';
+import { DOCUMENTDB_TOKEN_RESOURCE } from './entraScopes';
 import {
     getConnectionStringAuthFacts,
-    MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES,
+    getManagedIdentityAuthMechanismProperties,
     stripManagedIdentityMarkers,
 } from './managedIdentityConnectionString';
 
 const CLIENT_ID = '11111111-2222-3333-4444-555555555555';
 const HOST = 'my-cluster.mongocluster.cosmos.azure.com';
+const publicAuthMechanismProperties = getManagedIdentityAuthMechanismProperties(DOCUMENTDB_TOKEN_RESOURCE);
 
 function parse(uri: string): DocumentDBConnectionString {
     return new DocumentDBConnectionString(uri);
 }
 
+describe('getManagedIdentityAuthMechanismProperties', () => {
+    it('keeps the exact public-cloud output unchanged', () => {
+        expect(publicAuthMechanismProperties).toBe(
+            'ENVIRONMENT:azure,TOKEN_RESOURCE:https://ossrdbms-aad.database.windows.net',
+        );
+    });
+
+    it('emits the US Government token resource', () => {
+        expect(getManagedIdentityAuthMechanismProperties('https://ossrdbms-aad.database.usgovcloudapi.net')).toBe(
+            'ENVIRONMENT:azure,TOKEN_RESOURCE:https://ossrdbms-aad.database.usgovcloudapi.net',
+        );
+    });
+});
+
 describe('getConnectionStringAuthFacts', () => {
     it('reports the documented driver-native form as an Azure machine workflow', () => {
         const cs = parse(
-            `mongodb+srv://${CLIENT_ID}@${HOST}/?authMechanism=MONGODB-OIDC&authMechanismProperties=${MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES}`,
+            `mongodb+srv://${CLIENT_ID}@${HOST}/?authMechanism=MONGODB-OIDC&authMechanismProperties=${publicAuthMechanismProperties}`,
         );
 
         expect(getConnectionStringAuthFacts(cs)).toEqual({
@@ -36,7 +52,7 @@ describe('getConnectionStringAuthFacts', () => {
 
     it('reports an omitted username for the system-assigned form', () => {
         const cs = parse(
-            `mongodb+srv://${HOST}/?authMechanism=MONGODB-OIDC&authMechanismProperties=${MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES}`,
+            `mongodb+srv://${HOST}/?authMechanism=MONGODB-OIDC&authMechanismProperties=${publicAuthMechanismProperties}`,
         );
 
         expect(getConnectionStringAuthFacts(cs)).toMatchObject({ username: undefined, usernameIsGuid: false });
@@ -72,7 +88,7 @@ describe('getConnectionStringAuthFacts', () => {
 
     it('works for a plain mongodb:// host as well as +srv', () => {
         const cs = parse(
-            `mongodb://${CLIENT_ID}@${HOST}:10260/?authMechanism=MONGODB-OIDC&authMechanismProperties=${MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES}`,
+            `mongodb://${CLIENT_ID}@${HOST}:10260/?authMechanism=MONGODB-OIDC&authMechanismProperties=${publicAuthMechanismProperties}`,
         );
 
         expect(getConnectionStringAuthFacts(cs)).toMatchObject({ username: CLIENT_ID, usernameIsGuid: true });
@@ -80,7 +96,7 @@ describe('getConnectionStringAuthFacts', () => {
 
     it('keeps a username that is not GUID shaped as a supplied identity to review', () => {
         const cs = parse(
-            `mongodb+srv://alice@${HOST}/?authMechanism=MONGODB-OIDC&authMechanismProperties=${MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES}`,
+            `mongodb+srv://alice@${HOST}/?authMechanism=MONGODB-OIDC&authMechanismProperties=${publicAuthMechanismProperties}`,
         );
 
         expect(getConnectionStringAuthFacts(cs)).toMatchObject({ username: 'alice', usernameIsGuid: false });
@@ -121,7 +137,7 @@ describe('getConnectionStringAuthFacts', () => {
 describe('stripManagedIdentityMarkers', () => {
     it('removes the mechanism markers and the credentials but keeps everything else', () => {
         const cs = parse(
-            `mongodb+srv://${CLIENT_ID}@${HOST}/?authMechanism=MONGODB-OIDC&authMechanismProperties=${MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES}&retryWrites=true&appName=demo`,
+            `mongodb+srv://${CLIENT_ID}@${HOST}/?authMechanism=MONGODB-OIDC&authMechanismProperties=${publicAuthMechanismProperties}&retryWrites=true&appName=demo`,
         );
 
         stripManagedIdentityMarkers(cs);

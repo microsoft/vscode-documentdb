@@ -6,6 +6,11 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 
+import {
+    trackDeepLinkTelemetry,
+    type DeepLinkOpenOptions,
+    type DeepLinkOpenResult,
+} from '../../deepLinks/deepLinkTelemetry';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { inferViewIdFromTreeId } from '../../documentdb/Views';
@@ -74,7 +79,7 @@ function extractAzureInfo(cluster: TreeCluster): ClusterDashboardAzureInfo | und
     return Object.values(info).some((value) => value !== undefined) ? info : undefined;
 }
 
-export interface OpenClusterDashboardOptions {
+export interface OpenClusterDashboardOptions extends DeepLinkOpenOptions {
     /**
      * Which affordance asked for the dashboard: the inline tree button, the context menu, or
      * the automatic open that follows a successful connection. The three are the same command
@@ -89,9 +94,10 @@ export async function openClusterDashboard(
     node: ClusterItemBase | DatabaseItem,
     _nodes?: unknown,
     options?: OpenClusterDashboardOptions,
-): Promise<void> {
+): Promise<DeepLinkOpenResult> {
     // added manually here as this function can be called bypassing our general command registration
     trackJourneyCorrelationId(context, node);
+    trackDeepLinkTelemetry(context, options?.deepLink);
 
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
@@ -115,7 +121,9 @@ export async function openClusterDashboard(
         if (!client) {
             // `connect()` has already surfaced the reason, or the user cancelled the prompt.
             context.telemetry.properties.connectionResult = 'failed';
-            return;
+            const canceled = node.lastConnectionOutcome === 'canceled';
+            context.telemetry.properties.result = canceled ? 'Canceled' : 'Failed';
+            return { opened: false, canceled };
         }
     }
 
@@ -130,20 +138,23 @@ export async function openClusterDashboard(
     // open panel is not a new dashboard session and must not be counted as one.
     const existingSessionId = getOpenClusterDashboardSessionId(node.cluster.clusterId, selectedDatabaseName);
 
-    openClusterDashboardWebview({
-        clusterId: node.cluster.clusterId,
-        clusterDisplayName: node.cluster.name,
-        viewId: viewId,
-        refreshIntervalMs: DASHBOARD_REFRESH_INTERVAL_MS,
-        feedbackPermitted: isFeedbackPermitted(),
-        azure,
-        showDashboardOnConnect,
-        selectedDatabaseName,
-        journeyCorrelationId:
-            typeof context.telemetry.properties.journeyCorrelationId === 'string'
-                ? context.telemetry.properties.journeyCorrelationId
-                : undefined,
-    });
+    openClusterDashboardWebview(
+        {
+            clusterId: node.cluster.clusterId,
+            clusterDisplayName: node.cluster.name,
+            viewId: viewId,
+            refreshIntervalMs: DASHBOARD_REFRESH_INTERVAL_MS,
+            feedbackPermitted: isFeedbackPermitted(),
+            azure,
+            showDashboardOnConnect,
+            selectedDatabaseName,
+            journeyCorrelationId:
+                typeof context.telemetry.properties.journeyCorrelationId === 'string'
+                    ? context.telemetry.properties.journeyCorrelationId
+                    : undefined,
+        },
+        options?.deepLink,
+    );
 
     context.telemetry.properties.viewId = viewId;
     context.telemetry.properties.isAzureCluster = azure === undefined ? 'false' : 'true';
@@ -151,4 +162,9 @@ export async function openClusterDashboard(
     context.telemetry.properties.panelReused = existingSessionId === undefined ? 'false' : 'true';
     context.telemetry.properties.dashboardSessionId =
         existingSessionId ?? getOpenClusterDashboardSessionId(node.cluster.clusterId, selectedDatabaseName);
+    return {
+        opened: true,
+        dashboardSessionId: context.telemetry.properties.dashboardSessionId,
+        panelReused: existingSessionId !== undefined,
+    };
 }

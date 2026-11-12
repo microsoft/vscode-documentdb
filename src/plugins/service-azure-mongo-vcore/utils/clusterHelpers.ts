@@ -10,6 +10,7 @@ import { l10n } from 'vscode';
 import { AuthMethodId, isSupportedAuthMethod } from '../../../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
 import { type EphemeralClusterCredentials } from '../../../tree/documentdb/ClusterItemBase';
+import { ConnectionEndpointUnavailableError } from '../../../tree/documentdb/diagnosticCredentialRead';
 import { createMongoClustersManagementClient } from '../../../utils/azureClients';
 
 /**
@@ -32,7 +33,9 @@ export async function getClusterInformationFromAzure(
     // Validate connection string
     if (!clusterInformation.properties?.connectionString) {
         context.telemetry.properties.error = 'missing-connection-string';
-        throw new Error(
+        throw new ConnectionEndpointUnavailableError(
+            'azure',
+            'notProvided',
             l10n.t('Authentication data (properties.connectionString) is missing for "{cluster}".', {
                 cluster: clusterName,
             }),

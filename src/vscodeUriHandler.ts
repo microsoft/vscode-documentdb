@@ -3,13 +3,29 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
+import {
+    callWithTelemetryAndErrorHandling,
+    UserCancelledError,
+    type IActionContext,
+} from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { openLocalQuickStart } from './commands/localQuickStart/openLocalQuickStart';
 import { openCollectionViewInternal } from './commands/openCollectionView/openCollectionView';
+import {
+    cancelDeepLink,
+    failDeepLink,
+    measureDeepLinkPhase,
+    readDeepLinkTelemetry,
+    recordDeepLinkSource,
+    type DeepLinkOpenResult,
+} from './deepLinks/deepLinkTelemetry';
+import { handleAzureResourceLinkRequest } from './deepLinks/handleAzureResourceLink';
+import { ClustersClient } from './documentdb/ClustersClient';
 import { DocumentDBConnectionString } from './documentdb/utils/DocumentDBConnectionString';
-import { canonicalizeTlsException, stripTlsBypassParams } from './documentdb/utils/tlsException';
+import { isLoopbackHost } from './documentdb/utils/hostClassification';
+import { stripTlsBypassParams } from './documentdb/utils/tlsException';
 import { Views } from './documentdb/Views';
 import { API } from './DocumentDBExperiences';
 import { ext } from './extensionVariables';
@@ -22,26 +38,43 @@ import {
 import { isLegacyEmulatorMigrationComplete } from './services/legacyEmulatorMigration';
 import { settingsKeys } from './settingsKeys';
 import {
-    buildConnectionsViewTreePath,
+    buildConnectionsViewTargetPath,
     revealInConnectionsView,
     waitForConnectionsViewReady,
     withConnectionsViewProgress,
 } from './tree/connections-view/connectionsViewHelpers';
+import { suppressAutoOpenDashboard } from './tree/documentdb/autoOpenDashboardSuppression';
+import { type TreeElement } from './tree/TreeElement';
 import { nonNullValue } from './utils/nonNull';
 import { generateDocumentDBStorageId } from './utils/storageUtils';
 
 // #region Type Definitions
 
-/**
- * Interface for URI parameters used for connecting to DocumentDB resources.
- */
-interface UriParams {
-    /** The connection string to the DocumentDB/MongoDB account */
-    connectionString?: string;
-    /** The name of the database in the DocumentDB account */
+const KNOWN_QUERY_PARAMS = new Set([
+    'connectionString',
+    'resourceId',
+    'tenantId',
+    'database',
+    'collection',
+    'open',
+    'source',
+]);
+const OPEN_TARGETS = ['dashboard', 'shell'] as const;
+type OpenTarget = (typeof OPEN_TARGETS)[number];
+
+interface SharedUriParams {
     database?: string;
-    /** The name of the collection within the database */
     collection?: string;
+    open?: OpenTarget;
+}
+
+interface ConnectionStringUriParams extends SharedUriParams {
+    connectionString?: string;
+}
+
+interface AzureUriParams extends SharedUriParams {
+    resourceId?: string;
+    tenantId?: string;
 }
 
 /**
@@ -68,6 +101,9 @@ const LOCAL_RESOURCE_TYPES = ['documentdb'] as const;
 
 type LocalResourceType = (typeof LOCAL_RESOURCE_TYPES)[number];
 
+/** Hand-written allow-list of connection sources, like LOCAL_RESOURCE_TYPES. */
+const CONNECT_SOURCES = ['azure'] as const;
+
 /**
  * The verb assumed when a link names none.
  *
@@ -80,7 +116,7 @@ const DEFAULT_VERB: DeepLinkVerb = 'connect';
 /** A deep link's route: what it asks for, and any path segments qualifying it. */
 interface DeepLinkRoute {
     verb: DeepLinkVerb;
-    /** Segments after the verb, e.g. the provider id in `/discovery/<provider>`. */
+    /** Segments after the verb, e.g. the source in `/connect/azure`. */
     qualifiers: string[];
 }
 
@@ -95,6 +131,7 @@ interface DeepLinkRoute {
  *
  * ```text
  * vscode://ms-azuretools.vscode-documentdb/connect?connectionString=…&database=…&collection=…
+ * vscode://ms-azuretools.vscode-documentdb/connect/azure?resourceId=…
  * vscode://ms-azuretools.vscode-documentdb/local
  * vscode://ms-azuretools.vscode-documentdb/local/documentdb
  * vscode://ms-azuretools.vscode-documentdb?connectionString=…              (legacy, means /connect)
@@ -124,11 +161,25 @@ interface DeepLinkRoute {
  */
 export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
     return callWithTelemetryAndErrorHandling('globalUriHandler', async (context: IActionContext) => {
+        context.telemetry.properties.deepLinkCorrelationId = randomUUID();
+        context.telemetry.properties.activationSource = 'deepLink';
         // Record non-sensitive URI diagnostics to help investigate failures.
         context.telemetry.properties.uriScheme = uri.scheme;
         context.telemetry.properties.uriAuthority = uri.authority;
-        context.telemetry.properties.uriPathLength = String(uri.path.length);
-        context.telemetry.properties.uriQueryLength = String((uri.query ?? '').length);
+        context.telemetry.measurements.uriPathLength = uri.path.length;
+        context.telemetry.measurements.uriQueryLength = (uri.query ?? '').length;
+        const queryParams = recordParamsInTelemetry(context, uri.query);
+        recordDeepLinkSource(context, queryParams);
+        if (context.telemetry.properties.deepLinkSourceStatus === 'invalid') {
+            ext.outputChannel.warn(
+                '[DeepLink] Ignoring invalid source tag; use one label of 1-64 letters, digits, hyphens or underscores',
+            );
+        }
+        context.telemetry.properties.confirmationsEnabled = vscode.workspace
+            .getConfiguration()
+            .get<boolean>(settingsKeys.showUrlHandlingConfirmations, true)
+            ? 'true'
+            : 'false';
 
         try {
             context.telemetry.properties.failureStage = 'parseRoute';
@@ -138,26 +189,102 @@ export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
             // a link format someone published against a future version shows up here rather
             // than as an anonymous parse failure.
             context.telemetry.properties.deepLinkVerb = route?.verb ?? 'unrecognized';
-            context.telemetry.properties.deepLinkQualifierCount = String(route?.qualifiers.length ?? 0);
+            context.telemetry.measurements.deepLinkQualifierCount = route?.qualifiers.length ?? 0;
+            context.telemetry.properties.deepLinkRouteFormat =
+                uri.path.split('/').filter((segment) => segment.trim() !== '').length === 0 ? 'legacy' : 'explicit';
+            await callWithTelemetryAndErrorHandling('globalUriHandler.received', async (receivedContext) => {
+                Object.assign(receivedContext.telemetry.properties, context.telemetry.properties);
+                Object.assign(receivedContext.telemetry.measurements, context.telemetry.measurements);
+            });
+
+            let source: 'connectionString' | 'azure' | 'unrecognized' | undefined;
+            let resourceType: LocalResourceType | undefined;
+            try {
+                if (route?.verb === 'connect') {
+                    context.telemetry.properties.failureStage = 'validateConnectPath';
+                    context.telemetry.properties.deepLinkConnectSource = 'unrecognized';
+                    source = 'unrecognized';
+                    source = parseConnectSource(route.qualifiers);
+                    context.telemetry.properties.deepLinkConnectSource = source;
+                } else if (route?.verb === 'local') {
+                    context.telemetry.properties.failureStage = 'validateLocalResourceType';
+                    resourceType = parseLocalResourceType(route.qualifiers);
+                    context.telemetry.properties.deepLinkLocalResourceType = resourceType;
+                }
+            } finally {
+                const parameterNames: string[] = [];
+                let unknownParamCount = 0;
+                for (const key of queryParams.keys()) {
+                    if (KNOWN_QUERY_PARAMS.has(key)) {
+                        parameterNames.push(key);
+                    } else {
+                        unknownParamCount++;
+                    }
+                }
+                const open = OPEN_TARGETS.find((target) => target === queryParams.get('open')?.toLowerCase());
+                ext.outputChannel.info(
+                    `[DeepLink] Handling link: action=${route?.verb ?? 'unrecognized'}` +
+                        (source ? ` source=${source}` : '') +
+                        (resourceType ? ` localType=${resourceType}` : '') +
+                        ` parameters=${parameterNames.join(',') || 'none'}` +
+                        (unknownParamCount ? ` unknown=${unknownParamCount}` : '') +
+                        (open ? ` open=${open}` : ''),
+                );
+            }
 
             if (route === undefined) {
+                context.telemetry.properties.errorReason = 'unrecognizedAction';
                 throw new Error(
                     l10n.t(
-                        'This DocumentDB link asks for an action the extension does not recognize. It may have been written for a newer version — check for an update, or verify the link.',
+                        'This DocumentDB link asks for an action the extension does not recognize. It may have been written for a newer version. Check for an update, or verify the link.',
                     ),
                 );
             }
 
             switch (route.verb) {
                 case 'connect': {
-                    context.telemetry.properties.failureStage = 'validateConnectPath';
-                    if (route.qualifiers.length > 0) {
-                        throw new Error(l10n.t('This DocumentDB connection link has an invalid path. Use /connect.'));
+                    if (source === 'azure') {
+                        context.telemetry.properties.failureStage = 'extractParams';
+                        const params = extractAndValidateAzureParams(context, queryParams);
+                        ext.outputChannel.trace('[DeepLink] Parameters validated');
+                        context.telemetry.properties.failureStage = 'handleAzureRequest';
+                        ext.outputChannel.trace('[DeepLink] Handing off to the Azure flow');
+                        const result = await handleAzureResourceLinkRequest(context, {
+                            ...params,
+                            resourceId: nonNullValue(params.resourceId, 'resourceId', 'vscodeUriHandler.ts'),
+                        });
+                        ext.outputChannel.trace(
+                            `[DeepLink] Azure flow finished: ${result ? 'opened target' : 'stopped'}`,
+                        );
+                        if (result) {
+                            recordConnectionTelemetry(context, result.clusterId);
+                            context.telemetry.properties.failureStage = 'openTarget';
+                            if (params.database && params.collection) {
+                                const { database, collection } = params;
+                                ext.outputChannel.trace('[DeepLink] Opening Collection View');
+                                await measureDeepLinkPhase(context, 'openTarget', () =>
+                                    openCollectionViewInternal(context, {
+                                        clusterId: result.clusterId,
+                                        clusterDisplayName: result.clusterNode.cluster.name,
+                                        viewId: Views.DiscoveryView,
+                                        databaseName: database,
+                                        collectionName: collection,
+                                    }),
+                                );
+                                context.telemetry.properties.openTargetResult = 'opened';
+                            } else if (params.open) {
+                                await openTargetOnNode(context, params.open, result.databaseNode ?? result.clusterNode);
+                            }
+                        } else if (!context.telemetry.properties.deepLinkOutcome) {
+                            failDeepLink(context, 'connectionFailed', 'azureFlowStopped');
+                        }
+                        break;
                     }
 
                     context.telemetry.properties.failureStage = 'extractParams';
                     // Note: uri.query is already decoded once by VS Code when creating the vscode.Uri object
-                    const params = extractAndValidateParams(context, uri.query);
+                    const params = extractAndValidateParams(context, queryParams);
+                    ext.outputChannel.trace('[DeepLink] Parameters validated');
 
                     context.telemetry.properties.failureStage = 'handleRequest';
                     await handleConnectionStringRequest(context, params);
@@ -165,25 +292,83 @@ export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
                 }
 
                 case 'local': {
-                    context.telemetry.properties.failureStage = 'validateLocalResourceType';
-                    const resourceType = parseLocalResourceType(route.qualifiers);
-                    context.telemetry.properties.deepLinkLocalResourceType = resourceType;
-
+                    context.telemetry.properties.deepLinkTarget = 'localSetup';
                     context.telemetry.properties.failureStage = 'openLocalQuickStart';
-                    await handleLocalQuickStartRequest(context, resourceType);
+                    await handleLocalQuickStartRequest(
+                        context,
+                        nonNullValue(resourceType, 'resourceType', 'vscodeUriHandler.ts'),
+                    );
                     break;
                 }
             }
+            if (!context.telemetry.properties.deepLinkOutcome) {
+                context.telemetry.properties.deepLinkOutcome = 'completed';
+            }
         } catch (error) {
+            context.telemetry.properties.deepLinkOutcome = error instanceof UserCancelledError ? 'canceled' : 'failed';
+            context.telemetry.properties.errorReason ??= context.telemetry.properties.failureStage;
             if (!context.telemetry.properties.failureStage) {
                 context.telemetry.properties.failureStage = 'unknown';
             }
             // Record the error type (not the message, which can carry user data)
             // so we can group failures without exposing connection details.
             context.telemetry.properties.errorName = error instanceof Error ? error.name : 'NonError';
+            ext.outputChannel.error(
+                `[DeepLink] Failed: failureStage=${context.telemetry.properties.failureStage} errorName=${context.telemetry.properties.errorName}`,
+            );
             throw error;
+        } finally {
+            context.telemetry.properties.lastStage = context.telemetry.properties.failureStage;
         }
     });
+}
+
+function recordConnectionTelemetry(context: IActionContext, clusterId: string): void {
+    context.telemetry.properties.connectionCorrelationId ??=
+        ClustersClient.getExistingClient(clusterId)?.connectionCorrelationId;
+}
+
+async function openTargetOnNode(context: IActionContext, target: OpenTarget, node: TreeElement): Promise<void> {
+    ext.outputChannel.trace(`[DeepLink] Opening ${target}`);
+    const deepLink = readDeepLinkTelemetry(context.telemetry.properties);
+    const result = await measureDeepLinkPhase(
+        context,
+        'openTarget',
+        async (): Promise<DeepLinkOpenResult | undefined> => {
+            switch (target) {
+                case 'dashboard':
+                    return vscode.commands.executeCommand<DeepLinkOpenResult>(
+                        'vscode-documentdb.command.clusterDashboard.open',
+                        node,
+                        null,
+                        { activationSource: 'deepLink', deepLink },
+                    );
+                case 'shell':
+                    return vscode.commands.executeCommand<DeepLinkOpenResult>(
+                        'vscode-documentdb.command.shell.open',
+                        node,
+                        null,
+                        { deepLink },
+                    );
+            }
+        },
+    );
+    if (result?.canceled) {
+        cancelDeepLink(context, 'OpenTarget');
+        context.telemetry.properties.openTargetResult = 'skippedCanceled';
+        return;
+    }
+    if (!result?.opened) {
+        context.telemetry.properties.openTargetResult = 'notOpened';
+        failDeepLink(context, 'destinationFailed', 'destinationNotOpened');
+        return;
+    }
+    context.telemetry.properties.openTargetResult = 'opened';
+    context.telemetry.properties.shellSessionId = result.shellSessionId;
+    context.telemetry.properties.dashboardSessionId = result.dashboardSessionId;
+    if (result.panelReused !== undefined) {
+        context.telemetry.properties.panelReused = result.panelReused ? 'true' : 'false';
+    }
 }
 
 /**
@@ -211,6 +396,22 @@ function parseDeepLinkRoute(path: string): DeepLinkRoute | undefined {
     }
 
     return { verb, qualifiers: segments.slice(1) };
+}
+
+function parseConnectSource(qualifiers: string[]): 'connectionString' | 'azure' {
+    if (qualifiers.length === 0) {
+        return 'connectionString';
+    }
+
+    if (qualifiers.length === 1) {
+        const candidate = qualifiers[0].toLowerCase();
+        const source = CONNECT_SOURCES.find((known) => known === candidate);
+        if (source !== undefined) {
+            return source;
+        }
+    }
+
+    throw new Error(l10n.t('This DocumentDB connection link has an invalid path. Use /connect or /connect/azure.'));
 }
 
 /**
@@ -256,24 +457,38 @@ async function handleLocalQuickStartRequest(context: IActionContext, resourceTyp
 
     if (showUrlHandlingConfirmations) {
         const openSetup = l10n.t('Open setup');
-        const confirmation = await vscode.window.showInformationMessage(
-            l10n.t('This link wants to open the DocumentDB Local setup in VS Code.'),
-            {
-                modal: true,
-                detail: l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
-            },
-            openSetup,
+        ext.outputChannel.trace('[DeepLink] Showing local setup confirmation');
+        const confirmation = await measureDeepLinkPhase(context, 'confirmation', () =>
+            vscode.window.showInformationMessage(
+                l10n.t('Open DocumentDB Local setup?'),
+                {
+                    modal: true,
+                    detail: [
+                        l10n.t('A link wants to open the DocumentDB Local setup in VS Code.'),
+                        '',
+                        l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
+                    ].join('\n'),
+                },
+                openSetup,
+            ),
         );
 
+        ext.outputChannel.trace(
+            `[DeepLink] Local setup confirmation: ${confirmation === openSetup ? 'accepted' : 'dismissed'}`,
+        );
         if (confirmation !== openSetup) {
-            context.telemetry.properties.userCancelledAtStep = 'OpenLocalQuickStart';
+            cancelDeepLink(context, 'OpenLocalQuickStart');
             return;
         }
     }
 
     switch (resourceType) {
         case 'documentdb':
-            await openLocalQuickStart(context, undefined, { activationSource: 'deepLink' });
+            ext.outputChannel.trace('[DeepLink] Opening the DocumentDB Local wizard');
+            await measureDeepLinkPhase(context, 'openTarget', () =>
+                openLocalQuickStart(context, undefined, { activationSource: 'deepLink' }),
+            );
+            context.telemetry.properties.openTargetResult = 'opened';
             break;
     }
 }
@@ -291,13 +506,16 @@ async function handleLocalQuickStartRequest(context: IActionContext, resourceTyp
  */
 async function handleConnectionStringRequest(
     context: IActionContext,
-    params: ReturnType<typeof extractParams>,
+    params: ConnectionStringUriParams,
 ): Promise<void> {
     // Validate connection string
+    context.telemetry.properties.failureStage = 'validateConnectionString';
     validateConnectionString(params.connectionString);
 
     // Parse the connection string
+    context.telemetry.properties.failureStage = 'parseConnectionString';
     const parsedCS = new DocumentDBConnectionString(params.connectionString!);
+    context.telemetry.properties.failureStage = 'resolveConnection';
 
     // Extract database name from connection string pathname if params.database is not provided
     let selectedDatabase = params.database;
@@ -328,12 +546,17 @@ async function handleConnectionStringRequest(
 
     // Determine if this is an emulator connection
     const isEmulator = isEmulatorConnection(parsedCS);
-    // TLS exception (§7): only honor allow-invalid when EVERY host is local/private, and strip the
-    // bypass param from the parsed CS so every downstream use (storageId, stored secret, reveal)
-    // uses the canonical form — a public deep link can't silently disable certificate validation,
-    // and emulatorConfiguration is the single source of truth.
-    const disableEmulatorSecurity = canonicalizeTlsException(parsedCS.toString()).disableEmulatorSecurity;
-    stripTlsBypassParams(parsedCS);
+    // TLS exception (§7): a link comes from outside VS Code, so it may only request allow-invalid
+    // certificates for a target on this machine. Private-network, single-word and `.local` hosts
+    // can resolve to other machines and are not eligible here (users can still opt in through the
+    // connection settings). The bypass params are always stripped so every downstream use
+    // (storageId, stored secret, reveal) uses the canonical form, and emulatorConfiguration is the
+    // single source of truth.
+    const { bypassRequested: tlsBypassRequested } = stripTlsBypassParams(parsedCS);
+    const tlsBypassEligible = tlsBypassRequested && areAllHostsLoopback(parsedCS);
+    let disableEmulatorSecurity = false;
+    context.telemetry.properties.tlsBypassRequested = tlsBypassRequested ? 'true' : 'false';
+    context.telemetry.properties.tlsBypassHonored = 'false';
 
     // Pick the storage zone for this (possibly emulator) connection. The dedicated
     // Emulators zone is being retired (design §4): once the one-time migration has run,
@@ -350,6 +573,13 @@ async function handleConnectionStringRequest(
     // Check for existing connections with the same parameters
     const existingConnections = await ConnectionStorageService.getAll(targetZone);
     const existingDuplicateConnection = findDuplicateConnection(existingConnections, parsedCS, joinedHosts);
+    context.telemetry.properties.connectionDisposition = existingDuplicateConnection ? 'reused' : 'new';
+    context.telemetry.properties.connectionReused =
+        existingDuplicateConnection && ClustersClient.getExistingClient(existingDuplicateConnection.id)
+            ? 'true'
+            : 'false';
+    context.telemetry.properties.deepLinkTarget =
+        params.open ?? (params.collection ? 'collection' : selectedDatabase ? 'database' : 'cluster');
 
     // Check if URL handling confirmations are enabled
     const showUrlHandlingConfirmations = vscode.workspace
@@ -357,31 +587,94 @@ async function handleConnectionStringRequest(
         .get<boolean>(settingsKeys.showUrlHandlingConfirmations, true);
 
     let storageId: string;
+    let surface: string | undefined;
+    if (selectedDatabase && params.collection) {
+        surface = l10n.t('Collection View');
+    } else if (params.open) {
+        surface = params.open === 'dashboard' ? l10n.t('Cluster Dashboard') : l10n.t('Interactive Shell');
+    }
 
+    ext.outputChannel.trace(
+        `[DeepLink] ${existingDuplicateConnection ? 'Existing saved connection found' : 'New connection'}`,
+    );
     if (existingDuplicateConnection) {
         // the connection already exists, let's just reveal it later in the Connections View
         storageId = existingDuplicateConnection.id;
     } else {
-        // First confirmation: Ask user about adding new connection (if enabled)
-        if (showUrlHandlingConfirmations) {
-            const detail = [
-                ...formatConnectionTargetDetails(newConnectionLabel, selectedDatabase, params.collection),
-                '',
-                l10n.t('A new connection will be added to your Connections View.'),
-                l10n.t('Do you want to continue?'),
-                '',
-                l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
-            ].join('\n');
-            const connectionConfirmation = await vscode.window.showInformationMessage(
-                l10n.t('You clicked a link that wants to open a DocumentDB connection in VS Code.'),
+        // A link from outside VS Code must never add a connection without the user seeing its
+        // target, even when URL handling confirmations are disabled.
+        const detail = [
+            l10n.t('A link wants to add this DocumentDB connection and open it in VS Code.'),
+            '',
+            ...formatConnectionTargetDetails(newConnectionLabel, selectedDatabase, params.collection),
+            ...(surface ? [l10n.t('Opens: {0}', surface)] : []),
+            ...(tlsBypassRequested && !tlsBypassEligible
+                ? [
+                      '',
+                      l10n.t(
+                          'This link asked to turn off TLS certificate validation. The request was ignored, and certificate validation stays on.',
+                      ),
+                  ]
+                : []),
+            '',
+            l10n.t('A new connection will be added to your Connections view.'),
+            l10n.t('You might be asked for credentials to establish the connection.'),
+        ].join('\n');
+        ext.outputChannel.trace('[DeepLink] Showing add-and-open confirmation');
+        context.telemetry.properties.failureStage = 'confirmNewConnection';
+        const connectionConfirmation = await measureDeepLinkPhase(context, 'confirmation', () =>
+            vscode.window.showInformationMessage(
+                l10n.t('Add and open connection?'),
                 { modal: true, detail },
-                l10n.t('Yes, continue'),
+                l10n.t('Add and open'),
+            ),
+        );
+
+        ext.outputChannel.trace(
+            `[DeepLink] Add-and-open confirmation: ${connectionConfirmation === l10n.t('Add and open') ? 'accepted' : 'dismissed'}`,
+        );
+        if (connectionConfirmation !== l10n.t('Add and open')) {
+            cancelDeepLink(context, 'CreateNewConnection');
+            return; // User cancelled
+        }
+
+        // Relaxing certificate validation always needs the user's explicit consent, independent
+        // of the URL handling confirmation setting, and the prompt names the target it applies to.
+        if (tlsBypassEligible) {
+            const turnOff = l10n.t('Turn off validation');
+            const keepOn = l10n.t('Keep validation on');
+            ext.outputChannel.trace('[DeepLink] Showing TLS confirmation');
+            context.telemetry.properties.failureStage = 'confirmTlsException';
+            const tlsChoice = await measureDeepLinkPhase(context, 'confirmation', () =>
+                vscode.window.showWarningMessage(
+                    l10n.t('Turn off certificate validation?'),
+                    {
+                        modal: true,
+                        detail: [
+                            l10n.t('This link asks to turn off TLS certificate validation.'),
+                            '',
+                            ...formatConnectionTargetDetails(newConnectionLabel, selectedDatabase, params.collection),
+                            '',
+                            l10n.t(
+                                'Without certificate validation, the identity of the server is not verified. Only turn it off for a local emulator or test instance you trust.',
+                            ),
+                        ].join('\n'),
+                    },
+                    turnOff,
+                    keepOn,
+                ),
             );
 
-            if (connectionConfirmation !== l10n.t('Yes, continue')) {
-                context.telemetry.properties.userCancelledAtStep = 'CreateNewConnection';
+            ext.outputChannel.trace(
+                `[DeepLink] TLS confirmation: ${tlsChoice === undefined ? 'dismissed' : 'accepted'} disableValidation=${tlsChoice === turnOff}`,
+            );
+            if (tlsChoice === undefined) {
+                cancelDeepLink(context, 'TlsException');
                 return; // User cancelled
             }
+
+            disableEmulatorSecurity = tlsChoice === turnOff;
+            context.telemetry.properties.tlsBypassHonored = disableEmulatorSecurity ? 'true' : 'false';
         }
 
         // Show the Connections View
@@ -408,15 +701,18 @@ async function handleConnectionStringRequest(
                 // Match the wizard's shape: only carry an emulatorConfiguration when at least one
                 // flag is set, otherwise leave it undefined (a public deep link is a plain Cluster).
                 emulatorConfiguration:
-                    isEmulator || disableEmulatorSecurity
-                        ? { isEmulator, disableEmulatorSecurity: !!disableEmulatorSecurity }
-                        : undefined,
+                    isEmulator || disableEmulatorSecurity ? { isEmulator, disableEmulatorSecurity } : undefined,
                 availableAuthMethods: [],
             },
             secrets: { connectionString: parsedCS.toString() },
         };
 
-        await ConnectionStorageService.save(targetZone, storageItem, true);
+        context.telemetry.properties.failureStage = 'saveConnection';
+        await measureDeepLinkPhase(context, 'saveConnection', () =>
+            ConnectionStorageService.save(targetZone, storageItem, true),
+        );
+        context.telemetry.properties.connectionSaved = 'true';
+        ext.outputChannel.trace('[DeepLink] Connection saved');
 
         ext.connectionsBranchDataProvider.refresh();
 
@@ -424,30 +720,37 @@ async function handleConnectionStringRequest(
         await waitForConnectionsViewReady(context);
     }
 
-    // Second confirmation: Ask user about revealing the connection (if enabled)
-    if (showUrlHandlingConfirmations) {
+    // Ask before opening an existing connection when confirmations are enabled.
+    if (existingDuplicateConnection && showUrlHandlingConfirmations) {
+        const targetDetails = formatConnectionTargetDetails(
+            existingDuplicateConnection.name,
+            selectedDatabase,
+            params.collection,
+        );
+        if (surface) {
+            targetDetails.push(l10n.t('Opens: {0}', surface));
+        }
         const detail = [
-            ...formatConnectionTargetDetails(
-                existingDuplicateConnection?.name ?? newConnectionLabel,
-                selectedDatabase,
-                params.collection,
-            ),
+            l10n.t('A link wants to open a DocumentDB connection in VS Code.'),
+            '',
+            ...targetDetails,
             '',
             l10n.t('You might be asked for credentials to establish the connection.'),
-            l10n.t('Do you want to continue?'),
             '',
             l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
         ].join('\n');
-        const revealConfirmation = await vscode.window.showInformationMessage(
-            existingDuplicateConnection
-                ? l10n.t('You clicked a link that wants to open a DocumentDB connection in VS Code.')
-                : l10n.t('The connection will now be opened in the Connections View.'),
-            { modal: true, detail },
-            l10n.t('Yes, open connection'),
+        ext.outputChannel.trace('[DeepLink] Showing reveal connection confirmation');
+        const openButton = l10n.t('Open');
+        context.telemetry.properties.failureStage = 'confirmExistingConnection';
+        const revealConfirmation = await measureDeepLinkPhase(context, 'confirmation', () =>
+            vscode.window.showInformationMessage(l10n.t('Open connection?'), { modal: true, detail }, openButton),
         );
 
-        if (revealConfirmation !== l10n.t('Yes, open connection')) {
-            context.telemetry.properties.userCancelledAtStep = 'RevealConnection';
+        ext.outputChannel.trace(
+            `[DeepLink] Reveal connection confirmation: ${revealConfirmation === openButton ? 'accepted' : 'dismissed'}`,
+        );
+        if (revealConfirmation !== openButton) {
+            cancelDeepLink(context, 'RevealConnection');
             return; // User cancelled
         }
     }
@@ -465,67 +768,118 @@ async function handleConnectionStringRequest(
     // For future code maintainers:
     // This is a little trick: the first withProgress shows the notification with a user-friendly message,
     // while the second withProgress (via withConnectionsViewProgress) is used to show the 'loading animation' in the Connections View.
-    //
-    // Known limitation (pre-existing, follow-up): `revealInConnectionsView` /
-    // `buildConnectionsViewTreePath` build a FLAT path (`connectionsView/<id>`), which is
-    // correct for a root-level connection but not for one nested in a folder. A deep-link that
-    // de-dups onto a connection inside a folder (e.g. a connection migrated into "Local
-    // Connections (Legacy)") therefore may not auto-reveal. The connection is still found and
-    // navigable manually. A folder-aware reveal (via `buildFullTreePath(storageId, zone)` plus
-    // recursive `findNodeById`) is tracked as a follow-up.
-    await vscode.window.withProgress(
-        {
-            location: vscode.ProgressLocation.Notification,
-            title: l10n.t('Opening DocumentDB connection…'),
-            cancellable: false,
-        },
-        async () => {
-            await withConnectionsViewProgress(async () => {
-                await revealInConnectionsView(
-                    context,
-                    storageId,
-                    isInEmulatorZone,
-                    selectedDatabase,
-                    params.collection,
-                );
-            });
-        },
-    );
+    ext.outputChannel.trace('[DeepLink] Revealing in the Connections View');
+    const release = params.open === 'dashboard' ? suppressAutoOpenDashboard(storageId) : undefined;
+    context.telemetry.properties.failureStage = 'revealCluster';
+    try {
+        await measureDeepLinkPhase(context, 'treeReveal', () =>
+            vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: l10n.t('Opening DocumentDB connection…'),
+                    cancellable: false,
+                },
+                async () => {
+                    await withConnectionsViewProgress(async () => {
+                        await revealInConnectionsView(
+                            context,
+                            storageId,
+                            isInEmulatorZone,
+                            selectedDatabase,
+                            params.collection,
+                        );
+                    });
+                },
+            ),
+        );
+    } finally {
+        release?.();
+    }
+    recordConnectionTelemetry(context, storageId);
+    if (context.telemetry.properties.deepLinkOutcome === 'canceled') {
+        context.telemetry.properties.openTargetResult = 'skippedCanceled';
+        return;
+    }
 
-    // Third confirmation: Ask user about opening collection view (if applicable and enabled)
+    const clusterPath = await buildConnectionsViewTargetPath(storageId, isInEmulatorZone);
+    if (ext.connectionsBranchDataProvider.hasNodeErrorState(clusterPath)) {
+        ext.outputChannel.trace('[DeepLink] Cluster expansion failed; the node already explained why');
+        context.telemetry.properties.openTargetResult = 'skippedClusterError';
+        failDeepLink(context, 'connectionFailed', 'clusterExpansionFailed');
+        return;
+    }
+    const connectionName = existingDuplicateConnection?.name ?? newConnectionLabel;
+    if (!ClustersClient.exists(storageId)) {
+        ext.outputChannel.trace('[DeepLink] Cluster not connected; not opening the target');
+        context.telemetry.properties.openTargetResult = 'skippedNotConnected';
+        failDeepLink(context, 'connectionFailed', 'notConnected');
+        return;
+    }
+    if (context.telemetry.properties.revealError) {
+        ext.outputChannel.warn('[DeepLink] The requested tree target could not be revealed');
+        failDeepLink(context, 'destinationFailed', 'treeRevealFailed');
+        return;
+    }
+
+    if (params.open) {
+        context.telemetry.properties.failureStage = 'openTarget';
+        const treePath = await buildConnectionsViewTargetPath(storageId, isInEmulatorZone, selectedDatabase);
+        const node = await ext.connectionsBranchDataProvider.findNodeById(treePath, false);
+        if (!node) {
+            context.telemetry.properties.errorReason = selectedDatabase ? 'databaseNotFound' : 'clusterNotFound';
+            if (selectedDatabase) {
+                throw new Error(
+                    l10n.t(
+                        'Could not find database "{0}" on {1}. Check the name and your access, then open the link again.',
+                        selectedDatabase,
+                        connectionName,
+                    ),
+                );
+            }
+            throw new Error(l10n.t('Could not find {0} in the Connections view.', connectionName));
+        }
+        await openTargetOnNode(context, params.open, node);
+    }
+
     if (selectedDatabase && params.collection) {
-        // Verify that the connection, database, and collection exist in the tree
-        // This is an easy way to verify that the connection is valid
-        // and that the database and collection exist.
-        const treePath = buildConnectionsViewTreePath(storageId, isInEmulatorZone, selectedDatabase, params.collection);
+        context.telemetry.properties.failureStage = 'findCollection';
+        const treePath = await buildConnectionsViewTargetPath(
+            storageId,
+            isInEmulatorZone,
+            selectedDatabase,
+            params.collection,
+        );
         const collectionNode = await ext.connectionsBranchDataProvider.findNodeById(treePath, false);
 
         if (!collectionNode) {
-            // Connection verification failed
+            const databasePath = await buildConnectionsViewTargetPath(storageId, isInEmulatorZone, selectedDatabase);
+            const databaseNode = await ext.connectionsBranchDataProvider.findNodeById(databasePath, false);
+            if (!databaseNode) {
+                context.telemetry.properties.errorReason = 'databaseNotFound';
+                throw new Error(
+                    l10n.t(
+                        'Could not find database "{0}" on {1}. Check the name and your access, then open the link again.',
+                        selectedDatabase,
+                        connectionName,
+                    ),
+                );
+            }
+            context.telemetry.properties.errorReason = 'collectionNotFound';
             throw new Error(
                 l10n.t(
-                    'URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.',
+                    'Could not find collection "{0}" in database "{1}". Check the name and your access, then open the link again.',
+                    params.collection,
+                    selectedDatabase,
                 ),
             );
         }
 
-        if (showUrlHandlingConfirmations) {
-            const collectionViewConfirmation = await vscode.window.showInformationMessage(
-                l10n.t('Would you like to open the Collection View?'),
-                {
-                    modal: true,
-                    detail: l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
-                },
-                l10n.t('Yes, open Collection View'),
-            );
-
-            if (collectionViewConfirmation !== l10n.t('Yes, open Collection View')) {
-                context.telemetry.properties.userCancelledAtStep = 'CollectionView';
-                return;
-            }
-        }
-
-        await openDedicatedView(context, storageId, isEmulator, selectedDatabase, params.collection);
+        ext.outputChannel.trace('[DeepLink] Opening Collection View');
+        context.telemetry.properties.failureStage = 'openTarget';
+        await measureDeepLinkPhase(context, 'openTarget', () =>
+            openDedicatedView(context, storageId, isEmulator, selectedDatabase, params.collection),
+        );
+        context.telemetry.properties.openTargetResult = 'opened';
     }
 }
 
@@ -543,7 +897,7 @@ function validateConnectionString(connectionString: string | undefined): void {
 
     if (!connectionString.startsWith('mongodb://') && !connectionString.startsWith('mongodb+srv://')) {
         throw new Error(
-            l10n.t('Invalid connection string format. It should start with "mongodb://" or "mongodb+srv://"'),
+            l10n.t('Invalid connection string format. It should start with "mongodb://" or "mongodb+srv://".'),
         );
     }
 }
@@ -552,7 +906,14 @@ function validateConnectionString(connectionString: string | undefined): void {
  * Determines if a connection is to a local emulator based on host information
  */
 function isEmulatorConnection(parsedCS: DocumentDBConnectionString): boolean {
-    return parsedCS.hosts?.length > 0 && parsedCS.hosts[0].includes('localhost');
+    return areAllHostsLoopback(parsedCS) && parsedCS.hosts.some((host) => host.toLowerCase().includes('localhost'));
+}
+
+/**
+ * Whether every host in the connection string addresses this machine only.
+ */
+function areAllHostsLoopback(parsedCS: DocumentDBConnectionString): boolean {
+    return parsedCS.hosts?.length > 0 && parsedCS.hosts.every((host) => isLoopbackHost(host));
 }
 
 /**
@@ -618,62 +979,96 @@ function generateUniqueLabel(existingLabel: string): string {
 
 // #region Parameter Processing
 
-/**
- * Extracts query parameters from a URL query string.
- *
- * @param query - The URL query string to extract parameters from (already decoded once by VS Code)
- * @returns UriParams object containing the extracted parameters
- */
-function extractParams(query: string): UriParams {
-    const params: UriParams = {};
-    // Note: URLSearchParams constructor performs the second URI decode automatically
-    // This completes the double decoding process for parameters that were double-encoded in the original URL
-    const queryParams = new URLSearchParams(query);
+function parseOpenTarget(context: IActionContext, value: string | null): OpenTarget | undefined {
+    if (!value) {
+        return undefined;
+    }
 
-    // URLSearchParams.get() returns already decoded values
-    params.connectionString = queryParams.get('connectionString') || undefined;
-    params.database = queryParams.get('database') || undefined;
-    params.collection = queryParams.get('collection') || undefined;
+    const target = OPEN_TARGETS.find((candidate) => candidate === value.toLowerCase());
+    if (target) {
+        return target;
+    }
 
-    return params;
+    context.telemetry.properties.errorReason = 'unsupportedOpenTarget';
+    throw new Error(
+        l10n.t(
+            'This DocumentDB link asks to open something the extension does not support. Supported values for open: {0}.',
+            OPEN_TARGETS.join(', '),
+        ),
+    );
 }
 
-/**
- * Extracts and validates URI parameters from a query string.
- *
- * @param context - The action context used for telemetry tracking
- * @param queryFragment - The query fragment string from the URL
- * @returns The extracted and validated URI parameters
- * @throws Error when the parameters are invalid
- */
-function extractAndValidateParams(context: IActionContext, queryFragment: string): UriParams {
-    const params: UriParams = extractParams(queryFragment);
-
-    // Add sensitive values to valuesToMask to prevent sensitive data in logs
-    maskParamsInTelemetry(context, params);
-
-    // Record non-sensitive shape diagnostics: how many params were present and
-    // how many were not ones we recognize. This helps spot malformed deep-links
-    // (for example empty queries or links built against an older URL format)
-    // without ever capturing the parameter values themselves.
-    const knownKeys = new Set(['connectionString', 'database', 'collection']);
-    const allParams = new URLSearchParams(queryFragment);
+/** Records parameter shape and masks sensitive values before validation can fail. */
+function recordParamsInTelemetry(context: IActionContext, queryFragment: string): URLSearchParams {
+    const queryParams = new URLSearchParams(queryFragment);
+    const sensitiveKeys = ['connectionString', 'resourceId', 'tenantId', 'database', 'collection'];
     let paramCount = 0;
     let unknownParamCount = 0;
-    for (const [key] of allParams) {
+    for (const [key] of queryParams) {
         paramCount++;
-        if (!knownKeys.has(key)) {
+        if (!KNOWN_QUERY_PARAMS.has(key)) {
             unknownParamCount++;
         }
     }
-    context.telemetry.properties.uriParamCount = String(paramCount);
-    context.telemetry.properties.uriUnknownParamCount = String(unknownParamCount);
+    for (const key of sensitiveKeys) {
+        const value = queryParams.get(key);
+        if (value) {
+            context.valuesToMask.push(value);
+        }
+    }
+    context.telemetry.measurements.uriParamCount = paramCount;
+    context.telemetry.measurements.uriUnknownParamCount = unknownParamCount;
+    context.telemetry.properties.hasParamConnectionString = queryParams.get('connectionString') ? 'true' : undefined;
+    context.telemetry.properties.hasParamResourceId = queryParams.get('resourceId') ? 'true' : undefined;
+    context.telemetry.properties.hasParamTenantId = queryParams.get('tenantId') ? 'true' : undefined;
+    context.telemetry.properties.hasParamDatabase = queryParams.get('database') ? 'true' : undefined;
+    context.telemetry.properties.hasParamCollection = queryParams.get('collection') ? 'true' : undefined;
+    context.telemetry.properties.hasParamOpen = queryParams.get('open') ? 'true' : undefined;
+    return queryParams;
+}
 
+function extractSharedParams(context: IActionContext, queryParams: URLSearchParams): SharedUriParams {
+    const params: SharedUriParams = {
+        database: queryParams.get('database') || undefined,
+        collection: queryParams.get('collection') || undefined,
+        open: parseOpenTarget(context, queryParams.get('open')),
+    };
+    context.telemetry.properties.openTarget = params.open ?? 'none';
+    context.telemetry.properties.deepLinkTarget =
+        params.open ?? (params.collection ? 'collection' : params.database ? 'database' : 'cluster');
+    if (params.open && params.collection) {
+        context.telemetry.properties.errorReason = 'conflictingOpenTargets';
+        throw new Error(
+            l10n.t('This DocumentDB link cannot combine a collection with the open parameter. Remove one of them.'),
+        );
+    }
+    return params;
+}
+
+function refuseMixedLocators(context: IActionContext): never {
+    context.telemetry.properties.mixedLocatorRefused = 'true';
+    context.telemetry.properties.errorReason = 'mixedLocators';
+    throw new Error(
+        l10n.t(
+            'This DocumentDB link combines arguments for different link types. Use connectionString with /connect, or resourceId (and optionally tenantId) with /connect/azure.',
+        ),
+    );
+}
+
+/** Extracts and validates parameters for a connection-string link. */
+function extractAndValidateParams(context: IActionContext, queryParams: URLSearchParams): ConnectionStringUriParams {
+    if (queryParams.has('resourceId') || queryParams.has('tenantId')) {
+        refuseMixedLocators(context);
+    }
+    const params: ConnectionStringUriParams = {
+        ...extractSharedParams(context, queryParams),
+        connectionString: queryParams.get('connectionString') || undefined,
+    };
     if (!params.connectionString) {
-        // Throw a descriptive error so the telemetry wrapper will surface it to the user.
+        context.telemetry.properties.errorReason = 'missingConnectionString';
         throw new Error(
             l10n.t(
-                'A DocumentDB deep-link was opened without a connection string. Ensure the link includes a connectionString query parameter.',
+                'This DocumentDB link is missing a connection string. Add a connectionString query parameter to the link.',
             ),
         );
     }
@@ -685,29 +1080,32 @@ function extractAndValidateParams(context: IActionContext, queryFragment: string
         : params.connectionString.startsWith('mongodb://')
           ? 'mongodb'
           : 'other';
-
-    context.telemetry.properties.hasParamConnectionString = params.connectionString ? 'true' : undefined;
-    context.telemetry.properties.hasParamDatabase = params.database ? 'true' : undefined;
-    context.telemetry.properties.hasParamCollection = params.collection ? 'true' : undefined;
-
     return params;
 }
 
-/**
- * Masks sensitive parameter values in telemetry data
- */
-function maskParamsInTelemetry(context: IActionContext, params: UriParams): void {
-    Object.entries(params).forEach(([key, value]) => {
-        switch (key) {
-            case 'connectionString':
-            case 'database':
-            case 'collection':
-                if (value !== undefined && typeof value === 'string') {
-                    context.valuesToMask.push(value);
-                }
-                break;
-        }
-    });
+/** Extracts and validates parameters for an Azure resource link. */
+function extractAndValidateAzureParams(context: IActionContext, queryParams: URLSearchParams): AzureUriParams {
+    if (queryParams.has('connectionString')) {
+        refuseMixedLocators(context);
+    }
+    const params: AzureUriParams = {
+        ...extractSharedParams(context, queryParams),
+        resourceId: queryParams.get('resourceId') || undefined,
+        tenantId: queryParams.get('tenantId') || undefined,
+    };
+    if (!params.resourceId) {
+        context.telemetry.properties.errorReason = 'missingResourceId';
+        throw new Error(
+            l10n.t('This DocumentDB link is missing a resource ID. Add a resourceId query parameter to the link.'),
+        );
+    }
+    if (params.collection && !params.database) {
+        context.telemetry.properties.errorReason = 'collectionWithoutDatabase';
+        throw new Error(
+            l10n.t('This DocumentDB link specifies a collection without a database. Add a database parameter.'),
+        );
+    }
+    return params;
 }
 
 /**

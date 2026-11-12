@@ -15,6 +15,7 @@ import * as vscode from 'vscode';
 import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../documentdb/CredentialCache';
+import { showClusterConnectFailure } from '../../../documentdb/showClusterConnectFailure';
 import { Views } from '../../../documentdb/Views';
 import { type AuthenticateWizardContext } from '../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
 import { ChooseAuthMethodStep } from '../../../documentdb/wizards/authenticate/ChooseAuthMethodStep';
@@ -23,6 +24,12 @@ import { ProvideUserNameStep } from '../../../documentdb/wizards/authenticate/Pr
 import { SelectEntraTokenSourceStep } from '../../../documentdb/wizards/authenticate/SelectEntraTokenSourceStep';
 import { ext } from '../../../extensionVariables';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../tree/documentdb/ClusterItemBase';
+import {
+    ConnectionEndpointUnavailableError,
+    ConnectionSourceUnavailableError,
+    type DiagnosticCredentialRead,
+} from '../../../tree/documentdb/diagnosticCredentialRead';
+import { readCredentialsForDiagnostics } from '../../../tree/documentdb/readCredentialsForDiagnostics';
 import { type TreeCluster } from '../../../tree/models/BaseClusterModel';
 import { nonNullValue } from '../../../utils/nonNull';
 import { escapeMarkdown } from '../../../webviews/utils/escapeMarkdown';
@@ -140,6 +147,25 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
                 ),
                 availableAuthMethods: [AuthMethodId.NativeAuth],
             };
+        });
+    }
+
+    /** The cached Atlas model, read without the "not connectable" warning; connection diagnostics explain it. */
+    public override getCredentialsForDiagnostics(
+        read: DiagnosticCredentialRead,
+    ): Promise<EphemeralClusterCredentials | undefined> {
+        return readCredentialsForDiagnostics('getCredentials', 'atlas', read, async (context: IActionContext) => {
+            context.telemetry.properties.view = Views.DiscoveryView;
+            context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
+            context.telemetry.properties.resourceType = RESOURCE_TYPE;
+            const connectionString = this.cluster.connectionString;
+            if (!this.isConnectable() || !connectionString) {
+                const onlyMissingEndpoint = this.cluster.stateName === 'IDLE' && !isAtlasClusterPaused(this.cluster);
+                throw onlyMissingEndpoint
+                    ? new ConnectionEndpointUnavailableError('atlas', 'notProvided')
+                    : new ConnectionSourceUnavailableError('atlas', undefined, 'notConnectable');
+            }
+            return { connectionString, availableAuthMethods: [AuthMethodId.NativeAuth] };
         });
     }
 
@@ -277,16 +303,12 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
 
         if (!isAtlasTlsHandshakeRejection(error)) {
             context.telemetry.properties.atlasConnectionFailureKind = 'other';
-            void vscode.window.showErrorMessage(
-                l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
-                {
-                    modal: true,
-                    detail:
-                        l10n.t('Revisit connection details and try again.') +
-                        '\n\n' +
-                        l10n.t('Error: {error}', { error: errorMessage }),
-                },
-            );
+            await showClusterConnectFailure({
+                clusterId: this.cluster.clusterId,
+                clusterName: this.cluster.name,
+                error,
+                context,
+            });
             return;
         }
 

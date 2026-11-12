@@ -15,6 +15,14 @@ an Azure VM. System-assigned and user-assigned identities are supported. The UI 
 identity and interactive account sign-in as identity choices inside the Microsoft Entra ID family,
 while their stored authentication methods and token handlers remain separate.
 
+Both token sources now share the [Entra destination policy](../deep-links/iterations/04-entra-token-destination-hardening.md#accepted-execution-plan-2026-11-10):
+every seed must be under a recognized DocumentDB service suffix or the existing, explicitly trusted
+single machine-scoped `hostnameSuffix`. An OIDC/`ENVIRONMENT:azure` declaration is only an identity
+hint and cannot make an untrusted destination eligible. TLS certificate and hostname validation
+remain mandatory; localhost, IP/tunnel and trailing-dot destinations cannot be rescued by bypasses.
+See [D9](decisions.md#d9-connection-string-parsing-reports-facts-not-confidence) and
+[D14](decisions.md#d14-managed-identity-shares-the-entra-destination-boundary).
+
 Interactive account tenant selection reports empty, failed, and timed-out lookups separately.
 The initial lookup allows five seconds; an explicit retry allows 30 seconds. Manual tenant entry
 and account management remain available. See D11 in [Decisions](decisions.md).
@@ -64,7 +72,13 @@ Starting a new family choice clears stale selection fields; switching away from 
 clears its dimensions. Manual entry records `entraIdentityChoice=manual` before asking for a client
 ID, but user-assigned dimensions are only set after completion. The added fields contain categories,
 not client/tenant IDs, account labels, connection strings, or input values. Detailed troubleshooting
-continues to use Output tracing, which is unchanged.
+continues to use Output tracing; destination-policy additions are described below.
+
+Destination enforcement adds the `entraDestination.evaluated` Output operation and bounded
+`entraDestinationClass` startup property, with `microsoftCloudDomain` / `serviceLabel` rejection
+flags. It does not add a per-operation telemetry event. The
+[WI0 query](../deep-links/iterations/04-entra-token-destination-hardening.md#wi0-bounded-measurement-query-not-executed)
+is an unexecuted example, not production or pre-enforcement sizing.
 
 ## Status
 
@@ -84,6 +98,8 @@ shipped in `0.10.2`.
   each entry's status before relying on it.
 - [Research](research-findings.md): historical evidence behind the design.
 - [User guide](../../../user-manual/connect-with-managed-identity.md): setup and connection workflow.
+- [Trusted-server guide](../../../user-manual/entra-id-trusted-servers.md): portal verification,
+  missing-endpoint reporting and narrow machine-scoped trust, without a TLS bypass.
 
 ## Code Map
 

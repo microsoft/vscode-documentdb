@@ -127,6 +127,19 @@ coverage into installed-workbench E2E; see the
 5. Tests for verification tooling belong beside that tool and run through
    `npm run test:verification`, not the main Vitest project unless the local config says otherwise.
 
+## Post-release version automation
+
+[`bump-version-pr.yaml`](../../../../.github/workflows/bump-version-pr.yaml) runs after stable
+GitHub releases and on manual dispatch. It always operates on `main`, requires release tags to
+match its current version, and prepares the next patch's first alpha on a version-specific branch. The root
+manifest and both lockfile version entries stay synchronized; workspace versions are not bumped.
+Reruns reuse the same branch and reminder issue, or skip an existing development version.
+The issue is assigned to `tnaum-ms` and includes a prefilled PR link; a maintainer submits the PR
+and normal PR CI runs. The workflow summary retains the branch and link even if issue creation
+fails. No bot PR, third-party PR action, or additional token secret is needed.
+The policy constraint and operator's accepted alternative are recorded in [decision 0016](./decisions.md#0016-prepare-a-version-branch-and-an-assigned-issue-instead-of-a-bot-pr).
+See [the release process](../../../../CONTRIBUTING.md#78-create-the-github-release).
+
 ## Durable documents
 
 - [Design and invariants](./design.md)
@@ -134,5 +147,6 @@ coverage into installed-workbench E2E; see the
 - [Pipeline guide](./pipelines.md)
 - [Deferred work](./future-work.md)
 - [Modernization iteration](./iterations/01-modernization/build-and-test-stack.md) and its reviews
+- [Post-release version automation review](./iterations/02-post-release-version-review.md)
 - [E2E strategy](../e2e-testing/strategy.md)
 - [Data-grid replacement plan](../data-grid/slickgrid-removal.md)

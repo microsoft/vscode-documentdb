@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MongoClient } from 'mongodb';
 import * as dns from 'node:dns';
@@ -167,6 +167,12 @@ function rewriteOutcome(fixture: Fixture): Outcome {
 }
 
 describe('SRV rewrite differential against the installed MongoDB API driver', (): void => {
+    beforeEach((): void => {
+        const error = new Error('Driver DNS queries must use the mocked resolve function');
+        vi.spyOn(dns.promises, 'resolveSrv').mockRejectedValue(error);
+        vi.spyOn(dns.promises, 'resolveTxt').mockRejectedValue(error);
+    });
+
     afterEach((): void => {
         vi.restoreAllMocks();
     });
@@ -178,10 +184,13 @@ describe('SRV rewrite differential against the installed MongoDB API driver', ()
                 if (rrtype === 'SRV') {
                     return srvRecords.map((record): SrvRecord => ({ ...record }));
                 }
-                if (fixture.txtRecords === undefined) {
-                    throw Object.assign(new Error('queryTxt ENODATA'), { code: 'ENODATA' });
+                if (rrtype === 'TXT') {
+                    if (fixture.txtRecords === undefined) {
+                        throw Object.assign(new Error('queryTxt ENODATA'), { code: 'ENODATA' });
+                    }
+                    return fixture.txtRecords.map((record): string[] => [...record]);
                 }
-                return fixture.txtRecords.map((record): string[] => [...record]);
+                throw new Error(`Unexpected DNS record type: ${rrtype}`);
             },
         );
         const expected = await driverOutcome(fixture);

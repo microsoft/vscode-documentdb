@@ -248,13 +248,21 @@ Nothing else. `l10n`, `prettier-fix`, `lint`, and `package` each cost minutes an
 All of these must pass locally. The same checks run in CI, so catching failures here saves time.
 
 ```bash
-npm run l10n            # only if a vscode.l10n.t() string was added, changed, or removed
+npm run l10n             # only if a vscode.l10n.t() string was added, changed, or removed
 npm run prettier-fix
+npm run l10n:check       # always; CI validates localization even when generation is skipped
 npm run lint
-npx vitest run          # full suite
 npm run build
-npm run package         # catches bundling and missing-asset failures
+npm run typecheck:tests  # strict package-test checks across all workspaces, as in CI
+npx vitest run           # full runtime suite; does not replace typecheck:tests
+npm run package          # catches bundling and missing-asset failures
 ```
+
+`npm run build` checks the root project and package source, but does not check package
+tests under their stricter `tsconfig.test.json` settings. Vitest runtime success (or
+an ad hoc `vitest --typecheck` invocation) is not a substitute for the exact
+`npm run typecheck:tests` script. Keep this list aligned with the
+[CI static-check job](.github/workflows/main.yml), and report that script's result separately.
 
 Commit whatever these change, including regenerated files under `l10n/` and anything Prettier reformats.
 
@@ -263,7 +271,9 @@ Case 2 is also where the AI pre-review in [§6](#6-ai-assisted-review-workflow) 
 ### 4.3. Notes on individual steps
 
 - **`npm run l10n`** regenerates the localization bundle from the strings passed to `vscode.l10n.t()`. **Never resolve a conflict in `l10n/bundle.l10n.json` by hand** — the file is generated. Take either side, or delete it, then re-run `npm run l10n` and commit the result.
+- **`npm run l10n:check`** validates localization against the source without regenerating files. Run it even when no strings changed, matching CI.
 - **`npm run prettier-fix`** covers Markdown as well as source, so documentation formatting does not drift whenever a file is touched. Fenced code blocks are left exactly as authored: they are often partial or illustrative, and reformatting them to the Markdown tab width would leave every example disagreeing with the code it documents.
+- **`npm run typecheck:tests`** checks every participating workspace's tests with its own TypeScript configuration, including strict checks that the root build and Vitest runtime do not cover.
 - **`npm run package`** catches Vite host and webview bundling issues and missing assets that unit tests alone will not surface.
 
 ## 5. Documenting Work with AI
@@ -337,6 +347,8 @@ Prompt guidance for the coding agent:
 - Post the same comment on GitHub in the PR, one comment per pushed commit.
 - If a fix addresses a comment from the Copilot reviewer, post the comment as a reply in the thread of that review.
 
+**Faster with the [`lead`](.github/skills/lead/SKILL.md) skill.** Once the review file records a selected approach for each item, type `/lead` with the advisor model and the review file, for example `/lead advisor: opus docs/ai-and-plans/features/<feature>/iterations/05-review.md`. The session's model becomes the leader: it hands each item to a coding subagent on a cost-appropriate model, runs items that touch different files in parallel, and asks the advisor model for technical judgment. It commits each item separately, records a done note under the item in the review file, and posts a progress checkpoint after every agent return. It asks you before any choice the review file did not settle, and it does not push or comment on GitHub unless you ask. A cost-effective model such as Sol works well as leader, with a stronger model as advisor.
+
 ### 6.4 Stage 4: Author final review
 
 - The author reviews the changes. Looking at individual commits is easier, and the review file makes the changes visible.
@@ -403,8 +415,10 @@ Based on the `docs/release-notes/X.Y.md` file, announce the release in the **Ann
 
 An agent can do this for you with the `writing-release-notes` skill. The full commands, including how to handle images, are in [ANNOUNCING-ON-DISCUSSIONS.md](.github/skills/writing-release-notes/ANNOUNCING-ON-DISCUSSIONS.md).
 
-- **Minor or major release (`X.Y.0`):** create one new discussion titled `DocumentDB extension for Visual Studio Code vX.Y Released! <emoji>` with the release notes as the body. Copy its URL into the `releaseNotesUrl` field in `package.json` so users see the announcement from inside the extension, then pin it in place of the previous announcement.
-- **Patch release (`X.Y.Z`):** first create a new discussion titled `Patch Release vX.Y.Z 📎` whose body is the `## Patch Release vX.Y.Z` section of the release notes. Then post the same text as a comment on the `X.Y.0` announcement of the version being patched. Find that announcement by its title (`vX.Y Released`) and check its content; do not assume it is the one `releaseNotesUrl` points to, because a patch can target an older version. Keep this order: Announcements are listed by most recent activity, so the comment brings the `X.Y.0` announcement back to the top with the patch post right below it. Leave `releaseNotesUrl` unchanged.
+Before publishing, the agent must ask whether a placeholder discussion already exists and collect its URL, or confirm a URL already supplied. Wait for the answer and update the confirmed placeholder's title and body. Create a new discussion only when the operator confirms there is no placeholder.
+
+- **Minor or major release (`X.Y.0`):** create or update one discussion titled `DocumentDB extension for Visual Studio Code vX.Y Released! <emoji>` with the release notes as the body. Copy its URL into the `releaseNotesUrl` field in `package.json` so users see the announcement from inside the extension, then pin it in place of the previous announcement.
+- **Patch release (`X.Y.Z`):** first create or update the dedicated discussion titled `Patch Release vX.Y.Z 📎` whose body is the `## Patch Release vX.Y.Z` section of the release notes. A patch placeholder is for this dedicated discussion, not the parent announcement. Then post the same text as a comment on the `X.Y.0` announcement of the version being patched. Find that announcement by its title (`vX.Y Released`) and check its content; do not assume it is the one `releaseNotesUrl` points to, because a patch can target an older version. Keep this order: Announcements are listed by most recent activity, so the comment brings the `X.Y.0` announcement back to the top with the patch post right below it. Leave `releaseNotesUrl` unchanged.
 
 ### 7.6 Commit the version bump
 
@@ -422,6 +436,37 @@ Always ship the signed artifact from the pipeline. A locally packaged `.vsix` is
 2. Use this version's section of `CHANGELOG.md` as the release body.
 3. Attach the **signed** `.vsix` downloaded in the previous step.
 4. Save the release.
+
+Publishing a stable GitHub release also starts [Bump version after release](.github/workflows/bump-version-pr.yaml).
+When its tag matches the version on `main`, the workflow prepares a branch for the next patch's
+first development version, for example `1.0.1` → `1.0.2-alpha.0`. It updates `package.json` and
+both root version entries in `package-lock.json`, leaving workspace package versions unchanged.
+It creates or updates a reminder issue assigned to `tnaum-ms`, with an old/new version table and
+a **Create version-bump PR** link that prefills the branch, title, and description.
+
+Open that link and submit the PR yourself so normal pull-request CI runs. Review and merge it
+after the required checks pass, then close the reminder issue. The workflow summary also contains
+the prepared branch and PR link. No bot-created PR, direct push to `main`, additional credential,
+or permission to create PRs is needed; the workflow requires contents and issues write access.
+If issue creation fails, the run fails explicitly but the prepared branch and PR link remain
+available in the summary. The published release and tag are not modified.
+The alpha suffix is for development only; use the intended numeric release version at
+[§7.4](#74-bump-the-version) before the next publication.
+
+To catch up after a release, select **Actions → Bump version after release → Run workflow** on
+`main`, or run:
+
+```bash
+gh workflow run bump-version-pr.yaml --ref main
+```
+
+The workflow always operates on `main`. Re-running it reuses the same version-specific branch and
+reminder issue while `main` is still on the released version; a prematurely closed reminder is
+reopened. Existing matching branches, including a branch pushed by an earlier failed run, are
+preserved without force-pushing. Conflicting branch changes cause an explicit failure so a
+maintainer can reconcile them. After the bump is merged, the workflow leaves the existing alpha
+version alone. GitHub prereleases are ignored, as are releases whose tags do not match the version
+on `main` (for example, a patch release from an older release branch).
 
 ### 7.9 Publish to the Marketplace
 

@@ -6,7 +6,7 @@
 import { createContextValue, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../extensionVariables';
-import { ConnectionDiagnosticsService } from '../services/connectionDiagnosticsService';
+import { ErrorExplanationService } from '../services/errorExplanationService';
 import { dispose } from '../utils/vscodeUtils';
 import { type ExtendedTreeDataProvider } from './ExtendedTreeDataProvider';
 import { type TreeElement } from './TreeElement';
@@ -194,6 +194,11 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
      */
     getParent(element: T): T | null | undefined {
         return this.parentCache.getParent(element);
+    }
+
+    /** Returns only children the view has already loaded; never triggers a fetch. */
+    public getCachedChildren(parent: T): T[] {
+        return this.parentCache.getChildren(parent);
     }
 
     /**
@@ -603,14 +608,14 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
             // Cluster nodes and everything below them carry the same `cluster` model but share no
             // interface, so this is structural rather than an `instanceof`.
             const clusterId = (element as { cluster?: { clusterId?: string } }).cluster?.clusterId;
-            const diagnosis = clusterId ? await ConnectionDiagnosticsService.explain({ clusterId, error }) : undefined;
+            const explanation = clusterId ? await ErrorExplanationService.explain({ clusterId, error }) : undefined;
 
-            if (diagnosis) {
-                context.telemetry.properties.diagnosisProviderId = diagnosis.providerId;
+            if (explanation) {
+                context.telemetry.properties.explanationProviderId = explanation.providerId;
                 context.errorHandling.suppressDisplay = true;
                 // `detail` is only rendered for modal messages, so the raw text is appended instead.
                 const cause = error instanceof Error ? error.message : String(error);
-                void vscode.window.showErrorMessage(`${diagnosis.message} (${cause})`);
+                void vscode.window.showErrorMessage(`${explanation.message} (${cause})`);
             }
 
             throw error;

@@ -78,12 +78,26 @@ Increment 1 ([plan](./iterations/01-srv-fallback/plan.md), progress recorded per
 | `packages/documentdb-js-srv-resolver/` (`@documentdb-js/srv-resolver`, published after merge, D0023) | —                             | No VS Code imports. `srvUriRewrite.ts` (driver-equivalent rewrite), `fallbackDnsClient.ts` (`dns-packet` over UDP/TCP), `resolveSrvForDriver.ts` (probe, fallback, error and cancellation rules), `report.ts`, `constants.ts` (D0016 timings), `types.ts` |
 | `src/documentdb/srv/prepareDriverConnectionString.ts`                                                | All                           | Extension adapter: environment switches, deadline, trace output, `connect.srvResolution` telemetry, `UserCancelledError`                                                                                                                                  |
 | `src/documentdb/srv/srvResolutionTelemetry.ts`, `srvResolutionSummary.ts`                            | All                           | Telemetry properties without hosts or IPs; the in-memory summary kept on `ClustersClient` for the future dashboard (D0021)                                                                                                                                |
-| `src/documentdb/srv/SrvDnsDiagnosticsProvider.ts`                                                    | Error messages                | Neutral, actionable text for `querySrv EBADRESP`/`EFORMERR`/`ECONNREFUSED` (WI-7)                                                                                                                                                                         |
+| `src/documentdb/srv/SrvDnsErrorExplainer.ts`                                                         | Error messages                | Neutral, actionable text for `querySrv EBADRESP`/`EFORMERR`/`ECONNREFUSED` (WI-7)                                                                                                                                                                         |
 | `src/documentdb/ClustersClient.ts`                                                                   | Tree, webviews, commands      | Resolves between `configureAuth()` and `new MongoClient()`; `getSrvResolution(clusterId)`                                                                                                                                                                 |
 | `src/documentdb/playground/WorkerSessionManager.ts`, `PlaygroundEvaluator.ts`                        | Interactive shell, playground | Resolves on the host before `new Worker()`; per-startup abort; rethrows cancellation                                                                                                                                                                      |
 | `src/documentdb/playground/playgroundWorker.ts`, `workerTypes.ts`                                    | (worker)                      | Unchanged driver call; OIDC allowed hosts taken from the host                                                                                                                                                                                             |
 | `docs/user-manual/troubleshooting-srv-dns.md`                                                        | Docs                          | Symptoms, confirmation, workarounds, timing, trace, switches                                                                                                                                                                                              |
 | `src/services/localQuickStart/QuickStartService.ts`, `connectToClient.ts`                            | —                             | Out of scope (D0007); `connectToClient` is deprecated                                                                                                                                                                                                     |
+
+## Test isolation
+
+The resolver package tests do not query external DNS servers. Transport tests use UDP/TCP
+stubs bound to `127.0.0.1`; system DNS server discovery and driver resolver probes are mocked.
+Transport tests freeze both the clock and resolver timers, advancing time only for timeout
+scenarios, so slow loopback I/O cannot exhaust the resolver's time budget. TCP frame assembly
+is tested by splitting client data events into individual bytes, not by delaying server writes.
+Retry tests do not assume randomly generated query IDs differ. Stub startup cleans up partial
+binds and retries address-in-use conflicts up to three attempts; other bind failures remain errors.
+The UDP refusal tests inject `ECONNREFUSED` and `ECONNRESET` without sending a datagram, and
+check immediate rejection and timer cleanup without advancing fake timers. They do not rely on
+closed-port ICMP errors, which may be suppressed on Windows or restricted runners.
+Loopback sockets must still be permitted.
 
 ## Timeline
 

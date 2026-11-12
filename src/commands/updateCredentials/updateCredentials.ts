@@ -5,10 +5,17 @@
 
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { AuthMethodId, authMethodFromString, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
+import * as vscode from 'vscode';
+import {
+    AuthMethodId,
+    authMethodFromString,
+    authMethodsFromString,
+    getAuthMethodFamily,
+} from '../../documentdb/auth/AuthMethod';
+import { evaluateEntraDestinationFromSettings } from '../../documentdb/auth/entraDestinationSettings';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
-import { AzureDomains, hasDomainSuffix } from '../../documentdb/utils/connectionStringHelpers';
+import { getRegisteredShellTerminals } from '../../documentdb/shell/ShellTerminalLinkProvider';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
 import { SelectEntraTokenSourceStep } from '../../documentdb/wizards/authenticate/SelectEntraTokenSourceStep';
@@ -16,6 +23,7 @@ import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, isConnection } from '../../services/connectionStorageService';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
 import { resolveStorageZone } from '../../tree/connections-view/models/ConnectionClusterModel';
+import { shutdownEvaluator } from '../playground/executePlaygroundCode';
 import { refreshView } from '../refreshView/refreshView';
 import { PromptAuthMethodStep } from '../updateCredentials/PromptAuthMethodStep';
 import { ExecuteStep } from './ExecuteStep';
@@ -38,7 +46,8 @@ import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardCo
  *    - PromptPasswordStep: Enter password (if needed)
  *    - PromptReconnectStepForErrorNodes: Ask to reconnect (only for error nodes)
  * 3. ExecuteStep: Saves updated credentials to storage
- * 4. Post-wizard: Clears cache and optionally resets error state for reconnection
+ * 4. Post-wizard: Refreshes cached credentials, drops the client and playground worker,
+ *    warns about open shells, and optionally resets error state for reconnection
  *
  * For error recovery nodes, prompts whether to reconnect immediately. If user chooses
  * not to reconnect, the error state is preserved and the node remains as an error node.
@@ -62,10 +71,11 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     const connectionString = connectionCredentials?.secrets?.connectionString || '';
     context.valuesToMask.push(connectionString);
 
-    const parsedCS = new DocumentDBConnectionString(connectionCredentials?.secrets.connectionString ?? '');
-    const supportedAuthMethods = [...(connectionCredentials?.properties.availableAuthMethods ?? [])];
-
-    if (hasDomainSuffix(AzureDomains.vCore, ...parsedCS.hosts)) {
+    const entraDestinationAllowed = evaluateEntraDestinationFromSettings(connectionString).allowed;
+    const supportedAuthMethods = authMethodsFromString(connectionCredentials?.properties.availableAuthMethods).filter(
+        (method) => entraDestinationAllowed || getAuthMethodFamily(method) !== AuthMethodId.MicrosoftEntraID,
+    );
+    if (entraDestinationAllowed) {
         if (!supportedAuthMethods.includes(AuthMethodId.MicrosoftEntraID)) {
             supportedAuthMethods.push(AuthMethodId.MicrosoftEntraID);
         }
@@ -81,13 +91,19 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
 
     context.telemetry.properties.calledFrom = isErrorState ? 'errorNode' : 'contextMenu';
 
+    const selectedMethod = authMethodFromString(connectionCredentials?.properties.selectedAuthMethod);
     const wizardContext: UpdateCredentialsWizardContext = {
         ...context,
+        connectionString,
         nativeAuthConfig: connectionCredentials?.secrets.nativeAuthConfig,
         entraIdAuthConfig: connectionCredentials?.secrets.entraIdAuthConfig,
         managedIdentityAuthConfig: connectionCredentials?.secrets.managedIdentityAuthConfig,
         availableAuthenticationMethods: authMethodsFromString(supportedAuthMethods),
-        selectedAuthenticationMethod: authMethodFromString(connectionCredentials?.properties.selectedAuthMethod),
+        selectedAuthenticationMethod:
+            selectedMethod &&
+            (entraDestinationAllowed || getAuthMethodFamily(selectedMethod) !== AuthMethodId.MicrosoftEntraID)
+                ? selectedMethod
+                : undefined,
         isEmulator: Boolean(node.cluster.emulatorConfiguration?.isEmulator),
         storageZone: resolveStorageZone(node.cluster),
         storageId: node.storageId,
@@ -117,9 +133,41 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     await wizard.prompt();
     await wizard.execute();
 
-    // Invalidate cached client/credentials so the tree picks up the new values.
     await ClustersClient.deleteClient(node.cluster.clusterId);
-    CredentialCache.deleteCredentials(node.cluster.clusterId);
+
+    const updatedStoredItem = await ConnectionStorageService.get(node.storageId, resourceType);
+    const updatedConnection = updatedStoredItem && isConnection(updatedStoredItem) ? updatedStoredItem : undefined;
+    const authMethod = authMethodFromString(updatedConnection?.properties.selectedAuthMethod);
+    const username = updatedConnection?.secrets.nativeAuthConfig?.connectionUser;
+    const password = updatedConnection?.secrets.nativeAuthConfig?.connectionPassword;
+    if (updatedConnection && authMethod && !(authMethod === AuthMethodId.NativeAuth && (!username || !password))) {
+        const connectionString = new DocumentDBConnectionString(updatedConnection.secrets.connectionString);
+
+        CredentialCache.setAuthCredentials(
+            node.cluster.clusterId,
+            authMethod,
+            connectionString.toString(),
+            username && password ? { connectionUser: username, connectionPassword: password } : undefined,
+            node.cluster.emulatorConfiguration,
+            updatedConnection.secrets.entraIdAuthConfig,
+            updatedConnection.secrets.managedIdentityAuthConfig,
+        );
+    } else {
+        // Clear stale credentials so the tree can prompt from storage.
+        CredentialCache.deleteCredentials(node.cluster.clusterId);
+    }
+
+    shutdownEvaluator(node.cluster.clusterId);
+
+    if (getRegisteredShellTerminals().some(({ info }) => info.clusterId === node.cluster.clusterId)) {
+        void vscode.window.showInformationMessage(
+            l10n.t(
+                "Credentials updated. New connections will use them. Open shells for '{cluster}' keep their current connection until you close them.",
+                { cluster: node.cluster.name },
+            ),
+            { modal: true },
+        );
+    }
 
     // When the node is in an error state, only clear it if the user chose to reconnect.
     // Clearing the error state triggers a fresh connection attempt on refresh.

@@ -1,5 +1,20 @@
 # Change Log
 
+## 1.0.2
+
+### New Features & Improvements
+
+- **Cloud-Aware Entra ID Authentication**: Requests tokens for the selected Azure public, US Government, China, or custom cloud, detects cloud mismatches before sign-in, and supports cloud-aware managed identity and copied connection strings. Sovereign sign-in still requires Microsoft-side preauthorization. [#1050](https://github.com/microsoft/vscode-documentdb/pull/1050)
+- **Actionable Sign-in Diagnostics**: Explains Microsoft Entra ID errors and Windows broker failures with guidance on settings, administrator action, or Microsoft-side fixes. Adds cloud-resolution tracing and a sovereign-cloud configuration and troubleshooting guide. [#1050](https://github.com/microsoft/vscode-documentdb/pull/1050)
+- **Credential Update Reliability**: Refreshes cached credentials and restarts the cluster's Query Playground worker after Update Credentials. Open Interactive Shell sessions retain their original connection and token-refresh credentials, with a notification explaining when new credentials take effect. [#1050](https://github.com/microsoft/vscode-documentdb/pull/1050)
+- **SRV Resolver Test Reliability**: Makes resolver tests deterministic on Windows and restricted CI runners by controlling socket errors, timers, and TCP framing. Adds lifecycle regression coverage without changing production DNS behavior. [#1041](https://github.com/microsoft/vscode-documentdb/pull/1041)
+
+### Security
+
+- **Connection Links**: Always confirms links that add connections and displays their targets, regardless of confirmation settings. Allows links to disable TLS certificate validation only for local hosts after explicit approval. [#1040](https://github.com/microsoft/vscode-documentdb/pull/1040)
+- **Microsoft Entra ID Token Protection**: Restricts token delivery to known Azure public and sovereign cloud domains, or an explicitly configured custom hostname suffix in machine-scoped user settings. Connection strings cannot widen their own allowlist. [#1040](https://github.com/microsoft/vscode-documentdb/pull/1040), [#1050](https://github.com/microsoft/vscode-documentdb/pull/1050)
+- **No-Authentication Connections**: Applies the same host checks as other authentication methods before relaxing TLS certificate validation, and honors accepted TLS exceptions for local IP addresses such as `127.0.0.1` or `::1`. [#1040](https://github.com/microsoft/vscode-documentdb/pull/1040)
+
 ## 1.0.1
 
 ### Improvements

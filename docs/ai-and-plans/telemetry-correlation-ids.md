@@ -26,6 +26,11 @@ Three questions, three IDs.
 A shell captures `connectionCorrelationId` once, when it is created, and puts it on its
 `worker.startup`, SRV, and `shell.sessionStart` events.
 
+A failed extension startup is remembered per cluster until a startup succeeds. The next
+`connect.startup` names it in `previousFailedStartupCorrelationId`, and connection diagnosis names
+it in `failedStartupCorrelationId`, so a failure can be joined to the recovery that followed it.
+Cancelled startups are not remembered.
+
 ### Output channel
 
 Every line about a database connection carries `startup=<id>`: the startup summaries
@@ -64,6 +69,22 @@ RawEventsVSCodeExt
 ```
 
 Scope the query to this extension and a time range. Ingested property names are lowercase.
+
+### Entra cloud resolution
+
+Interactive and managed identity startup events also carry only five closed-enum fields:
+`cloudCategory` (`public`, `usgov`, `china`, `custom`, `unknown`), `tokenResourceReason`
+(`setting`, `customOverride`, `customLoginHost`, `armMetadata`, `host`, `imds`, `copyDefault`,
+`unknown`), `configuredCloud` (the three built-in Azure cloud names, `custom`, `unreadable`,
+`unknown`), `hostCloud` (the three built-in names, `none`, `unknown`), and `entraFailureKind`
+(`none`, the five token-resource resolution error kinds, or `tokenAcquisitionFailed`).
+`entraFailureKind` was named `errorKind` until 2026-11-06 (shipped in 1.0.2). Whole-error masking
+replaced that value with `redacted:action` on every event, so it carries no data before the rename.
+Unknown resolution fields are reported as `unknown`, not inferred from the selected cloud.
+These properties use the existing attempt's auth trace context, including deferred managed
+identity callbacks and worker token relays. No cluster-keyed verdict cache is used.
+Native and no-auth attempts are unchanged. Resources, scopes, authorities, identifiers, custom
+configuration, and IMDS environment strings remain outside this telemetry projection.
 
 ## Why this needs a convention
 

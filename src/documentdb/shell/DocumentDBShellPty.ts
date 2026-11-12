@@ -7,8 +7,9 @@ import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsof
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
+import { type DeepLinkTelemetry, trackDeepLinkTelemetry } from '../../deepLinks/deepLinkTelemetry';
 import { ext } from '../../extensionVariables';
-import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
+import { ErrorExplanationService } from '../../services/errorExplanationService';
 import { maskSecrets } from '../../services/localQuickStart/outputMasking';
 import { recordSurveyActivity } from '../../services/survey/SurveyService';
 import { settingsKeys } from '../../settingsKeys';
@@ -48,6 +49,7 @@ const COMPACT_CONNECTION_SUMMARY_MIN_COLUMNS = 100;
  * Configuration for the interactive shell Pseudoterminal.
  */
 export interface DocumentDBShellPtyOptions {
+    readonly deepLink?: DeepLinkTelemetry;
     /** Connection parameters for the shell session. */
     readonly connectionInfo: ShellConnectionInfo;
     /** Optional command to pre-fill in the input line after initialization (not executed). */
@@ -126,8 +128,14 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private _commandCount: number = 0;
     /** Whether the session was successfully initialized (for guarding sessionEnd emission). */
     private _sessionStarted: boolean = false;
+    private readonly _deepLink: DeepLinkTelemetry | undefined;
+
+    public get shellSessionId(): string {
+        return this._shellSessionId;
+    }
 
     constructor(options: DocumentDBShellPtyOptions) {
+        this._deepLink = options.deepLink;
         this._connectionInfo = options.connectionInfo;
         this._currentDatabase = options.connectionInfo.databaseName;
         this._initialInput = options.initialInput;
@@ -241,6 +249,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             void callWithTelemetryAndErrorHandling('shell.sessionEnd', async (context) => {
                 context.errorHandling.suppressDisplay = true;
                 context.telemetry.properties.shellSessionId = this._shellSessionId;
+                trackDeepLinkTelemetry(context, this._deepLink);
             });
         }
 
@@ -476,7 +485,26 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     private async initializeSession(): Promise<void> {
         try {
-            const metadata = await this._sessionManager.initialize();
+            const metadata = await callWithTelemetryAndErrorHandling('shell.sessionStart', async (context) => {
+                context.errorHandling.suppressDisplay = true;
+                context.errorHandling.rethrow = true;
+                context.telemetry.maskEntireErrorMessage = true;
+                trackDeepLinkTelemetry(context, this._deepLink);
+                context.telemetry.properties.shellSessionId = this._shellSessionId;
+                context.telemetry.properties.connectionCorrelationId = this._connectionCorrelationId;
+                context.telemetry.properties.hasInitialInput = this._initialInput ? 'true' : 'false';
+                const metadata = await this._sessionManager.initialize();
+                context.telemetry.properties.authMethod = metadata.authMechanism;
+                context.telemetry.properties.isEmulator = metadata.isEmulator ? 'true' : 'false';
+                context.telemetry.measurements.activeShellSessionCount = getRegisteredShellTerminals().length;
+                const domainProps: Record<string, string | undefined> = {};
+                this.collectShellDomainTelemetry(domainProps);
+                Object.assign(context.telemetry.properties, domainProps);
+                return metadata;
+            });
+            if (!metadata) {
+                throw new UserCancelledError('shell.sessionStart');
+            }
 
             void this._completionProvider.prewarmCollections({
                 clusterId: this._connectionInfo.clusterId,
@@ -489,23 +517,6 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
             // ── Telemetry: shell session started ─────────────────────────
             this._sessionStarted = true;
-            void callWithTelemetryAndErrorHandling('shell.sessionStart', async (context) => {
-                context.errorHandling.suppressDisplay = true;
-                context.telemetry.properties.shellSessionId = this._shellSessionId;
-                context.telemetry.properties.authMethod = metadata.authMechanism;
-                context.telemetry.properties.isEmulator = metadata.isEmulator ? 'true' : 'false';
-                context.telemetry.properties.hasInitialInput = this._initialInput ? 'true' : 'false';
-                context.telemetry.measurements.activeShellSessionCount = getRegisteredShellTerminals().length;
-
-                if (this._connectionCorrelationId) {
-                    context.telemetry.properties.connectionCorrelationId = this._connectionCorrelationId;
-                }
-
-                // Domain info — privacy-safe hashed host data
-                const domainProps: Record<string, string | undefined> = {};
-                this.collectShellDomainTelemetry(domainProps);
-                Object.assign(context.telemetry.properties, domainProps);
-            });
 
             // Display connection summary
             let authLabel: string;
@@ -606,12 +617,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
             // Written as a separate line rather than merged into the message above, so the raw text
             // stays intact for extractErrorCode and the SettingsHintError check below.
-            const diagnosis = await ConnectionDiagnosticsService.explain({
+            const explanation = await ErrorExplanationService.explain({
                 clusterId: this._connectionInfo.clusterId,
                 error,
             });
-            if (diagnosis) {
-                this.writeLine(this._outputFormatter.formatError(diagnosis.message));
+            if (explanation) {
+                this.writeLine(this._outputFormatter.formatError(explanation.message));
             }
 
             // Logged so the failure survives in an output channel a user can share with us. Driver
@@ -619,7 +630,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             ext.outputChannel.error(
                 maskSecrets(
                     `[Shell] Failed to connect to "${this._connectionInfo.clusterDisplayName}": ${rawMessage}` +
-                        (diagnosis ? ` (${diagnosis.providerId}: ${diagnosis.message})` : ''),
+                        (explanation ? ` (${explanation.providerId}: ${explanation.message})` : ''),
                     this.credentialSecrets(),
                 ),
             );
@@ -632,7 +643,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             // A notification as well: the terminal may be in the background, or closed by the user
             // before they read it.
             void vscode.window.showErrorMessage(
-                diagnosis?.message ??
+                explanation?.message ??
                     l10n.t('Failed to connect to "{cluster}": {error}', {
                         cluster: this._connectionInfo.clusterDisplayName,
                         error: errorMessage,
@@ -713,6 +724,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         await callWithTelemetryAndErrorHandling('shell.eval', async (context) => {
             context.errorHandling.suppressDisplay = true;
             context.errorHandling.rethrow = true; // let the outer catch handle display
+            trackDeepLinkTelemetry(context, this._deepLink);
 
             // ── Pre-eval telemetry ───────────────────────────────────────
             context.telemetry.properties.shellSessionId = this._shellSessionId;
@@ -798,12 +810,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         // talks to gets stopped, a port-forward drops — and the next command is where they find
         // out. Written as a separate line so the raw text above stays intact for extractErrorCode
         // and the checks below.
-        const diagnosis = await ConnectionDiagnosticsService.explain({
+        const explanation = await ErrorExplanationService.explain({
             clusterId: this._connectionInfo.clusterId,
             error,
         });
-        if (diagnosis) {
-            this.writeLine(this._outputFormatter.formatError(diagnosis.message));
+        if (explanation) {
+            this.writeLine(this._outputFormatter.formatError(explanation.message));
         }
 
         // Show a hint line and clickable settings link for errors that reference a VS Code setting

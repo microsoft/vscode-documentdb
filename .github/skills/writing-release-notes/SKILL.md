@@ -110,10 +110,17 @@ Version X.Y.Z:
 Once the release notes are committed, post the announcement in the **Announcements** category. Follow
 [ANNOUNCING-ON-DISCUSSIONS.md](./ANNOUNCING-ON-DISCUSSIONS.md) for the commands and the image handling.
 
-- **X.Y.0:** one new discussion, titled `DocumentDB extension for Visual Studio Code vX.Y Released! <emoji>`,
+Before publishing, always ask the operator: **Is there already a placeholder discussion for this
+release? If so, what is its URL?** If a URL was already supplied, confirm that it is the placeholder
+to update instead of asking for it again. Wait for the answer; do not create a new discussion unless
+the operator confirms there is no placeholder. Reuse a confirmed placeholder by updating its title
+and body.
+
+- **X.Y.0:** one discussion (reuse the placeholder if present), titled `DocumentDB extension for Visual Studio Code vX.Y Released! <emoji>`,
   with the release notes as the body. Point `releaseNotesUrl` in `package.json` at it and pin it.
-- **X.Y.Z (patch):** first create a new discussion titled `Patch Release vX.Y.Z 📎` whose body is the
+- **X.Y.Z (patch):** first create or update the dedicated discussion titled `Patch Release vX.Y.Z 📎` whose body is the
   `## Patch Release vX.Y.Z` section; then post the same text as a comment on the X.Y.0 announcement.
+  A patch placeholder is for the dedicated patch discussion, not the parent X.Y.0 announcement.
   Find that announcement by title (`vX.Y Released`) and content, not through `releaseNotesUrl`: a
   patch can target an older version. If the lookup is not a single clear match, ask the operator.
   Keep this order: it puts the X.Y.0 announcement first and the patch post second in the
@@ -163,4 +170,5 @@ Before completing:
 - [ ] `docs/index.md` Release Notes section updated with link to new version
 - [ ] Screenshot question was answered
 - [ ] Every requested screenshot is framed with [documentation-screenshots](../documentation-screenshots/SKILL.md), saved under `docs/release-notes/images/` and referenced
-- [ ] Announcement posted per [ANNOUNCING-ON-DISCUSSIONS.md](./ANNOUNCING-ON-DISCUSSIONS.md) (for a patch: new `Patch Release vX.Y.Z 📎` discussion first, then the same text as a comment on the X.Y.0 announcement)
+- [ ] Placeholder question answered (or supplied URL confirmed), and any confirmed placeholder reused
+- [ ] Announcement posted per [ANNOUNCING-ON-DISCUSSIONS.md](./ANNOUNCING-ON-DISCUSSIONS.md) (for a patch: create or update the dedicated `Patch Release vX.Y.Z 📎` discussion first, then post the same text as a comment on the X.Y.0 announcement)

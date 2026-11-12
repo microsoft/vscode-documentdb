@@ -50,13 +50,21 @@ is missing. Report all blockers; do not mark the PR ready until the checks pass
 and the other requirements are satisfied. If there is no PR, stay on Case 1.
 
 ```bash
-npm run l10n            # only if a vscode.l10n.t() string was added, changed, or removed
+npm run l10n             # only if a vscode.l10n.t() string was added, changed, or removed
 npm run prettier-fix
+npm run l10n:check       # always; CI validates localization even when generation is skipped
 npm run lint
-npx vitest run          # full suite
 npm run build
-npm run package         # catches bundling and missing-asset failures
+npm run typecheck:tests  # strict package-test checks across all workspaces, as in CI
+npx vitest run           # full runtime suite; does not replace typecheck:tests
+npm run package          # catches bundling and missing-asset failures
 ```
+
+`npm run build` checks the root project and package source, but does not check package
+tests under their stricter `tsconfig.test.json` settings. Vitest runtime success (or
+an ad hoc `vitest --typecheck` invocation) is not a substitute for the exact
+`npm run typecheck:tests` script. Keep this list aligned with the
+[CI static-check job](workflows/main.yml), and report that script's result separately.
 
 Also confirm the AI pre-review (CONTRIBUTING.md §6) has run and its review file is
 committed under `docs/ai-and-plans/features/<name>/iterations/`.
@@ -314,3 +322,4 @@ For detailed patterns, see:
 - [skills/backport/SKILL.md](skills/backport/SKILL.md) - Cherry-picking a merged fix onto a `release/*` branch and opening the backport PR
 - [skills/flagging-fresh-dependencies/SKILL.md](skills/flagging-fresh-dependencies/SKILL.md) - Scanning lockfiles for npm versions published in the last N days and tracing the adding PR and its approver
 - [skills/documentation-screenshots/SKILL.md](skills/documentation-screenshots/SKILL.md) - Framing and annotating screenshots for release notes, documentation and blog posts in one shared visual style
+- [skills/lead/SKILL.md](skills/lead/SKILL.md) - **Operator-invoked only (`/lead`); do not load otherwise.** The leader runs a multi-item task with delegated coding subagents, an operator-named advisor model for technical judgment, separate commits per item, a progress checkpoint after every agent return, and progress recorded in the source document

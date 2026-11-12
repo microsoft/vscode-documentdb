@@ -49,6 +49,7 @@ The User Manual provides guidance on using the extension. It contains detailed d
 - [Connecting with a URL](./user-manual/how-to-construct-url)
 - [Connect with a Managed Identity](./user-manual/connect-with-managed-identity)
 - [Troubleshoot SRV DNS Lookups (`querySrv EBADRESP`)](./user-manual/troubleshooting-srv-dns)
+- [Diagnose a Connection](./user-manual/diagnose-connection)
 - [Service Discovery](./user-manual/service-discovery)
   - [Azure DocumentDB](./user-manual/service-discovery-azure-cosmosdb-for-mongodb-vcore)
   - [Azure Cosmos DB for MongoDB (RU)](./user-manual/service-discovery-azure-cosmosdb-for-mongodb-ru)
@@ -84,7 +85,7 @@ The User Manual provides guidance on using the extension. It contains detailed d
 
 Explore the history of updates and improvements to the extension. Each release brings new features, enhancements, and fixes to improve your experience.
 
-- [1.0](./release-notes/1.0), [1.0.1](./release-notes/1.0#patch-release-v101)
+- [1.0](./release-notes/1.0), [1.0.1](./release-notes/1.0#patch-release-v101), [1.0.2](./release-notes/1.0#patch-release-v102)
 - [0.11](./release-notes/0.11), [0.11.1](./release-notes/0.11#patch-release-v0111), [0.11.2](./release-notes/0.11#patch-release-v0112)
 - [0.10](./release-notes/0.10), [0.10.1](./release-notes/0.10#patch-release-v0101), [0.10.2](./release-notes/0.10#patch-release-v0102)
 - [0.9](./release-notes/0.9), [0.9.1](./release-notes/0.9#patch-release-v091), [0.9.2](./release-notes/0.9#patch-release-v092)
