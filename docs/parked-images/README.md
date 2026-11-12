@@ -15,6 +15,6 @@ walkthroughs or blog posts yet. This folder is excluded from the documentation s
 
 ## Images
 
-| Image                                                                                                                                         | Shows                                                                       | Intended use                                         | Parked     |
-| --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------- | ---------- |
+| Image                                                                                                                                        | Shows                                                                       | Intended use                                         | Parked     |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------- | ---------- |
 | [`local_quick_start_container_engine.png`](./local_quick_start_container_engine.png) ([dark](./local_quick_start_container_engine_dark.png)) | Local Quick Start Configure step with the preferred Docker or Podman choice | Release notes for Docker and Podman engine selection | 2026-11-12 |
