@@ -54,8 +54,10 @@ The extension never installs Docker or Podman, starts an engine automatically, r
 group membership, or switches Docker contexts. On macOS and Windows, you can explicitly select
 **Start Podman machine** when setup identifies a stopped default machine, or the sole machine when
 none is marked default. The extension does not initialize a machine; if the selection is ambiguous,
-choose and start the intended machine manually. Linux and WSL do not use a Podman machine and have
-no machine-start button; when the Podman socket is down, setup provides copy-only socket guidance.
+choose and start the intended machine manually. Linux and WSL have no machine-start button; setup
+uses the address in Podman's error to choose copy-only guidance (see
+[Linux or WSL socket access denied](#linux-or-wsl-socket-access-denied)).
+If that address is on another computer, setup offers no start button on any platform.
 
 The extension host matters. In a local VS Code window, the container engine and DocumentDB Local run on your machine. In WSL, SSH, a dev container, or Codespaces, they run in that extension-host environment. In remote sessions, `localhost:10260` refers to the extension host, not necessarily your local computer.
 Remote sessions do not start a container engine on your local machine.
@@ -170,12 +172,18 @@ The extension never runs the command. Group changes apply only to new login sess
 
 See [Linux post-installation steps for Docker Engine](https://docs.docker.com/engine/install/linux-postinstall/) for details and security considerations.
 
-For Podman on Linux or WSL, there is no machine-start button. When its socket is down, setup can
-offer this command as copy-only text:
+For Podman on Linux or WSL, there is no machine-start button. Setup reads the address in Podman's
+error to decide what to suggest. When Podman could not reach its user socket, setup can offer this
+command as copy-only text:
 
 ```bash
 systemctl --user start podman.socket
 ```
+
+In WSL, when Podman uses a Podman machine running on Windows, setup instead offers
+`podman machine start <name>` as copy-only text labelled **Run in a Windows terminal**. You can also
+start the machine from Podman Desktop. For any other address, setup asks you to check the connection
+with `podman system connection list`.
 
 Run the command yourself, then select **Refresh**.
 
@@ -216,6 +224,9 @@ If no machine exists, initialize it manually with `podman machine init`, then st
 `podman machine start`. If several machines exist and none is marked default, setup offers no
 button; choose and start the intended machine manually. The extension never initializes a machine
 or starts one without your click.
+
+If Podman's error shows that it tried to reach another computer, setup offers no button and asks you
+to check the connection with `podman system connection list`.
 
 ### Context or remote endpoint unavailable
 

@@ -39,7 +39,8 @@ verified: 2026-08-14
 > provider memory and ignore Docker evidence, while Docker's existing provider-memory behavior is
 > unchanged. On macOS and Windows, an explicit Podman machine start is available only for a stopped
 > default machine or the sole machine. Initialization and ambiguous selection remain manual; Linux
-> and WSL get copy-only socket guidance, and remote sessions do not start a local engine.
+> and WSL get copy-only guidance chosen from the address in Podman's error (decision 0012), an
+> unreachable remote Podman host gets no start action, and remote sessions do not start a local engine.
 > This approved design supersedes the older Docker-only assumptions below. Iteration 12 records
 > implementation phases and source provenance; the code remains authoritative for runtime behavior.
 

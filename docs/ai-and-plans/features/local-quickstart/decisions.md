@@ -22,6 +22,7 @@ verified: 2026-08-14
 | 0009 | Preferred engine and instance ownership                | Accepted            | Configure is check-free; Docker is fresh default | 2026-11-10 | #1076 |
 | 0010 | Platform-gated Podman machine startup                  | Accepted            | Button only for eligible macOS/Windows machines  | 2026-11-10 | #1076 |
 | 0011 | Rootful default machine and a slow machine list        | Accepted            | Amends 0010 after a native Windows test          | 2026-11-10 | #1076 |
+| 0012 | Podman guidance follows the address in its error       | Accepted            | Simplified; connection resolution rejected       | 2026-11-12 | #1076 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -565,7 +566,9 @@ When should Quick Start offer to start Podman, and which machine should the acti
    If no machine exists, initialization remains manual. Ambiguous selection remains manual, with
    guidance naming the machines.
 3. Linux and WSL get copy-only `systemctl --user start podman.socket` guidance and no machine-start
-   button. Remote sessions get no local start action.
+   button. Remote sessions get no local start action. _Amended by
+   [0012](#0012--podman-guidance-follows-the-address-in-its-error): the socket command is offered
+   only for the user socket, and WSL can target a Windows machine._
 
 ### Why
 
@@ -616,3 +619,43 @@ retry is enough and a longer deadline is not needed.
 
 Item 1 is unit-tested only; the test machine had one Podman machine. Item 2 was measured on the
 unfixed build and is not yet re-tested live.
+
+---
+
+## 0012 — Podman guidance follows the address in its error
+
+**Status:** Accepted · **Date:** 2026-11-12 · **PR:** #1076 · **Raised by:** the operator
+
+**Evidence:** [iteration 14](./iterations/14-podman-connection-detection.md)
+
+### Question
+
+A failed Podman check produced the same diagnosis for a stopped machine, a stopped Windows machine
+reached from WSL, and an unreachable remote host. How should setup tell them apart?
+
+### Decision
+
+1. Read the address the failed `podman info` dialled (`dial unix <path>` or `dial tcp <host>:<port>`)
+   and nothing else. No extra process runs.
+2. A host other than this one is remote: the failure is `endpointUnreachable`, with no machine
+   lookup, start button or command. A machine on `127.0.0.1` is local and keeps 0010/0011 unchanged.
+3. In WSL, a socket under `/mnt/wsl/podman-sockets/<name>/` is a Windows machine: show copy-only
+   `podman machine start <name>` for a Windows terminal, never a start button.
+4. On Linux and WSL, offer `systemctl --user start podman.socket` only for
+   `/run/user/<uid>/podman/podman.sock`. Any other address gets the generic
+   "check `podman system connection list`" text, with no machine wording.
+5. Failed Podman CLI checks report no endpoint, because Docker's endpoint does not describe Podman.
+
+### Rejected alternative
+
+A first implementation re-derived Podman's active connection (`CONTAINER_CONNECTION`, then
+`CONTAINER_HOST`, then the default connection), ran `podman system connection list`, matched
+connections to machines, re-probed the connection's socket and redacted endpoints in the setup log.
+The operator judged it overengineered: the error already names the address Podman tried, which is
+the ground truth. It also withheld the macOS/Windows machine button whenever the connection and
+machine lists disagreed, and added a second process inside the readiness deadline.
+
+### Not verified
+
+The address formats come from the manual checks in iteration 14 (WSL2, Podman 6.1.4). The macOS,
+native Windows and remote cases are unit-tested only.

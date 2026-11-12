@@ -30,7 +30,9 @@ The approved engine preference and Podman startup behavior are recorded in
 [iteration 12](./iterations/12-preferred-engine-and-podman-start.md); implementation progress is
 tracked there. On macOS and Windows, an explicit **Start Podman machine** action is available only
 for a stopped default machine or the sole machine. Initialization and ambiguous machine selection
-remain manual. Linux and WSL receive copy-only socket guidance, and remote sessions do not start a
+remain manual. Linux and WSL receive copy-only guidance chosen from the address in Podman's error
+(user socket, or a Windows machine from WSL); an unreachable remote Podman host gets no start
+action, and remote sessions do not start a
 local engine.
 
 It is **not** a general Docker manager. It only ever touches containers it created, recognized by
@@ -91,7 +93,9 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 - **Engine-specific recovery.** Only the selected engine can receive a start action. On macOS and
   Windows, a stopped default Podman machine (or the sole machine) can be started by explicit click.
   A missing machine must be initialized manually; an ambiguous machine choice remains manual.
-  Linux and WSL get copy-only Podman socket guidance, with no machine-start button, and remote
+  Linux and WSL get copy-only Podman guidance chosen from the address in Podman's error
+  ([0012](./decisions.md#0012--podman-guidance-follows-the-address-in-its-error)), with no
+  machine-start button, and remote
   sessions never start a local engine. See the approved details in
   [iteration 12](./iterations/12-preferred-engine-and-podman-start.md).
 - **Provider identification.** Docker Engine and Docker Desktop are supported. When positive
@@ -130,16 +134,17 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 | 2026-11-09 | —     | Partial container-runtime transparency; W1/W5/W8 pending                                                                             | [iterations/10-container-runtime-transparency.md](./iterations/10-container-runtime-transparency.md); [user manual](../../../user-manual/local-quick-start.md)                  |
 | 2026-11-10 | —     | Details on settled Set up and Done stages; no step durations                                                                         | [iterations/11-setup-stage-details.md](./iterations/11-setup-stage-details.md)                                                                                                  |
 | 2026-11-10 | #1076 | Preferred engine, owning-engine lifecycle safety and platform-gated Podman startup; all P1–P6 phases and final verification complete | [iterations/12-preferred-engine-and-podman-start.md](./iterations/12-preferred-engine-and-podman-start.md), [review](./iterations/13-preferred-engine-implementation-review.md) |
+| 2026-11-12 | #1076 | Podman guidance follows the address in its error (WSL Windows machine, remote host, user socket)                                     | [iterations/14-podman-connection-detection.md](./iterations/14-podman-connection-detection.md)                                                                                  |
 
 ## Decisions
 
-See [decisions.md](./decisions.md). Ten entries: the single-instance model (0001, superseded), its
+See [decisions.md](./decisions.md). Twelve entries: the single-instance model (0001, superseded), its
 reversal to multi-instance (0002), the Concept F wizard information architecture (0003), the
 managed-node cluster-command context boundary plus its deferred replacement (0004), restoring
 missing credentials from the managed container (0005), the wizard journey telemetry and its
 correlation ids (0006), image usage telemetry following VS Code's setting (0007), Details on
-settled setup stages (0008), and preferred-engine ownership and platform-gated Podman startup
-(0009–0010).
+settled setup stages (0008), preferred-engine ownership and platform-gated Podman startup
+(0009–0011), and Podman guidance from the address in its error (0012).
 
 ## Open gaps
 
