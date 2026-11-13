@@ -988,7 +988,7 @@ export class QuickStartServiceImpl {
         // The original image is reused — from in-memory metadata, falling back to the stored record
         // (survives a window reload), then the default if neither is known.
         const usedCustomCreds = !reusing && wantsCustomCredentials;
-        const imageRef = reusing
+        let imageRef = reusing
             ? (this.stateFor(alias).metadata?.imageRef ?? (await getInstance(alias))?.imageRef ?? QUICK_START_IMAGE)
             : resolveQuickStartImage(options?.imageTag);
         const usedCustomImage = !reusing && imageRef !== QUICK_START_IMAGE;
@@ -1103,6 +1103,18 @@ export class QuickStartServiceImpl {
             }
             let removedContainerId: string | undefined;
             if (existing) {
+                // Removing the container loses the only proof of which image its data last ran on.
+                const existingImage = reusing
+                    ? await this.pinImage(engine, (await engine.inspectContainer(existing.id))?.imageId, cts.token)
+                    : undefined;
+                if (existingImage && existingImage !== imageRef) {
+                    imageRef = existingImage;
+                    await updateInstance(alias, (current) => current && { ...current, imageRef: existingImage });
+                    const entry = this.stateFor(alias);
+                    if (entry.metadata) {
+                        entry.metadata = { ...entry.metadata, imageRef: existingImage };
+                    }
+                }
                 channel.appendLine(`Removing existing Quick Start container ${existing.id} for a clean run…`);
                 await engine
                     .removeContainer(existing.id)

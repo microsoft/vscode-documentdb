@@ -2974,6 +2974,46 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             },
         );
 
+        it('saves the image of a container it replaces before removing it, and runs that image', async () => {
+            await seedMissingInstance(latest);
+            const old = `${QUICK_START_IMAGE_REPOSITORY}@sha256:${'b'.repeat(64)}`;
+            let savedAtRemoval: string | undefined;
+            const runtime = runtimeFor({
+                volumeExists: true,
+                containers: [{ id: 'old-container' }],
+                overrides: {
+                    inspectContainer: vi.fn().mockImplementation((id: string) =>
+                        Promise.resolve(
+                            id === 'old-container'
+                                ? { id, status: 'exited', imageId: 'sha256:old-image' }
+                                : {
+                                      id,
+                                      status: 'running',
+                                      ports: [{ containerPort: QUICK_START_PORT, hostPort: QUICK_START_PORT }],
+                                  },
+                        ),
+                    ),
+                    inspectImage: vi.fn((ref: string) =>
+                        Promise.resolve(
+                            ref === 'sha256:old-image'
+                                ? { id: ref, digest: `sha256:${'b'.repeat(64)}` }
+                                : { id: 'sha256:local-image' },
+                        ),
+                    ),
+                    removeContainer: vi.fn(async () => {
+                        savedAtRemoval = (await getInstance(DEFAULT_ALIAS))?.imageRef;
+                    }),
+                },
+            });
+            const service = new QuickStartServiceImpl(runtime);
+
+            await collect(service.provision(new AbortController().signal));
+
+            expect(savedAtRemoval).toBe(old);
+            expect(runtime.pullImage).not.toHaveBeenCalled();
+            expect(createdFrom(runtime)).toBe(old);
+        });
+
         it('pulls a tag-only record when its data volume is gone too, since there is nothing to upgrade', async () => {
             await seedMissingInstance(latest);
             const runtime = runtimeFor({ volumeExists: false, overrides: imagePruned() });
