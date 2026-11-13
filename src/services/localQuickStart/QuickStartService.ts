@@ -3357,10 +3357,9 @@ export class QuickStartServiceImpl {
         if (running) {
             this.populateCredentialCache(alias, stored, username, password);
         }
-        // Pins instances set up before digests were stored, while their container still says which image they run.
-        const adoptedImageRef = isPinnedImageRef(record?.imageRef)
-            ? record.imageRef
-            : ((await this.pinImage(engine, inspected?.imageId)) ?? inspected?.image?.originalName);
+        // The container shows which image its data last ran on, which outranks whatever the record says.
+        const adoptedImageRef =
+            (await this.pinImage(engine, inspected?.imageId)) ?? record?.imageRef ?? inspected?.image?.originalName;
         // Make the store authoritative + clear any stale provisioning lease: an adopted container whose
         // credentials we hold IS ready (so a later container-loss becomes Missing, not scavenged). The
         // image is backfilled from the adopted container so a recreate AFTER this container is removed

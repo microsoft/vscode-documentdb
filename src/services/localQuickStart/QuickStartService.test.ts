@@ -708,7 +708,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
     });
 
     // Instances set up before digests were stored only know their tag, which may since have moved.
-    it('pins a tag-only instance to the digest its container runs, then stops looking it up', async () => {
+    it('pins an instance to the digest its container runs, replacing an older pin', async () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
         const tag = `${QUICK_START_IMAGE_REPOSITORY}:latest`;
@@ -741,11 +741,19 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         expect((await getInstance(DEFAULT_ALIAS))?.imageRef).toBe(pinned);
         expect(service.getStatus().metadata?.imageRef).toBe(pinned);
 
-        inspectImage.mockClear();
+        // Something else recreated the container on a newer image, which has since run on the data.
+        const newer = `${QUICK_START_IMAGE_REPOSITORY}@sha256:${'b'.repeat(64)}`;
+        inspectImage.mockResolvedValue({ id: 'sha256:id', digest: `sha256:${'b'.repeat(64)}` });
         await service.reconcile();
 
-        expect(inspectImage).not.toHaveBeenCalled();
-        expect((await getInstance(DEFAULT_ALIAS))?.imageRef).toBe(pinned);
+        expect((await getInstance(DEFAULT_ALIAS))?.imageRef).toBe(newer);
+        expect(service.getStatus().metadata?.imageRef).toBe(newer);
+
+        // An image that can't be pinned keeps the pin already recorded.
+        inspectImage.mockResolvedValue(undefined);
+        await service.reconcile();
+
+        expect((await getInstance(DEFAULT_ALIAS))?.imageRef).toBe(newer);
     });
 
     it('retains Docker host facts collected during reconciliation', async () => {
