@@ -2976,6 +2976,23 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             },
         );
 
+        it('stops without advising a pull when it could not check whether a tag-only image is local', async () => {
+            await seedMissingInstance(latest);
+            const runtime = runtimeFor({
+                volumeExists: true,
+                overrides: { inspectImage: vi.fn().mockResolvedValue(undefined) },
+            });
+            const service = new QuickStartServiceImpl(runtime);
+
+            const events = await collect(service.provision(new AbortController().signal));
+
+            expect(runtime.pullImage).not.toHaveBeenCalled();
+            expect(runtime.createAndRunContainer).not.toHaveBeenCalled();
+            expect(events.at(-1)?.message?.detail).toContain("couldn't check whether");
+            expect(events.at(-1)?.message?.detail).not.toContain('pull');
+            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase: 'ready', imageRef: latest });
+        });
+
         it('saves the image of a container it replaces before removing it, and runs that image', async () => {
             await seedMissingInstance(latest);
             const old = `${QUICK_START_IMAGE_REPOSITORY}@sha256:${'b'.repeat(64)}`;

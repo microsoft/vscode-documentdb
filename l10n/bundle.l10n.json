@@ -3516,6 +3516,7 @@
   "We could not start DocumentDB Local: {0}. View the setup log for details.": "We could not start DocumentDB Local: {0}. View the setup log for details.",
   "We could not stop DocumentDB Local: {0}. View the setup log for details.": "We could not stop DocumentDB Local: {0}. View the setup log for details.",
   "We couldn't check this credential": "We couldn't check this credential",
+  "We couldn't check whether {0} is still on this machine, so setup stopped to keep this data on the version it already runs. Make sure {1} is running, then try again.": "We couldn't check whether {0} is still on this machine, so setup stopped to keep this data on the version it already runs. Make sure {1} is running, then try again.",
   "We couldn't close this view": "We couldn't close this view",
   "We couldn't open the feedback view. Please try again.": "We couldn't open the feedback view. Please try again.",
   "We couldn't open the Privacy Statement in your browser. Please try again.": "We couldn't open the Privacy Statement in your browser. Please try again.",

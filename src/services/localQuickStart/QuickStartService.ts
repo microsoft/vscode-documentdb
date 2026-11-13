@@ -1194,6 +1194,16 @@ export class QuickStartServiceImpl {
                 async () => {
                     if (!keepLocalImage) {
                         if (reusing && !isPinnedImageRef(imageRef) && (await engine.volumeExists(volumeName(alias)))) {
+                            // A failed check isn't absence, and pulling over a local image could upgrade the data.
+                            if (imageBefore === undefined) {
+                                throw new Error(
+                                    l10n.t(
+                                        "We couldn't check whether {0} is still on this machine, so setup stopped to keep this data on the version it already runs. Make sure {1} is running, then try again.",
+                                        imageRef,
+                                        resolved.cli,
+                                    ),
+                                );
+                            }
                             throw new Error(
                                 l10n.t(
                                     'We don\'t know which DocumentDB version this data was created with, and {0} is no longer on this machine. Downloading it could upgrade the data to a newer version, which can\'t be undone. To go ahead anyway, run "{1} pull {0}", then try again.',
