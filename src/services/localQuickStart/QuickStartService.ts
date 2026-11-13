@@ -1154,7 +1154,9 @@ export class QuickStartServiceImpl {
             activeDockerStage = 'pulling';
             const imageBefore = await engine.inspectImage(imageRef, cts.token);
             // Existing data stays on the image it ran on: a tag that has moved would upgrade it for good.
-            const keepLocalImage = reusing && imageBefore !== undefined && imageBefore !== 'absent';
+            const keptImageId =
+                reusing && imageBefore !== undefined && imageBefore !== 'absent' ? imageBefore.id : undefined;
+            const keepLocalImage = keptImageId !== undefined;
             facts = pullingFacts(imageBefore);
             const activePullFacts = facts;
             // Keep only the latest line, waking on output or settlement rather than polling a quiet pull.
@@ -1350,7 +1352,8 @@ export class QuickStartServiceImpl {
                     try {
                         createdContainerId = await engine.createAndRunContainer(
                             {
-                                imageRef: imageRef,
+                                // By ID, so a tag moved since the check, or an implicit pull, can't swap the image.
+                                imageRef: keptImageId ?? imageRef,
                                 name: containerName(alias),
                                 labels: {
                                     [QUICK_START_LABEL_KEY]: '1',

@@ -2903,7 +2903,8 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             const events = await collect(service.provision(new AbortController().signal));
 
             expect(runtime.pullImage).not.toHaveBeenCalled();
-            expect(createdFrom(runtime)).toBe(pinned);
+            expect(createdFrom(runtime)).toBe('sha256:image-id');
+            expect((await getInstance(DEFAULT_ALIAS))?.imageRef).toBe(pinned);
             expect(service.getStatus().state).toBe(InstanceState.Running);
             // Nothing was checked against the registry, so the image is not reported as up to date.
             expect(events.find((event) => event.stage === 'pulling' && event.status === 'done')?.facts).toMatchObject({
@@ -2939,7 +2940,8 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             const events = await collect(service.provision(new AbortController().signal));
 
             expect(runtime.pullImage).not.toHaveBeenCalled();
-            expect(createdFrom(runtime)).toBe(latest);
+            // The image checked above, even if the tag moves before the container is created.
+            expect(createdFrom(runtime)).toBe('sha256:image-id');
             expect(service.getStatus().state).toBe(InstanceState.Running);
             expect(events.find((event) => event.stage === 'pulling' && event.status === 'done')?.facts).toMatchObject({
                 disposition: 'reusedTag',
@@ -2995,8 +2997,8 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                     ),
                     inspectImage: vi.fn((ref: string) =>
                         Promise.resolve(
-                            ref === 'sha256:old-image'
-                                ? { id: ref, digest: `sha256:${'b'.repeat(64)}` }
+                            ref === 'sha256:old-image' || ref === old
+                                ? { id: 'sha256:old-image', digest: `sha256:${'b'.repeat(64)}` }
                                 : { id: 'sha256:local-image' },
                         ),
                     ),
@@ -3011,7 +3013,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
 
             expect(savedAtRemoval).toBe(old);
             expect(runtime.pullImage).not.toHaveBeenCalled();
-            expect(createdFrom(runtime)).toBe(old);
+            expect(createdFrom(runtime)).toBe('sha256:old-image');
         });
 
         it('pulls a tag-only record when its data volume is gone too, since there is nothing to upgrade', async () => {
