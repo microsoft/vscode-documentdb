@@ -110,7 +110,7 @@ The relaxed protection on `feature/*` and `release/*` is a deliberate escape hat
 
 ## 2. Machine Setup
 
-> **Platform coverage:** The detailed setup instructions below are written for **Windows + WSL2**. Stub sections for [macOS](#22-macos-pending), [Windows (native)](#23-windows-native-pending), and [plain Linux](#24-linux-pending) are included but not yet filled in; Contributors on those platforms are warmly invited to submit a PR expanding those sections!
+> **Platform coverage:** Setup instructions are available for **Windows + WSL2** and [native Windows](#23-windows-native). [macOS](#22-macos-pending) and [plain Linux](#24-linux-pending) still need platform-specific walkthroughs.
 
 ---
 
@@ -165,9 +165,274 @@ npm install -g typescript
 
 ---
 
-### 2.3. Windows (native) _(pending)_
+### 2.3. Windows (native)
 
-> **Help wanted!** If you develop on Windows without WSL2, please consider contributing setup instructions for this section.
+You can develop entirely on Windows, without WSL. The essentials are **Git, Node.js
+and VS Code**. If you already have them, most of the setup is done: check their
+versions, then skip ahead to cloning and building.
+
+We start with two recommended foundations: a Dev Drive and PowerShell 7. After that,
+install only the tools you are missing. Run the commands in a Windows terminal,
+not an Ubuntu terminal or a VS Code window connected to WSL.
+
+#### 2.3.1. Recommended: create a Dev Drive
+
+On Windows 11, we recommend a **Dev Drive** for source code and package caches.
+This is Microsoft's development-optimized storage volume, using the ReFS filesystem.
+Restoring dependencies and building involve many small files; Dev Drive's filesystem
+optimizations and lower antivirus scanning overhead can make that work faster.
+The improvement depends on the workload, and a Dev Drive is optional.
+
+Throughout this walkthrough, **we use `D:` as the development drive**:
+`D:\github\ms\vscode-documentdb` for the checkout and `D:\packages\npm` for npm's cache.
+Substitute your own drive or a normal local folder if needed. Keep the checkout
+outside OneDrive or other synchronized folders.
+
+To create a new Dev Drive, follow
+[Microsoft's Dev Drive setup guide](https://learn.microsoft.com/en-us/windows/dev-drive/):
+**Settings > System > Storage > Advanced storage settings > Disks & volumes >
+Create dev drive**. It requires administrator permission and at least 50 GB of space.
+Keep applications such as VS Code in their normal installation locations. If you
+already have a Dev Drive, reuse it; do not reformat an existing drive containing data.
+You can check its designation and trust state with this read-only command in an
+administrator PowerShell:
+
+```powershell
+fsutil devdrv query D:
+```
+
+`Access is denied` means the query needs elevation, not that the drive is broken.
+A drive label alone does not confirm it is a Dev Drive.
+
+**Defender: use performance mode, not blanket exclusions.** Microsoft's
+[Protect Dev Drive using performance mode](https://learn.microsoft.com/en-us/defender-endpoint/microsoft-defender-endpoint-antivirus-performance-mode)
+guide explains how Defender can scan asynchronously on a trusted Dev Drive rather
+than making file opens wait for scans. This trades some immediate protection for
+speed, but retains scanning and is safer than excluding the folder altogether.
+
+Performance mode is enabled by default for a newly created, trusted Dev Drive when
+its requirements are met: Defender is the primary antivirus and up to date, and
+**real-time protection remains on**. Check **Windows Security > Virus & threat
+protection > Manage settings > Dev Drive protection > See volumes**. Follow your
+organization's policy on managed machines. There is no need to disable Defender,
+detach antivirus filters, or add broad exclusions for this setup.
+
+#### 2.3.2. Install or update PowerShell 7
+
+Windows includes the older **Windows PowerShell 5.1** (`powershell.exe`). We use
+**PowerShell 7** (`pwsh.exe`), which installs alongside it. **Check first:**
+
+```powershell
+$PSVersionTable | Select-Object PSVersion, PSEdition
+```
+
+If you see `7.x` / `Core`, you already have PowerShell 7. If you see `5.1` / `Desktop`,
+you are in the older shell. Microsoft's
+[Install PowerShell 7 on Windows](https://learn.microsoft.com/en-us/powershell/scripting/install/install-powershell-on-windows)
+guide covers the options; **WinGet** is the recommended method for Windows clients.
+Install it if missing:
+
+```powershell
+winget install --id Microsoft.PowerShell --exact --source winget
+```
+
+To update an existing WinGet-managed installation instead:
+
+```powershell
+winget upgrade --id Microsoft.PowerShell --exact --source winget
+```
+
+If needed, see Microsoft's
+[Windows Package Manager installation instructions](https://learn.microsoft.com/en-us/windows/package-manager/winget/#install-winget)
+or use the installer linked from the PowerShell guide. Choose a stable, supported
+release; see the
+[PowerShell support lifecycle](https://learn.microsoft.com/en-us/powershell/scripting/install/powershell-support-lifecycle).
+
+Open **PowerShell 7** from the Start menu afterward and repeat the check. Installing
+it does not switch existing terminals. In VS Code, use **Terminal: Select Default
+Profile**, choose PowerShell (`pwsh.exe`), and open a new terminal.
+For the remaining steps, use a normal terminal, not an administrator terminal.
+
+#### 2.3.3. Git
+
+**Check:** if this prints a Git version, skip installation.
+
+```powershell
+git --version
+```
+
+**Install if missing:** download [Git for Windows](https://git-scm.com/downloads/win),
+or run:
+
+```powershell
+winget install --id Git.Git --exact
+```
+
+Reopen your terminal after installation, then repeat the check.
+
+#### 2.3.4. Visual Studio Code
+
+**Check:** if you already use VS Code, keep it and check **Help > About**, or run:
+
+```powershell
+code --version
+```
+
+Use a version satisfying `engines.vscode` in `package.json` (currently 1.109.0 or
+later in the 1.x line). **Install if missing:** visit
+[code.visualstudio.com](https://code.visualstudio.com/), or run:
+
+```powershell
+winget install --id Microsoft.VisualStudioCode --exact
+```
+
+Reopen your terminal afterward. If the app is installed but `code` is not recognized,
+check that the installer's **Add to PATH** option is enabled.
+
+#### 2.3.5. Node.js and npm: choose one installation method
+
+**Check first:**
+
+```powershell
+node --version
+npm --version
+```
+
+The minimums are currently **Node.js 22.18.0** and **npm 10.0.0**; `package.json`
+is authoritative. Node.js includes npm, so you do not need to install npm separately.
+If you already have supported versions, skip installation.
+
+**Option A: the regular Windows installer (simplest).** Download the Node.js 22
+Windows installer (`.msi`) from [nodejs.org](https://nodejs.org/en/download), choosing
+22.18.0 or later in that line and your machine's architecture. Keep npm and PATH
+integration enabled. Alternatively, install the Node.js 22 line with WinGet:
+
+```powershell
+winget install --id OpenJS.NodeJS.22 --exact
+```
+
+Reopen your terminal and repeat the version checks. That's enough to build the
+project; a version manager is not required.
+
+<details>
+<summary>Option B: fnm (optional; recommended for switching Node.js versions)</summary>
+
+fnm is useful if you work on several projects or want to match CI's version from
+[`.nvmrc`](.nvmrc). It adds a little shell setup, so Option A is fine if you do not
+need version switching. Choose one method rather than layering both.
+
+Check `fnm --version` first. If it is missing, install it:
+
+```powershell
+winget install --id Schniz.fnm --exact
+```
+
+Reopen PowerShell, then initialize fnm for this terminal:
+
+```powershell
+fnm env --use-on-cd --shell powershell | Out-String | Invoke-Expression
+```
+
+The next step selects the repository's Node.js version after cloning.
+
+**For automatic setup in new terminals**, follow
+[fnm's PowerShell profile instructions](https://github.com/Schniz/fnm#shell-setup).
+Create the profile only if missing, then open it:
+
+```powershell
+if (-not (Test-Path $PROFILE)) {
+    New-Item -ItemType File -Path $PROFILE -Force
+}
+notepad $PROFILE
+```
+
+Add this line once, save, and open a new terminal:
+
+```powershell
+fnm env --use-on-cd --version-file-strategy=recursive --shell powershell | Out-String | Invoke-Expression
+```
+
+If fnm is already initialized in a profile, keep the existing setup rather than
+adding it twice. Shells started with `-NoProfile` still need explicit initialization.
+PowerShell 7 and Windows PowerShell have separate profiles.
+
+</details>
+
+#### 2.3.6. Clone and build
+
+Skip cloning if you already have a native Windows checkout. Skip `mkdir` if the
+parent folder already exists. `mkdir` and `cd` work in PowerShell too.
+
+```powershell
+mkdir D:\github\ms
+cd D:\github\ms
+git clone https://github.com/microsoft/vscode-documentdb.git
+cd .\vscode-documentdb
+```
+
+**Only if you chose fnm**, run these from the repository root. They read `.nvmrc`,
+install the requested version if needed, and select it for this terminal:
+
+```powershell
+fnm install
+fnm use
+```
+
+**Everyone:** install the locked dependencies, build, and open VS Code:
+
+```powershell
+npm ci
+npm run build
+code .
+```
+
+Run each command after the previous one succeeds. `npm ci` restores the committed
+dependencies and replaces an old `node_modules`; stop this checkout's watchers
+first. Do not share `node_modules` with WSL.
+
+TypeScript, Vite and Vitest come with the project; no global installation is needed.
+Docker/Podman, Azure CLI and Kubernetes tooling are only needed for their respective
+features, not the TypeScript build or ordinary unit tests.
+
+To start developing, select **Default: Launch Extension (Vite)** and press **F5**.
+The pre-launch task starts the watchers automatically; see
+[Launching and Debugging](#32-launching-and-debugging-in-vs-code). A successful
+`npm run build` checks types and builds the workspace packages; F5 builds and
+launches the development extension. For tests and PR checks, follow
+[the PR checklist](#4-pr-submission-checklist).
+
+#### 2.3.7. Optional: put npm's cache on `D:`
+
+Check `npm config get cache` first. If it already points to your Dev Drive, skip
+this step. Otherwise, to use `D:\packages\npm` (skip `mkdir` if it already exists):
+
+```powershell
+mkdir D:\packages\npm
+npm config set cache "D:\packages\npm" --location=user
+npm config get cache
+```
+
+This user-wide setting moves future downloads to that cache, not Node.js or the
+project's installed dependencies. It can be done before the first `npm ci`.
+Folder names such as `packages` or `bench` have no special meaning; npm uses the
+configured path. Leave existing caches and fnm's installation prefix alone.
+
+<details>
+<summary>If something does not work</summary>
+
+| Symptom                                                    | What to try                                                                                                             |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| A newly installed command is not recognized                | Reopen the terminal. If needed, fully exit and reopen VS Code so it picks up PATH changes.                              |
+| fnm is installed but Node is unavailable                   | Run the fnm initialization line, then `fnm install` and `fnm use` from the checkout.                                    |
+| A profile or `npm.ps1` is blocked                          | Check `Get-ExecutionPolicy -List` and follow your organization's policy; do not disable or bypass it.                   |
+| Missing modules/types or Vite/Vitest after pulling changes | Run `npm ci` before rebuilding. Do not add individual dependencies or change source types to repair a stale install.    |
+| Native binary errors after switching OS                    | Keep Windows and WSL checkouts/dependencies separate and restore on the target OS.                                      |
+| `EPERM` or locked files during restore                     | Stop this checkout's watchers and debugging session, then retry.                                                        |
+| A package asks for Python or C++ tools                     | Check the package's prebuilt-binary support first; install these tools only if a dependency needs to build from source. |
+
+Do not share an entire `.npmrc` when troubleshooting: it can contain registry credentials.
+
+</details>
 
 ---
 
@@ -178,6 +443,9 @@ npm install -g typescript
 ## 3. VS Code Configuration
 
 This section explains how to clone the **DocumentDB extension for Visual Studio Code** repository and set up Visual Studio Code for development and debugging.
+Native Windows contributors should use the PowerShell clone/restore commands in
+[section 2.3](#23-windows-native) instead of the WSL commands below, then continue
+with [Launching and Debugging](#32-launching-and-debugging-in-vs-code).
 
 ### 3.1. Steps to Clone and Set Up Repository
 
@@ -205,7 +473,7 @@ npm run build
 
 To effectively isolate development environments, it is beneficial to create and use a separate VS Code profile.
 
-1. Open the cloned repository in VS Code:
+1. Open the cloned repository in VS Code (from its root on native Windows, run `code .`):
 
 ```bash
 cd ~/vscode-documentdb
