@@ -28,11 +28,18 @@ import { DockerCommandError } from './dockerCommand';
 
 import { formatQuickStartMessage } from './quickStartMessages';
 import { envFileName, QuickStartServiceImpl, sweepStaleQuickStartEnvFiles } from './QuickStartService';
-import { listInstances, PROVISIONING_LEASE_TTL_MS, upsertInstance, writeConnectionString } from './quickStartStore';
+import {
+    getInstance,
+    listInstances,
+    PROVISIONING_LEASE_TTL_MS,
+    upsertInstance,
+    writeConnectionString,
+} from './quickStartStore';
 import {
     DEFAULT_ALIAS,
     InstanceState,
     QUICK_START_ALIAS_LABEL_KEY,
+    QUICK_START_IMAGE_REPOSITORY,
     QUICK_START_LABEL_KEY,
     QUICK_START_OPERATION_LABEL_KEY,
     QUICK_START_PORT,
@@ -237,6 +244,36 @@ describe('QuickStartService — stored-credential volume safety', () => {
 
         expect(await service.canReuseExistingData()).toBe(true);
     });
+
+    it.each([
+        [`${QUICK_START_IMAGE_REPOSITORY}@sha256:${'a'.repeat(64)}`, true],
+        [`${QUICK_START_IMAGE_REPOSITORY}:latest`, false],
+        [undefined, false],
+    ])(
+        'reads saved-image pin knowledge from durable metadata without inspecting an engine (%s)',
+        async (imageRef, pinned) => {
+            ext.secretStorage = fakeSecretStorage({});
+            ext.context = fakeContext(fakeMemento());
+            await seedInstance(DEFAULT_ALIAS, STORED_CONN);
+            await upsertInstance({
+                alias: DEFAULT_ALIAS,
+                displayName: 'Existing',
+                phase: 'ready',
+                port: 10273,
+                imageRef,
+            });
+            const runtime = mockRuntime({});
+            const service = new QuickStartServiceImpl(runtime);
+
+            const context = await service.getWizardContext();
+
+            expect(context.savedImagePinned).toBe(pinned);
+            expect(service.getStatus().metadata).toBeUndefined();
+            expect(runtime.resolveCli).not.toHaveBeenCalled();
+            expect(runtime.inspectImage).not.toHaveBeenCalled();
+            service.dispose();
+        },
+    );
 
     it.each(['docker', 'podman', undefined] as const)(
         'reads the recorded %s engine and reusable credentials without any engine calls',
@@ -620,6 +657,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         removeContainer?: Mock;
         removeVolume?: Mock;
         volumeExists?: boolean;
+        inspectImage?: Mock;
     }): IContainerRuntime {
         const inspect = opts.inspect ?? {};
         return mockRuntime({
@@ -638,6 +676,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
             removeVolume: opts.removeVolume ?? vi.fn().mockResolvedValue(undefined),
             // Unlike the provision helpers: a recorded instance normally still has its data volume.
             volumeExists: vi.fn().mockResolvedValue(opts.volumeExists ?? true),
+            ...(opts.inspectImage ? { inspectImage: opts.inspectImage } : {}),
         });
     }
 
@@ -666,6 +705,55 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         // listStatuses is ordered DEFAULT-first; both instances are durable + ready.
         expect(service.listStatuses().map((status) => status.alias)).toEqual([DEFAULT_ALIAS, ALIAS_2]);
         expect((await listInstances()).map((record) => record.alias).sort()).toEqual([ALIAS_2, DEFAULT_ALIAS].sort());
+    });
+
+    // Instances set up before digests were stored only know their tag, which may since have moved.
+    it('pins an instance to the digest its container runs, replacing an older pin', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        const tag = `${QUICK_START_IMAGE_REPOSITORY}:latest`;
+        const pinned = `${QUICK_START_IMAGE_REPOSITORY}@sha256:${'a'.repeat(64)}`;
+        await upsertInstance({
+            alias: DEFAULT_ALIAS,
+            displayName: DEFAULT_ALIAS,
+            port: 10260,
+            phase: 'ready',
+            imageRef: tag,
+        });
+        await writeConnectionString(DEFAULT_ALIAS, CONN_1, { displayName: DEFAULT_ALIAS, port: 10260 });
+        const inspectImage = vi.fn().mockResolvedValue({ id: 'sha256:id', digest: `sha256:${'a'.repeat(64)}` });
+        const service = new QuickStartServiceImpl(
+            reconcileRuntime({
+                containers: [{ id: 'c1', alias: DEFAULT_ALIAS }],
+                inspect: {
+                    c1: {
+                        ...(inspectItem('c1', { running: false, port: 10260, image: tag }) as object),
+                        imageId: 'sha256:id',
+                    },
+                },
+                inspectImage,
+            }),
+        );
+
+        await service.reconcile();
+
+        expect(inspectImage).toHaveBeenCalledWith('sha256:id', undefined, QUICK_START_IMAGE_REPOSITORY);
+        expect((await getInstance(DEFAULT_ALIAS))?.imageRef).toBe(pinned);
+        expect(service.getStatus().metadata?.imageRef).toBe(pinned);
+
+        // Something else recreated the container on a newer image, which has since run on the data.
+        const newer = `${QUICK_START_IMAGE_REPOSITORY}@sha256:${'b'.repeat(64)}`;
+        inspectImage.mockResolvedValue({ id: 'sha256:id', digest: `sha256:${'b'.repeat(64)}` });
+        await service.reconcile();
+
+        expect((await getInstance(DEFAULT_ALIAS))?.imageRef).toBe(newer);
+        expect(service.getStatus().metadata?.imageRef).toBe(newer);
+
+        // An image that can't be pinned keeps the pin already recorded.
+        inspectImage.mockResolvedValue(undefined);
+        await service.reconcile();
+
+        expect((await getInstance(DEFAULT_ALIAS))?.imageRef).toBe(newer);
     });
 
     it('retains Docker host facts collected during reconciliation', async () => {

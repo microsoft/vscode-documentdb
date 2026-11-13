@@ -28,6 +28,7 @@ import * as fsPromises from 'fs/promises';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { StorageService } from '../storageService';
+import { type ContainerCli } from './containerCli';
 import {
     disposeQuickStartOutputChannel,
     SETUP_CLEANUP_TIMEOUT_MS,
@@ -168,7 +169,8 @@ function runtimeFor(options: RuntimeOptions = {}): IContainerRuntime {
         isPortFree: vi.fn().mockResolvedValue(options.portFree ?? true),
         listByLabel: options.listByLabel ?? vi.fn().mockResolvedValue(options.containers ?? []),
         pullImage: vi.fn().mockResolvedValue(undefined),
-        inspectImage: vi.fn().mockResolvedValue(undefined),
+        // The image is on this machine, as it is after any earlier setup.
+        inspectImage: vi.fn().mockResolvedValue({ id: 'sha256:local-image' }),
         createAndRunContainer: options.createAndRunContainer ?? vi.fn().mockResolvedValue('c1'),
         inspectContainer: vi.fn().mockResolvedValue({
             id: 'c1',
@@ -1569,12 +1571,18 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                     expect(runtime.pullImage).not.toHaveBeenCalled();
                     const remaining = await collect(generator);
                     expect(remaining.at(-1)?.stage).toBe('done');
-                    expect(runtime.inspectImage).toHaveBeenCalledTimes(2);
-                    expect(runtime.pullImage).toHaveBeenCalledExactlyOnceWith(
-                        imageRef,
-                        expect.anything(),
-                        expect.any(Function),
-                    );
+                    if (origin === 'reused') {
+                        // Existing data keeps the local image; pulling its tag again could upgrade the data.
+                        expect(runtime.inspectImage).toHaveBeenCalledOnce();
+                        expect(runtime.pullImage).not.toHaveBeenCalled();
+                    } else {
+                        expect(runtime.inspectImage).toHaveBeenCalledTimes(2);
+                        expect(runtime.pullImage).toHaveBeenCalledExactlyOnceWith(
+                            imageRef,
+                            expect.anything(),
+                            expect.any(Function),
+                        );
+                    }
                 } finally {
                     await generator.return(undefined);
                 }
@@ -2818,6 +2826,222 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             await collect(service.provision(new AbortController().signal, { username: 'me', password: 'secret-pw' }));
 
             expect(await readConnectionString(DEFAULT_ALIAS)).toContain('me:secret-pw@');
+        });
+    });
+
+    // A newer image updates the DocumentDB extensions on the volume it starts on, and older images
+    // can't run that volume afterwards, so a recreate must never follow a tag that has moved.
+    describe('recreating a container onto its existing data', () => {
+        const pinned = `${QUICK_START_IMAGE_REPOSITORY}@sha256:${'a'.repeat(64)}`;
+        const latest = `${QUICK_START_IMAGE_REPOSITORY}:latest`;
+
+        async function seedMissingInstance(imageRef: string | undefined, engineCli?: ContainerCli): Promise<void> {
+            await upsertInstance({
+                alias: DEFAULT_ALIAS,
+                displayName: 'DocumentDB Local',
+                port: QUICK_START_PORT,
+                phase: 'ready',
+                imageRef,
+                engineCli,
+            });
+            await writeConnectionString(
+                DEFAULT_ALIAS,
+                `mongodb://u1:p1@localhost:${QUICK_START_PORT}/?tls=true&tlsAllowInvalidCertificates=true`,
+                { displayName: 'DocumentDB Local', port: QUICK_START_PORT },
+            );
+        }
+
+        function createdFrom(runtime: IContainerRuntime): unknown {
+            return (runtime.createAndRunContainer as Mock).mock.calls[0]?.[0]?.imageRef;
+        }
+
+        // As the runtime answers: a missing tag is provably absent, a missing digest only unknown.
+        function imagePruned(): Partial<IContainerRuntime> {
+            return {
+                inspectImage: vi.fn((ref: string) =>
+                    Promise.resolve(ref.includes('@') ? undefined : ('absent' as const)),
+                ),
+            };
+        }
+
+        it('stores the digest of the image a new instance runs on', async () => {
+            const inspectImage = vi.fn((ref: string, _token?: unknown, repository?: string) =>
+                Promise.resolve(
+                    ref === 'sha256:image-id' && repository === QUICK_START_IMAGE_REPOSITORY
+                        ? { id: ref, digest: `sha256:${'a'.repeat(64)}` }
+                        : { id: 'sha256:image-id' },
+                ),
+            );
+            const runtime = runtimeFor({
+                overrides: {
+                    inspectContainer: vi.fn().mockResolvedValue({
+                        id: 'c1',
+                        status: 'running',
+                        imageId: 'sha256:image-id',
+                        ports: [{ containerPort: QUICK_START_PORT, hostPort: QUICK_START_PORT }],
+                    }),
+                    inspectImage,
+                },
+            });
+            const service = new QuickStartServiceImpl(runtime);
+
+            await collect(service.provision(new AbortController().signal));
+
+            expect(runtime.pullImage).toHaveBeenCalledWith(latest, expect.anything(), expect.any(Function));
+            expect((await getInstance(DEFAULT_ALIAS))?.imageRef).toBe(pinned);
+            expect(service.getStatus().metadata?.imageRef).toBe(pinned);
+        });
+
+        it('runs the pinned image without pulling while it is still on this machine', async () => {
+            await seedMissingInstance(pinned);
+            const runtime = runtimeFor({
+                volumeExists: true,
+                overrides: { inspectImage: vi.fn().mockResolvedValue({ id: 'sha256:image-id' }) },
+            });
+            const service = new QuickStartServiceImpl(runtime);
+
+            const events = await collect(service.provision(new AbortController().signal));
+
+            expect(runtime.pullImage).not.toHaveBeenCalled();
+            expect(createdFrom(runtime)).toBe('sha256:image-id');
+            expect((await getInstance(DEFAULT_ALIAS))?.imageRef).toBe(pinned);
+            expect(service.getStatus().state).toBe(InstanceState.Running);
+            // Nothing was checked against the registry, so the image is not reported as up to date.
+            expect(events.find((event) => event.stage === 'pulling' && event.status === 'done')?.facts).toMatchObject({
+                imageOrigin: 'reused',
+                result: undefined,
+                disposition: 'reusedPinned',
+            });
+        });
+
+        it('pulls the pinned digest, never the tag, once the image was pruned', async () => {
+            await seedMissingInstance(pinned);
+            const runtime = runtimeFor({ volumeExists: true, overrides: imagePruned() });
+            const service = new QuickStartServiceImpl(runtime);
+
+            const events = await collect(service.provision(new AbortController().signal));
+
+            expect(runtime.pullImage).toHaveBeenCalledWith(pinned, expect.anything(), expect.any(Function));
+            expect(createdFrom(runtime)).toBe(pinned);
+            expect((await getInstance(DEFAULT_ALIAS))?.imageRef).toBe(pinned);
+            expect(events.find((event) => event.stage === 'pulling' && event.status === 'done')?.facts).toMatchObject({
+                disposition: 'downloadedPinned',
+            });
+        });
+
+        it('runs a tag-only record from the local image without pulling', async () => {
+            await seedMissingInstance(latest);
+            const runtime = runtimeFor({
+                volumeExists: true,
+                overrides: { inspectImage: vi.fn().mockResolvedValue({ id: 'sha256:image-id' }) },
+            });
+            const service = new QuickStartServiceImpl(runtime);
+
+            const events = await collect(service.provision(new AbortController().signal));
+
+            expect(runtime.pullImage).not.toHaveBeenCalled();
+            // The image checked above, even if the tag moves before the container is created.
+            expect(createdFrom(runtime)).toBe('sha256:image-id');
+            expect(service.getStatus().state).toBe(InstanceState.Running);
+            expect(events.find((event) => event.stage === 'pulling' && event.status === 'done')?.facts).toMatchObject({
+                disposition: 'reusedTag',
+                result: undefined,
+            });
+        });
+
+        it.each([
+            ['a tag-only record', latest, undefined, 'docker'],
+            ['a record with no image', undefined, undefined, 'docker'],
+            ['a tag-only Podman record', latest, 'podman', 'podman'],
+        ] as const)(
+            'stops before pulling for %s whose image is gone, keeping the data',
+            async (_case, imageRef, engineCli, cli) => {
+                await seedMissingInstance(imageRef, engineCli);
+                const removeVolume = vi.fn().mockResolvedValue(undefined);
+                const runtime = runtimeFor({ volumeExists: true, overrides: { ...imagePruned(), removeVolume } });
+                const service = new QuickStartServiceImpl(runtime);
+
+                const events = await collect(service.provision(new AbortController().signal));
+
+                expect(runtime.pullImage).not.toHaveBeenCalled();
+                expect(runtime.createAndRunContainer).not.toHaveBeenCalled();
+                expect(removeVolume).not.toHaveBeenCalled();
+                expect(events.at(-1)).toMatchObject({ stage: 'error', status: 'error', canReuseExistingData: true });
+                expect(events.at(-1)?.message?.detail).toContain(`${cli} pull ${latest}`);
+                expect(runtime.forCli).toHaveBeenCalledWith(expect.objectContaining({ cli }));
+                expect(runtime.forCli).not.toHaveBeenCalledWith(
+                    expect.objectContaining({ cli: cli === 'docker' ? 'podman' : 'docker' }),
+                );
+                expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase: 'ready', imageRef });
+            },
+        );
+
+        it('stops without advising a pull when it could not check whether a tag-only image is local', async () => {
+            await seedMissingInstance(latest);
+            const runtime = runtimeFor({
+                volumeExists: true,
+                overrides: { inspectImage: vi.fn().mockResolvedValue(undefined) },
+            });
+            const service = new QuickStartServiceImpl(runtime);
+
+            const events = await collect(service.provision(new AbortController().signal));
+
+            expect(runtime.pullImage).not.toHaveBeenCalled();
+            expect(runtime.createAndRunContainer).not.toHaveBeenCalled();
+            expect(events.at(-1)?.message?.detail).toContain("couldn't check whether");
+            expect(events.at(-1)?.message?.detail).not.toContain('pull');
+            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase: 'ready', imageRef: latest });
+        });
+
+        it('saves the image of a container it replaces before removing it, and runs that image', async () => {
+            await seedMissingInstance(latest);
+            const old = `${QUICK_START_IMAGE_REPOSITORY}@sha256:${'b'.repeat(64)}`;
+            let savedAtRemoval: string | undefined;
+            const runtime = runtimeFor({
+                volumeExists: true,
+                containers: [{ id: 'old-container' }],
+                overrides: {
+                    inspectContainer: vi.fn().mockImplementation((id: string) =>
+                        Promise.resolve(
+                            id === 'old-container'
+                                ? { id, status: 'exited', imageId: 'sha256:old-image' }
+                                : {
+                                      id,
+                                      status: 'running',
+                                      ports: [{ containerPort: QUICK_START_PORT, hostPort: QUICK_START_PORT }],
+                                  },
+                        ),
+                    ),
+                    inspectImage: vi.fn((ref: string) =>
+                        Promise.resolve(
+                            ref === 'sha256:old-image' || ref === old
+                                ? { id: 'sha256:old-image', digest: `sha256:${'b'.repeat(64)}` }
+                                : { id: 'sha256:local-image' },
+                        ),
+                    ),
+                    removeContainer: vi.fn(async () => {
+                        savedAtRemoval = (await getInstance(DEFAULT_ALIAS))?.imageRef;
+                    }),
+                },
+            });
+            const service = new QuickStartServiceImpl(runtime);
+
+            await collect(service.provision(new AbortController().signal));
+
+            expect(savedAtRemoval).toBe(old);
+            expect(runtime.pullImage).not.toHaveBeenCalled();
+            expect(createdFrom(runtime)).toBe('sha256:old-image');
+        });
+
+        it('pulls a tag-only record when its data volume is gone too, since there is nothing to upgrade', async () => {
+            await seedMissingInstance(latest);
+            const runtime = runtimeFor({ volumeExists: false, overrides: imagePruned() });
+            const service = new QuickStartServiceImpl(runtime);
+
+            await collect(service.provision(new AbortController().signal));
+
+            expect(runtime.pullImage).toHaveBeenCalledWith(latest, expect.anything(), expect.any(Function));
+            expect(service.getStatus().state).toBe(InstanceState.Running);
         });
     });
 

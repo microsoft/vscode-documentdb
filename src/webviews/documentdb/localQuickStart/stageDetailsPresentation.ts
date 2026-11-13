@@ -12,6 +12,8 @@ import {
     type DockerProvider,
     type DockerReadiness,
     type DockerReadinessOutcome,
+    type ProvisionStage,
+    type PullingStageFacts,
     type StageFacts,
 } from '../../../services/localQuickStart/quickStartTypes';
 import { apiCompatibilityText } from '../connectionDiagnostics/formatEvidence';
@@ -32,6 +34,44 @@ export interface StageDetailFact {
     readonly message?: 'info';
 }
 
+function imagePreparationSummary(disposition: PullingStageFacts['disposition']): string | undefined {
+    switch (disposition) {
+        case 'reusedPinned':
+            return l10n.t('Reused the saved image. No download needed.');
+        case 'downloadedPinned':
+            return l10n.t('Downloaded the exact saved image.');
+        case 'reusedTag':
+            return l10n.t('Used the local image without downloading.');
+        default:
+            return undefined;
+    }
+}
+
+/** Confirm recreation from execution's volume evidence, not the initial Configure choice. */
+export function buildRecreateSuccessMessage(
+    facts: Readonly<Partial<Record<ProvisionStage, StageFacts | undefined>>>,
+): string | undefined {
+    if (facts.creating?.kind !== 'creating' || facts.creating.volume !== 'reused') return undefined;
+    const versions =
+        facts.waiting?.kind === 'waiting'
+            ? facts.waiting.documentdbVersions?.filter((version) => version.trim()).join(', ')
+            : undefined;
+    const running = versions
+        ? l10n.t('DocumentDB {0} is running with your existing data volume and credentials.', versions)
+        : l10n.t('DocumentDB is running with your existing data volume and credentials.');
+    const disposition = facts.pulling?.kind === 'pulling' ? facts.pulling.disposition : undefined;
+    switch (disposition) {
+        case 'reusedPinned':
+            return l10n.t('{0} The saved image was reused without downloading.', running);
+        case 'downloadedPinned':
+            return l10n.t('{0} The exact saved image was downloaded.', running);
+        case 'reusedTag':
+            return l10n.t('{0} The local image was used without downloading.', running);
+        default:
+            return running;
+    }
+}
+
 export function buildStageSummary(
     facts: StageFacts | undefined,
     status: 'active' | 'done' | 'error',
@@ -41,6 +81,9 @@ export function buildStageSummary(
         case 'checking':
             return facts.portFree ? l10n.t('Port {0} free', facts.port) : l10n.t('Port {0} in use', facts.port);
         case 'pulling': {
+            if (status === 'done' && facts.disposition) {
+                return imagePreparationSummary(facts.disposition);
+            }
             if (status === 'done' && facts.result) {
                 const results = {
                     downloaded: l10n.t('Downloaded'),
@@ -112,7 +155,10 @@ export function buildStageDetailRows(facts: StageFacts | undefined): readonly St
                           ? l10n.t('Kept from existing data')
                           : undefined,
             });
-            if (facts.result) {
+            if (facts.disposition) {
+                const summary = imagePreparationSummary(facts.disposition);
+                if (summary) rows.push({ label: l10n.t('Result'), value: summary });
+            } else if (facts.result) {
                 const results = {
                     downloaded: l10n.t('Downloaded'),
                     updated: l10n.t('Updated'),

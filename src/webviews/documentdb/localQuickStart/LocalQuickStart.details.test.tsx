@@ -15,6 +15,7 @@ import {
     type DockerReadiness,
     type InstanceStatusUpdate,
     type PodmanTarget,
+    type PullingStageFacts,
     type StageEvent,
 } from '../../../services/localQuickStart/quickStartTypes';
 import { LocalQuickStart } from './LocalQuickStart';
@@ -159,6 +160,55 @@ async function start(): Promise<void> {
     await click(button('Start DocumentDB Local'));
 }
 
+async function completeSetup(
+    disposition: PullingStageFacts['disposition'],
+    volume: 'new' | 'reused',
+    documentdbVersions?: readonly string[],
+): Promise<void> {
+    await event({ stage: 'checking', status: 'done', facts: { kind: 'checking', port: 10273, portFree: true } });
+    await event({
+        stage: 'pulling',
+        status: 'done',
+        facts: {
+            kind: 'pulling',
+            imageRef: 'official:saved',
+            imageOrigin: disposition ? 'reused' : 'default',
+            imageVersion: 'image-label-not-server-version',
+            disposition,
+        },
+    });
+    await event({
+        stage: 'creating',
+        status: 'done',
+        facts: {
+            kind: 'creating',
+            containerName: 'test-instance',
+            hostPort: 10273,
+            containerPort: 10260,
+            volumeName: 'existing-volume',
+            dataPath: '/data',
+            volume,
+            username: 'test-user',
+        },
+    });
+    await event({
+        stage: 'starting',
+        status: 'done',
+        facts: { kind: 'starting', running: true, boundPort: 10273, boundPortReported: true },
+    });
+    await event({
+        stage: 'waiting',
+        status: 'done',
+        facts: {
+            kind: 'waiting',
+            port: 10273,
+            documentdbVersions,
+            sampleData: volume === 'reused' ? 'keptExisting' : 'loaded',
+        },
+    });
+    await event({ stage: 'done', status: 'done' });
+}
+
 describe('Local Quick Start stage details', () => {
     beforeEach(async () => {
         const matches = Element.prototype.matches;
@@ -196,6 +246,161 @@ describe('Local Quick Start stage details', () => {
         await act(async () => root.unmount());
         host.remove();
         vi.restoreAllMocks();
+    });
+
+    it.each([
+        [
+            'reusedPinned',
+            ['1.0.4'],
+            'Reused the saved image. No download needed.',
+            'The saved image was reused without downloading.',
+        ],
+        ['downloadedPinned', ['1.0.4'], 'Downloaded the exact saved image.', 'The exact saved image was downloaded.'],
+        [
+            'reusedTag',
+            ['1.0.4'],
+            'Used the local image without downloading.',
+            'The local image was used without downloading.',
+        ],
+        [
+            'reusedPinned',
+            undefined,
+            'Reused the saved image. No download needed.',
+            'The saved image was reused without downloading.',
+        ],
+    ] as const)(
+        'summarizes %s recreation with server versions %j and keeps every completed Details accessible',
+        async (disposition, versions, stageSummary, imageSummary) => {
+            const savedImagePinned = disposition !== 'reusedTag';
+            client.trpc.localQuickStart.getWizardContext.query.mockResolvedValue({
+                status: { state: InstanceState.Stopped, missing: true },
+                busy: false,
+                canReuseExistingData: true,
+                suggestedPort: 10273,
+                instanceEngine: 'podman',
+                savedImagePinned,
+            });
+            await act(async () =>
+                root.render(
+                    <SSRProvider>
+                        <LocalQuickStart key={`recreate-${disposition}-${versions?.join()}`} />
+                    </SSRProvider>,
+                ),
+            );
+            expect(host.textContent).toContain('Configure recreation');
+            expect(host.textContent).toContain('Saved image');
+            expect(host.textContent).toContain('Address');
+            expect(host.textContent).toContain('Credentials');
+            expect(host.textContent).toContain(
+                savedImagePinned
+                    ? 'The exact recorded image, not a newer image. Downloaded only if needed.'
+                    : 'Uses the available local image. The original image identity is not recorded.',
+            );
+            if (!savedImagePinned) expect(host.textContent).not.toContain('exact recorded image');
+            await click(button('Recreate container'));
+            expect(host.textContent).toContain('Recreating DocumentDB Local container');
+            expect(client.trpc.localQuickStart.startQuickStart.subscribe).toHaveBeenLastCalledWith(
+                expect.objectContaining({ port: 10273 }),
+                expect.any(Object),
+            );
+            await completeSetup(disposition, 'reused', versions);
+            expect(host.textContent).toContain('DocumentDB Local is ready');
+            const success = [...host.querySelectorAll('.fui-MessageBar')].find((bar) =>
+                bar.textContent?.includes('Container recreated'),
+            );
+            expect(success?.textContent).toContain(
+                versions
+                    ? 'DocumentDB 1.0.4 is running with your existing data volume and credentials.'
+                    : 'DocumentDB is running with your existing data volume and credentials.',
+            );
+            expect(success?.textContent).toContain(imageSummary);
+            expect(success?.textContent).not.toContain('image-label-not-server-version');
+            expect(host.textContent).toContain(stageSummary);
+            expect(host.textContent).not.toMatch(/All set|up to date/);
+            if (disposition === 'reusedTag') expect(success?.textContent).not.toMatch(/exact|saved image/);
+            for (const stage of [
+                'Checking container engine',
+                'Preparing image',
+                'Creating container',
+                'Starting container',
+                'Waiting for DocumentDB to accept connections',
+            ]) {
+                expect(toggle(stage)?.getAttribute('aria-expanded')).toBe('false');
+                await click(toggle(stage)!);
+                expect(toggle(stage)?.getAttribute('aria-expanded')).toBe('true');
+            }
+            expect(host.textContent).toContain('existing-volume');
+            const logLink = [...host.querySelectorAll<HTMLElement>('a, button')].find(
+                (node) => node.textContent === 'View setup log',
+            );
+            const calls = client.trpc.localQuickStart.showOutput.mutate.mock.calls.length;
+            await click(logLink!);
+            expect(client.trpc.localQuickStart.showOutput.mutate).toHaveBeenCalledTimes(calls + 1);
+            expect(button('Open Connection')).toBeDefined();
+            expect(button('Close')).toBeDefined();
+        },
+    );
+
+    it('does not announce recreation when the selected existing volume was actually gone', async () => {
+        client.trpc.localQuickStart.getWizardContext.query.mockResolvedValue({
+            status: { state: InstanceState.Stopped, missing: true },
+            busy: false,
+            canReuseExistingData: true,
+            suggestedPort: 10273,
+            savedImagePinned: true,
+        });
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <LocalQuickStart key="volume-gone" />
+                </SSRProvider>,
+            ),
+        );
+        await click(button('Recreate container'));
+        await completeSetup('reusedPinned', 'new', ['1.0.4']);
+        expect(host.textContent).toContain('All set');
+        expect(host.textContent).not.toContain('Container recreated');
+        expect(host.textContent).not.toContain('running with your existing data volume');
+        expect(toggle('Creating container')).not.toBeNull();
+    });
+
+    it('keeps fresh setup and Start fresh settings and success separate from recreation', async () => {
+        expect(host.textContent).toContain('Configure setup');
+        expect(button('Start DocumentDB Local')).toBeDefined();
+        await click(button('Change the image tag'));
+        expect(host.querySelector('input[value="latest"]')).not.toBeNull();
+        await start();
+        expect(host.textContent).toContain('Setting up DocumentDB Local');
+        await completeSetup(undefined, 'new');
+        expect(host.textContent).toContain('All set');
+        expect(host.textContent).not.toContain('Container recreated');
+        expect(toggle('Preparing image')).not.toBeNull();
+
+        client.trpc.localQuickStart.getWizardContext.query.mockResolvedValue({
+            status: { state: InstanceState.Stopped, missing: true },
+            busy: false,
+            canReuseExistingData: true,
+            suggestedPort: 10273,
+            savedImagePinned: true,
+        });
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <LocalQuickStart key="start-fresh" />
+                </SSRProvider>,
+            ),
+        );
+        await click(host.querySelector<HTMLInputElement>('input[value="fresh"]')!);
+        expect(host.textContent).toContain('Configure setup');
+        expect(host.textContent).not.toContain('Saved image');
+        await start();
+        expect(client.trpc.localQuickStart.startQuickStart.subscribe).toHaveBeenLastCalledWith(
+            expect.objectContaining({ startFresh: true }),
+            expect.any(Object),
+        );
+        await completeSetup(undefined, 'new');
+        expect(host.textContent).toContain('All set');
+        expect(host.textContent).not.toContain('Container recreated');
     });
 
     it.each([
@@ -1118,7 +1323,7 @@ describe('Local Quick Start stage details', () => {
         expect(checking?.getAttribute('aria-expanded')).toBe('false');
         await click(checking!);
         expect(host.textContent).toContain('Docker Engine');
-        expect(toggle('Pulling official image')).toBeNull();
+        expect(toggle('Preparing image')).toBeNull();
         await event({ stage: 'done', status: 'done' });
         expect(toggle('Checking container engine')?.getAttribute('aria-expanded')).toBe('true');
     });
@@ -1128,7 +1333,7 @@ describe('Local Quick Start stage details', () => {
         await event({ stage: 'checking', status: 'done' });
         await event({ stage, status: 'active' });
         await event({ stage: 'error', status: 'error', dockerReadiness: failed });
-        const name = stage === 'pulling' ? 'Pulling official image' : 'Creating container';
+        const name = stage === 'pulling' ? 'Preparing image' : 'Creating container';
         const check = toggle('Checking container engine');
         const failure = toggle(name);
         expect(failure?.getAttribute('aria-expanded')).toBe('false');
@@ -1238,7 +1443,7 @@ describe('Local Quick Start stage details', () => {
         await start();
         await event({ stage: 'checking', status: 'done', facts: { kind: 'checking', port: 10273, portFree: true } });
         await event({ stage: 'pulling', status: 'active' });
-        expect(toggle('Pulling official image')).toBeNull();
+        expect(toggle('Preparing image')).toBeNull();
         await event({
             stage: 'pulling',
             status: 'done',
@@ -1266,7 +1471,7 @@ describe('Local Quick Start stage details', () => {
         });
         for (const stage of [
             'Checking container engine',
-            'Pulling official image',
+            'Preparing image',
             'Creating container',
             'Starting container',
         ]) {
@@ -1317,17 +1522,17 @@ describe('Local Quick Start stage details', () => {
             facts: { kind: 'pulling', imageRef: 'image:custom', imageOrigin: 'custom' },
         });
         expect(host.textContent).toContain('Image image:custom · Custom tag');
-        expect(toggle('Pulling official image')).toBeNull();
+        expect(toggle('Preparing image')).toBeNull();
         await event({
             stage: 'pulling',
             status: 'done',
             facts: { kind: 'pulling', imageRef: 'image:custom', imageOrigin: 'custom', result: 'updated' },
         });
         expect(host.textContent).toContain('Updated');
-        expect(toggle('Pulling official image')).not.toBeNull();
+        expect(toggle('Preparing image')).not.toBeNull();
         await event({ stage: 'done', status: 'done' });
         expect(host.textContent).toContain('Updated');
-        expect(toggle('Pulling official image')).not.toBeNull();
+        expect(toggle('Preparing image')).not.toBeNull();
     });
 
     it('replaces the active image summary with literal pull output without repeated step effects', async () => {
@@ -1338,7 +1543,7 @@ describe('Local Quick Start stage details', () => {
         expect(host.textContent).toContain(summary);
         expect(host.textContent).not.toContain('Engine output:');
         const announcement = [...host.querySelectorAll('[role="status"][aria-live="polite"]')].find(
-            (node) => node.textContent === 'Pulling official image…',
+            (node) => node.textContent === 'Preparing image…',
         );
         expect(announcement).toBeDefined();
         const mutations: MutationRecord[] = [];
@@ -1369,8 +1574,8 @@ describe('Local Quick Start stage details', () => {
                 expect(getComputedStyle(output.parentElement!).color).toBe('var(--colorNeutralForeground1)');
                 expect(output?.querySelector('b')).toBeNull();
                 expect(output?.closest('[aria-live], [role="status"], [role="alert"], [role="log"]')).toBeNull();
-                expect(announcement?.textContent).toBe('Pulling official image…');
-                expect(toggle('Pulling official image')).toBeNull();
+                expect(announcement?.textContent).toBe('Preparing image…');
+                expect(toggle('Preparing image')).toBeNull();
                 expect(button('Cancel')).toBe(cancel);
                 expect(button('Setting up…')).toBe(primary);
                 expect(primary.disabled).toBe(true);
@@ -1410,7 +1615,7 @@ describe('Local Quick Start stage details', () => {
         expect(image?.title).toBe(summary);
         expect(image?.children).toHaveLength(0);
         expect(host.textContent).not.toContain('Engine output:');
-        expect(toggle('Pulling official image')).toBeNull();
+        expect(toggle('Preparing image')).toBeNull();
     });
 
     it.each([undefined, '', ' \n\t'])(
@@ -1428,7 +1633,7 @@ describe('Local Quick Start stage details', () => {
             expect(host.textContent).not.toContain('Engine output:');
             expect(host.textContent).not.toContain('Downloading layer');
             expect(host.textContent).toContain('Image image:custom · Custom tag');
-            expect(toggle('Pulling official image')).toBeNull();
+            expect(toggle('Preparing image')).toBeNull();
         },
     );
 
@@ -1476,7 +1681,7 @@ describe('Local Quick Start stage details', () => {
         await event({ stage: 'pulling', status: 'active' });
         expect(host.textContent).not.toContain('Engine output:');
         expect(host.textContent).not.toContain('image:custom');
-        expect(toggle('Pulling official image')).toBeNull();
+        expect(toggle('Preparing image')).toBeNull();
     });
 
     it('keeps the image summary ahead of engine failure details', async () => {
@@ -1489,7 +1694,7 @@ describe('Local Quick Start stage details', () => {
             facts: { kind: 'pulling', imageRef: 'image:failed', imageOrigin: 'default' },
         });
         expect(host.textContent).toContain('Image image:failed');
-        await click(toggle('Pulling official image')!);
+        await click(toggle('Preparing image')!);
         expect(host.textContent).toContain('Docker access denied');
     });
 
@@ -1509,8 +1714,8 @@ describe('Local Quick Start stage details', () => {
                 previousImageId,
             },
         });
-        await click(toggle('Pulling official image')!);
-        const region = host.querySelector(`[aria-labelledby="${toggle('Pulling official image')!.id}"]`);
+        await click(toggle('Preparing image')!);
+        const region = host.querySelector(`[aria-labelledby="${toggle('Preparing image')!.id}"]`);
         const triggers = [...region!.querySelectorAll<HTMLElement>('[role="group"][tabindex="0"]')];
         expect(triggers.every((node) => node.tagName === 'SPAN')).toBe(true);
         expect(triggers.every((node) => node.getAttribute('aria-labelledby') === node.firstElementChild?.id)).toBe(
@@ -1653,12 +1858,12 @@ describe('Local Quick Start stage details', () => {
             status: 'error',
             facts: { kind: 'pulling', imageRef: 'official:failed-tag', imageOrigin: 'custom' },
         });
-        expect(toggle('Pulling official image')?.getAttribute('aria-expanded')).toBe('false');
-        await click(toggle('Pulling official image')!);
+        expect(toggle('Preparing image')?.getAttribute('aria-expanded')).toBe('false');
+        await click(toggle('Preparing image')!);
         expect(host.textContent).toContain('official:failed-tag');
         await click(button('Retry setup'));
         await event({ stage: 'pulling', status: 'done' });
-        expect(toggle('Pulling official image')).toBeNull();
+        expect(toggle('Preparing image')).toBeNull();
         expect(host.textContent).not.toContain('official:failed-tag');
     });
 
@@ -1755,16 +1960,16 @@ describe('Local Quick Start stage details', () => {
         });
         await event({ stage: 'waiting', status: 'active' });
         await event({ stage: 'waiting', status: 'error', timedOut: true, facts: { kind: 'waiting', port: 10273 } });
-        await click(toggle('Pulling official image')!);
+        await click(toggle('Preparing image')!);
         await click(button('Wait longer'));
-        expect(toggle('Pulling official image')?.getAttribute('aria-expanded')).toBe('false');
-        await click(toggle('Pulling official image')!);
+        expect(toggle('Preparing image')?.getAttribute('aria-expanded')).toBe('false');
+        await click(toggle('Preparing image')!);
         expect(host.textContent).toContain('official:retained');
         await event({ stage: 'waiting', status: 'error', timedOut: true });
         await click(button('Start over'));
         await start();
         await event({ stage: 'pulling', status: 'done' });
-        expect(toggle('Pulling official image')).toBeNull();
+        expect(toggle('Preparing image')).toBeNull();
         expect(host.textContent).not.toContain('official:retained');
     });
 });

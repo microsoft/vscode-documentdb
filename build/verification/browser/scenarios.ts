@@ -297,7 +297,7 @@ const detailedStages = [
 
 const quickStartRows = [
     'Checking container engine',
-    'Pulling official image',
+    'Preparing image',
     'Creating container',
     'Starting container',
     'Waiting for DocumentDB to accept connections',
@@ -2584,6 +2584,7 @@ export const scenarios = {
                             canReuseExistingData: true,
                             suggestedPort: 10260,
                             instanceEngine: 'podman',
+                            savedImagePinned: true,
                         },
                     ],
                 },
@@ -2593,6 +2594,7 @@ export const scenarios = {
                         {
                             status: { state: InstanceState.Stopped, missing: true },
                             canReuseExistingData: true,
+                            savedImagePinned: true,
                         },
                     ],
                     keepOpen: true,
@@ -2600,7 +2602,7 @@ export const scenarios = {
             },
             steps: continueSteps,
             readiness: {
-                content: ['Configure setup', 'Podman · kept from the existing instance'],
+                content: ['Configure recreation', 'Podman · kept from the existing instance', 'Recreate container'],
                 selectors: ['table'],
                 noProgressbar: true,
             },
@@ -2609,7 +2611,7 @@ export const scenarios = {
                     kind: 'text',
                     name: 'The existing engine is read-only, with no detected availability',
                     selector: 'table',
-                    includes: ['Container engine', 'Podman · kept from the existing instance'],
+                    includes: ['Container engine', 'Podman · kept from the existing instance', 'Saved image'],
                     excludes: ['Found', 'Not found on PATH', 'Detected', 'Preferred container engine'],
                 },
                 {
@@ -2664,7 +2666,7 @@ export const scenarios = {
                 content: [
                     'Setting up DocumentDB Local',
                     'Checking container engine',
-                    'Pulling official image',
+                    'Preparing image',
                     'Engine output: Downloading layer one',
                     'View setup log',
                 ],
@@ -2688,7 +2690,7 @@ export const scenarios = {
                 {
                     kind: 'attribute',
                     name: 'Active pull has no Details disclosure',
-                    selector: '[aria-label="Details for Pulling official image"]',
+                    selector: '[aria-label="Details for Preparing image"]',
                     attribute: 'aria-expanded',
                     expected: null,
                 },

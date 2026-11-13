@@ -100,6 +100,7 @@ import { type LocalQuickStartConfigurationType } from './localQuickStartControll
 import { SetupStageRow } from './SetupStageRow';
 import {
     buildDockerDetailRows,
+    buildRecreateSuccessMessage,
     buildStageDetailRows,
     buildStageSummary,
     dockerFailureLabel,
@@ -254,7 +255,7 @@ const useStyles = makeStyles({
 function stageLabels(): Record<ProvisionStage, string> {
     return {
         checking: l10n.t('Checking container engine'),
-        pulling: l10n.t('Pulling official image'),
+        pulling: l10n.t('Preparing image'),
         creating: l10n.t('Creating container'),
         starting: l10n.t('Starting container'),
         waiting: l10n.t('Waiting for DocumentDB to accept connections'),
@@ -643,6 +644,8 @@ export const LocalQuickStart = (): JSX.Element => {
     const [stageDockerFailure, setStageDockerFailure] = useState<DockerReadiness | undefined>(undefined);
     const [canReuseExistingData, setCanReuseExistingData] = useState(false);
     const [instanceEngine, setInstanceEngine] = useState<ContainerCli | 'notRecorded'>();
+    const [savedImagePinned, setSavedImagePinned] = useState(false);
+    const [recreating, setRecreating] = useState(false);
     const [preferredEngine, setPreferredEngine] = useState<ContainerCli>('docker');
     const [editingEngine, setEditingEngine] = useState(false);
     /**
@@ -1120,11 +1123,12 @@ export const LocalQuickStart = (): JSX.Element => {
             const options = continueAnyway
                 ? { ...(advancedRef.current ?? {}), continueAnyway: true }
                 : advancedRef.current;
+            setRecreating(isRecreate);
             runStream((handlers) => trpcClient.localQuickStart.startQuickStart.subscribe(options, handlers), {
                 trigger: continueAnyway ? 'continueAnyway' : 'startSetup',
             });
         },
-        [trpcClient, runStream],
+        [trpcClient, runStream, isRecreate],
     );
 
     const handleStart = useCallback((): void => startProvisioning(false), [startProvisioning]);
@@ -1274,6 +1278,7 @@ export const LocalQuickStart = (): JSX.Element => {
                 setInstanceDataRemoved(update.status.dataRemoved === true);
                 setCanReuseExistingData(update.canReuseExistingData);
                 setInstanceEngine(update.instanceEngine);
+                setSavedImagePinned(update.savedImagePinned === true);
                 // The timed-out container is gone (e.g. deleted from the tree), so "Wait longer" has
                 // nothing left to wait for. While it is still retained the instance stays in Error.
                 if (
@@ -1306,6 +1311,7 @@ export const LocalQuickStart = (): JSX.Element => {
                 setInstanceMissing(result.status.missing === true);
                 setInstanceDataRemoved(result.status.dataRemoved === true);
                 setInstanceEngine(result.instanceEngine);
+                setSavedImagePinned(result.savedImagePinned);
                 setSuggestedPort(result.suggestedPort);
                 if (!portTouchedRef.current) {
                     setAdvPort(String(result.suggestedPort));
@@ -1789,9 +1795,13 @@ export const LocalQuickStart = (): JSX.Element => {
         },
         {
             key: 'image',
-            label: l10n.t('Image'),
+            label: isRecreate ? l10n.t('Saved image') : l10n.t('Image'),
             value: isRecreate ? (
-                l10n.t('Kept from the existing instance')
+                savedImagePinned ? (
+                    l10n.t('The exact recorded image, not a newer image. Downloaded only if needed.')
+                ) : (
+                    l10n.t('Uses the available local image. The original image identity is not recorded.')
+                )
             ) : (
                 <code className={styles.imagePath}>{effectiveImage}</code>
             ),
@@ -2045,9 +2055,7 @@ export const LocalQuickStart = (): JSX.Element => {
             </Table>
             {isRecreate && (
                 <Text size={200} className={styles.muted}>
-                    {l10n.t(
-                        'Recreating reuses the existing data volume, so the original credentials and image are kept.',
-                    )}
+                    {l10n.t('Recreating reuses the existing data volume and its saved credentials.')}
                 </Text>
             )}
         </>
@@ -2155,7 +2163,9 @@ export const LocalQuickStart = (): JSX.Element => {
     );
 
     const setupHeading = isProvisioning
-        ? l10n.t('Setting up DocumentDB Local')
+        ? recreating
+            ? l10n.t('Recreating DocumentDB Local container')
+            : l10n.t('Setting up DocumentDB Local')
         : canContinueSetup
           ? l10n.t('Ready to set up')
           : l10n.t('Setup did not finish');
@@ -2299,6 +2309,7 @@ export const LocalQuickStart = (): JSX.Element => {
         </>
     );
 
+    const recreateSuccessMessage = buildRecreateSuccessMessage(facts);
     const done = (
         <>
             <StatusList
@@ -2322,12 +2333,17 @@ export const LocalQuickStart = (): JSX.Element => {
                     />
                 ))}
             </StatusList>
-            <MessageBlock intent="success" title={l10n.t('All set')}>
-                {l10n.t('The instance is ready in the Connections view as “DocumentDB Local”.')}
+            <MessageBlock
+                intent="success"
+                title={recreateSuccessMessage ? l10n.t('Container recreated') : l10n.t('All set')}
+            >
+                {recreateSuccessMessage ??
+                    l10n.t('The instance is ready in the Connections view as “DocumentDB Local”.')}
                 {facts.waiting?.kind === 'waiting' && facts.waiting.sampleData === 'failed' && (
                     <> {l10n.t('Sample data was not loaded. View the setup log for the reason.')}</>
                 )}
             </MessageBlock>
+            <Link onClick={handleViewOutput}>{l10n.t('View setup log')}</Link>
             <div className={styles.nextSteps}>
                 <Text size={300} weight="regular">
                     {l10n.t('Next steps')}
@@ -2379,10 +2395,11 @@ export const LocalQuickStart = (): JSX.Element => {
             break;
         }
         case 'configure': {
-            // The label stays fixed; the note below it is what follows the choice. "Nothing else on your
-            // machine is changed" is true only for a genuinely fresh install and must not render for
-            // either recreate path (review M4 / §10.6).
-            primaryLabel = forcedFresh ? l10n.t('Start fresh') : l10n.t('Start DocumentDB Local');
+            primaryLabel = forcedFresh
+                ? l10n.t('Start fresh')
+                : isRecreate
+                  ? l10n.t('Recreate container')
+                  : l10n.t('Start DocumentDB Local');
             primaryDisabled = advError !== undefined || passwordEncoding === 'checking' || startBlockedByGuard;
             primaryIcon = <RocketRegular />;
             onPrimary = handleStart;
@@ -2402,7 +2419,7 @@ export const LocalQuickStart = (): JSX.Element => {
             );
             const actionNote = isRecreate
                 ? l10n.t(
-                      'Recreating replaces the container named {0} and keeps its data volume, so your documents, credentials and image version are preserved.',
+                      'Recreating replaces the container named {0} and reuses its existing data volume and saved credentials.',
                       QUICK_START_CONTAINER_NAME,
                   )
                 : startFresh
@@ -2427,7 +2444,7 @@ export const LocalQuickStart = (): JSX.Element => {
             break;
         }
         case 'provisioning': {
-            primaryLabel = l10n.t('Setting up…');
+            primaryLabel = recreating ? l10n.t('Recreating…') : l10n.t('Setting up…');
             primaryDisabled = true;
             onPrimary = () => undefined;
             secondaryActions = (
@@ -2591,8 +2608,12 @@ export const LocalQuickStart = (): JSX.Element => {
                 <WizardStep
                     value="configure"
                     label={l10n.t('Configure')}
-                    title={l10n.t('Configure setup')}
-                    subtitle={l10n.t('These defaults work for most people. Change them only if you need to.')}
+                    title={isRecreate ? l10n.t('Configure recreation') : l10n.t('Configure setup')}
+                    subtitle={
+                        isRecreate
+                            ? l10n.t('Create the container again using its existing data volume and saved credentials.')
+                            : l10n.t('These defaults work for most people. Change them only if you need to.')
+                    }
                 >
                     {configure}
                 </WizardStep>

@@ -242,9 +242,19 @@ instead of the start flow:
 
 ### 5.4 Webview: Progress
 
-After **Start DocumentDB Local**, Set up shows five stages: checking the container engine, pulling
-the image, creating and starting the container, and waiting for DocumentDB to accept connections.
+After **Start DocumentDB Local** (or **Recreate container**), Set up shows five stages: checking the
+container engine, **Preparing image**, creating and starting the container, and waiting for DocumentDB to accept connections.
 Command output is available through **View setup log**.
+
+For data-preserving recreation, Configure is titled **Configure recreation**, with a **Saved image**
+row and **Recreate container** primary action; the in-progress heading describes recreation.
+The address, recorded engine and credential summaries remain available, as does Start fresh.
+Only a recorded image digest supports the explanation that the exact recorded image is used rather
+than a newer image. A tag-only record explicitly lacks original image identity.
+Execution reuses an available local image without pulling. If a pinned image is unavailable, it
+pulls that exact digest; a missing legacy tag with an existing volume blocks setup instead of
+silently upgrading the data. The settled image summary and its Details distinguish saved-image
+reuse, exact-image download and legacy local-image reuse, without claiming a tag is up to date.
 
 Both Set up and Done enable the shared StatusList row highlight for pointer hover and
 keyboard-visible focus, including its high-contrast outline and reduced-motion behavior.
@@ -279,6 +289,16 @@ On readiness success, Done retains the five completed rows and their Details, fo
 success message and next steps. **Open Connection** reveals the managed cluster in the tree. If
 requested sample data was not loaded, the success message says so and the waiting row's Details
 provides an informational message and a link to the setup log.
+
+The title stays **DocumentDB Local is ready** on every path. A successful recreation uses the
+existing success message block with the heading **Container recreated**, not a separate panel.
+The summary confirms that DocumentDB is running with the existing data volume and credentials,
+and states whether the saved image was reused, its exact digest was downloaded, or a legacy local
+image was used. The DocumentDB version is shown only when reported by the readiness probe's server
+response (`documentdbVersions`), never inferred from an image label. This is not a verification of
+data contents. Actual volume reuse from the creating-stage facts determines this summary, not the
+initial Configure mode: if the volume was gone, fresh-setup messaging remains. **View setup log**,
+**Open Connection**, **Close**, the next steps and all stage Details remain available.
 
 ### 5.6 Cancel rules
 

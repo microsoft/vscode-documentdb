@@ -82,6 +82,7 @@ import {
     type InstanceMetadata,
     InstanceState,
     type InstanceStatus,
+    isPinnedImageRef,
     type OpenLocalQuickStartOptions,
     type PortAvailability,
     type ProvisionStage,
@@ -89,6 +90,7 @@ import {
     QUICK_START_ALIAS_LABEL_KEY,
     QUICK_START_DATA_PATH,
     QUICK_START_IMAGE,
+    QUICK_START_IMAGE_REPOSITORY,
     QUICK_START_LABEL_KEY,
     QUICK_START_OPERATION_LABEL_KEY,
     QUICK_START_PORT,
@@ -802,6 +804,12 @@ export class QuickStartServiceImpl {
         return entry.metadata && !entry.dataRemoved ? entry.engineCli : undefined;
     }
 
+    public async isSavedImagePinned(alias: string = DEFAULT_ALIAS): Promise<boolean> {
+        const entry = this.stateFor(alias);
+        if (entry.dataRemoved) return false;
+        return isPinnedImageRef(entry.metadata?.imageRef ?? (await getInstance(alias))?.imageRef);
+    }
+
     /** The status the wizard opens with, from stored facts only; it never resolves or contacts an engine. */
     public async getWizardStatus(): Promise<QuickStartStatus> {
         return (await this.readWizardStatus()).status;
@@ -833,6 +841,7 @@ export class QuickStartServiceImpl {
         canReuseExistingData: boolean;
         suggestedPort: number;
         instanceEngine?: ContainerCli | 'notRecorded';
+        savedImagePinned: boolean;
     }> {
         const { status, canReuseExistingData } = await this.readWizardStatus();
         return {
@@ -843,6 +852,7 @@ export class QuickStartServiceImpl {
             canReuseExistingData,
             suggestedPort: await this.suggestPort(),
             instanceEngine: await this.getInstanceEngine(),
+            savedImagePinned: await this.isSavedImagePinned(),
         };
     }
 
@@ -978,7 +988,7 @@ export class QuickStartServiceImpl {
         // The original image is reused — from in-memory metadata, falling back to the stored record
         // (survives a window reload), then the default if neither is known.
         const usedCustomCreds = !reusing && wantsCustomCredentials;
-        const imageRef = reusing
+        let imageRef = reusing
             ? (this.stateFor(alias).metadata?.imageRef ?? (await getInstance(alias))?.imageRef ?? QUICK_START_IMAGE)
             : resolveQuickStartImage(options?.imageTag);
         const usedCustomImage = !reusing && imageRef !== QUICK_START_IMAGE;
@@ -1093,6 +1103,18 @@ export class QuickStartServiceImpl {
             }
             let removedContainerId: string | undefined;
             if (existing) {
+                // Removing the container loses the only proof of which image its data last ran on.
+                const existingImage = reusing
+                    ? await this.pinImage(engine, (await engine.inspectContainer(existing.id))?.imageId, cts.token)
+                    : undefined;
+                if (existingImage && existingImage !== imageRef) {
+                    imageRef = existingImage;
+                    await updateInstance(alias, (current) => current && { ...current, imageRef: existingImage });
+                    const entry = this.stateFor(alias);
+                    if (entry.metadata) {
+                        entry.metadata = { ...entry.metadata, imageRef: existingImage };
+                    }
+                }
                 channel.appendLine(`Removing existing Quick Start container ${existing.id} for a clean run…`);
                 await engine
                     .removeContainer(existing.id)
@@ -1131,6 +1153,10 @@ export class QuickStartServiceImpl {
             yield { ...stageEvent('pulling', 'active'), facts };
             activeDockerStage = 'pulling';
             const imageBefore = await engine.inspectImage(imageRef, cts.token);
+            // Existing data stays on the image it ran on: a tag that has moved would upgrade it for good.
+            const keptImageId =
+                reusing && imageBefore !== undefined && imageBefore !== 'absent' ? imageBefore.id : undefined;
+            const keepLocalImage = keptImageId !== undefined;
             facts = pullingFacts(imageBefore);
             const activePullFacts = facts;
             // Keep only the latest line, waking on output or settlement rather than polling a quiet pull.
@@ -1166,7 +1192,28 @@ export class QuickStartServiceImpl {
                 'pulling',
                 provisionCorrelationId,
                 async () => {
-                    await engine.pullImage(imageRef, cts.token, onProgress);
+                    if (!keepLocalImage) {
+                        if (reusing && !isPinnedImageRef(imageRef) && (await engine.volumeExists(volumeName(alias)))) {
+                            // A failed check isn't absence, and pulling over a local image could upgrade the data.
+                            if (imageBefore === undefined) {
+                                throw new Error(
+                                    l10n.t(
+                                        "We couldn't check whether {0} is still on this machine, so setup stopped to keep this data on the version it already runs. Make sure {1} is running, then try again.",
+                                        imageRef,
+                                        resolved.cli,
+                                    ),
+                                );
+                            }
+                            throw new Error(
+                                l10n.t(
+                                    'We don\'t know which DocumentDB version this data was created with, and {0} is no longer on this machine. Downloading it could upgrade the data to a newer version, which can\'t be undone. To go ahead anyway, run "{1} pull {0}", then try again.',
+                                    imageRef,
+                                    resolved.cli,
+                                ),
+                            );
+                        }
+                        await engine.pullImage(imageRef, cts.token, onProgress);
+                    }
                     this.throwIfAborted(signal);
                 },
                 [imageRef],
@@ -1203,18 +1250,28 @@ export class QuickStartServiceImpl {
                     cts.cancel();
                 }
             }
-            const imageAfter = await engine.inspectImage(imageRef, cts.token);
+            const imageAfter = keepLocalImage ? imageBefore : await engine.inspectImage(imageRef, cts.token);
+            // Nothing was pulled, so whether a newer image exists is unknown.
             const result =
-                imageBefore !== undefined && imageAfter && imageAfter !== 'absent'
+                !keepLocalImage && imageBefore !== undefined && imageAfter && imageAfter !== 'absent'
                     ? imageBefore === 'absent'
                         ? 'downloaded'
                         : imageBefore.id === imageAfter.id
                           ? 'upToDate'
                           : 'updated'
                     : undefined;
+            let disposition: PullingStageFacts['disposition'];
+            if (reusing) {
+                if (isPinnedImageRef(imageRef)) {
+                    disposition = keepLocalImage ? 'reusedPinned' : 'downloadedPinned';
+                } else if (keepLocalImage) {
+                    disposition = 'reusedTag';
+                }
+            }
             facts = {
                 ...pullingFacts(imageAfter),
                 result,
+                disposition,
                 ...(result === 'updated' && imageBefore && imageBefore !== 'absent'
                     ? { previousImageId: masked(imageBefore.id) }
                     : {}),
@@ -1305,7 +1362,8 @@ export class QuickStartServiceImpl {
                     try {
                         createdContainerId = await engine.createAndRunContainer(
                             {
-                                imageRef: imageRef,
+                                // By ID, so a tag moved since the check, or an implicit pull, can't swap the image.
+                                imageRef: keptImageId ?? imageRef,
                                 name: containerName(alias),
                                 labels: {
                                     [QUICK_START_LABEL_KEY]: '1',
@@ -1376,6 +1434,7 @@ export class QuickStartServiceImpl {
                 boundPort,
                 boundPortReported: !!reportedPort,
             };
+            const runningImageRef = (await this.pinImage(engine, inspected?.imageId, cts.token)) ?? imageRef;
             // Stream container logs to the channel during the wait (compensates for -dt detach, D2).
             void engine.followLogs(provisionedContainerId, secrets, cts.token);
             yield { ...stageEvent('starting', 'done'), facts };
@@ -1395,7 +1454,7 @@ export class QuickStartServiceImpl {
                 boundPort,
                 username: credentials.username,
                 password: credentials.password,
-                imageRef,
+                imageRef: runningImageRef,
                 sampleDataRequested,
                 provisionCorrelationId: provisionCorrelationId,
                 reusing: reusesVolume,
@@ -2243,6 +2302,18 @@ export class QuickStartServiceImpl {
         if (attempt.leaseHeld && stillOurs) {
             await this.releaseProvisioningLease(alias, attempt.operationId);
         }
+    }
+
+    /** The image's `…@sha256:` digest, which still names exactly this image after its tag moves. */
+    private async pinImage(
+        engine: IContainerEngineOps,
+        imageId: string | undefined,
+        token?: vscode.CancellationToken,
+    ): Promise<string | undefined> {
+        const image = imageId ? await engine.inspectImage(imageId, token, QUICK_START_IMAGE_REPOSITORY) : undefined;
+        const pinned =
+            image && image !== 'absent' && image.digest ? `${QUICK_START_IMAGE_REPOSITORY}@${image.digest}` : '';
+        return isPinnedImageRef(pinned) ? pinned : undefined;
     }
 
     private async findManagedContainer(
@@ -3295,7 +3366,8 @@ export class QuickStartServiceImpl {
         containerId: string,
         stored: string,
     ): Promise<void> {
-        const inspected = await (await this.engineFor(alias)).inspectContainer(containerId);
+        const engine = await this.engineFor(alias);
+        const inspected = await engine.inspectContainer(containerId);
         const running = isRunning(inspected);
         const boundPort = (inspected && getBoundHostPort(inspected)) || record?.port || QUICK_START_PORT;
         let username = '';
@@ -3310,7 +3382,9 @@ export class QuickStartServiceImpl {
         if (running) {
             this.populateCredentialCache(alias, stored, username, password);
         }
-        const adoptedImageRef = inspected?.image?.originalName;
+        // The container shows which image its data last ran on, which outranks whatever the record says.
+        const adoptedImageRef =
+            (await this.pinImage(engine, inspected?.imageId)) ?? record?.imageRef ?? inspected?.image?.originalName;
         // Make the store authoritative + clear any stale provisioning lease: an adopted container whose
         // credentials we hold IS ready (so a later container-loss becomes Missing, not scavenged). The
         // image is backfilled from the adopted container so a recreate AFTER this container is removed
