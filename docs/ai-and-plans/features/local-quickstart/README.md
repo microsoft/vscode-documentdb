@@ -160,6 +160,7 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 | 2026-11-10 | —     | Details on settled Set up and Done stages; no step durations                                                                         | [iterations/11-setup-stage-details.md](./iterations/11-setup-stage-details.md)                                                                                                  |
 | 2026-11-10 | #1076 | Preferred engine, owning-engine lifecycle safety and platform-gated Podman startup; all P1–P6 phases and final verification complete | [iterations/12-preferred-engine-and-podman-start.md](./iterations/12-preferred-engine-and-podman-start.md), [review](./iterations/13-preferred-engine-implementation-review.md) |
 | 2026-11-12 | #1076 | Podman guidance follows the address in its error (WSL Windows machine, remote host, user socket)                                     | [iterations/14-podman-connection-detection.md](./iterations/14-podman-connection-detection.md)                                                                                  |
+| 2026-11-13 | #1083 | Recreate keeps the image its data runs on, pinned by digest                                                                          | [iterations/15-recreate-image-pin-review.md](./iterations/15-recreate-image-pin-review.md)                                                                                      |
 
 ## Decisions
 
