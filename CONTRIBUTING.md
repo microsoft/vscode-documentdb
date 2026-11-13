@@ -420,15 +420,15 @@ configured path. Leave existing caches and fnm's installation prefix alone.
 <details>
 <summary>If something does not work</summary>
 
-| Symptom | What to try |
-| --- | --- |
-| A newly installed command is not recognized | Reopen the terminal. If needed, fully exit and reopen VS Code so it picks up PATH changes. |
-| fnm is installed but Node is unavailable | Run the fnm initialization line, then `fnm install` and `fnm use` from the checkout. |
-| A profile or `npm.ps1` is blocked | Check `Get-ExecutionPolicy -List` and follow your organization's policy; do not disable or bypass it. |
-| Missing modules/types or Vite/Vitest after pulling changes | Run `npm ci` before rebuilding. Do not add individual dependencies or change source types to repair a stale install. |
-| Native binary errors after switching OS | Keep Windows and WSL checkouts/dependencies separate and restore on the target OS. |
-| `EPERM` or locked files during restore | Stop this checkout's watchers and debugging session, then retry. |
-| A package asks for Python or C++ tools | Check the package's prebuilt-binary support first; install these tools only if a dependency needs to build from source. |
+| Symptom                                                    | What to try                                                                                                             |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| A newly installed command is not recognized                | Reopen the terminal. If needed, fully exit and reopen VS Code so it picks up PATH changes.                              |
+| fnm is installed but Node is unavailable                   | Run the fnm initialization line, then `fnm install` and `fnm use` from the checkout.                                    |
+| A profile or `npm.ps1` is blocked                          | Check `Get-ExecutionPolicy -List` and follow your organization's policy; do not disable or bypass it.                   |
+| Missing modules/types or Vite/Vitest after pulling changes | Run `npm ci` before rebuilding. Do not add individual dependencies or change source types to repair a stale install.    |
+| Native binary errors after switching OS                    | Keep Windows and WSL checkouts/dependencies separate and restore on the target OS.                                      |
+| `EPERM` or locked files during restore                     | Stop this checkout's watchers and debugging session, then retry.                                                        |
+| A package asks for Python or C++ tools                     | Check the package's prebuilt-binary support first; install these tools only if a dependency needs to build from source. |
 
 Do not share an entire `.npmrc` when troubleshooting: it can contain registry credentials.
 
