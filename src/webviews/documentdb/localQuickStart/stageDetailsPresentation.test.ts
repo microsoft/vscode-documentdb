@@ -206,6 +206,26 @@ describe('buildDockerDetailRows', () => {
 });
 
 describe('buildStageSummary', () => {
+    it.each([
+        ['reusedPinned', 'Reused the saved image. No download needed.'],
+        ['downloadedPinned', 'Downloaded the exact saved image.'],
+        ['reusedTag', 'Used the local image without downloading.'],
+    ] as const)(
+        'reports %s in the settled summary and Details without an up-to-date claim',
+        (disposition, expected) => {
+            const facts: StageFacts = {
+                kind: 'pulling',
+                imageRef: 'official:saved',
+                imageOrigin: 'reused',
+                disposition,
+                result: 'upToDate',
+            };
+            expect(buildStageSummary(facts, 'done')).toBe(expected);
+            expect(buildStageDetailRows(facts).find((row) => row.label === 'Result')?.value).toBe(expected);
+            expect(buildStageSummary(facts, 'active')).toBe('Image official:saved · Kept from existing data');
+        },
+    );
+
     it('omits absent facts', () => {
         for (const status of ['active', 'done', 'error'] as const) {
             expect(buildStageSummary(undefined, status)).toBeUndefined();

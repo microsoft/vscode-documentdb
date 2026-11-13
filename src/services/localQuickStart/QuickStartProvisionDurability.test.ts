@@ -2909,6 +2909,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             expect(events.find((event) => event.stage === 'pulling' && event.status === 'done')?.facts).toMatchObject({
                 imageOrigin: 'reused',
                 result: undefined,
+                disposition: 'reusedPinned',
             });
         });
 
@@ -2917,11 +2918,14 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             const runtime = runtimeFor({ volumeExists: true, overrides: imagePruned() });
             const service = new QuickStartServiceImpl(runtime);
 
-            await collect(service.provision(new AbortController().signal));
+            const events = await collect(service.provision(new AbortController().signal));
 
             expect(runtime.pullImage).toHaveBeenCalledWith(pinned, expect.anything(), expect.any(Function));
             expect(createdFrom(runtime)).toBe(pinned);
             expect((await getInstance(DEFAULT_ALIAS))?.imageRef).toBe(pinned);
+            expect(events.find((event) => event.stage === 'pulling' && event.status === 'done')?.facts).toMatchObject({
+                disposition: 'downloadedPinned',
+            });
         });
 
         it('runs a tag-only record from the local image without pulling', async () => {
@@ -2932,11 +2936,15 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             });
             const service = new QuickStartServiceImpl(runtime);
 
-            await collect(service.provision(new AbortController().signal));
+            const events = await collect(service.provision(new AbortController().signal));
 
             expect(runtime.pullImage).not.toHaveBeenCalled();
             expect(createdFrom(runtime)).toBe(latest);
             expect(service.getStatus().state).toBe(InstanceState.Running);
+            expect(events.find((event) => event.stage === 'pulling' && event.status === 'done')?.facts).toMatchObject({
+                disposition: 'reusedTag',
+                result: undefined,
+            });
         });
 
         it.each([

@@ -77,7 +77,7 @@ The first setup stage heading reads **Checking container engine**. Its summary i
 selected CLI and its version when reported. If setup falls back, it also names the missing preferred
 CLI.
 
-The setup view shows pull, create, start, and connection-readiness progress. While pulling, one
+The setup view shows **Preparing image**, create, start, and connection-readiness progress. While downloading, one
 status line shows the known image and origin until engine output is available, then shows that
 output instead. Long text is ellipsized to prevent layout shifts; hover to see the full line.
 This reports activity, not a completion estimate. Container-engine command output is also
@@ -99,6 +99,27 @@ still ready to use; select **View setup log** for the reason.
 The **Configure** step pre-fills the **Address** with a host port that is free at that moment, starting at `10260` and moving forward if that port is taken. You can change it, and the value is checked while you are still on the step.
 
 Setup then uses exactly that port. It never moves the instance to a different port after you select **Start DocumentDB Local**. If the port is taken by the time the container is created, setup stops with an explanation so you can go back and choose another one.
+
+## Recreate a missing container
+
+If the container is missing but its data volume remains, select **Recreate container** in the
+Connections view. In Configure, keep **Keep the existing data**, review the address and **Saved
+image**, then select **Recreate container**. The saved credentials and the recorded container
+engine are reused.
+
+When an exact image digest was recorded, setup reuses that image locally or downloads the exact
+saved image if needed, rather than choosing a newer image. Older instances may have only a saved
+tag: setup uses the available local image without promising it is the original image. If that
+image is missing while the data volume remains, setup stops with guidance instead of downloading
+a tag that could upgrade the data.
+
+**Preparing image** says whether an image was reused or downloaded. On success, **Container
+recreated** summarizes the outcome and includes the DocumentDB version only when the server
+reports it. This confirms the container is running with the existing volume and credentials; it
+does not check the contents of your databases. The completed stages, expandable **Details** and
+**View setup log** remain available on **DocumentDB Local is ready**.
+
+To erase the existing volume instead, explicitly choose **Erase the existing data and start empty**.
 
 ## Usage telemetry
 
@@ -140,7 +161,7 @@ Use the CLI of the instance's recorded engine in the commands below: replace `do
    ```
 
 2. In the **Connections** view, expand the **DocumentDB Local** instance and select **Recreate container**. If the row doesn't appear yet, refresh the view.
-3. In the setup view, select **Continue**, then **Start DocumentDB Local**. The extension creates a new container on the same data volume, with the same credentials and image version, using your current telemetry level.
+3. In the setup view, select **Continue** if the Introduction step appears, keep **Keep the existing data**, then select **Recreate container**. The extension creates a new container on the same data volume with the saved credentials, using your current telemetry level. See [Recreate a missing container](#recreate-a-missing-container) for saved-image behavior.
 
 **Delete Container…** in the extension removes the data volume too, so use it only when you want to start over.
 

@@ -804,6 +804,12 @@ export class QuickStartServiceImpl {
         return entry.metadata && !entry.dataRemoved ? entry.engineCli : undefined;
     }
 
+    public async isSavedImagePinned(alias: string = DEFAULT_ALIAS): Promise<boolean> {
+        const entry = this.stateFor(alias);
+        if (entry.dataRemoved) return false;
+        return isPinnedImageRef(entry.metadata?.imageRef ?? (await getInstance(alias))?.imageRef);
+    }
+
     /** The status the wizard opens with, from stored facts only; it never resolves or contacts an engine. */
     public async getWizardStatus(): Promise<QuickStartStatus> {
         return (await this.readWizardStatus()).status;
@@ -835,6 +841,7 @@ export class QuickStartServiceImpl {
         canReuseExistingData: boolean;
         suggestedPort: number;
         instanceEngine?: ContainerCli | 'notRecorded';
+        savedImagePinned: boolean;
     }> {
         const { status, canReuseExistingData } = await this.readWizardStatus();
         return {
@@ -845,6 +852,7 @@ export class QuickStartServiceImpl {
             canReuseExistingData,
             suggestedPort: await this.suggestPort(),
             instanceEngine: await this.getInstanceEngine(),
+            savedImagePinned: await this.isSavedImagePinned(),
         };
     }
 
@@ -1228,9 +1236,18 @@ export class QuickStartServiceImpl {
                           ? 'upToDate'
                           : 'updated'
                     : undefined;
+            let disposition: PullingStageFacts['disposition'];
+            if (reusing) {
+                if (isPinnedImageRef(imageRef)) {
+                    disposition = keepLocalImage ? 'reusedPinned' : 'downloadedPinned';
+                } else if (keepLocalImage) {
+                    disposition = 'reusedTag';
+                }
+            }
             facts = {
                 ...pullingFacts(imageAfter),
                 result,
+                disposition,
                 ...(result === 'updated' && imageBefore && imageBefore !== 'absent'
                     ? { previousImageId: masked(imageBefore.id) }
                     : {}),

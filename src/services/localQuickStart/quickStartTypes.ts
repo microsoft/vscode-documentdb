@@ -254,6 +254,8 @@ export interface PullingStageFacts {
     readonly imageRef: string;
     readonly imageOrigin: 'default' | 'custom' | 'reused';
     readonly result?: 'downloaded' | 'updated' | 'upToDate';
+    /** How an existing instance's image was prepared; a local tag does not prove original identity. */
+    readonly disposition?: 'reusedPinned' | 'downloadedPinned' | 'reusedTag';
     readonly imageId?: string;
     readonly previousImageId?: string;
     readonly progress?: string;
@@ -623,6 +625,7 @@ export interface InstanceStatusUpdate {
     readonly status: QuickStartStatus;
     readonly canReuseExistingData: boolean;
     readonly instanceEngine?: ContainerCli | 'notRecorded';
+    readonly savedImagePinned?: boolean;
 }
 
 /** Why a host port cannot be used, or `'available'` when it can (Configure-step validation, L3). */

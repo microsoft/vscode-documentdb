@@ -245,6 +245,36 @@ describe('QuickStartService — stored-credential volume safety', () => {
         expect(await service.canReuseExistingData()).toBe(true);
     });
 
+    it.each([
+        [`${QUICK_START_IMAGE_REPOSITORY}@sha256:${'a'.repeat(64)}`, true],
+        [`${QUICK_START_IMAGE_REPOSITORY}:latest`, false],
+        [undefined, false],
+    ])(
+        'reads saved-image pin knowledge from durable metadata without inspecting an engine (%s)',
+        async (imageRef, pinned) => {
+            ext.secretStorage = fakeSecretStorage({});
+            ext.context = fakeContext(fakeMemento());
+            await seedInstance(DEFAULT_ALIAS, STORED_CONN);
+            await upsertInstance({
+                alias: DEFAULT_ALIAS,
+                displayName: 'Existing',
+                phase: 'ready',
+                port: 10273,
+                imageRef,
+            });
+            const runtime = mockRuntime({});
+            const service = new QuickStartServiceImpl(runtime);
+
+            const context = await service.getWizardContext();
+
+            expect(context.savedImagePinned).toBe(pinned);
+            expect(service.getStatus().metadata).toBeUndefined();
+            expect(runtime.resolveCli).not.toHaveBeenCalled();
+            expect(runtime.inspectImage).not.toHaveBeenCalled();
+            service.dispose();
+        },
+    );
+
     it.each(['docker', 'podman', undefined] as const)(
         'reads the recorded %s engine and reusable credentials without any engine calls',
         async (engineCli) => {
