@@ -1171,6 +1171,8 @@ export class QuickStartServiceImpl {
             const keptImageId =
                 reusing && imageBefore !== undefined && imageBefore !== 'absent' ? imageBefore.id : undefined;
             const keepLocalImage = keptImageId !== undefined;
+            // Pulled only because no volume existed, so it must not start on one that appears meanwhile.
+            let pulledUnpinnedTag = false;
             facts = pullingFacts(imageBefore);
             const activePullFacts = facts;
             // Keep only the latest line, waking on output or settlement rather than polling a quiet pull.
@@ -1226,6 +1228,7 @@ export class QuickStartServiceImpl {
                                 ),
                             );
                         }
+                        pulledUnpinnedTag = reusing && !isPinnedImageRef(imageRef);
                         await engine.pullImage(imageRef, cts.token, onProgress);
                     }
                     this.throwIfAborted(signal);
@@ -1307,7 +1310,7 @@ export class QuickStartServiceImpl {
             activeDockerStage = 'creating';
             const volumeOnDisk = await engine.volumeExists(volumeName(alias));
             // The gate saw no volume, so one here appeared during the pull and isn't ours to remove.
-            if (!reusing && !startFresh && volumeOnDisk) {
+            if (((!reusing && !startFresh) || pulledUnpinnedTag) && volumeOnDisk) {
                 throw new Error(
                     l10n.t(
                         'We found an existing data volume after the image downloaded. Setup stopped to protect its data. Go back to Configure and try again.',

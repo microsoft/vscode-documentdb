@@ -3080,6 +3080,28 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             expect(createdFrom(runtime)).toBe('sha256:old-image');
         });
 
+        it('refuses a data volume that appeared while a tag-only record pulled its image', async () => {
+            await seedMissingInstance(latest);
+            let pulled = false;
+            const runtime = runtimeFor({
+                overrides: {
+                    ...imagePruned(),
+                    pullImage: vi.fn(() => {
+                        pulled = true;
+                        return Promise.resolve();
+                    }),
+                    volumeExists: vi.fn(() => Promise.resolve(pulled)),
+                },
+            });
+            const service = new QuickStartServiceImpl(runtime);
+
+            const events = await collect(service.provision(new AbortController().signal));
+
+            expect(runtime.pullImage).toHaveBeenCalled();
+            expect(runtime.createAndRunContainer).not.toHaveBeenCalled();
+            expect(events.at(-1)?.message?.detail).toContain('We found an existing data volume');
+        });
+
         it('pulls a tag-only record when its data volume is gone too, since there is nothing to upgrade', async () => {
             await seedMissingInstance(latest);
             const runtime = runtimeFor({ volumeExists: false, overrides: imagePruned() });
