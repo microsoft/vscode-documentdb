@@ -3102,6 +3102,42 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             expect(events.at(-1)?.message?.detail).toContain('We found an existing data volume');
         });
 
+        it('saves the running image before readiness, so a failed attempt still leaves the record pinned', async () => {
+            await seedMissingInstance(latest);
+            onProbe = () => {
+                throw new Error('connect ECONNREFUSED 127.0.0.1:10260');
+            };
+            let inspections = 0;
+            const runtime = runtimeFor({
+                volumeExists: true,
+                overrides: {
+                    inspectContainer: vi.fn(() => {
+                        inspections += 1;
+                        return Promise.resolve({
+                            id: 'c1',
+                            status: inspections === 1 ? 'running' : 'exited',
+                            imageId: 'sha256:image-id',
+                            ports: [{ containerPort: QUICK_START_PORT, hostPort: QUICK_START_PORT }],
+                            raw: JSON.stringify({ State: { Status: 'exited', ExitCode: 1 } }),
+                        });
+                    }) as unknown as IContainerRuntime['inspectContainer'],
+                    inspectImage: vi.fn((ref: string, _token?: unknown, repository?: string) =>
+                        Promise.resolve(
+                            ref === 'sha256:image-id' && repository === QUICK_START_IMAGE_REPOSITORY
+                                ? { id: ref, digest: `sha256:${'a'.repeat(64)}` }
+                                : { id: 'sha256:image-id' },
+                        ),
+                    ),
+                },
+            });
+            const service = new QuickStartServiceImpl(runtime);
+
+            const events = await collect(service.provision(new AbortController().signal));
+
+            expect(events.at(-1)?.stage).toBe('error');
+            expect((await getInstance(DEFAULT_ALIAS))?.imageRef).toBe(pinned);
+        });
+
         it('pulls a tag-only record when its data volume is gone too, since there is nothing to upgrade', async () => {
             await seedMissingInstance(latest);
             const runtime = runtimeFor({ volumeExists: false, overrides: imagePruned() });

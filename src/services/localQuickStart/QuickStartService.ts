@@ -1452,6 +1452,10 @@ export class QuickStartServiceImpl {
                 boundPortReported: !!reportedPort,
             };
             const runningImageRef = (await this.pinImage(engine, inspected?.imageId, cts.token)) ?? imageRef;
+            // Saved now, not at readiness: a failed attempt's retry must not follow a tag that has moved.
+            if (reusesVolume && runningImageRef !== imageRef && isPinnedImageRef(runningImageRef)) {
+                await this.saveImagePin(alias, runningImageRef);
+            }
             // Stream container logs to the channel during the wait (compensates for -dt detach, D2).
             void engine.followLogs(provisionedContainerId, secrets, cts.token);
             yield { ...stageEvent('starting', 'done'), facts };
