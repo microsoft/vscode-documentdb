@@ -1102,19 +1102,31 @@ export class QuickStartServiceImpl {
                 }
             }
             let removedContainerId: string | undefined;
+            // The replaced container's image, so an unpinnable one still runs instead of whatever its tag now names.
+            let existingImageId: string | undefined;
             if (existing) {
                 // Removing the container loses the only proof of which image its data last ran on.
-                const existingImage = reusing
-                    ? await this.pinImage(engine, (await engine.inspectContainer(existing.id))?.imageId, cts.token)
-                    : undefined;
-                if (existingImage && existingImage !== imageRef) {
-                    imageRef = existingImage;
-                    await updateInstance(alias, (current) => current && { ...current, imageRef: existingImage });
-                    const entry = this.stateFor(alias);
-                    if (entry.metadata) {
-                        entry.metadata = { ...entry.metadata, imageRef: existingImage };
+                if (reusing) {
+                    const existingContainer = await engine.inspectContainer(existing.id, {
+                        quiet: true,
+                        token: cts.token,
+                    });
+                    existingImageId = existingContainer?.imageId;
+                    if (!existingContainer && !isPinnedImageRef(imageRef)) {
+                        throw new Error(
+                            l10n.t(
+                                "We couldn't check which image the existing container runs, so setup stopped to keep this data on the version it already runs. Make sure {0} is running, then try again.",
+                                resolved.cli,
+                            ),
+                        );
+                    }
+                    const existingImage = await this.pinImage(engine, existingImageId, cts.token);
+                    if (existingImage && existingImage !== imageRef) {
+                        imageRef = existingImage;
+                        await this.saveImagePin(alias, existingImage);
                     }
                 }
+                this.throwIfAborted(signal);
                 channel.appendLine(`Removing existing Quick Start container ${existing.id} for a clean run…`);
                 await engine
                     .removeContainer(existing.id)
@@ -1152,7 +1164,9 @@ export class QuickStartServiceImpl {
             facts = pullingFacts(undefined);
             yield { ...stageEvent('pulling', 'active'), facts };
             activeDockerStage = 'pulling';
-            const imageBefore = await engine.inspectImage(imageRef, cts.token);
+            const imageBefore = existingImageId
+                ? await engine.inspectImage(existingImageId, cts.token, QUICK_START_IMAGE_REPOSITORY)
+                : await engine.inspectImage(imageRef, cts.token);
             // Existing data stays on the image it ran on: a tag that has moved would upgrade it for good.
             const keptImageId =
                 reusing && imageBefore !== undefined && imageBefore !== 'absent' ? imageBefore.id : undefined;
@@ -2305,6 +2319,14 @@ export class QuickStartServiceImpl {
     }
 
     /** The image's `…@sha256:` digest, which still names exactly this image after its tag moves. */
+    private async saveImagePin(alias: string, imageRef: string): Promise<void> {
+        await updateInstance(alias, (current) => current && { ...current, imageRef });
+        const entry = this.stateFor(alias);
+        if (entry.metadata) {
+            entry.metadata = { ...entry.metadata, imageRef };
+        }
+    }
+
     private async pinImage(
         engine: IContainerEngineOps,
         imageId: string | undefined,

@@ -3033,6 +3033,53 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             expect(createdFrom(runtime)).toBe('sha256:old-image');
         });
 
+        it('stops before removing a container whose image it could not check when the record names a tag', async () => {
+            await seedMissingInstance(latest);
+            const runtime = runtimeFor({
+                volumeExists: true,
+                containers: [{ id: 'old-container' }],
+                overrides: { inspectContainer: vi.fn().mockResolvedValue(undefined) },
+            });
+            const service = new QuickStartServiceImpl(runtime);
+
+            const events = await collect(service.provision(new AbortController().signal));
+
+            expect(runtime.removeContainer).not.toHaveBeenCalled();
+            expect(runtime.createAndRunContainer).not.toHaveBeenCalled();
+            expect(events.at(-1)?.message?.detail).toContain("couldn't check which image");
+            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase: 'ready', imageRef: latest });
+        });
+
+        it("runs a replaced container's own image when it has no digest, not the image its tag names now", async () => {
+            await seedMissingInstance(latest);
+            const runtime = runtimeFor({
+                volumeExists: true,
+                containers: [{ id: 'old-container' }],
+                overrides: {
+                    inspectContainer: vi.fn().mockImplementation((id: string) =>
+                        Promise.resolve(
+                            id === 'old-container'
+                                ? { id, status: 'exited', imageId: 'sha256:old-image' }
+                                : {
+                                      id,
+                                      status: 'running',
+                                      ports: [{ containerPort: QUICK_START_PORT, hostPort: QUICK_START_PORT }],
+                                  },
+                        ),
+                    ),
+                    inspectImage: vi.fn((ref: string) =>
+                        Promise.resolve({ id: ref === 'sha256:old-image' ? ref : 'sha256:newer-image' }),
+                    ),
+                },
+            });
+            const service = new QuickStartServiceImpl(runtime);
+
+            await collect(service.provision(new AbortController().signal));
+
+            expect(runtime.pullImage).not.toHaveBeenCalled();
+            expect(createdFrom(runtime)).toBe('sha256:old-image');
+        });
+
         it('pulls a tag-only record when its data volume is gone too, since there is nothing to upgrade', async () => {
             await seedMissingInstance(latest);
             const runtime = runtimeFor({ volumeExists: false, overrides: imagePruned() });
