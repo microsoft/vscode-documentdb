@@ -384,7 +384,20 @@ class ContainerEngineOps implements IContainerEngineOps {
                     : parsed;
                 const created = isRecord(record) && record.Id === item.id ? record.Created : undefined;
                 const createdAtMs = typeof created === 'string' ? Date.parse(created) : NaN;
-                const digest = item.repoDigests.find((value) => value.split('@')[0] === repository)?.split('@')[1];
+                // Podman empties RepoDigests once the tag moves on, but keeps the pulled digest and past names.
+                const pulledFrom =
+                    isRecord(record) &&
+                    record.Id === item.id &&
+                    typeof record.Digest === 'string' &&
+                    Array.isArray(record.NamesHistory) &&
+                    record.NamesHistory.some(
+                        (name: unknown) =>
+                            typeof name === 'string' && name.split('@')[0].replace(/:[^/:]+$/, '') === repository,
+                    )
+                        ? record.Digest
+                        : undefined;
+                const digest =
+                    item.repoDigests.find((value) => value.split('@')[0] === repository)?.split('@')[1] ?? pulledFrom;
                 const version = item.labels['org.opencontainers.image.version'];
                 return {
                     id: item.id,

@@ -556,6 +556,23 @@ describe('ContainerRuntime output channel', () => {
         });
     });
 
+    it("falls back to Podman's pulled digest once the tag has moved and RepoDigests is empty", async () => {
+        const podmanItem = (namesHistory: string[]) => ({
+            ...imageItem({ Id: 'sha256:image-id', Digest: 'sha256:pulled', NamesHistory: namesHistory }),
+            repoDigests: [],
+        });
+        vi.mocked(runDockerCommand)
+            .mockResolvedValueOnce([podmanItem([IMAGE_REF])])
+            .mockResolvedValueOnce([podmanItem(['other/repository:latest'])]);
+        const repository = IMAGE_REF.split(':')[0];
+        expect(await engine.inspectImage('sha256:image-id', undefined, repository)).toMatchObject({
+            digest: 'sha256:pulled',
+        });
+        expect(await engine.inspectImage('sha256:image-id', undefined, repository)).toMatchObject({
+            digest: undefined,
+        });
+    });
+
     it('proves absence only with an empty strict reference-filtered listing', async () => {
         vi.mocked(runDockerCommand).mockRejectedValueOnce(new Error('missing')).mockResolvedValueOnce([]);
         expect(await engine.inspectImage(IMAGE_REF)).toBe('absent');
