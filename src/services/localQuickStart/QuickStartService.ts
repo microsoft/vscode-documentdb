@@ -3425,8 +3425,10 @@ export class QuickStartServiceImpl {
             this.populateCredentialCache(alias, stored, username, password);
         }
         // The container shows which image its data last ran on, which outranks whatever the record says.
-        const adoptedImageRef =
-            (await this.pinImage(engine, inspected?.imageId)) ?? record?.imageRef ?? inspected?.image?.originalName;
+        // A container run by image ID names nothing a later pull could fetch.
+        const originalName = inspected?.image?.originalName;
+        const namedImage = originalName && !/^(sha256:)?[0-9a-f]{64}$/i.test(originalName) ? originalName : undefined;
+        const adoptedImageRef = (await this.pinImage(engine, inspected?.imageId)) ?? record?.imageRef ?? namedImage;
         // Make the store authoritative + clear any stale provisioning lease: an adopted container whose
         // credentials we hold IS ready (so a later container-loss becomes Missing, not scavenged). The
         // image is backfilled from the adopted container so a recreate AFTER this container is removed

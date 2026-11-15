@@ -235,6 +235,24 @@ describe('QuickStartService — stored-credential volume safety', () => {
         expect(service.getStatus().state).toBe(InstanceState.Stopped);
     });
 
+    it.each([
+        [`sha256:${'c'.repeat(64)}`, undefined],
+        ['c'.repeat(64), undefined],
+        ['ghcr.io/documentdb/documentdb-local:1.0.0', 'ghcr.io/documentdb/documentdb-local:1.0.0'],
+    ])('does not record an image ID it cannot pull as the image of an adopted container (%s)', async (name, saved) => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, STORED_CONN);
+        const runtime = mockRuntime({
+            listByLabel: vi.fn().mockResolvedValue([{ id: 'c1' }]),
+            inspectContainer: vi.fn().mockResolvedValue({ id: 'c1', status: 'exited', image: { originalName: name } }),
+        });
+
+        await new QuickStartServiceImpl(runtime).reconcile();
+
+        expect((await getInstance(DEFAULT_ALIAS))?.imageRef).toBe(saved);
+    });
+
     it('canReuseExistingData() is true when credentials are stored (protects the volume-wipe gate)', async () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
