@@ -1022,6 +1022,7 @@ export class QuickStartServiceImpl {
         // load-bearing today for concurrent windows, not only for the multi-instance seam.
         const operationId = crypto.randomBytes(8).toString('hex');
         let leaseHeld = false;
+        let replacedRecord: QuickStartInstanceRecord | undefined;
         // What this run persisted before `docker run` (H3), and what was stored before it, so a failed
         // attempt can restore the previous state exactly.
         let earlySecret: string | undefined;
@@ -1156,6 +1157,8 @@ export class QuickStartServiceImpl {
             // a recreate the existing `ready` record must survive, otherwise a failed recreate would
             // scavenge the record of an instance whose data volume is still on disk.
             if (!hasReadyRecord) {
+                // An earlier attempt's record holds the only credentials for a reused volume; a failure puts it back.
+                replacedRecord = reusing ? await getInstance(alias) : undefined;
                 leaseHeld = true;
                 await this.renewProvisioningLease(alias, operationId, chosenPort, resolved.cli);
             }
@@ -1636,6 +1639,7 @@ export class QuickStartServiceImpl {
                     operationId,
                     leaseHeld,
                     port: chosenPort,
+                    replacedRecord,
                 });
                 // Interrupted before settling (cancel / unsubscribe) → reset state.
                 // The error path already settled to `Error` in `catch`.
@@ -2303,6 +2307,7 @@ export class QuickStartServiceImpl {
             readonly operationId: string;
             readonly leaseHeld: boolean;
             readonly port: number;
+            readonly replacedRecord?: QuickStartInstanceRecord;
         },
     ): Promise<void> {
         let stillOurs = true;
@@ -2320,7 +2325,15 @@ export class QuickStartServiceImpl {
                 meterQuickStartSilentCatch('provision_restoreCredentials');
             }
         }
-        if (attempt.leaseHeld && stillOurs) {
+        const replaced = attempt.replacedRecord;
+        if (attempt.leaseHeld && stillOurs && replaced) {
+            // Deleting the record would take the secret its volume needs; keep any image pinned meanwhile.
+            await updateInstance(alias, (current) =>
+                current?.phase === 'provisioning' && current.operationId === attempt.operationId
+                    ? { ...replaced, imageRef: current.imageRef ?? replaced.imageRef }
+                    : undefined,
+            ).catch(() => meterQuickStartSilentCatch('provision_restoreReplacedRecord'));
+        } else if (attempt.leaseHeld && stillOurs) {
             await this.releaseProvisioningLease(alias, attempt.operationId);
         }
     }

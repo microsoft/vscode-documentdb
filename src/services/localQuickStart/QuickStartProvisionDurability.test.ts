@@ -3138,6 +3138,35 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             expect((await getInstance(DEFAULT_ALIAS))?.imageRef).toBe(pinned);
         });
 
+        it("keeps an earlier attempt's credentials when a refusal ends the attempt that replaced its lease", async () => {
+            const connectionString = `mongodb://u1:p1@localhost:${QUICK_START_PORT}/?tls=true&tlsAllowInvalidCertificates=true`;
+            await upsertInstance({
+                alias: DEFAULT_ALIAS,
+                displayName: 'DocumentDB Local',
+                port: QUICK_START_PORT,
+                phase: 'provisioning',
+                operationId: 'earlier-attempt',
+                leaseAt: Date.now(),
+                imageRef: latest,
+            });
+            await writeConnectionString(DEFAULT_ALIAS, connectionString, {
+                displayName: 'DocumentDB Local',
+                port: QUICK_START_PORT,
+            });
+            const runtime = runtimeFor({ volumeExists: true, overrides: imagePruned() });
+            const service = new QuickStartServiceImpl(runtime);
+
+            const events = await collect(service.provision(new AbortController().signal));
+
+            expect(events.at(-1)?.message?.detail).toContain('no longer on this machine');
+            expect(await readConnectionString(DEFAULT_ALIAS)).toBe(connectionString);
+            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({
+                phase: 'provisioning',
+                operationId: 'earlier-attempt',
+                imageRef: latest,
+            });
+        });
+
         it('pulls a tag-only record when its data volume is gone too, since there is nothing to upgrade', async () => {
             await seedMissingInstance(latest);
             const runtime = runtimeFor({ volumeExists: false, overrides: imagePruned() });
