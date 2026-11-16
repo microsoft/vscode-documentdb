@@ -436,6 +436,7 @@ interface PendingReadiness {
     readonly storedConnectionString: string;
     /** Stored before this run wrote its own; a discarded reuse puts it back. */
     readonly previousConnectionString: string | undefined;
+    readonly replacedRecord?: QuickStartInstanceRecord;
 }
 
 /**
@@ -1228,7 +1229,8 @@ export class QuickStartServiceImpl {
             // ours, D9). The data volume survives this; it is only dropped later, right before
             // `docker run`, and only when not reusing.
             const existing = await this.findManagedContainer(alias, undefined, engine);
-            let hasReadyRecord = (await getInstance(alias))?.phase === 'ready';
+            const recordAtGate = await getInstance(alias);
+            let hasReadyRecord = recordAtGate?.phase === 'ready';
             // RR4 / §5.2 volume-wipe gate: NEVER silently destroy an existing instance's data. A
             // managed container, a durable `ready` record or the data volume itself (its container
             // pruned, or created from another VS Code profile) all mean data this profile can't open
@@ -1305,10 +1307,32 @@ export class QuickStartServiceImpl {
 
             // Take the durable provisioning lease BEFORE the pull (H3): a host killed anywhere from
             // here to `finalizeReadyInstance` then reconciles as "Provisioning…" (fresh lease) or is
-            // scavenged (stale lease) instead of dead-ending. Only for a genuinely fresh alias — for
-            // a recreate the existing `ready` record must survive, otherwise a failed recreate would
-            // scavenge the record of an instance whose data volume is still on disk.
-            if (!hasReadyRecord) {
+            // scavenged (stale lease) instead of dead-ending. A recreate keeps its `ready` record
+            // while data remains on disk; a removed instance can reserve the newly selected engine.
+            if (!startFresh && engineRequest.kind === 'preferred' && this.isRemovedOwnerRecord(alias, recordAtGate)) {
+                // An explicitly reselected engine must be discoverable even if this host dies before
+                // readiness. Persist its lease before creating resources, but retain the old record
+                // for failure/discard rollback. Unlike an ordinary lease renewal, this write must succeed.
+                await updateInstance(alias, (current) => {
+                    if (!current || !this.isRemovedOwnerRecord(alias, current)) {
+                        return undefined;
+                    }
+                    replacedRecord = current;
+                    leaseHeld = true;
+                    return {
+                        ...current,
+                        port: chosenPort,
+                        phase: 'provisioning',
+                        engineCli: resolved.cli,
+                        operationId,
+                        leaseAt: Date.now(),
+                    };
+                });
+                if (!leaseHeld) {
+                    terminalEvent = stageEvent('error', 'error', { key: 'setupAlreadyInProgress' });
+                    return;
+                }
+            } else if (!hasReadyRecord) {
                 // An earlier attempt's record holds the only credentials for a reused volume; a failure puts it back.
                 replacedRecord = reusing ? await getInstance(alias) : undefined;
                 leaseHeld = true;
@@ -1656,6 +1680,7 @@ export class QuickStartServiceImpl {
                 leaseHeld,
                 storedConnectionString: plannedConnectionString,
                 previousConnectionString: previousStoredConnectionString,
+                replacedRecord,
             };
             this.stateFor(alias).pendingReadiness = pending;
             if (leaseHeld) {
@@ -2174,6 +2199,7 @@ export class QuickStartServiceImpl {
                 await this.rollBackAttempt(alias, {
                     storedConnectionString: pending.storedConnectionString,
                     previousConnectionString: pending.previousConnectionString,
+                    replacedRecord: pending.replacedRecord,
                     operationId: pending.operationId,
                     leaseHeld: pending.leaseHeld,
                     port: pending.boundPort,
@@ -2509,6 +2535,34 @@ export class QuickStartServiceImpl {
             readonly replacedRecord?: QuickStartInstanceRecord;
         },
     ): Promise<void> {
+        const replaced = attempt.replacedRecord;
+        if (attempt.leaseHeld && replaced) {
+            try {
+                const stored = await this.readStoredConnectionString(alias);
+                if (attempt.storedConnectionString !== undefined && stored !== attempt.storedConnectionString) {
+                    return;
+                }
+                // Restore owner and credentials together, only while this lease is still ours.
+                // A new engine's image pin does not describe the previous engine's data.
+                await updateInstance(
+                    alias,
+                    (current) =>
+                        current?.phase === 'provisioning' && current.operationId === attempt.operationId
+                            ? {
+                                  ...replaced,
+                                  imageRef:
+                                      current.engineCli === replaced.engineCli
+                                          ? (current.imageRef ?? replaced.imageRef)
+                                          : replaced.imageRef,
+                              }
+                            : undefined,
+                    attempt.storedConnectionString === undefined ? undefined : (attempt.previousConnectionString ?? null),
+                );
+            } catch {
+                meterQuickStartSilentCatch('provision_restoreReplacedRecord');
+            }
+            return;
+        }
         let stillOurs = true;
         if (attempt.storedConnectionString !== undefined) {
             try {
@@ -2524,15 +2578,7 @@ export class QuickStartServiceImpl {
                 meterQuickStartSilentCatch('provision_restoreCredentials');
             }
         }
-        const replaced = attempt.replacedRecord;
-        if (attempt.leaseHeld && stillOurs && replaced) {
-            // Deleting the record would take the secret its volume needs; keep any image pinned meanwhile.
-            await updateInstance(alias, (current) =>
-                current?.phase === 'provisioning' && current.operationId === attempt.operationId
-                    ? { ...replaced, imageRef: current.imageRef ?? replaced.imageRef }
-                    : undefined,
-            ).catch(() => meterQuickStartSilentCatch('provision_restoreReplacedRecord'));
-        } else if (attempt.leaseHeld && stillOurs) {
+        if (attempt.leaseHeld && stillOurs) {
             await this.releaseProvisioningLease(alias, attempt.operationId);
         }
     }
