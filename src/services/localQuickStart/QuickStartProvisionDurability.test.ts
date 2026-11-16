@@ -338,7 +338,10 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                                 state: InstanceState.Running,
                                 dataRemoved: false,
                             });
-                            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase: 'ready', engineCli: target });
+                            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({
+                                phase: 'ready',
+                                engineCli: target,
+                            });
                             expect(await readConnectionString(DEFAULT_ALIAS)).toContain(
                                 'replacement:replacement-password@',
                             );
@@ -431,7 +434,9 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                             expect(resumed.at(-1)).toMatchObject({ stage: 'done', status: 'done' });
                         }
                         expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase: 'ready', engineCli: 'podman' });
-                        expect(await readConnectionString(DEFAULT_ALIAS)).toContain('replacement:replacement-password@');
+                        expect(await readConnectionString(DEFAULT_ALIAS)).toContain(
+                            'replacement:replacement-password@',
+                        );
                     }
                 } finally {
                     clock.mockRestore();

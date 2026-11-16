@@ -2556,7 +2556,9 @@ export class QuickStartServiceImpl {
                                           : replaced.imageRef,
                               }
                             : undefined,
-                    attempt.storedConnectionString === undefined ? undefined : (attempt.previousConnectionString ?? null),
+                    attempt.storedConnectionString === undefined
+                        ? undefined
+                        : (attempt.previousConnectionString ?? null),
                 );
             } catch {
                 meterQuickStartSilentCatch('provision_restoreReplacedRecord');
