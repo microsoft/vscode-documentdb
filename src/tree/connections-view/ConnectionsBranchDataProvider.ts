@@ -113,9 +113,8 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
                 {
                     contextValue: Views.ConnectionsView, // This enables automatic child processing
                     // View-specific error-recovery action added at the provider level. The element
-                    // layer (ClusterItemBase) already owns failure-type recovery nodes ("retry" and,
-                    // for post-auth failures, "open shell"); here we add the Connections-view action
-                    // for updating stored credentials.
+                    // layer (ClusterItemBase) owns diagnosis, shell, and retry; prepend stored
+                    // connection repairs so retry stays last.
                     //
                     // `forContextValues` is a whitelist matched against the FAILING element's
                     // contextValue tags. "Update credentials" only makes sense for stored cluster
@@ -126,21 +125,13 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
                         {
                             forContextValues: [CLUSTER_ITEM_CONTEXT_VALUE],
                             create: (el) => [
-                                createGenericElementWithContext({
-                                    contextValue: 'error',
-                                    id: `${el.id}/updateCredentials`,
-                                    label: vscode.l10n.t('Click here to update credentials'),
-                                    iconPath: new vscode.ThemeIcon('key'),
-                                    commandId: 'vscode-documentdb.command.connectionsView.updateCredentials',
-                                    commandArgs: [el],
-                                }) as TreeElement,
                                 ...(el instanceof ClusterItemBase &&
                                 el.lastConnectionFailureReason === 'entraDestinationRejected'
                                     ? [
                                           createGenericElementWithContext({
                                               contextValue: 'error',
                                               id: `${el.id}/updateConnectionString`,
-                                              label: vscode.l10n.t('Click here to update the connection string'),
+                                              label: vscode.l10n.t('Update connection string…'),
                                               iconPath: new vscode.ThemeIcon('edit'),
                                               commandId:
                                                   'vscode-documentdb.command.connectionsView.updateConnectionString',
@@ -148,6 +139,14 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
                                           }) as TreeElement,
                                       ]
                                     : []),
+                                createGenericElementWithContext({
+                                    contextValue: 'error',
+                                    id: `${el.id}/updateCredentials`,
+                                    label: vscode.l10n.t('Update credentials…'),
+                                    iconPath: new vscode.ThemeIcon('key'),
+                                    commandId: 'vscode-documentdb.command.connectionsView.updateCredentials',
+                                    commandArgs: [el],
+                                }) as TreeElement,
                             ],
                         },
                     ],

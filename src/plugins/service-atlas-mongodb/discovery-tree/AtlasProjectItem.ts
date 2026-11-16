@@ -41,7 +41,7 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
      *
      * Refresh is a passive, whole-subtree action: the user is not asking about this project in
      * particular, so a failure belongs in the retry node, not a dialog. Expanding the node, or
-     * clicking "Click here to retry" (which routes through `retryAuthentication`, not this method),
+     * clicking "Retry" (which routes through `retryAuthentication`, not this method),
      * *is* a question about this project and still answers with a modal. That asymmetry is what
      * keeps the two paths distinguishable without extra command plumbing.
      */
@@ -134,7 +134,7 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
      */
     public async refresh(_context: IActionContext): Promise<void> {
         // Refresh is passive: suppress the next expansion's modal so the failure lands quietly in
-        // the retry node. `retryAuthentication` (the "Click here to retry" handler) does not call
+        // the retry node. `retryAuthentication` (the "Retry" handler) does not call
         // this method, so an explicit retry still shows the modal.
         this.suppressNextLoadModal = true;
         atlasTrace(`project "${this.project.name}": explicit refresh requested`);
@@ -182,7 +182,7 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
         return createGenericElementWithContext({
             contextValue: 'error',
             id: `${this.id}/retry`,
-            label: vscode.l10n.t('Click here to retry'),
+            label: vscode.l10n.t('Retry'),
             iconPath: new vscode.ThemeIcon('refresh'),
             commandId: 'vscode-documentdb.command.internal.retry',
             commandArgs: [this],

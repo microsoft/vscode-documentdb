@@ -53,6 +53,9 @@ document here, and it is referenced directly from the source. The short version:
   no-op when no provider applies.
 - Failures propagate into the connect flow's existing telemetry and error handling. Providers do not
   present UI.
+- Kubeconfig recovery puts Edit kubeconfig (file) or View kubeconfig (pasted YAML) before Retry.
+  Retry is always last; default sources still offer only Retry. This ordering also applies when
+  the source loads but contains no contexts (#1088).
 
 ## Timeline
 
