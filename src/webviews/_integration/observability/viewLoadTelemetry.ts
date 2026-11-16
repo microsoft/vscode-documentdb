@@ -41,7 +41,7 @@ export interface ViewLoadTrackerOptions {
 /**
  * Measures how long one webview panel takes to show its first data, and reports it once.
  *
- * Per-RPC events and the RPC concurrency gauge time single requests, but not what a user waits
+ * Per-RPC events time single requests, but not what a user waits
  * for: bundle load, React mount, and the chain of requests before anything is on screen. One
  * tracker belongs to one panel instance, so the report is exactly one event per panel,
  * whichever comes first of the webview's first-data signal, the panel closing, or the timeout.

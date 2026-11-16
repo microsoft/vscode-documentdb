@@ -55,13 +55,14 @@ interface DistributionAccumulator {
 /**
  * Reserved distribution key under which every call automatically records the
  * wall-clock duration (in milliseconds) of the **populator callback**. Collected
- * by the helper itself, so every call site gets a latency min / max / sum / count
- * for free without any caller bookkeeping. On flush it surfaces as
- * `dist_auto_duration_ms_min`, `_max`, `_sum`, `_count`.
+ * by the helper itself without any caller bookkeeping. On flush it surfaces as
+ * `dist_auto_duration_ms_min`, `_max`, `_sum`, `_count`; `_count` is the number of
+ * calls in the batch.
  *
- * Note: the populator is synchronous and normally just sets a few keys, so this
- * duration is tiny by design. To time real (e.g. async) work, measure it in the
- * caller and write the result into `sample.distributions` under your own key.
+ * Note: this is NOT the latency of the operation being counted. The populator is
+ * synchronous and normally just sets a few keys, so this duration is tiny by design.
+ * To time real (e.g. async) work, measure it in the caller and write the result
+ * into `sample.distributions` under your own key.
  */
 export const AUTO_DURATION_DISTRIBUTION_KEY = 'auto_duration_ms';
 

@@ -32,12 +32,16 @@
  * `openCollectionWebview`) that derives config + context and calls this.
  */
 
-import { openWebview, type WebviewController } from '@microsoft/vscode-ext-webview/host';
-import type * as vscode from 'vscode';
+import {
+    consoleProcedureLogger,
+    openWebview,
+    type ProcedureLogger,
+    type WebviewController,
+} from '@microsoft/vscode-ext-webview/host';
+import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { appRouter, type AppRouter, type BaseRouterContext } from './appRouter';
 import { WEBVIEW_CONFIG } from './configuration';
-import { rpcConcurrencyLogger } from './observability/rpcConcurrencyLogger';
 import { reportViewLoaded, ViewLoadTracker, type ViewLoadKind } from './observability/viewLoadTelemetry';
 import { trpc } from './trpc';
 import { type WebviewName } from './WebviewRegistry';
@@ -74,6 +78,15 @@ export interface OpenAppWebviewOptions<TConfiguration> {
 }
 
 /**
+ * The framework's console line per RPC while developing the extension; nothing in an installed
+ * build, where no one reads the host console (R766-P05). Omitting `logger` would fall back to the
+ * console logger, so production passes an inert one.
+ */
+function dispatchLogger(): ProcedureLogger {
+    return ext.context.extensionMode === vscode.ExtensionMode.Production ? {} : consoleProcedureLogger;
+}
+
+/**
  * Opens a DocumentDB webview panel through the framework `openWebview` factory.
  *
  * @param options - The per-view title, webview name, configuration, router
@@ -106,9 +119,7 @@ export function openAppWebview<TConfiguration>(
             },
             devServerHost: WEBVIEW_CONFIG.devServerHost,
             isBundled: true,
-            // R766-S04: record RPC concurrency (peak / average in-flight operations)
-            // so the per-operation listener design can be judged on evidence.
-            logger: rpcConcurrencyLogger,
+            logger: dispatchLogger(),
             icon: options.icon,
             viewColumn: options.viewColumn,
         });
