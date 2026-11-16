@@ -168,6 +168,13 @@ checks can proceed. Recommendation: approve the one-off smoke before final hando
 - Lockfile-only refresh; `@vscode/vsce@3.7.1` and `@vscode/l10n-dev@0.0.35` ranges admit both.
 - Check at handoff: `npm run l10n:check` and `npm run package` behave as before.
 
+> **Done (2026-11-16), commit `b39994c75`:** npm updated only `tmp` and
+> `markdown-it` to the accepted patch versions. Advised (`claude-opus-5.5`),
+> implemented by `gpt-6-luna`; leader confidence 99% after the mechanical diff
+> review. Cumulative age gate: twelve introduced versions, zero fresh, unknown
+> or lookup failures. No tests added or changed; localization and packaging
+> verification remain in the final Case 2 batch.
+
 ### 4. Vite `8.1.6`, Rolldown `1.1.5`, source-map-js `1.2.2`
 
 - Direct `vite`: `~8.0.16` -> exact **`8.1.6`** (temporary exact pin, see selection rules).
