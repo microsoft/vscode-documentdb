@@ -193,7 +193,7 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
         return createGenericElementWithContext({
             contextValue: 'error',
             id: `${this.id}/sign-in`,
-            label: vscode.l10n.t('Sign in to view MongoDB Atlas clusters'),
+            label: vscode.l10n.t('Add Atlas credentials…'),
             iconPath: new vscode.ThemeIcon('sign-in'),
             commandId: ADD_ATLAS_CREDENTIAL_COMMAND_ID,
             commandArgs: [this],

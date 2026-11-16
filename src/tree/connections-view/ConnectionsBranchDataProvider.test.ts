@@ -79,8 +79,15 @@ describe('Connections recovery actions', () => {
                 'vscode-documentdb.command.connectionsView.updateCredentials',
                 ...(reason ? ['vscode-documentdb.command.connectionsView.updateConnectionString'] : []),
             ]);
+            expect(treeItems.map((child) => child.label)).toEqual([
+                'Retry',
+                'Diagnose this connection…',
+                'Open shell',
+                'Update credentials…',
+                ...(reason ? ['Update connection string…'] : []),
+            ]);
             expect(treeItems.every((child) => !!child.command)).toBe(true);
-            expect(treeItems.slice(1).every((child) => child.command?.arguments?.[0] === item)).toBe(true);
+            expect(treeItems.every((child) => child.command?.arguments?.[0] === item)).toBe(true);
             expect(await provider.getChildren(item)).toEqual(children);
             expect(item.getChildren).toHaveBeenCalledTimes(1);
         },

@@ -129,7 +129,7 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
                                 createGenericElementWithContext({
                                     contextValue: 'error',
                                     id: `${el.id}/updateCredentials`,
-                                    label: vscode.l10n.t('Click here to update credentials'),
+                                    label: vscode.l10n.t('Update credentials…'),
                                     iconPath: new vscode.ThemeIcon('key'),
                                     commandId: 'vscode-documentdb.command.connectionsView.updateCredentials',
                                     commandArgs: [el],
@@ -140,7 +140,7 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
                                           createGenericElementWithContext({
                                               contextValue: 'error',
                                               id: `${el.id}/updateConnectionString`,
-                                              label: vscode.l10n.t('Click here to update the connection string'),
+                                              label: vscode.l10n.t('Update connection string…'),
                                               iconPath: new vscode.ThemeIcon('edit'),
                                               commandId:
                                                   'vscode-documentdb.command.connectionsView.updateConnectionString',

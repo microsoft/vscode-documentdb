@@ -67,6 +67,7 @@ vi.mock('../../../tree/api/createGenericElementWithContext', () => ({
 import type * as vscode from 'vscode';
 import { type TreeElement } from '../../../tree/TreeElement';
 import { type KubeconfigSourceRecord } from '../config';
+import { loadConfiguredKubeConfig } from '../kubernetesClient';
 import { KubernetesKubeconfigSourceItem } from './KubernetesKubeconfigSourceItem';
 
 function makeSource(kind: 'default' | 'file' | 'inline'): KubeconfigSourceRecord {
@@ -168,7 +169,7 @@ describe('KubernetesKubeconfigSourceItem', () => {
             expect(inlineItem.contextValue).not.toContain('discoveryKubernetesSourceFile');
         });
 
-        it('adds the default marker only for the default source so it also exposes "Edit Kubeconfig"', () => {
+        it('adds the default marker only for the default source so it also exposes "Edit kubeconfig"', () => {
             const defaultItem = new KubernetesKubeconfigSourceItem('parent', makeSource('default'));
             expect(defaultItem.contextValue).toContain('discoveryKubernetesSourceDefault');
 
@@ -192,13 +193,33 @@ describe('KubernetesKubeconfigSourceItem', () => {
     });
 
     describe('recovery children', () => {
+        it.each([
+            ['file', 'Edit kubeconfig', 'editSource'],
+            ['inline', 'View kubeconfig', 'viewSource'],
+        ] as const)('uses direct labels and preserves command wiring for %s sources', async (kind, label, action) => {
+            vi.mocked(loadConfiguredKubeConfig).mockRejectedValueOnce(new Error('load failed'));
+            const item = new KubernetesKubeconfigSourceItem('parent', makeSource(kind));
+            const children = (await item.getChildren()) as Array<{
+                label?: string;
+                commandId?: string;
+                commandArgs?: unknown[];
+            }>;
+
+            expect(children.map((child) => child.label)).toEqual(['Retry', label]);
+            expect(children.map((child) => child.commandId)).toEqual([
+                'vscode-documentdb.command.discoveryView.kubernetes.reloadSource',
+                `vscode-documentdb.command.discoveryView.kubernetes.${action}`,
+            ]);
+            expect(children.map((child) => child.commandArgs)).toEqual([[item], [item]]);
+        });
+
         async function recoveryChildIds(source: KubeconfigSourceRecord): Promise<string[]> {
             const item = new KubernetesKubeconfigSourceItem('parent', source);
             const children = (await item.getChildren()) as Array<{ id: string }>;
             return children.map((child) => child.id);
         }
 
-        it('offers "Edit Kubeconfig" only for file sources', async () => {
+        it('offers "Edit kubeconfig" only for file sources', async () => {
             const fileIds = await recoveryChildIds(makeSource('file'));
             expect(fileIds).toContain('parent/file-id/edit');
 
@@ -209,7 +230,7 @@ describe('KubernetesKubeconfigSourceItem', () => {
             expect(inlineIds).not.toContain('parent/inline-id/edit');
         });
 
-        it('offers "View Kubeconfig" only for inline sources', async () => {
+        it('offers "View kubeconfig" only for inline sources', async () => {
             const inlineIds = await recoveryChildIds(makeSource('inline'));
             expect(inlineIds).toContain('parent/inline-id/view');
 

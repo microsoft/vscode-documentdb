@@ -43,7 +43,7 @@ function createManageCredentialsItem(hasFailures: boolean): {
 } {
     return {
         label: hasFailures
-            ? vscode.l10n.t('Click here to revisit credentials')
+            ? vscode.l10n.t('Review credentials…')
             : vscode.l10n.t('Manage MongoDB Atlas Credentials…'),
         detail: hasFailures
             ? vscode.l10n.t('Some credentials need attention, so parts of your fleet may be missing from this list.')

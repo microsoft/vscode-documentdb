@@ -30,7 +30,7 @@ peer fails, and merges duplicate Atlas resources by their Atlas IDs.
 2. `AtlasDiscoveryProvider` owns one `AtlasDiscoveryService` and returns an
    `AtlasServiceRootItem` for the Service Discovery tree.
 3. `AtlasServiceRootItem.getChildren()` reads all stored credentials.
-4. With no credentials, the root shows **Sign in to view MongoDB Atlas clusters**. The command
+4. With no credentials, the root shows **Add Atlas credentials…**. The command
    opens the guided credential webview.
 5. With credentials, the root calls `AtlasDiscoveryService.listAll()`. Tree mode renders
    organizations; list mode renders a flat, deduplicated cluster list.

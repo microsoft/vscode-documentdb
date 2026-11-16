@@ -62,7 +62,7 @@ export class KubernetesRootItem implements TreeElement, TreeElementWithContextVa
 
     public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
         // Intentional exception to the canonical `containsRetryNode` (`/retry` + 'error') detector:
-        // this root has no retry node. Its only error-styled child is the empty-state "Add Kubeconfig…"
+        // this root has no retry node. Its only error-styled child is the empty-state "Add kubeconfig…"
         // placeholder (`/add-source`, contextValue 'error'), and detecting it here lets the provider
         // cache the empty state so it isn't recomputed on passive refreshes. The "Add Source" command
         // refreshes this node, which clears that cache.
@@ -89,7 +89,7 @@ export class KubernetesRootItem implements TreeElement, TreeElementWithContextVa
         return createGenericElementWithContext({
             contextValue: 'error',
             id: `${this.id}/add-source`,
-            label: vscode.l10n.t('Add Kubeconfig…'),
+            label: vscode.l10n.t('Add kubeconfig…'),
             iconPath: new vscode.ThemeIcon('add'),
             commandId: 'vscode-documentdb.command.discoveryView.kubernetes.addSource',
             commandArgs: [this],

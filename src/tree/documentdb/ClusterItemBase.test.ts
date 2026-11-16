@@ -175,6 +175,7 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
         expect(children).toHaveLength(3);
         expect(children[0].id).toBe('cluster-1/retry');
         expect(children[0].contextValue).toBe('error');
+        expect(children[0].label).toBe('Retry');
         expect(children[0].commandId).toBe('vscode-documentdb.command.internal.retry');
         expect(children[0].commandArgs).toEqual([item]);
 
@@ -193,7 +194,7 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
 
         expect(children[2].id).toBe('cluster-1/open-shell');
         expect(children[2].contextValue).toBe('error');
-        expect(children[2].label).toBe('Click here to open the shell');
+        expect(children[2].label).toBe('Open shell');
         expect(children[2].commandId).toBe(ShellCommandIds.open);
         expect(children[2].commandArgs).toEqual([item]);
 

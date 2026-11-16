@@ -290,7 +290,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             createGenericElementWithContext({
                 contextValue: 'error',
                 id: `${this.id}/open-shell`,
-                label: vscode.l10n.t('Click here to open the shell'),
+                label: vscode.l10n.t('Open shell'),
                 iconPath: new vscode.ThemeIcon('terminal'),
                 commandId: ShellCommandIds.open,
                 commandArgs: [this],

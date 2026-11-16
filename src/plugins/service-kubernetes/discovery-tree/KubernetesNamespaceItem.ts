@@ -150,7 +150,7 @@ export class KubernetesNamespaceItem implements TreeElement, TreeElementWithCont
  * can re-attempt the listing.
  *
  * The modal cannot spam the user: services are only (re)loaded on an explicit
- * user action (expanding the namespace or clicking "Click here to retry"), and
+ * user action (expanding the namespace or clicking "Retry"), and
  * the retry-node cache (see {@link hasRetryNode}) prevents `getChildren()` from
  * re-running on passive tree refreshes.
  */

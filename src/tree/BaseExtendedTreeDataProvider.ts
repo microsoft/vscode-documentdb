@@ -486,7 +486,7 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
      *           createGenericElementWithContext({
      *             contextValue: 'error',
      *             id: `${el.id}/updateCredentials`,
-     *             label: vscode.l10n.t('Click here to update credentials'),
+     *             label: vscode.l10n.t('Update credentials…'),
      *             iconPath: new vscode.ThemeIcon('key'),
      *             commandId: 'vscode-documentdb.command.connectionsView.updateCredentials',
      *             commandArgs: [el],

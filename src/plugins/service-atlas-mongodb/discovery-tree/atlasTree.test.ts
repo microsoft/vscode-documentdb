@@ -172,11 +172,18 @@ describe('AtlasServiceRootItem', () => {
     it('offers a sign-in row when no credentials are stored', async () => {
         const root = new AtlasServiceRootItem(serviceStub(snapshotOf()), 'discoveryView');
 
-        const children = (await root.getChildren()) as Array<{ id: string; commandId?: string }>;
+        const children = (await root.getChildren()) as Array<{
+            id: string;
+            label?: string;
+            commandId?: string;
+            commandArgs?: unknown[];
+        }>;
 
         expect(children).toHaveLength(1);
         expect(children[0].id).toContain('/sign-in');
+        expect(children[0].label).toBe('Add Atlas credentials…');
         expect(children[0].commandId).toBe('vscode-documentdb.command.internal.atlas.addCredential');
+        expect(children[0].commandArgs).toEqual([root]);
     });
 
     it('renders a quiet organization tree with no descriptions on the happy path', async () => {
@@ -219,11 +226,19 @@ describe('AtlasServiceRootItem', () => {
         );
 
         const root = new AtlasServiceRootItem(service, 'discoveryView');
-        const children = (await root.getChildren()) as Array<{ id: string; label?: string; tooltip?: string }>;
+        const children = (await root.getChildren()) as Array<{
+            id: string;
+            label?: string;
+            tooltip?: string;
+            commandId?: string;
+            commandArgs?: unknown[];
+        }>;
 
         const recoveryRows = children.filter((child) => child.id.endsWith('/recovery'));
         expect(recoveryRows).toHaveLength(1);
-        expect(recoveryRows[0].label).toBe('Click here to revisit credentials');
+        expect(recoveryRows[0].label).toBe('Review credentials…');
+        expect(recoveryRows[0].commandId).toBe('vscode-documentdb.command.discoveryView.manageCredentials');
+        expect(recoveryRows[0].commandArgs).toEqual([root]);
         expect(recoveryRows[0].tooltip).toContain('Beta: session expired');
         expect(recoveryRows[0].tooltip).toContain('Gamma: access denied');
         // Healthy data is still rendered next to the recovery row.
@@ -246,13 +261,15 @@ describe('AtlasServiceRootItem', () => {
             label?: string;
             tooltip?: string;
             commandId?: string;
+            commandArgs?: unknown[];
         }>;
 
         const recovery = children.find((child) => child.id.endsWith('/recovery'));
-        expect(recovery?.label).toBe('Click here to retry');
+        expect(recovery?.label).toBe('Retry');
         // The refresh command honours the root's own refresh() hook; the plain retry command would
         // only re-run getChildren() and re-read the cache.
         expect(recovery?.commandId).toBe('vscode-documentdb.command.refresh');
+        expect(recovery?.commandArgs).toEqual([root]);
         expect(recovery?.tooltip).toContain('MongoDB Atlas could not be reached');
     });
 
@@ -268,11 +285,17 @@ describe('AtlasServiceRootItem', () => {
         );
 
         const root = new AtlasServiceRootItem(service, 'discoveryView');
-        const children = (await root.getChildren()) as Array<{ id: string; label?: string; commandId?: string }>;
+        const children = (await root.getChildren()) as Array<{
+            id: string;
+            label?: string;
+            commandId?: string;
+            commandArgs?: unknown[];
+        }>;
 
         const recovery = children.find((child) => child.id.endsWith('/recovery'));
-        expect(recovery?.label).toBe('Click here to resolve the issues');
+        expect(recovery?.label).toBe('Review discovery issues…');
         expect(recovery?.commandId).toBe('vscode-documentdb.command.discoveryView.manageCredentials');
+        expect(recovery?.commandArgs).toEqual([root]);
     });
 
     it('flags an organization whose other credential failed, keeping its healthy projects', async () => {
@@ -416,9 +439,17 @@ describe('AtlasServiceRootItem in List mode', () => {
         );
 
         const root = new AtlasServiceRootItem(service, 'discoveryView');
-        const children = (await root.getChildren()) as Array<{ id?: string; label?: string }>;
+        const children = (await root.getChildren()) as Array<{
+            id?: string;
+            label?: string;
+            commandId?: string;
+            commandArgs?: unknown[];
+        }>;
 
         expect(children[0].id).toContain('/recovery');
+        expect(children[0].label).toBe('Review credentials…');
+        expect(children[0].commandId).toBe('vscode-documentdb.command.discoveryView.manageCredentials');
+        expect(children[0].commandArgs).toEqual([root]);
         expect(children).toHaveLength(2);
         // The healthy cluster is still listed next to the recovery row.
         expect(children[1]).toBeInstanceOf(AtlasClusterItem);

@@ -39,7 +39,7 @@ export class SelectContextStep extends AzureWizardPromptStep<NewConnectionWizard
         const sources = await readSources();
         const picks: IAzureQuickPickItem<SelectContextPickData>[] = [
             {
-                label: vscode.l10n.t('Add Kubeconfig…'),
+                label: vscode.l10n.t('Add kubeconfig…'),
                 detail: vscode.l10n.t('Add or manage sources to see more contexts.'),
                 iconPath: new ThemeIcon('add'),
                 alwaysShow: true,
