@@ -28,7 +28,7 @@ The Atlas API Key or Service Account is used only to discover resources. It is n
 ## Connect to your first cluster
 
 1. Open **Service Discovery** and expand **MongoDB Atlas**.
-2. Select **Sign in to view MongoDB Atlas clusters**.
+2. Select **Add Atlas credentials…**.
 3. Choose one authentication method:
    - **API Key**: enter an Atlas Public Key and Private Key.
    - **Service Account**: enter an Atlas Client ID and Client Secret.

@@ -65,6 +65,11 @@ Manage each source from its **right-click context menu** in the discovery tree:
 - **View Kubeconfig**: opens a read-only view of the stored YAML (pasted/inline sources only). To change it, copy the content, edit it elsewhere, and re-add the source with **Add Kubeconfig…**.
 - **Remove…**: deletes the source, including the Default source. Removing a source stops active port-forward tunnels for that source, and saved connections that depend on it need to be reconfigured or the source needs to be added again. If you remove the Default source it stays removed until you add it again with **Add Kubeconfig…**.
 
+When a source fails to load or has no contexts, its recovery rows put **Edit kubeconfig** for a
+custom file or **View kubeconfig** for pasted YAML before **Retry**. A Default source offers only
+Retry. The empty-tree and connection-wizard action is **Add kubeconfig…**; the inline and
+context-menu command titles above retain their capitalization.
+
 ## Browse the discovery tree
 
 ```
