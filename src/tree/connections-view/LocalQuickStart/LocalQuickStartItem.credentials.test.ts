@@ -178,7 +178,12 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
         const databases = await (await getClusterItem()).getChildren();
 
         expect(readStored).toHaveBeenCalledWith(ALIAS);
-        expect(mockGetClient).toHaveBeenCalledWith(CLUSTER_ID, expect.anything(), expect.any(Function));
+        expect(mockGetClient).toHaveBeenCalledWith(
+            CLUSTER_ID,
+            expect.any(AbortSignal),
+            expect.any(Function),
+            'treeConnect',
+        );
         expect(databases).toHaveLength(1);
         // The cache is a cache: it is filled by the connect, not depended on by it.
         expect(CredentialCache.hasCredentials(CLUSTER_ID)).toBe(true);

@@ -42,7 +42,10 @@ vi.mock('@microsoft/vscode-azext-utils', async () => {
         parseError: (error: unknown): { message: string; errorType: string } => ({
             message: error instanceof Error ? error.message : String(error),
             errorType:
-                typeof error === 'object' && error !== null && 'code' in error && error.code !== undefined
+                typeof error === 'object' &&
+                error !== null &&
+                'code' in error &&
+                (typeof error.code === 'string' || typeof error.code === 'number')
                     ? String(error.code)
                     : error instanceof Error
                       ? error.constructor.name
