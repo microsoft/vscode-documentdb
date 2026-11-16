@@ -98,13 +98,13 @@ and finish with the seven-day dependency scan. Opus 5.5 reviewed the plan and
 recommended the following coding models; the leader accepted these assignments
 (confidence 95%). All items run serially because they share the lockfile.
 
-| Item | Recommended and assigned model | Reason |
-| ---- | ------------------------------ | ------ |
-| 1 | `gpt-6-luna` | Mechanical lockfile-only patch |
-| 2 | `gpt-6.1-sol` | Authentication SDK and lazy-load compatibility |
-| 3 | `gpt-6-luna` | Mechanical lockfile-only patches |
-| 4 | `gpt-6.1-sol` | Cross-module build, bundling and dev-server compatibility |
-| 5 | `gpt-6.1-terra` | Scoped override and bounded FTP API smoke |
+| Item | Recommended and assigned model | Reason                                                    |
+| ---- | ------------------------------ | --------------------------------------------------------- |
+| 1    | `gpt-6-luna`                   | Mechanical lockfile-only patch                            |
+| 2    | `gpt-6.1-sol`                  | Authentication SDK and lazy-load compatibility            |
+| 3    | `gpt-6-luna`                   | Mechanical lockfile-only patches                          |
+| 4    | `gpt-6.1-sol`                  | Cross-module build, bundling and dev-server compatibility |
+| 5    | `gpt-6.1-terra`                | Scoped override and bounded FTP API smoke                 |
 
 Preflight: clean worktree, source plan already committed as `6c0aa59f6`;
 npm 10.9.3, Node 22.21.1, public npm registry. A no-script, lockfile-only
@@ -228,6 +228,18 @@ deviation or additional operator authorization is needed.
   [playground-worker](../../src/documentdb/playground/playgroundWorker.test.ts) tests.
 - If the smoke fails, drop this commit and report it; do not ship an untested override.
 
+> **Done (2026-11-16), commit `56930718a`:** Added only the approved scoped
+> `get-uri` override and updated the sole `basic-ftp` package record.
+> Implemented by `gpt-6.1-terra`; advised (`claude-opus-5.5`), approval 88%.
+> Leader confidence 98% after the scoped diff and smoke review. The advisor
+> confirmed compatible consumed APIs and numeric `FTPError.code`; separate
+> PASV hosts are now rejected by upstream's approved hardening. The temporary
+> read-only FTP server bound only to loopback; exact PAC bytes, cached
+> `ENOTMODIFIED`, missing-file `ENOTFOUND` and numeric error 550 all passed.
+> Shell/playground tests passed (84 tests). No tests added or changed.
+> Cumulative age gate: thirty-six introduced versions, zero fresh, unknown
+> or lookup failures. Temporary smoke/server assets were cleaned up.
+
 ### Resulting root overrides
 
 The existing `"glob": "~12.0.0"` entry stays unchanged. Patch-only entries
@@ -265,14 +277,52 @@ Public npm age does not prove the Azure Artifacts feed has synced; CI install is
 
 ## Acceptance
 
-- [ ] All five commits applied; the age gate passes after each.
+- [x] All five commits applied; the age gate passes after each.
 - [ ] Every locked copy of `proxy-addr`, `@azure/msal-node`, `tmp`, `markdown-it`, `vite`,
       `source-map-js` and `basic-ftp` is outside its alert's affected range; `uuid@8.3.2` is gone.
-- [ ] Draft (Case 1): `npm run build` plus the focused tests named above.
-- [ ] Ready for review (Case 2, in full): `npm run prettier-fix`, `npm run l10n:check`,
+- [x] Draft (Case 1): `npm run build` plus the focused tests named above.
+- [x] Ready for review (Case 2, in full): `npm run prettier-fix`, `npm run l10n:check`,
       `npm run lint`, `npm run build`, `npm run typecheck:tests`, `npx vitest run`,
       `npm run package`. No `npm run l10n` needed: no product strings change.
 - [ ] FTP smoke result recorded in the PR description.
 - [ ] Manual smoke on the packaged VSIX: Entra ID sign-in, Azure discovery tree, Collection
       View, and a shell session.
 - [ ] After merge, re-fetch the Dependabot alerts and confirm the 13 IDs above closed.
+
+## Outcome
+
+**Still unverified:** interactive packaged-VSIX Entra sign-in, Azure discovery,
+Collection View and a shell session. Try these before pushing further or
+requesting human review. Ordinary activation does not prove that the lazy Identity
+SDK loads; the extra packaged fake-endpoint test remains an operator decision.
+These limitations are not represented as passing checks.
+
+Draft PR: [#1087](https://github.com/microsoft/vscode-documentdb/pull/1087),
+base `main`, milestone **1.1.0**. Its description links each security alert;
+Dependabot alerts are not issue numbers, so no unrelated issues are linked with
+`Closes #NNN`. Closure must be confirmed after merge.
+
+Both requested verification cases passed locally:
+
+- Case 1: root build; eight focused auth/shell/playground files, 236 tests passed.
+- Case 2: `prettier-fix`, `l10n:check` (3,523 strings), `lint`, root build,
+  exact `typecheck:tests`, full Vitest (414 files; 9,431 passed, one skipped),
+  and `package`.
+- Additional: verification-tool tests (147 Node and 121 browser tests), VSIX
+  inspection (9,416,876 bytes). The generated VSIX is named
+  `vscode-documentdb-1.0.2.vsix` because this PR does not change the extension version.
+- Installed-VSIX activation initially failed before loading the extension because
+  the host lacks `libatk-1.0.so.0`; task-local environment recovery is in progress.
+- A checks-worker invocation accidentally included a trailing `.` and ran a
+  broader extension suite (8,116 passed, one skipped) before the correct focused
+  command. This was additional work, not a substitute for either required suite.
+  Original check logs were not saved as requested; results are from the host
+  session transcript. Recovery logs will be persisted.
+- No product strings changed, so localization generation was not needed.
+- L2-dev, remote CI and the final full-lockfile age scan are pending.
+
+The [committed AI pre-review](features/build-and-test-stack/iterations/03-november-dependency-security-review.md)
+records the Opus initial review and Sol different-vendor validation/independent
+sweep. Neither found defects requiring an author decision. User documentation
+was searched for these toolchain/authentication dependency changes; no affected
+usage instructions were found. Existing build design invariants are unchanged.
