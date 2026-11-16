@@ -75,7 +75,7 @@ function createQuickStartRetryAction(parentId: string, retryTarget: unknown): Tr
     return createGenericElementWithContext({
         id: `${parentId}/retry`,
         contextValue: 'error',
-        label: l10n.t('Retry setup'),
+        label: l10n.t('Retry setup…'),
         iconPath: new vscode.ThemeIcon('refresh'),
         commandId: 'vscode-documentdb.command.localQuickStart.open',
         commandArgs: openWizardArgs(retryTarget, 'treeRetryNode'),
@@ -107,7 +107,7 @@ function buildPreflightChildren(parentId: string, verdict: QuickStartConnectionP
                 createQuickStartAction(
                     parentId,
                     'preflight/recreate',
-                    l10n.t('Recreate container'),
+                    l10n.t('Recreate container…'),
                     'refresh',
                     open,
                     'treePreflightRecreateRow',
@@ -118,7 +118,7 @@ function buildPreflightChildren(parentId: string, verdict: QuickStartConnectionP
                 createQuickStartAction(
                     parentId,
                     'preflight/reviewDocker',
-                    l10n.t('Review container engine setup'),
+                    l10n.t('Review container engine setup…'),
                     'tools',
                     open,
                     'treePreflightReviewDockerRow',
@@ -133,7 +133,7 @@ function buildPreflightChildren(parentId: string, verdict: QuickStartConnectionP
                 createQuickStartAction(
                     parentId,
                     'preflight/reviewSetup',
-                    l10n.t('Review setup'),
+                    l10n.t('Review setup…'),
                     'tools',
                     open,
                     'treePreflightReviewSetupRow',
@@ -434,15 +434,14 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
 
     /**
      * Actionable recovery for a GENUINE failure (review §9.2 Q4 / N3). The tree renders recovery
-     * ACTIONS, not error text: a retry node that reopens the wizard (the operation that failed —
-     * see I2-Q2), the setup log, and — once a container exists — Delete Container.
+     * ACTIONS, not error text: the setup log, the "Delete container…" action once a container
+     * exists, and finally a retry node that reopens the wizard (the operation that failed — I2-Q2).
      *
      * `Missing` and `CredentialsMissing` deliberately do NOT come here: they are service states
      * with their own actionable rows, not fetch failures (I2-Q5).
      */
     private createErrorRecoveryChildren(includeDelete: boolean): TreeElement[] {
         const children: TreeElement[] = [
-            createQuickStartRetryAction(this.id, this),
             createQuickStartAction(
                 this.id,
                 'viewLogs',
@@ -457,13 +456,14 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 createGenericElementWithContext({
                     id: `${this.id}/delete`,
                     contextValue: 'error',
-                    label: l10n.t('Delete container'),
+                    label: l10n.t('Delete container…'),
                     iconPath: new vscode.ThemeIcon('trash'),
                     commandId: 'vscode-documentdb.command.localQuickStart.delete',
                 }),
             );
         }
 
+        children.push(createQuickStartRetryAction(this.id, this));
         return children;
     }
 
@@ -493,7 +493,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 createQuickStartAction(
                     this.id,
                     'recreate',
-                    l10n.t('Recreate container'),
+                    l10n.t('Recreate container…'),
                     'refresh',
                     'vscode-documentdb.command.localQuickStart.open',
                     'treeRecreateRow',
@@ -501,7 +501,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 createQuickStartAction(
                     this.id,
                     'delete',
-                    l10n.t('Delete container'),
+                    l10n.t('Delete container…'),
                     'trash',
                     'vscode-documentdb.command.localQuickStart.delete',
                 ),
@@ -582,7 +582,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 createQuickStartAction(
                     this.id,
                     'reviewSetup',
-                    l10n.t('Review setup'),
+                    l10n.t('Review setup…'),
                     'tools',
                     'vscode-documentdb.command.localQuickStart.open',
                     'treeReviewSetupRow',

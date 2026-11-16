@@ -468,8 +468,8 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
      * // With view-specific error-recovery actions (Connections provider):
      * //
      * // Error-recovery nodes come from two layers:
-     * //  - The ELEMENT layer owns failure-type nodes ("retry", "open shell") and appends them itself.
-     * //  - The PROVIDER layer (here) owns view-specific nodes via `errorRecoveryActions`. Each action
+     * //  - The ELEMENT layer owns diagnosis and shell, followed by retry.
+     * //  - The PROVIDER layer (here) prepends view-specific repairs via `errorRecoveryActions`. Each action
      * //    may declare a `forContextValues` whitelist, matched against the FAILING element's
      * //    contextValue tags, so an action only appears for the node types it makes sense for.
      * const children = await this.wrapGetChildrenWithErrorAndStateHandling(
@@ -486,7 +486,7 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
      *           createGenericElementWithContext({
      *             contextValue: 'error',
      *             id: `${el.id}/updateCredentials`,
-     *             label: vscode.l10n.t('Click here to update credentials'),
+     *             label: vscode.l10n.t('Update credentials…'),
      *             iconPath: new vscode.ThemeIcon('key'),
      *             commandId: 'vscode-documentdb.command.connectionsView.updateCredentials',
      *             commandArgs: [el],
@@ -505,7 +505,7 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
         options: {
             detectErrorState?: (element: T, children: T[] | null | undefined) => boolean;
             /**
-             * View-specific error-recovery actions appended when an error is detected. Each action is
+             * View-specific repairs prepended when an error is detected, before diagnosis and retry. Each action is
              * gated by an optional `forContextValues` whitelist (see {@link elementMatchesContextValues}).
              */
             errorRecoveryActions?: ReadonlyArray<{
@@ -515,7 +515,7 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
                  * to attach for any failing element.
                  */
                 forContextValues?: string[];
-                /** Builds the recovery node(s) to append for this action. */
+                /** Builds the recovery node(s) to prepend for this action. */
                 create: (element: T) => T[];
             }>;
             contextValue?: string | string[]; // For automatic context value appending - single or multiple values
@@ -541,15 +541,14 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
             : isTreeElementWithRetryChildren(element) && element.hasRetryNode(children);
 
         if (hasError && element.id) {
-            // 4. Optionally append view-specific error-recovery actions (e.g. "update credentials").
+            // 4. Prepend view-specific repairs (e.g. "update credentials") before diagnosis and retry.
             //    Each action may be gated to specific node types via `forContextValues`, so it only
             //    appears when a matching element fails (e.g. a cluster, but not a database/index).
             if (options.errorRecoveryActions) {
-                for (const action of options.errorRecoveryActions) {
-                    if (this.elementMatchesContextValues(element, action.forContextValues)) {
-                        children?.push(...action.create(element));
-                    }
-                }
+                const recoveryChildren = options.errorRecoveryActions
+                    .filter((action) => this.elementMatchesContextValues(element, action.forContextValues))
+                    .flatMap((action) => action.create(element));
+                children?.unshift(...recoveryChildren);
             }
 
             // 5. Store the complete error state (error nodes + recovery actions) in our cache for future refreshes

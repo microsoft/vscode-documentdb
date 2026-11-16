@@ -150,7 +150,7 @@
     "tsx": "~4.23.15",
     "typescript": "~6.0.3",
     "typescript-eslint": "~8.58.2",
-    "vite": "~8.0.16",
+    "vite": "8.1.6",
     "vitest": "~4.1.12"
   },
   "dependencies": {
@@ -160,7 +160,7 @@
     "@azure/arm-network": "^33.5.0",
     "@azure/arm-resources": "~7.0.0",
     "@azure/cosmos": "~4.7.0",
-    "@azure/identity": "~4.13.0",
+    "@azure/identity": "~4.14.1",
     "@documentdb-js/operator-registry": "*",
     "@documentdb-js/schema-analyzer": "*",
     "@documentdb-js/shell-runtime": "*",
@@ -208,10 +208,23 @@
     "vscode-uri": "~3.1.0",
     "zod": "~4.6.7"
   },
-  "//overrides": "Pin transitive dependencies: glob 12.0.x for latest. vite follows the direct pin because npm 10.9.3 crashes (\"Cannot read properties of null (reading 'edgesOut')\") when it resolves vitest's vite peer chain from scratch without it (re-checked in Modernization Stage 6).",
+  "//overrides": "Pin transitive dependencies: glob 12.0.x for latest; aged Rolldown and wasm-util versions. vite follows the exact direct pin because npm 10.9.3 crashes (\"Cannot read properties of null (reading 'edgesOut')\") when it resolves vitest's vite peer chain from scratch without it (re-checked in Modernization Stage 6).",
   "overrides": {
     "glob": "~12.0.0",
-    "vite": "$vite"
+    "vite": {
+      ".": "$vite",
+      "rolldown": "1.1.5"
+    },
+    "@azure/identity": {
+      "@azure/msal-node": "7.1.0"
+    },
+    "@napi-rs/wasm-runtime@1.1.6": {
+      "@tybys/wasm-util": "0.10.4"
+    },
+    "source-map-js": "1.2.2",
+    "get-uri": {
+      "basic-ftp": "6.2.6"
+    }
   },
   "extensionDependencies": [],
   "contributes": {

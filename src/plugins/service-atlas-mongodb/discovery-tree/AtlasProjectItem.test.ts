@@ -183,6 +183,12 @@ describe('AtlasProjectItem getChildren failure handling (NEW-3)', () => {
 
         expect(showErrorMessage).toHaveBeenCalledTimes(1);
         expect(children).toHaveLength(1);
+        const retryTreeItem = await children[0].getTreeItem();
+        expect(retryTreeItem.label).toBe('Retry');
+        expect(retryTreeItem.command).toMatchObject({
+            command: 'vscode-documentdb.command.internal.retry',
+            arguments: [item],
+        });
     });
 
     it('classifies a network failure with retry wording, not credential-blaming wording', async () => {

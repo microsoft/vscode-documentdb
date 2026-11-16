@@ -73,14 +73,21 @@ describe('Connections recovery actions', () => {
             const treeItems = await Promise.all((children ?? []).map((child) => Promise.resolve(child.getTreeItem())));
 
             expect(treeItems.map((child) => child.command?.command)).toEqual([
-                'vscode-documentdb.command.internal.retry',
+                ...(reason ? ['vscode-documentdb.command.connectionsView.updateConnectionString'] : []),
+                'vscode-documentdb.command.connectionsView.updateCredentials',
                 'vscode-documentdb.command.diagnoseConnection',
                 'vscode-documentdb.command.shell.open',
-                'vscode-documentdb.command.connectionsView.updateCredentials',
-                ...(reason ? ['vscode-documentdb.command.connectionsView.updateConnectionString'] : []),
+                'vscode-documentdb.command.internal.retry',
+            ]);
+            expect(treeItems.map((child) => child.label)).toEqual([
+                ...(reason ? ['Update connection string…'] : []),
+                'Update credentials…',
+                'Diagnose connection…',
+                'Open shell',
+                'Retry',
             ]);
             expect(treeItems.every((child) => !!child.command)).toBe(true);
-            expect(treeItems.slice(1).every((child) => child.command?.arguments?.[0] === item)).toBe(true);
+            expect(treeItems.every((child) => child.command?.arguments?.[0] === item)).toBe(true);
             expect(await provider.getChildren(item)).toEqual(children);
             expect(item.getChildren).toHaveBeenCalledTimes(1);
         },

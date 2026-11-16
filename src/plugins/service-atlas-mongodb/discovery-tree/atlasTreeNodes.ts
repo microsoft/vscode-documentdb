@@ -81,11 +81,11 @@ export function createRecoveryNode(
 function recoveryLabel(action: AtlasRecoveryAction): string {
     switch (action) {
         case 'retry':
-            return vscode.l10n.t('Click here to retry');
+            return vscode.l10n.t('Retry');
         case 'revisitCredentials':
-            return vscode.l10n.t('Click here to revisit credentials');
+            return vscode.l10n.t('Review credentials…');
         default:
-            return vscode.l10n.t('Click here to resolve the issues');
+            return vscode.l10n.t('Review discovery issues…');
     }
 }
 

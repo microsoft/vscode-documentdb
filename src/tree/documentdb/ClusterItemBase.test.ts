@@ -177,29 +177,30 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
         const children = (await item.getChildren()) as Array<TreeElement & Record<string, unknown>>;
 
         expect(children).toHaveLength(3);
-        expect(children[0].id).toBe('cluster-1/retry');
-        expect(children[0].contextValue).toBe('error');
-        expect(children[0].commandId).toBe('vscode-documentdb.command.internal.retry');
-        expect(children[0].commandArgs).toEqual([item]);
+        expect(children[2].id).toBe('cluster-1/retry');
+        expect(children[2].contextValue).toBe('error');
+        expect(children[2].label).toBe('Retry');
+        expect(children[2].commandId).toBe('vscode-documentdb.command.internal.retry');
+        expect(children[2].commandArgs).toEqual([item]);
 
-        expect(children[1]).toMatchObject({
+        expect(children[0]).toMatchObject({
             id: 'cluster-1/diagnose',
             contextValue: 'error',
-            label: 'Diagnose this connection…',
+            label: 'Diagnose connection…',
             iconPath: new vscode.ThemeIcon('debug-alt'),
             commandId: 'vscode-documentdb.command.diagnoseConnection',
             commandArgs: [item, undefined, 'errorNode'],
         });
-        expect(children[1].id.endsWith(RETRY_NODE_ID_SUFFIX)).toBe(false);
-        expect(containsRetryNode([children[1]])).toBe(false);
+        expect(children[0].id.endsWith(RETRY_NODE_ID_SUFFIX)).toBe(false);
+        expect(containsRetryNode([children[0]])).toBe(false);
         expect(containsRetryNode(children)).toBe(true);
         expect(children.filter((child) => child.id.endsWith(RETRY_NODE_ID_SUFFIX))).toHaveLength(1);
 
-        expect(children[2].id).toBe('cluster-1/open-shell');
-        expect(children[2].contextValue).toBe('error');
-        expect(children[2].label).toBe('Click here to open the shell');
-        expect(children[2].commandId).toBe(ShellCommandIds.open);
-        expect(children[2].commandArgs).toEqual([item]);
+        expect(children[1].id).toBe('cluster-1/open-shell');
+        expect(children[1].contextValue).toBe('error');
+        expect(children[1].label).toBe('Open shell');
+        expect(children[1].commandId).toBe(ShellCommandIds.open);
+        expect(children[1].commandArgs).toEqual([item]);
 
         // The branch data provider detects (and caches) the error state via hasRetryNode().
         expect(item.hasRetryNode(children)).toBe(true);
@@ -211,11 +212,11 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
         const children = (await item.getChildren()) as Array<TreeElement & Record<string, unknown>>;
 
         expect(children.map((child) => child.id)).toEqual([
-            'cluster-1/retry',
             'cluster-1/diagnose',
             'cluster-1/open-shell',
+            'cluster-1/retry',
         ]);
-        expect(children[2]).toMatchObject({ commandId: ShellCommandIds.open, commandArgs: [item] });
+        expect(children[1]).toMatchObject({ commandId: ShellCommandIds.open, commandArgs: [item] });
     });
 
     it.each(['authentication', 'listDatabases'] as const)(
@@ -445,11 +446,11 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
         const children = (await item.getChildren()) as Array<TreeElement & Record<string, unknown>>;
 
         expect(children).toHaveLength(3);
-        expect(children[0].id).toBe('cluster-1/retry');
-        expect(children[0].contextValue).toBe('error');
-        expect(children[0].commandId).toBe('vscode-documentdb.command.internal.retry');
-        expect(children[0].commandArgs).toEqual([item]);
-        expect(children[2].id).toBe('cluster-1/open-shell');
+        expect(children[2].id).toBe('cluster-1/retry');
+        expect(children[2].contextValue).toBe('error');
+        expect(children[2].commandId).toBe('vscode-documentdb.command.internal.retry');
+        expect(children[2].commandArgs).toEqual([item]);
+        expect(children[1].id).toBe('cluster-1/open-shell');
         expect(item.hasRetryNode(children)).toBe(true);
         expect(listDatabases).not.toHaveBeenCalled();
     });
@@ -480,19 +481,19 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
         );
         expect(item.lastConnectionFailureReason).toBe('entraDestinationRejected');
         expect(children).toHaveLength(3);
-        expect(children[0].id).toBe('connectionsView/folder/cluster-1/retry');
-        expect((children[0] as TreeElement & { commandId: string }).commandId).toBe(
+        expect(children[2].id).toBe('connectionsView/folder/cluster-1/retry');
+        expect((children[2] as TreeElement & { commandId: string }).commandId).toBe(
             'vscode-documentdb.command.internal.retry',
         );
         expect(children.map((child) => child.id)).toEqual([
-            'connectionsView/folder/cluster-1/retry',
             'connectionsView/folder/cluster-1/diagnose',
             'connectionsView/folder/cluster-1/open-shell',
+            'connectionsView/folder/cluster-1/retry',
         ]);
         expect(children.map((child) => (child as TreeElement & { commandId: string }).commandId)).toEqual([
-            'vscode-documentdb.command.internal.retry',
             'vscode-documentdb.command.diagnoseConnection',
             'vscode-documentdb.command.shell.open',
+            'vscode-documentdb.command.internal.retry',
         ]);
     });
 

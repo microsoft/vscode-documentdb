@@ -421,7 +421,7 @@ function classifyConnectionError(errorMessage: string): { summary: string; hint:
  * the connection.
  *
  * The modal cannot spam the user: a failed connection is only (re)loaded on an
- * explicit user action (expanding the node or clicking "Click here to retry"),
+ * explicit user action (expanding the node or clicking "Retry"),
  * and the retry-node cache (see {@link hasRetryNode}) prevents `getChildren()`
  * from re-running on passive tree refreshes.
  */

@@ -302,7 +302,12 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
         const children = await (await getClusterItem()).getChildren();
         const treeItems = await Promise.all(children.map(async (child) => child.getTreeItem()));
 
-        expect(treeItems.map((item) => item.label)).toEqual(['Review setup', 'View setup log']);
+        expect(treeItems.map((item) => item.label)).toEqual(['Review setup…', 'View setup log']);
+        expect(treeItems.map((item) => item.command?.command)).toEqual([
+            'vscode-documentdb.command.localQuickStart.open',
+            'vscode-documentdb.command.localQuickStart.viewLogs',
+        ]);
+        expect(treeItems[0].command?.arguments?.[1]).toEqual({ activationSource: 'treePreflightReviewSetupRow' });
         expect(mockGetClient).not.toHaveBeenCalled();
     });
 
@@ -318,6 +323,8 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
                 command: expect.objectContaining({ command: 'vscode-documentdb.command.localQuickStart.start' }),
             }),
         ]);
+        const startCommand = (await children[0].getTreeItem()).command;
+        expect(startCommand?.arguments?.[0]).toBe(children[0]);
         expect(prompt).not.toHaveBeenCalled();
         expect(mockGetClient).not.toHaveBeenCalled();
     });
@@ -328,8 +335,9 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
         const children = await (await getClusterItem()).getChildren();
         const treeItems = await Promise.all(children.map(async (child) => child.getTreeItem()));
 
-        expect(treeItems.map((item) => item.label)).toEqual(['Recreate container']);
+        expect(treeItems.map((item) => item.label)).toEqual(['Recreate container…']);
         expect(treeItems[0].command?.command).toBe('vscode-documentdb.command.localQuickStart.open');
+        expect(treeItems[0].command?.arguments?.[1]).toEqual({ activationSource: 'treePreflightRecreateRow' });
         expect(mockGetClient).not.toHaveBeenCalled();
     });
 
@@ -339,7 +347,12 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
         const children = await (await getClusterItem()).getChildren();
         const treeItems = await Promise.all(children.map(async (child) => child.getTreeItem()));
 
-        expect(treeItems.map((item) => item.label)).toEqual(['Review container engine setup', 'View setup log']);
+        expect(treeItems.map((item) => item.label)).toEqual(['Review container engine setup…', 'View setup log']);
+        expect(treeItems.map((item) => item.command?.command)).toEqual([
+            'vscode-documentdb.command.localQuickStart.open',
+            'vscode-documentdb.command.localQuickStart.viewLogs',
+        ]);
+        expect(treeItems[0].command?.arguments?.[1]).toEqual({ activationSource: 'treePreflightReviewDockerRow' });
         expect(mockGetClient).not.toHaveBeenCalled();
     });
 

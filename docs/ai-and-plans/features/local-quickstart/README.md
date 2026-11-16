@@ -75,6 +75,10 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 
 ## Architecture (intent — code is authoritative for behavior)
 
+- **Retry setup is always the last recovery action.** A genuine setup failure offers View setup
+  log, Delete container… when a container exists, then Retry setup…. Deletion is penultimate rather
+  than an exception to the shared retry-last rule. Missing-container and credential-unavailable
+  states retain their existing targeted actions (#1088).
 - **Ownership is label-gated.** Recognition is by Docker label, never by container name, image, or
   port. This is what makes the instance model extensible without data migration.
 - **Identity is an alias.** Each managed instance has an immutable alias (also the container name

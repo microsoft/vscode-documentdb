@@ -303,11 +303,10 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
      */
     private createErrorRecoveryChildren(): TreeElement[] {
         return [
-            createRetryNode(this.id, this),
             createGenericElementWithContext({
                 contextValue: 'error',
                 id: `${this.id}/diagnose`,
-                label: vscode.l10n.t('Diagnose this connection…'),
+                label: vscode.l10n.t('Diagnose connection…'),
                 iconPath: new vscode.ThemeIcon('debug-alt'),
                 commandId: 'vscode-documentdb.command.diagnoseConnection',
                 commandArgs: [this, undefined, 'errorNode'],
@@ -315,11 +314,12 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             createGenericElementWithContext({
                 contextValue: 'error',
                 id: `${this.id}/open-shell`,
-                label: vscode.l10n.t('Click here to open the shell'),
+                label: vscode.l10n.t('Open shell'),
                 iconPath: new vscode.ThemeIcon('terminal'),
                 commandId: ShellCommandIds.open,
                 commandArgs: [this],
             }),
+            createRetryNode(this.id, this),
         ];
     }
 

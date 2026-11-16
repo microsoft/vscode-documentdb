@@ -35,7 +35,7 @@ export const RETRY_NODE_ID_SUFFIX = '/retry';
 const DEFAULT_RETRY_COMMAND_ID = 'vscode-documentdb.command.internal.retry';
 
 /**
- * Builds the canonical "Click here to retry" recovery node.
+ * Builds the canonical "Retry" recovery node.
  *
  * @param parentId Id of the failing element; the retry node's id is `${parentId}${RETRY_NODE_ID_SUFFIX}`.
  * @param retryTarget Element passed as the command argument (usually the failing element, `this`).
@@ -50,7 +50,7 @@ export function createRetryNode(
     return createGenericElementWithContext({
         contextValue: RETRY_NODE_CONTEXT_VALUE,
         id: `${parentId}${RETRY_NODE_ID_SUFFIX}`,
-        label: vscode.l10n.t('Click here to retry'),
+        label: vscode.l10n.t('Retry'),
         iconPath: new vscode.ThemeIcon('refresh'),
         commandId: options?.commandId ?? DEFAULT_RETRY_COMMAND_ID,
         commandArgs: [retryTarget],
