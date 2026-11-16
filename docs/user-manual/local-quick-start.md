@@ -160,7 +160,7 @@ Use the CLI of the instance's recorded engine in the commands below: replace `do
    docker rm -f vscode-documentdb-local
    ```
 
-2. In the **Connections** view, expand the **DocumentDB Local** instance and select **Recreate container**. If the row doesn't appear yet, refresh the view.
+2. In the **Connections** view, expand the **DocumentDB Local** instance and select **Recreate container…**. If the row doesn't appear yet, refresh the view.
 3. In the setup view, select **Continue** if the Introduction step appears, keep **Keep the existing data**, then select **Recreate container**. The extension creates a new container on the same data volume with the saved credentials, using your current telemetry level. See [Recreate a missing container](#recreate-a-missing-container) for saved-image behavior.
 
 **Delete Container…** in the extension removes the data volume too, so use it only when you want to start over.
@@ -290,6 +290,15 @@ DocumentDB Local requires a Linux-container engine. If a reachable Windows Docke
 Windows-container mode, switch Docker to Linux containers and select **Check Docker again**.
 
 ## Recovery during setup
+
+After a setup failure, the instance's tree actions appear in this order: **View setup log**,
+**Delete container…** when a container exists, then **Retry setup…**. Retry setup reopens the wizard;
+it is not an immediate retry. Deleting the container also removes its data volume, so use it only
+when you intend to discard that data.
+
+Other states keep their targeted actions: **Recreate container…** for a missing container,
+**Review setup…** when credentials need attention, or **Review container engine setup…** when offered
+for an engine problem. These are tree-row labels; context-menu titles can differ.
 
 If the selected container engine becomes unavailable during image pull or container creation, setup returns to its recovery stage. Registry, proxy, image-manifest, and other image-specific failures remain setup errors and are not presented as engine diagnoses.
 

@@ -12,6 +12,7 @@
 
 - **Local Setup Details**: Adds expandable Details to completed and failed setup stages, including engine checks, image identity, container and volume details, readiness, and sample-data outcome. Shows image-download activity and calls out sample-data failures even when the instance is ready. [#1072](https://github.com/microsoft/vscode-documentdb/pull/1072)
 - **Connection Link Confirmations**: Consolidates connection-string link confirmations into one target-aware decision, while always confirming new saved connections. Azure resource links guide sign-in and request approval before changing discovery visibility filters; failed or cancelled connections do not open the requested destination. [#1067](https://github.com/microsoft/vscode-documentdb/pull/1067)
+- **Consistent Recovery Actions**: Uses direct tree labels such as Diagnose connection…, Open shell, and Retry. Orders repairs and investigation before retrying, puts Retry last, and keeps healthy Atlas discovery results above the relevant recovery action. [#1058](https://github.com/microsoft/vscode-documentdb/issues/1058), [#1088](https://github.com/microsoft/vscode-documentdb/pull/1088)
 
 ### Fixes
 
@@ -21,6 +22,7 @@
 
 - **Entra ID Trusted Servers**: Restricts account and managed-identity tokens to recognized Azure DocumentDB service suffixes or a validated machine-scoped custom suffix. Enforces destination and certificate checks across saved connections, links, Interactive Shell, and Query Playground; URI options cannot override the selected authentication method or weaken these checks. [#1077](https://github.com/microsoft/vscode-documentdb/pull/1077)
 - **Bundled Dependency Security**: Updates the runtime dependency `body-parser` to 2.4.0, incorporating the upstream security fix for CVE-2026-111181 in HTTP request parsing. [#1052](https://github.com/microsoft/vscode-documentdb/pull/1052)
+- **Authentication and Proxy Dependencies**: Updates Azure Identity to 4.14.1 with MSAL Node 7.1.0, `proxy-addr` to 2.0.8, and `basic-ftp` to 6.2.6. Addresses upstream authorization-code disclosure, proxy address handling, and FTP parser denial-of-service and crash vulnerabilities, and removes the vulnerable `uuid` 8.3.2 dependency. [#1087](https://github.com/microsoft/vscode-documentdb/pull/1087)
 
 ## 1.0.2
 
