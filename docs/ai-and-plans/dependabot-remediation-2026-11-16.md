@@ -92,6 +92,25 @@ All 15 `@rolldown/binding-*` packages must be exactly **`1.1.5`** (published
 One commit per dependency family, in this order, so any family can be dropped without
 regenerating the others. Regenerate the lockfile with npm; never hand-edit it.
 
+**Execution (2026-11-16):** The operator instructed `/lead` to implement this plan,
+push and create a PR against `main` for milestone 1.1.0, run both verification cases,
+and finish with the seven-day dependency scan. Opus 5.5 reviewed the plan and
+recommended the following coding models; the leader accepted these assignments
+(confidence 95%). All items run serially because they share the lockfile.
+
+| Item | Recommended and assigned model | Reason |
+| ---- | ------------------------------ | ------ |
+| 1 | `gpt-6-luna` | Mechanical lockfile-only patch |
+| 2 | `gpt-6.1-sol` | Authentication SDK and lazy-load compatibility |
+| 3 | `gpt-6-luna` | Mechanical lockfile-only patches |
+| 4 | `gpt-6.1-sol` | Cross-module build, bundling and dev-server compatibility |
+| 5 | `gpt-6.1-terra` | Scoped override and bounded FTP API smoke |
+
+Preflight: clean worktree, source plan already committed as `6c0aa59f6`;
+npm 10.9.3, Node 22.21.1, public npm registry. A no-script, lockfile-only
+install produced no diff. The original root lockfile was saved outside the worktree.
+All thirteen targeted alerts were verified open through GitHub's API.
+
 ### 1. proxy-addr `2.0.8`
 
 - Lockfile-only refresh. `express@5.2.1`'s `^2.0.7` range admits it. Path:
@@ -117,6 +136,14 @@ regenerating the others. Regenerate the lockfile with npm; never hand-edit it.
   [sovereign auth](../../src/documentdb/auth/sovereignAuth.integration.test.ts).
   Keep failure classification, token caching and sovereign-cloud behavior.
 
+**Deferred, escalated (2026-11-16):** The advisor found that ordinary activation does
+not load the lazy Identity SDK, so activation alone cannot prove its packaged load.
+The leader asked whether to approve an additional one-off packaged fake-endpoint
+smoke or accept graph inspection and existing tests with that proof unverified.
+The operator was unavailable. No new auth or test behavior is authorized; the
+additional smoke remains parked, while the approved dependency update and existing
+checks can proceed. Recommendation: approve the one-off smoke before final handoff.
+
 ### 3. tmp `0.2.7` and markdown-it `14.3.3`
 
 - Lockfile-only refresh; `@vscode/vsce@3.7.1` and `@vscode/l10n-dev@0.0.35` ranges admit both.
@@ -132,6 +159,15 @@ regenerating the others. Regenerate the lockfile with npm; never hand-edit it.
 - `npm run build` is `tsc` only and does not bundle; `npm run package` and its VSIX/activation
   inspection are the real gate. Smoke one L2-dev webview scenario for the dev server.
 - Update the existing override comment in `package.json` to match the new Vite shape.
+
+**Deferred, escalated (2026-11-16):** The advisor found an existing nested
+`@napi-rs/wasm-runtime@1.2.4`, whereas the proposed scoped override keys on `1.1.6`.
+The leader asked whether to re-key the pin to the actually resolved aged runtime,
+force `1.1.6`, or retain the plan verbatim. The operator was unavailable; none of
+these alternatives is newly approved. Attempt only the accepted manifest change;
+if resolution requires a different pin or introduces a fresh/unknown version,
+park item 4 without committing it and continue independent items. Recommendation:
+permit a scoped `@tybys/wasm-util@0.10.4` pin under the actually resolved aged runtime.
 
 ### 5. basic-ftp `6.2.6`, scoped under get-uri
 
