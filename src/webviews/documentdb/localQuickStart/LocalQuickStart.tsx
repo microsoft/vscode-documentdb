@@ -30,6 +30,7 @@ import {
     EditRegular,
     EmojiRegular,
     ErrorCircleFilled,
+    InfoRegular,
     RocketRegular,
     WarningRegular,
 } from '@fluentui/react-icons';
@@ -180,9 +181,18 @@ const useStyles = makeStyles({
     credentialFields: {
         display: 'grid',
         gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+        alignItems: 'start',
         gap: '12px',
         width: '100%',
         '@media (max-width: 560px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
+    },
+    credentialsHint: {
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '4px',
+        gridColumn: '1 / -1',
+        color: tokens.colorNeutralForeground2,
+        '> svg': { flexShrink: 0, fontSize: tokens.fontSizeBase300, marginTop: '2px' },
     },
     credentialsValidation: {
         display: 'flex',
@@ -1851,9 +1861,6 @@ export const LocalQuickStart = (): JSX.Element => {
                 <div className={styles.credentialFields}>
                     <Field
                         label={l10n.t('Username')}
-                        hint={l10n.t(
-                            'Up to 63 ASCII characters; fewer for non-ASCII text. No spaces. Names starting with pg, citus, documentdb, or internal_role are reserved.',
-                        )}
                         validationState={shownValidation?.field === 'username' ? 'error' : 'none'}
                         validationMessage={shownValidation?.field === 'username' ? shownValidation.message : undefined}
                     >
@@ -1863,7 +1870,9 @@ export const LocalQuickStart = (): JSX.Element => {
                             placeholder={l10n.t('Enter a username')}
                             aria-invalid={shownValidation?.field === 'credentials' || undefined}
                             aria-describedby={
-                                shownValidation?.field === 'credentials' ? 'quickstart-credentials-error' : undefined
+                                shownValidation?.field === 'credentials'
+                                    ? 'quickstart-username-hint quickstart-credentials-error'
+                                    : 'quickstart-username-hint'
                             }
                             onChange={(_event, data) => setAdvUser(data.value)}
                         />
@@ -1884,6 +1893,12 @@ export const LocalQuickStart = (): JSX.Element => {
                             onChange={(_event, data) => setAdvPass(data.value)}
                         />
                     </Field>
+                    <Text id="quickstart-username-hint" size={200} className={styles.credentialsHint}>
+                        <InfoRegular aria-hidden />
+                        {l10n.t(
+                            'Username: up to 63 ASCII characters; fewer for non-ASCII text. No spaces. Names starting with pg, citus, documentdb, or internal_role are reserved.',
+                        )}
+                    </Text>
                     {shownValidation?.field === 'credentials' && (
                         <Text
                             id="quickstart-credentials-error"
