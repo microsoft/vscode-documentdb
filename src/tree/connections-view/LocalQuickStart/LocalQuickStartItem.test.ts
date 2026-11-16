@@ -219,7 +219,7 @@ describe('LocalQuickStartItem — error recovery nodes (I2-4)', () => {
         return children;
     }
 
-    it('offers retry, the setup log and Delete container when a container exists', async () => {
+    it('offers the setup log, deletion and finally retry when a container exists', async () => {
         const items = await children({
             metadata: {
                 containerId: 'c1',
@@ -232,32 +232,32 @@ describe('LocalQuickStartItem — error recovery nodes (I2-4)', () => {
         } as Partial<QuickStartStatus>);
 
         expect(items.map((item) => item.id)).toEqual([
-            'connectionsView/root/localQuickStart/retry',
             'connectionsView/root/localQuickStart/viewLogs',
             'connectionsView/root/localQuickStart/delete',
+            'connectionsView/root/localQuickStart/retry',
         ]);
         const treeItems = await Promise.all(items.map(async (item) => item.getTreeItem()));
-        expect(treeItems.map((item) => item.label)).toEqual(['Retry setup…', 'View setup log', 'Delete container…']);
+        expect(treeItems.map((item) => item.label)).toEqual(['View setup log', 'Delete container…', 'Retry setup…']);
         expect(treeItems.map((item) => item.command?.command)).toEqual([
-            'vscode-documentdb.command.localQuickStart.open',
             'vscode-documentdb.command.localQuickStart.viewLogs',
             'vscode-documentdb.command.localQuickStart.delete',
+            'vscode-documentdb.command.localQuickStart.open',
         ]);
-        expect(treeItems[0].command?.arguments?.[0]).toMatchObject({ id: 'connectionsView/root/localQuickStart' });
-        expect(treeItems[0].command?.arguments?.[1]).toEqual({ activationSource: 'treeRetryNode' });
-        expect(items[2].getTreeItem()).toHaveProperty('label', 'Delete container…');
+        expect(treeItems[2].command?.arguments?.[0]).toMatchObject({ id: 'connectionsView/root/localQuickStart' });
+        expect(treeItems[2].command?.arguments?.[1]).toEqual({ activationSource: 'treeRetryNode' });
+        expect(items[1].getTreeItem()).toHaveProperty('label', 'Delete container…');
     });
 
-    it('offers retry and the setup log only when nothing was created, and never a message-only row (N3)', async () => {
+    it('offers the setup log then retry when nothing was created, and never a message-only row (N3)', async () => {
         const items = await children({ metadata: undefined });
         const ids = items.map((item) => item.id);
 
         expect(ids).toEqual([
-            'connectionsView/root/localQuickStart/retry',
             'connectionsView/root/localQuickStart/viewLogs',
+            'connectionsView/root/localQuickStart/retry',
         ]);
         const treeItems = await Promise.all(items.map(async (item) => item.getTreeItem()));
-        expect(treeItems.map((item) => item.label)).toEqual(['Retry setup…', 'View setup log']);
+        expect(treeItems.map((item) => item.label)).toEqual(['View setup log', 'Retry setup…']);
         expect(ids).not.toContain('connectionsView/root/localQuickStart/error');
     });
 });

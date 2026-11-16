@@ -88,16 +88,12 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
         );
         const snapshot = await this.discoveryService.listAll({ includeClusters: listMode });
 
-        const children: ExtTreeElementBase[] = [];
+        const children = listMode ? this.buildClusterRows(snapshot) : this.buildOrganizationRows(snapshot, credentials);
         if (snapshotHasFailures(snapshot)) {
             // The recovery row is just another row, so it drops into a flat list unchanged and
             // List mode needs no special casing: a failure never forces a view-mode switch.
             children.push(createRecoveryNode(this, snapshot));
         }
-
-        children.push(
-            ...(listMode ? this.buildClusterRows(snapshot) : this.buildOrganizationRows(snapshot, credentials)),
-        );
 
         if (children.length === 0) {
             atlasTrace('root: nothing visible to any credential, showing the empty placeholder');

@@ -431,15 +431,14 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
 
     /**
      * Actionable recovery for a GENUINE failure (review §9.2 Q4 / N3). The tree renders recovery
-     * ACTIONS, not error text: a retry node that reopens the wizard (the operation that failed —
-     * see I2-Q2), the setup log, and — once a container exists — the "Delete container…" action.
+     * ACTIONS, not error text: the setup log, the "Delete container…" action once a container
+     * exists, and finally a retry node that reopens the wizard (the operation that failed — I2-Q2).
      *
      * `Missing` and `CredentialsMissing` deliberately do NOT come here: they are service states
      * with their own actionable rows, not fetch failures (I2-Q5).
      */
     private createErrorRecoveryChildren(includeDelete: boolean): TreeElement[] {
         const children: TreeElement[] = [
-            createQuickStartRetryAction(this.id, this),
             createQuickStartAction(
                 this.id,
                 'viewLogs',
@@ -461,6 +460,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
             );
         }
 
+        children.push(createQuickStartRetryAction(this.id, this));
         return children;
     }
 

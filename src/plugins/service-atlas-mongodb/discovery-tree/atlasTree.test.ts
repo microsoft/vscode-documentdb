@@ -241,14 +241,18 @@ describe('AtlasServiceRootItem', () => {
         expect(recoveryRows[0].commandArgs).toEqual([root]);
         expect(recoveryRows[0].tooltip).toContain('Beta: session expired');
         expect(recoveryRows[0].tooltip).toContain('Gamma: access denied');
-        // Healthy data is still rendered next to the recovery row.
-        expect(children.some((child) => child instanceof AtlasOrganizationItem)).toBe(true);
+        expect(children).toHaveLength(2);
+        expect(children[0]).toBeInstanceOf(AtlasOrganizationItem);
+        expect(children[1]).toBe(recoveryRows[0]);
     });
 
     it('offers a retry instead of a credential review when the failure is connectivity', async () => {
         await upsertAtlasCredential({ authMethod: 'apikey', publicKey: 'pub-1', privateKey: 'priv-1' });
         const service = serviceStub(
             snapshotOf({
+                organizations: [
+                    { organization: org('org-1', 'Acme Corp'), credentialIds: ['c2'], ownerCredentialId: 'c2' },
+                ],
                 credentialErrors: [
                     { credentialId: 'c1', label: 'Acme', kind: 'network', message: 'fetch failed', retryable: true },
                 ],
@@ -271,12 +275,18 @@ describe('AtlasServiceRootItem', () => {
         expect(recovery?.commandId).toBe('vscode-documentdb.command.refresh');
         expect(recovery?.commandArgs).toEqual([root]);
         expect(recovery?.tooltip).toContain('MongoDB Atlas could not be reached');
+        expect(children).toHaveLength(2);
+        expect(children[0]).toBeInstanceOf(AtlasOrganizationItem);
+        expect(children[1]).toBe(recovery);
     });
 
     it('sends a mixed failure to the credential manager, where a fleet-wide retry also lives', async () => {
         await upsertAtlasCredential({ authMethod: 'apikey', publicKey: 'pub-1', privateKey: 'priv-1' });
         const service = serviceStub(
             snapshotOf({
+                organizations: [
+                    { organization: org('org-1', 'Acme Corp'), credentialIds: ['c3'], ownerCredentialId: 'c3' },
+                ],
                 credentialErrors: [
                     { credentialId: 'c1', label: 'Acme', kind: 'network', message: 'fetch failed', retryable: true },
                     { credentialId: 'c2', label: 'Beta', kind: 'auth', message: 'session expired', retryable: true },
@@ -296,6 +306,9 @@ describe('AtlasServiceRootItem', () => {
         expect(recovery?.label).toBe('Review discovery issues…');
         expect(recovery?.commandId).toBe('vscode-documentdb.command.discoveryView.manageCredentials');
         expect(recovery?.commandArgs).toEqual([root]);
+        expect(children).toHaveLength(2);
+        expect(children[0]).toBeInstanceOf(AtlasOrganizationItem);
+        expect(children[1]).toBe(recovery);
     });
 
     it('flags an organization whose other credential failed, keeping its healthy projects', async () => {
@@ -414,7 +427,11 @@ describe('AtlasServiceRootItem in List mode', () => {
         expect(row.cluster.treeId).toBe('discoveryView/atlas-mongodb-discovery/p1/p1_payments-prod');
     });
 
-    it('keeps the same recovery row in List mode without switching views', async () => {
+    it.each([
+        [['auth', 'forbidden'], 'Review credentials…'],
+        [['network'], 'Retry'],
+        [['auth', 'network'], 'Review discovery issues…'],
+    ] as const)('places %s recovery after healthy clusters in List mode', async (kinds, label) => {
         await upsertAtlasCredential({ authMethod: 'apikey', publicKey: 'pub-1', privateKey: 'priv-1' });
         const service = serviceStub(
             snapshotOf({
@@ -432,9 +449,13 @@ describe('AtlasServiceRootItem in List mode', () => {
                         ownerCredentialId: 'c1',
                     },
                 ],
-                credentialErrors: [
-                    { credentialId: 'c2', label: 'Beta', kind: 'auth', message: 'session expired', retryable: true },
-                ],
+                credentialErrors: kinds.map((kind, index) => ({
+                    credentialId: `c${index + 2}`,
+                    label: 'Beta',
+                    kind,
+                    message: 'discovery failed',
+                    retryable: true,
+                })),
             }),
         );
 
@@ -446,13 +467,16 @@ describe('AtlasServiceRootItem in List mode', () => {
             commandArgs?: unknown[];
         }>;
 
-        expect(children[0].id).toContain('/recovery');
-        expect(children[0].label).toBe('Review credentials…');
-        expect(children[0].commandId).toBe('vscode-documentdb.command.discoveryView.manageCredentials');
-        expect(children[0].commandArgs).toEqual([root]);
         expect(children).toHaveLength(2);
-        // The healthy cluster is still listed next to the recovery row.
-        expect(children[1]).toBeInstanceOf(AtlasClusterItem);
+        expect(children[0]).toBeInstanceOf(AtlasClusterItem);
+        expect(children[1].id).toContain('/recovery');
+        expect(children[1].label).toBe(label);
+        expect(children[1].commandId).toBe(
+            label === 'Retry'
+                ? 'vscode-documentdb.command.refresh'
+                : 'vscode-documentdb.command.discoveryView.manageCredentials',
+        );
+        expect(children[1].commandArgs).toEqual([root]);
     });
 });
 

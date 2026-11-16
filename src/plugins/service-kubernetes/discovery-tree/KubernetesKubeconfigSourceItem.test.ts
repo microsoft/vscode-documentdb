@@ -196,7 +196,7 @@ describe('KubernetesKubeconfigSourceItem', () => {
         it.each([
             ['file', 'Edit kubeconfig', 'editSource'],
             ['inline', 'View kubeconfig', 'viewSource'],
-        ] as const)('uses direct labels and preserves command wiring for %s sources', async (kind, label, action) => {
+        ] as const)('offers inspection or repair before retry for a failed %s source', async (kind, label, action) => {
             vi.mocked(loadConfiguredKubeConfig).mockRejectedValueOnce(new Error('load failed'));
             const item = new KubernetesKubeconfigSourceItem('parent', makeSource(kind));
             const children = (await item.getChildren()) as Array<{
@@ -205,12 +205,23 @@ describe('KubernetesKubeconfigSourceItem', () => {
                 commandArgs?: unknown[];
             }>;
 
-            expect(children.map((child) => child.label)).toEqual(['Retry', label]);
+            expect(children.map((child) => child.label)).toEqual([label, 'Retry']);
             expect(children.map((child) => child.commandId)).toEqual([
-                'vscode-documentdb.command.discoveryView.kubernetes.reloadSource',
                 `vscode-documentdb.command.discoveryView.kubernetes.${action}`,
+                'vscode-documentdb.command.discoveryView.kubernetes.reloadSource',
             ]);
             expect(children.map((child) => child.commandArgs)).toEqual([[item], [item]]);
+        });
+
+        it.each([
+            ['file', ['Edit kubeconfig', 'Retry']],
+            ['inline', ['View kubeconfig', 'Retry']],
+            ['default', ['Retry']],
+        ] as const)('keeps retry last for an empty %s source', async (kind, labels) => {
+            const item = new KubernetesKubeconfigSourceItem('parent', makeSource(kind));
+            const children = (await item.getChildren()) as Array<{ label?: string }>;
+
+            expect(children.map((child) => child.label)).toEqual(labels);
         });
 
         async function recoveryChildIds(source: KubeconfigSourceRecord): Promise<string[]> {

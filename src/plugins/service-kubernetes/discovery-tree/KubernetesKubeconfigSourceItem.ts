@@ -166,11 +166,7 @@ export class KubernetesKubeconfigSourceItem implements TreeElement, TreeElementW
             { modal: true },
         );
 
-        const children: ExtTreeElementBase[] = [
-            createRetryNode(this.id, this, {
-                commandId: 'vscode-documentdb.command.discoveryView.kubernetes.reloadSource',
-            }),
-        ];
+        const children: ExtTreeElementBase[] = [];
 
         // File sources have an on-disk path, so offer a one-click way to open and fix it.
         if (this.source.kind === 'file' && this.source.path) {
@@ -201,6 +197,11 @@ export class KubernetesKubeconfigSourceItem implements TreeElement, TreeElementW
             );
         }
 
+        children.push(
+            createRetryNode(this.id, this, {
+                commandId: 'vscode-documentdb.command.discoveryView.kubernetes.reloadSource',
+            }),
+        );
         return children;
     }
 }
