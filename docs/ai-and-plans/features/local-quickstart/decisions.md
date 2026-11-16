@@ -19,7 +19,7 @@ verified: 2026-08-14
 | 0006 | Wizard journey telemetry and correlation ids           | Accepted            | Quick Start lineage id not added                 | 2026-09-29 | #979  |
 | 0007 | Image usage telemetry follows VS Code's setting        | Accepted            | Accepted as proposed                             | 2026-10-15 | #1018 |
 | 0008 | Set up stages expand to show what each stage did       | Accepted            | Amends 0003's single failure surface             | 2026-11-10 | —     |
-| 0009 | Preferred engine and instance ownership                | Accepted            | Configure is check-free; Docker is fresh default | 2026-11-10 | #1076 |
+| 0009 | Preferred engine and instance ownership                | Accepted            | Amended: data-removed instances are not pinned   | 2026-11-10 | #1076 |
 | 0010 | Platform-gated Podman machine startup                  | Accepted            | Button only for eligible macOS/Windows machines  | 2026-11-10 | #1076 |
 | 0011 | Rootful default machine and a slow machine list        | Accepted            | Amends 0010 after a native Windows test          | 2026-11-10 | #1076 |
 | 0012 | Podman guidance follows the address in its error       | Accepted            | Simplified; connection resolution rejected       | 2026-11-12 | #1076 |
@@ -544,6 +544,20 @@ preferred engine from silently placing data in another engine, and treat the rec
 fact about where the instance's container and volume live. Podman provider memory would be stale;
 preserving Docker's existing memory avoids changing Docker recovery behavior. See the approved
 options and trade-offs in [iteration 12](./iterations/12-preferred-engine-and-podman-start.md).
+
+### Amendment, 2026-11-16
+
+Found in pre-release testing: after reconciliation found an instance's container and volume both
+gone, Configure still showed the recorded engine, or "Not recorded" for a legacy record, with no
+way to change it. Setup was pinned to that engine, and a legacy record was forced to Docker.
+The operator approved releasing the pin in that state. Setup then creates a new, empty instance, so
+point 3's reason, where the container and volume live, no longer applies.
+
+- Configure and setup (readiness check, engine start, provision) use the preferred engine when the
+  record is `ready` and still names the engine whose data was found removed.
+- Lifecycle and reconciliation still use the recorded owner, so switching that engine back and
+  refreshing can still recover the instance. The stored credentials are kept as before.
+- If another window re-provisions the instance under a different owner, the owner is pinned again.
 
 ---
 

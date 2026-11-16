@@ -315,21 +315,44 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             },
         );
 
-        it.each(['docker', 'podman'] as const)(
-            'keeps the stored %s owner when only its container and volume were removed externally',
-            async (engineCli) => {
+        it.each(['docker', 'podman', 'legacy'] as const)(
+            'lets setup choose the engine when only a %s-owned container and volume were removed externally',
+            async (owner) => {
                 const runtime = runtimeFor();
                 const service = new QuickStartServiceImpl(runtime);
-                await collect(service.provision(new AbortController().signal, { preferredEngine: engineCli }));
+                await collect(
+                    service.provision(new AbortController().signal, {
+                        preferredEngine: owner === 'podman' ? 'podman' : 'docker',
+                    }),
+                );
+                const engineCli = owner === 'legacy' ? undefined : owner;
+                if (owner === 'legacy') {
+                    const record = await getInstance(DEFAULT_ALIAS);
+                    await upsertInstance({ ...record!, engineCli: undefined });
+                }
                 vi.mocked(runtime.inspectContainer).mockResolvedValue(undefined);
                 vi.mocked(runtime.volumeExists).mockResolvedValue(false);
 
                 await service.refreshLiveState();
 
                 expect(service.getStatus()).toMatchObject({ state: InstanceState.NotInstalled, dataRemoved: true });
-                expect((await service.getWizardContext()).instanceEngine).toBe(engineCli);
-                await service.checkInstanceDockerReadiness({}, engineCli === 'docker' ? 'podman' : 'docker');
-                expect(runtime.isDockerReady).toHaveBeenLastCalledWith({ engine: { kind: 'pinned', cli: engineCli } });
+                expect((await service.getWizardContext()).instanceEngine).toBeUndefined();
+                const preferredEngine = owner === 'docker' ? 'podman' : 'docker';
+                await service.checkInstanceDockerReadiness({}, preferredEngine);
+                expect(runtime.isDockerReady).toHaveBeenLastCalledWith({
+                    engine: { kind: 'preferred', preferred: preferredEngine },
+                });
+                const retry = service.provision(new AbortController().signal, { preferredEngine });
+                try {
+                    expect((await retry.next()).value).toMatchObject({ stage: 'checking', status: 'active' });
+                    expect(runtime.resolveCli).toHaveBeenLastCalledWith({
+                        kind: 'preferred',
+                        preferred: preferredEngine,
+                    });
+                } finally {
+                    await retry.return(undefined);
+                }
+                // The record keeps its owner, so switching that engine back can still recover the data.
                 expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase: 'ready', engineCli });
             },
         );

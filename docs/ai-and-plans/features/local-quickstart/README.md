@@ -24,7 +24,8 @@ flow offers Docker and Podman in Configure without checking availability, defaul
 Docker, and does not persist the preference. During execution, setup detects both CLIs, uses the
 preferred CLI when it is installed, and falls back to the other only when it is missing and the
 other CLI is installed. Each instance records its owning engine, which remains fixed for lifecycle
-actions and recreation, including Start fresh.
+actions and recreation, including Start fresh. Once its container and volume are both gone, setup
+offers the engine choice again (decision 0009, amended).
 
 The approved engine preference and Podman startup behavior are recorded in
 [iteration 12](./iterations/12-preferred-engine-and-podman-start.md); implementation progress is

@@ -458,6 +458,8 @@ interface InstanceRuntimeState {
      * record and credentials are left alone: a Docker pointed at another engine looks the same.
      */
     dataRemoved: boolean;
+    /** The record's engine when {@link dataRemoved} was found; a record since owned by another engine is a new instance. */
+    dataRemovedOwner?: ContainerCli;
     pendingReadiness?: PendingReadiness;
     error?: QuickStartMessage;
     inFlight?: QuickStartOperation;
@@ -576,14 +578,26 @@ export class QuickStartServiceImpl {
     private metadataHydration: Promise<void> | undefined;
     private readonly engineReadiness = new Map<ContainerCli, DockerReadiness>();
 
-    private async engineRequestFor(alias: string, preferred: ContainerCli = 'docker'): Promise<ContainerEngineRequest> {
+    /** `setupPreference` is passed only by setup paths; lifecycle and reconciliation omit it. */
+    private async engineRequestFor(alias: string, setupPreference?: ContainerCli): Promise<ContainerEngineRequest> {
         const entry = this.stateFor(alias);
         const record = await getInstance(alias);
+        // With its container and volume gone, setup creates a new, empty instance, so the stored owner
+        // no longer pins it. Reconciliation still checks that owner, so switching back can recover it.
+        if (setupPreference !== undefined && this.isRemovedOwnerRecord(alias, record)) {
+            return { kind: 'preferred', preferred: setupPreference };
+        }
+        const preferred = setupPreference ?? 'docker';
         const cli = record?.engineCli ?? (entry.metadata && !entry.dataRemoved ? entry.engineCli : undefined);
         if (record?.phase === 'ready' && record.engineCli) {
             entry.engineCli = record.engineCli;
         }
         return cli ? { kind: 'pinned', cli } : { kind: 'preferred', preferred: record ? 'docker' : preferred };
+    }
+
+    private isRemovedOwnerRecord(alias: string, record: QuickStartInstanceRecord | undefined): boolean {
+        const entry = this.stateFor(alias);
+        return entry.dataRemoved && record?.phase === 'ready' && record.engineCli === entry.dataRemovedOwner;
     }
 
     private async resolveInstanceCli(alias: string): Promise<ResolvedContainerCli> {
@@ -876,6 +890,8 @@ export class QuickStartServiceImpl {
         const record = await getInstance(alias);
         const entry = this.stateFor(alias);
         if (record?.phase === 'ready') {
+            // Setup creates a new instance once the data is gone, so Configure offers the engine choice.
+            if (this.isRemovedOwnerRecord(alias, record)) return undefined;
             return record.engineCli ?? 'notRecorded';
         }
         return entry.metadata && !entry.dataRemoved ? entry.engineCli : undefined;
@@ -1042,7 +1058,7 @@ export class QuickStartServiceImpl {
         // generated ones would fail against existing data.
         const startFresh = options?.startFresh === true;
         const priorState = this.stateFor(alias).state;
-        const engineRequest = await this.engineRequestFor(alias, options?.preferredEngine);
+        const engineRequest = await this.engineRequestFor(alias, options?.preferredEngine ?? 'docker');
         const resolved = this.runtime.resolveCli(engineRequest);
         // Preference evidence exists only when this run chose its CLI; an instance's owner is not a preference.
         const selection = engineRequest.kind === 'preferred' ? resolved : undefined;
@@ -2630,8 +2646,9 @@ export class QuickStartServiceImpl {
      * data back; with the volume gone too, nothing is left to recreate.
      */
     private async markContainerMissing(alias: string): Promise<'missing' | 'removed'> {
+        const owner = (await getInstance(alias))?.engineCli;
         if ((await this.dataVolumeExists(alias)) === false) {
-            this.markDataRemoved(alias);
+            this.markDataRemoved(alias, owner);
             return 'removed';
         }
         const entry = this.stateFor(alias);
@@ -2643,10 +2660,11 @@ export class QuickStartServiceImpl {
     }
 
     /** Shown as not set up. The record and credentials stay, see {@link InstanceRuntimeState.dataRemoved}. */
-    private markDataRemoved(alias: string): void {
+    private markDataRemoved(alias: string, owner: ContainerCli | undefined): void {
         const entry = this.stateFor(alias);
         entry.metadata = undefined;
         entry.dataRemoved = true;
+        entry.dataRemovedOwner = owner;
         this.setStatus(alias, InstanceState.NotInstalled);
     }
 
@@ -3180,11 +3198,12 @@ export class QuickStartServiceImpl {
             if (entry.state === InstanceState.CredentialsMissing && !entry.provisioning && !entry.lifecycleBusy) {
                 // Once its container and volume are both gone, nothing is left that needs the lost
                 // credentials, and setup should not warn about erasing it.
+                const owner = (await getInstance(alias))?.engineCli;
                 const containers = await this.findManagedContainers(alias, { propagateErrors: true }).catch(
                     () => undefined,
                 );
                 if (containers?.length === 0 && (await this.dataVolumeExists(alias)) === false) {
-                    this.markDataRemoved(alias);
+                    this.markDataRemoved(alias, owner);
                 }
                 continue;
             }
@@ -3515,7 +3534,7 @@ export class QuickStartServiceImpl {
         if (record?.phase === 'ready') {
             if ((await this.dataVolumeExists(alias)) === false) {
                 // Removed together with its data volume: nothing is left to recreate.
-                this.markDataRemoved(alias);
+                this.markDataRemoved(alias, record.engineCli);
                 return { outcome: 'dataRemoved' };
             }
             const stored = await this.readStoredConnectionString(alias);
