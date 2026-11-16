@@ -186,6 +186,17 @@ checks can proceed. Recommendation: approve the one-off smoke before final hando
   inspection are the real gate. Smoke one L2-dev webview scenario for the dev server.
 - Update the existing override comment in `package.json` to match the new Vite shape.
 
+> **Done (2026-11-16), commit `3559f3c4d`:** Implemented the exact Vite,
+> Rolldown and wasm pins, retaining all fifteen platform bindings and the
+> existing Vitest/plugin-react/glob versions. Implemented by `gpt-6.1-sol`;
+> advised (`claude-opus-5.5`). Targeted refresh twice left `source-map-js` at
+> `1.2.1`; the advisor approved the plan's exact `1.2.2` override fallback at
+> 90% confidence, conditional on no additional churn. That condition passed.
+> Leader confidence 98% in the scoped manifest and evidence. Cumulative age
+> gate: thirty-five introduced versions, zero fresh, unknown or lookup failures.
+> Nineteen Fluent UI test files passed (174 tests); no tests added or changed.
+> Build, packaging and L2-dev smoke remain in the final checks.
+
 **Deferred, escalated (2026-11-16):** The advisor found an existing nested
 `@napi-rs/wasm-runtime@1.2.4`, whereas the proposed scoped override keys on `1.1.6`.
 The leader asked whether to re-key the pin to the actually resolved aged runtime,
@@ -194,6 +205,11 @@ these alternatives is newly approved. Attempt only the accepted manifest change;
 if resolution requires a different pin or introduces a fresh/unknown version,
 park item 4 without committing it and continue independent items. Recommendation:
 permit a scoped `@tybys/wasm-util@0.10.4` pin under the actually resolved aged runtime.
+
+**Resolution (2026-11-16):** The exact accepted manifest resolved
+`@napi-rs/wasm-runtime@1.1.6` and retained `@tybys/wasm-util@0.10.4`.
+The hypothetical override mismatch did not occur; no alternative pin, decision
+deviation or additional operator authorization is needed.
 
 ### 5. basic-ftp `6.2.6`, scoped under get-uri
 
