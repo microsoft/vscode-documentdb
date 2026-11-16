@@ -70,7 +70,12 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
         const myGeneration = ++this.expansionGeneration;
         const isCurrent = (): boolean => this.expansionGeneration === myGeneration;
 
-        const client: ClustersClient = await ClustersClient.getClient(this.cluster.clusterId, undefined, undefined, 'treeChildren');
+        const client: ClustersClient = await ClustersClient.getClient(
+            this.cluster.clusterId,
+            undefined,
+            undefined,
+            'treeChildren',
+        );
         const collections = await client.listCollections(this.databaseInfo.name);
 
         // Update the collection count from the full list we just fetched. This

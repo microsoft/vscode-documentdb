@@ -49,8 +49,8 @@ import {
     type DockerLaunchResult,
     type DockerReadiness,
     type DockerReadinessRequest,
-    type ImagePullOutcome,
     type DockerStartAction,
+    type ImagePullOutcome,
     QUICK_START_PORT,
 } from './quickStartTypes';
 

@@ -112,7 +112,12 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
     }
 
     private async fetchIndexes(): Promise<IndexItemModel[]> {
-        const client: ClustersClient = await ClustersClient.getClient(this.cluster.clusterId, undefined, undefined, 'treeChildren');
+        const client: ClustersClient = await ClustersClient.getClient(
+            this.cluster.clusterId,
+            undefined,
+            undefined,
+            'treeChildren',
+        );
         const indexes = await client.listIndexes(this.databaseInfo.name, this.collectionInfo.name);
 
         // Try to get search indexes, but silently fail if not supported by the platform

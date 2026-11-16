@@ -389,9 +389,7 @@ export function openClusterDashboardWebview(
             correlation: {
                 viewId: initialData.viewId,
                 ...(initialData.dashboardSessionId ? { dashboardSessionId: initialData.dashboardSessionId } : {}),
-                ...(initialData.journeyCorrelationId
-                    ? { journeyCorrelationId: initialData.journeyCorrelationId }
-                    : {}),
+                ...(initialData.journeyCorrelationId ? { journeyCorrelationId: initialData.journeyCorrelationId } : {}),
             },
         },
         viewColumn: vscode.ViewColumn.One,

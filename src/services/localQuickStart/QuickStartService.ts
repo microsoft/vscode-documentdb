@@ -80,8 +80,8 @@ import {
     type DockerHostEnvironment,
     type DockerLaunchResult,
     type DockerReadiness,
-    type ImagePullOutcome,
     type DockerStartAction,
+    type ImagePullOutcome,
     type InstanceMetadata,
     InstanceState,
     type InstanceStatus,
@@ -1141,7 +1141,9 @@ export class QuickStartServiceImpl {
             const aborted = signal.aborted;
             // A pull/create failure may mean Docker itself went away; ask it again rather than guess from the text.
             const dockerReadiness =
-                !aborted && activeDockerStage ? await this.getProvisioningDockerReadiness(resolved.cli, selection) : undefined;
+                !aborted && activeDockerStage
+                    ? await this.getProvisioningDockerReadiness(resolved.cli, selection)
+                    : undefined;
             const analysis = {
                 error,
                 dockerReadiness,
@@ -1183,22 +1185,27 @@ export class QuickStartServiceImpl {
 
             // --- checking ---
             yield stageEvent('checking', 'active');
-            const readiness = await this.runProvisionStage('checking', provisionCorrelationId, async () => {
-                const result = await this.checkDockerReadiness(
-                    { engine: { kind: 'pinned', cli: resolved.cli } },
-                    selection,
-                );
-                checkedReadiness = result;
-                this.throwIfAborted(signal);
-                const continueAfterIndeterminateReadiness =
-                    options?.continueAnyway === true && result.outcome === 'indeterminate';
-                if ((!result.cliInstalled || !result.daemonReachable) && !continueAfterIndeterminateReadiness) {
-                    throw new DockerNotReadyError(
-                        !result.cliInstalled ? 'dockerCliMissing' : 'dockerDaemonUnreachable',
+            const readiness = await this.runProvisionStage(
+                'checking',
+                provisionCorrelationId,
+                async () => {
+                    const result = await this.checkDockerReadiness(
+                        { engine: { kind: 'pinned', cli: resolved.cli } },
+                        selection,
                     );
-                }
-                return result;
-            }, classifyStageFailure);
+                    checkedReadiness = result;
+                    this.throwIfAborted(signal);
+                    const continueAfterIndeterminateReadiness =
+                        options?.continueAnyway === true && result.outcome === 'indeterminate';
+                    if ((!result.cliInstalled || !result.daemonReachable) && !continueAfterIndeterminateReadiness) {
+                        throw new DockerNotReadyError(
+                            !result.cliInstalled ? 'dockerCliMissing' : 'dockerDaemonUnreachable',
+                        );
+                    }
+                    return result;
+                },
+                classifyStageFailure,
+            );
             readinessEnvironment = readiness.environment;
 
             // Remove a pre-existing managed container so the run starts clean (it is labelled as
@@ -1577,11 +1584,16 @@ export class QuickStartServiceImpl {
             currentStage = 'starting';
             yield stageEvent('starting', 'active');
             facts = { kind: 'starting', boundPort: chosenPort, boundPortReported: false };
-            const inspected = await this.runProvisionStage('starting', provisionCorrelationId, async () => {
-                const result = await engine.inspectContainer(provisionedContainerId);
-                this.throwIfAborted(signal);
-                return result;
-            }, classifyStageFailure);
+            const inspected = await this.runProvisionStage(
+                'starting',
+                provisionCorrelationId,
+                async () => {
+                    const result = await engine.inspectContainer(provisionedContainerId);
+                    this.throwIfAborted(signal);
+                    return result;
+                },
+                classifyStageFailure,
+            );
             // Fall back to the port we actually requested (not the canonical default) if the
             // inspect can't report the binding, so a custom port stays correct in the success
             // message + stored connection string.
@@ -1633,22 +1645,27 @@ export class QuickStartServiceImpl {
             if (leaseHeld) {
                 await this.renewProvisioningLease(alias, operationId, boundPort, resolved.cli);
             }
-            await this.runProvisionStage('waiting', provisionCorrelationId, async () => {
-                const readiness = await this.waitForReadiness(
-                    connectionString,
-                    provisionedContainerId,
-                    secrets,
-                    signal,
-                    cts.token,
-                    engine,
-                );
-                facts = { kind: 'waiting', port: boundPort, ...readiness };
-                this.throwIfAborted(signal);
+            await this.runProvisionStage(
+                'waiting',
+                provisionCorrelationId,
+                async () => {
+                    const readiness = await this.waitForReadiness(
+                        connectionString,
+                        provisionedContainerId,
+                        secrets,
+                        signal,
+                        cts.token,
+                        engine,
+                    );
+                    facts = { kind: 'waiting', port: boundPort, ...readiness };
+                    this.throwIfAborted(signal);
 
-                // --- success (seed sample data, store creds, adopt as Running) ---
-                const sampleData = await this.finalizeReadyInstance(pending, cts.token, signal);
-                facts = { ...facts, displayName: pending.displayName, sampleData };
-            }, classifyStageFailure);
+                    // --- success (seed sample data, store creds, adopt as Running) ---
+                    const sampleData = await this.finalizeReadyInstance(pending, cts.token, signal);
+                    facts = { ...facts, displayName: pending.displayName, sampleData };
+                },
+                classifyStageFailure,
+            );
             success = true;
             yield { ...stageEvent('waiting', 'done'), facts };
             yield stageEvent('done', 'done', { key: 'instanceRunning', port: boundPort }, boundPort);
@@ -1982,20 +1999,25 @@ export class QuickStartServiceImpl {
             // startup rather than only the stale first-attempt output (opus-4.8).
             const engine = this.runtime.forCli(this.runtime.resolveCli({ kind: 'pinned', cli: pending.engineCli }));
             void engine.followLogs(pending.containerId, secretVariants(pending.password), cts.token);
-            await this.runProvisionStage('waiting', pending.provisionCorrelationId, async () => {
-                const readiness = await this.waitForReadiness(
-                    pending.connectionString,
-                    pending.containerId,
-                    secretVariants(pending.password),
-                    signal,
-                    cts.token,
-                    engine,
-                );
-                facts = { kind: 'waiting', port: pending.boundPort, ...readiness };
-                this.throwIfAborted(signal);
-                const sampleData = await this.finalizeReadyInstance(pending, cts.token, signal);
-                facts = { ...facts, displayName: pending.displayName, sampleData };
-            }, (error) => Promise.resolve(classifyProvisionFailure({ error, aborted: signal.aborted })));
+            await this.runProvisionStage(
+                'waiting',
+                pending.provisionCorrelationId,
+                async () => {
+                    const readiness = await this.waitForReadiness(
+                        pending.connectionString,
+                        pending.containerId,
+                        secretVariants(pending.password),
+                        signal,
+                        cts.token,
+                        engine,
+                    );
+                    facts = { kind: 'waiting', port: pending.boundPort, ...readiness };
+                    this.throwIfAborted(signal);
+                    const sampleData = await this.finalizeReadyInstance(pending, cts.token, signal);
+                    facts = { ...facts, displayName: pending.displayName, sampleData };
+                },
+                (error) => Promise.resolve(classifyProvisionFailure({ error, aborted: signal.aborted })),
+            );
             finalized = true;
             resumeResult = 'success';
             yield { ...stageEvent('waiting', 'done'), facts };

@@ -130,12 +130,12 @@ It has no defined end: it lives as long as the root tree item, which can be hour
 
 **Surface session: one UI surface, from open to close**
 
-| Id                    | Surface                            | Carried by                                                                                     |
-| --------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Id                    | Surface                            | Carried by                                                                                                                    |
+| --------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `dashboardSessionId`  | One Cluster Dashboard panel        | The open command, every dashboard procedure event, webview events sent through `reportEvent`, `documentDB.webview.viewLoaded` |
-| `quickStartSessionId` | One Local Quick Start wizard panel | The open command, `documentDB.quickstart.wizard.step` / `.close`, every wizard procedure event |
-| `shellSessionId`      | One interactive shell terminal     | Shell events                                                                                   |
-| `sessionId`           | One query playground evaluator     | Playground execution events. Generic name, easy to confuse with `VSCodeSessionId`.             |
+| `quickStartSessionId` | One Local Quick Start wizard panel | The open command, `documentDB.quickstart.wizard.step` / `.close`, every wizard procedure event                                |
+| `shellSessionId`      | One interactive shell terminal     | Shell events                                                                                                                  |
+| `sessionId`           | One query playground evaluator     | Playground execution events. Generic name, easy to confuse with `VSCodeSessionId`.                                            |
 
 **Operation: one attempt at one thing**
 

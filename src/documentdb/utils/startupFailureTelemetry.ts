@@ -153,7 +153,10 @@ function categoryOfNode(node: unknown): StartupFailureCategory | undefined {
 function mostSpecific(categories: readonly StartupFailureCategory[]): StartupFailureCategory | undefined {
     let best: StartupFailureCategory | undefined;
     for (const category of categories) {
-        if (best === undefined || STARTUP_FAILURE_CATEGORIES.indexOf(category) < STARTUP_FAILURE_CATEGORIES.indexOf(best)) {
+        if (
+            best === undefined ||
+            STARTUP_FAILURE_CATEGORIES.indexOf(category) < STARTUP_FAILURE_CATEGORIES.indexOf(best)
+        ) {
             best = category;
         }
     }
