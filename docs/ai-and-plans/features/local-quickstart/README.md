@@ -59,8 +59,8 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
   Docker or Podman introduction.
 - **Added:** the [setup guide](../../../user-manual/local-quick-start.md) now shows the Introduction
   step and the Configure step with the Container engine choice, in light and dark mode.
-- **Parked:** the same Configure screenshot is listed in
-  [parked images](../../../parked-images/README.md) as a release-notes candidate.
+- **Release notes:** the Configure screenshot is included in the
+  [1.1 release notes](../../../release-notes/1.1.md), with light and dark variants.
 - **Still useful:** a Set up or Done capture with Details expanded would illustrate the new evidence
   rows.
 - The root README's images and the manual-connection picker images do not show the changed setup
