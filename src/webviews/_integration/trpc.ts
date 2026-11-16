@@ -57,6 +57,7 @@ import {
     trackDeepLinkTelemetry,
     type DeepLinkTelemetry,
 } from '../../deepLinks/deepLinkTelemetry';
+import { innermostCauseTypeOf } from '../../utils/telemetryErrorType';
 import { WEBVIEW_CONFIG } from './configuration';
 
 /**
@@ -130,7 +131,10 @@ function isUserCancellation(error: unknown): boolean {
  * than a throw, so this runner translates that: it records `Failed` with
  * `parseError`-derived `error` / `errorMessage` / `errorStack` / `errorCause`
  * (so non-enumerable Error fields are read correctly and circular `cause`
- * chains never throw). Aborted calls and procedures that throw a
+ * chains never throw), plus `causeType`: the allow-listed type (class name or
+ * server code) of the innermost specific cause. `error` holds only the tRPC
+ * code, and `causeType` is deliberately not named like an error so whole-error
+ * masking keeps it. Aborted calls and procedures that throw a
  * `UserCancelledError` (a dismissed dialog) are left as `Canceled` with no
  * error fields so a cancellation is never counted as a failure (R766-C01 / R766-C02).
  */
@@ -158,6 +162,11 @@ const documentDbTelemetryRunner: TelemetryRunner<RpcEnrichment> = {
                     (middlewareResult.error as { stack?: string }).stack ?? '';
                 if (middlewareResult.error.cause) {
                     actionContext.telemetry.properties.errorCause = parseError(middlewareResult.error.cause).message;
+                }
+                // `error` above is the tRPC code; the real failure's class or server code is on the cause.
+                const causeType = innermostCauseTypeOf(middlewareResult.error);
+                if (causeType !== undefined) {
+                    actionContext.telemetry.properties.causeType = causeType;
                 }
             }
 
