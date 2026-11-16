@@ -58,6 +58,9 @@ aligned during UX review iteration 1.
   the original Atlas resource identity is kept separately for API calls.
 - **401 and 403 are not the same failure.** A 401 triggers a silent Service Account token refresh
   before giving up; a 403 must clear the cached session so "Manage Credentials" re-prompts.
+- **Healthy resources precede recovery.** In both tree and list modes, keep healthy results first
+  and the single classified recovery action last. Credential-only failures offer Review credentials…,
+  transient-only failures offer Retry, and mixed failures offer Review discovery issues… (#1088).
 
 ## Timeline
 
