@@ -35,7 +35,11 @@ verified: 2026-08-14
 > installed, and falls back to the other only when that CLI is missing and the other is installed,
 > not when its engine is stopped.
 > Instances record their owning engine, which remains fixed for lifecycle and recreation, including
-> Start fresh; legacy records are resolved only during execution. Podman runs neither read nor write
+> Start fresh; legacy records are resolved only during execution. Once both container and volume are
+> confirmed gone, setup can select a new engine. Before creating resources it durably reserves that
+> engine for reload recovery, including after a readiness timeout. Failed or discarded attempts
+> restore the previous record and credentials only while still owning the reservation.
+> Podman runs neither read nor write
 > provider memory and ignore Docker evidence, while Docker's existing provider-memory behavior is
 > unchanged. On macOS and Windows, an explicit Podman machine start is available only for a stopped
 > default machine or the sole machine. Initialization and ambiguous selection remain manual; Linux

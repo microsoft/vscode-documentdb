@@ -24,7 +24,8 @@ flow offers Docker and Podman in Configure without checking availability, defaul
 Docker, and does not persist the preference. During execution, setup detects both CLIs, uses the
 preferred CLI when it is installed, and falls back to the other only when it is missing and the
 other CLI is installed. Each instance records its owning engine, which remains fixed for lifecycle
-actions and recreation, including Start fresh.
+actions and recreation, including Start fresh. Once its container and volume are both gone, setup
+offers the engine choice again (decision 0009, amended).
 
 The approved engine preference and Podman startup behavior are recorded in
 [iteration 12](./iterations/12-preferred-engine-and-podman-start.md); implementation progress is
@@ -107,6 +108,10 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
   is installed, not when the preferred engine is stopped. An instance's recorded engine owns its
   container and data volume, including
   on recreate; legacy records are resolved only during execution and are not guessed in Configure.
+  When both the old container and volume are confirmed gone, setup can select a new engine. It
+  durably reserves that engine before creating resources so reload can recover an in-progress or
+  timed-out container. Failure, cancellation or timeout discard restores the previous record and
+  credentials only while the attempt still owns its lease; successful setup keeps the new owner.
   Podman runs neither read nor write provider memory and ignore Docker evidence, while Docker's
   existing provider-memory behavior is unchanged.
 - **Engine-specific recovery.** Only the selected engine can receive a start action. On macOS and

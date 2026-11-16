@@ -40,6 +40,7 @@ import { QuickStartServiceImpl } from './QuickStartService';
 import {
     getInstance,
     listInstances,
+    QUICK_START_STORAGE_NAME,
     readConnectionString,
     removeInstance,
     upsertInstance,
@@ -260,6 +261,254 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
     });
 
     describe('instance engine ownership', () => {
+        async function removedEngineInstance(owner: ContainerCli = 'docker'): Promise<{
+            runtime: IContainerRuntime;
+            engines: Record<ContainerCli, IContainerRuntime>;
+            service: QuickStartServiceImpl;
+        }> {
+            const engines = { docker: runtimeFor(), podman: runtimeFor() };
+            for (const cli of ['docker', 'podman'] as const) {
+                const engine = engines[cli];
+                const inspected = await engine.inspectContainer('c1');
+                let live: Awaited<ReturnType<IContainerEngineOps['listByLabel']>>[number] | undefined;
+                let hasVolume = false;
+                vi.mocked(engine.listByLabel).mockImplementation(async (labels) =>
+                    live && Object.entries(labels).every(([key, value]) => live?.labels[key] === value) ? [live] : [],
+                );
+                vi.mocked(engine.volumeExists).mockImplementation(async () => hasVolume);
+                vi.mocked(engine.createAndRunContainer).mockImplementation(async (options) => {
+                    live = {
+                        id: `${cli}-container`,
+                        name: DEFAULT_ALIAS,
+                        labels: options.labels ?? {},
+                        image: { originalName: 'local-image' },
+                        ports: [],
+                        networks: [],
+                        createdAt: new Date(),
+                        state: 'running',
+                    };
+                    hasVolume = true;
+                    return live.id;
+                });
+                vi.mocked(engine.inspectContainer).mockImplementation(async () =>
+                    live ? { ...inspected!, id: live.id, labels: live.labels } : undefined,
+                );
+                vi.mocked(engine.removeContainer).mockImplementation(async () => {
+                    live = undefined;
+                });
+                vi.mocked(engine.removeVolume).mockImplementation(async () => {
+                    hasVolume = false;
+                });
+            }
+            const runtime = engines.docker;
+            vi.mocked(runtime.forCli).mockImplementation((resolved) => engines[resolved.cli]);
+            const service = new QuickStartServiceImpl(runtime);
+            await collect(service.provision(new AbortController().signal, { preferredEngine: owner }));
+            expect(service.getStatus().state).toBe(InstanceState.Running);
+            await engines[owner].removeContainer(`${owner}-container`);
+            await engines[owner].removeVolume(DEFAULT_ALIAS);
+            await service.refreshLiveState();
+            expect(service.getStatus()).toMatchObject({ state: InstanceState.NotInstalled, dataRemoved: true });
+            return { runtime, engines, service };
+        }
+
+        it.each(['docker', 'podman'] as const)(
+            'recovers a new engine container after reload while switching away from removed %s data',
+            async (owner) => {
+                const { runtime, service } = await removedEngineInstance(owner);
+                const target = owner === 'docker' ? 'podman' : 'docker';
+                const attempt = service.provision(new AbortController().signal, {
+                    preferredEngine: target,
+                    username: 'replacement',
+                    password: 'replacement-password',
+                });
+                try {
+                    for await (const event of attempt) {
+                        if (event.stage === 'pulling' && event.status === 'active') {
+                            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({
+                                phase: 'provisioning',
+                                engineCli: target,
+                                operationId: expect.any(String),
+                            });
+                        }
+                        if (event.stage === 'waiting' && event.status === 'active') {
+                            const reloaded = new QuickStartServiceImpl(runtime);
+                            await reloaded.ensureHydrated();
+                            expect(reloaded.getStatus()).toMatchObject({
+                                state: InstanceState.Running,
+                                dataRemoved: false,
+                            });
+                            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({
+                                phase: 'ready',
+                                engineCli: target,
+                            });
+                            expect(await readConnectionString(DEFAULT_ALIAS)).toContain(
+                                'replacement:replacement-password@',
+                            );
+                        }
+                    }
+                    expect(service.getStatus().state).toBe(InstanceState.Running);
+                    expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase: 'ready', engineCli: target });
+                } finally {
+                    await attempt.return(undefined);
+                }
+            },
+        );
+
+        it.each(['pull failure', 'create failure', 'cancel', 'unsubscribe'] as const)(
+            'restores the removed engine record and credentials after a cross-engine %s',
+            async (outcome) => {
+                const { engines, service } = await removedEngineInstance();
+                const originalRecord = await getInstance(DEFAULT_ALIAS);
+                const originalSecret = await readConnectionString(DEFAULT_ALIAS);
+                const controller = new AbortController();
+                if (outcome === 'pull failure') {
+                    vi.mocked(engines.podman.pullImage).mockRejectedValueOnce(new Error('pull failed'));
+                } else if (outcome === 'create failure') {
+                    vi.mocked(engines.podman.createAndRunContainer).mockRejectedValueOnce(new Error('create failed'));
+                }
+                const attempt = service.provision(controller.signal, {
+                    preferredEngine: 'podman',
+                    username: 'replacement',
+                    password: 'replacement-password',
+                });
+                try {
+                    for await (const event of attempt) {
+                        if (event.stage === 'waiting' && event.status === 'active') {
+                            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({
+                                phase: 'provisioning',
+                                engineCli: 'podman',
+                            });
+                            expect(await readConnectionString(DEFAULT_ALIAS)).not.toBe(originalSecret);
+                            if (outcome === 'cancel') controller.abort();
+                            if (outcome === 'unsubscribe') break;
+                        }
+                    }
+                } finally {
+                    await attempt.return(undefined);
+                }
+                expect(await getInstance(DEFAULT_ALIAS)).toEqual(originalRecord);
+                expect(await readConnectionString(DEFAULT_ALIAS)).toBe(originalSecret);
+                expect(await engines.podman.listByLabel({ [QUICK_START_LABEL_KEY]: '1' })).toEqual([]);
+                expect(await engines.podman.volumeExists(DEFAULT_ALIAS)).toBe(false);
+            },
+        );
+
+        it.each(['discard', 'reload', 'resume'] as const)(
+            'keeps a timed-out cross-engine attempt recoverable through %s',
+            async (action) => {
+                const { runtime, service } = await removedEngineInstance();
+                const originalRecord = await getInstance(DEFAULT_ALIAS);
+                const originalSecret = await readConnectionString(DEFAULT_ALIAS);
+                let now = Date.now();
+                const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+                onProbe = () => {
+                    now += 200_000;
+                    throw new Error('connect ECONNREFUSED');
+                };
+                try {
+                    const events = await collect(
+                        service.provision(new AbortController().signal, {
+                            preferredEngine: 'podman',
+                            username: 'replacement',
+                            password: 'replacement-password',
+                        }),
+                    );
+                    expect(events.at(-1)).toMatchObject({ stage: 'waiting', timedOut: true });
+                    expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({
+                        phase: 'provisioning',
+                        engineCli: 'podman',
+                    });
+                    if (action === 'discard') {
+                        expect(await service.discardTimedOutInstance()).toBe(true);
+                        expect(await getInstance(DEFAULT_ALIAS)).toEqual(originalRecord);
+                        expect(await readConnectionString(DEFAULT_ALIAS)).toBe(originalSecret);
+                    } else {
+                        onProbe = () => undefined;
+                        if (action === 'reload') {
+                            const reloaded = new QuickStartServiceImpl(runtime);
+                            await reloaded.ensureHydrated();
+                            expect(reloaded.getStatus().state).toBe(InstanceState.Running);
+                        } else {
+                            const resumed = await collect(service.resumeReadiness(new AbortController().signal));
+                            expect(resumed.at(-1)).toMatchObject({ stage: 'done', status: 'done' });
+                        }
+                        expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase: 'ready', engineCli: 'podman' });
+                        expect(await readConnectionString(DEFAULT_ALIAS)).toContain(
+                            'replacement:replacement-password@',
+                        );
+                    }
+                } finally {
+                    clock.mockRestore();
+                }
+            },
+        );
+
+        it('does not restore a removed engine record or secret over another window owning the replacement lease', async () => {
+            const { engines, service } = await removedEngineInstance();
+            let winnerRecord: Awaited<ReturnType<typeof getInstance>>;
+            let winnerSecret: string | undefined;
+            vi.mocked(engines.podman.createAndRunContainer).mockImplementationOnce(async () => {
+                const record = await getInstance(DEFAULT_ALIAS);
+                winnerRecord = { ...record!, operationId: 'other-window' };
+                winnerSecret = await readConnectionString(DEFAULT_ALIAS);
+                await upsertInstance(winnerRecord);
+                throw new Error('name in use');
+            });
+            await collect(
+                service.provision(new AbortController().signal, {
+                    preferredEngine: 'podman',
+                    username: 'replacement',
+                    password: 'replacement-password',
+                }),
+            );
+            expect(await getInstance(DEFAULT_ALIAS)).toEqual(winnerRecord);
+            expect(await readConnectionString(DEFAULT_ALIAS)).toBe(winnerSecret);
+        });
+
+        it('creates no new-engine resources if persisting its replacement lease fails', async () => {
+            const { engines, service } = await removedEngineInstance();
+            const originalRecord = await getInstance(DEFAULT_ALIAS);
+            const originalSecret = await readConnectionString(DEFAULT_ALIAS);
+            const push = vi.spyOn(StorageService.get(QUICK_START_STORAGE_NAME), 'push');
+            push.mockRejectedValueOnce(new Error('storage unavailable'));
+            try {
+                const events = await collect(
+                    service.provision(new AbortController().signal, { preferredEngine: 'podman' }),
+                );
+                expect(events.at(-1)?.status).toBe('error');
+                expect(engines.podman.pullImage).not.toHaveBeenCalled();
+                expect(engines.podman.createAndRunContainer).not.toHaveBeenCalled();
+                expect(await getInstance(DEFAULT_ALIAS)).toEqual(originalRecord);
+                expect(await readConnectionString(DEFAULT_ALIAS)).toBe(originalSecret);
+            } finally {
+                push.mockRestore();
+            }
+        });
+
+        it('does not replace another window lease acquired during the removed-engine checks', async () => {
+            const { engines, service } = await removedEngineInstance();
+            const winnerRecord = {
+                ...(await getInstance(DEFAULT_ALIAS))!,
+                phase: 'provisioning' as const,
+                engineCli: 'podman' as const,
+                operationId: 'other-window',
+                leaseAt: Date.now(),
+            };
+            const attempt = service.provision(new AbortController().signal, { preferredEngine: 'podman' });
+            try {
+                for await (const event of attempt) {
+                    if (event.stage === 'checking' && event.status === 'done') {
+                        await upsertInstance(winnerRecord);
+                    }
+                }
+            } finally {
+                await attempt.return(undefined);
+            }
+            expect(await getInstance(DEFAULT_ALIAS)).toEqual(winnerRecord);
+            expect(engines.podman.createAndRunContainer).not.toHaveBeenCalled();
+        });
+
         it.each(['docker', 'podman'] as const)(
             'releases the %s engine after another window deletes its record, container and volume',
             async (engineCli) => {
@@ -315,21 +564,44 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             },
         );
 
-        it.each(['docker', 'podman'] as const)(
-            'keeps the stored %s owner when only its container and volume were removed externally',
-            async (engineCli) => {
+        it.each(['docker', 'podman', 'legacy'] as const)(
+            'lets setup choose the engine when only a %s-owned container and volume were removed externally',
+            async (owner) => {
                 const runtime = runtimeFor();
                 const service = new QuickStartServiceImpl(runtime);
-                await collect(service.provision(new AbortController().signal, { preferredEngine: engineCli }));
+                await collect(
+                    service.provision(new AbortController().signal, {
+                        preferredEngine: owner === 'podman' ? 'podman' : 'docker',
+                    }),
+                );
+                const engineCli = owner === 'legacy' ? undefined : owner;
+                if (owner === 'legacy') {
+                    const record = await getInstance(DEFAULT_ALIAS);
+                    await upsertInstance({ ...record!, engineCli: undefined });
+                }
                 vi.mocked(runtime.inspectContainer).mockResolvedValue(undefined);
                 vi.mocked(runtime.volumeExists).mockResolvedValue(false);
 
                 await service.refreshLiveState();
 
                 expect(service.getStatus()).toMatchObject({ state: InstanceState.NotInstalled, dataRemoved: true });
-                expect((await service.getWizardContext()).instanceEngine).toBe(engineCli);
-                await service.checkInstanceDockerReadiness({}, engineCli === 'docker' ? 'podman' : 'docker');
-                expect(runtime.isDockerReady).toHaveBeenLastCalledWith({ engine: { kind: 'pinned', cli: engineCli } });
+                expect((await service.getWizardContext()).instanceEngine).toBeUndefined();
+                const preferredEngine = owner === 'docker' ? 'podman' : 'docker';
+                await service.checkInstanceDockerReadiness({}, preferredEngine);
+                expect(runtime.isDockerReady).toHaveBeenLastCalledWith({
+                    engine: { kind: 'preferred', preferred: preferredEngine },
+                });
+                const retry = service.provision(new AbortController().signal, { preferredEngine });
+                try {
+                    expect((await retry.next()).value).toMatchObject({ stage: 'checking', status: 'active' });
+                    expect(runtime.resolveCli).toHaveBeenLastCalledWith({
+                        kind: 'preferred',
+                        preferred: preferredEngine,
+                    });
+                } finally {
+                    await retry.return(undefined);
+                }
+                // The record keeps its owner, so switching that engine back can still recover the data.
                 expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase: 'ready', engineCli });
             },
         );

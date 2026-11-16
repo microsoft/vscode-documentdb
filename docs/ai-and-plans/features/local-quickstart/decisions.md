@@ -9,21 +9,21 @@ verified: 2026-08-14
 
 > The decisions that shaped Local Quick Start, and what was rejected on the way.
 
-| #    | Decision                                               | Status              | Changed from the proposal?                       | Date       | PR    |
-| ---- | ------------------------------------------------------ | ------------------- | ------------------------------------------------ | ---------- | ----- |
-| 0001 | Single managed instance, ownership-bounded             | Superseded by 0002  | Accepted as proposed                             | 2026-06-25 | —     |
-| 0002 | Multiple managed instances in v1                       | Accepted            | Reverses 0001 after owner review                 | 2026-07-06 | —     |
-| 0003 | Concept F — Docker verified as the first setup stage   | Accepted (modified) | Dedicated readiness page dropped entirely        | 2026-08-03 | #798  |
-| 0004 | Explicit cluster-command opt-ins for managed nodes     | Accepted            | Capability split deferred                        | 2026-08-09 | #876  |
-| 0005 | Restore missing credentials from the managed container | Accepted            | Error-node tree flow deferred                    | 2026-09-29 | #979  |
-| 0006 | Wizard journey telemetry and correlation ids           | Accepted            | Quick Start lineage id not added                 | 2026-09-29 | #979  |
-| 0007 | Image usage telemetry follows VS Code's setting        | Accepted            | Accepted as proposed                             | 2026-10-15 | #1018 |
-| 0008 | Set up stages expand to show what each stage did       | Accepted            | Amends 0003's single failure surface             | 2026-11-10 | —     |
-| 0009 | Preferred engine and instance ownership                | Accepted            | Configure is check-free; Docker is fresh default | 2026-11-10 | #1076 |
-| 0010 | Platform-gated Podman machine startup                  | Accepted            | Button only for eligible macOS/Windows machines  | 2026-11-10 | #1076 |
-| 0011 | Rootful default machine and a slow machine list        | Accepted            | Amends 0010 after a native Windows test          | 2026-11-10 | #1076 |
-| 0012 | Podman guidance follows the address in its error       | Accepted            | Simplified; connection resolution rejected       | 2026-11-12 | #1076 |
-| 0013 | Setup outcome, guide and instance connection telemetry | Accepted            | `customPort` replaced by `portChanged`           | 2026-11-04 | —     |
+| #    | Decision                                               | Status              | Changed from the proposal?                      | Date       | PR    |
+| ---- | ------------------------------------------------------ | ------------------- | ----------------------------------------------- | ---------- | ----- |
+| 0001 | Single managed instance, ownership-bounded             | Superseded by 0002  | Accepted as proposed                            | 2026-06-25 | —     |
+| 0002 | Multiple managed instances in v1                       | Accepted            | Reverses 0001 after owner review                | 2026-07-06 | —     |
+| 0003 | Concept F — Docker verified as the first setup stage   | Accepted (modified) | Dedicated readiness page dropped entirely       | 2026-08-03 | #798  |
+| 0004 | Explicit cluster-command opt-ins for managed nodes     | Accepted            | Capability split deferred                       | 2026-08-09 | #876  |
+| 0005 | Restore missing credentials from the managed container | Accepted            | Error-node tree flow deferred                   | 2026-09-29 | #979  |
+| 0006 | Wizard journey telemetry and correlation ids           | Accepted            | Quick Start lineage id not added                | 2026-09-29 | #979  |
+| 0007 | Image usage telemetry follows VS Code's setting        | Accepted            | Accepted as proposed                            | 2026-10-15 | #1018 |
+| 0008 | Set up stages expand to show what each stage did       | Accepted            | Amends 0003's single failure surface            | 2026-11-10 | —     |
+| 0009 | Preferred engine and instance ownership                | Accepted            | Amended: data-removed instances are not pinned  | 2026-11-10 | #1076 |
+| 0010 | Platform-gated Podman machine startup                  | Accepted            | Button only for eligible macOS/Windows machines | 2026-11-10 | #1076 |
+| 0011 | Rootful default machine and a slow machine list        | Accepted            | Amends 0010 after a native Windows test         | 2026-11-10 | #1076 |
+| 0012 | Podman guidance follows the address in its error       | Accepted            | Simplified; connection resolution rejected      | 2026-11-12 | #1076 |
+| 0013 | Setup outcome, guide and instance connection telemetry | Accepted            | `customPort` replaced by `portChanged`          | 2026-11-04 | —     |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -544,6 +544,20 @@ preferred engine from silently placing data in another engine, and treat the rec
 fact about where the instance's container and volume live. Podman provider memory would be stale;
 preserving Docker's existing memory avoids changing Docker recovery behavior. See the approved
 options and trade-offs in [iteration 12](./iterations/12-preferred-engine-and-podman-start.md).
+
+### Amendment, 2026-11-16
+
+Found in pre-release testing: after reconciliation found an instance's container and volume both
+gone, Configure still showed the recorded engine, or "Not recorded" for a legacy record, with no
+way to change it. Setup was pinned to that engine, and a legacy record was forced to Docker.
+The operator approved releasing the pin in that state. Setup then creates a new, empty instance, so
+point 3's reason, where the container and volume live, no longer applies.
+
+- Configure and setup (readiness check, engine start, provision) use the preferred engine when the
+  record is `ready` and still names the engine whose data was found removed.
+- Lifecycle and reconciliation still use the recorded owner, so switching that engine back and
+  refreshing can still recover the instance. The stored credentials are kept as before.
+- If another window re-provisions the instance under a different owner, the owner is pinned again.
 
 ---
 
