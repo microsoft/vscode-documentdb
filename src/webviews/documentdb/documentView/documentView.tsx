@@ -11,6 +11,7 @@ import { debounce } from 'es-toolkit';
 import * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api'; // eslint-disable-line import/no-internal-modules
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
+import { useViewLoadTelemetry } from '../../_integration/useViewLoadTelemetry';
 import { MonacoEditor } from '../../components/MonacoEditor';
 import { useSelectiveContextMenuPrevention } from '../../components/useSelectiveContextMenuPrevention';
 import { ToolbarDocuments } from './components/toolbarDocuments';
@@ -50,6 +51,7 @@ export const DocumentView = (): JSX.Element => {
      * Use the `useTrpcClient` hook to get the tRPC client
      */
     const trpcClient = useTrpcClient();
+    const viewLoad = useViewLoadTelemetry();
 
     const initialContent = configuration.mode === 'add' ? '{  }' : '{ "loading…": true }';
     const [editorContent] = useState(initialContent);
@@ -85,12 +87,19 @@ export const DocumentView = (): JSX.Element => {
             // eslint-disable-next-line react-hooks/set-state-in-effect -- Setting loading state before async document fetch
             setIsLoading(true);
 
+            const loadStartedAt = performance.now();
             void trpcClient.mongoClusters.documentView.getDocumentById
                 .query(documentId)
                 .then((response) => {
                     setContent(response);
+                    // A document deleted since it was listed reads back as `null`.
+                    viewLoad.reportFirstData(
+                        response === 'null' ? 'empty' : 'dataShown',
+                        performance.now() - loadStartedAt,
+                    );
                 })
                 .catch(async (error) => {
+                    viewLoad.reportFirstData('failed', performance.now() - loadStartedAt);
                     const cause = error instanceof Error ? error.message : String(error);
                     const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
                     void trpcClient.common.displayErrorMessage.mutate({

@@ -46,6 +46,11 @@ export const WEBVIEW_CONFIG = {
          * summed `dispatch` count and the free `dist_auto_duration_ms_*` latency.
          */
         rpcConcurrencyEvent: `${TELEMETRY_NAMESPACE}.webview.rpcConcurrency`,
+        /**
+         * Event name for the once-per-panel load time report (see
+         * `observability/viewLoadTelemetry.ts`).
+         */
+        viewLoadEvent: `${TELEMETRY_NAMESPACE}.webview.viewLoaded`,
     },
     /**
      * Layout describing where the extension's webview JavaScript lives on

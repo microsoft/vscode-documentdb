@@ -383,6 +383,17 @@ export function openClusterDashboardWebview(
         panelViewType: 'vscode-documentdb-cluster-dashboard',
         config: initialData,
         context: trpcContext,
+        // Only a new panel is measured: a reveal of an open one returns above and loads nothing.
+        viewLoad: {
+            kind: 'clusterDashboard',
+            correlation: {
+                viewId: initialData.viewId,
+                ...(initialData.dashboardSessionId ? { dashboardSessionId: initialData.dashboardSessionId } : {}),
+                ...(initialData.journeyCorrelationId
+                    ? { journeyCorrelationId: initialData.journeyCorrelationId }
+                    : {}),
+            },
+        },
         viewColumn: vscode.ViewColumn.One,
         icon: {
             light: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'collection-view-light.svg'),

@@ -38,6 +38,7 @@ import { ext } from '../../extensionVariables';
 import { appRouter, type AppRouter, type BaseRouterContext } from './appRouter';
 import { WEBVIEW_CONFIG } from './configuration';
 import { rpcConcurrencyLogger } from './observability/rpcConcurrencyLogger';
+import { reportViewLoaded, ViewLoadTracker, type ViewLoadKind } from './observability/viewLoadTelemetry';
 import { trpc } from './trpc';
 import { type WebviewName } from './WebviewRegistry';
 
@@ -61,6 +62,15 @@ export interface OpenAppWebviewOptions<TConfiguration> {
     readonly context: BaseRouterContext;
     readonly viewColumn?: vscode.ViewColumn;
     readonly icon?: vscode.Uri | { readonly light: vscode.Uri; readonly dark: vscode.Uri };
+    /**
+     * Report this panel's load time once as `documentDB.webview.viewLoaded`. The webview must
+     * signal its milestones with `useViewLoadTelemetry`. `correlation` holds IDs and bounded
+     * values only, never names or query text.
+     */
+    readonly viewLoad?: {
+        readonly kind: ViewLoadKind;
+        readonly correlation?: Readonly<Record<string, string>>;
+    };
 }
 
 /**
@@ -74,24 +84,42 @@ export interface OpenAppWebviewOptions<TConfiguration> {
 export function openAppWebview<TConfiguration>(
     options: OpenAppWebviewOptions<TConfiguration>,
 ): AppWebviewController<TConfiguration> {
-    return openWebview<AppRouter, TConfiguration, BaseRouterContext>(ext.context, {
-        title: options.title,
-        viewType: options.webviewName,
-        panelViewType: options.panelViewType,
-        router: appRouter,
-        trpc,
-        context: options.context,
-        config: options.config,
-        sourceLayout: {
-            bundled: WEBVIEW_CONFIG.bundle.bundled,
-            dev: WEBVIEW_CONFIG.bundle.bundled,
-        },
-        devServerHost: WEBVIEW_CONFIG.devServerHost,
-        isBundled: true,
-        // R766-S04: record RPC concurrency (peak / average in-flight operations)
-        // so the per-operation listener design can be judged on evidence.
-        logger: rpcConcurrencyLogger,
-        icon: options.icon,
-        viewColumn: options.viewColumn,
-    });
+    const viewLoad = options.viewLoad;
+    // Created before the panel so the measured time includes panel creation and bundle load.
+    const viewLoadTracker = viewLoad
+        ? new ViewLoadTracker(viewLoad.kind, (report) => reportViewLoaded(report, viewLoad.correlation))
+        : undefined;
+
+    let controller: AppWebviewController<TConfiguration>;
+    try {
+        controller = openWebview<AppRouter, TConfiguration, BaseRouterContext>(ext.context, {
+            title: options.title,
+            viewType: options.webviewName,
+            panelViewType: options.panelViewType,
+            router: appRouter,
+            trpc,
+            context: viewLoadTracker ? { ...options.context, viewLoad: viewLoadTracker } : options.context,
+            config: options.config,
+            sourceLayout: {
+                bundled: WEBVIEW_CONFIG.bundle.bundled,
+                dev: WEBVIEW_CONFIG.bundle.bundled,
+            },
+            devServerHost: WEBVIEW_CONFIG.devServerHost,
+            isBundled: true,
+            // R766-S04: record RPC concurrency (peak / average in-flight operations)
+            // so the per-operation listener design can be judged on evidence.
+            logger: rpcConcurrencyLogger,
+            icon: options.icon,
+            viewColumn: options.viewColumn,
+        });
+    } catch (error) {
+        viewLoadTracker?.discard();
+        throw error;
+    }
+
+    if (viewLoadTracker) {
+        controller.onDisposed(() => viewLoadTracker.markDisposed());
+    }
+
+    return controller;
 }

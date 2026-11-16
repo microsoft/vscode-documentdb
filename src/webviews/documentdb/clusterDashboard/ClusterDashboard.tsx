@@ -38,7 +38,9 @@ import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 
 import { type ClusterHealthSample, type ClusterStorageStats } from '../../../documentdb/utils/getClusterHealth';
+import { type ViewFirstDataOutcome } from '../../_integration/observability/viewLoadTelemetry';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
+import { useViewLoadTelemetry } from '../../_integration/useViewLoadTelemetry';
 import { Announcer } from '../../components/accessibility';
 import './clusterDashboard.scss';
 import { isInventoryChangedMessage, isNamespaceBusyMessage } from './clusterDashboardContextMenu';
@@ -64,6 +66,7 @@ export const ClusterDashboard = (): JSX.Element => {
      * Use the `useTrpcClient` hook to get the tRPC client
      */
     const trpcClient = useTrpcClient();
+    const viewLoad = useViewLoadTelemetry();
 
     const [clusterInfo, setClusterInfo] = useState<ClusterDashboardInfo | null>(null);
     /**
@@ -145,10 +148,16 @@ export const ClusterDashboard = (): JSX.Element => {
         setLive((previous) => ({ text, politeness, n: previous.n + 1 }));
     }, []);
 
+    /**
+     * Reads the inventory. Resolves to how the read ended for the view-load report, or
+     * `undefined` when it did not run or the panel was torn down meanwhile.
+     */
     const loadStorageStats = useCallback(
-        async (source: 'background' | 'manual' | 'reconcile' = 'background'): Promise<void> => {
+        async (
+            source: 'background' | 'manual' | 'reconcile' = 'background',
+        ): Promise<ViewFirstDataOutcome | undefined> => {
             if (storageInFlightRef.current) {
-                return;
+                return undefined;
             }
             storageInFlightRef.current = true;
             setIsRefreshingStorage(true);
@@ -178,7 +187,12 @@ export const ClusterDashboard = (): JSX.Element => {
                     } else if (source === 'reconcile') {
                         announce(l10n.t('Inventory updated. {0} databases.', stats.databases.length));
                     }
+                    if (stats.databases === null) {
+                        return 'failed';
+                    }
+                    return stats.databases.length === 0 ? 'empty' : 'dataShown';
                 }
+                return undefined;
             } catch (error) {
                 const cause = error instanceof Error ? error.message : String(error);
                 if (!disposedRef.current) {
@@ -197,7 +211,9 @@ export const ClusterDashboard = (): JSX.Element => {
                             cause,
                         });
                     }
+                    return 'failed';
                 }
+                return undefined;
             } finally {
                 storageInFlightRef.current = false;
                 if (!disposedRef.current) {
@@ -229,12 +245,18 @@ export const ClusterDashboard = (): JSX.Element => {
         disposedRef.current = false;
 
         void loadClusterInfo();
-        void loadStorageStats();
+        // The inventory is the dashboard's main content, so its first read is the view's load time.
+        const loadStartedAt = performance.now();
+        void loadStorageStats().then((outcome) => {
+            if (outcome !== undefined) {
+                viewLoad.reportFirstData(outcome, performance.now() - loadStartedAt);
+            }
+        });
 
         return () => {
             disposedRef.current = true;
         };
-    }, [loadClusterInfo, loadStorageStats]);
+    }, [loadClusterInfo, loadStorageStats, viewLoad]);
 
     /**
      * Whether the panel is on screen.
