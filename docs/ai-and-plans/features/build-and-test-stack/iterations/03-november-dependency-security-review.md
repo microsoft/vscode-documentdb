@@ -72,7 +72,10 @@ Collection View and shell checks remain unverified. The extra packaged
 fake-endpoint proof awaits an operator decision.
 
 Both local verification cases passed, including strict package-test type checks,
-the complete runtime suite and packaging. VSIX inspection passed; activation
-initially stopped on a missing host library. Final activation recovery, L2-dev,
-CI and full-lockfile publication results are recorded in the source plan rather
-than duplicated here.
+the complete runtime suite and packaging. VSIX inspection and installed
+activation passed, as did the unchanged L2-dev Collection View scenario and
+full remote CI. Task-local GUI libraries recovered activation; a visible
+headless browser avoided the integrated hidden tab's missing animation frames.
+Final publication scans found no fresh versions; the four full-scan unknowns
+were unchanged local workspaces. Detailed evidence is recorded in the source
+plan rather than duplicated here.

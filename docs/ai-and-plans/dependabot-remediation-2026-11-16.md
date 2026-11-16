@@ -278,13 +278,13 @@ Public npm age does not prove the Azure Artifacts feed has synced; CI install is
 ## Acceptance
 
 - [x] All five commits applied; the age gate passes after each.
-- [ ] Every locked copy of `proxy-addr`, `@azure/msal-node`, `tmp`, `markdown-it`, `vite`,
+- [x] Every locked copy of `proxy-addr`, `@azure/msal-node`, `tmp`, `markdown-it`, `vite`,
       `source-map-js` and `basic-ftp` is outside its alert's affected range; `uuid@8.3.2` is gone.
 - [x] Draft (Case 1): `npm run build` plus the focused tests named above.
 - [x] Ready for review (Case 2, in full): `npm run prettier-fix`, `npm run l10n:check`,
       `npm run lint`, `npm run build`, `npm run typecheck:tests`, `npx vitest run`,
       `npm run package`. No `npm run l10n` needed: no product strings change.
-- [ ] FTP smoke result recorded in the PR description.
+- [x] FTP smoke result recorded in the PR description.
 - [ ] Manual smoke on the packaged VSIX: Entra ID sign-in, Azure discovery tree, Collection
       View, and a shell session.
 - [ ] After merge, re-fetch the Dependabot alerts and confirm the 13 IDs above closed.
@@ -311,18 +311,97 @@ Both requested verification cases passed locally:
 - Additional: verification-tool tests (147 Node and 121 browser tests), VSIX
   inspection (9,416,876 bytes). The generated VSIX is named
   `vscode-documentdb-1.0.2.vsix` because this PR does not change the extension version.
-- Installed-VSIX activation initially failed before loading the extension because
-  the host lacks `libatk-1.0.so.0`; task-local environment recovery is in progress.
+- Installed-VSIX activation passed after missing GUI libraries were downloaded
+  and extracted into task-local scratch and supplied only through the subprocess
+  `LD_LIBRARY_PATH`. No system packages or user VS Code profile were changed.
 - A checks-worker invocation accidentally included a trailing `.` and ran a
   broader extension suite (8,116 passed, one skipped) before the correct focused
   command. This was additional work, not a substitute for either required suite.
   Original check logs were not saved as requested; results are from the host
-  session transcript. Recovery logs will be persisted.
+  session transcript. The successful activation retry log was persisted.
 - No product strings changed, so localization generation was not needed.
-- L2-dev, remote CI and the final full-lockfile age scan are pending.
+- L2-dev `/collectionView/default/dark` passed the unchanged helper: ready,
+  zero errors and all eight assertions passing. The integrated browser's hidden
+  page initially timed out because it received no animation frames. Following
+  the advisor's diagnosis (80% confidence), a read-only probe confirmed
+  `visibilityState=hidden` and no animation frame within two seconds. An isolated
+  visible headless Chromium page then passed without changing application code,
+  scenario fixtures, assertions or readiness rules.
+- [Full CI run](https://github.com/microsoft/vscode-documentdb/actions/runs/43860119855)
+  passed on `400f1c15e`: static checks, unit tests, package tarballs, VSIX build,
+  inspection, installed activation and merge gate. CodeQL and API typings passed.
+  Subsequent changes only record this evidence in documentation.
+- The final fresh-dependency skill scan at 11:50 UTC checked 1,287 root and
+  116 API lockfile versions: zero fresh versions and zero lookup failures.
+  Its four unknown publication times were verified as unchanged, pre-existing
+  local workspace packages, not newly introduced external dependencies.
+  A final baseline scan at 11:51 UTC checked all 36 introduced versions:
+  zero fresh versions, unknown publication times or lookup failures.
+- Temporary FTP, browser and GUI-library helpers were stopped or cleaned up.
 
 The [committed AI pre-review](features/build-and-test-stack/iterations/03-november-dependency-security-review.md)
 records the Opus initial review and Sol different-vendor validation/independent
 sweep. Neither found defects requiring an author decision. User documentation
 was searched for these toolchain/authentication dependency changes; no affected
 usage instructions were found. Existing build design invariants are unchanged.
+
+### Decisions and remaining operator work
+
+The operator approved the five-item scope and external publication. The leader
+kept the source order and model recommendations (95% confidence); no coding-model
+substitutions or retries on different models occurred. Technical decisions and
+their confidence are recorded under each item. Four Opus advisor agents handled
+five consultations: planning, WI-2 compatibility, WI-4 fallback, WI-4 browser
+diagnosis, and WI-5/pre-review. All verdicts were followed. A separate Sol pass
+validated the review and independently swept the graph at 90% confidence.
+
+The PR remains a draft pending the manual packaged checks and the parked
+Identity-load-proof decision. No author decision or rationale was invented.
+After merge, confirm that all thirteen security alerts close.
+
+### Usage snapshot for cost optimization
+
+Window: **2026-11-16 11:04:56 UTC to 11:51 UTC**, approximately 46 minutes wall
+clock. This snapshot excludes later documentation/publication wrap-up and the
+final response. Summed request times are not wall time; overlapping spans are
+not additive. AIU are not dollars.
+
+| Model           | Role    | Requests | Model time |   AIU | AIU share |
+| --------------- | ------- | -------: | ---------: | ----: | --------: |
+| claude-opus-5.5 | advisor |       57 |      8m09s | 279.6 |     51.0% |
+| gpt-6-luna      | coding  |       13 |      2m00s |   1.4 |      0.3% |
+| gpt-6-luna      | checks  |       24 |      2m41s |   2.0 |      0.4% |
+| gpt-6.1-sol     | leader  |       99 |     15m31s | 185.0 |     33.8% |
+| gpt-6.1-sol     | coding  |       30 |      3m32s |  45.7 |      8.3% |
+| gpt-6.1-sol     | review  |        7 |      1m28s |  20.3 |      3.7% |
+| gpt-6.1-terra   | coding  |       31 |      2m41s |  13.9 |      2.5% |
+
+| Role    | Requests | Model time |   AIU | AIU share |
+| ------- | -------: | ---------: | ----: | --------: |
+| leader  |       99 |     15m31s | 185.0 |     33.8% |
+| coding  |       74 |      8m14s |  61.0 |     11.1% |
+| advisor |       57 |      8m09s | 279.6 |     51.0% |
+| review  |        7 |      1m28s |  20.3 |      3.7% |
+| checks  |       24 |      2m41s |   2.0 |      0.4% |
+
+**Totals:** leader 185.0 AIU; subagents 362.8 AIU; run 547.8 AIU.
+The checks worker reported 9m24s of test/build spans; the additional visible
+browser and recovered activation checks ran separately. CI's longest reported
+job was static checks at 5m00s; its parallel job times must not be added as wall time.
+
+| Model           | Role    |     Input | Output | Cache read | Cache write | Reasoning |
+| --------------- | ------- | --------: | -----: | ---------: | ----------: | --------: |
+| claude-opus-5.5 | advisor | 3,423,067 | 47,383 |  3,180,601 |     242,342 |    24,904 |
+| gpt-6-luna      | coding  |   387,029 |  8,828 |    338,860 |      48,130 |     6,002 |
+| gpt-6-luna      | checks  |   724,721 | 13,966 |    677,035 |      47,614 |    11,242 |
+| gpt-6.1-sol     | leader  | 9,890,743 | 47,726 |  9,730,971 |     159,475 |    13,372 |
+| gpt-6.1-sol     | coding  | 1,281,422 | 13,248 |  1,199,537 |      81,795 |     2,860 |
+| gpt-6.1-sol     | review  |   268,186 |  4,340 |    212,873 |      55,183 |     1,561 |
+| gpt-6.1-terra   | coding  | 1,051,687 |  7,606 |  1,011,480 |      40,114 |     1,894 |
+
+Cache and reasoning fields can overlap input/output; they are not summed.
+Advisor work was the largest measured category (51%), especially the initial
+planning consultation. A future run could bound that first packet more tightly
+and provision GUI prerequisites once, avoiding repeated leader-side recovery
+calls. This is a workflow optimization, not a model-quality comparison or a
+change to the approved model assignments.
