@@ -160,7 +160,7 @@
     "@azure/arm-network": "^33.5.0",
     "@azure/arm-resources": "~7.0.0",
     "@azure/cosmos": "~4.7.0",
-    "@azure/identity": "~4.13.0",
+    "@azure/identity": "~4.14.1",
     "@documentdb-js/operator-registry": "*",
     "@documentdb-js/schema-analyzer": "*",
     "@documentdb-js/shell-runtime": "*",
@@ -211,7 +211,10 @@
   "//overrides": "Pin transitive dependencies: glob 12.0.x for latest. vite follows the direct pin because npm 10.9.3 crashes (\"Cannot read properties of null (reading 'edgesOut')\") when it resolves vitest's vite peer chain from scratch without it (re-checked in Modernization Stage 6).",
   "overrides": {
     "glob": "~12.0.0",
-    "vite": "$vite"
+    "vite": "$vite",
+    "@azure/identity": {
+      "@azure/msal-node": "7.1.0"
+    }
   },
   "extensionDependencies": [],
   "contributes": {
