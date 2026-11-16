@@ -5,13 +5,17 @@
 
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
-import { callWithTelemetryAndErrorHandling, UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
+import {
+    callWithTelemetryAndErrorHandling,
+    UserCancelledError,
+    type IActionContext,
+} from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { EntraDestinationRejectedError } from '../../documentdb/auth/oidcAllowedHosts';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { type Experience } from '../../DocumentDBExperiences';
-import { RETRY_NODE_ID_SUFFIX, containsRetryNode } from '../api/retryNode';
+import { containsRetryNode, RETRY_NODE_ID_SUFFIX } from '../api/retryNode';
 import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
@@ -67,7 +71,7 @@ vi.mock('../../documentdb/CredentialCache', () => ({
 }));
 
 vi.mock('../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: vi.fn(), exists: vi.fn().mockReturnValue(false) },
+    ClustersClient: { getClient: vi.fn(), exists: vi.fn().mockReturnValue(false), getExistingClient: vi.fn() },
 }));
 
 vi.mock('../../extensionVariables', () => ({

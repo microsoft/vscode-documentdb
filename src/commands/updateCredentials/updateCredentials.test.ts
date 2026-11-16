@@ -43,7 +43,10 @@ vi.mock('../../services/connectionStorageService', async (importOriginal) => ({
     ConnectionStorageService: { get: (...args: unknown[]): unknown => mockGet(...args) },
 }));
 vi.mock('../../documentdb/ClustersClient', () => ({
-    ClustersClient: { deleteClient: (...args: unknown[]): unknown => mockDeleteClient(...args) },
+    ClustersClient: {
+        deleteClient: (...args: unknown[]): unknown => mockDeleteClient(...args),
+        getLastFailedStartupCorrelationId: (): undefined => undefined,
+    },
 }));
 vi.mock('../playground/executePlaygroundCode', () => ({
     shutdownEvaluator: (...args: unknown[]): unknown => mockShutdownEvaluator(...args),

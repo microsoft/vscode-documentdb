@@ -271,6 +271,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                     context.telemetry.properties.connectionResult = 'cancelled';
                     throw error;
                 }
+                this.reportConnectionAttempt(context, 'failed');
                 ext.outputChannel.appendLine(
                     l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
                 );
@@ -310,6 +311,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                         const retryError = retryErr instanceof Error ? retryErr : new Error(String(retryErr));
                         ext.outputChannel.appendLine(l10n.t('Retry Error: {error}', { error: retryError.message }));
                         context.telemetry.properties.urlDecodePasswordResult = 'failed';
+                        this.reportConnectionAttempt(context, 'failed');
 
                         await showClusterConnectFailure({
                             clusterId: this.cluster.clusterId,
@@ -326,6 +328,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                             }),
                         );
                         context.telemetry.properties.urlDecodePasswordResult = 'succeeded';
+                        this.reportConnectionAttempt(context, 'success', retryClient);
 
                         // Offer to persist the corrected password so the user does not have to retry next time.
                         const updateButton = l10n.t('Update saved password');
@@ -374,7 +377,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                 }),
             );
 
-            context.telemetry.properties.connectionCorrelationId = clustersClient.connectionCorrelationId ?? '';
+            this.reportConnectionAttempt(context, 'success', clustersClient);
 
             return clustersClient;
         });

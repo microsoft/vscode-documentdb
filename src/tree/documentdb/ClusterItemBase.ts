@@ -8,6 +8,7 @@ import {
     callWithTelemetryAndErrorHandling,
     createContextValue,
     createGenericElement,
+    type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
@@ -228,6 +229,25 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
      * @returns A promise that resolves to the connected `ClustersClient`.
      * @throws {UserCancelledError} if the user cancels the connection via the notification.
      */
+    /**
+     * Reports how this connect request's connection attempt ended, on its `connect` event:
+     * `connectionResult`, plus the attempt's `connectionCorrelationId`. The ID joins the request
+     * (which knows the view, provider and journey) to its `connect.startup` event (destination,
+     * stage, duration), for failed attempts as well as successful ones. Call it only once an attempt
+     * ran; a request that stopped before connecting (a closed prompt) reports neither.
+     */
+    protected reportConnectionAttempt(
+        context: IActionContext,
+        result: 'success' | 'failed',
+        client?: ClustersClient,
+    ): void {
+        context.telemetry.properties.connectionResult = result;
+        const correlationId = client?.connectionCorrelationId ?? this.lastConnectionCorrelationId;
+        if (correlationId) {
+            context.telemetry.properties.connectionCorrelationId = correlationId;
+        }
+    }
+
     protected async getClientWithProgress(clusterId: string): Promise<ClustersClient> {
         const abortController = new AbortController();
         const clientPromise = ClustersClient.getClient(clusterId, abortController.signal, (id) => {
@@ -372,6 +392,13 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                     telemetryContext.telemetry.properties.experience = this.experience.api;
                     telemetryContext.telemetry.properties.failurePhase = 'cachedClientConnect';
                     telemetryContext.telemetry.properties.explanationProviderId = explanation?.providerId ?? 'none';
+                    // The connection being reused, so the failure joins its destination.
+                    const reusedConnectionId = ClustersClient.getExistingClient(
+                        this.cluster.clusterId,
+                    )?.connectionCorrelationId;
+                    if (reusedConnectionId) {
+                        telemetryContext.telemetry.properties.connectionCorrelationId = reusedConnectionId;
+                    }
                     if (entraRejected) {
                         await showClusterConnectFailure({
                             clusterId: this.cluster.clusterId,
@@ -427,8 +454,9 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
         // user to retry. We therefore catch the failure, record telemetry, surface a modal error,
         // and return a retry node (mirroring the `!clustersClient` branch above).
         let databases: DatabaseItemModel[];
+        const connectedClient = clustersClient;
         try {
-            databases = await clustersClient.listDatabases();
+            databases = await connectedClient.listDatabases();
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             const explanation = await ErrorExplanationService.explain({
@@ -448,6 +476,11 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 telemetryContext.telemetry.properties.experience = this.experience.api;
                 telemetryContext.telemetry.properties.failurePhase = 'listDatabases';
                 telemetryContext.telemetry.properties.explanationProviderId = explanation?.providerId ?? 'none';
+                // The connection that worked but was refused the listing, so the failure joins its destination.
+                if (connectedClient.connectionCorrelationId) {
+                    telemetryContext.telemetry.properties.connectionCorrelationId =
+                        connectedClient.connectionCorrelationId;
+                }
                 throw error;
             });
 
@@ -502,6 +535,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
         // Map the databases to DatabaseItem elements
         return databases.map((database) => {
             const databaseItem = new DatabaseItem(this.cluster, database);
+            databaseItem.journeyCorrelationId = this.journeyCorrelationId;
             // Start loading collection count in background (fire-and-forget).
             databaseItem.loadCollectionCount();
             return databaseItem;

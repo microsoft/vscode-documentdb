@@ -29,7 +29,19 @@ A shell captures `connectionCorrelationId` once, when it is created, and puts it
 A failed extension startup is remembered per cluster until a startup succeeds. The next
 `connect.startup` names it in `previousFailedStartupCorrelationId`, and connection diagnosis names
 it in `failedStartupCorrelationId`, so a failure can be joined to the recovery that followed it.
-Cancelled startups are not remembered.
+Cancelled startups are not remembered. From 1.1.0 the tree's Retry and Update Credentials commands
+also name it in `failedStartupCorrelationId`.
+
+**Connect requests (1.1.0).** A tree `connect` event is one connect request from a view: it knows
+the view, the discovery provider and `journeyCorrelationId`, but not the destination or the stage a
+failure stopped in, which `connect.startup` knows. Once an attempt ran, every tree view sets
+`connectionResult` (`success` or `failed`) and the attempt's `connectionCorrelationId`, failed
+attempts included, so the two join exactly. Before 1.1.0 the Connections View and the Azure
+Resources View set neither on a failure (the request reported `Succeeded`), and the ID was set only
+after a success. A request that stopped before connecting (a closed prompt) has neither. The
+`connect` events for failures after a cluster was connected (`source = treeExpansion`) carry the
+ID of the connection they happened on. Database, collection, documents and index nodes of a
+discovered cluster carry its `journeyCorrelationId`, so commands run on them join the journey.
 
 ### Output channel
 

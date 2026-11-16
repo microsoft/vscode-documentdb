@@ -19,6 +19,12 @@ export class DocumentsItem implements TreeElement, TreeElementWithExperience, Tr
     public readonly experience: Experience;
     public contextValue: string = 'treeItem_documents';
 
+    /**
+     * The discovery journey of the cluster this node belongs to, passed down from its parent so
+     * commands run here join that journey in telemetry. For statistics only.
+     */
+    public journeyCorrelationId?: string;
+
     private readonly experienceContextValue: string = '';
 
     /**

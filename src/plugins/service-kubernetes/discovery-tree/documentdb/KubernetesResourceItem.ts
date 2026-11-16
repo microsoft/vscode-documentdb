@@ -344,8 +344,7 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
                     }),
                 );
 
-                context.telemetry.properties.connectionResult = 'success';
-                context.telemetry.properties.connectionCorrelationId = clustersClient.connectionCorrelationId ?? '';
+                this.reportConnectionAttempt(context, 'success', clustersClient);
 
                 return clustersClient;
             } catch (error) {
@@ -354,7 +353,7 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
                     throw error;
                 }
 
-                context.telemetry.properties.connectionResult = 'failed';
+                this.reportConnectionAttempt(context, 'failed');
                 context.telemetry.properties.connectionErrorType = error instanceof Error ? error.name : 'UnknownError';
 
                 ext.outputChannel.appendLine(

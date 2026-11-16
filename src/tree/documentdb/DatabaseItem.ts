@@ -24,6 +24,12 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
     public readonly experience: Experience;
     public contextValue: string = 'treeItem_database';
 
+    /**
+     * The discovery journey of the cluster this node belongs to, passed down from its parent so
+     * commands run here join that journey in telemetry. For statistics only.
+     */
+    public journeyCorrelationId?: string;
+
     private readonly experienceContextValue: string = '';
 
     /**
@@ -102,6 +108,7 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
 
         return collections.map((collection) => {
             const collectionItem = new CollectionItem(this.cluster, this.databaseInfo, collection, isCurrent);
+            collectionItem.journeyCorrelationId = this.journeyCorrelationId;
             // Start loading document count in background (fire-and-forget).
             collectionItem.loadDocumentCount();
             return collectionItem;

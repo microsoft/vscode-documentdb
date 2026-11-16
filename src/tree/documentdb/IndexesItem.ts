@@ -35,6 +35,12 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
     public readonly experience: Experience;
     public contextValue: string = 'treeItem_indexes';
 
+    /**
+     * The discovery journey of the cluster this node belongs to, passed down from its parent so
+     * commands run here join that journey in telemetry. For statistics only.
+     */
+    public journeyCorrelationId?: string;
+
     private readonly experienceContextValue: string = '';
     /**
      * Cached index count for the collection.
@@ -70,7 +76,9 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
         indexes.sort((a, b) => compareIndexNames(a.name, b.name));
 
         return indexes.map((index) => {
-            return new IndexItem(this.cluster, this.databaseInfo, this.collectionInfo, index);
+            const indexItem = new IndexItem(this.cluster, this.databaseInfo, this.collectionInfo, index);
+            indexItem.journeyCorrelationId = this.journeyCorrelationId;
+            return indexItem;
         });
     }
 
