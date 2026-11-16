@@ -56,7 +56,7 @@ loading/bundling paths:
 ## GitHub reviewer feedback and author decisions
 
 GitHub PR reviews and inline review comments were both empty at the collection
-snapshot on 2026-11-16. The PR remains a draft; no Copilot review is claimed.
+snapshot on 2026-11-16, while the PR was a draft; no Copilot review is claimed here.
 Any later reviewer feedback must be incorporated before human-review handoff.
 
 No defects were proposed, so there are no finding-specific author decisions to
@@ -67,9 +67,10 @@ recorded inline in that plan.
 ## Validation boundaries
 
 The review is not proof of interactive behavior in an installed workbench.
-Packaged lazy Identity loading and manual Entra sign-in, Azure discovery,
-Collection View and shell checks remain unverified. The extra packaged
-fake-endpoint proof awaits an operator decision.
+At 12:15 UTC on 2026-11-16, the operator reported that the listed manual
+Entra sign-in, Azure discovery, Collection View and shell checks passed.
+Packaged lazy Identity loading remains separately unverified; the extra
+packaged fake-endpoint proof awaits an operator decision.
 
 Both local verification cases passed, including strict package-test type checks,
 the complete runtime suite and packaging. VSIX inspection and installed

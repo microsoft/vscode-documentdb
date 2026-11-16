@@ -285,19 +285,20 @@ Public npm age does not prove the Azure Artifacts feed has synced; CI install is
       `npm run lint`, `npm run build`, `npm run typecheck:tests`, `npx vitest run`,
       `npm run package`. No `npm run l10n` needed: no product strings change.
 - [x] FTP smoke result recorded in the PR description.
-- [ ] Manual smoke on the packaged VSIX: Entra ID sign-in, Azure discovery tree, Collection
+- [x] Manual smoke on the packaged VSIX: Entra ID sign-in, Azure discovery tree, Collection
       View, and a shell session.
 - [ ] After merge, re-fetch the Dependabot alerts and confirm the 13 IDs above closed.
 
 ## Outcome
 
-**Still unverified:** interactive packaged-VSIX Entra sign-in, Azure discovery,
-Collection View and a shell session. Try these before pushing further or
-requesting human review. Ordinary activation does not prove that the lazy Identity
-SDK loads; the extra packaged fake-endpoint test remains an operator decision.
-These limitations are not represented as passing checks.
+**Manual smoke passed (operator report, 2026-11-16 12:15 UTC):** the operator
+confirmed "manual tests passed", completing the listed packaged-VSIX checks:
+Entra sign-in, Azure discovery, Collection View and a shell session.
+Ordinary activation does not prove that the lazy Identity SDK loads; the extra
+packaged fake-endpoint test remains separately unverified and an operator decision.
+The manual-test report is not represented as proof that this additional test ran.
 
-Draft PR: [#1087](https://github.com/microsoft/vscode-documentdb/pull/1087),
+PR: [#1087](https://github.com/microsoft/vscode-documentdb/pull/1087),
 base `main`, milestone **1.1.0**. Its description links each security alert;
 Dependabot alerts are not issue numbers, so no unrelated issues are linked with
 `Closes #NNN`. Closure must be confirmed after merge.
@@ -355,8 +356,10 @@ five consultations: planning, WI-2 compatibility, WI-4 fallback, WI-4 browser
 diagnosis, and WI-5/pre-review. All verdicts were followed. A separate Sol pass
 validated the review and independently swept the graph at 90% confidence.
 
-The PR remains a draft pending the manual packaged checks and the parked
-Identity-load-proof decision. No author decision or rationale was invented.
+The PR was already marked ready for review when the manual-test result was
+recorded; that state was preserved. The listed manual packaged checks passed;
+the additional Identity-load proof remains separately unverified. No author
+decision or rationale about that extra proof was inferred from the test report.
 After merge, confirm that all thirteen security alerts close.
 
 ### Usage snapshot for cost optimization
