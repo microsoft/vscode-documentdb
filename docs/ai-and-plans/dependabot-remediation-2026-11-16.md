@@ -119,6 +119,13 @@ All thirteen targeted alerts were verified open through GitHub's API.
 - Check: [Entra auth tests](../../src/documentdb/auth/MicrosoftEntraIDAuthHandler.test.ts);
   do not change application proxy policy.
 
+> **Done (2026-11-16), commit `b3810a922`:** Updated the sole `proxy-addr` copy to
+> `2.0.8` with npm; only that package's metadata changed. Operator-approved patch;
+> advised (`claude-opus-5.5`), implemented by `gpt-6-luna`. Leader confidence 99%
+> after reviewing the scoped diff and age-gate evidence. One introduced version,
+> zero fresh, unknown or lookup failures. No tests added or changed; Entra tests
+> and the build are deferred to the installed-dependency batch.
+
 ### 2. Azure Identity `4.14.1` with MSAL Node `7.1.0`
 
 - Direct dependency `@azure/identity`: `~4.13.0` -> **`~4.14.1`**.
