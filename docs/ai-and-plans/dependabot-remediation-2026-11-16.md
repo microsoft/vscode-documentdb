@@ -143,6 +143,18 @@ All thirteen targeted alerts were verified open through GitHub's API.
   [sovereign auth](../../src/documentdb/auth/sovereignAuth.integration.test.ts).
   Keep failure classification, token caching and sovereign-cloud behavior.
 
+> **Done (2026-11-16), commit `2373d8943`:** Applied the approved Identity range and
+> scoped Node MSAL pin; removed `uuid@8.3.2`. Implemented by `gpt-6.1-sol`;
+> advised (`claude-opus-5.5`). The advisor resolved the worker's blocker with high
+> confidence: unchanged MSAL Browser pins root `msal-common@16.5.1`, while Node
+> MSAL correctly pins nested `16.14.2`; preserving both avoids unrelated churn.
+> Leader confidence 98% in carrying out that verdict. SDK source review found
+> the existing managed-identity call and error-classification paths compatible;
+> upstream Azure Arc now validates the requested client ID. `npm ls` passed;
+> six focused auth files passed (152 tests). No tests added or changed.
+> Cumulative age gate: ten introduced versions, zero fresh, unknown or lookup
+> failures. Root build and packaged checks remain in the final batch.
+
 **Deferred, escalated (2026-11-16):** The advisor found that ordinary activation does
 not load the lazy Identity SDK, so activation alone cannot prove its packaged load.
 The leader asked whether to approve an additional one-off packaged fake-endpoint
