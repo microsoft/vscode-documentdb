@@ -594,6 +594,7 @@ export const fixtures = {
                 status: docker.status,
                 busy: false,
                 canReuseExistingData: false,
+                savedImagePinned: false,
                 suggestedPort: 10260,
             }),
             'localQuickStart.getDockerStatus': reply('query', docker),

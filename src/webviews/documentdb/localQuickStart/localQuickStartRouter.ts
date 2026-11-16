@@ -392,7 +392,8 @@ export const localQuickStartRouter = router({
                     dirty = false;
                     const status = toWebviewStatus(QuickStartService.getStatus());
                     const instanceEngine = await QuickStartService.getInstanceEngine();
-                    const statusKey = JSON.stringify({ status, instanceEngine });
+                    const savedImagePinned = await QuickStartService.isSavedImagePinned();
+                    const statusKey = JSON.stringify({ status, instanceEngine, savedImagePinned });
                     // The status event also fires when nothing user-visible changed; skipping those
                     // keeps the credential read below off the repeating path.
                     if (statusKey !== lastStatusKey) {
@@ -401,6 +402,7 @@ export const localQuickStartRouter = router({
                             status,
                             canReuseExistingData: await QuickStartService.canReuseExistingData(),
                             instanceEngine,
+                            savedImagePinned,
                         };
                     }
                     continue;

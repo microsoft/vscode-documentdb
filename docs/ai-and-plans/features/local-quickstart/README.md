@@ -2,7 +2,7 @@
 feature: local-quickstart
 kind: notes
 status: active
-prs: [653, 798, 876, 958, 954, 953, 955, 979, 1076]
+prs: [653, 798, 876, 958, 954, 953, 955, 979, 1076, 1083]
 verified: 2026-08-14
 code:
   - src/commands/localQuickStart/**
@@ -123,6 +123,16 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
   from its own environment ([0005](./decisions.md#0005---restore-missing-credentials-from-the-managed-container)).
   A volume without recoverable credentials requires an explicit Start fresh. Its removal waits until the port check and image download succeed. Sample data is
   loaded only into a new volume, so recreating an instance does not restore documents the user deleted.
+- **Recreation prepares the saved image, not an upgrade.** Setup and reconciliation record the
+  running image's digest when available. Configure uses **Saved image** and **Recreate container**;
+  only a recorded digest is described as the exact image rather than a newer image. Execution reuses
+  that image locally or downloads its exact digest. Legacy tag-only records use the local image
+  without claiming original identity; if that image is unavailable while the volume exists, setup
+  stops rather than downloading a potentially newer tag. **Preparing image** reports what actually
+  happened. Done retains every completed stage and its Details, then shows **Container recreated**
+  only when execution confirmed reuse of the existing volume. Its version comes from the server's
+  readiness response, never the image label; unknown versions are omitted. The summary confirms the
+  reused volume and credentials, not the contents of the data.
 - **Refresh reports; it does not clean up.** If the recorded engine or container is unavailable, the
   record and credentials stay until setup or Delete. The tree does not silently switch an instance
   to another engine.
@@ -150,6 +160,7 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 | 2026-11-10 | —     | Details on settled Set up and Done stages; no step durations                                                                         | [iterations/11-setup-stage-details.md](./iterations/11-setup-stage-details.md)                                                                                                  |
 | 2026-11-10 | #1076 | Preferred engine, owning-engine lifecycle safety and platform-gated Podman startup; all P1–P6 phases and final verification complete | [iterations/12-preferred-engine-and-podman-start.md](./iterations/12-preferred-engine-and-podman-start.md), [review](./iterations/13-preferred-engine-implementation-review.md) |
 | 2026-11-12 | #1076 | Podman guidance follows the address in its error (WSL Windows machine, remote host, user socket)                                     | [iterations/14-podman-connection-detection.md](./iterations/14-podman-connection-detection.md)                                                                                  |
+| 2026-11-13 | #1083 | Recreate keeps the image its data runs on, pinned by digest                                                                          | [iterations/15-recreate-image-pin-review.md](./iterations/15-recreate-image-pin-review.md)                                                                                      |
 
 ## Decisions
 
