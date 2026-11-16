@@ -90,6 +90,18 @@ and `startupOutcome` (`succeeded`, `failed`, or `canceled`). The framework suppl
 `stageDurationsMs` contains those same stage timings, with a total `elapsedMs`. Success and cancellation
 summaries use Trace; failures use Error. No per-stage log or telemetry events are added.
 
+From 1.1.0 the event also carries `startupTrigger`: which code path asked for the client
+(`treeConnect`, `treeChildren`, `collectionView`, `documentView`, `clusterDashboard`,
+`clusterDashboardPoll`, `playgroundCompletion`, or `other` for callers that do not pass one).
+Failed startups (not succeeded or canceled ones) also carry `startupFailureType`, the original
+error's `parseError` type kept only when it looks like an identifier or a code of up to six digits
+(else `other`), and `startupFailureCategory`: `credentialsUnavailable`, `entraToken`,
+`authentication`, `authorization`, `invalidConnectionString`, `unsupported`, `tls`, `dns`,
+`timeout`, `network`, `serverSelection` or `other`. Both are computed from the original error
+because the event sets `maskEntireErrorMessage`, which redacts every property named like `error`
+or `exception`; that is also why neither name contains those words. See
+`src/documentdb/utils/startupFailureTelemetry.ts`.
+
 The same event also carries `tokenAcquireDurationMs` for the actual provider call and
 `databaseConnectDurationMs` for driver connection work excluding overlapping token acquisition.
 Both appear in the log's `costTimingsMs`. Entra user tokens are usually acquired before connecting,
