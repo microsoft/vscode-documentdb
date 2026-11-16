@@ -16,6 +16,7 @@
 
 ### Fixes
 
+- **Local Credentials Layout**: Fixes username and password field alignment in DocumentDB Local setup. Places username guidance below both inputs as a full-width note with an info icon. [#1092](https://github.com/microsoft/vscode-documentdb/pull/1092)
 - **Local Container Recreation**: Preserves a recorded image digest when recreating a container with existing data, avoiding an unintended upgrade through a floating tag. Older tag-only instances use the local image or stop with guidance if it is missing, rather than automatically downloading a potentially newer image. [#1083](https://github.com/microsoft/vscode-documentdb/pull/1083)
 
 ### Security
