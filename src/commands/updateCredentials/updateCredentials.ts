@@ -57,6 +57,12 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
     }
+    // The failed attempt these credentials replace; the reconnect's `connect.startup` names it in
+    // `previousFailedStartupCorrelationId`, so it shows whether the new credentials worked.
+    const failedStartupCorrelationId = ClustersClient.getLastFailedStartupCorrelationId(node.cluster.clusterId);
+    if (failedStartupCorrelationId) {
+        context.telemetry.properties.failedStartupCorrelationId = failedStartupCorrelationId;
+    }
 
     // access credentials assigned to the selected cluster
 

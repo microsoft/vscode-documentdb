@@ -13,6 +13,7 @@ import {
 import * as vscode from 'vscode';
 import * as containerCli from './containerCli';
 import {
+    classifyImagePullLine,
     ContainerRuntime,
     disposeQuickStartOutputChannel,
     getExitCode,
@@ -609,6 +610,14 @@ describe('ContainerRuntime output channel', () => {
         await new Promise((resolve) => setImmediate(resolve));
 
         expect(lines).toContain('c1');
+    });
+    it.each([
+        ['Status: Downloaded newer image for mcr.microsoft.com/documentdb/documentdb-local:latest', 'downloaded'],
+        ['Status: Image is up to date for mcr.microsoft.com/documentdb/documentdb-local:latest', 'upToDate'],
+        ['latest: Pulling from documentdb/documentdb-local', undefined],
+        ['Copying blob sha256:abc done', undefined],
+    ] as const)('reads what the pull did from its status line (%s)', (line, expected) => {
+        expect(classifyImagePullLine(line)).toBe(expected);
     });
 });
 

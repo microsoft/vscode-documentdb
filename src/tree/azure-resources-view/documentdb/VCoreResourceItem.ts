@@ -180,7 +180,7 @@ export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
                     }),
                 );
 
-                context.telemetry.properties.connectionCorrelationId = clustersClient.connectionCorrelationId ?? '';
+                this.reportConnectionAttempt(context, 'success', clustersClient);
 
                 return clustersClient;
             } catch (error) {
@@ -188,6 +188,8 @@ export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
                     context.telemetry.properties.connectionResult = 'cancelled';
                     throw error;
                 }
+                // Without this the request reports Succeeded: a failed connection returns no client, like a closed prompt.
+                this.reportConnectionAttempt(context, 'failed');
 
                 ext.outputChannel.appendLine(
                     l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),

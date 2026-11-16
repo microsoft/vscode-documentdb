@@ -497,6 +497,7 @@ const instance: InstanceStatusUpdate = { status: docker.status, canReuseExisting
 const common = {
     'common.reportEvent': reply<void>('mutation', undefined),
     'common.reportError': reply<void>('mutation', undefined),
+    'common.reportViewLoad': reply<void>('mutation', undefined),
 } satisfies RpcFixtures;
 
 export const fixtures = {

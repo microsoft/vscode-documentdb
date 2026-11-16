@@ -115,7 +115,7 @@ export async function openClusterDashboard(
 
     if (node instanceof DatabaseItem) {
         // Database nodes are only rendered after their cluster connected, so reuse that client.
-        await ClustersClient.getClient(node.cluster.clusterId);
+        await ClustersClient.getClient(node.cluster.clusterId, undefined, undefined, 'clusterDashboard');
     } else {
         const client = await node.connect();
         if (!client) {

@@ -5,13 +5,17 @@
 
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
-import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
+import {
+    callWithTelemetryAndErrorHandling,
+    UserCancelledError,
+    type IActionContext,
+} from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { EntraDestinationRejectedError } from '../../documentdb/auth/oidcAllowedHosts';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { type Experience } from '../../DocumentDBExperiences';
-import { RETRY_NODE_ID_SUFFIX, containsRetryNode } from '../api/retryNode';
+import { containsRetryNode, RETRY_NODE_ID_SUFFIX } from '../api/retryNode';
 import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
@@ -67,7 +71,7 @@ vi.mock('../../documentdb/CredentialCache', () => ({
 }));
 
 vi.mock('../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: vi.fn(), exists: vi.fn().mockReturnValue(false) },
+    ClustersClient: { getClient: vi.fn(), exists: vi.fn().mockReturnValue(false), getExistingClient: vi.fn() },
 }));
 
 vi.mock('../../extensionVariables', () => ({
@@ -299,6 +303,10 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
             null,
             { activationSource: 'autoOpenOnConnect' },
         );
+        expect(callWithTelemetryAndErrorHandling).not.toHaveBeenCalledWith(
+            'clusterDashboard.autoOpenSkipped',
+            expect.anything(),
+        );
     });
 
     it('does not auto-open the dashboard while the stable cluster id is suppressed', async (): Promise<void> => {
@@ -381,6 +389,18 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
             null,
             { activationSource: 'autoOpenOnConnect' },
         );
+        // Reports that automatic opening was skipped, so people who turned it off are countable.
+        const skipped = (callWithTelemetryAndErrorHandling as Mock).mock.calls.find(
+            ([eventName]) => eventName === 'clusterDashboard.autoOpenSkipped',
+        );
+        expect(skipped).toBeDefined();
+        const context = {
+            telemetry: { properties: {} as Record<string, string>, measurements: {} },
+            errorHandling: {},
+        };
+        await (skipped?.[1] as (ctx: typeof context) => unknown)(context);
+        expect(context.telemetry.properties).toMatchObject({ reason: 'settingDisabled' });
+        expect(mockTelemetryEvents).toHaveLength(0);
     });
 
     it('returns the "Create Database…" node when the cluster has no databases', async () => {
@@ -445,7 +465,12 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
 
         const children = await item.getChildren();
 
-        expect(ClustersClientMock.getClient).toHaveBeenCalledWith('cluster-1', expect.anything(), expect.any(Function));
+        expect(ClustersClientMock.getClient).toHaveBeenCalledWith(
+            'cluster-1',
+            expect.anything(),
+            expect.any(Function),
+            'treeConnect',
+        );
         expect(vscode.window.showErrorMessage).toHaveBeenCalledExactlyOnceWith(
             "Microsoft Entra ID isn't allowed for this server.",
             {
@@ -630,6 +655,7 @@ describe('ClusterItemBase.connect', () => {
             cluster.clusterId,
             expect.anything(),
             expect.any(Function),
+            'treeConnect',
         );
     });
 

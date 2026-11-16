@@ -50,8 +50,24 @@ import {
     type DockerReadiness,
     type DockerReadinessRequest,
     type DockerStartAction,
+    type ImagePullOutcome,
     QUICK_START_PORT,
 } from './quickStartTypes';
+
+/**
+ * Read one line of `docker pull` output. Both the classic and the containerd image store end a
+ * pull with one of these two status lines; other lines (and other CLIs such as Podman, or a changed
+ * wording) tell nothing, so the pull's outcome stays unknown.
+ */
+export function classifyImagePullLine(line: string): ImagePullOutcome | undefined {
+    if (/^Status: Downloaded newer image for /i.test(line.trim())) {
+        return 'downloaded';
+    }
+    if (/^Status: Image is up to date for /i.test(line.trim())) {
+        return 'upToDate';
+    }
+    return undefined;
+}
 
 /**
  * Shell used to run docker commands. A shell provider is REQUIRED so the runner

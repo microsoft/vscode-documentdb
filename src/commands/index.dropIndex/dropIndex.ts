@@ -12,6 +12,7 @@ import { type IndexItem } from '../../tree/documentdb/IndexItem';
 import { confirmIndexAction } from '../../utils/dialogs/confirmIndexAction';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { getIndexConfirmationStats } from '../index.shared/getIndexConfirmationStats';
+import { recordIndexActionTelemetry } from '../index.shared/recordIndexActionTelemetry';
 
 export async function dropIndex(context: IActionContext, node: IndexItem): Promise<void> {
     if (!node) {
@@ -19,7 +20,6 @@ export async function dropIndex(context: IActionContext, node: IndexItem): Promi
     }
 
     context.telemetry.properties.experience = node.experience.api;
-    context.telemetry.properties.indexName = node.indexInfo.name;
 
     // Prevent deleting the _id index
     if (node.indexInfo.name === '_id_') {
@@ -36,6 +36,7 @@ export async function dropIndex(context: IActionContext, node: IndexItem): Promi
         sizeBytes,
         usageOps,
     });
+    recordIndexActionTelemetry(context, 'drop', confirmed, { sizeBytes, usageOps });
 
     if (!confirmed) {
         return;

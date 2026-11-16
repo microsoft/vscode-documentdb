@@ -688,7 +688,7 @@ export class ClusterSession {
      * @throws Will throw an error if the client cannot be obtained using the provided cluster ID.
      */
     public static async initNewSession(clusterId: string): Promise<string> {
-        const client = await ClustersClient.getClient(clusterId);
+        const client = await ClustersClient.getClient(clusterId, undefined, undefined, 'collectionView');
 
         const sessionId = Math.random().toString(16).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 

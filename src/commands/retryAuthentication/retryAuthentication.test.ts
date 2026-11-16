@@ -29,6 +29,14 @@ vi.mock('../../extensionVariables', () => ({
     },
 }));
 
+vi.mock('../../documentdb/ClustersClient', () => ({
+    ClustersClient: {
+        getLastFailedStartupCorrelationId: vi.fn((clusterId: string) =>
+            clusterId === 'failed-cluster' ? 'failed-attempt' : undefined,
+        ),
+    },
+}));
+
 vi.mock('vscode', () => ({
     l10n: {
         t: vi.fn((value: string) => value),
@@ -45,6 +53,21 @@ describe('retryAuthentication', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+    });
+
+    // The next connect.startup names the same attempt in previousFailedStartupCorrelationId.
+    it('records the failed connection attempt a retry follows up on', async () => {
+        const context = { telemetry: { properties: {} as Record<string, string>, measurements: {} } };
+        const node = {
+            id: 'connectionsView/failed-cluster',
+            contextValue: 'connectionsView;treeItem_documentdbcluster',
+            cluster: { clusterId: 'failed-cluster' },
+            getTreeItem,
+        };
+
+        await retryAuthentication(context as never, node);
+
+        expect(context.telemetry.properties.failedStartupCorrelationId).toBe('failed-attempt');
     });
 
     it('retries discovery nodes based on tree id when the context value lacks the view token', async () => {

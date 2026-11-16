@@ -168,13 +168,14 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 
 ## Decisions
 
-See [decisions.md](./decisions.md). Twelve entries: the single-instance model (0001, superseded), its
+See [decisions.md](./decisions.md). Thirteen entries: the single-instance model (0001, superseded), its
 reversal to multi-instance (0002), the Concept F wizard information architecture (0003), the
 managed-node cluster-command context boundary plus its deferred replacement (0004), restoring
 missing credentials from the managed container (0005), the wizard journey telemetry and its
 correlation ids (0006), image usage telemetry following VS Code's setting (0007), Details on
 settled setup stages (0008), preferred-engine ownership and platform-gated Podman startup
-(0009–0011), and Podman guidance from the address in its error (0012).
+(0009–0011), Podman guidance from the address in its error (0012), and the setup outcome, guide and
+instance connection telemetry added in 1.1.0 (0013).
 
 ## Open gaps
 

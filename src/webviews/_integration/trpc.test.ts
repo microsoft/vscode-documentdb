@@ -4,6 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { TRPCError } from '@trpc/server';
+import { MongoServerError } from 'mongodb';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCallerFactory, publicProcedureWithTelemetry, router } from './trpc';
 
@@ -77,6 +79,14 @@ const testRouter = router({
     broken: publicProcedureWithTelemetry.mutation((): never => {
         throw new Error('broken');
     }),
+    duplicate: publicProcedureWithTelemetry.mutation((): never => {
+        throw new Error('private-key duplicate', {
+            cause: new MongoServerError({ message: 'E11000 private-value', code: 11000 }),
+        });
+    }),
+    rejected: publicProcedureWithTelemetry.mutation((): never => {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'rejected' });
+    }),
 });
 
 const createCaller = createCallerFactory(testRouter);
@@ -98,5 +108,21 @@ describe('publicProcedureWithTelemetry', (): void => {
         await expect(caller().broken()).rejects.toBeDefined();
         expect(recordedContexts[0].telemetry.properties.result).toBe('Failed');
         expect(recordedContexts[0].telemetry.properties.errorMessage).toBe('broken');
+        expect(recordedContexts[0].telemetry.properties.causeType).toBe('Error');
+    });
+
+    it('records the innermost cause type, not the tRPC code, under a name whole-error masking keeps', async (): Promise<void> => {
+        await expect(caller().duplicate()).rejects.toBeDefined();
+        const properties = recordedContexts[0].telemetry.properties;
+        expect(properties.error).toBe('INTERNAL_SERVER_ERROR');
+        expect(properties.causeType).toBe('11000');
+        expect(/(error|exception)/i.test('causeType')).toBe(false);
+        expect(properties.causeType).not.toContain('private');
+    });
+
+    it('omits causeType when the failure has no cause', async (): Promise<void> => {
+        await expect(caller().rejected()).rejects.toBeDefined();
+        expect(recordedContexts[0].telemetry.properties.result).toBe('Failed');
+        expect(recordedContexts[0].telemetry.properties.causeType).toBeUndefined();
     });
 });

@@ -174,7 +174,7 @@ export const clusterDashboardRouter = router({
     getClusterInfo: publicProcedureWithTelemetry.query(async ({ ctx }): Promise<ClusterDashboardInfo> => {
         const myCtx = dashboardContext(ctx);
 
-        const client = await ClustersClient.getClient(myCtx.clusterId);
+        const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'clusterDashboard');
         const metadata = await client.getClusterMetadata();
 
         // Best effort: a connection restored from a session without cached credentials has
@@ -204,7 +204,7 @@ export const clusterDashboardRouter = router({
             const myCtx = dashboardContext(ctx);
             myCtx.actionContext.telemetry.properties.loadReason = input.loadReason ?? 'initial';
 
-            const client = await ClustersClient.getClient(myCtx.clusterId);
+            const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'clusterDashboard');
 
             // Expanding a row can fan out to 100 `collStats`; the panel is often collapsed or the
             // dashboard closed long before they finish.
@@ -222,7 +222,7 @@ export const clusterDashboardRouter = router({
         const myCtx = ctx as WithTelemetry<RouterContext>;
         myCtx.actionContext.telemetry.suppressAll = true;
 
-        const client = await ClustersClient.getClient(myCtx.clusterId);
+        const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'clusterDashboardPoll');
 
         return sampleClusterHealth(client.getMongoClient());
     }),
@@ -234,7 +234,7 @@ export const clusterDashboardRouter = router({
             const myCtx = dashboardContext(ctx);
             myCtx.actionContext.telemetry.properties.loadReason = input?.loadReason ?? 'initial';
 
-            const client = await ClustersClient.getClient(myCtx.clusterId);
+            const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'clusterDashboard');
 
             const stats = await getStorageStats(client.getMongoClient(), myCtx.signal);
 
@@ -381,6 +381,8 @@ export const clusterDashboardRouter = router({
                 collectionName: z.string().min(1),
                 initialTab: z.enum(['tab_result', 'tab_indexes', 'tab_queryInsights']).optional(),
                 activationSource: DASHBOARD_CONTROL.optional(),
+                /** Whether the row was picked from a filtered list. */
+                isFiltered: z.boolean().optional(),
             }),
         )
         .mutation(async ({ input, ctx }): Promise<void> => {
@@ -389,6 +391,9 @@ export const clusterDashboardRouter = router({
                 input.activationSource,
             );
             myCtx.actionContext.telemetry.properties.initialTab = input.initialTab ?? 'tab_result';
+            if (input.isFiltered !== undefined) {
+                myCtx.actionContext.telemetry.properties.isFiltered = input.isFiltered ? 'true' : 'false';
+            }
 
             await openCollectionViewInternal(myCtx.actionContext, {
                 clusterId: myCtx.clusterId,
@@ -438,7 +443,7 @@ export const clusterDashboardRouter = router({
         }
         myCtx.actionContext.telemetry.properties.exportConfirmed = 'true';
 
-        const client = await ClustersClient.getClient(myCtx.clusterId);
+        const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'clusterDashboard');
         const mongoClient = client.getMongoClient();
         const storageCommands: RawCommandDiagnostic[] = [];
 

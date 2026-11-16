@@ -28,11 +28,12 @@ import {
 } from '../../services/connectionStorageService';
 import { DocumentDBClusterItem } from './DocumentDBClusterItem';
 
-const { prompt, wizardCreated, showQuickPick, showErrorMessage } = vi.hoisted(() => ({
+const { prompt, wizardCreated, showQuickPick, showErrorMessage, telemetryEvents } = vi.hoisted(() => ({
     prompt: vi.fn<(context: AuthenticateWizardContext) => Promise<void>>(),
     wizardCreated: vi.fn(),
     showQuickPick: vi.fn(),
     showErrorMessage: vi.fn<(...args: unknown[]) => Promise<string | undefined>>(),
+    telemetryEvents: [] as Array<{ name: string; properties: Record<string, string | undefined> }>,
 }));
 
 vi.mock('vscode', async (importOriginal) => {
@@ -58,7 +59,7 @@ vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
         }
     },
     callWithTelemetryAndErrorHandling: async (
-        _name: string,
+        name: string,
         callback: (context: IActionContext) => Promise<unknown>,
     ): Promise<unknown> => {
         const context = {
@@ -67,6 +68,10 @@ vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
             valuesToMask: [],
             ui: { showQuickPick },
         } as unknown as IActionContext;
+        telemetryEvents.push({
+            name,
+            properties: context.telemetry.properties as Record<string, string | undefined>,
+        });
         try {
             return await callback(context);
         } catch {
@@ -236,6 +241,41 @@ describe('saved connection destination authentication', () => {
             );
         },
     );
+});
+
+describe('connect request telemetry', () => {
+    beforeEach((): void => {
+        vi.clearAllMocks();
+        telemetryEvents.length = 0;
+        vi.mocked(CredentialCache.hasCredentials).mockReturnValue(false);
+        vi.mocked(ConnectionStorageService.get).mockResolvedValue(
+            makeConnection('mongodb://localhost:27017/', AuthMethodId.NoAuth),
+        );
+    });
+
+    const connectEvent = (): Record<string, string | undefined> | undefined =>
+        telemetryEvents.find((event) => event.name === 'connect')?.properties;
+
+    // The request returns no client after a failed connection, which the wrapper reports as
+    // Succeeded; the outcome and the failed attempt's ID must be explicit.
+    it('reports a failed connection with the ID of the attempt that failed', async (): Promise<void> => {
+        vi.mocked(ClustersClient.getClient).mockImplementation(async (_clusterId, _signal, onStartup) => {
+            onStartup?.('failed-attempt');
+            throw new Error('Authentication failed.');
+        });
+
+        await expect(makeItem().connect()).resolves.toBeNull();
+
+        expect(connectEvent()).toMatchObject({ connectionResult: 'failed', connectionCorrelationId: 'failed-attempt' });
+    });
+
+    it('reports a successful connection with its connection ID', async (): Promise<void> => {
+        vi.mocked(ClustersClient.getClient).mockResolvedValue({ connectionCorrelationId: 'attempt' } as ClustersClient);
+
+        await expect(makeItem().connect()).resolves.toMatchObject({ connectionCorrelationId: 'attempt' });
+
+        expect(connectEvent()).toMatchObject({ connectionResult: 'success', connectionCorrelationId: 'attempt' });
+    });
 });
 
 describe('DocumentDBClusterItem credential reachability', (): void => {

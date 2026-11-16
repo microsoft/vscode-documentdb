@@ -10,27 +10,28 @@ created: 2026-08-24
 
 > The decisions that shaped the Cluster Dashboard, and what was rejected on the way.
 
-| #    | Decision                                                      | Status              | Changed from the proposal?                                                 | Date       | PR   |
-| ---- | ------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------------- | ---------- | ---- |
-| 0001 | Poll from the webview, not tRPC subscriptions                 | Accepted            | Accepted as proposed, scoped down for the POC                              | 2026-07-27 | #823 |
-| 0002 | Per-command try/catch, no capability probe                    | Accepted            | Accepted as proposed                                                       | 2026-07-27 | #823 |
-| 0003 | Confirmation on the host; kill reports the request            | Superseded by 0019  | Outcome vocabulary added after live testing                                | 2026-07-28 | #823 |
-| 0004 | Custom SVG sparkline instead of a charting dependency         | Accepted            | Accepted as proposed                                                       | 2026-07-27 | #823 |
-| 0005 | Panel de-duplication keyed on `clusterId`, never `treeId`     | Accepted            | Accepted as proposed                                                       | 2026-07-27 | #823 |
-| 0006 | The page is a data inventory, not a performance dashboard     | Accepted            | **Reverses the genre-A model in `design.md` §1.1**                         | 2026-07-28 | #823 |
-| 0007 | Nothing above the fold moves                                  | Accepted            | Raised from a review note to a standing rule                               | 2026-07-28 | #823 |
-| 0008 | A tab exists only when the server can answer it               | Accepted            | Emerged from live vCore testing, not the plan                              | 2026-07-28 | #823 |
-| 0009 | Converge with PR #753 on a shared `feature/` branch           | Proposed            | Needs sign-off from #753's author and a maintainer                         | 2026-08-24 | #823 |
-| 0014 | Step into a database, do not expand it                        | Accepted (modified) | Its back-button-only exit was reversed by 0018                             | 2026-09-02 | #823 |
-| 0015 | Storage refresh is explicit after initial load                | Accepted            | Removes a timer left behind by the data-first redesign                     | 2026-09-07 | #823 |
-| 0016 | Row context-menu entries run on the host                      | Accepted            | Removes a host → webview → host relay                                      | 2026-09-07 | #823 |
-| 0017 | Diagnostics carry raw replies, not a second reading of them   | Accepted            | Retires the topology summary with its card                                 | 2026-09-07 | #823 |
-| 0018 | The level band is a breadcrumb; Back stays in the footer      | Accepted            | Reverses 0014's rejection of the breadcrumb                                | 2026-09-07 | #823 |
-| 0019 | `currentOp` is out of scope for this iteration                | Accepted            | Supersedes 0003 and 0010; makes 0012 moot                                  | 2026-09-08 | #823 |
-| 0020 | Show the dashboard on tree connect by default                 | Accepted            | New entry point, with a persistent opt-out                                 | 2026-09-09 | #823 |
-| 0021 | Unavailable table values are enough for best-effort summaries | Accepted            | Replaces proposed completeness badges and row warning icons with N/A cells | 2026-09-10 | #823 |
-| 0022 | Labels name content; icons communicate navigation             | Accepted            | Replaces generic file and document icons with destination-oriented actions | 2026-09-10 | #823 |
-| 0023 | Dashboard proposals are ideas, not a specification            | Accepted            | Approves the scope design as implemented, not literal proposal conformance | 2026-09-29 | #980 |
+| #    | Decision                                                      | Status              | Changed from the proposal?                                                 | Date       | PR    |
+| ---- | ------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------------- | ---------- | ----- |
+| 0001 | Poll from the webview, not tRPC subscriptions                 | Accepted            | Accepted as proposed, scoped down for the POC                              | 2026-07-27 | #823  |
+| 0002 | Per-command try/catch, no capability probe                    | Accepted            | Accepted as proposed                                                       | 2026-07-27 | #823  |
+| 0003 | Confirmation on the host; kill reports the request            | Superseded by 0019  | Outcome vocabulary added after live testing                                | 2026-07-28 | #823  |
+| 0004 | Custom SVG sparkline instead of a charting dependency         | Accepted            | Accepted as proposed                                                       | 2026-07-27 | #823  |
+| 0005 | Panel de-duplication keyed on `clusterId`, never `treeId`     | Accepted            | Accepted as proposed                                                       | 2026-07-27 | #823  |
+| 0006 | The page is a data inventory, not a performance dashboard     | Accepted            | **Reverses the genre-A model in `design.md` §1.1**                         | 2026-07-28 | #823  |
+| 0007 | Nothing above the fold moves                                  | Accepted            | Raised from a review note to a standing rule                               | 2026-07-28 | #823  |
+| 0008 | A tab exists only when the server can answer it               | Accepted            | Emerged from live vCore testing, not the plan                              | 2026-07-28 | #823  |
+| 0009 | Converge with PR #753 on a shared `feature/` branch           | Proposed            | Needs sign-off from #753's author and a maintainer                         | 2026-08-24 | #823  |
+| 0014 | Step into a database, do not expand it                        | Accepted (modified) | Its back-button-only exit was reversed by 0018                             | 2026-09-02 | #823  |
+| 0015 | Storage refresh is explicit after initial load                | Accepted            | Removes a timer left behind by the data-first redesign                     | 2026-09-07 | #823  |
+| 0016 | Row context-menu entries run on the host                      | Accepted            | Removes a host → webview → host relay                                      | 2026-09-07 | #823  |
+| 0017 | Diagnostics carry raw replies, not a second reading of them   | Accepted            | Retires the topology summary with its card                                 | 2026-09-07 | #823  |
+| 0018 | The level band is a breadcrumb; Back stays in the footer      | Accepted            | Reverses 0014's rejection of the breadcrumb                                | 2026-09-07 | #823  |
+| 0019 | `currentOp` is out of scope for this iteration                | Accepted            | Supersedes 0003 and 0010; makes 0012 moot                                  | 2026-09-08 | #823  |
+| 0020 | Show the dashboard on tree connect by default                 | Accepted            | New entry point, with a persistent opt-out                                 | 2026-09-09 | #823  |
+| 0021 | Unavailable table values are enough for best-effort summaries | Accepted            | Replaces proposed completeness badges and row warning icons with N/A cells | 2026-09-10 | #823  |
+| 0022 | Labels name content; icons communicate navigation             | Accepted            | Replaces generic file and document icons with destination-oriented actions | 2026-09-10 | #823  |
+| 0023 | Dashboard proposals are ideas, not a specification            | Accepted            | Approves the scope design as implemented, not literal proposal conformance | 2026-09-29 | #980  |
+| 0024 | Measure whether automatic opening and filters are used        | Accepted            | Raised from the telemetry dashboard, not a feature proposal                | 2026-11-04 | #1064 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -930,3 +931,50 @@ approved design from the remaining ideas rather than describe every proposal as 
   suggestions: the operator approved the current implementation instead.
 - Treat the full proposal list as approved work: the operator expressly described it as
   ideas, not a specification.
+
+---
+
+## 0024: Measure whether automatic opening and filters are used
+
+**Status:** Accepted · **Date:** 2026-11-04 · **Raised by:** Operator
+**Evidence:** the Feat: Cluster Dashboard page of the telemetry dashboard (iteration 10,
+`docs/ai-and-plans/dashboards/live/README.md`) and the operator's request for "a signal on
+using the filter feature in the collection/databases and indexes".
+
+### Decision
+
+Add four signals, shipping in 1.1.0:
+
+- `clusterDashboard.closed` when a dashboard panel closes, with `openMs`, `visibleMs` and
+  `shownAgainCount`, joined to its open by `dashboardSessionId`. Best effort: a window closing
+  with the panel open may not deliver it.
+- `clusterDashboard.autoOpenSkipped` (`reason = settingDisabled`) where a connection would
+  have opened the dashboard but the setting is off, so people who turned automatic opening
+  off in Settings are countable.
+- One filter-use event per use of a list filter: `inventoryFilter` in the dashboard
+  inventory (`level`, `totalRows`, `matchingRows`, `filterLength`) and `indexFilter` in the
+  Indexes tab (`textFilter`, `hiddenFilter`, `unusedFilter`, `totalIndexes`, `shownIndexes`,
+  `filterLength`). A use is reported once the input has been still for 1.5 s, or as it ends
+  if that is sooner. Opening a collection from the dashboard also records `isFiltered`.
+- The tree's drop, hide and unhide index commands record `actionType`, `userCancelled` and the
+  index's size and usage, as the Indexes tab already does, and no longer send the index name.
+
+### Reasoning
+
+From 2026-10-20 to 2026-11-03 auto-opened dashboards were used in 11.8% of cases against 64%
+for deliberate opens, which questions decision 0020's default. Their events cannot tell a
+page closed at once from one left behind another editor, and the setting can be turned off
+without any event. The filters had no signal at all: `isFiltered` on drilling into a database
+was false on all 441 drill-ins, but typing without opening a row was invisible. Tree index
+commands returned on a declined confirmation without marking it, so a cancel read as
+Succeeded, and they sent index names, which can contain field names.
+
+### Rejected alternatives
+
+- Report every filter keystroke, or the filter text: volume without meaning, and names typed
+  into a filter are user data.
+- Infer dashboard closing from the last event of a session: the last event is usually an
+  automatic load, which says nothing about when the panel closed.
+- Change the open command's result to Failed when its connection fails: the dashboard
+  telemetry page already reads `connectionresult`, and failing the command would surface a
+  second error to the user.

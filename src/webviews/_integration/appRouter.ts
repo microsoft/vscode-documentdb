@@ -47,6 +47,7 @@ import { documentsViewRouter as documentViewRouter } from '../documentdb/documen
 import { localQuickStartRouter } from '../documentdb/localQuickStart/localQuickStartRouter';
 import { confirmInput, showModalConfirmation, type ConfirmResult } from './commonDialogs';
 import { WEBVIEW_CONFIG } from './configuration';
+import { type ViewLoadTracker } from './observability/viewLoadTelemetry';
 import { publicProcedure, publicProcedureWithTelemetry, router } from './trpc';
 
 // Re-export tRPC primitives for backward compatibility with existing imports.
@@ -91,6 +92,11 @@ export type BaseRouterContext = FrameworkBaseRouterContext &
          * `openAppWebview` factory / framework `openWebview` options.
          */
         webviewName: string;
+        /**
+         * The panel's load-time tracker, set by `openAppWebview` only for views that report
+         * `documentDB.webview.viewLoaded`. Shared by every operation of the panel.
+         */
+        viewLoad?: ViewLoadTracker;
     };
 
 /**
@@ -146,6 +152,30 @@ const commonRouter = router({
                     trackDeepLinkTelemetry(context, readDeepLinkTelemetry(myCtx));
                 },
             );
+        }),
+    /**
+     * Load-time milestones of the calling panel. Plain `publicProcedure`: the milestones feed the
+     * panel's single `documentDB.webview.viewLoaded` event, so a per-call RPC event would only
+     * duplicate it. Views without a tracker, repeated milestones and remounts are ignored.
+     */
+    reportViewLoad: publicProcedure
+        .input(
+            z.discriminatedUnion('milestone', [
+                z.object({ milestone: z.literal('webviewReady') }),
+                z.object({
+                    milestone: z.literal('firstData'),
+                    outcome: z.enum(['dataShown', 'empty', 'failed']),
+                    firstDataRpcMs: z.number().nonnegative().optional(),
+                }),
+            ]),
+        )
+        .mutation(({ input, ctx }): void => {
+            const tracker = (ctx as BaseRouterContext).viewLoad;
+            if (input.milestone === 'webviewReady') {
+                tracker?.markWebviewReady();
+            } else {
+                tracker?.markFirstData(input.outcome, input.firstDataRpcMs);
+            }
         }),
     reportError: publicProcedure
         // This is the input schema of your procedure, two parameters, both strings

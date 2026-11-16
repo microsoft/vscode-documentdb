@@ -10,6 +10,7 @@ import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useRef, useState } from 'react';
 import { type TableDataEntry } from '../../../documentdb/ClusterSession';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
+import { useViewLoadTelemetry } from '../../_integration/useViewLoadTelemetry';
 import { Announcer } from '../../components/accessibility';
 import { useSelectiveContextMenuPrevention } from '../../components/useSelectiveContextMenuPrevention';
 import { setCompletionContext } from '../../query-language-support';
@@ -59,6 +60,15 @@ export const CollectionView = (): JSX.Element => {
      * Use the `useTrpcClient` hook to get the tRPC client
      */
     const trpcClient = useTrpcClient();
+
+    const viewLoad = useViewLoadTelemetry();
+    /**
+     * When the view's first query was sent (webview clock), or `undefined` once that load was
+     * reported. Only the first query's chain (run the query, then fetch the page for the
+     * current view) is load time; every later query, page or view switch is not.
+     */
+    const firstLoadStartedAtRef = useRef<number | undefined>(undefined);
+    const firstLoadClaimedRef = useRef(false);
 
     /**
      * Please note: using the context and states inside of closures can lead to stale data.
@@ -267,7 +277,7 @@ export const CollectionView = (): JSX.Element => {
      * within various controls (query panel, paging, etc.).
      */
 
-    function getDataForView(selectedView: Views): void {
+    function getDataForView(selectedView: Views, onSettled?: (loaded: boolean) => void): void {
         switch (selectedView) {
             case Views.TABLE: {
                 const path = currentContext.currentViewState?.currentPath ?? [];
@@ -293,8 +303,10 @@ export const CollectionView = (): JSX.Element => {
                             tableHeaders: tableHeaders,
                             tableData: (result.data as TableDataEntry[]) ?? [],
                         }));
+                        onSettled?.(true);
                     })
                     .catch((error) => {
+                        onSettled?.(false);
                         void trpcClient.common.displayErrorMessage.mutate({
                             message: l10n.t('Error while loading the data'),
                             modal: false,
@@ -311,8 +323,10 @@ export const CollectionView = (): JSX.Element => {
                             ...prev,
                             treeData: result,
                         }));
+                        onSettled?.(true);
                     })
                     .catch((error) => {
+                        onSettled?.(false);
                         void trpcClient.common.displayErrorMessage.mutate({
                             message: l10n.t('Error while loading the data'),
                             modal: false,
@@ -328,8 +342,10 @@ export const CollectionView = (): JSX.Element => {
                             ...prev,
                             jsonDocuments: result,
                         }));
+                        onSettled?.(true);
                     })
                     .catch((error) => {
+                        onSettled?.(false);
                         void trpcClient.common.displayErrorMessage.mutate({
                             message: l10n.t('Error while loading the data'),
                             modal: false,
@@ -338,6 +354,7 @@ export const CollectionView = (): JSX.Element => {
                     });
                 break;
             default:
+                onSettled?.(true);
                 break;
         }
     }
@@ -367,6 +384,20 @@ export const CollectionView = (): JSX.Element => {
     useEffect(() => {
         setCurrentContext((prev) => ({ ...prev, isLoading: true }));
 
+        const isFirstLoad = !firstLoadClaimedRef.current;
+        if (isFirstLoad) {
+            firstLoadClaimedRef.current = true;
+            firstLoadStartedAtRef.current = performance.now();
+        }
+        const settleFirstLoad = (outcome: 'dataShown' | 'empty' | 'failed'): void => {
+            const startedAt = firstLoadStartedAtRef.current;
+            if (!isFirstLoad || startedAt === undefined) {
+                return;
+            }
+            firstLoadStartedAtRef.current = undefined;
+            viewLoad.reportFirstData(outcome, performance.now() - startedAt);
+        };
+
         // 1. Run the query, this operation only acknowledges the request.
         //    Next we need to load the ones we need.
         trpcClient.mongoClusters.collectionView.runFindQuery
@@ -391,7 +422,9 @@ export const CollectionView = (): JSX.Element => {
                 updateAutoCompletionData();
 
                 // 3. Load the data for the current view
-                getDataForView(currentContext.currentView);
+                getDataForView(currentContext.currentView, (loaded) =>
+                    settleFirstLoad(!loaded ? 'failed' : response.documentCount === 0 ? 'empty' : 'dataShown'),
+                );
 
                 // 4. Non-blocking Stage 1 prefetch to populate cache. Only on a
                 //    fresh query (initial/refresh): pagination keeps the same
@@ -407,6 +440,7 @@ export const CollectionView = (): JSX.Element => {
                 setCurrentContext((prev) => ({ ...prev, isLoading: false, isFirstTimeLoad: false }));
             })
             .catch(async (error) => {
+                settleFirstLoad('failed');
                 const cause = error instanceof Error ? error.message : String(error);
                 const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
                 void trpcClient.common.displayErrorMessage.mutate({

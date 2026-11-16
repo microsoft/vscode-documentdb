@@ -148,7 +148,7 @@ export const indexViewRouter = router({
      */
     listIndexes: publicProcedureWithTelemetry.query(async ({ ctx }) => {
         const myCtx = ctx as WithTelemetry<RouterContext>;
-        const client = await ClustersClient.getClient(myCtx.clusterId);
+        const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'collectionView');
 
         const rawIndexes = await client.listIndexes(myCtx.databaseName, myCtx.collectionName);
 
@@ -203,7 +203,7 @@ export const indexViewRouter = router({
     getCollectionDocumentCount: publicProcedureWithTelemetry.query(async ({ ctx }) => {
         const myCtx = ctx as WithTelemetry<RouterContext>;
         try {
-            const client = await ClustersClient.getClient(myCtx.clusterId);
+            const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'collectionView');
             const stats = await client.getCollectionStats(myCtx.databaseName, myCtx.collectionName);
             return stats.count;
         } catch {
@@ -257,7 +257,7 @@ export const indexViewRouter = router({
      */
     createIndex: publicProcedureWithTelemetry.input(CreateIndexInputSchema).mutation(async ({ input, ctx }) => {
         const myCtx = ctx as WithTelemetry<RouterContext>;
-        const client = await ClustersClient.getClient(myCtx.clusterId);
+        const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'collectionView');
         const spec = buildIndexSpec(input);
 
         if (isVectorCreateIndexInput(input)) {
@@ -386,7 +386,7 @@ export const indexViewRouter = router({
                 return { ok: true, cancelled: true };
             }
 
-            const client = await ClustersClient.getClient(myCtx.clusterId);
+            const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'collectionView');
             const result = await client.dropIndex(myCtx.databaseName, myCtx.collectionName, input.indexName);
             if (result.ok === 0 || result.note) {
                 const message = typeof result.note === 'string' ? result.note : l10n.t('Failed to delete index.');
@@ -408,7 +408,7 @@ export const indexViewRouter = router({
         .input(z.object({ indexName: z.string().min(1) }))
         .mutation(async ({ input, ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
-            const client = await ClustersClient.getClient(myCtx.clusterId);
+            const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'collectionView');
             const rawIndexes = await client.listIndexes(myCtx.databaseName, myCtx.collectionName);
             const match = rawIndexes.find((idx) => idx.name === input.indexName);
             if (!match) {
@@ -462,7 +462,7 @@ export const indexViewRouter = router({
             if (!confirmed) {
                 return { ok: true, cancelled: true };
             }
-            const client = await ClustersClient.getClient(myCtx.clusterId);
+            const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'collectionView');
             const result = await client.hideIndex(myCtx.databaseName, myCtx.collectionName, input.indexName);
             if (result.ok === 0 || result.errmsg) {
                 const message = typeof result.errmsg === 'string' ? result.errmsg : l10n.t('Failed to hide index.');
@@ -495,7 +495,7 @@ export const indexViewRouter = router({
             if (!confirmed) {
                 return { ok: true, cancelled: true };
             }
-            const client = await ClustersClient.getClient(myCtx.clusterId);
+            const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'collectionView');
             const result = await client.unhideIndex(myCtx.databaseName, myCtx.collectionName, input.indexName);
             if (result.ok === 0 || result.errmsg) {
                 const message = typeof result.errmsg === 'string' ? result.errmsg : l10n.t('Failed to unhide index.');

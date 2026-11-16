@@ -17,10 +17,10 @@ vi.mock('../../webviews/documentdb/collectionView/collectionViewController', () 
 }));
 
 describe('URL-driven collection opening', () => {
-    it('records the real collection session and forwards publisher attribution', async (): Promise<void> => {
+    it('records the real collection session and forwards publisher attribution and the journey', async (): Promise<void> => {
         const deepLink = { deepLinkCorrelationId: 'link-id', deepLinkSource: 'docs' };
         const context: IActionContext = {
-            telemetry: { properties: { ...deepLink }, measurements: {} },
+            telemetry: { properties: { ...deepLink, journeyCorrelationId: 'journey-id' }, measurements: {} },
             errorHandling: { issueProperties: {} },
             valuesToMask: [],
             ui: {} as IActionContext['ui'],
@@ -36,6 +36,7 @@ describe('URL-driven collection opening', () => {
         expect(openCollectionWebview).toHaveBeenCalledWith(
             expect.objectContaining({ clusterId: 'stable-id', sessionId: 'collection-session' }),
             deepLink,
+            'journey-id',
         );
     });
 });

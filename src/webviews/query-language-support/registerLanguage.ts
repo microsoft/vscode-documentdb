@@ -43,6 +43,10 @@ let openUrlHandler: ((url: string) => void) | undefined;
 /** Callback used to track completion acceptance via the extension host. */
 let completionAcceptedHandler: ((category: string) => void) | undefined;
 
+/** Callback reporting that this panel's editor offered a completion; called at most once. */
+let completionOfferedHandler: (() => void) | undefined;
+let completionOfferedReported = false;
+
 /** Monaco command ID for completion acceptance tracking. */
 const COMPLETION_ACCEPTED_COMMAND = 'documentdb.internal.completionAccepted';
 
@@ -56,14 +60,17 @@ const COMPLETION_ACCEPTED_COMMAND = 'documentdb.internal.completionAccepted';
  * @param monaco - the Monaco editor API instance
  * @param openUrl - callback to open a URL via the extension host (avoids webview sandbox restrictions)
  * @param onCompletionAccepted - callback to track completion acceptance via the extension host
+ * @param onCompletionOffered - callback reporting the first completion offered in this panel
  */
 export function registerDocumentDBQueryLanguage(
     monaco: typeof monacoEditor,
     openUrl?: (url: string) => void,
     onCompletionAccepted?: (category: string) => void,
+    onCompletionOffered?: () => void,
 ): Promise<void> {
     openUrlHandler = openUrl ?? openUrlHandler;
     completionAcceptedHandler = onCompletionAccepted ?? completionAcceptedHandler;
+    completionOfferedHandler = onCompletionOffered ?? completionOfferedHandler;
     if (!registrationPromise) {
         registrationPromise = doRegisterLanguage(monaco).catch((err) => {
             registrationPromise = undefined; // allow retry on next call
@@ -188,6 +195,12 @@ async function doRegisterLanguage(monaco: typeof monacoEditor): Promise<void> {
                 needsWrapping,
                 completionCommandId: COMPLETION_ACCEPTED_COMMAND,
             });
+
+            // Once per panel is enough to count who is offered completions; per keystroke would flood the host.
+            if (items.length > 0 && !completionOfferedReported && completionOfferedHandler) {
+                completionOfferedReported = true;
+                completionOfferedHandler();
+            }
 
             return { suggestions: items };
         },

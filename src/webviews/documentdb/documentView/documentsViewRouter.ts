@@ -51,7 +51,12 @@ export const documentsViewRouter = router({
             const myCtx = ctx as RouterContext;
 
             // run query
-            const client: ClustersClient = await ClustersClient.getClient(myCtx.clusterId);
+            const client: ClustersClient = await ClustersClient.getClient(
+                myCtx.clusterId,
+                undefined,
+                undefined,
+                'documentView',
+            );
             const documentContent = await client.pointRead(myCtx.databaseName, myCtx.collectionName, input);
 
             /**
@@ -83,7 +88,12 @@ export const documentsViewRouter = router({
             }
 
             // run query
-            const client: ClustersClient = await ClustersClient.getClient(myCtx.clusterId);
+            const client: ClustersClient = await ClustersClient.getClient(
+                myCtx.clusterId,
+                undefined,
+                undefined,
+                'documentView',
+            );
 
             // when a document is saved and is missing an _id field, the _id field is added on the server
             // or by the mongodb driver.

@@ -12,6 +12,7 @@ import { type IndexItem } from '../../tree/documentdb/IndexItem';
 import { confirmIndexAction } from '../../utils/dialogs/confirmIndexAction';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { getIndexConfirmationStats } from '../index.shared/getIndexConfirmationStats';
+import { recordIndexActionTelemetry } from '../index.shared/recordIndexActionTelemetry';
 
 export async function unhideIndex(context: IActionContext, node: IndexItem): Promise<void> {
     if (!node) {
@@ -19,7 +20,6 @@ export async function unhideIndex(context: IActionContext, node: IndexItem): Pro
     }
 
     context.telemetry.properties.experience = node.experience.api;
-    context.telemetry.properties.indexName = node.indexInfo.name;
 
     // Check if index is actually hidden
     if (!node.indexInfo.hidden) {
@@ -36,6 +36,7 @@ export async function unhideIndex(context: IActionContext, node: IndexItem): Pro
         sizeBytes,
         usageOps,
     });
+    recordIndexActionTelemetry(context, 'unhide', confirmed, { sizeBytes, usageOps });
 
     if (!confirmed) {
         return;

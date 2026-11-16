@@ -21,6 +21,8 @@ const mockRefreshLiveState = vi.fn();
 const mockCanReuseExistingData = vi.fn();
 const mockSuggestPort = vi.fn();
 const mockProvision = vi.fn();
+const mockOpenExternal = vi.fn();
+const mockGetDockerReadinessSnapshot = vi.fn();
 const mockProcedureTelemetry = vi.fn();
 const mockGetWizardContext = vi.fn();
 const mockGetInstanceEngine = vi.fn();
@@ -34,7 +36,11 @@ const fireStatusChange = (): void => statusListeners.forEach((listener) => liste
 
 vi.mock('vscode', () => ({
     commands: { executeCommand: vi.fn() },
-    env: { clipboard: { writeText: vi.fn() } },
+    env: {
+        clipboard: { writeText: vi.fn() },
+        openExternal: (...args: unknown[]) => mockOpenExternal(...args) as unknown,
+    },
+    Uri: { parse: (value: string) => ({ toString: () => value }) },
 }));
 
 vi.mock('../../../services/localQuickStart/ContainerRuntime', () => ({
@@ -57,6 +63,7 @@ vi.mock('../../../services/localQuickStart/QuickStartService', () => ({
         getInstanceEngine: (...args: unknown[]) => mockGetInstanceEngine(...args) as unknown,
         isSavedImagePinned: (...args: unknown[]) => mockIsSavedImagePinned(...args) as unknown,
         checkPort: vi.fn(),
+        getDockerReadinessSnapshot: (...args: unknown[]) => mockGetDockerReadinessSnapshot(...args) as unknown,
         onDidChangeStatus: (listener: () => void) => {
             statusListeners.add(listener);
             return { dispose: () => statusListeners.delete(listener) };
@@ -258,6 +265,51 @@ describe('localQuickStartRouter', () => {
             expect.objectContaining({ forceRefresh: true, resetProviderMemory: true }),
             undefined,
         );
+    });
+
+    describe('openGuide', () => {
+        beforeEach(() => {
+            mockOpenExternal.mockReset().mockResolvedValue(true);
+            mockGetDockerReadinessSnapshot.mockReset();
+        });
+
+        it('opens the guide URL resolved on the host and records the guide and journey', async () => {
+            mockGetDockerReadinessSnapshot.mockReturnValue({ outcome: 'diagnosed', failureKind: 'cliMissing' });
+            const context = { ...createContext(), wizardSession: wizardSession() };
+            const caller = createCallerFactory(localQuickStartRouter)(context);
+
+            await caller.openGuide({ guide: 'installWindowsDesktop' });
+
+            expect(mockOpenExternal).toHaveBeenCalledTimes(1);
+            expect(String(mockOpenExternal.mock.calls[0][0])).toBe(
+                'https://docs.docker.com/desktop/setup/install/windows-install/',
+            );
+            expect(context.actionContext.telemetry.properties).toMatchObject({
+                guide: 'installWindowsDesktop',
+                wizardStep: 'configure',
+                quickStartSessionId: 'session-1',
+                dockerFailureKind: 'cliMissing',
+            });
+        });
+
+        it('omits dockerFailureKind when the last readiness found no failure', async () => {
+            mockGetDockerReadinessSnapshot.mockReturnValue({ outcome: 'ready' });
+            const context = createContext();
+            const caller = createCallerFactory(localQuickStartRouter)(context);
+
+            await caller.openGuide({ guide: 'dockerTroubleshooting' });
+
+            expect(context.actionContext.telemetry.properties.guide).toBe('dockerTroubleshooting');
+            expect(context.actionContext.telemetry.properties).not.toHaveProperty('dockerFailureKind');
+        });
+
+        // The panel names a guide; it can never make the host open an arbitrary address.
+        it('rejects anything but a known guide key', async () => {
+            const caller = createCallerFactory(localQuickStartRouter)(createContext());
+
+            await expect(caller.openGuide({ guide: 'https://example.com' as 'install' })).rejects.toThrow();
+            expect(mockOpenExternal).not.toHaveBeenCalled();
+        });
     });
 
     it.each([
