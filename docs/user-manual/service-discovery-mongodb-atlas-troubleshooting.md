@@ -10,12 +10,14 @@ This guide separates discovery problems from database connection problems. Atlas
 
 ## A credential needs attention
 
-When one or more credentials fail, the MongoDB Atlas root item shows a recovery action. Healthy resources found through other credentials remain visible.
+When one or more credentials fail, the MongoDB Atlas root item shows a single recovery action
+after healthy resources found through other credentials, in both tree and list modes.
 
-| Recovery action                   | What to do                                                                                                     |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Click here to retry               | Use this for a temporary network, service, or rate-limit failure.                                              |
-| Click here to revisit credentials | Open credential management when a credential is invalid, lacks permission, or requires a more detailed review. |
+| Recovery action          | What to do                                                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| Retry                    | Retry when all failures are temporary network, service, or rate-limit problems.                               |
+| Review credentials…      | Open credential management when all failures concern credentials, such as invalid credentials or permissions. |
+| Review discovery issues… | Review a mix of credential and temporary failures.                                                            |
 
 In credential management, use **Retry** for one credential or **Retry all** for every credential. A retry fetches fresh resource information and rechecks Service Account access.
 

@@ -15,6 +15,11 @@ sign-in and database access. It says which step stopped the connection and what 
 It works for connections that succeed, too. A working connection ends with **Connection successful**,
 and each step's **Details** show what was found, such as the server version and which server answered.
 
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./images/connection-diagnostics_dark.png"><img src="./images/connection-diagnostics.png" alt="Connection Diagnostics showing all eight checks passing, expanded DNS details, the Connection successful result, and report actions; identifying values are obscured" width="800" style="max-width:100%;height:auto;"></picture></p>
+
+This example shows a successful connection with **Server address (DNS)** expanded. Identifying
+values have been obscured in the screenshot; the panel itself shows their real values.
+
 **Table of Contents**
 
 - [Open connection diagnosis](#open-connection-diagnosis)
@@ -32,7 +37,8 @@ and each step's **Details** show what was found, such as the server version and 
 There are three ways to open it:
 
 - **From a failed connection.** When a cluster fails to connect, the tree shows recovery items under
-  it. Select **Diagnose this connection…**.
+  it. Select **Diagnose connection…**. Configuration repairs appear before diagnosis and
+  **Open shell**, with **Retry** last; see [connection recovery](./connecting-to-databases#recover-from-a-failed-connection).
 - **From any cluster.** Right-click a cluster in the Connections, Discovery or Azure view and select
   **Diagnose Connection…**. This works whether or not the cluster is connected. It is not offered
   on the Local Quick Start instance node.
