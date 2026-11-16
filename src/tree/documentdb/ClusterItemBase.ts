@@ -250,9 +250,14 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
 
     protected async getClientWithProgress(clusterId: string): Promise<ClustersClient> {
         const abortController = new AbortController();
-        const clientPromise = ClustersClient.getClient(clusterId, abortController.signal, (id) => {
-            this.lastConnectionCorrelationId = id;
-        });
+        const clientPromise = ClustersClient.getClient(
+            clusterId,
+            abortController.signal,
+            (id) => {
+                this.lastConnectionCorrelationId = id;
+            },
+            'treeConnect',
+        );
         try {
             const client = await withDelayedProgress(
                 clientPromise,

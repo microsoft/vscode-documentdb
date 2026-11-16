@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UserCancelledError, type IActionContext, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import type * as Mongodb from 'mongodb';
-import { MongoClient, type MongoClientOptions } from 'mongodb';
+import { MongoClient, MongoServerError, type MongoClientOptions } from 'mongodb';
 import { ext } from '../extensionVariables';
 import { traceAuthFlow, type AuthTraceContext } from '../utils/authTrace';
 import { AuthMethodId } from './auth/AuthMethod';
@@ -38,8 +38,15 @@ vi.mock('@microsoft/vscode-azext-utils', async () => {
     return {
         ...actual,
         appendExtensionUserAgent: vi.fn().mockReturnValue('test-extension'),
-        parseError: (error: unknown): { message: string } => ({
+        // Mirrors the real `parseError` type rule: a `code` wins over the class name.
+        parseError: (error: unknown): { message: string; errorType: string } => ({
             message: error instanceof Error ? error.message : String(error),
+            errorType:
+                typeof error === 'object' && error !== null && 'code' in error && error.code !== undefined
+                    ? String(error.code)
+                    : error instanceof Error
+                      ? error.constructor.name
+                      : typeof error,
         }),
         callWithTelemetryAndErrorHandling: vi.fn(
             async (eventName: string, callback: (context: IActionContext) => Promise<unknown>): Promise<unknown> => {
@@ -506,11 +513,50 @@ describe('regular connection startup diagnostics', () => {
         expect(startupEvent().telemetry.properties).toMatchObject({
             result: 'Failed',
             lastStage: 'stage01PreparingCredentials',
+            startupFailureType: 'Error',
+            startupFailureCategory: 'credentialsUnavailable',
+            startupTrigger: 'other',
         });
         expect(startupEvent().telemetry.properties.connectionCorrelationId).toEqual(expect.any(String));
         expect(startupEvent().telemetry.measurements.stage02ConfiguringAuthDurationMs).toBeUndefined();
         expect(JSON.stringify(startupEvent())).not.toContain('private-');
         expect(vi.mocked(MongoClient)).not.toHaveBeenCalled();
+    });
+
+    it('records the original failure type, category and trigger under names whole-error masking keeps', async () => {
+        const serverError = new MongoServerError({ message: 'private-user authentication failed', code: 18 });
+        mockConnect.mockRejectedValueOnce(serverError);
+
+        await expect(ClustersClient.getClient(clusterId, undefined, undefined, 'treeConnect')).rejects.toBe(
+            serverError,
+        );
+        const properties = startupEvent().telemetry.properties;
+        expect(properties).toMatchObject({
+            startupFailureType: '18',
+            startupFailureCategory: 'authentication',
+            startupTrigger: 'treeConnect',
+        });
+        // azext redacts every property named like an error when `maskEntireErrorMessage` is set.
+        expect(
+            ['startupFailureType', 'startupFailureCategory', 'startupTrigger'].filter((key) =>
+                /(error|exception)/i.test(key),
+            ),
+        ).toEqual([]);
+        expect(JSON.stringify(startupEvent())).not.toContain('private-');
+    });
+
+    it('records no failure properties on a successful or cancelled startup', async () => {
+        await ClustersClient.getClient(clusterId, undefined, undefined, 'clusterDashboardPoll');
+        expect(startupEvent().telemetry.properties).toMatchObject({ startupTrigger: 'clusterDashboardPoll' });
+        expect(startupEvent().telemetry.properties.startupFailureType).toBeUndefined();
+        expect(startupEvent().telemetry.properties.startupFailureCategory).toBeUndefined();
+
+        ClustersClient._clients.clear();
+        mockTelemetryEvents.length = 0;
+        const controller = new AbortController();
+        controller.abort();
+        await expect(ClustersClient.getClient(clusterId, controller.signal)).rejects.toBeInstanceOf(UserCancelledError);
+        expect(startupEvent().telemetry.properties.startupFailureCategory).toBeUndefined();
     });
 
     it('hands the transient URI to the driver while metadata and credentials keep the original', async () => {

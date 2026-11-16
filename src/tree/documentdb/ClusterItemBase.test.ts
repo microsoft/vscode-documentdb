@@ -464,7 +464,12 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
 
         const children = await item.getChildren();
 
-        expect(ClustersClientMock.getClient).toHaveBeenCalledWith('cluster-1', expect.anything(), expect.any(Function));
+        expect(ClustersClientMock.getClient).toHaveBeenCalledWith(
+            'cluster-1',
+            expect.anything(),
+            expect.any(Function),
+            'treeConnect',
+        );
         expect(vscode.window.showErrorMessage).toHaveBeenCalledExactlyOnceWith(
             "Microsoft Entra ID isn't allowed for this server.",
             {
@@ -649,6 +654,7 @@ describe('ClusterItemBase.connect', () => {
             cluster.clusterId,
             expect.anything(),
             expect.any(Function),
+            'treeConnect',
         );
     });
 

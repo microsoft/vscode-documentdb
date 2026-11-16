@@ -63,6 +63,7 @@ import { getHostsFromConnectionString } from './utils/connectionStringHelpers';
 import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
 import { parseDocumentId } from './utils/parseDocumentId';
+import { applyStartupFailureTelemetry, type ClientStartupTrigger } from './utils/startupFailureTelemetry';
 import { resolveAllowInvalidCertificates } from './utils/tlsException';
 import { toFilterQueryObj } from './utils/toFilterQuery';
 
@@ -163,6 +164,8 @@ interface ClientStartup {
     readonly stageDurationsMs: Partial<Record<ClientStartupStage, number>>;
     stage: ClientStartupStage;
     stageStartedAt: number;
+    /** Set when no cached credentials existed, so the failure category does not depend on a localized message. */
+    credentialsMissing?: boolean;
 }
 
 /**
@@ -263,7 +266,11 @@ export class ClustersClient {
         return CredentialCache.getCredentials(this.clusterId)?.localQuickStartInstance === true;
     }
 
-    private async initClient(abortSignal?: AbortSignal, onStartup?: (id: string) => void): Promise<void> {
+    private async initClient(
+        abortSignal: AbortSignal | undefined,
+        onStartup: ((id: string) => void) | undefined,
+        trigger: ClientStartupTrigger,
+    ): Promise<void> {
         const startupId = randomUUID();
         this.connectionCorrelationId = startupId;
         onStartup?.(startupId);
@@ -277,6 +284,7 @@ export class ClustersClient {
                 context.telemetry.properties.connectionCorrelationId = startupId;
                 context.telemetry.properties.startupCorrelationId = startupId;
                 context.telemetry.properties.surface = 'extension';
+                context.telemetry.properties.startupTrigger = trigger;
                 context.telemetry.properties.localQuickStartInstance = this.isLocalQuickStartInstance()
                     ? 'true'
                     : 'false';
@@ -300,6 +308,12 @@ export class ClustersClient {
                     this.finishClientStartup(startup, 'succeeded');
                 } catch (error) {
                     const canceled = error instanceof UserCancelledError;
+                    if (!canceled) {
+                        // Computed from the original error: the masked telemetry error carries no cause.
+                        applyStartupFailureTelemetry(context.telemetry.properties, error, {
+                            credentialsMissing: startup.credentialsMissing,
+                        });
+                    }
                     this.finishClientStartup(startup, canceled ? 'canceled' : 'failed');
                     originalFailure = { error };
                     if (canceled) {
@@ -348,6 +362,7 @@ export class ClustersClient {
     private async initializeClient(startup: ClientStartup, abortSignal?: AbortSignal): Promise<void> {
         const credentials = CredentialCache.getCredentials(this.clusterId);
         if (!credentials) {
+            startup.credentialsMissing = true;
             throw new Error(l10n.t('No credentials found for id {clusterId}', { clusterId: this.clusterId }));
         }
 
@@ -548,12 +563,16 @@ export class ClustersClient {
      * It is also used as a key to reuse existing clients.
      * @param abortSignal - Optional signal to abort the connection attempt. When aborted,
      * the in-progress connection is closed and a `UserCancelledError` is thrown.
+     * @param onStartup - Called with the startup correlation ID of the attempt this call joins.
+     * @param trigger - Which code path asks for the client; recorded as `startupTrigger` when this
+     * call starts a new `connect.startup`. Callers that do not pass it are recorded as `other`.
      * @returns A promise that resolves to an instance of `ClustersClient`.
      */
     public static async getClient(
         clusterId: string,
         abortSignal?: AbortSignal,
         onStartup?: (id: string) => void,
+        trigger: ClientStartupTrigger = 'other',
     ): Promise<ClustersClient> {
         if (ClustersClient._clients.has(clusterId)) {
             const client = ClustersClient._clients.get(clusterId) as ClustersClient;
@@ -596,7 +615,7 @@ export class ClustersClient {
         const client = new ClustersClient(clusterId);
         try {
             // Cluster metadata is set in initClient
-            await client.initClient(abortSignal, onStartup);
+            await client.initClient(abortSignal, onStartup, trigger);
             ClustersClient._clients.set(clusterId, client);
             ClustersClient._lastFailedStartups.delete(clusterId);
         } catch (error) {
