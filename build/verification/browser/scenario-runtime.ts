@@ -10,6 +10,8 @@ declare global {
     interface Window {
         __harnessErrors: string[];
         __scenario: { readonly route: ScenarioRoute; readonly data: Scenario; readonly check: () => void };
+        /** Per `sequence` assertion name: when each milestone first matched, in ms since page load. */
+        __scenarioTimeline: Record<string, (number | null)[]>;
     }
 }
 
@@ -30,10 +32,24 @@ export function readinessHolds(scenario: Scenario): boolean {
     );
 }
 
+/** Notes the first time each `sequence` milestone matches; DOM mutations trigger this, so it is prompt. */
+function recordMilestones(data: Scenario, timeline: Record<string, (number | null)[]>): void {
+    for (const assertion of data.assertions ?? []) {
+        if (assertion.kind !== 'sequence') continue;
+        const times = (timeline[assertion.name] ??= assertion.milestones.map((): null => null));
+        assertion.milestones.forEach((selector, index): void => {
+            if (times[index] === null && document.querySelector(selector)) times[index] = performance.now();
+        });
+    }
+}
+
 export function installScenario(route: ScenarioRoute, data: Scenario): void {
     const errors = window.__harnessErrors;
     window.acquireVsCodeApi = fakeVsCodeApi(data.rpc, errors);
+    const timeline: Record<string, (number | null)[]> = {};
+    window.__scenarioTimeline = timeline;
     const check = (): void => {
+        recordMilestones(data, timeline);
         document.documentElement.dataset.ready = errors.length ? 'failed' : readinessHolds(data) ? 'true' : 'pending';
     };
     window.__scenario = { route, data, check };

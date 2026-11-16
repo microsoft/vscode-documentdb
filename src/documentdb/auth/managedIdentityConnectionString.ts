@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type DocumentDBConnectionString } from '../utils/DocumentDBConnectionString';
-import { DOCUMENTDB_TOKEN_RESOURCE } from './entraScopes';
 
 /**
  * The `authMechanismProperties` entry that marks a connection string as using the driver-native
@@ -13,7 +12,9 @@ import { DOCUMENTDB_TOKEN_RESOURCE } from './entraScopes';
 export const AZURE_ENVIRONMENT_PROPERTY = 'ENVIRONMENT:azure';
 
 /** The full `authMechanismProperties` value emitted by `Copy Connection String` (decision D1a). */
-export const MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES = `ENVIRONMENT:azure,TOKEN_RESOURCE:${DOCUMENTDB_TOKEN_RESOURCE}`;
+export function getManagedIdentityAuthMechanismProperties(tokenResource: string): string {
+    return `ENVIRONMENT:azure,TOKEN_RESOURCE:${tokenResource}`;
+}
 
 const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

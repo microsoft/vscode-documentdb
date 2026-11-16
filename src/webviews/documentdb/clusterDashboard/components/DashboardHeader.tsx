@@ -10,10 +10,11 @@ import { useId, useState, type JSX } from 'react';
 
 import { DataBarVerticalAscendingRegular, NetworkCheckRegular } from '@fluentui/react-icons';
 import { type ClusterHealthSample } from '../../../../documentdb/utils/getClusterHealth';
+import { getClusterVersions } from '../../../../utils/clusterVersions';
 import { regionToDisplayName } from '../../../../utils/regionToDisplayName';
 import { type ClusterDashboardAzureInfo } from '../clusterDashboardController';
 import { type ClusterDashboardInfo } from '../clusterDashboardRouter';
-import { formatUptime, getClusterVersions } from '../formatUtils';
+import { formatUptime } from '../formatUtils';
 import { buildDetailGroups, DashboardDetailsRegion, DetailsDisclosureButton } from './DashboardDetails';
 
 /** Connection state derived from the most recent samples. */

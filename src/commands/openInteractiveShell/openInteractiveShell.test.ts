@@ -13,6 +13,7 @@ import { openInteractiveShell } from './openInteractiveShell';
 vi.mock('../../documentdb/shell/DocumentDBShellPty', () => ({
     DocumentDBShellPty: vi.fn().mockImplementation(function () {
         return {
+            shellSessionId: 'shell-session',
             onDidWrite: vi.fn(),
             onDidClose: vi.fn(),
             onDidChangeName: vi.fn(),
@@ -167,6 +168,20 @@ describe('openInteractiveShell', () => {
     });
 
     describe('when invoked from a cluster node', () => {
+        it('attributes URL-driven opens and returns their session id', async (): Promise<void> => {
+            const deepLink = { deepLinkCorrelationId: 'link-id', deepLinkSource: 'portal' };
+            const result = await openInteractiveShell(mockContext as never, makeClusterNode() as never, null, {
+                deepLink,
+            });
+            expect(result).toEqual({ opened: true, shellSessionId: 'shell-session' });
+            expect(mockContext.telemetry.properties).toMatchObject({
+                activationSource: 'deepLink',
+                deepLinkSource: 'portal',
+                deepLinkCorrelationId: 'link-id',
+                shellSessionId: 'shell-session',
+            });
+        });
+
         it('should create terminal with default database "test"', async () => {
             await openInteractiveShell(mockContext as never, makeClusterNode() as never);
 

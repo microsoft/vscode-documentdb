@@ -26,13 +26,29 @@ verified: 2026-08-14
 > [docker-readiness-implementation-plan.md](./iterations/04-ui-redesign/docker-readiness-implementation-plan.md)
 > supersedes the Docker Desktop-only examples in this historical design. Docker
 > Engine and Docker Desktop are supported providers; the prerequisite is a Docker
-> CLI that can reach a Linux-container daemon from the extension host.
+> or Podman CLI that can reach a Linux-container daemon from the extension host.
+>
+> **Approved engine behavior (2026-11-10):**
+> [iteration 12](./iterations/12-preferred-engine-and-podman-start.md) specifies a first-row,
+> check-free Container engine preference in Configure. A fresh form defaults to Docker and does
+> not persist the preference. Execution detects both CLIs, uses the preferred one if its CLI is
+> installed, and falls back to the other only when that CLI is missing and the other is installed,
+> not when its engine is stopped.
+> Instances record their owning engine, which remains fixed for lifecycle and recreation, including
+> Start fresh; legacy records are resolved only during execution. Podman runs neither read nor write
+> provider memory and ignore Docker evidence, while Docker's existing provider-memory behavior is
+> unchanged. On macOS and Windows, an explicit Podman machine start is available only for a stopped
+> default machine or the sole machine. Initialization and ambiguous selection remain manual; Linux
+> and WSL get copy-only guidance chosen from the address in Podman's error (decision 0012), an
+> unreachable remote Podman host gets no start action, and remote sessions do not start a local engine.
+> This approved design supersedes the older Docker-only assumptions below. Iteration 12 records
+> implementation phases and source provenance; the code remains authoritative for runtime behavior.
 
 ---
 
 ## 1. One-sentence goal
 
-From an empty machine-with-Docker to an open local DocumentDB connection,
+From an empty machine with a supported container engine to an open local DocumentDB connection,
 without leaving VS Code.
 
 ---
@@ -48,7 +64,7 @@ without leaving VS Code.
 | TLS exception                      | Gated to emulator wizard                                            | Gated step in regular new-connection wizard (localhost + private IPs + local domains) |
 | Container creation UI              | Notification-based interstitial                                     | Webview (tRPC router, card-based, same design language as query insights tab)         |
 | Legacy migration                   | Not addressed                                                       | First launch: existing emulator connections → `Local Connections (Legacy)` folder     |
-| Container runtime                  | Docker-specific                                                     | Docker-first (v1). OCI/podman follow-up issues tracked separately.                    |
+| Container runtime                  | Docker-specific                                                     | Docker-first in iteration 2; superseded by the approved engine preference above.      |
 
 ---
 
@@ -226,109 +242,63 @@ instead of the start flow:
 
 ### 5.4 Webview: Progress
 
-After the user clicks **Start DocumentDB Local**, the webview transitions
-to a progress view. The user can keep working — the webview is not modal
-(yet — modal webview API is expected from VS Code; once available we
-switch).
+After **Start DocumentDB Local** (or **Recreate container**), Set up shows five stages: checking the
+container engine, **Preparing image**, creating and starting the container, and waiting for DocumentDB to accept connections.
+Command output is available through **View setup log**.
 
-The heavy container work (pull / create / start) runs as **VS Code
-terminal tasks**, so the raw `docker` commands and their streaming output
-are visible in the integrated terminal. This mirrors the PostgreSQL
-"Local Docker Server" reference (see §16): the webview shows friendly step
-status while the terminal provides full command transparency. The
-webview's **View Docker output** expander surfaces the same stream inline
-for users who prefer not to switch to the terminal.
+For data-preserving recreation, Configure is titled **Configure recreation**, with a **Saved image**
+row and **Recreate container** primary action; the in-progress heading describes recreation.
+The address, recorded engine and credential summaries remain available, as does Start fresh.
+Only a recorded image digest supports the explanation that the exact recorded image is used rather
+than a newer image. A tag-only record explicitly lacks original image identity.
+Execution reuses an available local image without pulling. If a pinned image is unavailable, it
+pulls that exact digest; a missing legacy tag with an existing volume blocks setup instead of
+silently upgrading the data. The settled image summary and its Details distinguish saved-image
+reuse, exact-image download and legacy local-image reuse, without claiming a tag is up to date.
 
-**v1.0 keeps the webview side minimal** — matching the PostgreSQL reference,
-which shows _no_ in-webview progress at all. While the container work runs,
-the **Start** button is disabled and shows a spinner, and a failure renders
-as a single inline error message with a **Retry** (the terminal carries the
-detail). The staged progress list, per-stage percentages, and per-step
-inline expansion shown below are the **v1.2** enriched view (§15); the
-diagram illustrates that target, not the v1.0 surface.
+Both Set up and Done enable the shared StatusList row highlight for pointer hover and
+keyboard-visible focus, including its high-contrast outline and reduced-motion behavior.
 
-```
-+======================================================================+
-|  DocumentDB Local - Quick Start                              [x]     |
-+======================================================================+
-|                                                                      |
-|  ┌────────────────────────────────────────────────────────────────┐  |
-|  │  Setting up DocumentDB Local...                  00:18        │  |
-|  └────────────────────────────────────────────────────────────────┘  |
-|                                                                      |
-|  ┌────────────────────────────────────────────────────────────────┐  |
-|  │  [✅] Checking Docker                                         │  |
-|  │  [✅] Reserving port 10260                                    │  |
-|  │  [🔄] Pulling official image                          42%     │  |
-|  │  [  ] Creating container                                      │  |
-|  │  [  ] Starting container                                      │  |
-|  │  [  ] Waiting for DocumentDB to accept connections            │  |
-|  └────────────────────────────────────────────────────────────────┘  |
-|                                                                      |
-|  ┌────────────────────────────────────────────────────────────────┐  |
-|  │  ▸ View Docker output                                         │  |
-|  └────────────────────────────────────────────────────────────────┘  |
-|                                                                      |
-|                                                      [ Cancel ]      |
-|                                                                      |
-+======================================================================+
-```
+A settled row with facts offers **Details** alongside a concise factual summary. It starts collapsed
+and shows available evidence, not step durations. Every stage reserves one summary line while pending
+or active, so adding its summary does not move the following rows. Longer content can still wrap
+naturally in narrow panels. Checking reports PATH presence for both CLI
+executables but probes only the selected engine; its Details omit explanatory notes. Long image
+and container IDs are shortened visually and their full values are available via mouse and keyboard
+tooltips. An updated image includes its previous ID when already known. While pulling, one summary
+line initially shows the known image and origin; the latest bounded engine output replaces it once
+available. This active line never wraps: long text is ellipsized visually, with the full value in its
+title and the setup log. It reports literal activity, not an estimated completion percentage.
+A failed stage does not expand automatically: the
+explanation and recovery actions remain visible in the message block below the list. The checking
+row retains its last-checked time and re-check action; its Details replaces the old Docker-check
+accordion. See [0008](./decisions.md#0008---set-up-stages-expand-to-show-what-each-stage-did).
 
-On failure (v1.2 enriched view), the failed step expands with guidance; in
-v1.0 the same guidance is a single inline error message with **Retry** (the
-terminal carries the detail). When `docker run` fails, distinguish the cause
-via `docker inspect` — if the container exists it is a **start** failure,
-otherwise a **create** failure — and word the message accordingly (matching
-the PostgreSQL reference):
-
-```
-|  │  [✅] Checking Docker                                         │  |
-|  │  [✅] Reserving port 10260                                    │  |
-|  │  [❌] Pulling official image                       Failed     │  |
-|  │       We couldn't pull the image from ghcr.io.                │  |
-|  │       Check your network connection or proxy settings.        │  |
-|  │                                                               │  |
-|  │       [ Retry ]   [ Troubleshooting ]                         │  |
-|  │  [  ] Creating container                                      │  |
-|  │  [  ] Starting container                                      │  |
-|  │  [  ] Waiting for DocumentDB to accept connections            │  |
-```
+The main stage labels and status icons retain their existing typography. Everything ordinary below
+them uses one proportional UI font at base200 (12 px, 16 px line height), regular weight. Summaries,
+fact labels and values share the primary foreground; ports, names and identifiers do not switch to
+monospace. Links retain their interaction colour and focus styling but use the same text size.
+Only supplementary context uses the theme's description foreground, with a secondary-foreground
+fallback. Important qualifications such as a port shown "As requested" remain primary text.
+Severity messages retain their semantic emphasis. These are Local Quick Start overrides; the shared
+StatusList defaults and other consumers, including Diagnose connection, are unchanged.
 
 ### 5.5 Webview: Success
 
-```
-+======================================================================+
-|  DocumentDB Local - Quick Start                              [x]     |
-+======================================================================+
-|                                                                      |
-|  ┌────────────────────────────────────────────────────────────────┐  |
-|  │  ✅  DocumentDB Local is running on localhost:10260           │  |
-|  └────────────────────────────────────────────────────────────────┘  |
-|                                                                      |
-|  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌────────────┐  |
-|  │  Status      │ │  Endpoint    │ │  Image       │ │  Data      │  |
-|  │  ✅ Running  │ │  localhost    │ │  v1.2.3      │ │  Persisted │  |
-|  │              │ │  :10260      │ │  (latest)    │ │            │  |
-|  └──────────────┘ └──────────────┘ └──────────────┘ └────────────┘  |
-|                                                                      |
-|  ┌────────────────────────────────────────────────────────────────┐  |
-|  │  [ Open Connection ]       [ Copy Connection String ]         │  |
-|  │  [ Load Sample Data ]      [ View Logs ]                      │  |
-|  └────────────────────────────────────────────────────────────────┘  |
-|                                                                      |
-+======================================================================+
-```
+On readiness success, Done retains the five completed rows and their Details, followed by the
+success message and next steps. **Open Connection** reveals the managed cluster in the tree. If
+requested sample data was not loaded, the success message says so and the waiting row's Details
+provides an informational message and a link to the setup log.
 
-On readiness success the webview **auto-closes** and hands off to the
-tree, which becomes the persistent control surface (this matches the
-prototype: "progress in the terminal, and the webview closes
-automatically"). The success card above is shown only briefly.
-**Open Connection** expands the managed cluster in the tree (user browses
-databases/collections from the Quick Start subtree).
-
-**Load Sample Data** is rendered only when a seed dataset is available at
-ship time (see §8.4); otherwise it appears disabled with a "Coming soon"
-tooltip, since it is a v1.2 item (§15).
+The title stays **DocumentDB Local is ready** on every path. A successful recreation uses the
+existing success message block with the heading **Container recreated**, not a separate panel.
+The summary confirms that DocumentDB is running with the existing data volume and credentials,
+and states whether the saved image was reused, its exact digest was downloaded, or a legacy local
+image was used. The DocumentDB version is shown only when reported by the readiness probe's server
+response (`documentdbVersions`), never inferred from an image label. This is not a verification of
+data contents. Actual volume reuse from the creating-stage facts determines this summary, not the
+initial Configure mode: if the volume was gone, fresh-setup messaging remains. **View setup log**,
+**Open Connection**, **Close**, the next steps and all stage Details remain available.
 
 ### 5.6 Cancel rules
 
@@ -700,11 +670,12 @@ The container is shared machine state. No window "owns" it.
 
 ## 13. Cross-cutting rules
 
-1. **Opt-in only.** Never install Docker, never start Docker silently,
+1. **Opt-in only.** Never install a container engine, never start one silently,
    never modify containers the extension didn't create.
-2. **Explicit Docker start.** If Docker is stopped, offer a user-clicked
-   provider action only when the extension has positive launch evidence. Never
-   start a root-managed service or use elevation.
+2. **Explicit engine start.** Start actions require a user click. Offer
+   **Start Podman machine** only on macOS or Windows when a stopped default
+   machine or the sole machine is identified. Never start a root-managed
+   service or use elevation.
 3. **No background pulls.** Image pulled only inside user-initiated flows.
 4. **No required form fields** in the happy path.
 5. **Canonical port `10260`** for both Quick Start and manual connections.
@@ -712,13 +683,14 @@ The container is shared machine state. No window "owns" it.
    and `PromptPortStep.ts`) must be fixed before Quick Start ships.
 6. **No nag toasts.** Updates and warnings stay in the tree description.
 7. **Uninstalling the extension does not remove the container.**
-8. **Docker-first, OCI later.** v1 targets Docker. Podman/OCI follow-up
-   issues are tracked separately. The container runtime is accessed through
-   **`@microsoft/vscode-container-client`** — the Microsoft-maintained library
-   the PostgreSQL extension uses, which ships both a `DockerClient` and a
-   `PodmanClient` behind one interface (with mount/label/platform/port arg
-   helpers). Adding podman/OCI later is therefore a client swap, not a
-   rewrite, and we avoid hand-rolling `docker` CLI strings.
+8. **Docker and Podman are supported.** Configure presents a nonpersisted
+   preference, defaulting to Docker for a fresh form. Execution detects both
+   CLIs and falls back to the other only when the preferred CLI is missing and
+   the other is installed. The container
+   runtime is accessed through **`@microsoft/vscode-container-client`** — the
+   Microsoft-maintained library the PostgreSQL extension uses, which ships
+   both a `DockerClient` and a `PodmanClient` behind one interface (with
+   mount/label/platform/port argument helpers).
 9. **No dependency on the Docker VS Code extension.** Quick Start manages
    the container itself, in-tree. The Docker extension is optional and
    aimed at advanced users; a hard dependency would break the zero-friction
@@ -779,7 +751,7 @@ gets a `quickStartSessionId` from the open command, and every event the panel pr
   connection event.
 
 **Setup outcome, guides and instance connections, as implemented (1.1.0).** See
-[decision 0008](./decisions.md#0008---setup-outcome-guide-and-instance-connection-telemetry).
+[decision 0013](./decisions.md#0013---setup-outcome-guide-and-instance-connection-telemetry).
 
 - `documentDB.quickstart.provision`, one per setup run: `provisionResult`
   (`success`, `cancelled`, `timeout`, `error`), `provisionCorrelationId`, `reused`, `portTaken`,
@@ -802,6 +774,9 @@ gets a `quickStartSessionId` from the open command, and every event the panel pr
 ---
 
 ## 15. Scope split
+
+This section records the original proposed scope, not the current setup and success behavior in
+§§5.4–5.5.
 
 ### v1.0 (must ship)
 
@@ -861,6 +836,8 @@ gets a `quickStartSessionId` from the open command, and every event the panel pr
 ---
 
 ## 16. Webview implementation notes
+
+These are the original implementation notes; current setup and success behavior is in §§5.4–5.5.
 
 The Quick Start webview follows existing extension patterns:
 
@@ -924,6 +901,8 @@ The Quick Start webview follows existing extension patterns:
 ---
 
 ## 18. Review resolutions (iteration 2)
+
+These review resolutions are historical; current setup and success behavior is in §§5.4–5.5.
 
 This revision folds in the PR review feedback (notably @xgerman's
 comments), the design intent shown in @tnaum-ms's prototype screenshots,

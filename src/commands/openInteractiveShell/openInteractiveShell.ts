@@ -6,6 +6,11 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import {
+    trackDeepLinkTelemetry,
+    type DeepLinkOpenOptions,
+    type DeepLinkOpenResult,
+} from '../../deepLinks/deepLinkTelemetry';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBShellPty } from '../../documentdb/shell/DocumentDBShellPty';
 import { type ShellConnectionInfo } from '../../documentdb/shell/ShellSessionManager';
@@ -39,14 +44,17 @@ export interface OpenShellWithInputParams {
 export async function openInteractiveShell(
     context: IActionContext,
     node?: ClusterItemBase | DatabaseItem | CollectionItem,
-): Promise<void> {
+    _nodes?: unknown,
+    options?: DeepLinkOpenOptions,
+): Promise<DeepLinkOpenResult> {
+    trackDeepLinkTelemetry(context, options?.deepLink);
     if (!node) {
         void vscode.window.showInformationMessage(
             l10n.t(
                 'Right-click a cluster, database, or collection in the DocumentDB panel to open an interactive shell.',
             ),
         );
-        return;
+        return { opened: false };
     }
 
     const connectionInfo = extractConnectionInfo(node);
@@ -56,7 +64,9 @@ export async function openInteractiveShell(
         void vscode.window.showErrorMessage(
             l10n.t('Not signed in to {0}. Please authenticate first.', connectionInfo.clusterDisplayName),
         );
-        return;
+        context.telemetry.properties.result = 'Failed';
+        context.telemetry.properties.errorReason = 'missingCredentials';
+        return { opened: false };
     }
 
     context.telemetry.properties.experience = node.experience.api;
@@ -64,7 +74,8 @@ export async function openInteractiveShell(
     context.telemetry.properties.activationSource ??= 'treeNode';
     context.telemetry.properties.viewId = node.cluster.viewId ?? 'unknown';
 
-    const pty = new DocumentDBShellPty({ connectionInfo });
+    const pty = new DocumentDBShellPty({ connectionInfo, deepLink: options?.deepLink });
+    context.telemetry.properties.shellSessionId = pty.shellSessionId;
 
     const terminal = vscode.window.createTerminal({
         name: l10n.t('DocumentDB: {0}/{1}', connectionInfo.clusterDisplayName, connectionInfo.databaseName),
@@ -76,6 +87,7 @@ export async function openInteractiveShell(
     registerShellTerminal(terminal, () => pty.getTerminalInfo());
 
     terminal.show();
+    return { opened: true, shellSessionId: pty.shellSessionId };
 }
 
 /**

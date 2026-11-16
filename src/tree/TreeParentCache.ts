@@ -74,6 +74,19 @@ export class TreeParentCache<T extends TreeElement> {
         }
     }
 
+    getChildren(parent: T): T[] {
+        const children: T[] = [];
+        for (const [childId, parentId] of this.childToParentMap) {
+            if (parentId === parent.id) {
+                const child = this.nodeCache.get(childId);
+                if (child) {
+                    children.push(child);
+                }
+            }
+        }
+        return children;
+    }
+
     /**
      * Registers a node in the cache (typically used for root nodes that don't have parents)
      *

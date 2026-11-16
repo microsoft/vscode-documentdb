@@ -13,10 +13,13 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
+import { showClusterConnectFailure } from '../../../../documentdb/showClusterConnectFailure';
 import { Views } from '../../../../documentdb/Views';
 import { ext } from '../../../../extensionVariables';
 import { type AzureClusterModel } from '../../../../tree/azure-views/models/AzureClusterModel';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
+import { type DiagnosticCredentialRead } from '../../../../tree/documentdb/diagnosticCredentialRead';
+import { readCredentialsForDiagnostics } from '../../../../tree/documentdb/readCredentialsForDiagnostics';
 import { type TreeCluster } from '../../../../tree/models/BaseClusterModel';
 import { DISCOVERY_PROVIDER_ID, RESOURCE_TYPE } from '../../config';
 import { extractCredentialsFromRUAccount } from '../../utils/ruClusterHelpers';
@@ -47,23 +50,36 @@ export class MongoRUResourceItem extends ClusterItemBase<AzureClusterModel> {
     }
 
     public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
-        return callWithTelemetryAndErrorHandling('getCredentials', async (context: IActionContext) => {
-            context.telemetry.properties.view = Views.DiscoveryView;
-            context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
-            context.telemetry.properties.resourceType = RESOURCE_TYPE;
-            if (this.journeyCorrelationId) {
-                context.telemetry.properties.journeyCorrelationId = this.journeyCorrelationId;
-            }
+        return callWithTelemetryAndErrorHandling('getCredentials', (context: IActionContext) =>
+            this.readCredentials(context),
+        );
+    }
 
-            const credentials = await extractCredentialsFromRUAccount(
-                context,
-                this.subscription,
-                this.cluster.resourceGroup!,
-                this.cluster.name,
-            );
+    /** Same Azure Resource Manager read, without error UI; typed failures reach connection diagnostics. */
+    public override getCredentialsForDiagnostics(
+        read: DiagnosticCredentialRead,
+    ): Promise<EphemeralClusterCredentials | undefined> {
+        return readCredentialsForDiagnostics('getCredentials', 'azure', read, (context: IActionContext) =>
+            this.readCredentials(context),
+        );
+    }
 
-            return credentials;
-        });
+    private async readCredentials(context: IActionContext): Promise<EphemeralClusterCredentials> {
+        context.telemetry.properties.view = Views.DiscoveryView;
+        context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
+        context.telemetry.properties.resourceType = RESOURCE_TYPE;
+        if (this.journeyCorrelationId) {
+            context.telemetry.properties.journeyCorrelationId = this.journeyCorrelationId;
+        }
+
+        const credentials = await extractCredentialsFromRUAccount(
+            context,
+            this.subscription,
+            this.cluster.resourceGroup!,
+            this.cluster.name,
+        );
+
+        return credentials;
     }
 
     /**
@@ -123,6 +139,7 @@ export class MongoRUResourceItem extends ClusterItemBase<AzureClusterModel> {
                 return clustersClient;
             } catch (error) {
                 if (error instanceof UserCancelledError) {
+                    this.lastConnectionOutcome = 'canceled';
                     context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
                     context.telemetry.properties.connectionResult = 'cancelled';
                     throw error;
@@ -137,16 +154,12 @@ export class MongoRUResourceItem extends ClusterItemBase<AzureClusterModel> {
                     l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
                 );
 
-                void vscode.window.showErrorMessage(
-                    l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
-                    {
-                        modal: true,
-                        detail:
-                            l10n.t('Revisit connection details and try again.') +
-                            '\n\n' +
-                            l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
-                    },
-                );
+                await showClusterConnectFailure({
+                    clusterId: this.cluster.clusterId,
+                    clusterName: this.cluster.name,
+                    error,
+                    context,
+                });
 
                 // Clean up failed connection
                 await ClustersClient.deleteClient(this.cluster.clusterId);

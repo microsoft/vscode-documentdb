@@ -10,6 +10,7 @@ import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
 import { maskSensitiveValuesInTelemetry } from '../../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
 import { type EphemeralClusterCredentials } from '../../../tree/documentdb/ClusterItemBase';
+import { ConnectionEndpointUnavailableError } from '../../../tree/documentdb/diagnosticCredentialRead';
 import { createCosmosDBManagementClient } from '../../../utils/azureClients';
 
 /**
@@ -60,7 +61,9 @@ export async function extractCredentialsFromRUAccount(
     // Validate connection string's presence
     if (!primaryConnectionString) {
         context.telemetry.properties.error = 'missing-connection-string';
-        throw new Error(
+        throw new ConnectionEndpointUnavailableError(
+            'azure',
+            'notProvided',
             l10n.t('Authentication data (primary connection string) is missing for "{cluster}".', {
                 cluster: accountName,
             }),

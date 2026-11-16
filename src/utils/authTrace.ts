@@ -3,8 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
+import { type EntraDestinationDecision } from '../documentdb/auth/oidcAllowedHosts';
 import { ext } from '../extensionVariables';
 
 const knownErrorNames = new Set([
@@ -22,6 +24,7 @@ const knownErrorNames = new Set([
     'AbortError',
     'UserCancelledError',
     'GoBackError',
+    'EntraDestinationRejectedError',
 ]);
 
 const knownErrorCodes = new Set([
@@ -61,7 +64,9 @@ export function describeAuthError(error: unknown): string {
             ? statusCode
             : 'unknown';
     const aadstsCode = error instanceof Error ? /\bAADSTS\d{5,9}\b/.exec(error.message)?.[0] : undefined;
-    return `type=${errorName}; code=${code}; httpStatus=${httpStatus}; aadsts=${aadstsCode ?? 'none'}`;
+    const broker =
+        error instanceof Error && error.message.includes('platform_broker_error') ? 'platform_broker_error' : 'none';
+    return `type=${errorName}; code=${code}; httpStatus=${httpStatus}; aadsts=${aadstsCode ?? 'none'}; broker=${broker}`;
 }
 
 type AuthTraceDetails = Readonly<Record<string, string | number | boolean>>;
@@ -70,6 +75,66 @@ type AuthTraceDetails = Readonly<Record<string, string | number | boolean>>;
 export interface AuthTraceContext {
     readonly startupCorrelationId: string;
     readonly surface: string;
+    readonly startupProperties?: ITelemetryContext['properties'];
+}
+
+export function traceEntraDestination(
+    decision: EntraDestinationDecision,
+    correlationId?: string,
+    context?: AuthTraceContext,
+): void {
+    traceAuthFlow(
+        'entraDestination.evaluated',
+        {
+            entraDestinationClass: decision.destinationClass,
+            ...(decision.rejection ? decision.rejection : {}),
+        },
+        correlationId,
+        context,
+    );
+    if (decision.allowed && decision.customSuffixUsed) {
+        ext.outputChannel.info(
+            l10n.t('[Auth] Microsoft Entra ID destination admitted by custom suffix: {0}', decision.customSuffixUsed),
+        );
+    }
+}
+
+function recordCloudResolution(details: AuthTraceDetails, properties: ITelemetryContext['properties']): void {
+    properties.cloudCategory =
+        typeof details.cloudCategory === 'string' &&
+        ['public', 'usgov', 'china', 'custom'].includes(details.cloudCategory)
+            ? details.cloudCategory
+            : 'unknown';
+    properties.tokenResourceReason =
+        typeof details.reason === 'string' &&
+        ['setting', 'customOverride', 'customLoginHost', 'armMetadata', 'host', 'imds', 'copyDefault'].includes(
+            details.reason,
+        )
+            ? details.reason
+            : 'unknown';
+    properties.configuredCloud =
+        typeof details.configuredCloud === 'string' &&
+        ['AzureCloud', 'AzureUSGovernment', 'AzureChinaCloud', 'custom', 'unreadable'].includes(details.configuredCloud)
+            ? details.configuredCloud
+            : 'unknown';
+    properties.hostCloud =
+        typeof details.hostCloud === 'string' &&
+        ['AzureCloud', 'AzureUSGovernment', 'AzureChinaCloud', 'conflicting', 'none'].includes(details.hostCloud)
+            ? details.hostCloud
+            : 'unknown';
+    // Not named `error…`: whole-error masking would redact this allowlisted category.
+    properties.entraFailureKind =
+        typeof details.errorKind === 'string' &&
+        [
+            'customCloudUnresolved',
+            'customCloudDefinitionInvalid',
+            'invalidCustomOverride',
+            'cloudMismatch',
+            'hostCloudConflict',
+            'managedIdentityCloudUnknown',
+        ].includes(details.errorKind)
+            ? details.errorKind
+            : 'none';
 }
 
 /** Connection-bound steps show the connection's startup ID; other steps show their own auth ID. */
@@ -86,6 +151,31 @@ export function traceAuthFlow(
     correlationId?: string,
     context?: AuthTraceContext,
 ): void {
+    if (operation === 'entraDestination.evaluated') {
+        const destinationClass =
+            typeof details.entraDestinationClass === 'string' &&
+            ['documentdbService', 'customSuffix', 'otherAzure', 'other'].includes(details.entraDestinationClass)
+                ? details.entraDestinationClass
+                : 'other';
+        details = {
+            entraDestinationClass: destinationClass,
+            ...(typeof details.microsoftCloudDomain === 'boolean'
+                ? { microsoftCloudDomain: details.microsoftCloudDomain }
+                : {}),
+            ...(typeof details.serviceLabel === 'boolean' ? { serviceLabel: details.serviceLabel } : {}),
+        };
+        if (context?.startupProperties) {
+            context.startupProperties.entraDestinationClass = destinationClass;
+            for (const key of ['microsoftCloudDomain', 'serviceLabel'] as const) {
+                if (typeof details[key] === 'boolean') {
+                    context.startupProperties[key] = details[key] ? 'true' : 'false';
+                }
+            }
+        }
+    }
+    if (context?.startupProperties && (operation === 'entraCloud.resolved' || operation === 'entraCloud.unresolved')) {
+        recordCloudResolution(details, context.startupProperties);
+    }
     ext.outputChannel.info(
         l10n.t('[Authentication]{0} {1}: {2}', authLogIds(correlationId, context), operation, JSON.stringify(details)),
     );

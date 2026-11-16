@@ -4,10 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    Accordion,
-    AccordionHeader,
-    AccordionItem,
-    AccordionPanel,
     Button,
     CounterBadge,
     Field,
@@ -42,7 +38,6 @@ import {
     ContainerFooter,
     ContainerHeader,
     StatusList,
-    StatusListItem,
     type StatusListItemStatus,
     Wizard,
     WizardStep,
@@ -50,22 +45,19 @@ import {
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { Fragment, type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ContainerCli } from '../../../services/localQuickStart/containerCli';
 import { formatQuickStartMessage } from '../../../services/localQuickStart/quickStartMessages';
 import {
     type AdvancedQuickStartOptions,
-    type DockerEndpointKind,
-    type DockerEndpointProbe,
-    type DockerFailureKind,
-    type DockerHostEnvironment,
-    type DockerPermissionDetail,
+    type DockerLaunchResult,
     type DockerProvider,
-    type DockerProviderEvidence,
     type DockerReadiness,
-    type DockerReadinessOutcome,
     type DockerRecoveryCommand,
     type DockerStatusResult,
     InstanceState,
     type InstanceStatusUpdate,
+    type PodmanMachineState,
+    type PodmanTarget,
     type PortAvailability,
     PROVISION_STAGES,
     type ProvisionStage,
@@ -77,6 +69,7 @@ import {
     type QuickStartWizardPhase,
     type QuickStartWizardStepTrigger,
     type StageEvent,
+    type StageFacts,
 } from '../../../services/localQuickStart/quickStartTypes';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility/Announcer';
@@ -96,15 +89,22 @@ import {
     type DockerGuidanceKey,
     type DockerGuideKey,
     type DockerReadinessPresentation,
-    type DockerReadinessPresentationState,
     type DockerRecoveryNoteKey,
     type DockerStartLabelKey,
-    getDockerExecutionTargetKey,
+    type getDockerExecutionTargetKey,
     getDockerReadinessPresentation,
 } from './dockerReadinessPresentation';
 import { getExistingInstanceGuard, guardBlocksSetup } from './existingInstanceGuard';
 import './localQuickStart.scss';
 import { type LocalQuickStartConfigurationType } from './localQuickStartController';
+import { SetupStageRow } from './SetupStageRow';
+import {
+    buildDockerDetailRows,
+    buildRecreateSuccessMessage,
+    buildStageDetailRows,
+    buildStageSummary,
+    dockerFailureLabel,
+} from './stageDetailsPresentation';
 
 /**
  * Wizard phases. `provisioning` and `failed` are both the "Set up" step: a setup failure — Docker
@@ -192,6 +192,14 @@ const useStyles = makeStyles({
         color: tokens.colorPaletteRedForeground1,
     },
     imagePath: { overflowWrap: 'anywhere' },
+    pullActivity: {
+        display: 'block',
+        minWidth: 0,
+        maxWidth: '100%',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+    },
     dockerStatus: { display: 'flex', flexDirection: 'column', gap: '10px' },
     recoveryCommand: { display: 'flex', flexDirection: 'column', gap: '8px' },
     // Copy stays pinned top-right: a multi-line command must not push it down or wrap it away.
@@ -219,35 +227,6 @@ const useStyles = makeStyles({
     },
     recoveryCommandCopy: { flexShrink: 0 },
     waitingStatus: { display: 'flex', alignItems: 'center', gap: '8px' },
-    dockerAccordionHeader: { minHeight: '30px' },
-    accordionHeaderBrand: { color: tokens.colorBrandForeground1 },
-    dockerAccordionPanel: { paddingTop: '4px' },
-    dockerDetailsIntro: { display: 'block', paddingBottom: '8px', color: tokens.colorNeutralForeground2 },
-    dockerDetails: {
-        display: 'grid',
-        gridTemplateColumns: '150px minmax(0, 1fr)',
-        margin: 0,
-        borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
-        '@media (max-width: 480px)': { gridTemplateColumns: '110px minmax(0, 1fr)' },
-    },
-    dockerDetailLabel: {
-        margin: 0,
-        padding: '9px 0',
-        color: tokens.colorNeutralForeground2,
-        borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-    },
-    dockerDetailValue: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '2px',
-        margin: 0,
-        padding: '9px 0',
-        overflowWrap: 'anywhere',
-        borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-    },
-    // How the fact above was established — the part that is worth the extra room behind a
-    // collapsed panel.
-    dockerDetailNote: { color: tokens.colorNeutralForeground3 },
     lastCheckedRow: {
         display: 'flex',
         alignItems: 'center',
@@ -275,8 +254,8 @@ const useStyles = makeStyles({
 // it avoids freezing strings if the module is imported before configuration elsewhere.
 function stageLabels(): Record<ProvisionStage, string> {
     return {
-        checking: l10n.t('Checking Docker'),
-        pulling: l10n.t('Pulling official image'),
+        checking: l10n.t('Checking container engine'),
+        pulling: l10n.t('Preparing image'),
         creating: l10n.t('Creating container'),
         starting: l10n.t('Starting container'),
         waiting: l10n.t('Waiting for DocumentDB to accept connections'),
@@ -315,8 +294,10 @@ interface SettingItem {
 function planItems(): readonly PlanItem[] {
     return [
         {
-            label: l10n.t('Verify your Docker setup'),
-            detail: l10n.t('Confirms Docker is installed and can run containers on this machine.'),
+            label: l10n.t('Check your container engine'),
+            detail: l10n.t(
+                'Confirms Docker or Podman is installed and can run Linux containers on this machine. You choose a preferred engine in the next step; setup uses the other if it is not installed.',
+            ),
         },
         {
             label: l10n.t('Download the official image'),
@@ -333,120 +314,20 @@ function planItems(): readonly PlanItem[] {
     ];
 }
 
-function dockerDaemonValues(): Readonly<Record<DockerReadinessPresentationState, string>> {
+function dockerGuidance(
+    podmanMachine?: PodmanMachineState,
+    podmanTarget?: PodmanTarget,
+): Readonly<Record<DockerGuidanceKey, string>> {
     return {
-        ready: l10n.t('Reachable'),
-        cliMissing: l10n.t('Unknown'),
-        accessDenied: l10n.t('Access denied'),
-        accessDeniedPendingRestart: l10n.t('Access denied'),
-        dockerDesktopNotRunning: l10n.t('Docker Desktop not running'),
-        notRunning: l10n.t('Not running'),
-        starting: l10n.t('Starting…'),
-        notAccessibleFromWsl: l10n.t('Not accessible from WSL'),
-        endpointUnreachable: l10n.t('Endpoint unreachable'),
-        contextUnavailable: l10n.t('Context unavailable'),
-        checkTimedOut: l10n.t('Check timed out'),
-        unsupported: l10n.t('Unsupported'),
-        windowsContainers: l10n.t('Linux containers required'),
-        notAccessible: l10n.t('Not accessible'),
-    };
-}
-
-function dockerFailureLabels(): Readonly<Record<DockerFailureKind, string>> {
-    return {
-        cliMissing: l10n.t('Docker CLI not found'),
-        permissionDenied: l10n.t('Docker access denied'),
-        daemonUnavailable: l10n.t('Docker daemon unavailable'),
-        daemonStarting: l10n.t('Docker daemon starting'),
-        contextUnavailable: l10n.t('Docker context unavailable'),
-        endpointUnreachable: l10n.t('Docker endpoint unreachable'),
-        probeTimedOut: l10n.t('Docker check timed out'),
-        unsupportedHost: l10n.t('Unsupported host'),
-        windowsContainers: l10n.t('Windows containers enabled'),
-        unknown: l10n.t('Unknown Docker problem'),
-    };
-}
-
-function dockerProviderLabels(): Readonly<Record<DockerProvider, string>> {
-    return {
-        dockerDesktop: l10n.t('Docker Desktop'),
-        dockerEngine: l10n.t('Docker Engine'),
-        unknown: l10n.t('Unknown'),
-    };
-}
-
-function dockerOutcomeValues(): Readonly<Record<DockerReadinessOutcome, string>> {
-    return {
-        ready: l10n.t('Docker is ready'),
-        diagnosed: l10n.t('A specific problem was identified'),
-        indeterminate: l10n.t('No clear answer'),
-    };
-}
-
-function dockerEndpointKindValues(): Readonly<Record<DockerEndpointKind, string>> {
-    return {
-        unixSocket: l10n.t('Unix socket'),
-        namedPipe: l10n.t('Windows named pipe'),
-        tcp: l10n.t('TCP address'),
-        ssh: l10n.t('SSH tunnel'),
-        unknown: l10n.t('Could not be resolved'),
-    };
-}
-
-/** How the endpoint the check dialled was chosen. */
-function dockerEndpointSourceNotes(): Readonly<Record<DockerEndpointProbe['source'], string>> {
-    return {
-        dockerHostEnv: l10n.t('Taken from the DOCKER_HOST environment variable, which overrides everything else.'),
-        dockerContextEnv: l10n.t('Taken from the DOCKER_CONTEXT environment variable.'),
-        currentContext: l10n.t('Taken from the Docker context that is currently active.'),
-        platformDefault: l10n.t('No override was set, so the default location for this platform was used.'),
-    };
-}
-
-/** How the provider above was identified — strongest evidence first. */
-function dockerProviderEvidenceNotes(): Readonly<Record<DockerProviderEvidence, string>> {
-    return {
-        liveDaemon: l10n.t('Read from the daemon that answered the check.'),
-        activeContext: l10n.t('Inferred from the Docker context that is currently active.'),
-        installedApplication: l10n.t('Inferred from the Docker application installed on this machine.'),
-        rememberedProvider: l10n.t('Remembered from the last check on this machine that did reach a daemon.'),
-        none: l10n.t('Nothing identified it: the check reached neither a daemon nor a usable context.'),
-    };
-}
-
-function dockerHostEnvironmentValues(): Readonly<Record<DockerHostEnvironment, string>> {
-    return {
-        windows: l10n.t('Windows'),
-        macos: l10n.t('macOS'),
-        linux: l10n.t('Linux'),
-        wsl: l10n.t('Windows Subsystem for Linux'),
-        ssh: l10n.t('Remote SSH host'),
-        devContainer: l10n.t('Dev container'),
-        codespaces: l10n.t('GitHub Codespaces'),
-        otherRemote: l10n.t('Remote extension host'),
-        unsupported: l10n.t('Unsupported platform'),
-    };
-}
-
-function dockerPermissionDetailValues(): Readonly<Record<DockerPermissionDetail, string>> {
-    return {
-        notInGroup: l10n.t('Your user is not a member of the docker group'),
-        pendingSessionRestart: l10n.t('Your user is in the docker group, but this session predates the change'),
-        unknown: l10n.t('Denied for a reason the check could not narrow down'),
-    };
-}
-
-function dockerGuidance(): Readonly<Record<DockerGuidanceKey, string>> {
-    return {
-        installDocker: l10n.t('Install Docker Engine or Docker Desktop, then reopen DocumentDB Local setup.'),
+        installDocker: l10n.t('Install Docker or Podman, then reopen DocumentDB Local setup.'),
         installDockerWindows: l10n.t(
-            'Install Docker Desktop, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so Docker stays undetected until it is restarted. Reloading the window is not enough. Start Docker Desktop and wait until it is ready, then check again.',
+            'Install Docker Desktop or Podman, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so the CLI stays undetected until it is restarted. Reloading the window is not enough. Start Docker Desktop or the Podman machine and wait until it is ready, then check again.',
         ),
         installDockerMac: l10n.t(
-            'Install Docker Desktop, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so Docker stays undetected until it is restarted. Start Docker Desktop and wait until it is ready, then check again.',
+            'Install Docker Desktop or Podman, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so the CLI stays undetected until it is restarted. Start Docker Desktop or the Podman machine and wait until it is ready, then check again.',
         ),
         installDockerWsl: l10n.t(
-            'Docker was not found in this WSL distribution. If you use Docker Desktop, turn on its WSL integration for this distribution. Otherwise install Docker Engine here. Then check again.',
+            'Neither Docker nor Podman was found in this WSL distribution. If you use Docker Desktop, turn on its WSL integration for this distribution. Otherwise install Docker Engine or Podman here. Then check again.',
         ),
         accessDeniedLinux: l10n.t(
             'Your user cannot access the Docker socket. Run this command, then sign out and sign back in.',
@@ -471,6 +352,37 @@ function dockerGuidance(): Readonly<Record<DockerGuidanceKey, string>> {
         ),
         dockerDesktopNotRunning: l10n.t('Start Docker Desktop and wait until it is ready.'),
         daemonNotRunning: l10n.t('Start the Docker service, then check again.'),
+        podmanNotRunning: l10n.t(
+            'Podman is not reachable. Start its machine in Podman Desktop or check its connection, then check again.',
+        ),
+        podmanNotRunningLinux: l10n.t(
+            'Podman is not reachable. Check its connection with "podman system connection list", then check again.',
+        ),
+        podmanSocketNotRunning: l10n.t('Start the Podman user socket with this command, then check again.'),
+        podmanWindowsMachineFromWsl: l10n.t(
+            'Podman in this WSL distribution uses the Podman machine "{0}" on Windows, and that machine is not reachable. Start it on Windows with this command or from Podman Desktop, then check again.',
+            podmanTarget?.kind === 'windowsMachineFromWsl' ? podmanTarget.name : '',
+        ),
+        podmanRemoteUnreachable: l10n.t(
+            'Podman is connected to another computer, which cannot be reached from here. Check its connection with "podman system connection list", then check again.',
+        ),
+        podmanMachineMissing: l10n.t('No Podman machine was found. Run this command to create one, then check again.'),
+        podmanMachineStopped: l10n.t(
+            'The Podman machine "{0}" is not running. Start it and wait until it is ready.',
+            podmanMachine?.kind === 'stopped' ? podmanMachine.name : '',
+        ),
+        podmanMachineAmbiguous: l10n.t(
+            'Several Podman machines were found without a unique default: {0}. Start the machine you want, then check again.',
+            podmanMachine?.kind === 'ambiguous' ? podmanMachine.names.join(', ') : '',
+        ),
+        podmanMachineOtherActive: l10n.t(
+            'Another Podman machine is already starting or running: {0}. Check that machine, then check again.',
+            podmanMachine?.kind === 'otherActive' ? podmanMachine.active : '',
+        ),
+        podmanMachineRunning: l10n.t(
+            'The Podman machine "{0}" is running, but its engine is not reachable. Check the machine and its connection, then check again.',
+            podmanMachine?.kind === 'running' ? podmanMachine.name : '',
+        ),
         daemonStarting: l10n.t('Waiting for Docker to start. This can take a minute.'),
         wslIntegrationUnavailable: l10n.t(
             'Enable Docker Desktop integration for this WSL distribution, then check again.',
@@ -498,6 +410,7 @@ function dockerGuideLabels(): Readonly<Record<DockerGuideKey, string>> {
         installMacDesktop: l10n.t('Get Docker Desktop for Mac'),
         linuxPostInstall: l10n.t('Open Linux setup guide'),
         dockerTroubleshooting: l10n.t('Open Docker troubleshooting guide'),
+        podmanMachine: l10n.t('Open Podman machine guide'),
         dockerContexts: l10n.t('Open Docker context guide'),
         wslIntegration: l10n.t('Open WSL integration guide'),
         remoteDocker: l10n.t('Open remote Docker guide'),
@@ -510,17 +423,7 @@ function dockerStartLabels(): Readonly<Record<DockerStartLabelKey, string>> {
     return {
         startDockerDesktop: l10n.t('Start Docker Desktop'),
         startDocker: l10n.t('Start Docker'),
-    };
-}
-
-function executionTargetValues(): Readonly<Record<ReturnType<typeof getDockerExecutionTargetKey>, string>> {
-    return {
-        local: l10n.t('This machine (Docker)'),
-        wsl: l10n.t('This WSL environment (Docker)'),
-        ssh: l10n.t('Remote SSH host (Docker)'),
-        devContainer: l10n.t('This dev container environment (Docker)'),
-        codespaces: l10n.t('This Codespaces environment (Docker)'),
-        otherRemote: l10n.t('This remote extension host (Docker)'),
+        startPodmanMachine: l10n.t('Start Podman machine'),
     };
 }
 
@@ -531,15 +434,17 @@ function dockerRecoveryNotes(): Readonly<Record<DockerRecoveryNoteKey, string>> 
             'This stops all running WSL distributions so the new group membership applies when WSL starts again.',
         ),
         runsDockerService: l10n.t('Runs the system Docker service.'),
+        runInWindowsTerminal: l10n.t('Run in a Windows terminal'),
     };
 }
 
-/** Provider names for the stage detail line; an unidentified provider is still "Docker". */
+/** Provider names for the stage detail line. */
 function dockerDetailProviderLabels(): Readonly<Record<DockerProvider, string>> {
     return {
         dockerDesktop: l10n.t('Docker Desktop'),
         dockerEngine: l10n.t('Docker Engine'),
-        unknown: l10n.t('Docker'),
+        podman: 'Podman',
+        unknown: l10n.t('Engine'),
     };
 }
 
@@ -552,40 +457,51 @@ function dockerDetailOsLabels(): Readonly<Record<'linux' | 'windows', string>> {
 
 function dockerDetailTargetLabels(): Readonly<Record<ReturnType<typeof getDockerExecutionTargetKey>, string>> {
     return {
-        local: l10n.t('runs on this machine'),
-        wsl: l10n.t('runs in this WSL environment'),
-        ssh: l10n.t('runs on the remote SSH host'),
-        devContainer: l10n.t('runs in this dev container'),
-        codespaces: l10n.t('runs in this Codespace'),
-        otherRemote: l10n.t('runs on the remote extension host'),
+        local: l10n.t('Runs on this machine'),
+        wsl: l10n.t('Runs in this WSL environment'),
+        ssh: l10n.t('Runs on the remote SSH host'),
+        devContainer: l10n.t('Runs in this dev container'),
+        codespaces: l10n.t('Runs in this Codespace'),
+        otherRemote: l10n.t('Runs on the remote extension host'),
     };
 }
 
 function dockerDetailFailureLabels(): Readonly<Record<DockerDetailFailureKey, string>> {
     return {
-        noCli: l10n.t('no Docker CLI found'),
-        accessDenied: l10n.t('access denied'),
-        notRunning: l10n.t('not running'),
-        daemonNotRunning: l10n.t('daemon not running'),
-        daemonStarting: l10n.t('daemon starting'),
-        notAvailableInWsl: l10n.t('not available in this WSL distribution'),
-        endpointUnreachable: l10n.t('endpoint unreachable'),
-        contextUnavailable: l10n.t('context unavailable'),
-        checkTimedOut: l10n.t('check timed out'),
-        unsupportedHost: l10n.t('unsupported host'),
+        noCli: l10n.t('No Docker or Podman CLI found'),
+        accessDenied: l10n.t('Access denied'),
+        notRunning: l10n.t('Not running'),
+        daemonNotRunning: l10n.t('Daemon not running'),
+        daemonStarting: l10n.t('Daemon starting'),
+        notAvailableInWsl: l10n.t('Not available in this WSL distribution'),
+        endpointUnreachable: l10n.t('Endpoint unreachable'),
+        contextUnavailable: l10n.t('Context unavailable'),
+        checkTimedOut: l10n.t('Check timed out'),
+        unsupportedHost: l10n.t('Unsupported host'),
         windowsContainers: l10n.t('Windows containers enabled'),
-        daemonUnreachable: l10n.t('daemon unreachable'),
+        daemonUnreachable: l10n.t('Daemon unreachable'),
     };
 }
 
 function formatDockerDetailSegment(segment: DockerDetailSegment): string | undefined {
     switch (segment.kind) {
-        case 'provider': {
-            const name = dockerDetailProviderLabels()[segment.provider];
-            return segment.version ? l10n.t('{0} {1}', name, segment.version) : name;
+        case 'provider':
+            return dockerDetailProviderLabels()[segment.provider];
+        case 'cli': {
+            if (segment.cliFallback && segment.cli && segment.preferredEngine) {
+                const engine = segment.cli === 'docker' ? l10n.t('Docker') : l10n.t('Podman');
+                const selected = segment.version ? l10n.t('{0} {1}', engine, segment.version) : engine;
+                const preferred = segment.preferredEngine === 'docker' ? l10n.t('Docker') : l10n.t('Podman');
+                return l10n.t('{0} ({1} not found)', selected, preferred);
+            }
+            const name =
+                segment.cli === 'docker'
+                    ? l10n.t('Docker CLI')
+                    : segment.cli === 'podman'
+                      ? l10n.t('Podman CLI')
+                      : l10n.t('Container CLI');
+            return segment.version ? l10n.t('{0} {1} found', name, segment.version) : l10n.t('{0} found', name);
         }
-        case 'cli':
-            return segment.version ? l10n.t('Docker CLI {0} found', segment.version) : l10n.t('Docker CLI found');
         case 'platform': {
             const osName = segment.osType ? dockerDetailOsLabels()[segment.osType] : undefined;
             if (osName && segment.architecture) {
@@ -643,124 +559,6 @@ function formatElapsed(elapsedMs: number): string {
     return `${minutes}:${seconds}`;
 }
 
-interface DockerDetailRow {
-    readonly label: string;
-    readonly value: string;
-    /** How the value above was established, or why it could not be. */
-    readonly note?: string;
-}
-
-/**
- * Full report of the Docker readiness check, for the collapsed "What the Docker check found"
- * panel. Every fact carries how it was established, because the panel's job is to show the user
- * what was actually probed rather than to be scanned quickly.
- */
-function buildDockerDetailRows(
-    readiness: DockerReadiness,
-    daemonState: DockerReadinessPresentationState,
-    now: number,
-): readonly DockerDetailRow[] {
-    const rows: DockerDetailRow[] = [
-        {
-            label: l10n.t('Check result'),
-            value: dockerOutcomeValues()[readiness.outcome],
-            note:
-                readiness.outcome === 'indeterminate'
-                    ? l10n.t('Docker answered too vaguely to name a cause, so setup can still be attempted.')
-                    : undefined,
-        },
-    ];
-
-    if (readiness.outcome !== 'ready') {
-        rows.push({
-            label: l10n.t('Detected problem'),
-            value: dockerFailureLabels()[readiness.failureKind ?? 'unknown'],
-        });
-    }
-
-    rows.push({
-        label: l10n.t('Docker CLI'),
-        value: readiness.cliInstalled
-            ? readiness.cliVersion
-                ? l10n.t('Found, version {0}', readiness.cliVersion)
-                : l10n.t('Found, version not reported')
-            : l10n.t('Not found'),
-        note: readiness.cliInstalled
-            ? l10n.t('The docker command was located and run to read its version.')
-            : l10n.t('The docker command is not on PATH, so no further probe could run.'),
-    });
-
-    rows.push({
-        label: l10n.t('Docker daemon'),
-        value: dockerDaemonValues()[daemonState],
-        note: readiness.daemonReachable
-            ? l10n.t('The daemon answered, so everything below was reported by Docker itself.')
-            : l10n.t('The daemon did not answer, so anything only Docker can report is still unknown.'),
-    });
-
-    rows.push({
-        label: l10n.t('Docker endpoint'),
-        value: dockerEndpointKindValues()[readiness.endpointKind],
-        note: readiness.endpointSource
-            ? dockerEndpointSourceNotes()[readiness.endpointSource]
-            : l10n.t('No endpoint could be resolved, so the check had nothing to dial.'),
-    });
-
-    if (readiness.permissionDetail) {
-        rows.push({
-            label: l10n.t('Socket access'),
-            value: dockerPermissionDetailValues()[readiness.permissionDetail],
-            note: l10n.t('Checked by comparing the Docker socket owner group against your user and this process.'),
-        });
-    }
-
-    rows.push({
-        label: l10n.t('Provider'),
-        value: dockerProviderLabels()[readiness.provider],
-        note: dockerProviderEvidenceNotes()[readiness.providerEvidence],
-    });
-
-    const daemonOs = readiness.osType ? dockerDetailOsLabels()[readiness.osType] : undefined;
-    const daemonPlatform =
-        daemonOs && readiness.daemonArchitecture
-            ? l10n.t('{0} {1}', daemonOs, readiness.daemonArchitecture)
-            : (daemonOs ?? readiness.daemonArchitecture);
-    rows.push({
-        label: l10n.t('Containers run on'),
-        value: daemonPlatform ?? l10n.t('Not reported yet'),
-        note: daemonPlatform
-            ? l10n.t('The operating system and CPU architecture the daemon builds and runs containers for.')
-            : l10n.t('Docker reports this only once a connection succeeds, so it stays unknown until then.'),
-    });
-
-    rows.push({
-        label: l10n.t('This machine'),
-        value: readiness.arch
-            ? l10n.t('{0}, {1}', dockerHostEnvironmentValues()[readiness.environment], readiness.arch)
-            : dockerHostEnvironmentValues()[readiness.environment],
-        note:
-            readiness.platformSupported === false
-                ? l10n.t('DocumentDB Local images are published for x64 and arm64 only.')
-                : l10n.t('Where VS Code is running the extension, detected before Docker was contacted.'),
-    });
-
-    rows.push({
-        label: l10n.t('Container host'),
-        value: executionTargetValues()[getDockerExecutionTargetKey(readiness.executionTarget)],
-        note: l10n.t('The container is created here, so localhost refers to this environment.'),
-    });
-
-    rows.push({
-        label: l10n.t('Check run'),
-        value: formatLastChecked(readiness.checkedAtMs, now),
-        note: readiness.diagnosticFingerprint
-            ? l10n.t('Diagnostic reference {0}. Quote it when reporting this.', readiness.diagnosticFingerprint)
-            : undefined,
-    });
-
-    return rows;
-}
-
 function emptyStageStatus(): Record<ProvisionStage, StageStatus> {
     return {
         checking: 'pending',
@@ -770,6 +568,18 @@ function emptyStageStatus(): Record<ProvisionStage, StageStatus> {
         waiting: 'pending',
         done: 'pending',
         error: 'pending',
+    };
+}
+
+function emptyStageFacts(): Record<ProvisionStage, StageFacts | undefined> {
+    return {
+        checking: undefined,
+        pulling: undefined,
+        creating: undefined,
+        starting: undefined,
+        waiting: undefined,
+        done: undefined,
+        error: undefined,
     };
 }
 
@@ -799,14 +609,18 @@ export const LocalQuickStart = (): JSX.Element => {
         void trpcClient.localQuickStart.reportStepChange.mutate({ to: phase, trigger }).catch(() => undefined);
     }, [phase, trpcClient]);
     /**
-     * Readiness backing the `Checking Docker` stage: its detail line in both directions, and its
-     * remediation when that stage failed. Loaded in the background while the user reads the
-     * Introduction — nothing about it is rendered before the Set up step.
+     * Readiness backing the `Checking container engine` stage: its detail line in both
+     * directions, and its remediation when that stage failed. Collected only during execution.
      */
     const [checkReadiness, setCheckReadiness] = useState<DockerReadiness | undefined>(undefined);
     /** A Docker problem reported by a later stage (pull / run), backing that stage's remediation. */
     const [stageDockerFailure, setStageDockerFailure] = useState<DockerReadiness | undefined>(undefined);
     const [canReuseExistingData, setCanReuseExistingData] = useState(false);
+    const [instanceEngine, setInstanceEngine] = useState<ContainerCli | 'notRecorded'>();
+    const [savedImagePinned, setSavedImagePinned] = useState(false);
+    const [recreating, setRecreating] = useState(false);
+    const [preferredEngine, setPreferredEngine] = useState<ContainerCli>('docker');
+    const [editingEngine, setEditingEngine] = useState(false);
     /**
      * Live state of the managed instance, backing the Configure step's guard (review §9.2 Q2).
      * Reaching the wizard while an instance exists should not normally be possible — the tree does
@@ -829,6 +643,32 @@ export const LocalQuickStart = (): JSX.Element => {
      */
     const [dataChoice, setDataChoice] = useState<'reuse' | 'fresh'>('reuse');
     const [stageStatus, setStageStatus] = useState<Record<ProvisionStage, StageStatus>>(emptyStageStatus);
+    const [facts, setFacts] = useState<Record<ProvisionStage, StageFacts | undefined>>(emptyStageFacts);
+    const [expandedStages, setExpandedStages] = useState<ReadonlySet<ProvisionStage>>(() => new Set());
+    const handleExpandedChange = useCallback(
+        (stage: ProvisionStage, expanded: boolean): void => {
+            if (expanded && !expandedStages.has(stage) && stage !== 'done' && stage !== 'error') {
+                void trpcClient.localQuickStart.reportDetailsOpened.mutate({ stage }).catch((error: unknown) => {
+                    void trpcClient.common.reportError
+                        .mutate({
+                            message: error instanceof Error ? error.message : String(error),
+                            stack: error instanceof Error ? (error.stack ?? '') : '',
+                        })
+                        .catch(() => undefined);
+                });
+            }
+            setExpandedStages((previous) => {
+                const next = new Set(previous);
+                if (expanded) {
+                    next.add(stage);
+                } else {
+                    next.delete(stage);
+                }
+                return next;
+            });
+        },
+        [expandedStages, trpcClient],
+    );
     const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
     const [successMessage, setSuccessMessage] = useState<string | undefined>(undefined);
     const [elapsedMs, setElapsedMs] = useState(0);
@@ -894,8 +734,6 @@ export const LocalQuickStart = (): JSX.Element => {
 
     const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
     const readinessAbortRef = useRef<AbortController | null>(null);
-    // Mirrors `checkReadiness` so the stage-event handler can test it without reading state inside
-    // a setState updater (which React may invoke more than once).
     const checkReadinessRef = useRef<DockerReadiness | undefined>(undefined);
     const dockerPollAbortRef = useRef<AbortController | null>(null);
     const lastDockerProblemRef = useRef<
@@ -920,6 +758,7 @@ export const LocalQuickStart = (): JSX.Element => {
     // any invocation from a superseded/cancelled stream, so a late/flushed event can't overwrite
     // state after Cancel / Start over / a new Start.
     const streamGenerationRef = useRef(0);
+    const autoWaitGenRef = useRef(-1);
 
     // Validate the settings client-side, mirroring the router's zod schema so a valid form never
     // dead-ends on a server rejection. Returns the offending field (for a per-field error state,
@@ -983,6 +822,7 @@ export const LocalQuickStart = (): JSX.Element => {
         advancedRef.current = advError
             ? undefined
             : buildAdvancedOptions({
+                  preferredEngine,
                   port: advPort,
                   suggestedPort,
                   username: advUser,
@@ -994,6 +834,7 @@ export const LocalQuickStart = (): JSX.Element => {
                   startFresh,
               });
     }, [
+        preferredEngine,
         advPort,
         suggestedPort,
         advUser,
@@ -1011,8 +852,6 @@ export const LocalQuickStart = (): JSX.Element => {
     const stageLabelsMap = useMemo(() => stageLabels(), []);
     const stageStatusLabels = useMemo(() => stageStatusWords(), []);
     const planItemList = useMemo(() => planItems(), []);
-    const dockerFailureLabelMap = useMemo(() => dockerFailureLabels(), []);
-    const dockerGuidanceMap = useMemo(() => dockerGuidance(), []);
     const dockerGuideLabelMap = useMemo(() => dockerGuideLabels(), []);
     const dockerStartLabelMap = useMemo(() => dockerStartLabels(), []);
     const dockerRecoveryNoteMap = useMemo(() => dockerRecoveryNotes(), []);
@@ -1046,11 +885,7 @@ export const LocalQuickStart = (): JSX.Element => {
         setRelativeTimeNow(Date.now());
     }, []);
 
-    /**
-     * Refresh the Docker facts backing the `Checking Docker` stage. The host memoizes readiness
-     * briefly, so a call made right after that stage settles returns exactly the result the
-     * service acted on rather than probing Docker a second time.
-     */
+    /** Refresh engine facts for an explicit recovery action. */
     const syncDockerStatus = useCallback(
         async (request?: {
             readonly forceRefresh: boolean;
@@ -1060,9 +895,10 @@ export const LocalQuickStart = (): JSX.Element => {
             const abortController = new AbortController();
             readinessAbortRef.current = abortController;
             try {
-                const result = await trpcClient.localQuickStart.getDockerStatus.query(request, {
-                    signal: abortController.signal,
-                });
+                const result = await trpcClient.localQuickStart.getDockerStatus.query(
+                    { ...request, preferredEngine },
+                    { signal: abortController.signal },
+                );
                 if (abortController.signal.aborted) {
                     return undefined;
                 }
@@ -1091,7 +927,7 @@ export const LocalQuickStart = (): JSX.Element => {
                 }
             }
         },
-        [applyReadiness, trpcClient],
+        [applyReadiness, preferredEngine, trpcClient],
     );
 
     const stopTimer = useCallback((): void => {
@@ -1134,10 +970,16 @@ export const LocalQuickStart = (): JSX.Element => {
             // Supersede any prior stream: its in-flight callbacks will see a newer generation and no-op.
             const myGeneration = ++streamGenerationRef.current;
 
+            setExpandedStages(new Set());
             // "Wait longer" resumes at the waiting stage, so keep the earlier stages' done state
             // rather than resetting the whole list to pending.
             if (options?.resetStages !== false) {
                 setStageStatus(emptyStageStatus());
+                setFacts(emptyStageFacts());
+                setCheckReadiness(undefined);
+                checkReadinessRef.current = undefined;
+            } else {
+                setFacts((previous) => ({ ...previous, waiting: undefined }));
             }
             setErrorMessage(undefined);
             setSuccessMessage(undefined);
@@ -1155,10 +997,29 @@ export const LocalQuickStart = (): JSX.Element => {
             const subscription = subscribe({
                 onData(event: StageEvent) {
                     if (myGeneration !== streamGenerationRef.current) return; // superseded/cancelled stream
+                    if (event.stage === 'checking' && event.dockerReadiness) {
+                        applyReadiness(event.dockerReadiness);
+                    }
+                    if (event.facts || event.status !== 'active') {
+                        const stageFacts = event.facts;
+                        setFacts((previous) => {
+                            const next = stageFacts ? { ...previous, [stageFacts.kind]: stageFacts } : previous;
+                            if (
+                                event.status === 'active' ||
+                                next.pulling?.kind !== 'pulling' ||
+                                next.pulling.progress === undefined
+                            ) {
+                                return next;
+                            }
+                            return { ...next, pulling: { ...next.pulling, progress: undefined } };
+                        });
+                    }
                     if (event.stage === 'done' && event.status === 'done') {
                         settled = true;
                         stopTimer();
-                        setStageStatus((prev) => ({ ...prev, [event.stage]: event.status }));
+                        setStageStatus((prev) =>
+                            prev[event.stage] === event.status ? prev : { ...prev, [event.stage]: event.status },
+                        );
                         setSuccessMessage(event.message && formatQuickStartMessage(event.message));
                         setPhase('success');
                     } else if (event.status === 'error') {
@@ -1168,8 +1029,9 @@ export const LocalQuickStart = (): JSX.Element => {
                         // icon + "failed" status instead of a stuck spinner / "in progress" that would
                         // contradict the failure message for sighted and screen-reader users alike.
                         setStageStatus((prev) => {
-                            const next = { ...prev, [event.stage]: event.status };
                             const active = PROVISION_STAGES.find((s) => prev[s] === 'active');
+                            if (prev[event.stage] === event.status && !active) return prev;
+                            const next = { ...prev, [event.stage]: event.status };
                             if (active) next[active] = 'error';
                             return next;
                         });
@@ -1177,37 +1039,31 @@ export const LocalQuickStart = (): JSX.Element => {
                             event.message ? formatQuickStartMessage(event.message) : l10n.t('Setup failed.'),
                         );
                         setTimedOut(event.timedOut === true);
-                        if (event.dockerReadiness) {
+                        if (event.dockerReadiness && event.stage !== 'checking') {
                             // Docker became unusable mid-run: the remediation belongs beside the
                             // stage that hit it, not on a screen of its own.
                             setStageDockerFailure(event.dockerReadiness);
                             setRelativeTimeNow(Date.now());
-                        } else if (event.stage === 'checking') {
-                            // The check stage does not carry its readiness, so pull the classification
-                            // the host just computed to drive the detail line and the remediation.
-                            void syncDockerStatus();
                         }
                         if (event.canReuseExistingData !== undefined) {
                             setCanReuseExistingData(event.canReuseExistingData);
                         }
                         setPhase('failed');
                     } else {
-                        setStageStatus((prev) => ({ ...prev, [event.stage]: event.status }));
-                        if (
-                            event.stage === 'checking' &&
-                            event.status === 'done' &&
-                            checkReadinessRef.current?.outcome !== 'ready'
-                        ) {
-                            // Prove which Docker was accepted, even when the background load ran
-                            // before the user installed, started, or fixed Docker.
-                            void syncDockerStatus();
-                        }
+                        setStageStatus((prev) =>
+                            prev[event.stage] === event.status ? prev : { ...prev, [event.stage]: event.status },
+                        );
                     }
                 },
                 onError(error: unknown) {
                     if (myGeneration !== streamGenerationRef.current) return; // superseded/cancelled stream
                     settled = true;
                     stopTimer();
+                    setFacts((previous) =>
+                        previous.pulling?.kind === 'pulling' && previous.pulling.progress !== undefined
+                            ? { ...previous, pulling: { ...previous.pulling, progress: undefined } }
+                            : previous,
+                    );
                     setErrorMessage(error instanceof Error ? error.message : String(error));
                     setTimedOut(false);
                     setPhase('failed');
@@ -1231,7 +1087,7 @@ export const LocalQuickStart = (): JSX.Element => {
             });
             subscriptionRef.current = subscription;
         },
-        [navigate, stopTimer, syncDockerStatus],
+        [applyReadiness, navigate, stopTimer],
     );
 
     const startProvisioning = useCallback(
@@ -1240,11 +1096,12 @@ export const LocalQuickStart = (): JSX.Element => {
             const options = continueAnyway
                 ? { ...(advancedRef.current ?? {}), continueAnyway: true }
                 : advancedRef.current;
+            setRecreating(isRecreate);
             runStream((handlers) => trpcClient.localQuickStart.startQuickStart.subscribe(options, handlers), {
                 trigger: continueAnyway ? 'continueAnyway' : 'startSetup',
             });
         },
-        [trpcClient, runStream],
+        [trpcClient, runStream, isRecreate],
     );
 
     const handleStart = useCallback((): void => startProvisioning(false), [startProvisioning]);
@@ -1267,69 +1124,109 @@ export const LocalQuickStart = (): JSX.Element => {
 
     const handleStopWaiting = useCallback((): void => {
         stopDockerWait();
-        setDockerActionMessage(l10n.t('Stopped waiting for Docker.'));
+        setDockerActionMessage(
+            lastDockerProblemRef.current?.problem.startAction === 'startPodmanMachine' ||
+                lastDockerProblemRef.current?.problem.engine === 'podman'
+                ? l10n.t('Stopped waiting for Podman.')
+                : l10n.t('Stopped waiting for Docker.'),
+        );
     }, [stopDockerWait]);
 
-    const handleStartDocker = useCallback((): void => {
-        stopDockerWait();
-        setDockerActionMessage(undefined);
-        setStartingDocker(true);
-        setDockerWaitElapsedMs(0);
-        const abortController = new AbortController();
-        dockerPollAbortRef.current = abortController;
-        void trpcClient.localQuickStart.startDockerProvider
-            .mutate(undefined, { signal: abortController.signal })
-            .then(async (launchResult) => {
-                if (abortController.signal.aborted) return;
-                if (launchResult === 'notAvailable' || launchResult === 'failed') {
+    const beginDockerWait = useCallback(
+        (launch: () => Promise<DockerLaunchResult>, isPodman: boolean): void => {
+            stopDockerWait();
+            setDockerActionMessage(undefined);
+            setStartingDocker(true);
+            setDockerWaitElapsedMs(0);
+            const abortController = new AbortController();
+            dockerPollAbortRef.current = abortController;
+            const startedAt = Date.now();
+            dockerWaitTimerRef.current = setInterval(() => setDockerWaitElapsedMs(Date.now() - startedAt), 250);
+            void launch()
+                .then(async (launchResult) => {
+                    if (abortController.signal.aborted) return;
+                    if (launchResult === 'notAvailable' || launchResult === 'failed') {
+                        stopDockerWait();
+                        setDockerActionMessage(
+                            isPodman ? l10n.t('Podman could not be started.') : l10n.t('Docker could not be started.'),
+                        );
+                        if (launchResult === 'notAvailable') {
+                            // The click-time check no longer offers this action; show what it found instead.
+                            void syncDockerStatus();
+                        }
+                        return;
+                    }
+                    let latestResult: DockerStatusResult | undefined;
+                    const outcome = await pollDockerReadiness({
+                        signal: abortController.signal,
+                        query: (suppressCommandEcho) =>
+                            trpcClient.localQuickStart.getDockerStatus.query(
+                                { forceRefresh: true, polled: true, suppressCommandEcho, preferredEngine },
+                                { signal: abortController.signal },
+                            ),
+                        onResult: (result) => {
+                            latestResult = result;
+                            applyReadiness(result.readiness);
+                            setCanReuseExistingData(result.canReuseExistingData);
+                            setInstanceState(result.status.state);
+                            setInstanceMissing(result.status.missing === true);
+                            setInstanceDataRemoved(result.status.dataRemoved === true);
+                        },
+                    });
+                    if (abortController.signal.aborted) return;
                     stopDockerWait();
-                    setDockerActionMessage(l10n.t('Docker could not be started.'));
-                    return;
-                }
-                const startedAt = Date.now();
-                dockerWaitTimerRef.current = setInterval(() => setDockerWaitElapsedMs(Date.now() - startedAt), 250);
-                let latestResult: DockerStatusResult | undefined;
-                const outcome = await pollDockerReadiness({
-                    signal: abortController.signal,
-                    query: (suppressCommandEcho) =>
-                        trpcClient.localQuickStart.getDockerStatus.query(
-                            { forceRefresh: true, polled: true, suppressCommandEcho },
-                            { signal: abortController.signal },
-                        ),
-                    onResult: (result) => {
-                        latestResult = result;
-                        applyReadiness(result.readiness);
-                        setCanReuseExistingData(result.canReuseExistingData);
-                        setInstanceState(result.status.state);
-                        setInstanceMissing(result.status.missing === true);
-                        setInstanceDataRemoved(result.status.dataRemoved === true);
-                    },
+                    if (outcome === 'ready' && latestResult) {
+                        applyDockerRecovery();
+                    } else if (outcome === 'deadline') {
+                        setDockerActionMessage(
+                            isPodman
+                                ? l10n.t('Podman did not become ready before the wait timed out.')
+                                : l10n.t('Docker did not become ready before the wait timed out.'),
+                        );
+                    } else if (outcome === 'stopped') {
+                        // Docker answered, but with a non-transient problem (e.g. permission denied). The
+                        // readiness card below already updated via onResult; announce the transition too,
+                        // otherwise the spinner just disappears and the Announcer says nothing.
+                        setDockerActionMessage(
+                            isPodman
+                                ? l10n.t('Podman started, but it is not usable yet. See the details below.')
+                                : l10n.t('Docker started, but it is not usable yet. See the details below.'),
+                        );
+                    }
+                })
+                .catch(() => {
+                    if (abortController.signal.aborted) return;
+                    stopDockerWait();
+                    setDockerActionMessage(
+                        isPodman
+                            ? l10n.t('The Podman readiness check failed.')
+                            : l10n.t('The Docker readiness check failed.'),
+                    );
                 });
-                if (abortController.signal.aborted) return;
-                stopDockerWait();
-                if (outcome === 'ready' && latestResult) {
-                    applyDockerRecovery();
-                } else if (outcome === 'deadline') {
-                    setDockerActionMessage(l10n.t('Docker did not become ready before the wait timed out.'));
-                } else if (outcome === 'stopped') {
-                    // Docker answered, but with a non-transient problem (e.g. permission denied). The
-                    // readiness card below already updated via onResult; announce the transition too,
-                    // otherwise the spinner just disappears and the Announcer says nothing.
-                    setDockerActionMessage(l10n.t('Docker started, but it is not usable yet. See the details below.'));
-                }
-            })
-            .catch(() => {
-                if (abortController.signal.aborted) return;
-                stopDockerWait();
-                setDockerActionMessage(l10n.t('The Docker readiness check failed.'));
-            });
-    }, [applyDockerRecovery, applyReadiness, stopDockerWait, trpcClient]);
+        },
+        [applyDockerRecovery, applyReadiness, preferredEngine, stopDockerWait, syncDockerStatus, trpcClient],
+    );
+
+    const handleStartDocker = useCallback((): void => {
+        // The host re-checks before launching; naming the displayed action keeps it from starting another engine.
+        const expectedAction = lastDockerProblemRef.current?.problem.startAction;
+        beginDockerWait(
+            () => trpcClient.localQuickStart.startDockerProvider.mutate({ preferredEngine, expectedAction }),
+            expectedAction === 'startPodmanMachine',
+        );
+    }, [beginDockerWait, preferredEngine, trpcClient]);
 
     // Re-run only the Docker check, after the user follows the guidance. It never starts or resumes
     // provisioning: a pass clears the blocker in place, a fresh failure updates the evidence.
     const handleCheckDockerAgain = useCallback((): void => {
         setDockerActionMessage(undefined);
         setCheckingDockerAgain(true);
+        setFacts((previous) => ({ ...previous, checking: undefined }));
+        setExpandedStages((previous) => {
+            const next = new Set(previous);
+            next.delete('checking');
+            return next;
+        });
         // The stage's own status carries the in-flight signal, so its icon spins and a screen
         // reader stops hearing "failed" while a re-check is actively running.
         setStageStatus((prev) => ({ ...prev, checking: 'active' }));
@@ -1353,6 +1250,8 @@ export const LocalQuickStart = (): JSX.Element => {
                 setInstanceMissing(update.status.missing === true);
                 setInstanceDataRemoved(update.status.dataRemoved === true);
                 setCanReuseExistingData(update.canReuseExistingData);
+                setInstanceEngine(update.instanceEngine);
+                setSavedImagePinned(update.savedImagePinned === true);
                 // The timed-out container is gone (e.g. deleted from the tree), so "Wait longer" has
                 // nothing left to wait for. While it is still retained the instance stays in Error.
                 if (
@@ -1363,6 +1262,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     setTimedOut(false);
                     setErrorMessage(undefined);
                     setStageStatus(emptyStageStatus());
+                    setFacts(emptyStageFacts());
                     setPhase((current) => (current === 'failed' ? 'configure' : current));
                 }
             },
@@ -1374,32 +1274,45 @@ export const LocalQuickStart = (): JSX.Element => {
     }, [trpcClient]);
 
     useEffect(() => {
-        // Load the instance facts the settings page needs (and rehydrate a resumable readiness
-        // timeout) while the user reads the Introduction. Nothing about this check is shown before
-        // the Set up step, and a failure here never blocks the wizard.
-        void syncDockerStatus().then((result) => {
-            if (result?.readiness.outcome === 'ready' && result.status.canResumeReadiness) {
-                setStageStatus({
-                    checking: 'done',
-                    pulling: 'done',
-                    creating: 'done',
-                    starting: 'done',
-                    waiting: 'error',
-                    done: 'pending',
-                    error: 'pending',
-                });
-                setTimedOut(true);
-                setPhase('failed');
-            }
-        });
+        const abortController = new AbortController();
+        void trpcClient.localQuickStart.getWizardContext
+            .query(undefined, { signal: abortController.signal })
+            .then((result) => {
+                if (abortController.signal.aborted) return;
+                setCanReuseExistingData(result.canReuseExistingData);
+                setInstanceState(result.status.state);
+                setInstanceMissing(result.status.missing === true);
+                setInstanceDataRemoved(result.status.dataRemoved === true);
+                setInstanceEngine(result.instanceEngine);
+                setSavedImagePinned(result.savedImagePinned);
+                setSuggestedPort(result.suggestedPort);
+                if (!portTouchedRef.current) {
+                    setAdvPort(String(result.suggestedPort));
+                }
+                if (result.status.canResumeReadiness) {
+                    setStageStatus({
+                        checking: 'done',
+                        pulling: 'done',
+                        creating: 'done',
+                        starting: 'done',
+                        waiting: 'error',
+                        done: 'pending',
+                        error: 'pending',
+                    });
+                    setTimedOut(true);
+                    setPhase('failed');
+                }
+            })
+            .catch(() => undefined);
         return () => {
+            abortController.abort();
             readinessAbortRef.current?.abort();
             dockerPollAbortRef.current?.abort();
             subscriptionRef.current?.unsubscribe();
             if (timerRef.current) clearInterval(timerRef.current);
             if (dockerWaitTimerRef.current) clearInterval(dockerWaitTimerRef.current);
         };
-    }, [syncDockerStatus]);
+    }, [trpcClient]);
 
     useEffect(() => {
         const relativeTimeTimer = setInterval(() => setRelativeTimeNow(Date.now()), 30_000);
@@ -1481,6 +1394,7 @@ export const LocalQuickStart = (): JSX.Element => {
     // return to the settings page. If the discard no-ops because a just-cancelled resume is still
     // unwinding, keep the timed-out actions (the container is intact) so nothing is stranded.
     const handleStartOver = useCallback((): void => {
+        setExpandedStages(new Set());
         subscriptionRef.current?.unsubscribe();
         subscriptionRef.current = null;
         streamGenerationRef.current++; // ignore any trailing callbacks from the cancelled stream
@@ -1493,6 +1407,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     setTimedOut(false);
                     setErrorMessage(undefined);
                     setStageStatus(emptyStageStatus());
+                    setFacts(emptyStageFacts());
                     navigate('configure', 'startOver');
                 } else {
                     setTimedOut(true);
@@ -1514,6 +1429,11 @@ export const LocalQuickStart = (): JSX.Element => {
         subscriptionRef.current = null;
         streamGenerationRef.current++; // ignore any trailing callbacks from the cancelled stream
         stopTimer();
+        setFacts((previous) =>
+            previous.pulling?.kind === 'pulling' && previous.pulling.progress !== undefined
+                ? { ...previous, pulling: { ...previous.pulling, progress: undefined } }
+                : previous,
+        );
         if (isWaitLongerRef.current) {
             // Cancelling a "Wait longer" resume leaves the container running, so return to the
             // timed-out actions (Wait longer / Start over) rather than the settings page.
@@ -1556,9 +1476,12 @@ export const LocalQuickStart = (): JSX.Element => {
     );
 
     const handleCopyRecoveryCommand = useCallback(
-        (id: DockerRecoveryCommand['id']): void => {
+        (command: DockerRecoveryCommand): void => {
             void trpcClient.localQuickStart.copyRecoveryCommand
-                .mutate(id)
+                .mutate({
+                    id: command.id,
+                    ...(command.machineName !== undefined ? { machineName: command.machineName } : {}),
+                })
                 .then(() => setCopyAnnouncementKey((current) => current + 1))
                 .catch(() => undefined);
         },
@@ -1611,6 +1534,21 @@ export const LocalQuickStart = (): JSX.Element => {
             ? (stageDockerFailure ??
               (checkStageFailed && checkReadiness && checkReadiness.outcome !== 'ready' ? checkReadiness : undefined))
             : undefined;
+    useEffect(() => {
+        if (
+            phase !== 'failed' ||
+            startingDocker ||
+            checkingDockerAgain ||
+            dockerProblem?.failureKind !== 'daemonStarting' ||
+            dockerProblem.podmanMachine?.kind !== 'starting' ||
+            autoWaitGenRef.current === streamGenerationRef.current
+        ) {
+            return;
+        }
+        autoWaitGenRef.current = streamGenerationRef.current;
+        beginDockerWait(() => Promise.resolve('launchAttempted'), true);
+    }, [beginDockerWait, checkingDockerAgain, dockerProblem, phase, startingDocker]);
+
     const dockerPresentation = dockerProblem ? getDockerReadinessPresentation(dockerProblem) : undefined;
     // Held so the block keeps its content while it collapses away, instead of blanking first and
     // then closing an empty gap.
@@ -1618,7 +1556,11 @@ export const LocalQuickStart = (): JSX.Element => {
         lastDockerProblemRef.current = { problem: dockerProblem, presentation: dockerPresentation };
     }
     const shownDocker = lastDockerProblemRef.current;
-    const dockerPresentationState = startingDocker ? 'starting' : (shownDocker?.presentation.state ?? 'notAccessible');
+    const dockerGuidanceMap = useMemo(
+        () => dockerGuidance(shownDocker?.problem.podmanMachine, shownDocker?.problem.podmanTarget),
+        [shownDocker?.problem.podmanMachine, shownDocker?.problem.podmanTarget],
+    );
+    const shownPodman = shownDocker?.problem.cli === 'podman' || shownDocker?.problem.engineEvidence === 'podmanShim';
     const recoveryCommand = shownDocker?.presentation.showCopyCommand ? shownDocker.problem.recoveryCommand : undefined;
     // A Docker-only re-check cleared the blocker. When that blocker was the check stage itself,
     // nothing has run yet, so the run can simply go ahead; a later stage's failure still stands.
@@ -1644,12 +1586,32 @@ export const LocalQuickStart = (): JSX.Element => {
 
     const stageDetailFor = (stage: ProvisionStage): string | undefined => {
         if (stage === 'checking') {
-            return checkStageDetail;
+            if (checkStageDetail) return checkStageDetail;
         }
+        const status = stageStatus[stage];
+        const summary =
+            status === 'active' || status === 'done' || status === 'error'
+                ? buildStageSummary(facts[stage], status)
+                : undefined;
+        if (summary) return summary;
         if (stage === failedStage && stageDockerFailure) {
             return formatDockerDetail(getDockerReadinessPresentation(stageDockerFailure).detail);
         }
         return undefined;
+    };
+
+    const stageFactsFor = (stage: ProvisionStage): ReturnType<typeof buildDockerDetailRows> | undefined => {
+        const rows = buildStageDetailRows(facts[stage]).filter(
+            (row) => stageStatus[stage] !== 'error' || row.action !== 'showOutput',
+        );
+        if (stage === 'checking') {
+            if (checkReadiness && (stageStatus.checking === 'done') === (checkReadiness.outcome === 'ready')) {
+                rows.unshift(...buildDockerDetailRows(checkReadiness));
+            }
+        } else if (stage === failedStage && stageDockerFailure) {
+            rows.unshift(...buildDockerDetailRows(stageDockerFailure));
+        }
+        return rows.length ? rows : undefined;
     };
 
     // Human-readable message for the current in-flight stage, mirrored into a polite live
@@ -1671,7 +1633,7 @@ export const LocalQuickStart = (): JSX.Element => {
         <ContainerHeader
             media={<RocketRegular aria-hidden />}
             title={l10n.t('DocumentDB Local')}
-            subtitle={l10n.t('Set up DocumentDB locally for development and testing with Docker.')}
+            subtitle={l10n.t('Set up DocumentDB locally for development and testing with Docker or Podman.')}
             action={
                 configuration.feedbackPermitted === true ? (
                     <Button
@@ -1743,6 +1705,41 @@ export const LocalQuickStart = (): JSX.Element => {
 
     const settingItems: readonly SettingItem[] = [
         {
+            key: 'engine',
+            label: l10n.t('Container engine'),
+            value: instanceEngine
+                ? instanceEngine === 'notRecorded'
+                    ? l10n.t('Not recorded')
+                    : l10n.t('{0} · kept from the existing instance', instanceEngine === 'docker' ? 'Docker' : 'Podman')
+                : preferredEngine === 'docker'
+                  ? 'Docker'
+                  : 'Podman',
+            action: instanceEngine
+                ? undefined
+                : rowAction(
+                      editingEngine
+                          ? l10n.t('Hide the container engine setting')
+                          : l10n.t('Change the container engine'),
+                      editingEngine,
+                      () => setEditingEngine((value) => !value),
+                  ),
+            editorOpen: editingEngine && !instanceEngine,
+            editor: instanceEngine ? undefined : (
+                <Field
+                    label={l10n.t('Preferred container engine')}
+                    hint={l10n.t('Setup uses your preferred engine if installed, or the other one otherwise.')}
+                >
+                    <RadioGroup
+                        value={preferredEngine}
+                        onChange={(_event, data) => setPreferredEngine(data.value === 'podman' ? 'podman' : 'docker')}
+                    >
+                        <Radio value="docker" label="Docker" />
+                        <Radio value="podman" label="Podman" />
+                    </RadioGroup>
+                </Field>
+            ),
+        },
+        {
             key: 'address',
             label: l10n.t('Address'),
             value: l10n.t('localhost:{0}', effectivePort),
@@ -1779,9 +1776,13 @@ export const LocalQuickStart = (): JSX.Element => {
         },
         {
             key: 'image',
-            label: l10n.t('Image'),
+            label: isRecreate ? l10n.t('Saved image') : l10n.t('Image'),
             value: isRecreate ? (
-                l10n.t('Kept from the existing instance')
+                savedImagePinned ? (
+                    l10n.t('The exact recorded image, not a newer image. Downloaded only if needed.')
+                ) : (
+                    l10n.t('Uses the available local image. The original image identity is not recorded.')
+                )
             ) : (
                 <code className={styles.imagePath}>{effectiveImage}</code>
             ),
@@ -2035,9 +2036,7 @@ export const LocalQuickStart = (): JSX.Element => {
             </Table>
             {isRecreate && (
                 <Text size={200} className={styles.muted}>
-                    {l10n.t(
-                        'Recreating reuses the existing data volume, so the original credentials and image are kept.',
-                    )}
+                    {l10n.t('Recreating reuses the existing data volume and its saved credentials.')}
                 </Text>
             )}
         </>
@@ -2052,7 +2051,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     <MessageBlock
                         intent="error"
                         icon={<ErrorCircleFilled />}
-                        title={dockerFailureLabelMap[shownDocker.problem.failureKind ?? 'unknown']}
+                        title={dockerFailureLabel(shownDocker.problem)}
                         actions={
                             <>
                                 {shownDocker.presentation.showInstall && (
@@ -2100,13 +2099,13 @@ export const LocalQuickStart = (): JSX.Element => {
                         }
                     >
                         <div>
-                            {
-                                dockerGuidanceMap[
-                                    startingDocker
-                                        ? 'daemonStarting'
-                                        : (shownDocker.presentation.guidance ?? 'notAccessible')
-                                ]
-                            }
+                            {shownPodman && (startingDocker || shownDocker.problem.failureKind === 'daemonStarting')
+                                ? l10n.t('Waiting for Podman to start. This can take a minute.')
+                                : dockerGuidanceMap[
+                                      startingDocker
+                                          ? 'daemonStarting'
+                                          : (shownDocker.presentation.guidance ?? 'notAccessible')
+                                  ]}
                         </div>
                         {recoveryCommand && (
                             <div className={styles.recoveryCommand}>
@@ -2118,7 +2117,7 @@ export const LocalQuickStart = (): JSX.Element => {
                                         size="small"
                                         className={styles.recoveryCommandCopy}
                                         icon={<CopyRegular />}
-                                        onClick={() => handleCopyRecoveryCommand(recoveryCommand.id)}
+                                        onClick={() => handleCopyRecoveryCommand(recoveryCommand)}
                                     >
                                         {l10n.t('Copy')}
                                     </Button>
@@ -2135,55 +2134,24 @@ export const LocalQuickStart = (): JSX.Element => {
                             </div>
                         )}
                     </MessageBlock>
-                    <Accordion collapsible>
-                        <AccordionItem value="docker-details">
-                            <AccordionHeader className={styles.dockerAccordionHeader}>
-                                <Text weight="semibold" className={styles.accordionHeaderBrand}>
-                                    {l10n.t('What the Docker check found')}
-                                </Text>
-                            </AccordionHeader>
-                            <AccordionPanel className={styles.dockerAccordionPanel}>
-                                <Text size={200} className={styles.dockerDetailsIntro}>
-                                    {l10n.t(
-                                        'Everything the readiness check established, in the order it was established.',
-                                    )}
-                                </Text>
-                                <dl className={styles.dockerDetails}>
-                                    {buildDockerDetailRows(
-                                        shownDocker.problem,
-                                        dockerPresentationState,
-                                        relativeTimeNow,
-                                    ).map((row) => (
-                                        <Fragment key={row.label}>
-                                            <dt className={styles.dockerDetailLabel}>{row.label}</dt>
-                                            <dd className={styles.dockerDetailValue}>
-                                                <span>{row.value}</span>
-                                                {row.note && (
-                                                    <Text size={200} className={styles.dockerDetailNote}>
-                                                        {row.note}
-                                                    </Text>
-                                                )}
-                                            </dd>
-                                        </Fragment>
-                                    ))}
-                                </dl>
-                            </AccordionPanel>
-                        </AccordionItem>
-                    </Accordion>
                 </>
             )}
         </div>
     );
 
     const setupHeading = isProvisioning
-        ? l10n.t('Setting up DocumentDB Local')
+        ? recreating
+            ? l10n.t('Recreating DocumentDB Local container')
+            : l10n.t('Setting up DocumentDB Local')
         : canContinueSetup
           ? l10n.t('Ready to set up')
           : l10n.t('Setup did not finish');
     const setupSubtitle = isProvisioning
         ? l10n.t('This can take a few minutes. Elapsed time: {0}', formatElapsed(elapsedMs))
         : canContinueSetup
-          ? l10n.t('Docker is ready now. Nothing has been created on your machine yet.')
+          ? shownPodman
+              ? l10n.t('Podman is ready now. Nothing has been created on your machine yet.')
+              : l10n.t('Docker is ready now. Nothing has been created on your machine yet.')
           : checkStageFailed
             ? l10n.t('Setup stopped at the first stage. Nothing was created on your machine.')
             : undefined;
@@ -2201,7 +2169,18 @@ export const LocalQuickStart = (): JSX.Element => {
         ) {
             return undefined;
         }
-        return <Link onClick={handleCheckDockerAgain}>{l10n.t('Check Docker again')}</Link>;
+        return (
+            <Link
+                onClick={(event) => {
+                    if (event.currentTarget.ownerDocument.activeElement === event.currentTarget) {
+                        primaryButtonRef.current?.focus();
+                    }
+                    handleCheckDockerAgain();
+                }}
+            >
+                {shownPodman ? l10n.t('Check Podman again') : l10n.t('Check Docker again')}
+            </Link>
+        );
     };
 
     // When the evidence was gathered belongs next to the evidence, not at the foot of the block.
@@ -2220,6 +2199,18 @@ export const LocalQuickStart = (): JSX.Element => {
         if (!text && !action) {
             return undefined;
         }
+        const stageFacts = facts[stage];
+        if (stage === 'pulling' && stageStatus.pulling === 'active') {
+            const activity =
+                stageFacts?.kind === 'pulling' && stageFacts.progress?.trim()
+                    ? l10n.t('Engine output: {0}', stageFacts.progress)
+                    : text;
+            return (
+                <span className={styles.pullActivity} title={activity}>
+                    {activity}
+                </span>
+            );
+        }
         return (
             <>
                 {text}
@@ -2231,14 +2222,23 @@ export const LocalQuickStart = (): JSX.Element => {
 
     const setup = (
         <>
-            <StatusList ariaLabel={l10n.t('Setup progress')} statusLabels={stageStatusLabels}>
+            <StatusList ariaLabel={l10n.t('Setup progress')} statusLabels={stageStatusLabels} highlightRowsOnHover>
                 {PROVISION_STAGES.map((stage) => (
-                    <StatusListItem
+                    <SetupStageRow
                         key={stage}
+                        stage={stage}
                         label={stageLabelsMap[stage]}
                         status={stageStatus[stage]}
                         detail={stageDetailNode(stage)}
-                        reserveDetailSpace={stage === 'checking'}
+                        facts={stageFactsFor(stage)}
+                        failureTitle={
+                            stage === failedStage && dockerProblem ? dockerFailureLabel(dockerProblem) : undefined
+                        }
+                        expanded={expandedStages.has(stage)}
+                        onExpandedChange={handleExpandedChange}
+                        focusFallback={primaryButtonRef}
+                        mutedClassName={styles.muted}
+                        onShowOutput={handleViewOutput}
                     />
                 ))}
             </StatusList>
@@ -2286,22 +2286,41 @@ export const LocalQuickStart = (): JSX.Element => {
         </>
     );
 
+    const recreateSuccessMessage = buildRecreateSuccessMessage(facts);
     const done = (
         <>
-            <StatusList ariaLabel={l10n.t('Completed setup steps')} statusLabels={stageStatusLabels}>
+            <StatusList
+                ariaLabel={l10n.t('Completed setup steps')}
+                statusLabels={stageStatusLabels}
+                highlightRowsOnHover
+            >
                 {PROVISION_STAGES.map((stage) => (
-                    <StatusListItem
+                    <SetupStageRow
                         key={stage}
+                        stage={stage}
                         label={stageLabelsMap[stage]}
                         status="done"
-                        detail={stage === 'checking' ? checkStageDetail : undefined}
-                        reserveDetailSpace={stage === 'checking'}
+                        detail={stageDetailFor(stage)}
+                        facts={stageFactsFor(stage)}
+                        expanded={expandedStages.has(stage)}
+                        onExpandedChange={handleExpandedChange}
+                        focusFallback={primaryButtonRef}
+                        mutedClassName={styles.muted}
+                        onShowOutput={handleViewOutput}
                     />
                 ))}
             </StatusList>
-            <MessageBlock intent="success" title={l10n.t('All set')}>
-                {l10n.t('The instance is ready in the Connections view as “DocumentDB Local”.')}
+            <MessageBlock
+                intent="success"
+                title={recreateSuccessMessage ? l10n.t('Container recreated') : l10n.t('All set')}
+            >
+                {recreateSuccessMessage ??
+                    l10n.t('The instance is ready in the Connections view as “DocumentDB Local”.')}
+                {facts.waiting?.kind === 'waiting' && facts.waiting.sampleData === 'failed' && (
+                    <> {l10n.t('Sample data was not loaded. View the setup log for the reason.')}</>
+                )}
             </MessageBlock>
+            <Link onClick={handleViewOutput}>{l10n.t('View setup log')}</Link>
             <div className={styles.nextSteps}>
                 <Text size={300} weight="regular">
                     {l10n.t('Next steps')}
@@ -2353,10 +2372,11 @@ export const LocalQuickStart = (): JSX.Element => {
             break;
         }
         case 'configure': {
-            // The label stays fixed; the note below it is what follows the choice. "Nothing else on your
-            // machine is changed" is true only for a genuinely fresh install and must not render for
-            // either recreate path (review M4 / §10.6).
-            primaryLabel = forcedFresh ? l10n.t('Start fresh') : l10n.t('Start DocumentDB Local');
+            primaryLabel = forcedFresh
+                ? l10n.t('Start fresh')
+                : isRecreate
+                  ? l10n.t('Recreate container')
+                  : l10n.t('Start DocumentDB Local');
             primaryDisabled = advError !== undefined || passwordEncoding === 'checking' || startBlockedByGuard;
             primaryIcon = <RocketRegular />;
             onPrimary = handleStart;
@@ -2376,7 +2396,7 @@ export const LocalQuickStart = (): JSX.Element => {
             );
             const actionNote = isRecreate
                 ? l10n.t(
-                      'Recreating replaces the container named {0} and keeps its data volume, so your documents, credentials and image version are preserved.',
+                      'Recreating replaces the container named {0} and reuses its existing data volume and saved credentials.',
                       QUICK_START_CONTAINER_NAME,
                   )
                 : startFresh
@@ -2401,7 +2421,7 @@ export const LocalQuickStart = (): JSX.Element => {
             break;
         }
         case 'provisioning': {
-            primaryLabel = l10n.t('Setting up…');
+            primaryLabel = recreating ? l10n.t('Recreating…') : l10n.t('Setting up…');
             primaryDisabled = true;
             onPrimary = () => undefined;
             secondaryActions = (
@@ -2439,10 +2459,10 @@ export const LocalQuickStart = (): JSX.Element => {
                       )
                     : canContinueSetup
                       ? l10n.t(
-                            'Continuing runs every setup step from the beginning, starting with the Docker check. Nothing has been created on your machine yet.',
+                            'Continuing runs every setup step from the beginning, starting with the container engine check. Nothing has been created on your machine yet.',
                         )
                       : l10n.t(
-                            'Retrying runs every setup step again from the beginning, starting with the Docker check.',
+                            'Retrying runs every setup step again from the beginning, starting with the container engine check.',
                         );
                 secondaryActions = (
                     <Button appearance="secondary" onClick={handleBackToConfigure}>
@@ -2490,11 +2510,18 @@ export const LocalQuickStart = (): JSX.Element => {
                 }
                 politeness="assertive"
             />
-            <Announcer when={startingDocker} message={l10n.t('Waiting for Docker to start.')} />
+            <Announcer
+                when={startingDocker}
+                message={shownPodman ? l10n.t('Waiting for Podman to start.') : l10n.t('Waiting for Docker to start.')}
+            />
             <Announcer
                 key={`docker-recovered-${dockerRecoveredKey}`}
                 when={dockerRecoveredKey > 0}
-                message={l10n.t('Docker is ready. Setup has not run yet.')}
+                message={
+                    shownPodman
+                        ? l10n.t('Podman is ready. Setup has not run yet.')
+                        : l10n.t('Docker is ready. Setup has not run yet.')
+                }
             />
             <Announcer
                 key={`recovery-copied-${copyAnnouncementKey}`}
@@ -2536,6 +2563,7 @@ export const LocalQuickStart = (): JSX.Element => {
                             ref={primaryButtonRef}
                             icon={primaryIcon}
                             disabled={primaryDisabled}
+                            disabledFocusable={checkingDockerAgain}
                             onClick={onPrimary}
                         >
                             {primaryLabel}
@@ -2548,21 +2576,21 @@ export const LocalQuickStart = (): JSX.Element => {
                     value="introduction"
                     label={l10n.t('Introduction')}
                     title={l10n.t('Develop and test locally')}
-                    subtitle={
-                        /* Approved product copy, taken verbatim from documentdb.io — exempt from the
-                           repo's "never MongoDB as a bare product name" terminology rule. Do not sweep. */
-                        l10n.t(
-                            'DocumentDB Local gives you an open-source, fully MongoDB-compatible database for development and testing on your machine.',
-                        )
-                    }
+                    subtitle={l10n.t(
+                        'DocumentDB Local gives you an open-source, fully MongoDB-compatible database for local development and testing.',
+                    )}
                 >
                     {introduction}
                 </WizardStep>
                 <WizardStep
                     value="configure"
                     label={l10n.t('Configure')}
-                    title={l10n.t('Configure setup')}
-                    subtitle={l10n.t('These defaults work for most people. Change them only if you need to.')}
+                    title={isRecreate ? l10n.t('Configure recreation') : l10n.t('Configure setup')}
+                    subtitle={
+                        isRecreate
+                            ? l10n.t('Create the container again using its existing data volume and saved credentials.')
+                            : l10n.t('These defaults work for most people. Change them only if you need to.')
+                    }
                 >
                     {configure}
                 </WizardStep>

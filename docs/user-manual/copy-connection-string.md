@@ -43,6 +43,8 @@ mongodb+srv://<client-id>@<cluster>.mongocluster.cosmos.azure.com/?authMechanism
 
 For the system-assigned identity the string is the same without the client ID in the user position.
 
+`TOKEN_RESOURCE` matches the cluster's cloud. The example shows the public cloud; a cluster in Azure US Government or Azure China gets that cloud's value. See [Sovereign Clouds](./sovereign-clouds#documentdbcustomenvironmentossrdbmsendpoint).
+
 A few things worth knowing:
 
 - **No password prompt appears.** There is no password on this kind of connection, so there is nothing to choose between.

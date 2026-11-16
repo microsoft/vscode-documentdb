@@ -26,6 +26,20 @@ describe('LocalQuickStartItem — lazy hydration', () => {
         expect(ensureHydrated).not.toHaveBeenCalled();
     });
 
+    it('describes both supported container engines in the empty-state tooltip', () => {
+        vi.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(true);
+        vi.spyOn(QuickStartService, 'getStatus').mockReturnValue({
+            state: InstanceState.NotInstalled,
+            metadata: undefined,
+            missing: false,
+            canResumeReadiness: false,
+        });
+
+        const item = new LocalQuickStartItem('connectionsView/root').getTreeItem();
+
+        expect(item.tooltip).toHaveProperty('value', expect.stringContaining('Runs in Docker or Podman'));
+    });
+
     it('awaits first hydration without starting a redundant background probe', async () => {
         vi.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(false);
         const ensureHydrated = vi.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);

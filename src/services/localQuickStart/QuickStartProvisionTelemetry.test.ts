@@ -21,7 +21,7 @@ import * as vscode from 'vscode';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { ext } from '../../extensionVariables';
 import { StorageService } from '../storageService';
-import { disposeQuickStartOutputChannel, type IContainerRuntime } from './ContainerRuntime';
+import { disposeQuickStartOutputChannel, type IContainerEngineOps, type IContainerRuntime } from './ContainerRuntime';
 import { DockerCommandError } from './dockerCommand';
 import { QuickStartServiceImpl } from './QuickStartService';
 import { type DockerReadiness, QUICK_START_PORT, type StageEvent } from './quickStartTypes';
@@ -152,12 +152,35 @@ const RUNNING = {
     ports: [{ containerPort: QUICK_START_PORT, hostPort: QUICK_START_PORT }],
 };
 
-function runtimeFor(overrides: Partial<IContainerRuntime> = {}): IContainerRuntime {
-    return {
+type RuntimeOverrides = Partial<IContainerRuntime & IContainerEngineOps>;
+
+/** Docker's closing line on a pull, delivered through the progress callback like the real CLI. */
+function pullReporting(statusLine: string): IContainerEngineOps['pullImage'] {
+    return vi.fn((_imageRef: string, _token?: vscode.CancellationToken, onProgress?: (line: string) => void) => {
+        onProgress?.('latest: Pulling from documentdb/documentdb-local');
+        onProgress?.(statusLine);
+        return Promise.resolve();
+    });
+}
+
+// One object serves as the runtime and as the engine it resolves (`forCli` returns itself).
+function runtimeFor(overrides: RuntimeOverrides = {}): IContainerRuntime {
+    const runtime = {
+        resolveCli: vi.fn(() => ({
+            cli: 'docker',
+            executable: 'docker',
+            onPath: { docker: true, podman: false },
+            preferred: 'docker',
+            fellBack: false,
+        })),
+        forCli: vi.fn(() => runtime),
+        startAvailableDockerProvider: vi.fn().mockResolvedValue('notAvailable'),
         isDockerReady: vi.fn().mockResolvedValue(READY),
         isPortFree: vi.fn().mockResolvedValue(true),
         listByLabel: vi.fn().mockResolvedValue([]),
-        pullImage: vi.fn().mockResolvedValue('downloaded'),
+        // Not on this machine yet, so setup downloads it.
+        inspectImage: vi.fn().mockResolvedValue('absent'),
+        pullImage: pullReporting('Status: Downloaded newer image for documentdb-local:latest'),
         createAndRunContainer: vi.fn().mockResolvedValue('c1'),
         inspectContainer: vi.fn().mockResolvedValue(RUNNING),
         startContainer: vi.fn().mockResolvedValue(undefined),
@@ -170,6 +193,7 @@ function runtimeFor(overrides: Partial<IContainerRuntime> = {}): IContainerRunti
         readRecentLogs: vi.fn().mockResolvedValue(''),
         ...overrides,
     } as unknown as IContainerRuntime;
+    return runtime;
 }
 
 async function collect(generator: AsyncGenerator<StageEvent>): Promise<StageEvent[]> {
@@ -235,7 +259,7 @@ describe('QuickStartService — provision outcome telemetry', () => {
 
     it('reports a successful run that downloaded the image at the suggested port', async () => {
         const service = new QuickStartServiceImpl(runtimeFor());
-        await service.checkDockerReadiness();
+        await service.checkDockerReadiness({ engine: { kind: 'pinned', cli: 'docker' } });
         const suggested = await service.suggestPort();
 
         const events = await collect(service.provision(new AbortController().signal, { port: suggested }));
@@ -262,7 +286,7 @@ describe('QuickStartService — provision outcome telemetry', () => {
 
     it('reports an image that was already present and a port the user changed', async () => {
         const service = new QuickStartServiceImpl(
-            runtimeFor({ pullImage: vi.fn().mockResolvedValue('upToDate') as IContainerRuntime['pullImage'] }),
+            runtimeFor({ pullImage: pullReporting('Status: Image is up to date for documentdb-local:latest') }),
         );
         const suggested = await service.suggestPort();
 
@@ -304,7 +328,7 @@ describe('QuickStartService — provision outcome telemetry', () => {
             return Promise.reject(new Error('Command cancelled'));
         });
         const service = new QuickStartServiceImpl(
-            runtimeFor({ pullImage: pullImage as IContainerRuntime['pullImage'] }),
+            runtimeFor({ pullImage: pullImage as IContainerEngineOps['pullImage'] }),
         );
 
         await collect(service.provision(controller.signal, { port: QUICK_START_PORT }));
@@ -344,7 +368,7 @@ describe('QuickStartService — provision outcome telemetry', () => {
             .fn()
             .mockRejectedValue(new DockerCommandError(1, 'Error response from daemon: Get "https://mcr": timeout'));
         const service = new QuickStartServiceImpl(
-            runtimeFor({ pullImage: pullImage as IContainerRuntime['pullImage'] }),
+            runtimeFor({ pullImage: pullImage as IContainerEngineOps['pullImage'] }),
         );
 
         await collect(service.provision(new AbortController().signal, { port: QUICK_START_PORT }));
@@ -358,7 +382,7 @@ describe('QuickStartService — provision outcome telemetry', () => {
             .fn()
             .mockRejectedValue(new DockerCommandError(1, 'write /var/lib/docker/tmp: no space left on device'));
         const service = new QuickStartServiceImpl(
-            runtimeFor({ pullImage: pullImage as IContainerRuntime['pullImage'] }),
+            runtimeFor({ pullImage: pullImage as IContainerEngineOps['pullImage'] }),
         );
 
         await collect(service.provision(new AbortController().signal, { port: QUICK_START_PORT }));

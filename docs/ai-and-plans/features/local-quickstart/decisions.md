@@ -9,16 +9,21 @@ verified: 2026-08-14
 
 > The decisions that shaped Local Quick Start, and what was rejected on the way.
 
-| #    | Decision                                               | Status              | Changed from the proposal?                | Date       | PR    |
-| ---- | ------------------------------------------------------ | ------------------- | ----------------------------------------- | ---------- | ----- |
-| 0001 | Single managed instance, ownership-bounded             | Superseded by 0002  | Accepted as proposed                      | 2026-06-25 | —     |
-| 0002 | Multiple managed instances in v1                       | Accepted            | Reverses 0001 after owner review          | 2026-07-06 | —     |
-| 0003 | Concept F — Docker verified as the first setup stage   | Accepted (modified) | Dedicated readiness page dropped entirely | 2026-08-03 | #798  |
-| 0004 | Explicit cluster-command opt-ins for managed nodes     | Accepted            | Capability split deferred                 | 2026-08-09 | #876  |
-| 0005 | Restore missing credentials from the managed container | Accepted            | Error-node tree flow deferred             | 2026-09-29 | #979  |
-| 0006 | Wizard journey telemetry and correlation ids           | Accepted            | Quick Start lineage id not added          | 2026-09-29 | #979  |
-| 0007 | Image usage telemetry follows VS Code's setting        | Accepted            | Accepted as proposed                      | 2026-10-15 | #1018 |
-| 0008 | Setup outcome, guide and instance connection telemetry | Accepted            | `customPort` replaced by `portChanged`    | 2026-11-04 | —     |
+| #    | Decision                                               | Status              | Changed from the proposal?                       | Date       | PR    |
+| ---- | ------------------------------------------------------ | ------------------- | ------------------------------------------------ | ---------- | ----- |
+| 0001 | Single managed instance, ownership-bounded             | Superseded by 0002  | Accepted as proposed                             | 2026-06-25 | —     |
+| 0002 | Multiple managed instances in v1                       | Accepted            | Reverses 0001 after owner review                 | 2026-07-06 | —     |
+| 0003 | Concept F — Docker verified as the first setup stage   | Accepted (modified) | Dedicated readiness page dropped entirely        | 2026-08-03 | #798  |
+| 0004 | Explicit cluster-command opt-ins for managed nodes     | Accepted            | Capability split deferred                        | 2026-08-09 | #876  |
+| 0005 | Restore missing credentials from the managed container | Accepted            | Error-node tree flow deferred                    | 2026-09-29 | #979  |
+| 0006 | Wizard journey telemetry and correlation ids           | Accepted            | Quick Start lineage id not added                 | 2026-09-29 | #979  |
+| 0007 | Image usage telemetry follows VS Code's setting        | Accepted            | Accepted as proposed                             | 2026-10-15 | #1018 |
+| 0008 | Set up stages expand to show what each stage did       | Accepted            | Amends 0003's single failure surface             | 2026-11-10 | —     |
+| 0009 | Preferred engine and instance ownership                | Accepted            | Configure is check-free; Docker is fresh default | 2026-11-10 | #1076 |
+| 0010 | Platform-gated Podman machine startup                  | Accepted            | Button only for eligible macOS/Windows machines  | 2026-11-10 | #1076 |
+| 0011 | Rootful default machine and a slow machine list        | Accepted            | Amends 0010 after a native Windows test          | 2026-11-10 | #1076 |
+| 0012 | Podman guidance follows the address in its error       | Accepted            | Simplified; connection resolution rejected       | 2026-11-12 | #1076 |
+| 0013 | Setup outcome, guide and instance connection telemetry | Accepted            | `customPort` replaced by `portChanged`           | 2026-11-04 | —     |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -167,6 +172,9 @@ it, with `Checking Docker` as stage 1. There is exactly **one** failure surface,
 Modified during implementation: the dedicated readiness page was not merely deprioritized, it was
 removed as a concept, and `getDockerLastCheckedAtMs` was deleted with it because a remembered
 timestamp could report evidence that was days old.
+
+**Amendment, 2026-11-09:** The operator requested a neutral stage heading. Stage 1 now reads
+`Checking container engine`.
 
 ### Why
 
@@ -444,12 +452,221 @@ that choice rather than ask again.
 - The Configure step says so in its footer note, after what Start does, linking the image's
   [privacy statement](https://github.com/documentdb/documentdb/blob/main/documentdb-local/PRIVACY.md).
 
-## 0008 - Setup outcome, guide and instance connection telemetry
+## 0008 - Set up stages expand to show what each stage did
+
+**Status:** Accepted · **Date:** 2026-11-10 · **PR:** — · **Raised by:** the operator
+**Evidence:** [iterations/11-setup-stage-details.md](./iterations/11-setup-stage-details.md) §§7–9
+
+### Decision
+
+The operator accepted Details on each settled stage with facts, on both Set up and Done. Details
+start collapsed and contain evidence only. This amends 0003's single failure surface: the
+`MessageBlock` remains the visible home for explanations and recovery actions, while the checking
+row's Details replaces the old Docker-check accordion. The relative last-checked time stays on the
+checking row.
+
+If requested sample data was not loaded, success remains success; the success block says so and
+the waiting row's Details contains an informational message pointing to the setup log.
+
+The operator deliberately left out step durations, unlike Diagnose connection's
+[0050](../connectivity-troubleshooter/decisions.md#0050--each-row-shows-its-duration-in-a-squared-badge-the-list-shades-the-row-under-the-pointer),
+and accepted session aggregates on the existing
+`wizard.close` event: the bounded, sorted stages opened and the number of openings. No new event
+per opening is sent.
+
+### Amendment, 2026-11-10
+
+The operator explicitly requested the eight changes in the
+[setup-stage follow-up](./iterations/11-setup-stage-details-followup.md). Checking Details no
+longer includes explanatory notes; it reports both CLI executables' PATH presence without
+claiming the unselected engine was probed. Settled rows with Details have concise factual summaries.
+Long image and container IDs retain full values in mouse and keyboard tooltips, and Updated includes
+the previous image ID when already available. Active pulling shows the known image and origin and
+the latest bounded engine-output line when available, without an invented completion estimate.
+The decision to omit durations remains unchanged.
+
+The operator later clarified that stacking engine output below the image caused the layout shift.
+Active pulling therefore uses one non-wrapping line: image and origin before output arrives, then
+engine output instead of the already-selected image. Long text is ellipsized visually, not removed
+from the DOM; its full value remains in the title and setup log. This supersedes the earlier
+two-line active-pull presentation.
+
+### Typography simplification, 2026-11-10
+
+The operator approved uniform styling below the unchanged main stage labels: regular base200
+proportional text for summaries, fact labels, values and links, without monospace. Ordinary text
+shares the primary foreground; links keep their action colour and focus treatment. Supplementary
+context stays muted at the same size, weight and font. Important qualifications, specifically an
+unconfirmed port marked "As requested", remain in the primary foreground rather than being treated
+as incidental context.
+
+This is a deliberate Local Quick Start exception to the shared Details defaults for code-like
+values and secondary-colour fact terms. It does not change Diagnose connection or package-wide
+styling. Context notes use VS Code's description foreground with a Fluent secondary-colour fallback,
+since the existing dark theme can give primary and secondary foregrounds the same colour. High
+contrast follows its theme's description colour rather than forcing opacity or an arbitrary gray.
+No evidence, disclosure controls, full-ID tooltips or severity semantics are removed.
+
+---
+
+## 0009 — Preferred engine and instance ownership
+
+**Status:** Accepted · **Date:** 2026-11-10 · **PR:** #1076
+
+**Evidence:** [iteration 12](./iterations/12-preferred-engine-and-podman-start.md) §§3.1–3.4, Q1–Q5 and Q7
+
+### Question
+
+How should a fresh setup choose between Docker and Podman without checking availability in
+Configure, while keeping existing instance data attached to its engine?
+
+### Decision
+
+1. Configure always puts a **Container engine** row first, with Docker and Podman as static choices
+   and no engine checks or availability hints. A fresh form defaults to Docker; the preference is
+   not persisted.
+2. During execution, check both CLIs and use the preferred one if its CLI is on `PATH`. Fall back
+   only when that CLI is missing. An installed but stopped engine remains selected. If neither CLI
+   is present, report the preferred engine as missing.
+3. Store `engineCli` on the instance and provisioning lease. Lifecycle, reconciliation, and
+   recreation—including Start fresh—use that recorded owner; a different preference never moves the
+   instance or its volume.
+4. A legacy record without `engineCli` remains unrecorded in Configure and resolves using today's
+   CLI order only during execution. It is not inferred or written during Configure.
+5. A start action is offered only for the engine selected for that run. Podman runs neither read
+   nor write provider memory and ignore Docker provider memory, Docker Desktop evidence, and Docker
+   start actions. Docker's existing provider-memory behavior is unchanged.
+
+### Why
+
+The approved resolutions keep Configure independent of machine availability, prevent a stopped
+preferred engine from silently placing data in another engine, and treat the recorded engine as a
+fact about where the instance's container and volume live. Podman provider memory would be stale;
+preserving Docker's existing memory avoids changing Docker recovery behavior. See the approved
+options and trade-offs in [iteration 12](./iterations/12-preferred-engine-and-podman-start.md).
+
+---
+
+## 0010 — Platform-gated Podman machine startup
+
+**Status:** Accepted · **Date:** 2026-11-10 · **PR:** #1076
+
+**Evidence:** [iteration 12](./iterations/12-preferred-engine-and-podman-start.md) §§3.5–3.6, Q5–Q6
+
+### Question
+
+When should Quick Start offer to start Podman, and which machine should the action target?
+
+### Decision
+
+1. Offer **Start Podman machine** only on macOS and Windows, after a failed readiness check when a
+   stopped machine is identified. Start the machine marked `Default: true` by name; if none is
+   marked default, use the sole machine. If several machines have no default, or the machine is
+   already starting, show no button.
+2. The button starts only the selected run's Podman machine and runs only after an explicit click.
+   If no machine exists, initialization remains manual. Ambiguous selection remains manual, with
+   guidance naming the machines.
+3. Linux and WSL get copy-only `systemctl --user start podman.socket` guidance and no machine-start
+   button. Remote sessions get no local start action. _Amended by
+   [0012](#0012--podman-guidance-follows-the-address-in-its-error): the socket command is offered
+   only for the user socket, and WSL can target a Windows machine._
+
+### Why
+
+The approved platform gate reflects that Podman uses a machine on macOS and Windows, while Linux
+and WSL run Podman natively. A remote engine is not on the local machine. The default-or-sole rule
+targets the machine Podman uses without choosing among ambiguous machines. See
+[iteration 12](./iterations/12-preferred-engine-and-podman-start.md) for the approved alternatives
+and source verification.
+
+---
+
+## 0011 — Rootful default machine and a slow machine list
+
+**Status:** Accepted · **Date:** 2026-11-10 · **PR:** #1076 · **Raised by:** a reviewer's native
+Windows test
+
+**Evidence:** [iteration 13](./iterations/13-preferred-engine-implementation-review.md), "Native
+Windows Podman test"
+
+### Question
+
+0010 targets the machine marked `Default: true`. What should happen when Podman marks no machine,
+or does not answer in time?
+
+### Decision
+
+This amends 0010 item 1; the rest of 0010 stands.
+
+1. When several machines exist and none is marked default, read the default connection from
+   `podman system connection list`. A default connection named `<machine>-root` selects that
+   machine. If it names no machine, selection stays ambiguous and there is no button.
+2. A `podman machine list` that reaches the 10-second process deadline is retried once, inside the
+   same readiness deadline. A second timeout leaves the machine unknown, with no button.
+
+### Why
+
+`machine list` marks a machine as default only when the default connection carries the machine's
+own name. A rootful machine's default connection is `<name>-root`, so Podman 6.1.4 reports
+`Default: false` for it. Rootful is a common setup, for example for kind. The sole-machine rule
+hid this with one machine; with several, 0010 withheld the button although the default was not
+ambiguous.
+
+On Windows, WSL shuts down its idle VM about a minute after a machine stops, and `machine list`
+blocked for 4.5 to 11.3 seconds while it did. The next call returns in about 0.3 seconds, so one
+retry is enough and a longer deadline is not needed.
+
+### Not verified
+
+Item 1 is unit-tested only; the test machine had one Podman machine. Item 2 was measured on the
+unfixed build and is not yet re-tested live.
+
+---
+
+## 0012 — Podman guidance follows the address in its error
+
+**Status:** Accepted · **Date:** 2026-11-12 · **PR:** #1076 · **Raised by:** the operator
+
+**Evidence:** [iteration 14](./iterations/14-podman-connection-detection.md)
+
+### Question
+
+A failed Podman check produced the same diagnosis for a stopped machine, a stopped Windows machine
+reached from WSL, and an unreachable remote host. How should setup tell them apart?
+
+### Decision
+
+1. Read the address the failed `podman info` dialled (`dial unix <path>` or `dial tcp <host>:<port>`)
+   and nothing else. No extra process runs.
+2. A host other than this one is remote: the failure is `endpointUnreachable`, with no machine
+   lookup, start button or command. A machine on `127.0.0.1` is local and keeps 0010/0011 unchanged.
+3. In WSL, a socket under `/mnt/wsl/podman-sockets/<name>/` is a Windows machine: show copy-only
+   `podman machine start <name>` for a Windows terminal, never a start button.
+4. On Linux and WSL, offer `systemctl --user start podman.socket` only for
+   `/run/user/<uid>/podman/podman.sock`. Any other address gets the generic
+   "check `podman system connection list`" text, with no machine wording.
+5. Failed Podman CLI checks report no endpoint, because Docker's endpoint does not describe Podman.
+
+### Rejected alternative
+
+A first implementation re-derived Podman's active connection (`CONTAINER_CONNECTION`, then
+`CONTAINER_HOST`, then the default connection), ran `podman system connection list`, matched
+connections to machines, re-probed the connection's socket and redacted endpoints in the setup log.
+The operator judged it overengineered: the error already names the address Podman tried, which is
+the ground truth. It also withheld the macOS/Windows machine button whenever the connection and
+machine lists disagreed, and added a second process inside the readiness deadline.
+
+### Not verified
+
+The address formats come from the manual checks in iteration 14 (WSL2, Podman 6.1.4). The macOS,
+native Windows and remote cases are unit-tested only.
+
+## 0013 - Setup outcome, guide and instance connection telemetry
 
 **Status:** Accepted · **Date:** 2026-11-04 · **Release:** 1.1.0 · **PR:** — · **Raised by:** the
 operator while building the Local Quick Start dashboard page from 28 days of telemetry
 **Evidence:** `QuickStartService.ts` (`provision`, `runProvisionStage`, `classifyProvisionFailure`),
-`ContainerRuntime.ts` (`classifyImagePullOutput`), `localQuickStartRouter.ts` (`openGuide`),
+`ContainerRuntime.ts` (`classifyImagePullLine`), `localQuickStartRouter.ts` (`openGuide`),
 `ClustersClient.ts` (`initClient`), `CredentialCache.ts`; [design.md](./design.md) §14
 
 ### Question

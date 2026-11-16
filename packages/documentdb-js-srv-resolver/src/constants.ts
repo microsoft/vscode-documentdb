@@ -22,3 +22,6 @@ export const FALLBACK_MAX_DEADLINE_MS = 20_000;
 
 /** Default DNS port, used when a server from `dns.getServers()` has no explicit port. */
 export const DNS_DEFAULT_PORT = 53;
+
+/** Node.js SRV errors for which the in-memory DNS fallback may recover. */
+export const SRV_FALLBACK_ELIGIBLE_ERROR_CODES: ReadonlySet<string> = new Set(['EBADRESP', 'EFORMERR', 'ECONNREFUSED']);

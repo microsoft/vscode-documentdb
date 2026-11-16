@@ -15,23 +15,24 @@ reviewed them; this file records the confirmed position, what changed from the p
 reasoning. Rejected alternatives are kept so that reversing any one of them is a small, well-scoped
 edit to `managed-identities.md` rather than a redesign.
 
-| ID  | Status                    | Changed from the proposal?                                              |
-| --- | ------------------------- | ----------------------------------------------------------------------- |
-| D0  | **Confirmed**             | New. Supported-platform claims narrowed to Azure VMs                    |
-| D1  | **Confirmed as proposed** | Option C. Unchanged, plus an explicit normalisation rule                |
-| D1a | **Confirmed**             | New. `Copy Connection String` behaviour, round-trips with D1            |
-| D2  | **Superseded by D10**     | Identity selection is now part of one Entra-family picker               |
-| D3  | **OPEN**                  | Maintainer sees no benefit in the probe; under discussion               |
-| D4  | **Confirmed, deferred**   | Issue filed **after** this work lands, so progress can inform its scope |
-| D5  | **Confirmed**             | Unchanged                                                               |
-| D6  | **Confirmed, rescoped**   | D6.1 out of scope, D6.2 simplified, D6.3 retargeted to `docs/`          |
-| D7  | **Confirmed**             | Unchanged, not contested                                                |
-| D8  | **Confirmed**             | Keep additive managed identity fields in storage v3.0                   |
-| D9  | **Confirmed**             | Replaces parser confidence with stable connection-string facts          |
-| D10 | **Confirmed, reversal**   | Managed identity moves under the Microsoft Entra ID family              |
-| D11 | **Confirmed**             | Tenant choice is retimed and account management continues in place      |
-| D12 | **Confirmed**             | Applies the shared family presentation to all seven entry points        |
-| D13 | **Confirmed**             | Adds a visible Back row when the family picker actually prompted        |
+| ID  | Status                        | Changed from the proposal?                                                                         |
+| --- | ----------------------------- | -------------------------------------------------------------------------------------------------- |
+| D0  | **Confirmed**                 | New. Supported-platform claims narrowed to Azure VMs                                               |
+| D1  | **Confirmed as proposed**     | Option C. Unchanged, plus an explicit normalisation rule                                           |
+| D1a | **Confirmed**                 | New. `Copy Connection String` behaviour, round-trips with D1                                       |
+| D2  | **Superseded by D10**         | Identity selection is now part of one Entra-family picker                                          |
+| D3  | **OPEN**                      | Maintainer sees no benefit in the probe; under discussion                                          |
+| D4  | **Confirmed, deferred**       | Issue filed **after** this work lands, so progress can inform its scope                            |
+| D5  | **Confirmed**                 | Unchanged                                                                                          |
+| D6  | **Confirmed, rescoped**       | D6.1 out of scope, D6.2 simplified, D6.3 retargeted to `docs/`                                     |
+| D7  | **Confirmed**                 | Unchanged, not contested                                                                           |
+| D8  | **Confirmed**                 | Keep additive managed identity fields in storage v3.0                                              |
+| D9  | **Confirmed**                 | Replaces parser confidence with stable connection-string facts                                     |
+| D10 | **Confirmed, reversal**       | Managed identity moves under the Microsoft Entra ID family                                         |
+| D11 | **Confirmed**                 | Tenant choice is retimed and account management continues in place                                 |
+| D12 | **Confirmed**                 | Applies the shared family presentation to all seven entry points                                   |
+| D13 | **Confirmed**                 | Adds a visible Back row when the family picker actually prompted                                   |
+| D14 | **Accepted** (operator scope) | Managed identity shares service-only Entra destinations and the existing Option B machine override |
 
 ---
 
@@ -508,7 +509,11 @@ position.
 
 ### Consequences
 
-- Bare OIDC establishes the Microsoft Entra ID family but does not select account sign-in.
+- **2026-11-10 amendment:** the following inference rules apply only after the destination policy
+  admits every seed. OIDC facts describe identity intent, not destination trust. An untrusted host
+  cannot expose or preselect Entra/managed identity through `ENVIRONMENT:azure`, a GUID or bare
+  OIDC; the picker explains the restriction and offers Learn More. See [D14](#d14-managed-identity-shares-the-entra-destination-boundary).
+- For an admitted destination, bare OIDC establishes the Microsoft Entra ID family but does not select account sign-in.
 - OIDC plus a GUID without `ENVIRONMENT:azure` supplies a managed identity candidate and still asks
   which identity to use.
 - `ENVIRONMENT:azure` plus no username selects this machine's identity without a prompt.
@@ -610,6 +615,33 @@ step for `AzureWizard.goBack()` to return to. Those paths omit the Back row; inf
 inline **Choose a different authentication method...** action required by D10.
 
 ---
+
+## D14. Managed identity shares the Entra destination boundary
+
+**Accepted scope**, authorized by the operator on 2026-11-10 in
+[deep-links iteration 4](../deep-links/iterations/04-entra-token-destination-hardening.md#accepted-execution-plan-2026-11-10).
+The operator's exact Option B choice is recorded in deep-links
+[D0018](../deep-links/decisions.md#0018--entra-tokens-go-only-to-service-destinations-with-the-existing-option-b-override);
+it retains the existing machine-scoped, single-string `hostnameSuffix`, with no new setting,
+list, global switch or per-connection bypass.
+
+Destination approval precedes managed identity acquisition, including IMDS requests. Runtime
+OIDC options remove URI auth, TLS-bypass and CA/proxy trust overrides, force TLS certificate
+validation, and compose destination policy with hostname validation on every socket. Custom suffixes
+still require every seed and subsequent server to qualify; neither an OIDC declaration nor an alias
+with a TLS bypass establishes trust. Native/password and no-auth behavior is unchanged.
+
+Shell/playground token relays evaluate the current suffix against the original session connection
+while retaining the captured identity and audience. They do not read a replacement identity from
+`CredentialCache` or accept principal selectors from worker messages. This amends only the trust
+aspect of sovereign-clouds [D12](../sovereign-clouds/decisions.md#d12-open-sessions-keep-what-they-started-with),
+not its stable-identity/audience contract.
+
+The shared OSS RDBMS audience permits potential replay to DocumentDB, PostgreSQL and MySQL
+database roles where the identity is authorized and network access permits it. The change limits
+delivery destinations; it does not introduce a service-specific audience. Live Government/China
+and private-link behavior, manual UX and locale layout remain open; the dummy-token TLS harness
+does not supply that evidence.
 
 ## Resolved review questions
 

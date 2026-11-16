@@ -172,6 +172,20 @@ describe('DocumentDBShellPty', () => {
     });
 
     describe('open', () => {
+        it('carries URL attribution into actual shell startup', async (): Promise<void> => {
+            const deepLink = { deepLinkCorrelationId: 'link-attempt', deepLinkSource: 'docs' };
+            pty = new DocumentDBShellPty({ ...defaultOptions, deepLink });
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            expect(mockSessionTelemetry).toHaveLength(1);
+            expect(mockSessionTelemetry[0]).toMatchObject({
+                ...deepLink,
+                activationSource: 'deepLink',
+                shellSessionId: pty.shellSessionId,
+            });
+            pty.close();
+        });
+
         it('keeps the metadata link captured when the shell was created', async (): Promise<void> => {
             const existingClient = vi.spyOn(ClustersClient, 'getExistingClient');
             existingClient.mockReturnValue({ connectionCorrelationId: 'original-id' } as ClustersClient);

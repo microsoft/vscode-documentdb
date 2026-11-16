@@ -33,19 +33,23 @@ import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { ext } from '../../extensionVariables';
 import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
+import { type ContainerCli, type ContainerEngineRequest, type ResolvedContainerCli } from './containerCli';
 import {
+    classifyImagePullLine,
     ContainerRuntime,
     getBoundHostPort,
     getExitCode,
     getPublishedHostPort,
     getQuickStartOutputChannel,
     hasExited,
+    type IContainerEngineOps,
     type IContainerRuntime,
     isRunning,
+    type RuntimeImageFacts,
     SETUP_CLEANUP_TIMEOUT_MS,
 } from './ContainerRuntime';
 import { DockerCommandError, DockerCommandTimeoutError } from './dockerCommand';
-import { maskSecrets } from './outputMasking';
+import { maskSecrets, sanitizeOutput } from './outputMasking';
 import {
     composeConnectionString,
     generateCredentials,
@@ -74,18 +78,23 @@ import {
     DEFAULT_ALIAS,
     type DockerFailureKind,
     type DockerHostEnvironment,
+    type DockerLaunchResult,
     type DockerReadiness,
     type ImagePullOutcome,
+    type DockerStartAction,
     type InstanceMetadata,
     InstanceState,
     type InstanceStatus,
+    isPinnedImageRef,
     type OpenLocalQuickStartOptions,
     type PortAvailability,
     type ProvisionFailureCode,
     type ProvisionStage,
+    type PullingStageFacts,
     QUICK_START_ALIAS_LABEL_KEY,
     QUICK_START_DATA_PATH,
     QUICK_START_IMAGE,
+    QUICK_START_IMAGE_REPOSITORY,
     QUICK_START_LABEL_KEY,
     QUICK_START_OPERATION_LABEL_KEY,
     QUICK_START_PORT,
@@ -95,7 +104,9 @@ import {
     type QuickStartStatus,
     resolveQuickStartImage,
     type StageEvent,
+    type StageFacts,
     volumeName,
+    type WaitingStageFacts,
 } from './quickStartTypes';
 
 /** Stable cache key for CredentialCache / ClustersClient (the default instance). Ephemeral. */
@@ -199,6 +210,7 @@ const READINESS_TIMEOUT_MS = 180_000;
 const EXITED_CONTAINER_LOG_LINES = 20;
 /** Per-attempt server-selection timeout so a Cancel is observed within ~3s. */
 const PROBE_SERVER_SELECTION_TIMEOUT_MS = 3_000;
+const READINESS_HELLO_TIMEOUT_MS = 2_000;
 /**
  * The image ships a native init script + sample-data directory (see
  * `Dockerfile_documentdb_local`). We run that script ONCE via `docker exec` after
@@ -262,7 +274,11 @@ function meterQuickStartSilentCatch(location: string): undefined {
  * than tearing everything down like a pull/create/start failure.
  */
 class ReadinessTimeoutError extends Error {
-    constructor(message: string) {
+    constructor(
+        message: string,
+        readonly attempts: number,
+        readonly lastError: unknown,
+    ) {
         super(message);
         this.name = 'ReadinessTimeoutError';
     }
@@ -274,10 +290,40 @@ class ReadinessTimeoutError extends Error {
  * because it can quote a custom username and error messages reach telemetry.
  */
 class ReadinessFailedError extends Error {
-    constructor(readonly reason: QuickStartMessage) {
+    constructor(
+        readonly reason: QuickStartMessage,
+        readonly attempts: number,
+        readonly lastError: unknown,
+    ) {
         super(reason.key);
         this.name = 'ReadinessFailedError';
     }
+}
+
+interface ReadinessResult {
+    readonly attempts: number;
+    readonly documentdbVersions?: readonly string[];
+    readonly maxWireVersion?: number;
+}
+
+function readinessFailureFacts(
+    error: ReadinessTimeoutError | ReadinessFailedError,
+    port: number,
+    secrets: readonly string[],
+): WaitingStageFacts {
+    const masked = (value: string): string =>
+        maskSecrets(value, secrets)
+            .replace(/mongodb(?:\+srv)?:\/\/[^\s]+/gi, '(hidden)')
+            .slice(0, 1000);
+    const reason = error instanceof ReadinessFailedError ? error.reason : undefined;
+    return {
+        kind: 'waiting',
+        port,
+        attempts: error.attempts,
+        lastProbeError: error.lastError === undefined ? undefined : masked(errMessage(error.lastError)),
+        exitCode: reason?.exitCode,
+        lastLogLine: reason?.key === 'containerExited' && reason.detail ? masked(reason.detail) : undefined,
+    };
 }
 
 /**
@@ -371,6 +417,7 @@ function toImagePulled(outcome: ImagePullOutcome | undefined): 'true' | 'false' 
 interface PendingReadiness {
     /** The instance this pending readiness belongs to (WI-2). */
     readonly alias: string;
+    readonly engineCli: ContainerCli;
     readonly displayName: string;
     readonly containerId: string;
     readonly connectionString: string;
@@ -398,6 +445,7 @@ interface PendingReadiness {
  */
 interface InstanceRuntimeState {
     readonly alias: string;
+    engineCli?: ContainerCli;
     displayName: string;
     port?: number;
     metadata?: InstanceMetadata;
@@ -525,7 +573,37 @@ export class QuickStartServiceImpl {
     private hydration: Promise<void> | undefined;
     private reconciliation: Promise<void> | undefined;
     private hydrated = false;
-    private dockerReadiness: DockerReadiness | undefined;
+    private metadataHydration: Promise<void> | undefined;
+    private readonly engineReadiness = new Map<ContainerCli, DockerReadiness>();
+
+    private async engineRequestFor(alias: string, preferred: ContainerCli = 'docker'): Promise<ContainerEngineRequest> {
+        const entry = this.stateFor(alias);
+        const record = await getInstance(alias);
+        const cli = record?.engineCli ?? (entry.metadata && !entry.dataRemoved ? entry.engineCli : undefined);
+        if (record?.phase === 'ready' && record.engineCli) {
+            entry.engineCli = record.engineCli;
+        }
+        return cli ? { kind: 'pinned', cli } : { kind: 'preferred', preferred: record ? 'docker' : preferred };
+    }
+
+    private async resolveInstanceCli(alias: string): Promise<ResolvedContainerCli> {
+        return this.runtime.resolveCli(await this.engineRequestFor(alias));
+    }
+
+    private async engineFor(alias: string): Promise<IContainerEngineOps> {
+        return this.runtime.forCli(await this.resolveInstanceCli(alias));
+    }
+
+    public async followLogs(
+        alias: string,
+        secrets: ReadonlyArray<string>,
+        token?: vscode.CancellationToken,
+    ): Promise<void> {
+        const containerId = this.stateFor(alias).metadata?.containerId;
+        if (containerId) {
+            await (await this.engineFor(alias)).followLogs(containerId, secrets, token);
+        }
+    }
 
     /** Lazily get (creating a NotInstalled default for) an alias's runtime state. */
     private stateFor(alias: string): InstanceRuntimeState {
@@ -616,17 +694,43 @@ export class QuickStartServiceImpl {
     }
 
     /** Latest Docker host facts collected by setup or deep reconciliation. */
-    public getDockerReadinessSnapshot(): DockerReadiness | undefined {
-        return this.dockerReadiness;
+    public getDockerReadinessSnapshot(alias: string = DEFAULT_ALIAS): DockerReadiness | undefined {
+        const entry = this.stateFor(alias);
+        const cli = entry.pendingReadiness?.engineCli ?? entry.engineCli;
+        return cli ? this.engineReadiness.get(cli) : undefined;
     }
 
     /** Check Docker and retain the result for tree presentation. */
     public async checkDockerReadiness(
         request?: Parameters<IContainerRuntime['isDockerReady']>[0],
+        selection?: Pick<ResolvedContainerCli, 'cli' | 'preferred' | 'fellBack'>,
     ): Promise<DockerReadiness> {
-        const readiness = await this.runtime.isDockerReady(request);
-        this.dockerReadiness = readiness;
+        const checked = await this.runtime.isDockerReady(request);
+        const readiness =
+            selection && checked.cli === selection.cli
+                ? { ...checked, preferredEngine: selection.preferred, cliFallback: selection.fellBack }
+                : checked;
+        const cli = readiness.cli ?? (request?.engine?.kind === 'pinned' ? request.engine.cli : undefined);
+        if (cli) {
+            this.engineReadiness.set(cli, readiness);
+        }
         return readiness;
+    }
+
+    public async checkInstanceDockerReadiness(
+        request: Parameters<IContainerRuntime['isDockerReady']>[0] = {},
+        preferred: ContainerCli = 'docker',
+        alias: string = DEFAULT_ALIAS,
+    ): Promise<DockerReadiness> {
+        return this.checkDockerReadiness({ ...request, engine: await this.engineRequestFor(alias, preferred) });
+    }
+
+    public async startDockerProvider(
+        preferred: ContainerCli = 'docker',
+        expectedAction?: DockerStartAction,
+        alias: string = DEFAULT_ALIAS,
+    ): Promise<DockerLaunchResult> {
+        return this.runtime.startAvailableDockerProvider(await this.engineRequestFor(alias, preferred), expectedAction);
     }
 
     public getStatus(alias: string = DEFAULT_ALIAS): QuickStartStatus {
@@ -736,6 +840,99 @@ export class QuickStartServiceImpl {
         await this.hydration;
     }
 
+    /**
+     * Load wizard metadata without resolving or contacting a container engine. Do not emit status
+     * changes here: tree listeners may respond by starting engine reconciliation.
+     */
+    public async hydrateMetadata(): Promise<void> {
+        if (!this.metadataHydration) {
+            this.metadataHydration = (async (): Promise<void> => {
+                for (const record of await listInstances()) {
+                    if (record.phase !== 'ready') {
+                        continue;
+                    }
+                    const entry = this.stateFor(record.alias);
+                    if (
+                        this.hydrated ||
+                        entry.dataRemoved ||
+                        entry.state !== InstanceState.NotInstalled ||
+                        entry.metadata ||
+                        entry.provisioning
+                    ) {
+                        continue;
+                    }
+                    entry.displayName = record.displayName;
+                    entry.port = record.port;
+                    entry.engineCli = record.engineCli;
+                }
+            })().finally(() => {
+                this.metadataHydration = undefined;
+            });
+        }
+        await this.metadataHydration;
+    }
+
+    public async getInstanceEngine(alias: string = DEFAULT_ALIAS): Promise<ContainerCli | 'notRecorded' | undefined> {
+        const record = await getInstance(alias);
+        const entry = this.stateFor(alias);
+        if (record?.phase === 'ready') {
+            return record.engineCli ?? 'notRecorded';
+        }
+        return entry.metadata && !entry.dataRemoved ? entry.engineCli : undefined;
+    }
+
+    public async isSavedImagePinned(alias: string = DEFAULT_ALIAS): Promise<boolean> {
+        const entry = this.stateFor(alias);
+        if (entry.dataRemoved) return false;
+        return isPinnedImageRef(entry.metadata?.imageRef ?? (await getInstance(alias))?.imageRef);
+    }
+
+    /** The status the wizard opens with, from stored facts only; it never resolves or contacts an engine. */
+    public async getWizardStatus(): Promise<QuickStartStatus> {
+        return (await this.readWizardStatus()).status;
+    }
+
+    private async readWizardStatus(): Promise<{ status: QuickStartStatus; canReuseExistingData: boolean }> {
+        await this.hydrateMetadata();
+        const record = await getInstance(DEFAULT_ALIAS);
+        const entry = this.stateFor(DEFAULT_ALIAS);
+        const canReuseExistingData = await this.canReuseExistingData();
+        let status = this.getStatus();
+        if (
+            !this.hydrated &&
+            !entry.dataRemoved &&
+            record?.phase === 'ready' &&
+            status.state === InstanceState.NotInstalled &&
+            !canReuseExistingData
+        ) {
+            // This is a wizard warning, not a live container diagnosis. Reconciliation may still
+            // recover credentials from the container environment.
+            status = { ...status, state: InstanceState.CredentialsMissing, error: { key: 'credentialsUnavailable' } };
+        }
+        return { status, canReuseExistingData };
+    }
+
+    public async getWizardContext(): Promise<{
+        status: QuickStartStatus;
+        busy: boolean;
+        canReuseExistingData: boolean;
+        suggestedPort: number;
+        instanceEngine?: ContainerCli | 'notRecorded';
+        savedImagePinned: boolean;
+    }> {
+        const { status, canReuseExistingData } = await this.readWizardStatus();
+        return {
+            status,
+            busy: this.isBusy,
+            // Stored credentials permit offering reuse; execution revalidates the owning engine's
+            // container and volume before creating or deleting anything.
+            canReuseExistingData,
+            suggestedPort: await this.suggestPort(),
+            instanceEngine: await this.getInstanceEngine(),
+            savedImagePinned: await this.isSavedImagePinned(),
+        };
+    }
+
     /** Whether the initial durable-store/Docker reconciliation has completed. */
     public get isHydrated(): boolean {
         return this.hydrated;
@@ -831,8 +1028,6 @@ export class QuickStartServiceImpl {
         }
         this.stateFor(alias).provisioning = true;
         const endOperation = this.beginOperation(alias, 'provisioning');
-        // What the host knew about Docker before this run's own check (the panel's last readiness).
-        const dockerReadinessAtStart = this.dockerReadiness?.outcome ?? 'notChecked';
         // Starting a fresh run supersedes any container left running by a prior readiness
         // timeout — drop its retained "Wait longer" state (the run below removes the container).
         this.stateFor(alias).pendingReadiness = undefined;
@@ -847,17 +1042,25 @@ export class QuickStartServiceImpl {
         // generated ones would fail against existing data.
         const startFresh = options?.startFresh === true;
         const priorState = this.stateFor(alias).state;
+        const engineRequest = await this.engineRequestFor(alias, options?.preferredEngine);
+        const resolved = this.runtime.resolveCli(engineRequest);
+        // Preference evidence exists only when this run chose its CLI; an instance's owner is not a preference.
+        const selection = engineRequest.kind === 'preferred' ? resolved : undefined;
+        const engine = this.runtime.forCli(resolved);
+        // What the host knew about this engine before this run's own check (the panel's last readiness).
+        const dockerReadinessAtStart = this.engineReadiness.get(resolved.cli)?.outcome ?? 'notChecked';
         const stored = startFresh ? undefined : await this.getReusableCredentials(alias);
         const wantsCustomCredentials = !!(options?.username && options?.password);
         // With its data gone this is a new instance, set up as the wizard showed it. It still keeps the
         // stored credentials unless the user chose others, so a Docker pointed back at the original
         // engine can still open that one.
-        const dataRemoved = stored !== undefined && (await this.isDataStillRemoved(alias));
+        const dataRemoved = stored !== undefined && (await this.isDataStillRemoved(alias, engine));
         const reusing = stored !== undefined && !dataRemoved;
         const credentials =
             (reusing || (dataRemoved && !wantsCustomCredentials) ? stored : undefined) ??
             resolveProvisionCredentials(options);
         const secrets: string[] = secretVariants(credentials.password);
+        const masked = (value: string): string => maskSecrets(value, secrets);
 
         // Advanced overrides (P1-4). When reusing an existing instance we keep its data volume,
         // so custom credentials AND a custom image tag are intentionally IGNORED: the stored
@@ -866,7 +1069,7 @@ export class QuickStartServiceImpl {
         // The original image is reused — from in-memory metadata, falling back to the stored record
         // (survives a window reload), then the default if neither is known.
         const usedCustomCreds = !reusing && wantsCustomCredentials;
-        const imageRef = reusing
+        let imageRef = reusing
             ? (this.stateFor(alias).metadata?.imageRef ?? (await getInstance(alias))?.imageRef ?? QUICK_START_IMAGE)
             : resolveQuickStartImage(options?.imageTag);
         const usedCustomImage = !reusing && imageRef !== QUICK_START_IMAGE;
@@ -879,7 +1082,11 @@ export class QuickStartServiceImpl {
             explicitPort !== undefined && explicitPort !== (this.stateFor(alias).suggestedPort ?? QUICK_START_PORT);
         const sampleDataRequested = options?.loadSampleData !== false;
         const cts = new vscode.CancellationTokenSource();
-        const onAbort = (): void => cts.cancel();
+        let wakePullOnAbort: (() => void) | undefined;
+        const onAbort = (): void => {
+            cts.cancel();
+            wakePullOnAbort?.();
+        };
         signal.addEventListener('abort', onAbort, { once: true });
         if (signal.aborted) {
             cts.cancel();
@@ -899,6 +1106,7 @@ export class QuickStartServiceImpl {
         // load-bearing today for concurrent windows, not only for the multi-instance seam.
         const operationId = crypto.randomBytes(8).toString('hex');
         let leaseHeld = false;
+        let replacedRecord: QuickStartInstanceRecord | undefined;
         // What this run persisted before `docker run` (H3), and what was stored before it, so a failed
         // attempt can restore the previous state exactly.
         let earlySecret: string | undefined;
@@ -933,7 +1141,7 @@ export class QuickStartServiceImpl {
             const aborted = signal.aborted;
             // A pull/create failure may mean Docker itself went away; ask it again rather than guess from the text.
             const dockerReadiness =
-                !aborted && activeDockerStage ? await this.getProvisioningDockerReadiness() : undefined;
+                !aborted && activeDockerStage ? await this.getProvisioningDockerReadiness(resolved.cli, selection) : undefined;
             const analysis = {
                 error,
                 dockerReadiness,
@@ -955,6 +1163,16 @@ export class QuickStartServiceImpl {
         // (provisioning/lifecycleBusy) are already clean — otherwise a fast click could hit the
         // "already in progress" guard (opus-4.7).
         let terminalEvent: StageEvent | undefined;
+        let facts: StageFacts | undefined;
+        const pullingFacts = (image: RuntimeImageFacts | 'absent' | undefined): PullingStageFacts => ({
+            kind: 'pulling',
+            imageRef: masked(imageRef),
+            imageOrigin: reusing ? 'reused' : usedCustomImage ? 'custom' : 'default',
+            imageId: image && image !== 'absent' ? masked(image.id) : undefined,
+            digest: image && image !== 'absent' && image.digest ? masked(image.digest) : undefined,
+            imageVersion: image && image !== 'absent' && image.version ? masked(image.version) : undefined,
+            createdAtMs: image && image !== 'absent' ? image.createdAtMs : undefined,
+        });
         const provisionStartedAt = Date.now();
 
         try {
@@ -965,37 +1183,35 @@ export class QuickStartServiceImpl {
 
             // --- checking ---
             yield stageEvent('checking', 'active');
-            const readiness = await this.runProvisionStage(
-                'checking',
-                provisionCorrelationId,
-                async () => {
-                    const result = await this.checkDockerReadiness();
-                    checkedReadiness = result;
-                    this.throwIfAborted(signal);
-                    const continueAfterIndeterminateReadiness =
-                        options?.continueAnyway === true && result.outcome === 'indeterminate';
-                    if ((!result.cliInstalled || !result.daemonReachable) && !continueAfterIndeterminateReadiness) {
-                        throw new DockerNotReadyError(
-                            !result.cliInstalled ? 'dockerCliMissing' : 'dockerDaemonUnreachable',
-                        );
-                    }
-                    return result;
-                },
-                classifyStageFailure,
-            );
+            const readiness = await this.runProvisionStage('checking', provisionCorrelationId, async () => {
+                const result = await this.checkDockerReadiness(
+                    { engine: { kind: 'pinned', cli: resolved.cli } },
+                    selection,
+                );
+                checkedReadiness = result;
+                this.throwIfAborted(signal);
+                const continueAfterIndeterminateReadiness =
+                    options?.continueAnyway === true && result.outcome === 'indeterminate';
+                if ((!result.cliInstalled || !result.daemonReachable) && !continueAfterIndeterminateReadiness) {
+                    throw new DockerNotReadyError(
+                        !result.cliInstalled ? 'dockerCliMissing' : 'dockerDaemonUnreachable',
+                    );
+                }
+                return result;
+            }, classifyStageFailure);
             readinessEnvironment = readiness.environment;
 
             // Remove a pre-existing managed container so the run starts clean (it is labelled as
             // ours, D9). The data volume survives this; it is only dropped later, right before
             // `docker run`, and only when not reusing.
-            const existing = await this.findManagedContainer(alias);
+            const existing = await this.findManagedContainer(alias, undefined, engine);
             let hasReadyRecord = (await getInstance(alias))?.phase === 'ready';
             // RR4 / §5.2 volume-wipe gate: NEVER silently destroy an existing instance's data. A
             // managed container, a durable `ready` record or the data volume itself (its container
             // pruned, or created from another VS Code profile) all mean data this profile can't open
             // may exist. Only an explicit "Start fresh" from the Configure step may wipe it (#946).
             if (!reusing && !startFresh) {
-                const volumeAtGate = await this.runtime.volumeExists(volumeName(alias));
+                const volumeAtGate = await engine.volumeExists(volumeName(alias));
                 if (!existing && !volumeAtGate && hasReadyRecord) {
                     // Its container and data volume were both removed outside VS Code, so the record
                     // protects nothing: set up from scratch instead of refusing for good. The record stays
@@ -1006,30 +1222,63 @@ export class QuickStartServiceImpl {
                     failedStage = 'checking';
                     failureCode = 'other';
                     this.setStatus(alias, InstanceState.CredentialsMissing, undefined, credentialsUnavailable);
-                    yield stageEvent('checking', 'error', credentialsUnavailable);
+                    yield {
+                        ...stageEvent('checking', 'error', credentialsUnavailable),
+                        dockerReadiness: checkedReadiness,
+                    };
                     return;
                 }
             }
+            let removedContainerId: string | undefined;
+            // The replaced container's image, so an unpinnable one still runs instead of whatever its tag now names.
+            let existingImageId: string | undefined;
             if (existing) {
+                // Removing the container loses the only proof of which image its data last ran on.
+                if (reusing) {
+                    const existingContainer = await engine.inspectContainer(existing.id, {
+                        quiet: true,
+                        token: cts.token,
+                    });
+                    existingImageId = existingContainer?.imageId;
+                    if (!existingContainer && !isPinnedImageRef(imageRef)) {
+                        throw new Error(
+                            l10n.t(
+                                "We couldn't check which image the existing container runs, so setup stopped to keep this data on the version it already runs. Make sure {0} is running, then try again.",
+                                resolved.cli,
+                            ),
+                        );
+                    }
+                    const existingImage = await this.pinImage(engine, existingImageId, cts.token);
+                    if (existingImage && existingImage !== imageRef) {
+                        imageRef = existingImage;
+                        await this.saveImagePin(alias, existingImage);
+                    }
+                }
+                this.throwIfAborted(signal);
                 channel.appendLine(`Removing existing Quick Start container ${existing.id} for a clean run…`);
-                await this.runtime
+                await engine
                     .removeContainer(existing.id)
+                    .then(() => {
+                        removedContainerId = masked(existing.id);
+                    })
                     .catch(() => meterQuickStartSilentCatch('provision_removeExistingContainer'));
             }
 
             // The host port is ALWAYS explicit (review L3, "no magic after execute"): the Configure
             // step suggests a free port, validates it while the user can still react, and sends it.
             // Setup never relocates it — a conflict here is a hard, explained error.
-            if (!(await this.runtime.isPortFree(chosenPort))) {
+            const portFree = await this.runtime.isPortFree(chosenPort);
+            facts = { kind: 'checking', port: chosenPort, portFree, removedContainerId };
+            if (!portFree) {
                 const message: QuickStartMessage = { key: 'portInUse', port: chosenPort };
                 failedStage = 'checking';
                 failureCode = 'portInUse';
                 this.setStatus(alias, InstanceState.Error, undefined, message);
-                yield stageEvent('checking', 'error', message);
+                yield { ...stageEvent('checking', 'error', message), facts, dockerReadiness: checkedReadiness };
                 return;
             }
             this.throwIfAborted(signal);
-            yield stageEvent('checking', 'done');
+            yield { ...stageEvent('checking', 'done'), facts, dockerReadiness: checkedReadiness };
 
             // Take the durable provisioning lease BEFORE the pull (H3): a host killed anywhere from
             // here to `finalizeReadyInstance` then reconciles as "Provisioning…" (fresh lease) or is
@@ -1037,32 +1286,163 @@ export class QuickStartServiceImpl {
             // a recreate the existing `ready` record must survive, otherwise a failed recreate would
             // scavenge the record of an instance whose data volume is still on disk.
             if (!hasReadyRecord) {
+                // An earlier attempt's record holds the only credentials for a reused volume; a failure puts it back.
+                replacedRecord = reusing ? await getInstance(alias) : undefined;
                 leaseHeld = true;
-                await this.renewProvisioningLease(alias, operationId, chosenPort);
+                await this.renewProvisioningLease(alias, operationId, chosenPort, resolved.cli);
             }
 
             // --- pulling ---
             currentStage = 'pulling';
-            yield stageEvent('pulling', 'active');
+            facts = pullingFacts(undefined);
+            yield { ...stageEvent('pulling', 'active'), facts };
             activeDockerStage = 'pulling';
-            await this.runProvisionStage(
+            const imageBefore = existingImageId
+                ? await engine.inspectImage(existingImageId, cts.token, QUICK_START_IMAGE_REPOSITORY)
+                : await engine.inspectImage(imageRef, cts.token);
+            // Existing data stays on the image it ran on: a tag that has moved would upgrade it for good.
+            const keptImageId =
+                reusing && imageBefore !== undefined && imageBefore !== 'absent' ? imageBefore.id : undefined;
+            const keepLocalImage = keptImageId !== undefined;
+            // Pulled only because no volume existed, so it must not start on one that appears meanwhile.
+            let pulledUnpinnedTag = false;
+            facts = pullingFacts(imageBefore);
+            const activePullFacts = facts;
+            // Keep only the latest line, waking on output or settlement rather than polling a quiet pull.
+            let latestProgress: string | undefined;
+            let lastProgressAt = -Infinity;
+            let pullSettled = false;
+            let wakePull: (() => void) | undefined;
+            let progressTimer: ReturnType<typeof setTimeout> | undefined;
+            const wake = (): void => {
+                clearTimeout(progressTimer);
+                progressTimer = undefined;
+                wakePull?.();
+                wakePull = undefined;
+            };
+            const onProgress = (line: string): void => {
+                if (pullSettled || cts.token.isCancellationRequested) {
+                    return;
+                }
+                const sanitized = sanitizeOutput(line, secrets);
+                const progress = sanitized
+                    .slice(sanitized.lastIndexOf('\r') + 1)
+                    .replace(/\p{Cc}/gu, '')
+                    .trim()
+                    .slice(0, 160);
+                if (progress) {
+                    latestProgress = progress;
+                    if (progressTimer === undefined) {
+                        wake();
+                    }
+                }
+            };
+            const pullPromise = this.runProvisionStage(
                 'pulling',
                 provisionCorrelationId,
                 async () => {
-                    imagePulled = toImagePulled(await this.runtime.pullImage(imageRef, cts.token));
+                    if (!keepLocalImage) {
+                        if (reusing && !isPinnedImageRef(imageRef) && (await engine.volumeExists(volumeName(alias)))) {
+                            // A failed check isn't absence, and pulling over a local image could upgrade the data.
+                            if (imageBefore === undefined) {
+                                throw new Error(
+                                    l10n.t(
+                                        "We couldn't check whether {0} is still on this machine, so setup stopped to keep this data on the version it already runs. Make sure {1} is running, then try again.",
+                                        imageRef,
+                                        resolved.cli,
+                                    ),
+                                );
+                            }
+                            throw new Error(
+                                l10n.t(
+                                    'We don\'t know which DocumentDB version this data was created with, and {0} is no longer on this machine. Downloading it could upgrade the data to a newer version, which can\'t be undone. To go ahead anyway, run "{1} pull {0}", then try again.',
+                                    imageRef,
+                                    resolved.cli,
+                                ),
+                            );
+                        }
+                        pulledUnpinnedTag = reusing && !isPinnedImageRef(imageRef);
+                        let pullOutcome: ImagePullOutcome = 'unknown';
+                        await engine.pullImage(imageRef, cts.token, (line) => {
+                            pullOutcome = classifyImagePullLine(line) ?? pullOutcome;
+                            onProgress(line);
+                        });
+                        imagePulled = toImagePulled(pullOutcome);
+                    } else {
+                        imagePulled = 'false';
+                    }
                     this.throwIfAborted(signal);
                 },
                 classifyStageFailure,
                 [imageRef],
             );
+            const settle = (): void => {
+                pullSettled = true;
+                wake();
+            };
+            // Observe rejection immediately, including while the generator is suspended at a yield.
+            void pullPromise.then(settle, settle);
+            wakePullOnAbort = wake;
+            try {
+                while (!pullSettled && !cts.token.isCancellationRequested) {
+                    if (latestProgress !== undefined && Date.now() - lastProgressAt >= 250) {
+                        const progress = latestProgress;
+                        latestProgress = undefined;
+                        lastProgressAt = Date.now();
+                        yield { ...stageEvent('pulling', 'active'), facts: { ...activePullFacts, progress } };
+                        continue;
+                    }
+                    await new Promise<void>((resolve) => {
+                        wakePull = resolve;
+                        if (latestProgress !== undefined) {
+                            progressTimer = setTimeout(wake, Math.max(0, 250 - (Date.now() - lastProgressAt)));
+                        }
+                    });
+                }
+                await pullPromise;
+            } finally {
+                wakePullOnAbort = undefined;
+                wake();
+                latestProgress = undefined;
+                if (!pullSettled) {
+                    cts.cancel();
+                }
+            }
+            const imageAfter = keepLocalImage ? imageBefore : await engine.inspectImage(imageRef, cts.token);
+            // Nothing was pulled, so whether a newer image exists is unknown.
+            const result =
+                !keepLocalImage && imageBefore !== undefined && imageAfter && imageAfter !== 'absent'
+                    ? imageBefore === 'absent'
+                        ? 'downloaded'
+                        : imageBefore.id === imageAfter.id
+                          ? 'upToDate'
+                          : 'updated'
+                    : undefined;
+            let disposition: PullingStageFacts['disposition'];
+            if (reusing) {
+                if (isPinnedImageRef(imageRef)) {
+                    disposition = keepLocalImage ? 'reusedPinned' : 'downloadedPinned';
+                } else if (keepLocalImage) {
+                    disposition = 'reusedTag';
+                }
+            }
+            facts = {
+                ...pullingFacts(imageAfter),
+                result,
+                disposition,
+                ...(result === 'updated' && imageBefore && imageBefore !== 'absent'
+                    ? { previousImageId: masked(imageBefore.id) }
+                    : {}),
+            };
             activeDockerStage = undefined;
-            yield stageEvent('pulling', 'done');
+            yield { ...stageEvent('pulling', 'done'), facts };
 
             // --- creating (docker run -d creates and starts) ---
             currentStage = 'creating';
             yield stageEvent('creating', 'active');
+            facts = undefined;
             if (leaseHeld) {
-                await this.renewProvisioningLease(alias, operationId, chosenPort);
+                await this.renewProvisioningLease(alias, operationId, chosenPort, resolved.cli);
             }
             // Write credentials to a temp env-file (deleted right after `docker run`) so they never
             // appear on the docker CLI / host process list (design §8.2). The image
@@ -1070,9 +1450,9 @@ export class QuickStartServiceImpl {
             const createdEnvFilePath = await this.writeEnvFile(credentials.username, credentials.password);
             envFilePath = createdEnvFilePath;
             activeDockerStage = 'creating';
-            const volumeOnDisk = await this.runtime.volumeExists(volumeName(alias));
+            const volumeOnDisk = await engine.volumeExists(volumeName(alias));
             // The gate saw no volume, so one here appeared during the pull and isn't ours to remove.
-            if (!reusing && !startFresh && volumeOnDisk) {
+            if (((!reusing && !startFresh) || pulledUnpinnedTag) && volumeOnDisk) {
                 throw new Error(
                     l10n.t(
                         'We found an existing data volume after the image downloaded. Setup stopped to protect its data. Go back to Configure and try again.',
@@ -1082,6 +1462,16 @@ export class QuickStartServiceImpl {
             // Retained credentials don't prove the volume survived (e.g. Start over after a timeout
             // removed it), and only data that is really kept should skip the sample seed.
             reusesVolume = reusing && volumeOnDisk;
+            facts = {
+                kind: 'creating',
+                containerName: masked(containerName(alias)),
+                hostPort: chosenPort,
+                containerPort: QUICK_START_PORT,
+                volumeName: masked(volumeName(alias)),
+                dataPath: masked(QUICK_START_DATA_PATH),
+                volume: reusesVolume ? 'reused' : undefined,
+                username: masked(credentials.username),
+            };
             this.throwIfAborted(signal);
             // Drop the old data volume only now that the port is checked and the image is local, so a
             // failed check, pull or Cancel leaves it intact (#946). Fresh credentials need a clean
@@ -1089,7 +1479,7 @@ export class QuickStartServiceImpl {
             // fatal: carrying on would start the new credentials against the old cluster.
             if (!reusing && volumeOnDisk) {
                 try {
-                    await this.runtime.removeVolume(volumeName(alias));
+                    await engine.removeVolume(volumeName(alias));
                 } catch (error) {
                     throw new Error(
                         l10n.t(
@@ -1105,7 +1495,7 @@ export class QuickStartServiceImpl {
                 await removeInstance(alias);
                 hasReadyRecord = false;
                 leaseHeld = true;
-                await this.renewProvisioningLease(alias, operationId, chosenPort);
+                await this.renewProvisioningLease(alias, operationId, chosenPort, resolved.cli);
             }
             // Persist the credentials BEFORE `docker run` (H3), and after anything that removes the
             // previous instance. Written any later, a host killed once the container exists leaves
@@ -1129,9 +1519,10 @@ export class QuickStartServiceImpl {
                 async () => {
                     let createdContainerId: string | undefined;
                     try {
-                        createdContainerId = await this.runtime.createAndRunContainer(
+                        createdContainerId = await engine.createAndRunContainer(
                             {
-                                imageRef: imageRef,
+                                // By ID, so a tag moved since the check, or an implicit pull, can't swap the image.
+                                imageRef: keptImageId ?? imageRef,
                                 name: containerName(alias),
                                 labels: {
                                     [QUICK_START_LABEL_KEY]: '1',
@@ -1168,49 +1559,68 @@ export class QuickStartServiceImpl {
             );
             activeDockerStage = undefined;
             containerCreated = true;
+            let reportedContainerId = containerId;
             if (!containerId) {
-                const item = await this.runtime.inspectContainer(containerName(alias));
+                const item = await engine.inspectContainer(containerName(alias));
+                reportedContainerId = item?.id;
                 containerId = item?.id ?? containerName(alias);
             }
             const provisionedContainerId = containerId;
-            yield stageEvent('creating', 'done');
+            facts = {
+                ...facts,
+                volume: reusesVolume ? 'reused' : !reusing && volumeOnDisk ? 'replaced' : 'new',
+                containerId: reportedContainerId ? masked(reportedContainerId) : undefined,
+            };
+            yield { ...stageEvent('creating', 'done'), facts };
 
             // --- starting (confirm running, read bound port, follow logs) ---
             currentStage = 'starting';
             yield stageEvent('starting', 'active');
-            const inspected = await this.runProvisionStage(
-                'starting',
-                provisionCorrelationId,
-                async () => {
-                    const result = await this.runtime.inspectContainer(provisionedContainerId);
-                    this.throwIfAborted(signal);
-                    return result;
-                },
-                classifyStageFailure,
-            );
+            facts = { kind: 'starting', boundPort: chosenPort, boundPortReported: false };
+            const inspected = await this.runProvisionStage('starting', provisionCorrelationId, async () => {
+                const result = await engine.inspectContainer(provisionedContainerId);
+                this.throwIfAborted(signal);
+                return result;
+            }, classifyStageFailure);
             // Fall back to the port we actually requested (not the canonical default) if the
             // inspect can't report the binding, so a custom port stays correct in the success
             // message + stored connection string.
-            const boundPort = (inspected && getBoundHostPort(inspected)) || chosenPort;
+            const reportedPort = inspected && getBoundHostPort(inspected);
+            const boundPort = reportedPort || chosenPort;
+            const startedAtMs = inspected?.startedAt?.getTime();
+            facts = {
+                kind: 'starting',
+                running: inspected ? isRunning(inspected) : undefined,
+                startedAtMs: startedAtMs !== undefined && Number.isFinite(startedAtMs) ? startedAtMs : undefined,
+                boundPort,
+                boundPortReported: !!reportedPort,
+            };
+            const runningImageRef = (await this.pinImage(engine, inspected?.imageId, cts.token)) ?? imageRef;
+            // Saved now, not at readiness: a failed attempt's retry must not follow a tag that has moved.
+            if (reusesVolume && runningImageRef !== imageRef && isPinnedImageRef(runningImageRef)) {
+                await this.saveImagePin(alias, runningImageRef);
+            }
             // Stream container logs to the channel during the wait (compensates for -dt detach, D2).
-            void this.runtime.followLogs(provisionedContainerId, secrets, cts.token);
-            yield stageEvent('starting', 'done');
+            void engine.followLogs(provisionedContainerId, secrets, cts.token);
+            yield { ...stageEvent('starting', 'done'), facts };
 
             // --- waiting (wire-protocol readiness, D7) ---
             currentStage = 'waiting';
             yield stageEvent('waiting', 'active');
+            facts = undefined;
             const connectionString = composeConnectionString(credentials.username, credentials.password, boundPort);
             // Retain everything a "Wait longer" resume needs BEFORE probing, so a readiness
             // timeout can keep this running container and finish adoption later (§9.1).
             const pending: PendingReadiness = {
                 alias,
+                engineCli: resolved.cli,
                 displayName: alias === DEFAULT_ALIAS ? DEFAULT_INSTANCE_DISPLAY_NAME : alias,
                 containerId: provisionedContainerId,
                 connectionString,
                 boundPort,
                 username: credentials.username,
                 password: credentials.password,
-                imageRef,
+                imageRef: runningImageRef,
                 sampleDataRequested,
                 provisionCorrelationId: provisionCorrelationId,
                 reusing: reusesVolume,
@@ -1221,22 +1631,26 @@ export class QuickStartServiceImpl {
             };
             this.stateFor(alias).pendingReadiness = pending;
             if (leaseHeld) {
-                await this.renewProvisioningLease(alias, operationId, boundPort);
+                await this.renewProvisioningLease(alias, operationId, boundPort, resolved.cli);
             }
-            await this.runProvisionStage(
-                'waiting',
-                provisionCorrelationId,
-                async () => {
-                    await this.waitForReadiness(connectionString, provisionedContainerId, secrets, signal, cts.token);
-                    this.throwIfAborted(signal);
+            await this.runProvisionStage('waiting', provisionCorrelationId, async () => {
+                const readiness = await this.waitForReadiness(
+                    connectionString,
+                    provisionedContainerId,
+                    secrets,
+                    signal,
+                    cts.token,
+                    engine,
+                );
+                facts = { kind: 'waiting', port: boundPort, ...readiness };
+                this.throwIfAborted(signal);
 
-                    // --- success (seed sample data, store creds, adopt as Running) ---
-                    await this.finalizeReadyInstance(pending, cts.token, signal);
-                },
-                classifyStageFailure,
-            );
+                // --- success (seed sample data, store creds, adopt as Running) ---
+                const sampleData = await this.finalizeReadyInstance(pending, cts.token, signal);
+                facts = { ...facts, displayName: pending.displayName, sampleData };
+            }, classifyStageFailure);
             success = true;
-            yield stageEvent('waiting', 'done');
+            yield { ...stageEvent('waiting', 'done'), facts };
             yield stageEvent('done', 'done', { key: 'instanceRunning', port: boundPort }, boundPort);
         } catch (error) {
             const aborted = signal.aborted;
@@ -1250,12 +1664,24 @@ export class QuickStartServiceImpl {
                 dockerReadiness?.failureKind ??
                 (!aborted && error instanceof DockerNotReadyError ? checkedReadiness?.failureKind : undefined);
             const detail = errMessage(error);
+            if (error instanceof ReadinessTimeoutError || error instanceof ReadinessFailedError) {
+                facts = readinessFailureFacts(
+                    error,
+                    this.stateFor(alias).pendingReadiness?.boundPort ?? chosenPort,
+                    secrets,
+                );
+            }
             let message: QuickStartMessage = aborted ? { key: 'setupCancelled' } : { key: 'unexpectedFailure', detail };
             if (!aborted && error instanceof DockerNotReadyError) {
                 this.stateFor(alias).pendingReadiness = undefined;
-                message = { key: error.messageKey };
+                message = {
+                    key: error.messageKey,
+                    ...(error.messageKey === 'dockerCliMissing' && engineRequest.kind === 'pinned'
+                        ? { engineCli: resolved.cli }
+                        : {}),
+                };
                 this.setStatus(alias, InstanceState.Error, undefined, message);
-                terminalEvent = stageEvent('checking', 'error', message);
+                terminalEvent = { ...stageEvent('checking', 'error', message), dockerReadiness: checkedReadiness };
             } else if (!aborted && error instanceof ReadinessTimeoutError && containerCreated && containerId) {
                 // The container is running but the database did not accept connections within the
                 // window — it may still be initializing. KEEP it running (finally skips teardown)
@@ -1296,6 +1722,9 @@ export class QuickStartServiceImpl {
                 // (opus-4.7). On unsubscribe/return() the post-finally yield is simply skipped.
                 terminalEvent = stageEvent('error', 'error', message, undefined, undefined, dockerReadiness);
             }
+            if (terminalEvent && facts) {
+                terminalEvent = { ...terminalEvent, facts };
+            }
         } finally {
             // Stop the followLogs stream (started with cts.token). Disposing alone
             // does NOT signal cancellation — only cancel() stops `docker logs -f`.
@@ -1309,10 +1738,10 @@ export class QuickStartServiceImpl {
                 if (containerCreated && containerId) {
                     ownsContainer = true;
                     channel.appendLine(`Cleaning up container ${containerId}…`);
-                    await this.runtime
+                    await engine
                         .stopContainer(containerId, cleanupBounds)
                         .catch(() => meterQuickStartSilentCatch('provision_cleanupStopContainer'));
-                    await this.runtime
+                    await engine
                         .removeContainer(containerId, undefined, cleanupBounds)
                         .catch(() => meterQuickStartSilentCatch('provision_cleanupRemoveContainer'));
                 } else if (createAttempted && !containerId) {
@@ -1322,7 +1751,7 @@ export class QuickStartServiceImpl {
                     // container another window had just created, since the loser of a two-window
                     // create race reaches exactly this branch (its `docker run` failed on the
                     // duplicate name).
-                    const orphans = await this.runtime
+                    const orphans = await engine
                         .listByLabel(
                             {
                                 [QUICK_START_LABEL_KEY]: '1',
@@ -1337,7 +1766,7 @@ export class QuickStartServiceImpl {
                     ownsContainer = orphans.length > 0;
                     for (const orphan of orphans) {
                         channel.appendLine(`Removing orphaned container ${orphan.id}…`);
-                        await this.runtime
+                        await engine
                             .removeContainer(orphan.id, undefined, cleanupBounds)
                             .catch(() => meterQuickStartSilentCatch('provision_removeOrphanedContainer'));
                     }
@@ -1345,7 +1774,7 @@ export class QuickStartServiceImpl {
                 // A volume this run's `docker run` created is ours to drop, so a retry doesn't
                 // hit the volume gate above. Docker refuses if another container still mounts it.
                 if (ownsContainer && !reusesVolume) {
-                    await this.runtime
+                    await engine
                         .removeVolume(volumeName(alias))
                         .catch(() => meterQuickStartSilentCatch('provision_cleanupRemoveVolume'));
                 }
@@ -1355,6 +1784,7 @@ export class QuickStartServiceImpl {
                     operationId,
                     leaseHeld,
                     port: chosenPort,
+                    replacedRecord,
                 });
                 // Interrupted before settling (cancel / unsubscribe) → reset state.
                 // The error path already settled to `Error` in `catch`.
@@ -1403,6 +1833,11 @@ export class QuickStartServiceImpl {
                 telemetryContext.telemetry.properties.refusedCredentialsUnavailable = refusedCredentialsUnavailable
                     ? 'true'
                     : 'false';
+                if (selection) {
+                    telemetryContext.telemetry.properties.preferredContainerEngine =
+                        selection.preferred === 'podman' ? 'podman' : 'docker';
+                    telemetryContext.telemetry.properties.containerCliFallback = selection.fellBack ? 'true' : 'false';
+                }
                 telemetryContext.telemetry.properties.provisionCorrelationId = provisionCorrelationId;
                 telemetryContext.telemetry.measurements.provisionMs = Date.now() - provisionStartedAt;
             });
@@ -1417,10 +1852,20 @@ export class QuickStartServiceImpl {
         }
     }
 
-    private async getProvisioningDockerReadiness(): Promise<DockerReadiness | undefined> {
+    private async getProvisioningDockerReadiness(
+        cli: ContainerCli,
+        selection: ResolvedContainerCli | undefined,
+    ): Promise<DockerReadiness | undefined> {
         try {
             // Echo only failing probes: a healthy `docker info` dump would bury the real error in the setup log.
-            const readiness = await this.checkDockerReadiness({ forceRefresh: true, suppressCommandEcho: true });
+            const readiness = await this.checkDockerReadiness(
+                {
+                    forceRefresh: true,
+                    suppressCommandEcho: true,
+                    engine: { kind: 'pinned', cli },
+                },
+                selection,
+            );
             return readiness.outcome === 'diagnosed' ? readiness : undefined;
         } catch {
             meterQuickStartSilentCatch('provision_getDockerReadiness');
@@ -1440,13 +1885,22 @@ export class QuickStartServiceImpl {
         pending: PendingReadiness,
         token: vscode.CancellationToken,
         signal: AbortSignal,
-    ): Promise<void> {
+    ): Promise<NonNullable<WaitingStageFacts['sampleData']>> {
         // Seed the image's built-in sample data ONCE — only when requested (Advanced "Load
         // sample data", default on) and only into a fresh volume. A reused volume already had its
         // first setup; seeding it again would restore documents the user deleted (#946). Best-effort.
-        if (pending.sampleDataRequested && !pending.reusing) {
-            await this.seedSampleData(pending.containerId, secretVariants(pending.password), token);
-        }
+        const sampleData = pending.reusing
+            ? 'keptExisting'
+            : !pending.sampleDataRequested
+              ? 'notRequested'
+              : (await this.seedSampleData(
+                      pending.containerId,
+                      secretVariants(pending.password),
+                      token,
+                      this.runtime.forCli(this.runtime.resolveCli({ kind: 'pinned', cli: pending.engineCli })),
+                  ))
+                ? 'loaded'
+                : 'failed';
         this.throwIfAborted(signal);
         // One write covers the credentials, the image the volume was created with (so a recreate
         // after a window reload keeps it) and the ready phase the tree and reconcile enumerate.
@@ -1456,11 +1910,13 @@ export class QuickStartServiceImpl {
             port: pending.boundPort,
             phase: 'ready',
             imageRef: pending.imageRef,
+            engineCli: pending.engineCli,
         });
         await writeConnectionString(pending.alias, pending.connectionString, {
             displayName: pending.displayName,
             port: pending.boundPort,
         });
+        this.stateFor(pending.alias).engineCli = pending.engineCli;
         // Drop any stale client cached under this id (e.g. from a prior run with different
         // credentials) so the next browse uses the fresh credentials.
         await ClustersClient.deleteClient(clusterId(pending.alias)).catch(() =>
@@ -1483,6 +1939,7 @@ export class QuickStartServiceImpl {
         );
         this.stateFor(pending.alias).pendingReadiness = undefined;
         this.stateFor(pending.alias).credentialsRestored = false;
+        return sampleData;
     }
 
     /**
@@ -1517,31 +1974,31 @@ export class QuickStartServiceImpl {
         let finalized = false;
         let terminalEvent: StageEvent | undefined;
         let resumeResult: 'success' | 'timeout' | 'cancelled' | 'error' = 'error';
+        let facts: WaitingStageFacts | undefined;
         try {
             this.setStatus(alias, InstanceState.Provisioning, undefined, undefined);
             yield stageEvent('waiting', 'active');
             // Stream the container's logs during THIS wait so "View Docker output" shows the live
             // startup rather than only the stale first-attempt output (opus-4.8).
-            void this.runtime.followLogs(pending.containerId, secretVariants(pending.password), cts.token);
-            await this.runProvisionStage(
-                'waiting',
-                pending.provisionCorrelationId,
-                async () => {
-                    await this.waitForReadiness(
-                        pending.connectionString,
-                        pending.containerId,
-                        secretVariants(pending.password),
-                        signal,
-                        cts.token,
-                    );
-                    this.throwIfAborted(signal);
-                    await this.finalizeReadyInstance(pending, cts.token, signal);
-                },
-                (error) => Promise.resolve(classifyProvisionFailure({ error, aborted: signal.aborted })),
-            );
+            const engine = this.runtime.forCli(this.runtime.resolveCli({ kind: 'pinned', cli: pending.engineCli }));
+            void engine.followLogs(pending.containerId, secretVariants(pending.password), cts.token);
+            await this.runProvisionStage('waiting', pending.provisionCorrelationId, async () => {
+                const readiness = await this.waitForReadiness(
+                    pending.connectionString,
+                    pending.containerId,
+                    secretVariants(pending.password),
+                    signal,
+                    cts.token,
+                    engine,
+                );
+                facts = { kind: 'waiting', port: pending.boundPort, ...readiness };
+                this.throwIfAborted(signal);
+                const sampleData = await this.finalizeReadyInstance(pending, cts.token, signal);
+                facts = { ...facts, displayName: pending.displayName, sampleData };
+            }, (error) => Promise.resolve(classifyProvisionFailure({ error, aborted: signal.aborted })));
             finalized = true;
             resumeResult = 'success';
-            yield stageEvent('waiting', 'done');
+            yield { ...stageEvent('waiting', 'done'), facts };
             terminalEvent = stageEvent(
                 'done',
                 'done',
@@ -1556,6 +2013,9 @@ export class QuickStartServiceImpl {
             // (transport-impossible) case of a throw after adoption already succeeded.
             const aborted = signal.aborted;
             const isTimeout = error instanceof ReadinessTimeoutError;
+            if (isTimeout || error instanceof ReadinessFailedError) {
+                facts = readinessFailureFacts(error, pending.boundPort, secretVariants(pending.password));
+            }
             const timedOut = !finalized && (isTimeout || aborted);
             resumeResult = aborted ? 'cancelled' : isTimeout ? 'timeout' : 'error';
             // A repeat timeout is the same situation as the first one, so it earns the same
@@ -1563,7 +2023,7 @@ export class QuickStartServiceImpl {
             const message: QuickStartMessage = aborted
                 ? { key: 'stillInitializing' }
                 : isTimeout
-                  ? { key: 'readinessTimeout', environment: this.dockerReadiness?.environment }
+                  ? { key: 'readinessTimeout', environment: this.engineReadiness.get(pending.engineCli)?.environment }
                   : error instanceof ReadinessFailedError
                     ? // The timeout that led here kept the credentials and data, so setup now offers to reuse them.
                       describeReadinessFailure(error.reason, true)
@@ -1577,7 +2037,7 @@ export class QuickStartServiceImpl {
             if (!timedOut) {
                 this.stateFor(alias).pendingReadiness = undefined;
             }
-            terminalEvent = stageEvent('waiting', 'error', message, undefined, timedOut);
+            terminalEvent = { ...stageEvent('waiting', 'error', message, undefined, timedOut), facts };
         } finally {
             signal.removeEventListener('abort', onAbort);
             // Stop the followLogs stream (started with cts.token) before disposing.
@@ -1624,16 +2084,17 @@ export class QuickStartServiceImpl {
         entry.pendingReadiness = undefined;
         entry.lifecycleBusy = true;
         try {
-            await this.runtime
+            const engine = this.runtime.forCli(this.runtime.resolveCli({ kind: 'pinned', cli: pending.engineCli }));
+            await engine
                 .stopContainer(pending.containerId)
                 .catch(() => meterQuickStartSilentCatch('discardTimedOut_stopContainer'));
             let replaced = false;
-            const removed = await this.runtime.removeContainer(pending.containerId).then(
+            const removed = await engine.removeContainer(pending.containerId).then(
                 () => true,
                 // Already gone counts as removed, but only a lookup that succeeded can say so. Another
                 // window's replacement container is not the one this attempt kept.
                 () =>
-                    this.findManagedContainers(alias, { propagateErrors: true }).then(
+                    this.findManagedContainers(alias, { propagateErrors: true }, engine).then(
                         (left) => {
                             if (left.some((container) => isSameContainer(container, pending.containerId))) {
                                 return false;
@@ -1648,11 +2109,11 @@ export class QuickStartServiceImpl {
                 // Keep the container resumable and its credentials in place: dropping them now would
                 // leave a container nothing can open once Docker answers again.
                 meterQuickStartSilentCatch('discardTimedOut_removeContainer');
-                await this.runtime.startContainer(pending.containerId).catch(() => undefined);
+                await engine.startContainer(pending.containerId).catch(() => undefined);
                 entry.pendingReadiness = pending;
                 void vscode.window.showErrorMessage(
                     l10n.t(
-                        'Start over did not finish because Docker could not remove the DocumentDB Local container. Try again once Docker responds.',
+                        'Start over did not finish because your container engine (Docker or Podman) could not remove the DocumentDB Local container. Try again once your container engine responds.',
                     ),
                 );
                 return false;
@@ -1661,11 +2122,11 @@ export class QuickStartServiceImpl {
             // nothing: leave its volume and credentials alone and let the resync adopt it.
             if (!replaced) {
                 if (!pending.reusing) {
-                    await this.runtime.removeVolume(volumeName(pending.alias)).catch(() => {
+                    await engine.removeVolume(volumeName(pending.alias)).catch(() => {
                         meterQuickStartSilentCatch('discardTimedOut_removeVolume');
                         void vscode.window.showWarningMessage(
                             l10n.t(
-                                'Start over removed the DocumentDB Local container but could not remove its data volume. The next setup will ask you to start fresh, or you can remove the volume with Docker.',
+                                'Start over removed the DocumentDB Local container but could not remove its data volume. The next setup will ask you to start fresh, or you can remove the volume with your container engine (Docker or Podman).',
                             ),
                         );
                     });
@@ -1680,7 +2141,7 @@ export class QuickStartServiceImpl {
                     port: pending.boundPort,
                 });
             }
-            await this.resync(alias).catch(() => {
+            await this.resync(alias, pending.engineCli).catch(() => {
                 meterQuickStartSilentCatch('discardTimedOut_resync');
                 this.setStatus(alias, InstanceState.NotInstalled);
             });
@@ -1701,7 +2162,8 @@ export class QuickStartServiceImpl {
         secrets: ReadonlyArray<string>,
         signal: AbortSignal,
         token: vscode.CancellationToken,
-    ): Promise<void> {
+        engine: IContainerEngineOps,
+    ): Promise<ReadinessResult> {
         const deadline = Date.now() + READINESS_TIMEOUT_MS;
         let attempt = 0;
         let lastError: unknown;
@@ -1714,30 +2176,77 @@ export class QuickStartServiceImpl {
                 serverSelectionTimeoutMS: PROBE_SERVER_SELECTION_TIMEOUT_MS,
                 tlsAllowInvalidCertificates: true,
             });
+            attempt += 1;
             try {
                 await client.connect();
                 await client.db('admin').command({ ping: 1 });
-                return;
+                let helloTimer: ReturnType<typeof setTimeout> | undefined;
+                let onAbort: (() => void) | undefined;
+                try {
+                    this.throwIfAborted(signal);
+                    const hello: unknown = await Promise.race([
+                        client.db('admin').command({ hello: 1 }),
+                        new Promise<never>((_resolve, reject) => {
+                            helloTimer = setTimeout(
+                                () => reject(new Error('hello timed out')),
+                                READINESS_HELLO_TIMEOUT_MS,
+                            );
+                            onAbort = (): void => reject(new Error('aborted'));
+                            signal.addEventListener('abort', onAbort, { once: true });
+                        }),
+                    ]);
+                    if (hello && typeof hello === 'object') {
+                        const internal = 'internal' in hello ? hello.internal : undefined;
+                        const versions =
+                            internal && typeof internal === 'object' && 'documentdb_versions' in internal
+                                ? internal.documentdb_versions
+                                : undefined;
+                        const maxWireVersion = 'maxWireVersion' in hello ? hello.maxWireVersion : undefined;
+                        return {
+                            attempts: attempt,
+                            documentdbVersions:
+                                Array.isArray(versions) &&
+                                versions.every((version): version is string => typeof version === 'string')
+                                    ? versions.slice(0, 8)
+                                    : undefined,
+                            maxWireVersion:
+                                typeof maxWireVersion === 'number' &&
+                                Number.isInteger(maxWireVersion) &&
+                                maxWireVersion >= 0
+                                    ? maxWireVersion
+                                    : undefined,
+                        };
+                    }
+                } catch {
+                    meterQuickStartSilentCatch('readiness_hello');
+                } finally {
+                    clearTimeout(helloTimer);
+                    if (onAbort) signal.removeEventListener('abort', onAbort);
+                }
+                this.throwIfAborted(signal);
+                return { attempts: attempt };
             } catch (error) {
+                this.throwIfAborted(signal);
                 const rejection = describeCredentialRejection(error);
                 // SASLprep fails on this machine and cannot change; a server refusal has to repeat,
                 // in case an image starts its gateway before the user exists.
                 if (rejection && (rejection.key === 'passwordNotSupported' || rejectedLastAttempt)) {
-                    throw new ReadinessFailedError(rejection);
+                    throw new ReadinessFailedError(rejection, attempt, error);
                 }
                 rejectedLastAttempt = rejection !== undefined;
                 lastError = error;
             } finally {
-                await client.close().catch(() => undefined);
+                await client.close().catch(() => meterQuickStartSilentCatch('readiness_closeClient'));
             }
-            await this.throwIfContainerExited(containerId, secrets, token);
-            attempt += 1;
-            const backoff = Math.min(3000, 500 + attempt * 250);
+            await this.throwIfContainerExited(containerId, secrets, token, attempt, lastError, engine);
+            const backoff = Math.min(3000, 500 + (attempt - 1) * 250);
             await delay(backoff, signal);
         }
-        await this.throwIfContainerExited(containerId, secrets, token);
+        await this.throwIfContainerExited(containerId, secrets, token, attempt, lastError, engine);
         throw new ReadinessTimeoutError(
             `Timed out waiting for DocumentDB to accept connections.${lastError ? ` (${errMessage(lastError)})` : ''}`,
+            attempt,
+            lastError,
         );
     }
 
@@ -1745,23 +2254,28 @@ export class QuickStartServiceImpl {
         containerId: string,
         secrets: ReadonlyArray<string>,
         token: vscode.CancellationToken,
+        attempts: number,
+        lastError: unknown,
+        engine: IContainerEngineOps,
     ): Promise<void> {
-        const inspected = await this.runtime.inspectContainer(containerId, { quiet: true, token });
+        const inspected = await engine.inspectContainer(containerId, { quiet: true, token });
         // An inspect that failed says nothing about the container, so keep waiting.
         if (!inspected || !hasExited(inspected)) {
             return;
         }
-        const logs = await this.runtime
-            .readRecentLogs(containerId, EXITED_CONTAINER_LOG_LINES, secrets, token)
-            .catch(() => {
-                meterQuickStartSilentCatch('readiness_readExitedContainerLogs');
-                return '';
-            });
-        throw new ReadinessFailedError({
-            key: 'containerExited',
-            exitCode: getExitCode(inspected),
-            detail: lastContainerErrorLine(logs),
+        const logs = await engine.readRecentLogs(containerId, EXITED_CONTAINER_LOG_LINES, secrets, token).catch(() => {
+            meterQuickStartSilentCatch('readiness_readExitedContainerLogs');
+            return '';
         });
+        throw new ReadinessFailedError(
+            {
+                key: 'containerExited',
+                exitCode: getExitCode(inspected),
+                detail: lastContainerErrorLine(logs),
+            },
+            attempts,
+            lastError,
+        );
     }
 
     /**
@@ -1774,7 +2288,7 @@ export class QuickStartServiceImpl {
      * (`$USERNAME`/`$PASSWORD`, set via the `--env-file` at run) inside the `sh -c`
      * script, so they never appear on the HOST docker CLI argv / process list (§8.2) and
      * are never subject to host-shell quoting or expansion (e.g. Windows `cmd.exe`
-     * `%VAR%`). {@link ContainerRuntime.execShellInContainer} strong-quotes the script so
+     * `%VAR%`). {@link IContainerEngineOps.execShellInContainer} strong-quotes the script so
      * the host shell passes the `$VAR` references through verbatim and the container's own
      * shell performs the expansion. The interpolated values are all constants — no user
      * input reaches the script. Image 0.116 requires `DOCUMENTDB_PASSWORD` instead of
@@ -1785,11 +2299,15 @@ export class QuickStartServiceImpl {
         containerId: string,
         secrets: ReadonlyArray<string>,
         token: vscode.CancellationToken,
-    ): Promise<void> {
+        engine: IContainerEngineOps,
+    ): Promise<boolean> {
         try {
-            await this.runtime.execShellInContainer(containerId, buildSampleDataSeedScript(), secrets, token);
+            await engine.execShellInContainer(containerId, buildSampleDataSeedScript(), secrets, token);
+            return true;
         } catch (error) {
+            meterQuickStartSilentCatch('seedSampleData');
             getQuickStartOutputChannel().appendLine(`Sample data load skipped: ${errMessage(error)}`);
+            return false;
         }
     }
 
@@ -1950,6 +2468,7 @@ export class QuickStartServiceImpl {
             readonly operationId: string;
             readonly leaseHeld: boolean;
             readonly port: number;
+            readonly replacedRecord?: QuickStartInstanceRecord;
         },
     ): Promise<void> {
         let stillOurs = true;
@@ -1967,16 +2486,45 @@ export class QuickStartServiceImpl {
                 meterQuickStartSilentCatch('provision_restoreCredentials');
             }
         }
-        if (attempt.leaseHeld && stillOurs) {
+        const replaced = attempt.replacedRecord;
+        if (attempt.leaseHeld && stillOurs && replaced) {
+            // Deleting the record would take the secret its volume needs; keep any image pinned meanwhile.
+            await updateInstance(alias, (current) =>
+                current?.phase === 'provisioning' && current.operationId === attempt.operationId
+                    ? { ...replaced, imageRef: current.imageRef ?? replaced.imageRef }
+                    : undefined,
+            ).catch(() => meterQuickStartSilentCatch('provision_restoreReplacedRecord'));
+        } else if (attempt.leaseHeld && stillOurs) {
             await this.releaseProvisioningLease(alias, attempt.operationId);
         }
+    }
+
+    /** The image's `…@sha256:` digest, which still names exactly this image after its tag moves. */
+    private async saveImagePin(alias: string, imageRef: string): Promise<void> {
+        await updateInstance(alias, (current) => current && { ...current, imageRef });
+        const entry = this.stateFor(alias);
+        if (entry.metadata) {
+            entry.metadata = { ...entry.metadata, imageRef };
+        }
+    }
+
+    private async pinImage(
+        engine: IContainerEngineOps,
+        imageId: string | undefined,
+        token?: vscode.CancellationToken,
+    ): Promise<string | undefined> {
+        const image = imageId ? await engine.inspectImage(imageId, token, QUICK_START_IMAGE_REPOSITORY) : undefined;
+        const pinned =
+            image && image !== 'absent' && image.digest ? `${QUICK_START_IMAGE_REPOSITORY}@${image.digest}` : '';
+        return isPinnedImageRef(pinned) ? pinned : undefined;
     }
 
     private async findManagedContainer(
         alias: string = DEFAULT_ALIAS,
         options?: { propagateErrors?: boolean },
+        engine?: IContainerEngineOps,
     ): Promise<{ id: string } | undefined> {
-        return (await this.findManagedContainers(alias, options))[0];
+        return (await this.findManagedContainers(alias, options, engine))[0];
     }
 
     /**
@@ -1985,7 +2533,12 @@ export class QuickStartServiceImpl {
      * "Provisioning…" and only scavenges a stale one. Best-effort — a registry hiccup must not fail
      * a provision that is otherwise fine.
      */
-    private async renewProvisioningLease(alias: string, operationId: string, port: number): Promise<void> {
+    private async renewProvisioningLease(
+        alias: string,
+        operationId: string,
+        port: number,
+        engineCli: ContainerCli,
+    ): Promise<void> {
         await updateInstance(alias, (current) => {
             // Never downgrade a record another run already promoted to `ready`.
             if (current?.phase === 'ready') {
@@ -1999,6 +2552,7 @@ export class QuickStartServiceImpl {
                 operationId,
                 leaseAt: Date.now(),
                 imageRef: current?.imageRef,
+                engineCli,
             };
         }).catch(() => undefined);
     }
@@ -2014,13 +2568,15 @@ export class QuickStartServiceImpl {
     private async findManagedContainers(
         alias: string = DEFAULT_ALIAS,
         options?: { propagateErrors?: boolean },
+        engine?: IContainerEngineOps,
     ): Promise<Array<{ id: string; name?: string; labels?: Record<string, string> }>> {
         // Best-effort by default (discovery paths tolerate a Docker hiccup by treating it as "none
         // found"). The explicit Delete path opts into `propagateErrors` so a lookup FAILURE is not
         // mistaken for "already gone" — it must surface rather than green-light a false clean slate.
+        engine ??= await this.engineFor(alias);
         const list = options?.propagateErrors
-            ? await this.runtime.listByLabel({ [QUICK_START_LABEL_KEY]: '1' })
-            : await this.runtime.listByLabel({ [QUICK_START_LABEL_KEY]: '1' }).catch(() => []);
+            ? await engine.listByLabel({ [QUICK_START_LABEL_KEY]: '1' })
+            : await engine.listByLabel({ [QUICK_START_LABEL_KEY]: '1' }).catch(() => []);
         return list.filter((container: { id: string; labels?: Record<string, string> }) =>
             this.aliasMatches(container.labels?.[QUICK_START_ALIAS_LABEL_KEY], alias),
         );
@@ -2039,9 +2595,9 @@ export class QuickStartServiceImpl {
     }
 
     /** `undefined` when Docker could not say; callers treat that as "may still exist". */
-    private async dataVolumeExists(alias: string): Promise<boolean | undefined> {
+    private async dataVolumeExists(alias: string, engine?: IContainerEngineOps): Promise<boolean | undefined> {
         try {
-            return await this.runtime.volumeExists(volumeName(alias));
+            return await (engine ?? (await this.engineFor(alias))).volumeExists(volumeName(alias));
         } catch {
             return meterQuickStartSilentCatch('dataVolumeExists');
         }
@@ -2073,11 +2629,11 @@ export class QuickStartServiceImpl {
     }
 
     /** Re-checked before provision trusts it: Docker pointed back at the original engine brings the data back. */
-    private async isDataStillRemoved(alias: string): Promise<boolean> {
+    private async isDataStillRemoved(alias: string, engine: IContainerEngineOps): Promise<boolean> {
         return (
             this.stateFor(alias).dataRemoved &&
-            !(await this.findManagedContainer(alias)) &&
-            (await this.dataVolumeExists(alias)) === false
+            !(await this.findManagedContainer(alias, undefined, engine)) &&
+            (await this.dataVolumeExists(alias, engine)) === false
         );
     }
 
@@ -2102,9 +2658,13 @@ export class QuickStartServiceImpl {
     }
 
     /** Re-derive one alias's state after an operation changed both the store and Docker. */
-    private async resync(alias: string): Promise<void> {
-        const containers = await this.findManagedContainers(alias);
-        const outcome = await this.reconcileAlias(alias, await getInstance(alias), containers, Date.now());
+    private async resync(alias: string, engineCli: ContainerCli): Promise<void> {
+        const record = await getInstance(alias);
+        const resolved = this.runtime.resolveCli({ kind: 'pinned', cli: record?.engineCli ?? engineCli });
+        const containers = await this.findManagedContainers(alias, undefined, this.runtime.forCli(resolved));
+        this.stateFor(alias).engineCli =
+            (record?.phase === 'ready' && record.engineCli) || containers.length > 0 ? resolved.cli : undefined;
+        const outcome = await this.reconcileAlias(alias, record, containers, Date.now());
         if (outcome.scavenge) {
             await scavengeStaleLeases([alias]);
         }
@@ -2134,7 +2694,10 @@ export class QuickStartServiceImpl {
      * the id/name matches — so we can only ever act on containers the extension created (#9). Pure
      * (no Docker I/O) so callers that already hold an inspect result don't inspect twice.
      */
-    private isOwnedContainer(item: Awaited<ReturnType<IContainerRuntime['inspectContainer']>>, alias: string): boolean {
+    private isOwnedContainer(
+        item: Awaited<ReturnType<IContainerEngineOps['inspectContainer']>>,
+        alias: string,
+    ): boolean {
         return (
             !!item &&
             item.labels?.[QUICK_START_LABEL_KEY] === '1' &&
@@ -2161,7 +2724,7 @@ export class QuickStartServiceImpl {
         alias: string,
         allowed: ReadonlyArray<'running' | 'stopped'>,
     ): Promise<boolean> {
-        const item = await this.runtime.inspectContainer(id);
+        const item = await (await this.engineFor(alias)).inspectContainer(id);
         if (!item) {
             // Missing: deleted/pruned outside VS Code. Mark it here rather than via
             // refreshLiveState(), which skips the lifecycle-busy alias, and say so, so the click is
@@ -2203,7 +2766,7 @@ export class QuickStartServiceImpl {
             // removal as a second line of defense.
             void vscode.window.showWarningMessage(
                 l10n.t(
-                    'The DocumentDB Local container can no longer be managed because it was created outside the extension. Remove it with Docker if you no longer need it.',
+                    'The DocumentDB Local container can no longer be managed because it was created outside the extension. Remove it with your container engine (Docker or Podman) if you no longer need it.',
                 ),
             );
             return false;
@@ -2234,14 +2797,14 @@ export class QuickStartServiceImpl {
             return 'unavailable';
         }
 
-        const inspected = await this.runtime.inspectContainer(containerId);
+        const inspected = await (await this.engineFor(alias)).inspectContainer(containerId);
         if (entry.metadata?.containerId !== containerId) {
             return 'busy';
         }
         if (!inspected) {
             // `inspectContainer` reports "could not ask" and "not there" the same way, so a stopped
             // daemon would otherwise be announced as a container someone deleted.
-            return (await this.classifyUninspectableContainer()) ?? 'missing';
+            return (await this.classifyUninspectableContainer(alias)) ?? 'missing';
         }
         if (!this.isOwnedContainer(inspected, alias)) {
             return 'foreign';
@@ -2268,7 +2831,7 @@ export class QuickStartServiceImpl {
             case 'foreign':
                 void vscode.window.showWarningMessage(
                     l10n.t(
-                        'The DocumentDB Local container can no longer be opened because it was created outside the extension. Remove it with Docker if you no longer need it.',
+                        'The DocumentDB Local container can no longer be opened because it was created outside the extension. Remove it with your container engine (Docker or Podman) if you no longer need it.',
                     ),
                 );
                 break;
@@ -2291,10 +2854,17 @@ export class QuickStartServiceImpl {
      * Why an inspect came back empty, when the answer is not "the container is gone": `undefined`
      * means Docker answered normally, so the container really has been removed.
      */
-    private async classifyUninspectableContainer(): Promise<'dockerUnreachable' | 'unavailable' | undefined> {
+    private async classifyUninspectableContainer(
+        alias: string,
+    ): Promise<'dockerUnreachable' | 'unavailable' | undefined> {
         let readiness: DockerReadiness;
         try {
-            readiness = await this.checkDockerReadiness({ forceRefresh: true, suppressCommandEcho: true });
+            const resolved = await this.resolveInstanceCli(alias);
+            readiness = await this.checkDockerReadiness({
+                forceRefresh: true,
+                suppressCommandEcho: true,
+                engine: { kind: 'pinned', cli: resolved.cli },
+            });
         } catch {
             return 'unavailable';
         }
@@ -2319,8 +2889,9 @@ export class QuickStartServiceImpl {
                 return;
             }
             this.setStatus(alias, InstanceState.Starting);
-            await this.runtime.startContainer(id);
-            if (await this.confirmStaysRunning(id)) {
+            const engine = await this.engineFor(alias);
+            await engine.startContainer(id);
+            if (await this.confirmStaysRunning(id, engine)) {
                 this.setStatus(alias, InstanceState.Running);
             } else {
                 const message: QuickStartMessage = { key: 'startedButExited' };
@@ -2371,7 +2942,7 @@ export class QuickStartServiceImpl {
                 return;
             }
             this.setStatus(alias, InstanceState.Stopping);
-            await this.runtime.stopContainer(id);
+            await (await this.engineFor(alias)).stopContainer(id);
             this.setStatus(alias, InstanceState.Stopped);
         });
     }
@@ -2384,7 +2955,8 @@ export class QuickStartServiceImpl {
                 return;
             }
             this.setStatus(alias, InstanceState.Stopping);
-            const stopped = await this.runtime.stopContainer(id).then(
+            const engine = await this.engineFor(alias);
+            const stopped = await engine.stopContainer(id).then(
                 () => true,
                 () => false,
             );
@@ -2394,8 +2966,8 @@ export class QuickStartServiceImpl {
                 return;
             }
             this.setStatus(alias, InstanceState.Starting);
-            await this.runtime.startContainer(id);
-            if (await this.confirmStaysRunning(id)) {
+            await engine.startContainer(id);
+            if (await this.confirmStaysRunning(id, engine)) {
                 this.setStatus(alias, InstanceState.Running);
             } else {
                 const message: QuickStartMessage = { key: 'restartedButExited' };
@@ -2410,10 +2982,10 @@ export class QuickStartServiceImpl {
      * later. A container that re-runs a failing entrypoint reports "running" for a
      * moment before exiting, so a single immediate inspect can be a false positive.
      */
-    private async confirmStaysRunning(id: string): Promise<boolean> {
+    private async confirmStaysRunning(id: string, engine: IContainerEngineOps): Promise<boolean> {
         for (let attempt = 0; attempt < START_CONFIRM_ATTEMPTS; attempt++) {
             await new Promise((resolve) => setTimeout(resolve, START_CONFIRM_INTERVAL_MS));
-            const inspected = await this.runtime.inspectContainer(id);
+            const inspected = await engine.inspectContainer(id);
             if (!isRunning(inspected)) {
                 return false;
             }
@@ -2446,6 +3018,7 @@ export class QuickStartServiceImpl {
             'deleting',
             async (): Promise<'deleted' | 'refused' | 'error'> => {
                 const entry = this.stateFor(alias);
+                const engine = await this.engineFor(alias);
                 // #9 guard: if we hold a specific container id/name, re-inspect it first. inspectContainer
                 // swallows Docker errors and returns undefined, so an undefined result is inconclusive
                 // here — but a RESOLVED foreign container (a name our old container no longer owns) must
@@ -2453,11 +3026,11 @@ export class QuickStartServiceImpl {
                 // refusal instead of a false "deleted".
                 const knownId = entry.metadata?.containerId;
                 if (knownId) {
-                    const inspected = await this.runtime.inspectContainer(knownId);
+                    const inspected = await engine.inspectContainer(knownId);
                     if (inspected && !this.isOwnedContainer(inspected, alias)) {
                         void vscode.window.showWarningMessage(
                             l10n.t(
-                                'The DocumentDB Local container was not removed because it was created outside the extension. Remove it with Docker if you no longer need it.',
+                                'The DocumentDB Local container was not removed because it was created outside the extension. Remove it with your container engine (Docker or Podman) if you no longer need it.',
                             ),
                         );
                         return 'refused';
@@ -2486,7 +3059,7 @@ export class QuickStartServiceImpl {
                     // success or wipe our records. Surface the error and keep the instance so the user can
                     // retry Delete (GPT-5.6 review: the toast must reflect the ACTUAL outcome).
                     try {
-                        await this.runtime.removeContainer(container.id);
+                        await engine.removeContainer(container.id);
                     } catch (error) {
                         return this.reportDeleteFailure(error);
                     }
@@ -2498,7 +3071,7 @@ export class QuickStartServiceImpl {
                 // removal failure cannot bring the instance back; the next setup finds the leftover volume and
                 // asks the user to start fresh. Surface it as a non-blocking warning (not a silent
                 // swallow) and still complete the delete rather than stranding a container-less instance.
-                const volumeRemoved = await this.runtime
+                const volumeRemoved = await engine
                     .removeVolume(volumeName(alias))
                     .then(() => true)
                     .catch(() => false);
@@ -2519,6 +3092,7 @@ export class QuickStartServiceImpl {
                 entry.credentialsRestored = false;
                 // Otherwise a reopened wizard offers "Wait longer" for the container just removed.
                 entry.pendingReadiness = undefined;
+                entry.engineCli = undefined;
                 this.setStatus(alias, InstanceState.NotInstalled);
                 return 'deleted';
             },
@@ -2609,7 +3183,7 @@ export class QuickStartServiceImpl {
             }
             try {
                 const containerId = entry.metadata.containerId;
-                const inspected = await this.runtime.inspectContainer(containerId);
+                const inspected = await (await this.engineFor(alias)).inspectContainer(containerId);
                 // A concurrent deleteContainer/re-adopt may have cleared or replaced this alias's
                 // metadata while we awaited — bail rather than write a stale result onto it.
                 if (entry.metadata?.containerId !== containerId) {
@@ -2620,7 +3194,7 @@ export class QuickStartServiceImpl {
                     // actually answering before claiming the container was removed — otherwise a
                     // stopped Docker turns the row into recreate guidance for a container that is
                     // still on disk. Once it is known missing, only its volume can change the answer.
-                    if (!entry.missing && (await this.classifyUninspectableContainer()) !== undefined) {
+                    if (!entry.missing && (await this.classifyUninspectableContainer(alias)) !== undefined) {
                         continue;
                     }
                     // Fires only on the TRANSITION (like every sibling branch below): the tree renders
@@ -2711,15 +3285,39 @@ export class QuickStartServiceImpl {
     }
 
     private async performReconciliation(trigger: 'hydration' | 'refresh'): Promise<void> {
-        const readiness = this.checkDockerReadiness({ suppressCommandEcho: true }).catch(() => undefined);
-        const containersPromise = this.runtime.listByLabel({ [QUICK_START_LABEL_KEY]: '1' }) as Promise<
-            Array<{
-                id: string;
-                createdAt?: Date;
-                labels?: Record<string, string>;
-            }>
-        >;
-        const [containers, instances] = await Promise.all([containersPromise, listInstances(), readiness]);
+        const legacy = this.runtime.resolveCli({ kind: 'preferred', preferred: 'docker' });
+        const instances = await listInstances();
+        const required = new Set<ContainerCli>([
+            instances.find((record) => record.alias === DEFAULT_ALIAS)?.engineCli ??
+                this.instances.get(DEFAULT_ALIAS)?.engineCli ??
+                legacy.cli,
+            ...instances.map((record) => record.engineCli ?? this.stateFor(record.alias).engineCli ?? legacy.cli),
+            ...[...this.instances.values()].flatMap((entry) => (entry.engineCli ? [entry.engineCli] : [])),
+        ]);
+        const listings = await Promise.all(
+            [...required].map(async (cli) => {
+                const resolved = cli === legacy.cli ? legacy : this.runtime.resolveCli({ kind: 'pinned', cli });
+                const readiness = this.checkDockerReadiness({
+                    suppressCommandEcho: true,
+                    engine: { kind: 'pinned', cli },
+                }).catch((error: unknown) => {
+                    ext.outputChannel?.error(`[LocalQuickStart] ${cli} readiness failed: ${errMessage(error)}`);
+                });
+                try {
+                    const containers = await this.runtime
+                        .forCli(resolved)
+                        .listByLabel({ [QUICK_START_LABEL_KEY]: '1' });
+                    await readiness;
+                    return { cli, containers };
+                } catch (error: unknown) {
+                    await readiness;
+                    ext.outputChannel?.error(`[LocalQuickStart] ${cli} discovery failed: ${errMessage(error)}`);
+                    return { cli, error };
+                }
+            }),
+        );
+        const successful = listings.filter((listing) => listing.containers !== undefined);
+        const containers = successful.flatMap((listing) => listing.containers ?? []);
         const now = Date.now();
 
         traceQuickStart(
@@ -2728,13 +3326,22 @@ export class QuickStartServiceImpl {
 
         // Group live containers by alias (absent/empty alias label ⇒ DEFAULT).
         const liveByAlias = new Map<string, Array<{ id: string; createdAt?: Date }>>();
-        for (const container of containers) {
-            const alias = container.labels?.[QUICK_START_ALIAS_LABEL_KEY] || DEFAULT_ALIAS;
-            const bucket = liveByAlias.get(alias);
-            if (bucket) {
-                bucket.push(container);
-            } else {
-                liveByAlias.set(alias, [container]);
+        for (const listing of successful) {
+            for (const container of listing.containers ?? []) {
+                const alias = container.labels?.[QUICK_START_ALIAS_LABEL_KEY] || DEFAULT_ALIAS;
+                const owner =
+                    instances.find((record) => record.alias === alias)?.engineCli ??
+                    this.instances.get(alias)?.engineCli ??
+                    legacy.cli;
+                if (owner !== listing.cli) {
+                    continue;
+                }
+                const bucket = liveByAlias.get(alias);
+                if (bucket) {
+                    bucket.push(container);
+                } else {
+                    liveByAlias.set(alias, [container]);
+                }
             }
         }
 
@@ -2742,6 +3349,7 @@ export class QuickStartServiceImpl {
         const aliases = new Set<string>([
             DEFAULT_ALIAS,
             ...instances.map((record) => record.alias),
+            ...this.instances.keys(),
             ...liveByAlias.keys(),
         ]);
         const scavenge = new Set<string>();
@@ -2758,7 +3366,25 @@ export class QuickStartServiceImpl {
                 continue;
             }
             const record = instances.find((existing) => existing.alias === alias);
-            const outcome = await this.reconcileAlias(alias, record, liveByAlias.get(alias) ?? [], now);
+            const owner = record?.engineCli ?? entry.engineCli ?? legacy.cli;
+            const live = liveByAlias.get(alias) ?? [];
+            if ((record?.phase === 'ready' && record.engineCli) || live.length > 0) {
+                entry.engineCli = owner;
+            }
+            if (!successful.some((listing) => listing.cli === owner)) {
+                if (record && entry.state === InstanceState.NotInstalled) {
+                    entry.displayName = record.displayName;
+                    entry.port = record.port;
+                    const cliMissing = this.engineReadiness.get(owner)?.cliInstalled === false;
+                    this.setStatus(alias, InstanceState.Error, undefined, {
+                        key: cliMissing ? 'dockerCliMissing' : 'dockerDaemonUnreachable',
+                        ...(cliMissing && record.engineCli ? { engineCli: record.engineCli } : {}),
+                    });
+                }
+                count('skippedUnavailableEngine');
+                continue;
+            }
+            const outcome = await this.reconcileAlias(alias, record, live, now);
             count(`outcome_${outcome.outcome}`);
             if (outcome.restoreFailure) {
                 count(`restoreFailed_${outcome.restoreFailure}`);
@@ -2766,6 +3392,9 @@ export class QuickStartServiceImpl {
             if (outcome.scavenge) {
                 scavenge.add(alias);
             }
+        }
+        if (successful.length === 0) {
+            throw listings[0].error;
         }
 
         // Drop stale pre-create reservations. Scavenge fires ONLY here (deep reconciliation), never
@@ -2811,6 +3440,9 @@ export class QuickStartServiceImpl {
         containers: Array<{ id: string; createdAt?: Date }>,
         now: number,
     ): Promise<{ outcome: ReconcileOutcome; scavenge?: boolean; restoreFailure?: CredentialRestoreFailure }> {
+        if (record?.phase === 'ready' && record.engineCli) {
+            this.stateFor(alias).engineCli = record.engineCli;
+        }
         const winner = this.pickManagedContainer(alias, containers);
         const freshLease = record !== undefined && isProvisioningLeaseFresh(record, now);
 
@@ -2854,6 +3486,7 @@ export class QuickStartServiceImpl {
         if (record?.phase === 'provisioning') {
             // Stale pre-create reservation (crashed host): nothing was created ⇒ scavenge + clear.
             this.stateFor(alias).metadata = undefined;
+            this.stateFor(alias).engineCli = undefined;
             this.setStatus(alias, InstanceState.NotInstalled);
             return { outcome: 'scavenged', scavenge: true };
         }
@@ -2885,6 +3518,7 @@ export class QuickStartServiceImpl {
         }
         // No record and no container (only the always-present DEFAULT reaches here) ⇒ NotInstalled.
         this.stateFor(alias).metadata = undefined;
+        this.stateFor(alias).engineCli = undefined;
         this.setStatus(alias, InstanceState.NotInstalled);
         return { outcome: 'notInstalled' };
     }
@@ -2898,7 +3532,7 @@ export class QuickStartServiceImpl {
         alias: string,
         containerId: string,
     ): Promise<{ connectionString: string } | { failure: CredentialRestoreFailure }> {
-        const inspected = await this.runtime.inspectContainer(containerId);
+        const inspected = await (await this.engineFor(alias)).inspectContainer(containerId);
         const username = inspected?.environmentVariables?.['USERNAME'];
         const password = inspected?.environmentVariables?.['PASSWORD'];
         if (!inspected || !username || !password) {
@@ -2938,7 +3572,8 @@ export class QuickStartServiceImpl {
         containerId: string,
         stored: string,
     ): Promise<void> {
-        const inspected = await this.runtime.inspectContainer(containerId);
+        const engine = await this.engineFor(alias);
+        const inspected = await engine.inspectContainer(containerId);
         const running = isRunning(inspected);
         const boundPort = (inspected && getBoundHostPort(inspected)) || record?.port || QUICK_START_PORT;
         let username = '';
@@ -2953,7 +3588,11 @@ export class QuickStartServiceImpl {
         if (running) {
             this.populateCredentialCache(alias, stored, username, password);
         }
-        const adoptedImageRef = inspected?.image?.originalName;
+        // The container shows which image its data last ran on, which outranks whatever the record says.
+        // A container run by image ID names nothing a later pull could fetch.
+        const originalName = inspected?.image?.originalName;
+        const namedImage = originalName && !/^(sha256:)?[0-9a-f]{64}$/i.test(originalName) ? originalName : undefined;
+        const adoptedImageRef = (await this.pinImage(engine, inspected?.imageId)) ?? record?.imageRef ?? namedImage;
         // Make the store authoritative + clear any stale provisioning lease: an adopted container whose
         // credentials we hold IS ready (so a later container-loss becomes Missing, not scavenged). The
         // image is backfilled from the adopted container so a recreate AFTER this container is removed
@@ -2964,6 +3603,7 @@ export class QuickStartServiceImpl {
             port: running ? boundPort : (record?.port ?? boundPort),
             phase: 'ready',
             imageRef: adoptedImageRef ?? record?.imageRef,
+            engineCli: record?.engineCli ?? this.stateFor(alias).engineCli,
         });
         this.setStatus(alias, running ? InstanceState.Running : InstanceState.Stopped, {
             containerId,

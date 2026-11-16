@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { type DeepLinkTelemetry } from '../../../deepLinks/deepLinkTelemetry';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { type InstanceState, type QuickStartWizardPhase } from '../../../services/localQuickStart/quickStartTypes';
@@ -31,14 +32,21 @@ export type LocalQuickStartConfigurationType = {
  */
 export function openLocalQuickStartWebview(
     initialData: LocalQuickStartConfigurationType,
+    deepLink?: DeepLinkTelemetry,
 ): AppWebviewController<LocalQuickStartConfigurationType> {
     // The router context's closePanel needs the controller handle, which only
     // exists after openAppWebview returns. The closure is only invoked at
     // runtime (in response to a tRPC call), well after the handle is assigned.
     const handle: { controller?: AppWebviewController<LocalQuickStartConfigurationType> } = {};
-    const wizardSession = createWizardSession(initialData.quickStartSessionId, initialData.initialPhase);
+    const wizardSession = createWizardSession(
+        initialData.quickStartSessionId,
+        initialData.initialPhase,
+        Date.now(),
+        deepLink,
+    );
 
     const trpcContext: RouterContext = {
+        ...deepLink,
         dbExperience: API.DocumentDB,
         webviewName: 'localQuickStart',
         wizardSession,

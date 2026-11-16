@@ -35,7 +35,7 @@ describe('buildAdvancedOptions', () => {
     // The summary showed localhost:<suggested> but nothing was sent, so setup bound 10260, which
     // was the port the suggestion had avoided because it was busy.
     it('sends the suggested port when the port field is empty', () => {
-        expect(buildAdvancedOptions({ ...defaults, port: '' })).toEqual({ port: 10261 });
+        expect(buildAdvancedOptions({ ...defaults, port: '' })).toEqual({ port: 10261, preferredEngine: 'docker' });
     });
 
     it('sends the typed port', () => {
@@ -67,12 +67,28 @@ describe('buildAdvancedOptions', () => {
             password: 'Passw0rd',
             imageTag: '0.116.0',
         });
-        expect(options).toEqual({ port: 10261 });
+        expect(options).toEqual({ port: 10261, preferredEngine: 'docker' });
     });
 
     it('sends only non-default choices', () => {
         expect(
             buildAdvancedOptions({ ...defaults, imageTag: ' 0.116.0 ', loadSampleData: false, startFresh: true }),
-        ).toEqual({ port: 10261, imageTag: '0.116.0', loadSampleData: false, startFresh: true });
+        ).toEqual({
+            port: 10261,
+            preferredEngine: 'docker',
+            imageTag: '0.116.0',
+            loadSampleData: false,
+            startFresh: true,
+        });
     });
+
+    it.each(['docker', 'podman'] as const)(
+        'always sends the requested %s preference, including recreates',
+        (preferredEngine) => {
+            expect(buildAdvancedOptions({ ...defaults, preferredEngine }).preferredEngine).toBe(preferredEngine);
+            expect(buildAdvancedOptions({ ...defaults, preferredEngine, isRecreate: true }).preferredEngine).toBe(
+                preferredEngine,
+            );
+        },
+    );
 });

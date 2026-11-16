@@ -24,7 +24,17 @@ export { FocusableBadge, type FocusableBadgeProps } from './FocusableBadge/index
 export { MetricCard, MetricGrid, type MetricCardProps, type MetricGridProps } from './MetricGrid/index.js';
 export {
     StatusList,
+    StatusListDetailsFacts,
+    StatusListDetailsMessage,
+    StatusListDetailsSection,
     StatusListItem,
+    type StatusListDetailsFact,
+    type StatusListDetailsFactsProps,
+    type StatusListDetailsMessageProps,
+    type StatusListDetailsMessageSeverity,
+    type StatusListDetailsSectionProps,
+    type StatusListItemDisclosure,
+    type StatusListItemDisclosurePlacement,
     type StatusListItemProps,
     type StatusListItemStatus,
     type StatusListProps,

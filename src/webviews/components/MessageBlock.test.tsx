@@ -5,6 +5,7 @@
 
 // @vitest-environment jsdom
 
+import { ErrorCircleFilled, InfoRegular, WarningRegular } from '@fluentui/react-icons';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { act, type ReactNode } from 'react';
@@ -40,6 +41,10 @@ afterEach(async () => {
  * details, and the package's stylesheet is the only place in this repository allowed to key off
  * them.
  */
+/** The path data of every glyph in the host, which identifies an icon without its class names. */
+const glyphs = (host: HTMLElement): string[] =>
+    Array.from(host.querySelectorAll('svg path')).map((path) => path.getAttribute('d') ?? '');
+
 const bodyOf = (host: HTMLElement, text: string): Element | undefined => {
     const bar = host.querySelector('[role="group"]');
     return Array.from(bar?.children ?? []).find((child) => child.textContent?.includes(text));
@@ -70,6 +75,29 @@ describe('MessageBlock', () => {
 
         const body = bodyOf(host, 'First line');
         expect(body?.children).toHaveLength(2);
+    });
+
+    it("uses the house glyphs for errors and warnings, and Fluent's for other intents", async () => {
+        const errorGlyph = glyphs(await render(<ErrorCircleFilled />));
+        const warningGlyph = glyphs(await render(<WarningRegular />));
+
+        expect(glyphs(await render(<MessageBlock intent="error">Failed.</MessageBlock>))).toEqual(errorGlyph);
+        expect(glyphs(await render(<MessageBlock intent="warning">Careful.</MessageBlock>))).toEqual(warningGlyph);
+
+        const success = glyphs(await render(<MessageBlock intent="success">Done.</MessageBlock>));
+        expect(success).toHaveLength(1);
+        expect(success).not.toEqual(errorGlyph);
+        expect(success).not.toEqual(warningGlyph);
+    });
+
+    it('lets an explicit icon replace the house glyph', async () => {
+        const infoGlyph = glyphs(await render(<InfoRegular />));
+        const host = await render(
+            <MessageBlock intent="error" icon={<InfoRegular />}>
+                Failed.
+            </MessageBlock>,
+        );
+        expect(glyphs(host)).toEqual(infoGlyph);
     });
 
     it('renders actions only when it is given some', async () => {

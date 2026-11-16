@@ -22,6 +22,7 @@ const PRIMARY_GRAPHS = {
     localQuickStart: 'Local Quick Start page',
     atlasCredentials: 'Atlas Credentials page',
     clusterDashboard: 'Cluster Dashboard page',
+    connectionDiagnostics: 'Diagnose Connection page',
     mainStartup: 'Activation',
     main: 'Extension host',
     playgroundWorker: 'Playground worker',

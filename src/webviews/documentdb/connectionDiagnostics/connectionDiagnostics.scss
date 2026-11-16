@@ -1,0 +1,10 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/* VS Code injects `body { padding: 0 20px }`; the Container owns its insets, so the footer spans the
+ * panel edge to edge, as in Local Quick Start. */
+body {
+    padding: 0;
+}
