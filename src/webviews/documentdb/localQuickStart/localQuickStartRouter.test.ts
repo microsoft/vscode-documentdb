@@ -8,7 +8,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type initWebviewTrpc as InitWebviewTrpc } from '@microsoft/vscode-ext-webview';
 import * as vscode from 'vscode';
 import { API } from '../../../DocumentDBExperiences';
-import { type DockerReadiness, type StageEvent } from '../../../services/localQuickStart/quickStartTypes';
+import {
+    type DockerReadiness,
+    QUICK_START_IMAGE_REPOSITORY,
+    type StageEvent,
+} from '../../../services/localQuickStart/quickStartTypes';
 
 const mockStartDockerProvider = vi.fn();
 const mockIsDockerReady = vi.fn();
@@ -20,6 +24,7 @@ const mockProvision = vi.fn();
 const mockProcedureTelemetry = vi.fn();
 const mockGetWizardContext = vi.fn();
 const mockGetInstanceEngine = vi.fn();
+const mockIsSavedImagePinned = vi.fn();
 
 vi.mock('../../../services/survey/SurveyService', (): object => ({ recordSurveyActivity: vi.fn() }));
 
@@ -50,6 +55,7 @@ vi.mock('../../../services/localQuickStart/QuickStartService', () => ({
         suggestPort: (...args: unknown[]) => mockSuggestPort(...args) as unknown,
         getWizardContext: (...args: unknown[]) => mockGetWizardContext(...args) as unknown,
         getInstanceEngine: (...args: unknown[]) => mockGetInstanceEngine(...args) as unknown,
+        isSavedImagePinned: (...args: unknown[]) => mockIsSavedImagePinned(...args) as unknown,
         checkPort: vi.fn(),
         onDidChangeStatus: (listener: () => void) => {
             statusListeners.add(listener);
@@ -134,6 +140,26 @@ describe('localQuickStartRouter', () => {
     beforeEach(() => {
         mockSuggestPort.mockResolvedValue(10260);
         mockGetInstanceEngine.mockReset().mockResolvedValue(undefined);
+        mockIsSavedImagePinned.mockReset().mockResolvedValue(false);
+    });
+
+    it.each([
+        [`${QUICK_START_IMAGE_REPOSITORY}@sha256:${'a'.repeat(64)}`, true],
+        [`${QUICK_START_IMAGE_REPOSITORY}:latest`, false],
+        [undefined, false],
+    ])('reports only recorded pin knowledge for Configure (%s)', async (imageRef, savedImagePinned) => {
+        mockGetWizardContext.mockResolvedValue({
+            status: { state: 'Stopped', missing: true, metadata: { imageRef, connectionString: 'secret' } },
+            busy: false,
+            canReuseExistingData: true,
+            suggestedPort: 10260,
+            savedImagePinned,
+        });
+        const caller = createCallerFactory(localQuickStartRouter)(createContext());
+        const result = await caller.getWizardContext();
+        expect(result.savedImagePinned).toBe(savedImagePinned);
+        expect(JSON.stringify(result)).not.toContain('secret');
+        expect(JSON.stringify(result)).not.toContain('imageRef');
     });
 
     it.each(['docker', 'podman', 'notRecorded', undefined] as const)(
@@ -149,6 +175,7 @@ describe('localQuickStartRouter', () => {
                 },
                 busy: false,
                 canReuseExistingData: true,
+                savedImagePinned: false,
                 suggestedPort: 10273,
                 instanceEngine,
             });
@@ -597,6 +624,7 @@ describe('localQuickStartRouter', () => {
             expect(first).toEqual({
                 status: expect.objectContaining({ state: 'Stopped', missing: true }),
                 canReuseExistingData: true,
+                savedImagePinned: false,
             });
         });
 
@@ -612,6 +640,7 @@ describe('localQuickStartRouter', () => {
             expect(first).toEqual({
                 status: expect.objectContaining({ dataRemoved: true }),
                 canReuseExistingData: false,
+                savedImagePinned: false,
             });
         });
 
@@ -638,6 +667,20 @@ describe('localQuickStartRouter', () => {
             expect(received).toMatchObject([{ instanceEngine: 'podman' }, { instanceEngine: undefined }]);
             expect(mockGetWizardContext).not.toHaveBeenCalled();
             expect(mockIsDockerReady).not.toHaveBeenCalled();
+        });
+
+        it('pushes a newly recorded image pin even when the instance state and engine did not change', async () => {
+            mockGetStatus.mockReturnValue({
+                state: 'Stopped',
+                missing: true,
+                metadata: { connectionString: 'secret' },
+            });
+            mockIsSavedImagePinned.mockResolvedValueOnce(false).mockResolvedValue(true);
+            mockCanReuseExistingData.mockResolvedValue(true);
+            const received = await drain(2);
+            expect(received).toMatchObject([{ savedImagePinned: false }, { savedImagePinned: true }]);
+            expect(JSON.stringify(received)).not.toContain('secret');
+            expect(JSON.stringify(received)).not.toContain('imageRef');
         });
 
         it('never calls Docker, because the tree fires this event on a cooldown', async () => {

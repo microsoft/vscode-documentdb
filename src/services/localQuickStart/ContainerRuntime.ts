@@ -161,7 +161,12 @@ export interface IContainerRuntime {
 
 export interface IContainerEngineOps {
     pullImage(imageRef: string, token?: vscode.CancellationToken, onProgress?: (line: string) => void): Promise<void>;
-    inspectImage(imageRef: string, token?: vscode.CancellationToken): Promise<RuntimeImageFacts | 'absent' | undefined>;
+    /** `digest` is the one listed for `repository`, by default `imageRef`'s own; an image ID has none. */
+    inspectImage(
+        imageRef: string,
+        token?: vscode.CancellationToken,
+        repository?: string,
+    ): Promise<RuntimeImageFacts | 'absent' | undefined>;
     createAndRunContainer(
         options: CreateContainerOptions,
         secrets: ReadonlyArray<string>,
@@ -356,6 +361,7 @@ class ContainerEngineOps implements IContainerEngineOps {
     public async inspectImage(
         imageRef: string,
         token?: vscode.CancellationToken,
+        repository: string = imageRef.split('@')[0].replace(/:[^/:]+$/, ''),
     ): Promise<RuntimeImageFacts | 'absent' | undefined> {
         const bounds = {
             shellProvider: SHELL_PROVIDER,
@@ -378,8 +384,20 @@ class ContainerEngineOps implements IContainerEngineOps {
                     : parsed;
                 const created = isRecord(record) && record.Id === item.id ? record.Created : undefined;
                 const createdAtMs = typeof created === 'string' ? Date.parse(created) : NaN;
-                const repository = imageRef.split('@')[0].replace(/:[^/:]+$/, '');
-                const digest = item.repoDigests.find((value) => value.split('@')[0] === repository)?.split('@')[1];
+                // Podman empties RepoDigests once the tag moves on, but keeps the pulled digest and past names.
+                const pulledFrom =
+                    isRecord(record) &&
+                    record.Id === item.id &&
+                    typeof record.Digest === 'string' &&
+                    Array.isArray(record.NamesHistory) &&
+                    record.NamesHistory.some(
+                        (name: unknown) =>
+                            typeof name === 'string' && name.split('@')[0].replace(/:[^/:]+$/, '') === repository,
+                    )
+                        ? record.Digest
+                        : undefined;
+                const digest =
+                    item.repoDigests.find((value) => value.split('@')[0] === repository)?.split('@')[1] ?? pulledFrom;
                 const version = item.labels['org.opencontainers.image.version'];
                 return {
                     id: item.id,

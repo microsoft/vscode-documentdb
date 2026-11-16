@@ -4,8 +4,9 @@
 //
 // Usage:
 //   node find-fresh-dependencies.mjs [lockfile ...] [--days 7] [--now <ISO>]
-//        [--registry <url>] [--json] [--fail-on-fresh] [--concurrency 24]
+//        [--registry <url>] [--json] [--fail-on-fresh] [--concurrency 24] [--baseline <lockfile>]
 // Default lockfiles: ./package-lock.json and ./api/package-lock.json (if present).
+// --baseline checks only versions missing from that lockfile, e.g. what a PR adds over its base.
 // Exit codes: 0 ok, 1 fresh found (only with --fail-on-fresh), 2 bad usage, 3 incomplete (lookup failures).
 
 import fs from 'node:fs';
@@ -17,6 +18,7 @@ const opts = {
     json: false,
     failOnFresh: false,
     concurrency: 24,
+    baseline: null,
 };
 const lockfiles = [];
 const args = process.argv.slice(2);
@@ -32,6 +34,7 @@ for (let i = 0; i < args.length; i++) {
     else if (a === '--concurrency') opts.concurrency = Number(next());
     else if (a === '--json') opts.json = true;
     else if (a === '--fail-on-fresh') opts.failOnFresh = true;
+    else if (a === '--baseline') opts.baseline = next();
     else if (a.startsWith('--')) fail(`Unknown option ${a}`);
     else lockfiles.push(a);
 }
@@ -41,6 +44,7 @@ if (lockfiles.length === 0) {
     for (const f of ['package-lock.json', 'api/package-lock.json']) if (fs.existsSync(f)) lockfiles.push(f);
 }
 if (lockfiles.length === 0) fail('No lockfile found; pass a path explicitly');
+if (opts.baseline && lockfiles.length !== 1) fail('--baseline needs exactly one lockfile');
 
 function fail(message) {
     console.error(message);
@@ -114,6 +118,7 @@ async function fetchTimes(name) {
 
 async function scan(file) {
     const { versions, parents } = readLockfile(file);
+    if (opts.baseline) for (const key of readLockfile(opts.baseline).versions.keys()) versions.delete(key);
     const names = [...new Set([...versions.values()].map((v) => v.name))];
     const times = new Map();
     const failures = [];
@@ -165,8 +170,10 @@ if (opts.json) {
     );
 } else {
     console.log(`Window: ${opts.days} days up to ${opts.now.toISOString()} (registry: ${opts.registry})`);
+    if (opts.baseline) console.log(`Only versions missing from ${opts.baseline}`);
     for (const r of results) {
-        console.log(`\n${r.file}: ${r.total} locked versions, ${r.packages} packages, ${r.fresh.length} fresh`);
+        const kind = opts.baseline ? 'new' : 'locked';
+        console.log(`\n${r.file}: ${r.total} ${kind} versions, ${r.packages} packages, ${r.fresh.length} fresh`);
         for (const f of r.fresh) {
             console.log(`  ${f.ageDays.toFixed(2)}d  ${f.published}  ${f.scope.padEnd(4)}  ${f.name}@${f.version}`);
             console.log(`         via ${f.via.join(' > ')}   [${f.path}]`);

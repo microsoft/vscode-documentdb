@@ -9,7 +9,7 @@
  * Resilience model (copied from the sibling `getClusterMetadata.ts`): every server command
  * runs in its own try/catch. A command that fails leaves its fields `null` and records the
  * command name in `errors` — the collector never throws because of an unsupported command.
- * This matters because Azure DocumentDB (vCore) and DocumentDB Local do not support
+ * This matters because Azure DocumentDB (vCore) and DocumentDB Local before 1.2 do not support
  * `serverStatus`, while a self-hosted MongoDB server does.
  *
  * Nothing here reads a command anyone is running: no `currentOp`, and so no command
@@ -314,7 +314,7 @@ export async function sampleClusterHealth(client: MongoClient): Promise<ClusterH
                 sample.uptimeSeconds = toNumberOrNull(serverStatus.uptime);
                 return null;
             } catch (error) {
-                // Expected on Azure DocumentDB (vCore) and DocumentDB Local: neither supports `serverStatus`.
+                // Expected on Azure DocumentDB (vCore) and DocumentDB Local before 1.2: neither supports `serverStatus`.
                 const failure = describeCommandFailure('serverStatus', error);
                 if (isUnsupportedCommandError(error)) {
                     unsupportedServerStatus.set(client, failure);
