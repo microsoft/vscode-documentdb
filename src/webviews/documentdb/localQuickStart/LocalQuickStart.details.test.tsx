@@ -248,6 +248,31 @@ describe('Local Quick Start stage details', () => {
         vi.restoreAllMocks();
     });
 
+    it('shows username guidance with an info icon below both credential fields', async () => {
+        const automaticCredentials = host.querySelector<HTMLInputElement>(
+            'input[aria-label="Generate credentials automatically"]',
+        );
+        expect(automaticCredentials).not.toBeNull();
+        await click(automaticCredentials!);
+
+        const username = host.querySelector<HTMLInputElement>('input[placeholder="Enter a username"]');
+        const password = host.querySelector<HTMLInputElement>('input[placeholder="Enter a password"]');
+        const hint = host.querySelector<HTMLElement>('#quickstart-username-hint');
+        expect(username).not.toBeNull();
+        expect(password).not.toBeNull();
+        expect(hint).not.toBeNull();
+        expect(hint?.textContent).toContain('Username: up to 63 ASCII characters');
+        expect(hint?.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+        expect(username?.getAttribute('aria-describedby')?.split(' ')).toContain(hint?.id);
+
+        const fields = hint!.parentElement!;
+        expect(username?.closest('.fui-Field')?.parentElement).toBe(fields);
+        expect(password?.closest('.fui-Field')?.parentElement).toBe(fields);
+        expect([...fields.children].indexOf(hint!)).toBe(2);
+        expect(getComputedStyle(fields).alignItems).toBe('start');
+        expect(getComputedStyle(hint!).gridColumn.replace(/\s/g, '')).toBe('1/-1');
+    });
+
     it.each([
         [
             'reusedPinned',
