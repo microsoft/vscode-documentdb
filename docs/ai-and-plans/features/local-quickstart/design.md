@@ -22,23 +22,46 @@ verified: 2026-08-14
 >
 > **Scope:** UX design and architecture. Not an implementation plan.
 >
+> **Start fresh correction implemented; Case 1 and Case 2 verified (2026-11-17):** For records
+> with `engineCli`, Start fresh deletes the old managed instance and data before replacement,
+> including when the selected engine changes. The deletion warning remains visible. Target readiness,
+> chosen-port validation and image preparation precede source deletion; preparation failure or
+> cancellation preserves the source, while cleanup failure stops replacement creation. After source
+> data is erased, later failure does not restore the former ready record, image pin or saved
+> credentials. Records without `engineCli` retain the legacy cleanup and recovery path while source
+> selection is deferred. [Iteration 17](./iterations/17-start-fresh-deletes-old-engine-data.md)
+> records the implementation. Case 1 passed: `npm run build` and four focused suites (476 tests).
+> All Case 2 checks also passed, including strict package-test typechecking, the full runtime suite
+> (9,624 passed, one skipped), and packaging. Required AI pre-review and manual engine/workbench
+> checks remain pending. Iteration 16 is evidence of the earlier behavior.
+>
 > **Docker readiness update:** The provider-neutral behavior in
 > [docker-readiness-implementation-plan.md](./iterations/04-ui-redesign/docker-readiness-implementation-plan.md)
 > supersedes the Docker Desktop-only examples in this historical design. Docker
 > Engine and Docker Desktop are supported providers; the prerequisite is a Docker
 > or Podman CLI that can reach a Linux-container daemon from the extension host.
 >
-> **Approved engine behavior (2026-11-10):**
+> **Approved engine behavior (2026-11-10; Start fresh amended 2026-11-17):**
 > [iteration 12](./iterations/12-preferred-engine-and-podman-start.md) specifies a first-row,
 > check-free Container engine preference in Configure. A fresh form defaults to Docker and does
 > not persist the preference. Execution detects both CLIs, uses the preferred one if its CLI is
 > installed, and falls back to the other only when that CLI is missing and the other is installed,
 > not when its engine is stopped.
-> Instances record their owning engine, which remains fixed for lifecycle and recreation, including
-> Start fresh; legacy records are resolved only during execution. Once both container and volume are
-> confirmed gone, setup can select a new engine. Before creating resources it durably reserves that
-> engine for reload recovery, including after a readiness timeout. Failed or discarded attempts
-> restore the previous record and credentials only while still owning the reservation.
+> Instances record their owning engine, which remains fixed for lifecycle actions and recreation
+> that keeps the data. Start fresh unlocks the engine choice for an existing record and preselects
+> its owner, or Docker when a legacy record has no recorded owner. Earlier versions used Docker when
+> its CLI was installed and Podman otherwise, so a legacy record may not identify where its data
+> lives. For a record with an owner, Start fresh uses that recorded engine as the cleanup source and
+> resolves the creation target separately. Target readiness, chosen-port validation and image
+> preparation occur before source deletion. Source containers and volume must be removed
+> successfully before replacement creation; failure or cancellation during preparation preserves
+> the source, and cleanup failure stops setup. Once the source volume is erased, a later failure,
+> cancellation or timeout does not restore the old ready record, image pin or saved credentials as
+> a usable instance; the outcome reports the confirmed erasure. Keep continues to use the existing
+> volume, saved image and credentials. A record without `engineCli` retains the previous cleanup
+> and recovery path because its source engine cannot be established; legacy source selection remains
+> deferred.
+> Once both container and volume are confirmed gone, setup can select a new engine.
 > Podman runs neither read nor write
 > provider memory and ignore Docker evidence, while Docker's existing provider-memory behavior is
 > unchanged. On macOS and Windows, an explicit Podman machine start is available only for a stopped
@@ -315,14 +338,25 @@ initial Configure mode: if the volume was gone, fresh-setup messaging remains. *
 | Starting (existing row) | Non-destructive: let the in-flight `docker start` finish and leave the instance Running. Cancel only detaches the UI from the spinner. |
 | Stopping (existing row) | Non-destructive: let the in-flight `docker stop` finish; the instance lands in Stopped. Cancel never aborts the stop.                  |
 
-The first four rows are the **Provisioning** path, where destructive
-rollback is safe because the instance is not yet established. The last two
-are the lifecycle **Starting** / **Stopping** transitions of an
+The first four rows describe first-time provisioning, where destructive
+rollback is safe because no established source data is at stake. They are not
+a promise to restore an existing source instance during Start fresh. The last
+two are the lifecycle **Starting** / **Stopping** transitions of an
 already-provisioned instance: there, Cancel is non-destructive — it
 detaches the UI from a transition Docker will complete anyway, and never
 deletes the container or its data.
 
-Generated credentials are kept in SecretStorage so a retry reuses them.
+For a recorded-owner Start fresh, target readiness, chosen-port validation and
+image preparation happen before source deletion. A failure or cancellation
+during that preparation preserves the source. Source cleanup must succeed
+before replacement creation; if cleanup fails, setup stops. After the source
+volume is erased, a later replacement failure, cancellation or timeout does
+not restore the old ready record, image pin or saved credentials, and the
+outcome reports the confirmed erasure. Keep retains the existing volume, saved
+image and credentials. Records without `engineCli` retain the pre-existing
+cleanup and recovery behavior while legacy source selection is deferred.
+
+Generated credentials for a new instance are kept in SecretStorage so a retry can reuse them.
 
 ---
 
@@ -760,7 +794,10 @@ gets a `quickStartSessionId` from the open command, and every event the panel pr
 - `documentDB.quickstart.provision`, one per setup run: `provisionResult`
   (`success`, `cancelled`, `timeout`, `error`), `provisionCorrelationId`, `reused`, `portTaken`,
   `portChanged` (the port differs from the one suggested; replaces `customPort`), `customCreds`,
-  `customImage`, `sampleData`, `priorState`, `startFresh`, `refusedCredentialsUnavailable`,
+  `customImage`, `sampleData`, `priorState`, `startFresh`, `containerEngineChanged` (`true`, `false`,
+  `legacy`; whether the run changes the engine for a ready instance, with `legacy` identifying a
+  ready record without a recorded engine; `false` when there is no ready record),
+  `refusedCredentialsUnavailable`,
   `dockerFailureKind` (the readiness `failureKind` when Docker stopped the run, else `none`),
   `dockerReadinessAtStart` (`ready`, `diagnosed`, `indeterminate`, `notChecked`: the host's last
   readiness before the run's own check), `failedStage` (`none`, `checking`, `pulling`, `creating`,

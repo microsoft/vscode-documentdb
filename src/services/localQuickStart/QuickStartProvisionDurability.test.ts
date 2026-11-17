@@ -26,6 +26,7 @@ import {
 import * as fs from 'fs';
 import * as fsPromises from 'fs/promises';
 import * as vscode from 'vscode';
+import { CredentialCache } from '../../documentdb/CredentialCache';
 import { ext } from '../../extensionVariables';
 import { StorageService } from '../storageService';
 import { type ContainerCli } from './containerCli';
@@ -515,7 +516,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                 const runtime = runtimeFor();
                 const service = new QuickStartServiceImpl(runtime);
                 await collect(service.provision(new AbortController().signal, { preferredEngine: engineCli }));
-                expect((await service.getWizardContext()).instanceEngine).toBe(engineCli);
+                expect((await service.getWizardContext()).existingInstance).toEqual({ ownerEngine: engineCli });
                 await removeInstance(DEFAULT_ALIAS);
                 vi.mocked(runtime.inspectContainer).mockResolvedValue(undefined);
                 vi.mocked(runtime.volumeExists).mockResolvedValue(false);
@@ -523,8 +524,8 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                 await service.refreshLiveState();
 
                 expect(service.getStatus()).toMatchObject({ state: InstanceState.NotInstalled, dataRemoved: true });
-                expect((await service.getWizardContext()).instanceEngine).toBeUndefined();
-                expect(await service.getInstanceEngine()).toBeUndefined();
+                expect((await service.getWizardContext()).existingInstance).toBeUndefined();
+                expect(await service.getExistingInstance()).toBeUndefined();
                 const preferredEngine = engineCli === 'docker' ? 'podman' : 'docker';
                 await service.checkInstanceDockerReadiness({}, preferredEngine);
                 expect(runtime.isDockerReady).toHaveBeenLastCalledWith({
@@ -585,7 +586,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                 await service.refreshLiveState();
 
                 expect(service.getStatus()).toMatchObject({ state: InstanceState.NotInstalled, dataRemoved: true });
-                expect((await service.getWizardContext()).instanceEngine).toBeUndefined();
+                expect((await service.getWizardContext()).existingInstance).toBeUndefined();
                 const preferredEngine = owner === 'docker' ? 'podman' : 'docker';
                 await service.checkInstanceDockerReadiness({}, preferredEngine);
                 expect(runtime.isDockerReady).toHaveBeenLastCalledWith({
@@ -614,7 +615,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                 await collect(service.provision(new AbortController().signal, { preferredEngine: engineCli }));
                 await removeInstance(DEFAULT_ALIAS);
 
-                expect((await service.getWizardContext()).instanceEngine).toBe(engineCli);
+                expect((await service.getWizardContext()).existingInstance).toEqual({ ownerEngine: engineCli });
                 await service.checkInstanceDockerReadiness({}, engineCli === 'docker' ? 'podman' : 'docker');
                 expect(runtime.isDockerReady).toHaveBeenLastCalledWith({ engine: { kind: 'pinned', cli: engineCli } });
             },
@@ -639,11 +640,11 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
 
                 expect(service.getStatus().state).toBe(InstanceState.Provisioning);
                 expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase: 'provisioning', engineCli });
-                expect(await service.getInstanceEngine()).toBeUndefined();
-                expect((await service.getWizardContext()).instanceEngine).toBeUndefined();
+                expect(await service.getExistingInstance()).toBeUndefined();
+                expect((await service.getWizardContext()).existingInstance).toBeUndefined();
                 await service.checkInstanceDockerReadiness({}, engineCli === 'docker' ? 'podman' : 'docker');
                 expect(runtime.isDockerReady).toHaveBeenLastCalledWith({ engine: { kind: 'pinned', cli: engineCli } });
-                expect(await service.getInstanceEngine()).toBeUndefined();
+                expect(await service.getExistingInstance()).toBeUndefined();
             },
         );
 
@@ -662,14 +663,14 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                 const runtime = runtimeFor();
                 const service = new QuickStartServiceImpl(runtime);
 
-                expect((await service.getWizardContext()).instanceEngine).toBeUndefined();
-                expect(await service.getInstanceEngine()).toBeUndefined();
+                expect((await service.getWizardContext()).existingInstance).toBeUndefined();
+                expect(await service.getExistingInstance()).toBeUndefined();
                 expect(runtime.resolveCli).not.toHaveBeenCalled();
                 expect(runtime.isDockerReady).not.toHaveBeenCalled();
                 await service.checkInstanceDockerReadiness({}, engineCli === 'docker' ? 'podman' : 'docker');
                 expect(runtime.isDockerReady).toHaveBeenLastCalledWith({ engine: { kind: 'pinned', cli: engineCli } });
-                expect(await service.getInstanceEngine()).toBeUndefined();
-                expect((await service.getWizardContext()).instanceEngine).toBeUndefined();
+                expect(await service.getExistingInstance()).toBeUndefined();
+                expect((await service.getWizardContext()).existingInstance).toBeUndefined();
             },
         );
 
@@ -688,7 +689,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                     expect(runtime.isDockerReady).toHaveBeenLastCalledWith({
                         engine: { kind: 'pinned', cli: 'docker' },
                     });
-                    expect((await service.getWizardContext()).instanceEngine).toBeUndefined();
+                    expect((await service.getWizardContext()).existingInstance).toBeUndefined();
                     if (outcome === 'cancel') controller.abort();
                     throw new Error('pull interrupted');
                 });
@@ -696,8 +697,8 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                 await collect(service.provision(controller.signal, { preferredEngine: 'docker' }));
 
                 expect(await getInstance(DEFAULT_ALIAS)).toBeUndefined();
-                expect(await service.getInstanceEngine()).toBeUndefined();
-                expect((await service.getWizardContext()).instanceEngine).toBeUndefined();
+                expect(await service.getExistingInstance()).toBeUndefined();
+                expect((await service.getWizardContext()).existingInstance).toBeUndefined();
                 const retry = service.provision(new AbortController().signal, { preferredEngine: 'podman' });
                 expect((await retry.next()).value).toMatchObject({ stage: 'checking', status: 'active' });
                 expect(runtime.resolveCli).toHaveBeenLastCalledWith({ kind: 'preferred', preferred: 'podman' });
@@ -757,6 +758,982 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
 
         const stored = 'mongodb://admin:stored-password@localhost:10260/?tls=true';
 
+        interface ResetResources {
+            containers: Awaited<ReturnType<IContainerEngineOps['listByLabel']>>;
+            volume: boolean;
+        }
+
+        function managedResetContainer(
+            id: string,
+            alias: string = DEFAULT_ALIAS,
+        ): ResetResources['containers'][number] {
+            return {
+                id,
+                name: alias,
+                labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: alias },
+                image: { originalName: 'local-image' },
+                ports: [],
+                networks: [],
+                createdAt: new Date(),
+                state: 'running',
+            };
+        }
+
+        async function recordedReset(
+            owner: ContainerCli = 'docker',
+            shared = false,
+        ): Promise<{
+            runtime: IContainerRuntime;
+            source: IContainerRuntime;
+            target: IContainerRuntime;
+            sourceData: ResetResources;
+            targetData: ResetResources;
+            preferredEngine: ContainerCli;
+            service: QuickStartServiceImpl;
+        }> {
+            await upsertInstance({
+                alias: DEFAULT_ALIAS,
+                displayName: 'Existing',
+                port: QUICK_START_PORT,
+                phase: 'ready',
+                engineCli: owner,
+                imageRef: `${QUICK_START_IMAGE_REPOSITORY}@sha256:${'a'.repeat(64)}`,
+            });
+            await writeConnectionString(DEFAULT_ALIAS, stored, { displayName: 'Existing', port: QUICK_START_PORT });
+            const sourceData: ResetResources = { containers: [managedResetContainer('old-source')], volume: true };
+            const targetData: ResetResources = shared
+                ? sourceData
+                : { containers: [managedResetContainer('stale-target')], volume: true };
+            const engines = { docker: runtimeFor(), podman: runtimeFor() };
+            const preferredEngine = owner === 'docker' ? 'podman' : 'docker';
+            const source = engines[owner];
+            const target = engines[preferredEngine];
+            for (const cli of ['docker', 'podman'] as const) {
+                const engine = engines[cli];
+                const data = cli === owner ? sourceData : targetData;
+                const inspected = await engine.inspectContainer('c1');
+                vi.mocked(engine.listByLabel).mockImplementation(async (labels) =>
+                    data.containers.filter((container) =>
+                        Object.entries(labels).every(([key, value]) => container.labels[key] === value),
+                    ),
+                );
+                vi.mocked(engine.volumeExists).mockImplementation(async () => data.volume);
+                vi.mocked(engine.removeVolume).mockImplementation(async () => {
+                    data.volume = false;
+                });
+                vi.mocked(engine.removeContainer).mockImplementation(async (id) => {
+                    data.containers = data.containers.filter((container) => container.id !== id);
+                });
+                vi.mocked(engine.inspectContainer).mockImplementation(async (id) => {
+                    const container = data.containers.find((item) => item.id === id || item.name === id);
+                    return container ? { ...inspected!, id: container.id, labels: container.labels } : undefined;
+                });
+                vi.mocked(engine.createAndRunContainer).mockImplementation(async (options) => {
+                    if (data.containers.some((container) => container.name === options.name)) {
+                        throw new Error('container name is already in use');
+                    }
+                    const container = {
+                        ...managedResetContainer(`new-${cli}`),
+                        name: options.name,
+                        labels: options.labels,
+                    };
+                    data.containers.push(container);
+                    data.volume = true;
+                    return container.id;
+                });
+            }
+            const runtime = engines.docker;
+            vi.mocked(runtime.forCli).mockImplementation(({ cli }) => engines[cli]);
+            return {
+                runtime,
+                source,
+                target,
+                sourceData,
+                targetData,
+                preferredEngine,
+                service: new QuickStartServiceImpl(runtime),
+            };
+        }
+
+        it.each(['docker', 'podman'] as const)(
+            'erases all %s-owned source resources before creating in the other engine',
+            async (owner) => {
+                const { service, source, target, sourceData, targetData, preferredEngine } = await recordedReset(owner);
+                sourceData.containers.push(managedResetContainer('duplicate-source'));
+                sourceData.containers.push(managedResetContainer('other-alias', 'other-instance'));
+                const legacyContainer = managedResetContainer('source-without-alias');
+                delete legacyContainer.labels[QUICK_START_ALIAS_LABEL_KEY];
+                sourceData.containers.push(legacyContainer);
+                const create = vi.mocked(target.createAndRunContainer).getMockImplementation()!;
+                vi.mocked(target.createAndRunContainer).mockImplementation(async (...args) => {
+                    expect(sourceData.containers.map((container) => container.id)).toEqual(['other-alias']);
+                    expect(sourceData.volume).toBe(false);
+                    expect(targetData.containers).toEqual([]);
+                    expect(targetData.volume).toBe(false);
+                    expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({
+                        phase: 'provisioning',
+                        engineCli: preferredEngine,
+                    });
+                    expect((await getInstance(DEFAULT_ALIAS))?.imageRef).toBeUndefined();
+                    expect(await readConnectionString(DEFAULT_ALIAS)).not.toBe(stored);
+                    return create(...args);
+                });
+                vi.mocked(target.pullImage).mockImplementation(async () => {
+                    expect(source.removeContainer).not.toHaveBeenCalled();
+                    expect(source.removeVolume).not.toHaveBeenCalled();
+                    expect(target.removeContainer).not.toHaveBeenCalled();
+                    expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({
+                        phase: 'ready',
+                        engineCli: owner,
+                        operationId: expect.any(String),
+                    });
+                });
+
+                const events = await collect(
+                    service.provision(new AbortController().signal, { preferredEngine, startFresh: true }),
+                );
+
+                expect(events.at(-1)).toMatchObject({ stage: 'done' });
+                expect(source.removeContainer).toHaveBeenCalledWith('old-source');
+                expect(source.removeContainer).toHaveBeenCalledWith('duplicate-source');
+                expect(source.removeContainer).toHaveBeenCalledWith('source-without-alias');
+                expect(source.removeContainer).not.toHaveBeenCalledWith('other-alias');
+                expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase: 'ready', engineCli: preferredEngine });
+                expect(sourceData.volume).toBe(false);
+                expect(targetData.containers.map((container) => container.id)).toEqual([`new-${preferredEngine}`]);
+            },
+        );
+
+        it.each([
+            'source listing',
+            'source relisting',
+            'source container',
+            'source partial container removal',
+            'source volume check',
+            'source volume removal',
+            'target listing',
+            'target container',
+        ] as const)(
+            'blocks replacement and preserves surviving source credentials on failed %s cleanup',
+            async (failure) => {
+                const { service, runtime, source, target, sourceData, preferredEngine } = await recordedReset();
+                const error = new Error(`${failure} unavailable`);
+                if (failure === 'source listing') vi.mocked(source.listByLabel).mockRejectedValue(error);
+                if (failure === 'source relisting') {
+                    vi.mocked(target.pullImage).mockImplementation(async () => {
+                        vi.mocked(source.listByLabel).mockRejectedValue(error);
+                    });
+                }
+                if (failure === 'source container') vi.mocked(source.removeContainer).mockRejectedValue(error);
+                if (failure === 'source partial container removal') {
+                    sourceData.containers.push(managedResetContainer('second-source'));
+                    const remove = vi.mocked(source.removeContainer).getMockImplementation()!;
+                    vi.mocked(source.removeContainer).mockImplementation(async (id) => {
+                        if (id === 'second-source') throw error;
+                        await remove(id);
+                    });
+                }
+                if (failure === 'source volume check') vi.mocked(source.volumeExists).mockRejectedValue(error);
+                if (failure === 'source volume removal') vi.mocked(source.removeVolume).mockRejectedValue(error);
+                if (failure === 'target listing') vi.mocked(target.listByLabel).mockRejectedValue(error);
+                if (failure === 'target container') vi.mocked(target.removeContainer).mockRejectedValue(error);
+
+                const events = await collect(
+                    service.provision(new AbortController().signal, { preferredEngine, startFresh: true }),
+                );
+
+                expect(events.at(-1)).toMatchObject({
+                    status: 'error',
+                    message: {
+                        key: 'unexpectedFailure',
+                        detail: failure.startsWith('source') ? `Docker: ${error.message}` : error.message,
+                    },
+                    canReuseExistingData: true,
+                });
+                expect(events.at(-1)?.dockerReadiness).toBeUndefined();
+                expect(events.at(-1)?.existingDataErased).toBeUndefined();
+                expect(sourceData.volume).toBe(true);
+                expect(target.createAndRunContainer).not.toHaveBeenCalled();
+                expect(await readConnectionString(DEFAULT_ALIAS)).toBe(stored);
+                expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase: 'ready', engineCli: 'docker' });
+                expect((await getInstance(DEFAULT_ALIAS))?.operationId).toBeUndefined();
+                expect(runtime.startAvailableDockerProvider).not.toHaveBeenCalled();
+                expect(error.message).toBe(`${failure} unavailable`);
+            },
+        );
+
+        it.each(['target volume check', 'target volume removal'] as const)(
+            'never restores erased source data after failed %s',
+            async (failure) => {
+                const { service, target, sourceData, preferredEngine } = await recordedReset();
+                if (failure === 'target volume check') {
+                    vi.mocked(target.volumeExists).mockRejectedValue(new Error('target volume unavailable'));
+                } else {
+                    vi.mocked(target.removeVolume).mockRejectedValue(new Error('target volume unavailable'));
+                }
+                const events = await collect(
+                    service.provision(new AbortController().signal, { preferredEngine, startFresh: true }),
+                );
+                expect(events.at(-1)).toMatchObject({
+                    status: 'error',
+                    existingDataErased: true,
+                    canReuseExistingData: false,
+                });
+                expect(sourceData.volume).toBe(false);
+                expect(target.createAndRunContainer).not.toHaveBeenCalled();
+                expect(await readConnectionString(DEFAULT_ALIAS)).toBeUndefined();
+                expect(await getInstance(DEFAULT_ALIAS)).toBeUndefined();
+                expect(await service.getExistingInstance()).toBeUndefined();
+            },
+        );
+
+        it.each([false, true])(
+            'cleans shared backends before creation, with missing preferred CLI=%s',
+            async (fallback) => {
+                const { service, runtime, source, target, sourceData, preferredEngine } = await recordedReset(
+                    'docker',
+                    !fallback,
+                );
+                if (fallback) {
+                    const resolve = vi.mocked(runtime.resolveCli).getMockImplementation()!;
+                    vi.mocked(runtime.resolveCli).mockImplementation((request) =>
+                        request.kind === 'preferred'
+                            ? {
+                                  ...resolve(request),
+                                  cli: 'docker',
+                                  executable: 'docker',
+                                  fellBack: true,
+                                  onPath: { docker: true, podman: false },
+                              }
+                            : resolve(request),
+                    );
+                }
+                const actualTarget = fallback ? source : target;
+                const create = vi.mocked(actualTarget.createAndRunContainer).getMockImplementation()!;
+                vi.mocked(actualTarget.createAndRunContainer).mockImplementation(async (...args) => {
+                    expect(sourceData.volume).toBe(false);
+                    expect(sourceData.containers).toEqual([]);
+                    return create(...args);
+                });
+
+                const events = await collect(
+                    service.provision(new AbortController().signal, { preferredEngine, startFresh: true }),
+                );
+
+                expect(events.at(-1)).toMatchObject({ stage: 'done' });
+                expect(sourceData.containers.map((container) => container.id)).toEqual([
+                    fallback ? 'new-docker' : 'new-podman',
+                ]);
+                expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({
+                    phase: 'ready',
+                    engineCli: fallback ? 'docker' : 'podman',
+                });
+                expect(source.removeVolume).toHaveBeenCalledOnce();
+                expect(actualTarget.createAndRunContainer).toHaveBeenCalledOnce();
+                if (fallback) {
+                    expect(
+                        events.find((event) => event.stage === 'creating' && event.status === 'done')?.facts,
+                    ).toMatchObject({ volume: 'replaced' });
+                }
+            },
+        );
+
+        it.each(['unrelated occupant', 'source-owned binding', 'port taken during pull'] as const)(
+            'validates the explicit port around cleanup for %s',
+            async (occupant) => {
+                const { service, runtime, source, target, sourceData, preferredEngine } = await recordedReset();
+                vi.mocked(runtime.isPortFree).mockImplementation(async () =>
+                    occupant === 'source-owned binding'
+                        ? sourceData.containers.length === 0
+                        : occupant === 'port taken during pull',
+                );
+                if (occupant === 'unrelated occupant') {
+                    vi.mocked(source.inspectContainer).mockResolvedValue(undefined);
+                }
+                if (occupant === 'port taken during pull') {
+                    vi.mocked(target.pullImage).mockImplementation(async () => {
+                        vi.mocked(runtime.isPortFree).mockResolvedValue(false);
+                    });
+                }
+                const events = await collect(
+                    service.provision(new AbortController().signal, {
+                        preferredEngine,
+                        startFresh: true,
+                        port: QUICK_START_PORT,
+                    }),
+                );
+
+                if (occupant === 'source-owned binding') {
+                    expect(events.at(-1)?.stage).toBe('done');
+                    expect(target.createAndRunContainer).toHaveBeenCalledWith(
+                        expect.objectContaining({ hostPort: QUICK_START_PORT }),
+                        expect.anything(),
+                        expect.anything(),
+                    );
+                } else {
+                    expect(events.at(-1)).toMatchObject({
+                        status: 'error',
+                        message: { key: 'portInUse', port: QUICK_START_PORT },
+                    });
+                    expect(source.removeVolume).not.toHaveBeenCalled();
+                    expect(target.removeVolume).not.toHaveBeenCalled();
+                    expect(target.createAndRunContainer).not.toHaveBeenCalled();
+                    expect(await readConnectionString(DEFAULT_ALIAS)).toBe(stored);
+                    if (occupant === 'unrelated occupant') expect(source.removeContainer).not.toHaveBeenCalled();
+                }
+            },
+        );
+
+        it.each(['ready', 'provisioning'] as const)(
+            'does not erase data or steal a %s owner that replaces the reset claim during pull',
+            async (phase) => {
+                const { service, source, target, preferredEngine } = await recordedReset();
+                vi.mocked(target.pullImage).mockImplementation(async () => {
+                    const current = await getInstance(DEFAULT_ALIAS);
+                    await upsertInstance({ ...current!, phase, operationId: 'other-reset', leaseAt: Date.now() });
+                });
+                const events = await collect(
+                    service.provision(new AbortController().signal, { preferredEngine, startFresh: true }),
+                );
+                expect(events.at(-1)).toMatchObject({ message: { key: 'setupAlreadyInProgress' } });
+                expect(source.removeContainer).not.toHaveBeenCalled();
+                expect(source.removeVolume).not.toHaveBeenCalled();
+                expect(target.createAndRunContainer).not.toHaveBeenCalled();
+                expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase, operationId: 'other-reset' });
+                expect(await readConnectionString(DEFAULT_ALIAS)).toBe(stored);
+            },
+        );
+
+        it('leaves a replacement owner and its volume alone after the target reservation is lost', async () => {
+            const { service, target, preferredEngine } = await recordedReset();
+            const winnerSecret = 'mongodb://winner:winner-password@localhost:10260/';
+            vi.mocked(target.volumeExists).mockImplementation(async () => {
+                const current = await getInstance(DEFAULT_ALIAS);
+                await upsertInstance({ ...current!, operationId: 'other-window', phase: 'ready' });
+                await writeConnectionString(DEFAULT_ALIAS, winnerSecret, {
+                    displayName: 'Winner',
+                    port: QUICK_START_PORT,
+                });
+                return true;
+            });
+
+            const events = await collect(
+                service.provision(new AbortController().signal, { preferredEngine, startFresh: true }),
+            );
+
+            expect(events.at(-1)).toMatchObject({
+                message: { key: 'setupAlreadyInProgress' },
+                existingDataErased: true,
+            });
+            expect(target.removeVolume).not.toHaveBeenCalled();
+            expect(target.createAndRunContainer).not.toHaveBeenCalled();
+            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase: 'ready', operationId: 'other-window' });
+            expect(await readConnectionString(DEFAULT_ALIAS)).toBe(winnerSecret);
+        });
+
+        it('keeps the recorded source untouched when target readiness fails', async () => {
+            const { service, runtime, source, target, preferredEngine } = await recordedReset();
+            const readiness = await runtime.isDockerReady();
+            vi.mocked(runtime.isDockerReady).mockResolvedValue({
+                ...readiness,
+                outcome: 'diagnosed',
+                canContinueAnyway: false,
+                cliInstalled: true,
+                daemonReachable: false,
+                failureKind: 'daemonUnavailable',
+            });
+
+            const events = await collect(
+                service.provision(new AbortController().signal, { preferredEngine, startFresh: true }),
+            );
+
+            expect(events.at(-1)).toMatchObject({ status: 'error' });
+            expect(source.listByLabel).not.toHaveBeenCalled();
+            expect(source.removeContainer).not.toHaveBeenCalled();
+            expect(source.removeVolume).not.toHaveBeenCalled();
+            expect(target.createAndRunContainer).not.toHaveBeenCalled();
+            expect(await readConnectionString(DEFAULT_ALIAS)).toBe(stored);
+            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase: 'ready', engineCli: 'docker' });
+        });
+
+        it.each(['before cleanup', 'during cleanup', 'after source cleanup', 'after target reservation'] as const)(
+            'recovers truthfully when reloaded %s',
+            async (moment) => {
+                const { service, runtime, source, target, sourceData, targetData, preferredEngine } =
+                    await recordedReset();
+                const reload = async (): Promise<void> => {
+                    const reloaded = new QuickStartServiceImpl(runtime);
+                    await reloaded.ensureHydrated();
+                    if (moment === 'after source cleanup') {
+                        expect(await readConnectionString(DEFAULT_ALIAS)).toBeUndefined();
+                        expect(await reloaded.canReuseExistingData()).toBe(false);
+                        expect(await reloaded.getExistingInstance()).toBeUndefined();
+                    } else {
+                        expect(reloaded.getStatus().state).toBe(InstanceState.Provisioning);
+                        expect((await getInstance(DEFAULT_ALIAS))?.engineCli).toBe(
+                            moment === 'after target reservation' ? preferredEngine : 'docker',
+                        );
+                    }
+                };
+                if (moment === 'before cleanup') vi.mocked(target.pullImage).mockImplementation(reload);
+                if (moment === 'during cleanup') {
+                    const remove = vi.mocked(source.removeContainer).getMockImplementation()!;
+                    vi.mocked(source.removeContainer).mockImplementation(async (id) => {
+                        await remove(id);
+                        await reload();
+                    });
+                }
+                if (moment === 'after source cleanup') {
+                    vi.mocked(source.removeVolume).mockImplementation(async () => {
+                        sourceData.volume = false;
+                        await reload();
+                    });
+                }
+                if (moment === 'after target reservation') {
+                    vi.mocked(target.volumeExists).mockImplementation(async () => {
+                        await reload();
+                        return targetData.volume;
+                    });
+                }
+                const events = await collect(
+                    service.provision(new AbortController().signal, { preferredEngine, startFresh: true }),
+                );
+                if (moment === 'after source cleanup') {
+                    expect(events.at(-1)).toMatchObject({ status: 'error', existingDataErased: true });
+                    expect(target.createAndRunContainer).not.toHaveBeenCalled();
+                    expect(await getInstance(DEFAULT_ALIAS)).toBeUndefined();
+                } else {
+                    expect(events.at(-1)?.stage).toBe('done');
+                    expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({
+                        engineCli: preferredEngine,
+                        phase: 'ready',
+                    });
+                }
+            },
+        );
+
+        it('does not restore the source when storing the target reservation fails after erasure', async () => {
+            const { service, source, target, sourceData, preferredEngine } = await recordedReset();
+            const push = vi.spyOn(StorageService.get(QUICK_START_STORAGE_NAME), 'push');
+            vi.mocked(source.removeVolume).mockImplementation(async () => {
+                sourceData.volume = false;
+                push.mockRejectedValueOnce(new Error('storage unavailable after erasure'));
+            });
+            try {
+                const events = await collect(
+                    service.provision(new AbortController().signal, { preferredEngine, startFresh: true }),
+                );
+                expect(events.at(-1)).toMatchObject({
+                    status: 'error',
+                    existingDataErased: true,
+                    canReuseExistingData: false,
+                });
+                expect(target.createAndRunContainer).not.toHaveBeenCalled();
+                expect(await readConnectionString(DEFAULT_ALIAS)).toBeUndefined();
+                expect(await getInstance(DEFAULT_ALIAS)).toBeUndefined();
+                expect(await service.getExistingInstance()).toBeUndefined();
+            } finally {
+                push.mockRestore();
+            }
+        });
+
+        it.each(['docker', 'podman'] as const)(
+            'reports a missing %s source CLI without offering target-engine repair',
+            async (owner) => {
+                const { service, runtime, source, target, preferredEngine } = await recordedReset(owner);
+                const resolve = vi.mocked(runtime.resolveCli).getMockImplementation()!;
+                vi.mocked(runtime.resolveCli).mockImplementation((request) => ({
+                    ...resolve(request),
+                    onPath: { docker: owner !== 'docker', podman: owner !== 'podman' },
+                }));
+
+                const events = await collect(
+                    service.provision(new AbortController().signal, { preferredEngine, startFresh: true }),
+                );
+
+                expect(events.at(-1)).toMatchObject({
+                    status: 'error',
+                    message: { key: 'dockerCliMissing', engineCli: owner },
+                });
+                expect(events.at(-1)?.dockerReadiness).toBeUndefined();
+                expect(source.removeContainer).not.toHaveBeenCalled();
+                expect(source.removeVolume).not.toHaveBeenCalled();
+                expect(target.createAndRunContainer).not.toHaveBeenCalled();
+                expect(await readConnectionString(DEFAULT_ALIAS)).toBe(stored);
+            },
+        );
+
+        it('invalidates hydrated source metadata and credentials when replacement creation fails', async () => {
+            const { service, target, preferredEngine } = await recordedReset();
+            await service.ensureHydrated();
+            expect(service.getStatus().metadata?.containerId).toBe('old-source');
+            expect(await service.getExistingInstance()).toEqual({ ownerEngine: 'docker' });
+            vi.mocked(CredentialCache.deleteCredentials).mockClear();
+            vi.mocked(target.createAndRunContainer).mockRejectedValue(new Error('create failed'));
+
+            const events = await collect(
+                service.provision(new AbortController().signal, { preferredEngine, startFresh: true }),
+            );
+
+            expect(events.at(-1)).toMatchObject({ status: 'error', existingDataErased: true });
+            expect(service.getStatus().metadata).toBeUndefined();
+            expect(await service.getExistingInstance()).toBeUndefined();
+            expect(await service.isSavedImagePinned()).toBe(false);
+            expect(await service.canReuseExistingData()).toBe(false);
+            expect(CredentialCache.deleteCredentials).toHaveBeenCalledWith(expect.stringContaining(DEFAULT_ALIAS));
+        });
+
+        it.each(['before erasure', 'after erasure'] as const)(
+            'does not create after cancellation %s',
+            async (moment) => {
+                const { service, source, target, sourceData, preferredEngine } = await recordedReset();
+                const controller = new AbortController();
+                if (moment === 'before erasure') {
+                    vi.mocked(source.volumeExists).mockImplementation(async () => {
+                        controller.abort();
+                        return true;
+                    });
+                } else {
+                    vi.mocked(source.removeVolume).mockImplementation(async () => {
+                        sourceData.volume = false;
+                        controller.abort();
+                    });
+                }
+
+                const events = await collect(
+                    service.provision(controller.signal, { preferredEngine, startFresh: true }),
+                );
+
+                expect(events.at(-1)).toMatchObject({ message: { key: 'setupCancelled' } });
+                expect(target.createAndRunContainer).not.toHaveBeenCalled();
+                if (moment === 'before erasure') {
+                    expect(sourceData.volume).toBe(true);
+                    expect(await readConnectionString(DEFAULT_ALIAS)).toBe(stored);
+                    expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase: 'ready', engineCli: 'docker' });
+                } else {
+                    expect(sourceData.volume).toBe(false);
+                    expect(events.at(-1)?.existingDataErased).toBe(true);
+                    expect(await readConnectionString(DEFAULT_ALIAS)).toBeUndefined();
+                    expect(await getInstance(DEFAULT_ALIAS)).toBeUndefined();
+                }
+            },
+        );
+
+        it('retains the erasure fact through Wait longer and never restores the source on Start over', async () => {
+            const { service, runtime, target, sourceData, targetData, preferredEngine } = await recordedReset();
+            const realNow = Date.now.bind(Date);
+            let offset = 0;
+            const now = vi.spyOn(Date, 'now').mockImplementation(() => realNow() + offset);
+            onProbe = () => {
+                offset += 200_000;
+                throw new Error('connect ECONNREFUSED');
+            };
+            try {
+                const events = await collect(
+                    service.provision(new AbortController().signal, { preferredEngine, startFresh: true }),
+                );
+                expect(events.at(-1)).toMatchObject({ timedOut: true, existingDataErased: true });
+                const resumed = await collect(service.resumeReadiness(new AbortController().signal));
+                expect(resumed.at(-1)).toMatchObject({ timedOut: true, existingDataErased: true });
+                expect(await service.discardTimedOutInstance()).toBe(true);
+                expect(sourceData.containers).toEqual([]);
+                expect(sourceData.volume).toBe(false);
+                expect(targetData.containers).toEqual([]);
+                expect(targetData.volume).toBe(false);
+                expect(target.removeContainer).toHaveBeenCalledWith('new-podman');
+                expect(await getInstance(DEFAULT_ALIAS)).toBeUndefined();
+                expect(await readConnectionString(DEFAULT_ALIAS)).toBeUndefined();
+                const reloaded = new QuickStartServiceImpl(runtime);
+                await reloaded.ensureHydrated();
+                expect(await reloaded.getExistingInstance()).toBeUndefined();
+                expect(await reloaded.canReuseExistingData()).toBe(false);
+            } finally {
+                now.mockRestore();
+            }
+        });
+
+        it.each([false, true])(
+            'finishes a reset adopted by another window without removing its replacement (after timeout=%s)',
+            async (afterTimeout) => {
+                const { service, runtime, target, targetData, preferredEngine } = await recordedReset();
+                const inspect = vi.mocked(target.inspectContainer).getMockImplementation()!;
+                vi.mocked(target.inspectContainer).mockImplementation(async (...args) => {
+                    const inspected = await inspect(...args);
+                    return inspected
+                        ? {
+                              ...inspected,
+                              ports: [{ containerPort: QUICK_START_PORT, hostPort: QUICK_START_PORT + 7 }],
+                          }
+                        : undefined;
+                });
+                const realNow = Date.now.bind(Date);
+                let offset = 0;
+                const now = vi.spyOn(Date, 'now').mockImplementation(() => realNow() + offset);
+                const adopt = async (): Promise<void> => {
+                    const storedBeforeAdoption = await readConnectionString(DEFAULT_ALIAS);
+                    expect(storedBeforeAdoption).toContain(`localhost:${QUICK_START_PORT}/`);
+                    const otherWindow = new QuickStartServiceImpl(runtime);
+                    await otherWindow.ensureHydrated();
+                    expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({
+                        phase: 'ready',
+                        engineCli: preferredEngine,
+                        operationId: undefined,
+                    });
+                    expect(await readConnectionString(DEFAULT_ALIAS)).toBe(storedBeforeAdoption);
+                };
+                const options = { preferredEngine, startFresh: true, loadSampleData: false };
+                try {
+                    if (afterTimeout) {
+                        onProbe = () => {
+                            offset += 200_000;
+                            throw new Error('connect ECONNREFUSED');
+                        };
+                        const first = await collect(service.provision(new AbortController().signal, options));
+                        expect(first.at(-1)).toMatchObject({ timedOut: true, existingDataErased: true });
+                        await adopt();
+                        onProbe = () => undefined;
+                    } else {
+                        onProbe = adopt;
+                    }
+
+                    const events = await collect(
+                        afterTimeout
+                            ? service.resumeReadiness(new AbortController().signal)
+                            : service.provision(new AbortController().signal, options),
+                    );
+
+                    expect(events.at(-1)).toMatchObject({ stage: 'done', status: 'done' });
+                    expect(service.getStatus().state).toBe(InstanceState.Running);
+                    expect(targetData.containers.map((container) => container.id)).toEqual(['new-podman']);
+                    expect(targetData.volume).toBe(true);
+                    expect(target.removeContainer).not.toHaveBeenCalledWith('new-podman');
+                    expect(target.removeVolume).toHaveBeenCalledOnce();
+                    expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({
+                        phase: 'ready',
+                        engineCli: preferredEngine,
+                        port: QUICK_START_PORT + 7,
+                    });
+                    expect(await readConnectionString(DEFAULT_ALIAS)).toContain(`localhost:${QUICK_START_PORT + 7}/`);
+                } finally {
+                    now.mockRestore();
+                }
+            },
+        );
+
+        it.each(['different secret', 'foreign operationId'] as const)(
+            'rejects reset finalization over an adopted ready record with %s without changing its storage',
+            async (conflict) => {
+                const { service, runtime, preferredEngine } = await recordedReset();
+                let foreignRecord: Awaited<ReturnType<typeof getInstance>>;
+                let foreignSecret: string | undefined;
+                onProbe = async () => {
+                    const otherWindow = new QuickStartServiceImpl(runtime);
+                    await otherWindow.ensureHydrated();
+                    if (conflict === 'foreign operationId') {
+                        await upsertInstance({
+                            ...(await getInstance(DEFAULT_ALIAS))!,
+                            operationId: 'other-window',
+                        });
+                    } else {
+                        await writeConnectionString(
+                            DEFAULT_ALIAS,
+                            'mongodb://foreign:foreign-password@localhost:10260/',
+                            { displayName: 'Foreign', port: QUICK_START_PORT },
+                        );
+                    }
+                    foreignRecord = await getInstance(DEFAULT_ALIAS);
+                    foreignSecret = await readConnectionString(DEFAULT_ALIAS);
+                };
+
+                const events = await collect(
+                    service.provision(new AbortController().signal, {
+                        preferredEngine,
+                        startFresh: true,
+                        loadSampleData: false,
+                    }),
+                );
+
+                expect(events.at(-1)).toMatchObject({ status: 'error', existingDataErased: true });
+                expect(await getInstance(DEFAULT_ALIAS)).toEqual(foreignRecord);
+                expect(await readConnectionString(DEFAULT_ALIAS)).toBe(foreignSecret);
+            },
+        );
+
+        it('does not delete an unrelated target name collision, even after source erasure', async () => {
+            const { service, targetData, preferredEngine } = await recordedReset();
+            const unrelated = { ...managedResetContainer('unrelated-container'), labels: {} };
+            targetData.containers.push(unrelated);
+
+            const events = await collect(
+                service.provision(new AbortController().signal, { preferredEngine, startFresh: true }),
+            );
+
+            expect(events.at(-1)).toMatchObject({ status: 'error', existingDataErased: true });
+            expect(targetData.containers).toEqual([unrelated]);
+            expect(await getInstance(DEFAULT_ALIAS)).toBeUndefined();
+            expect(await readConnectionString(DEFAULT_ALIAS)).toBeUndefined();
+        });
+
+        it.each(['pull failure', 'create failure'] as const)(
+            'retains legacy engine-switch preservation and rollback after %s',
+            async (failure) => {
+                const { service, source, target, preferredEngine } = await recordedReset();
+                await upsertInstance({ ...(await getInstance(DEFAULT_ALIAS))!, engineCli: undefined });
+                const originalRecord = await getInstance(DEFAULT_ALIAS);
+                if (failure === 'pull failure') {
+                    vi.mocked(target.pullImage).mockRejectedValue(new Error('pull failed'));
+                } else {
+                    vi.mocked(target.createAndRunContainer).mockRejectedValue(new Error('create failed'));
+                }
+
+                const events = await collect(
+                    service.provision(new AbortController().signal, { preferredEngine, startFresh: true }),
+                );
+
+                expect(events.at(-1)).toMatchObject({ status: 'error' });
+                expect(events.at(-1)?.existingDataErased).toBeUndefined();
+                expect(source.removeContainer).not.toHaveBeenCalled();
+                expect(source.removeVolume).not.toHaveBeenCalled();
+                expect(await getInstance(DEFAULT_ALIAS)).toEqual(originalRecord);
+                expect(await readConnectionString(DEFAULT_ALIAS)).toBe(stored);
+            },
+        );
+
+        it.each(['storage failure', 'other lease', 'changed owner'] as const)(
+            'creates no switched-engine resources when the Start fresh reservation loses to %s',
+            async (outcome) => {
+                await upsertInstance({
+                    alias: DEFAULT_ALIAS,
+                    displayName: 'Existing',
+                    port: QUICK_START_PORT,
+                    phase: 'ready',
+                    engineCli: 'docker',
+                });
+                await writeConnectionString(DEFAULT_ALIAS, stored, { displayName: 'Existing', port: QUICK_START_PORT });
+                let expectedRecord = await getInstance(DEFAULT_ALIAS);
+                const runtime = runtimeFor();
+                const service = new QuickStartServiceImpl(runtime);
+                const push = vi.spyOn(StorageService.get(QUICK_START_STORAGE_NAME), 'push');
+                try {
+                    const events: StageEvent[] = [];
+                    for await (const event of service.provision(new AbortController().signal, {
+                        preferredEngine: 'podman',
+                        startFresh: true,
+                    })) {
+                        events.push(event);
+                        if (event.stage === 'checking' && event.status === 'done') {
+                            if (outcome === 'storage failure') {
+                                push.mockRejectedValueOnce(new Error('storage unavailable'));
+                            } else {
+                                expectedRecord = {
+                                    ...expectedRecord!,
+                                    engineCli: 'podman',
+                                    phase: outcome === 'other lease' ? 'provisioning' : 'ready',
+                                    operationId: 'other-window',
+                                    leaseAt: Date.now(),
+                                };
+                                await upsertInstance(expectedRecord);
+                            }
+                        }
+                    }
+
+                    if (outcome === 'storage failure') {
+                        expect(events.at(-1)).toMatchObject({
+                            stage: 'error',
+                            status: 'error',
+                            message: { key: 'unexpectedFailure', detail: 'storage unavailable' },
+                        });
+                    } else {
+                        expect(events.at(-1)).toMatchObject({
+                            stage: 'error',
+                            status: 'error',
+                            message: { key: 'setupAlreadyInProgress' },
+                        });
+                    }
+                    expect(events.some((event) => event.stage === 'pulling')).toBe(false);
+                    expect(runtime.pullImage).not.toHaveBeenCalled();
+                    expect(runtime.createAndRunContainer).not.toHaveBeenCalled();
+                    expect(await getInstance(DEFAULT_ALIAS)).toEqual(expectedRecord);
+                    expect(await readConnectionString(DEFAULT_ALIAS)).toBe(stored);
+                } finally {
+                    push.mockRestore();
+                }
+            },
+        );
+
+        it('preserves the legacy engine-switch behavior, reserving Podman and leaving Docker untouched', async () => {
+            await upsertInstance({
+                alias: DEFAULT_ALIAS,
+                displayName: 'Existing',
+                port: QUICK_START_PORT,
+                phase: 'ready',
+            });
+            await writeConnectionString(DEFAULT_ALIAS, stored, { displayName: 'Existing', port: QUICK_START_PORT });
+            const docker = runtimeFor({ containers: [{ id: 'old-docker' }], volumeExists: true });
+            const podman = runtimeFor({ volumeExists: true });
+            vi.mocked(docker.forCli).mockImplementation((resolved) => (resolved.cli === 'podman' ? podman : docker));
+            vi.mocked(podman.pullImage).mockImplementationOnce(async () => {
+                expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({
+                    phase: 'provisioning',
+                    engineCli: 'podman',
+                    operationId: expect.any(String),
+                });
+                expect(await readConnectionString(DEFAULT_ALIAS)).toBe(stored);
+                expect(podman.removeVolume).not.toHaveBeenCalled();
+            });
+            const service = new QuickStartServiceImpl(docker);
+
+            const events = await collect(
+                service.provision(new AbortController().signal, { preferredEngine: 'podman', startFresh: true }),
+            );
+
+            expect(events.at(-1)).toMatchObject({ stage: 'done', status: 'done' });
+            expect(podman.pullImage).toHaveBeenCalledTimes(1);
+            expect(podman.removeVolume).toHaveBeenCalledExactlyOnceWith(`${DEFAULT_ALIAS}-data`);
+            expect(docker.removeContainer).not.toHaveBeenCalled();
+            expect(docker.removeVolume).not.toHaveBeenCalled();
+            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase: 'ready', engineCli: 'podman' });
+            expect(await readConnectionString(DEFAULT_ALIAS)).not.toBe(stored);
+        });
+
+        it.each(['pull failure', 'create failure', 'cancel during pull', 'cancel after create'] as const)(
+            'preserves the source only before erasure after a switched Start fresh %s',
+            async (outcome) => {
+                await upsertInstance({
+                    alias: DEFAULT_ALIAS,
+                    displayName: 'Existing Docker instance',
+                    port: QUICK_START_PORT,
+                    phase: 'ready',
+                    engineCli: 'docker',
+                    imageRef: `${QUICK_START_IMAGE_REPOSITORY}@sha256:${'a'.repeat(64)}`,
+                });
+                await writeConnectionString(DEFAULT_ALIAS, stored, { displayName: 'Existing', port: QUICK_START_PORT });
+                const originalRecord = await getInstance(DEFAULT_ALIAS);
+                const docker = runtimeFor({ containers: [{ id: 'old-docker' }], volumeExists: true });
+                const podman = runtimeFor();
+                vi.mocked(docker.forCli).mockImplementation((resolved) =>
+                    resolved.cli === 'podman' ? podman : docker,
+                );
+                const controller = new AbortController();
+                const service = new QuickStartServiceImpl(docker);
+                vi.mocked(podman.pullImage).mockImplementationOnce(async () => {
+                    expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({
+                        phase: 'ready',
+                        engineCli: 'docker',
+                    });
+                    if (outcome === 'cancel during pull') controller.abort();
+                    if (outcome === 'pull failure' || outcome === 'cancel during pull') {
+                        throw new Error('pull interrupted');
+                    }
+                });
+                vi.mocked(podman.createAndRunContainer).mockImplementationOnce(async () => {
+                    expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({
+                        phase: 'provisioning',
+                        engineCli: 'podman',
+                    });
+                    expect(await readConnectionString(DEFAULT_ALIAS)).toContain('replacement:replacement-password@');
+                    if (outcome === 'create failure') throw new Error('create failed');
+                    return 'new-podman';
+                });
+                const attempt = service.provision(controller.signal, {
+                    preferredEngine: 'podman',
+                    startFresh: true,
+                    username: 'replacement',
+                    password: 'replacement-password',
+                });
+                const events: StageEvent[] = [];
+                for await (const event of attempt) {
+                    events.push(event);
+                    if (event.stage === 'waiting' && event.status === 'active' && outcome === 'cancel after create') {
+                        controller.abort();
+                    }
+                }
+
+                expect(events.at(-1)?.status).toBe('error');
+                if (outcome === 'pull failure' || outcome === 'cancel during pull') {
+                    expect(await getInstance(DEFAULT_ALIAS)).toEqual(originalRecord);
+                    expect(await readConnectionString(DEFAULT_ALIAS)).toBe(stored);
+                    expect(docker.removeContainer).not.toHaveBeenCalled();
+                    expect(docker.removeVolume).not.toHaveBeenCalled();
+                    expect(events.at(-1)?.existingDataErased).toBeUndefined();
+                    expect(podman.removeContainer).not.toHaveBeenCalled();
+                    expect(podman.removeVolume).not.toHaveBeenCalled();
+                } else {
+                    expect(await getInstance(DEFAULT_ALIAS)).toBeUndefined();
+                    expect(await readConnectionString(DEFAULT_ALIAS)).toBeUndefined();
+                    expect(docker.removeContainer).toHaveBeenCalledWith('old-docker');
+                    expect(docker.removeVolume).toHaveBeenCalledExactlyOnceWith(`${DEFAULT_ALIAS}-data`);
+                    expect(events.at(-1)).toMatchObject({ existingDataErased: true, canReuseExistingData: false });
+                    expect(await service.getExistingInstance()).toBeUndefined();
+                }
+                if (outcome === 'cancel after create') {
+                    expect(podman.removeContainer).toHaveBeenCalledExactlyOnceWith('new-podman', undefined, undefined);
+                    expect(podman.removeVolume).toHaveBeenCalledExactlyOnceWith(`${DEFAULT_ALIAS}-data`);
+                }
+            },
+        );
+
+        it('keeps a legacy ready record and its secret without reserving an engine before pull', async () => {
+            await upsertInstance({
+                alias: DEFAULT_ALIAS,
+                displayName: 'Legacy',
+                port: QUICK_START_PORT,
+                phase: 'ready',
+                imageRef: `${QUICK_START_IMAGE_REPOSITORY}@sha256:${'a'.repeat(64)}`,
+            });
+            await writeConnectionString(DEFAULT_ALIAS, stored, { displayName: 'Legacy', port: QUICK_START_PORT });
+            const originalRecord = await getInstance(DEFAULT_ALIAS);
+            const runtime = runtimeFor({ volumeExists: true });
+            // Pulling a missing image is needed to observe the Keep lease boundary.
+            vi.mocked(runtime.inspectImage).mockResolvedValue('absent');
+            vi.mocked(runtime.pullImage).mockImplementationOnce(async () => {
+                expect(await getInstance(DEFAULT_ALIAS)).toEqual(originalRecord);
+                expect(await readConnectionString(DEFAULT_ALIAS)).toBe(stored);
+                throw new Error('pull failed');
+            });
+            const service = new QuickStartServiceImpl(runtime);
+
+            const events = await collect(
+                service.provision(new AbortController().signal, { preferredEngine: 'podman' }),
+            );
+
+            expect(events.at(-1)?.status).toBe('error');
+            expect(runtime.pullImage).toHaveBeenCalledTimes(1);
+            expect(runtime.resolveCli).toHaveBeenCalledWith({ kind: 'preferred', preferred: 'docker' });
+            expect(await getInstance(DEFAULT_ALIAS)).toEqual(originalRecord);
+            expect(await readConnectionString(DEFAULT_ALIAS)).toBe(stored);
+            expect(runtime.removeVolume).not.toHaveBeenCalled();
+        });
+
+        it.each(['docker', 'podman', undefined] as const)(
+            'uses the selected engine for Start fresh readiness and launch instead of the %s owner',
+            async (engineCli) => {
+                await upsertInstance({
+                    alias: DEFAULT_ALIAS,
+                    displayName: 'Existing',
+                    port: QUICK_START_PORT,
+                    phase: 'ready',
+                    engineCli,
+                });
+                const originalRecord = await getInstance(DEFAULT_ALIAS);
+                const runtime = runtimeFor();
+                const service = new QuickStartServiceImpl(runtime);
+                const preferred = engineCli === 'podman' ? 'docker' : 'podman';
+
+                await service.checkInstanceDockerReadiness({ forceRefresh: true }, preferred, DEFAULT_ALIAS, true);
+                expect(runtime.isDockerReady).toHaveBeenLastCalledWith({
+                    forceRefresh: true,
+                    engine: { kind: 'preferred', preferred },
+                });
+                await service.startDockerProvider(preferred, 'startPodmanMachine', DEFAULT_ALIAS, true);
+                expect(runtime.startAvailableDockerProvider).toHaveBeenLastCalledWith(
+                    { kind: 'preferred', preferred },
+                    'startPodmanMachine',
+                );
+                expect(await getInstance(DEFAULT_ALIAS)).toEqual(originalRecord);
+            },
+        );
+
         it.each(['docker', 'podman'] as const)(
             'uses the fresh %s preference consistently without persisting it',
             async (preferredEngine) => {
@@ -793,7 +1770,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         );
 
         it.each(['docker', 'podman'] as const)(
-            'keeps the stored %s owner for readiness, launch and provision despite a conflicting preference',
+            'keeps the stored %s owner for readiness, launch and Keep despite a conflicting preference',
             async (engineCli) => {
                 const preferredEngine = engineCli === 'docker' ? 'podman' : 'docker';
                 await upsertInstance({
@@ -816,7 +1793,11 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                     { kind: 'pinned', cli: engineCli },
                     undefined,
                 );
-                await collect(service.provision(new AbortController().signal, { preferredEngine, startFresh: true }));
+                await writeConnectionString(DEFAULT_ALIAS, stored, {
+                    displayName: 'DocumentDB Local',
+                    port: QUICK_START_PORT,
+                });
+                await collect(service.provision(new AbortController().signal, { preferredEngine }));
                 expect(runtime.resolveCli).toHaveBeenCalledWith({ kind: 'pinned', cli: engineCli });
                 expect(runtime.resolveCli).not.toHaveBeenCalledWith(expect.objectContaining({ kind: 'preferred' }));
                 expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ engineCli, phase: 'ready' });
@@ -833,7 +1814,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             );
         });
 
-        it('ignores a new preference for a legacy record across readiness, launch and provision', async () => {
+        it('keeps legacy readiness and launch on Docker but starts fresh in the preferred engine', async () => {
             await upsertInstance({
                 alias: DEFAULT_ALIAS,
                 displayName: 'DocumentDB Local',
@@ -858,8 +1839,8 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                     startFresh: true,
                 }),
             );
-            expect(runtime.resolveCli).toHaveBeenCalledWith({ kind: 'preferred', preferred: 'docker' });
-            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ engineCli: 'docker', phase: 'ready' });
+            expect(runtime.resolveCli).toHaveBeenCalledWith({ kind: 'preferred', preferred: 'podman' });
+            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ engineCli: 'podman', phase: 'ready' });
         });
 
         it('uses the execution-time fallback for provisioning operations and readiness', async () => {
@@ -1197,14 +2178,24 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                 });
                 const runtime = runtimeFor();
                 const podman = runtimeFor({ volumeExists: true });
+                let volumeExists = true;
+                vi.mocked(podman.volumeExists).mockImplementation(async () => volumeExists);
+                vi.mocked(podman.removeVolume).mockImplementation(async () => {
+                    volumeExists = false;
+                });
                 vi.mocked(runtime.forCli).mockImplementation(({ cli }) => (cli === 'podman' ? podman : runtime));
                 const service = new QuickStartServiceImpl(runtime);
 
-                await collect(service.provision(new AbortController().signal, { startFresh }));
+                await collect(
+                    service.provision(new AbortController().signal, { preferredEngine: 'podman', startFresh }),
+                );
 
                 expect(service.getStatus().state).toBe(InstanceState.Running);
                 expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ engineCli: 'podman', phase: 'ready' });
-                expect(runtime.resolveCli).not.toHaveBeenCalledWith(expect.objectContaining({ kind: 'preferred' }));
+                expect(runtime.resolveCli).toHaveBeenNthCalledWith(
+                    1,
+                    startFresh ? { kind: 'preferred', preferred: 'podman' } : { kind: 'pinned', cli: 'podman' },
+                );
                 expect(runtime.isDockerReady).toHaveBeenCalledWith({
                     engine: { kind: 'pinned', cli: 'podman' },
                 });
@@ -1231,7 +2222,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             await service.reconcile();
             await upsertInstance({ ...record, engineCli: 'podman' });
 
-            await collect(service.provision(new AbortController().signal, { startFresh: true }));
+            await collect(service.provision(new AbortController().signal));
 
             expect(service.getStatus().state).toBe(InstanceState.Running);
             expect(podman.createAndRunContainer).toHaveBeenCalledOnce();
@@ -1310,7 +2301,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                 });
                 const service = new QuickStartServiceImpl(runtime);
 
-                const events = await collect(service.provision(new AbortController().signal, { startFresh: true }));
+                const events = await collect(service.provision(new AbortController().signal));
 
                 expect(events.at(-1)).toMatchObject({
                     status: 'error',
@@ -2974,10 +3965,16 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         expect(await readConnectionString(DEFAULT_ALIAS)).toBe(winner);
     });
 
-    // Start fresh wipes the old volume before anything else can fail; restoring the old record and
-    // credentials afterwards would describe data that no longer exists.
+    // Same-engine Start fresh wipes the old volume; restoring the old record and credentials
+    // afterwards would describe data that no longer exists.
     it('leaves nothing of the replaced instance when Start fresh fails after the wipe', async () => {
-        await upsertInstance({ alias: DEFAULT_ALIAS, displayName: 'DocumentDB Local', port: 10260, phase: 'ready' });
+        await upsertInstance({
+            alias: DEFAULT_ALIAS,
+            displayName: 'DocumentDB Local',
+            port: 10260,
+            phase: 'ready',
+            engineCli: 'docker',
+        });
         await writeConnectionString(
             DEFAULT_ALIAS,
             `mongodb://old:old@localhost:${QUICK_START_PORT}/?tls=true&tlsAllowInvalidCertificates=true`,

@@ -7,7 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { QuickStartService } from '../../services/localQuickStart/QuickStartService';
-import { InstanceState, type QuickStartStatus } from '../../services/localQuickStart/quickStartTypes';
+import {
+    InstanceState,
+    type OpenLocalQuickStartOptions,
+    type QuickStartStatus,
+} from '../../services/localQuickStart/quickStartTypes';
 import { openLocalQuickStartWebview } from '../../webviews/documentdb/localQuickStart/localQuickStartController';
 import { openLocalQuickStart } from './openLocalQuickStart';
 
@@ -117,5 +121,69 @@ describe('openLocalQuickStart', () => {
             },
             undefined,
         );
+    });
+
+    it('opens Configure with Start fresh selected without checking or changing the instance', async () => {
+        vi.spyOn(QuickStartService, 'getWizardStatus').mockResolvedValue({ state: InstanceState.Error });
+        const readiness = vi.spyOn(QuickStartService, 'checkInstanceDockerReadiness');
+        const provision = vi.spyOn(QuickStartService, 'provision');
+        const revealToForeground = vi.fn();
+        vi.mocked(openLocalQuickStartWebview).mockReturnValue({
+            panel: { viewColumn: undefined },
+            revealToForeground,
+        } as never);
+        const context = testContext();
+
+        await openLocalQuickStart(context, undefined, {
+            activationSource: 'treeStartFreshRow',
+            initialDataChoice: 'fresh',
+        });
+
+        expect(openLocalQuickStartWebview).toHaveBeenCalledWith(
+            expect.objectContaining({ initialPhase: 'configure', initialDataChoice: 'fresh' }),
+            undefined,
+        );
+        expect(context.telemetry.properties).toMatchObject({
+            activationSource: 'treeStartFreshRow',
+            initialStep: 'configure',
+        });
+        expect(revealToForeground).toHaveBeenCalledTimes(1);
+        expect(readiness).not.toHaveBeenCalled();
+        expect(provision).not.toHaveBeenCalled();
+    });
+
+    it.each(['reuse', true, 1, {}])(
+        'ignores runtime data choice %j instead of treating it as fresh',
+        async (initialDataChoice) => {
+            vi.spyOn(QuickStartService, 'getWizardStatus').mockResolvedValue({ state: InstanceState.Error });
+            vi.mocked(openLocalQuickStartWebview).mockReturnValue({
+                panel: { viewColumn: undefined },
+                revealToForeground: vi.fn(),
+            } as never);
+
+            await openLocalQuickStart(testContext(), undefined, {
+                initialDataChoice,
+            } as unknown as OpenLocalQuickStartOptions);
+
+            const config = vi.mocked(openLocalQuickStartWebview).mock.calls[0][0];
+            expect(config.initialPhase).toBe('introduction');
+            expect(config.initialDataChoice).toBeUndefined();
+        },
+    );
+
+    it('continues revealing the singleton in its existing column on a subsequent Start fresh request', async () => {
+        vi.spyOn(QuickStartService, 'getWizardStatus').mockResolvedValue({ state: InstanceState.Error });
+        const revealToForeground = vi.fn();
+        vi.mocked(openLocalQuickStartWebview).mockReturnValue({
+            panel: { viewColumn: 2 },
+            revealToForeground,
+        } as never);
+
+        await openLocalQuickStart(testContext());
+        await openLocalQuickStart(testContext(), undefined, { initialDataChoice: 'fresh' });
+
+        expect(openLocalQuickStartWebview).toHaveBeenCalledTimes(2);
+        expect(revealToForeground).toHaveBeenCalledTimes(2);
+        expect(revealToForeground.mock.calls).toEqual([[2], [2]]);
     });
 });

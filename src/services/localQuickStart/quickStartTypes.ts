@@ -205,6 +205,7 @@ export type QuickStartActivationSource =
     | 'dataRemovedNotification'
     | 'treeSetUpRow'
     | 'treeReviewSetupRow'
+    | 'treeStartFreshRow'
     | 'treeRecreateRow'
     | 'treeRetryNode'
     | 'treePreflightRecreateRow'
@@ -213,6 +214,7 @@ export type QuickStartActivationSource =
 
 export interface OpenLocalQuickStartOptions {
     readonly activationSource?: QuickStartActivationSource;
+    readonly initialDataChoice?: 'fresh';
 }
 
 /**
@@ -344,6 +346,8 @@ export interface StageEvent {
     readonly dockerReadiness?: DockerReadiness;
     /** Set on a setup's terminal event: whether data can be reused once the failed run rolled back. */
     readonly canReuseExistingData?: boolean;
+    /** The old source data was erased during this attempt, even if its replacement failed. */
+    readonly existingDataErased?: boolean;
     readonly facts?: StageFacts;
 }
 
@@ -644,7 +648,7 @@ export interface DockerStatusResult {
 export interface InstanceStatusUpdate {
     readonly status: QuickStartStatus;
     readonly canReuseExistingData: boolean;
-    readonly instanceEngine?: ContainerCli | 'notRecorded';
+    readonly existingInstance?: { readonly ownerEngine?: ContainerCli };
     readonly savedImagePinned?: boolean;
 }
 

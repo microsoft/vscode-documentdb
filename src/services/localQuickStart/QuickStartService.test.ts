@@ -319,9 +319,11 @@ describe('QuickStartService — stored-credential volume safety', () => {
                 busy: false,
                 canReuseExistingData: true,
                 suggestedPort: 10273,
-                instanceEngine: engineCli ?? 'notRecorded',
+                existingInstance: engineCli ? { ownerEngine: engineCli } : {},
                 status: { state: InstanceState.NotInstalled, missing: false, dataRemoved: false },
             });
+            expect(await service.getExistingInstance()).toEqual(engineCli ? { ownerEngine: engineCli } : {});
+            expect(await service.hasExistingInstance()).toBe(true);
             expect(runtime.resolveCli).not.toHaveBeenCalled();
             expect(runtime.forCli).not.toHaveBeenCalled();
             expect(runtime.isDockerReady).not.toHaveBeenCalled();
@@ -351,7 +353,7 @@ describe('QuickStartService — stored-credential volume safety', () => {
 
         expect(context.canReuseExistingData).toBe(false);
         expect(context.status.state).toBe(InstanceState.CredentialsMissing);
-        expect(context.instanceEngine).toBe('podman');
+        expect(context.existingInstance).toEqual({ ownerEngine: 'podman' });
         expect(service.getStatus()).toMatchObject({ state: InstanceState.NotInstalled, error: undefined });
         expect(service.getStatus().metadata).toBeUndefined();
         expect(runtime.resolveCli).not.toHaveBeenCalled();
@@ -379,6 +381,7 @@ describe('QuickStartService — stored-credential volume safety', () => {
         expect(context.status).toEqual(before);
         expect(context.canReuseExistingData).toBe(false);
         expect(context.status.metadata).toBeUndefined();
+        expect(await service.hasExistingInstance()).toBe(false);
         expect(runtime.resolveCli).not.toHaveBeenCalled();
         expect(runtime.forCli).not.toHaveBeenCalled();
         service.dispose();
@@ -405,7 +408,7 @@ describe('QuickStartService — stored-credential volume safety', () => {
 
         expect(service.getStatus()).toEqual(before);
         expect(context.status).toEqual(before);
-        expect(context.instanceEngine).toBe('podman');
+        expect(context.existingInstance).toEqual({ ownerEngine: 'podman' });
         expect(runtime.resolveCli).not.toHaveBeenCalled();
         expect(runtime.forCli).not.toHaveBeenCalled();
         service.dispose();
@@ -522,7 +525,7 @@ describe('QuickStartService — stored-credential volume safety', () => {
 
         const context = await service.getWizardContext();
 
-        expect(context.instanceEngine).toBeUndefined();
+        expect(context.existingInstance).toBeUndefined();
         expect(context.canReuseExistingData).toBe(false);
         expect(context.status.state).toBe(InstanceState.NotInstalled);
         expect(runtime.resolveCli).not.toHaveBeenCalled();
@@ -2466,7 +2469,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
     );
 
     it.each(['docker', 'podman'] as const)(
-        'records no preference for a run pinned to its %s owner, whatever Configure submitted',
+        'records no preference for Keep pinned to its %s owner, whatever Configure submitted',
         async (engineCli) => {
             ext.secretStorage = fakeSecretStorage({});
             ext.context = fakeContext(fakeMemento());
@@ -2483,7 +2486,6 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
 
             for await (const event of service.provision(new AbortController().signal, {
                 preferredEngine: engineCli === 'docker' ? 'podman' : 'docker',
-                startFresh: true,
             })) {
                 events.push(event);
             }

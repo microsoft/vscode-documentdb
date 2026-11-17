@@ -24,7 +24,8 @@ import { StorageService } from '../storageService';
 import { disposeQuickStartOutputChannel, type IContainerEngineOps, type IContainerRuntime } from './ContainerRuntime';
 import { DockerCommandError } from './dockerCommand';
 import { QuickStartServiceImpl } from './QuickStartService';
-import { type DockerReadiness, QUICK_START_PORT, type StageEvent } from './quickStartTypes';
+import { upsertInstance } from './quickStartStore';
+import { DEFAULT_ALIAS, type DockerReadiness, QUICK_START_PORT, type StageEvent } from './quickStartTypes';
 
 const mockTelemetryEvents: Array<{ readonly eventName: string; readonly telemetry: ITelemetryContext }> = [];
 
@@ -274,6 +275,7 @@ describe('QuickStartService — provision outcome telemetry', () => {
             imagePulled: 'true',
             portChanged: 'false',
             dockerFailureKind: 'none',
+            containerEngineChanged: 'false',
         });
         // Replaced by portChanged: the panel always sends a port, so it was always "true".
         expect(properties).not.toHaveProperty('customPort');
@@ -283,6 +285,49 @@ describe('QuickStartService — provision outcome telemetry', () => {
             localQuickStartInstance: true,
         });
     });
+
+    it.each([
+        ['docker', 'podman', 'true'],
+        ['podman', 'podman', 'false'],
+        [undefined, 'podman', 'legacy'],
+        ['docker', 'docker', 'false'],
+    ] as const)(
+        'classifies Start fresh from owner %s to resolved %s as containerEngineChanged=%s',
+        async (engineCli, cli, containerEngineChanged) => {
+            await upsertInstance({
+                alias: DEFAULT_ALIAS,
+                displayName: 'Existing',
+                phase: 'ready',
+                port: QUICK_START_PORT,
+                engineCli,
+            });
+            const runtime = runtimeFor({
+                resolveCli: vi.fn().mockReturnValue({
+                    cli,
+                    executable: cli,
+                    preferred: 'podman',
+                    fellBack: cli !== 'podman',
+                    onPath: { docker: true, podman: cli === 'podman' },
+                }),
+            });
+            const service = new QuickStartServiceImpl(runtime);
+
+            const events = await collect(
+                service.provision(new AbortController().signal, { preferredEngine: 'podman', startFresh: true }),
+            );
+
+            expect(events.at(-1)).toMatchObject({ stage: 'done', status: 'done' });
+            expect(provisionProperties()).toMatchObject({
+                containerEngineChanged,
+                preferredContainerEngine: 'podman',
+                containerCliFallback: cli === 'podman' ? 'false' : 'true',
+                startFresh: 'true',
+            });
+            expect(
+                mockTelemetryEvents.filter((event) => event.eventName === 'documentDB.quickstart.provision'),
+            ).toHaveLength(1);
+        },
+    );
 
     it('reports an image that was already present and a port the user changed', async () => {
         const service = new QuickStartServiceImpl(
@@ -319,6 +364,7 @@ describe('QuickStartService — provision outcome telemetry', () => {
             imagePulled: 'unknown',
         });
         expect(stageProperties('checking')).toMatchObject({ failureCode: 'dockerCliMissing' });
+        expect(provisionProperties()).not.toHaveProperty('containerEngineChanged');
     });
 
     it('reports where a cancelled run stopped', async () => {

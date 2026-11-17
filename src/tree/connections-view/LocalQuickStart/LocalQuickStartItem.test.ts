@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ThemeIcon, TreeItemCollapsibleState } from 'vscode';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import { InstanceState, type QuickStartStatus } from '../../../services/localQuickStart/quickStartTypes';
+import * as accumulatingTelemetry from '../../../utils/accumulatingTelemetry';
 import { LocalQuickStartItem } from './LocalQuickStartItem';
 
 // The root node's iconPath initializer calls getResourcesPath() (needs ext.context); stub it so the
@@ -102,6 +103,7 @@ describe('LocalQuickStartItem — action states', () => {
     afterEach(() => vi.restoreAllMocks());
 
     it('opens Quick Start to review setup without offering deletion in the tree', async () => {
+        const hasExistingInstance = vi.spyOn(QuickStartService, 'hasExistingInstance').mockResolvedValue(true);
         vi.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
         vi.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(false);
         vi.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
@@ -121,6 +123,7 @@ describe('LocalQuickStartItem — action states', () => {
         expect(treeItem.iconPath).toEqual(new ThemeIcon('tools'));
         expect(treeItem.command?.command).toBe('vscode-documentdb.command.localQuickStart.open');
         expect(treeItem.command?.arguments?.[1]).toEqual({ activationSource: 'treeReviewSetupRow' });
+        expect(hasExistingInstance).not.toHaveBeenCalled();
     });
 
     it('offers recreate and delete actions when the managed container is missing', async () => {
@@ -198,6 +201,15 @@ describe('LocalQuickStartItem — configured instance description', () => {
 describe('LocalQuickStartItem — error recovery nodes (I2-4)', () => {
     afterEach(() => vi.restoreAllMocks());
 
+    const metadata = {
+        containerId: 'c1',
+        alias: 'vscode-documentdb-local',
+        boundPort: 10260,
+        clusterId: 'quickstart-vscode-documentdb-local',
+        connectionString: 'mongodb://u:p@localhost:10260/',
+        username: 'u',
+    };
+
     async function children(
         status: Partial<QuickStartStatus>,
     ): Promise<Awaited<ReturnType<LocalQuickStartItem['getChildren']>>> {
@@ -220,16 +232,8 @@ describe('LocalQuickStartItem — error recovery nodes (I2-4)', () => {
     }
 
     it('offers the setup log, deletion and finally retry when a container exists', async () => {
-        const items = await children({
-            metadata: {
-                containerId: 'c1',
-                alias: 'vscode-documentdb-local',
-                boundPort: 10260,
-                clusterId: 'quickstart-vscode-documentdb-local',
-                connectionString: 'mongodb://u:p@localhost:10260/',
-                username: 'u',
-            },
-        } as Partial<QuickStartStatus>);
+        vi.spyOn(QuickStartService, 'hasExistingInstance').mockResolvedValue(false);
+        const items = await children({ metadata });
 
         expect(items.map((item) => item.id)).toEqual([
             'connectionsView/root/localQuickStart/viewLogs',
@@ -249,6 +253,7 @@ describe('LocalQuickStartItem — error recovery nodes (I2-4)', () => {
     });
 
     it('offers the setup log then retry when nothing was created, and never a message-only row (N3)', async () => {
+        vi.spyOn(QuickStartService, 'hasExistingInstance').mockResolvedValue(false);
         const items = await children({ metadata: undefined });
         const ids = items.map((item) => item.id);
 
@@ -260,4 +265,46 @@ describe('LocalQuickStartItem — error recovery nodes (I2-4)', () => {
         expect(treeItems.map((item) => item.label)).toEqual(['View setup log', 'Retry setup…']);
         expect(ids).not.toContain('connectionsView/root/localQuickStart/error');
     });
+
+    it.each([true, false])(
+        'offers Start fresh before retry when a record exists (container: %s)',
+        async (hasContainer) => {
+            const hasExistingInstance = vi.spyOn(QuickStartService, 'hasExistingInstance').mockResolvedValue(true);
+            const items = await children({ metadata: hasContainer ? metadata : undefined });
+            const treeItems = await Promise.all(items.map(async (item) => item.getTreeItem()));
+
+            expect(hasExistingInstance).toHaveBeenCalledExactlyOnceWith();
+            expect(treeItems.map((item) => item.label)).toEqual([
+                'View setup log',
+                ...(hasContainer ? ['Delete container…'] : []),
+                'Start fresh…',
+                'Retry setup…',
+            ]);
+            const fresh = treeItems[treeItems.length - 2];
+            expect(fresh.id).toBe('connectionsView/root/localQuickStart/startFresh');
+            expect(fresh.iconPath).toEqual(new ThemeIcon('discard'));
+            expect(fresh.command?.command).toBe('vscode-documentdb.command.localQuickStart.open');
+            expect(fresh.command?.arguments).toEqual([
+                undefined,
+                { activationSource: 'treeStartFreshRow', initialDataChoice: 'fresh' },
+            ]);
+        },
+    );
+
+    it.each([true, false])(
+        'preserves recovery actions and meters lookup failure (container: %s)',
+        async (hasContainer) => {
+            vi.spyOn(QuickStartService, 'hasExistingInstance').mockRejectedValue(new Error('storage unavailable'));
+            const meter = vi.spyOn(accumulatingTelemetry, 'meterSilentCatch').mockImplementation(() => undefined);
+            const items = await children({ metadata: hasContainer ? metadata : undefined });
+            const treeItems = await Promise.all(items.map(async (item) => item.getTreeItem()));
+
+            expect(treeItems.map((item) => item.label)).toEqual([
+                'View setup log',
+                ...(hasContainer ? ['Delete container…'] : []),
+                'Retry setup…',
+            ]);
+            expect(meter).toHaveBeenCalledExactlyOnceWith('LocalQuickStartItem_hasExistingInstance');
+        },
+    );
 });

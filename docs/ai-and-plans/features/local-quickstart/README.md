@@ -15,6 +15,20 @@ code:
 
 **Core status:** shipped 0.10.0 · **Verified:** 2026-08-14
 
+> **Iteration 17 implementation; Case 1 and Case 2 verified (2026-11-17):** For
+> records with `engineCli`, Start fresh removes the managed source container and data volume before
+> creating a replacement in the resolved target engine, with the deletion warning visible. Target
+> preparation happens first; failures or cancellation before source deletion preserve its data,
+> while cleanup failure stops replacement creation. Once the source volume is erased, a later
+> failure, cancellation or timeout cannot restore the old ready record, image pin or saved credentials.
+> Keep retains the existing volume, saved image and credentials. Records without `engineCli` retain
+> their legacy cleanup and recovery path; source selection is deferred.
+> [Iteration 17](./iterations/17-start-fresh-deletes-old-engine-data.md) records the
+> change. Case 1 passed: `npm run build` and four focused suites (476 tests). All Case 2 checks
+> also passed, including strict package-test typechecking, the full runtime suite (9,624 passed,
+> one skipped), and packaging. Required AI pre-review and manual engine/workbench checks remain pending.
+> Iteration 16 remains evidence of the earlier behavior.
+
 > Where the design of "run DocumentDB locally from inside VS Code" came from, and why it looks the
 > way it does.
 
@@ -24,8 +38,20 @@ flow offers Docker and Podman in Configure without checking availability, defaul
 Docker, and does not persist the preference. During execution, setup detects both CLIs, uses the
 preferred CLI when it is installed, and falls back to the other only when it is missing and the
 other CLI is installed. Each instance records its owning engine, which remains fixed for lifecycle
-actions and recreation, including Start fresh. Once its container and volume are both gone, setup
-offers the engine choice again (decision 0009, amended).
+actions and for a recreate that keeps the data. Start fresh is available for an existing instance
+record and unlocks the engine choice, preselecting the recorded owner or Docker when a legacy record
+has no recorded owner. Earlier versions used Docker when its CLI was installed and Podman otherwise,
+so a legacy record may not identify where its data lives. For a recorded owner, Start fresh uses
+that owner as the cleanup source and resolves the creation target separately. It prepares the target
+before deleting the source container and volume, and replacement creation waits for cleanup to
+succeed. A pre-deletion preparation failure or cancellation preserves the source; a cleanup failure
+stops setup. After source data is erased, a later failure does not restore the former ready record,
+image pin or saved credentials. A legacy record without `engineCli` retains its existing cleanup
+and recovery behavior; its source-selection policy is deferred, so a cross-engine attempt is not
+proof that all old data was removed. When credentials cannot be read, Start fresh is the only
+choice. Once the container and volume are both gone, setup offers the engine choice again without
+requiring Start fresh (decision 0009, amended; see decision 0014 and
+[iteration 16](./iterations/16-start-fresh-engine-choice.md)).
 
 The approved engine preference and Podman startup behavior are recorded in
 [iteration 12](./iterations/12-preferred-engine-and-podman-start.md); implementation progress is
@@ -106,12 +132,15 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
   preference; Docker is the fresh default, and the preference itself is not persisted. Execution
   checks both CLIs and falls back to the other only when the preferred CLI is missing and the other
   is installed, not when the preferred engine is stopped. An instance's recorded engine owns its
-  container and data volume, including
-  on recreate; legacy records are resolved only during execution and are not guessed in Configure.
-  When both the old container and volume are confirmed gone, setup can select a new engine. It
-  durably reserves that engine before creating resources so reload can recover an in-progress or
-  timed-out container. Failure, cancellation or timeout discard restores the previous record and
-  credentials only while the attempt still owns its lease; successful setup keeps the new owner.
+  container and data volume for lifecycle actions and data-preserving recreation; legacy records
+  are resolved only during execution and are not guessed in Configure. On recorded-owner Start
+  fresh, target readiness, chosen-port validation and image preparation precede source deletion.
+  Cleanup targets the recorded owner and must finish before replacement creation; failure or
+  cancellation during preparation preserves the source, while cleanup failure stops setup. After
+  source data is erased, failure, cancellation or timeout does not restore the old ready record,
+  image pin or saved credentials as a usable instance, and the outcome reports the confirmed
+  erasure. Keep remains on the existing volume, saved image and credentials. Records without
+  `engineCli` retain the legacy cleanup and recovery path while source selection is deferred.
   Podman runs neither read nor write provider memory and ignore Docker evidence, while Docker's
   existing provider-memory behavior is unchanged.
 - **Engine-specific recovery.** Only the selected engine can receive a start action. On macOS and
@@ -128,10 +157,12 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
   neutral container-engine wording where appropriate.
 - **Collision safety is non-negotiable.** A pre-existing container holding a planned name or port is
   never recreated over. Ours gets re-adopted; anything else is rejected with an inline error.
-- **Existing data is preserved.** A managed container with no stored credentials has them restored
+- **Keep preserves existing data.** A managed container with no stored credentials has them restored
   from its own environment ([0005](./decisions.md#0005---restore-missing-credentials-from-the-managed-container)).
-  A volume without recoverable credentials requires an explicit Start fresh. Its removal waits until the port check and image download succeed. Sample data is
-  loaded only into a new volume, so recreating an instance does not restore documents the user deleted.
+  A volume without recoverable credentials requires an explicit Start fresh. For a recorded-owner
+  fresh reset, target port validation and image preparation finish before source-volume deletion;
+  that deletion must succeed before replacement creation. Sample data is loaded only into a new
+  volume, so recreating an instance does not restore documents the user deleted.
 - **Recreation prepares the saved image, not an upgrade.** Setup and reconciliation record the
   running image's digest when available. Configure uses **Saved image** and **Recreate container**;
   only a recorded digest is described as the exact image rather than a newer image. Execution reuses
@@ -148,39 +179,42 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 
 ## Timeline
 
-| Date       | PR    | What changed                                                                                                                         | Docs                                                                                                                                                                            |
-| ---------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-06-15 | #653  | Initial design, benchmarked against the PostgreSQL extension                                                                         | [iterations/01-initial-design.md](./iterations/01-initial-design.md)                                                                                                            |
-| 2026-06-22 | —     | POC scope, plan, and 5-agent review                                                                                                  | [iterations/02-poc/](./iterations/02-poc/)                                                                                                                                      |
-| 2026-06-25 | —     | Instance model locked to one instance                                                                                                | [decisions.md#0001](./decisions.md#0001--single-managed-instance-ownership-bounded)                                                                                             |
-| 2026-06-26 | —     | v1 production-readiness gap analysis                                                                                                 | [v1-readiness-gaps.md](./v1-readiness-gaps.md)                                                                                                                                  |
-| 2026-07-06 | —     | Single → multi instance reversal                                                                                                     | [decisions.md#0002](./decisions.md#0002--multiple-managed-instances-in-v1-reconstructed)                                                                                        |
-| 2026-08-02 | —     | Provider-neutral Docker readiness                                                                                                    | [iterations/04-ui-redesign/](./iterations/04-ui-redesign/)                                                                                                                      |
-| 2026-08-04 | #798  | UI redesign shipped (Concept F)                                                                                                      | [iterations/04-ui-redesign/](./iterations/04-ui-redesign/)                                                                                                                      |
-| 2026-08-09 | #876  | State sync + infrastructure error translation                                                                                        | [iterations/05-error-translation.md](./iterations/05-error-translation.md)                                                                                                      |
-| 2026-09-23 | #958  | Setup never wipes a data volume before it can succeed (#946)                                                                         | [iterations/06-data-volume-protection/](./iterations/06-data-volume-protection/)                                                                                                |
-| 2026-09-24 | #954  | Setup failures show Docker's error, not an exit code                                                                                 | [iterations/07-setup-failures.md](./iterations/07-setup-failures.md)                                                                                                            |
-| 2026-09-24 | #953  | Reject credentials and ports setup can't honor (#949)                                                                                | [iterations/08-input-validation.md](./iterations/08-input-validation.md)                                                                                                        |
-| 2026-09-24 | #955  | Tree and wizard stop showing a stale instance (#950)                                                                                 | [iterations/09-state-recovery.md](./iterations/09-state-recovery.md)                                                                                                            |
-| 2026-09-29 | #979  | Restore missing credentials from the container                                                                                       | [decisions.md#0005](./decisions.md#0005---restore-missing-credentials-from-the-managed-container)                                                                               |
-| 2026-09-29 | #979  | Wizard journey telemetry and correlation ids                                                                                         | [decisions.md#0006](./decisions.md#0006---wizard-journey-telemetry-and-correlation-ids)                                                                                         |
-| 2026-10-15 | #1018 | Image usage telemetry follows VS Code's setting                                                                                      | [decisions.md#0007](./decisions.md#0007---image-usage-telemetry-follows-vs-codes-setting)                                                                                       |
-| 2026-11-09 | —     | Partial container-runtime transparency; W1/W5/W8 pending                                                                             | [iterations/10-container-runtime-transparency.md](./iterations/10-container-runtime-transparency.md); [user manual](../../../user-manual/local-quick-start.md)                  |
-| 2026-11-10 | —     | Details on settled Set up and Done stages; no step durations                                                                         | [iterations/11-setup-stage-details.md](./iterations/11-setup-stage-details.md)                                                                                                  |
-| 2026-11-10 | #1076 | Preferred engine, owning-engine lifecycle safety and platform-gated Podman startup; all P1–P6 phases and final verification complete | [iterations/12-preferred-engine-and-podman-start.md](./iterations/12-preferred-engine-and-podman-start.md), [review](./iterations/13-preferred-engine-implementation-review.md) |
-| 2026-11-12 | #1076 | Podman guidance follows the address in its error (WSL Windows machine, remote host, user socket)                                     | [iterations/14-podman-connection-detection.md](./iterations/14-podman-connection-detection.md)                                                                                  |
-| 2026-11-13 | #1083 | Recreate keeps the image its data runs on, pinned by digest                                                                          | [iterations/15-recreate-image-pin-review.md](./iterations/15-recreate-image-pin-review.md)                                                                                      |
+| Date       | PR    | What changed                                                                                                                                                       | Docs                                                                                                                                                                            |
+| ---------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-06-15 | #653  | Initial design, benchmarked against the PostgreSQL extension                                                                                                       | [iterations/01-initial-design.md](./iterations/01-initial-design.md)                                                                                                            |
+| 2026-06-22 | —     | POC scope, plan, and 5-agent review                                                                                                                                | [iterations/02-poc/](./iterations/02-poc/)                                                                                                                                      |
+| 2026-06-25 | —     | Instance model locked to one instance                                                                                                                              | [decisions.md#0001](./decisions.md#0001--single-managed-instance-ownership-bounded)                                                                                             |
+| 2026-06-26 | —     | v1 production-readiness gap analysis                                                                                                                               | [v1-readiness-gaps.md](./v1-readiness-gaps.md)                                                                                                                                  |
+| 2026-07-06 | —     | Single → multi instance reversal                                                                                                                                   | [decisions.md#0002](./decisions.md#0002--multiple-managed-instances-in-v1-reconstructed)                                                                                        |
+| 2026-08-02 | —     | Provider-neutral Docker readiness                                                                                                                                  | [iterations/04-ui-redesign/](./iterations/04-ui-redesign/)                                                                                                                      |
+| 2026-08-04 | #798  | UI redesign shipped (Concept F)                                                                                                                                    | [iterations/04-ui-redesign/](./iterations/04-ui-redesign/)                                                                                                                      |
+| 2026-08-09 | #876  | State sync + infrastructure error translation                                                                                                                      | [iterations/05-error-translation.md](./iterations/05-error-translation.md)                                                                                                      |
+| 2026-09-23 | #958  | Setup never wipes a data volume before it can succeed (#946)                                                                                                       | [iterations/06-data-volume-protection/](./iterations/06-data-volume-protection/)                                                                                                |
+| 2026-09-24 | #954  | Setup failures show Docker's error, not an exit code                                                                                                               | [iterations/07-setup-failures.md](./iterations/07-setup-failures.md)                                                                                                            |
+| 2026-09-24 | #953  | Reject credentials and ports setup can't honor (#949)                                                                                                              | [iterations/08-input-validation.md](./iterations/08-input-validation.md)                                                                                                        |
+| 2026-09-24 | #955  | Tree and wizard stop showing a stale instance (#950)                                                                                                               | [iterations/09-state-recovery.md](./iterations/09-state-recovery.md)                                                                                                            |
+| 2026-09-29 | #979  | Restore missing credentials from the container                                                                                                                     | [decisions.md#0005](./decisions.md#0005---restore-missing-credentials-from-the-managed-container)                                                                               |
+| 2026-09-29 | #979  | Wizard journey telemetry and correlation ids                                                                                                                       | [decisions.md#0006](./decisions.md#0006---wizard-journey-telemetry-and-correlation-ids)                                                                                         |
+| 2026-10-15 | #1018 | Image usage telemetry follows VS Code's setting                                                                                                                    | [decisions.md#0007](./decisions.md#0007---image-usage-telemetry-follows-vs-codes-setting)                                                                                       |
+| 2026-11-09 | —     | Partial container-runtime transparency; W1/W5/W8 pending                                                                                                           | [iterations/10-container-runtime-transparency.md](./iterations/10-container-runtime-transparency.md); [user manual](../../../user-manual/local-quick-start.md)                  |
+| 2026-11-10 | —     | Details on settled Set up and Done stages; no step durations                                                                                                       | [iterations/11-setup-stage-details.md](./iterations/11-setup-stage-details.md)                                                                                                  |
+| 2026-11-10 | #1076 | Preferred engine, owning-engine lifecycle safety and platform-gated Podman startup; all P1–P6 phases and final verification complete                               | [iterations/12-preferred-engine-and-podman-start.md](./iterations/12-preferred-engine-and-podman-start.md), [review](./iterations/13-preferred-engine-implementation-review.md) |
+| 2026-11-12 | #1076 | Podman guidance follows the address in its error (WSL Windows machine, remote host, user socket)                                                                   | [iterations/14-podman-connection-detection.md](./iterations/14-podman-connection-detection.md)                                                                                  |
+| 2026-11-13 | #1083 | Recreate keeps the image its data runs on, pinned by digest                                                                                                        | [iterations/15-recreate-image-pin-review.md](./iterations/15-recreate-image-pin-review.md)                                                                                      |
+| 2026-11-17 | #1096 | Start fresh unlocks the engine choice; implemented, manual engine and workbench checks pending (decision 0014)                                                     | [iterations/16-start-fresh-engine-choice.md](./iterations/16-start-fresh-engine-choice.md)                                                                                      |
+| 2026-11-17 | #1096 | Start fresh deletes recorded-owner data; legacy source policy deferred; Case 1 (`npm run build`, 476 focused tests) passed; manual engine/workbench checks pending | [iterations/17-start-fresh-deletes-old-engine-data.md](./iterations/17-start-fresh-deletes-old-engine-data.md)                                                                  |
 
 ## Decisions
 
-See [decisions.md](./decisions.md). Thirteen entries: the single-instance model (0001, superseded), its
+See [decisions.md](./decisions.md). Fourteen entries: the single-instance model (0001, superseded), its
 reversal to multi-instance (0002), the Concept F wizard information architecture (0003), the
 managed-node cluster-command context boundary plus its deferred replacement (0004), restoring
 missing credentials from the managed container (0005), the wizard journey telemetry and its
 correlation ids (0006), image usage telemetry following VS Code's setting (0007), Details on
 settled setup stages (0008), preferred-engine ownership and platform-gated Podman startup
 (0009–0011), Podman guidance from the address in its error (0012), and the setup outcome, guide and
-instance connection telemetry added in 1.1.0 (0013).
+instance connection telemetry added in 1.1.0 (0013), and Start fresh unlocking the engine choice
+(0014).
 
 ## Open gaps
 
