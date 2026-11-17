@@ -19,6 +19,12 @@ code:
 > decision 0014's original engine-switch consequence. This document requests no execution,
 > container deletion, commit, or PR readiness change.
 
+> **Execution authorized (2026-11-17):** the operator subsequently invoked `/lead advisor
+> opus 5.5` to implement this plan, emphasizing pragmatic fixes and simpler flow rather than
+> added complexity. The original plan was committed as `c4690a2c0` before application work.
+> PR #1096 remains a draft: Case 1 verification applies; full Case 2 checks, including
+> localization generation and formatting, are deferred until ready for review.
+
 ## 1. Operator direction
 
 The operator clarified:
@@ -65,6 +71,11 @@ Docker and Podman, or an explicit user choice of the old engine. Recommended saf
 block a cross-engine reset whose old cleanup target cannot be established, explaining why.
 Recorded-owner paths are fully specified and do not depend on that discovery decision.
 
+> **Deferred, escalated (2026-11-17), legacy source policy:** the operator was unavailable
+> when asked to approve blocking an ambiguous cross-engine reset. That remains the
+> recommendation, not an accepted decision. Do not introduce discovery, an engine selector,
+> or a new legacy policy. Keep the existing legacy path unchanged and report this limitation.
+
 ## 3. UX changes
 
 Use the same destructive meaning for explicit and forced Start fresh, whether credentials are
@@ -91,6 +102,11 @@ Record progress against each item below when implemented; do not rewrite this pl
 changes were already present.
 
 ### P1. Separate the source of cleanup from the target of creation
+
+> **Execution grouping:** P1 and P2 share the `provision()` lifecycle block and are scheduled
+> as one backend commit, with their P4 tests. Advisor recommendation: `gpt-6.1-sol`, because
+> ownership, cancellation and reload recovery span the lifecycle. Actual dispatch awaits
+> the final minimal-interface verdict.
 
 - [ ] In [QuickStartService.ts](../../../../../src/services/localQuickStart/QuickStartService.ts),
   capture the existing record and resolve the target once for the attempt.
@@ -138,6 +154,11 @@ Depends on P1.
 
 Can be developed after P1's source/target contract is settled; integration depends on P2's outcomes.
 
+> **Execution grouping:** a separate UI commit carries P3 and its P4 tests. Advisor
+> recommendation: `gpt-6.1-terra`, for the self-contained view changes. New failure-footer
+> prose proposed during consultation was not approved because the operator was unavailable;
+> prefer the copy already specified in section 3.
+
 - [ ] Apply section 3 in
   [LocalQuickStart.tsx](../../../../../src/webviews/documentdb/localQuickStart/LocalQuickStart.tsx):
   fresh radio, engine note, credentials messages, primary action and both footer branches.
@@ -178,6 +199,12 @@ Tests travel with P1-P3, rather than being deferred to a separate cleanup.
 ### P5. Documentation and localization
 
 Depends on P2 and P3.
+
+> **Execution grouping:** documentation is a separate commit. Advisor recommendation:
+> `gpt-6-luna`, for mechanical alignment with verified behavior. Preserve the operator's
+> pre-existing README and design edits. An additional decision entry and external PR edits
+> are not authorized by an unavailable operator; the accepted correction to decision 0014
+> can be recorded factually without inventing rationale.
 
 - [ ] Align the [user manual](../../../../user-manual/local-quick-start.md), feature README and design
   with actual deletion and failure behavior. Remove preserve-and-abandon instructions; explain that
