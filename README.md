@@ -26,8 +26,6 @@ Connect to your databases, explore your data, run and tune queries, and move col
 | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | Azure DocumentDB and Azure Cosmos DB for MongoDB (RU), with Microsoft Entra ID sign-in | The open-source [DocumentDB](https://documentdb.io) engine: on your laptop, on a VM or in Kubernetes | MongoDB Atlas, self-hosted MongoDB, and any other database that speaks the MongoDB API |
 
-🎉 **Version 1.0 is here**, released alongside DocumentDB 1.0. See [what's in 1.0](https://microsoft.github.io/vscode-documentdb/release-notes/1.0).
-
 <p align="center"><img src="resources/readme/vscode-documentdb-hero-screenshot.png" alt="DocumentDB extension for Visual Studio Code: the Collection View with a query, autocompletion and results in a table" width="800" style="max-width:100%;height:auto;"></p>
 
 ## Connect in Seconds, Wherever Your Data Lives
