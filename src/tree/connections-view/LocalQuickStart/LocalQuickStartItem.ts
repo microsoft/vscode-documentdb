@@ -32,6 +32,7 @@ import {
     type QuickStartActivationSource,
     type QuickStartStatus,
 } from '../../../services/localQuickStart/quickStartTypes';
+import { meterSilentCatch } from '../../../utils/accumulatingTelemetry';
 import { getResourcesPath } from '../../../utils/icons';
 import { nonNullValue } from '../../../utils/nonNull';
 import { createGenericElementWithContext } from '../../api/createGenericElementWithContext';
@@ -435,12 +436,13 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
     /**
      * Actionable recovery for a GENUINE failure (review §9.2 Q4 / N3). The tree renders recovery
      * ACTIONS, not error text: the setup log, the "Delete container…" action once a container
-     * exists, and finally a retry node that reopens the wizard (the operation that failed — I2-Q2).
+     * exists, Start fresh when an instance record exists, and finally a retry node that reopens
+     * the wizard (the operation that failed — I2-Q2).
      *
      * `Missing` and `CredentialsMissing` deliberately do NOT come here: they are service states
      * with their own actionable rows, not fetch failures (I2-Q5).
      */
-    private createErrorRecoveryChildren(includeDelete: boolean): TreeElement[] {
+    private async createErrorRecoveryChildren(includeDelete: boolean): Promise<TreeElement[]> {
         const children: TreeElement[] = [
             createQuickStartAction(
                 this.id,
@@ -459,6 +461,32 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                     label: l10n.t('Delete container…'),
                     iconPath: new vscode.ThemeIcon('trash'),
                     commandId: 'vscode-documentdb.command.localQuickStart.delete',
+                }),
+            );
+        }
+
+        let hasExistingInstance = false;
+        try {
+            hasExistingInstance = await QuickStartService.hasExistingInstance();
+        } catch {
+            meterSilentCatch('LocalQuickStartItem_hasExistingInstance');
+        }
+
+        if (hasExistingInstance) {
+            children.push(
+                createGenericElementWithContext({
+                    id: `${this.id}/startFresh`,
+                    contextValue: 'treeItem_quickStartAction',
+                    label: l10n.t('Start fresh…'),
+                    iconPath: new vscode.ThemeIcon('discard'),
+                    commandId: 'vscode-documentdb.command.localQuickStart.open',
+                    commandArgs: [
+                        undefined,
+                        {
+                            activationSource: 'treeStartFreshRow',
+                            initialDataChoice: 'fresh',
+                        } satisfies OpenLocalQuickStartOptions,
+                    ],
                 }),
             );
         }
@@ -568,7 +596,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 case InstanceState.Stopped:
                     return [row('state_stopped', instanceStateLabel(status.state), idle)];
                 case InstanceState.Error:
-                    return this.createErrorRecoveryChildren(true);
+                    return await this.createErrorRecoveryChildren(true);
                 default:
                     break;
             }
@@ -606,7 +634,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
         // A wizard failure that never got as far as creating anything (no metadata) is still
         // reported as recovery actions. There is no container yet, so Delete is not offered.
         if (status.state === InstanceState.Error) {
-            return this.createErrorRecoveryChildren(false);
+            return await this.createErrorRecoveryChildren(false);
         }
 
         // NotInstalled (no metadata) → empty-state row that opens the Quick Start wizard.
