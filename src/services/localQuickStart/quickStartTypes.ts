@@ -346,6 +346,8 @@ export interface StageEvent {
     readonly dockerReadiness?: DockerReadiness;
     /** Set on a setup's terminal event: whether data can be reused once the failed run rolled back. */
     readonly canReuseExistingData?: boolean;
+    /** The old source data was erased during this attempt, even if its replacement failed. */
+    readonly existingDataErased?: boolean;
     readonly facts?: StageFacts;
 }
 
