@@ -432,7 +432,12 @@ describe('localQuickStartRouter', () => {
                 const stream = (await caller.startQuickStart({ preferredEngine })) as AsyncGenerator<unknown>;
                 await stream.next();
 
-                expect(mockIsDockerReady).toHaveBeenLastCalledWith(expect.anything(), preferredEngine, undefined, false);
+                expect(mockIsDockerReady).toHaveBeenLastCalledWith(
+                    expect.anything(),
+                    preferredEngine,
+                    undefined,
+                    false,
+                );
                 expect(mockStartDockerProvider).toHaveBeenLastCalledWith(preferredEngine, undefined, undefined, false);
                 expect(mockProvision).toHaveBeenLastCalledWith(
                     expect.anything(),

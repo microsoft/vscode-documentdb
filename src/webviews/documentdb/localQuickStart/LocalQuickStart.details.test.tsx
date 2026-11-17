@@ -551,7 +551,12 @@ describe('Local Quick Start stage details', () => {
                     expectedAction: 'startDockerDesktopWindows',
                 });
                 expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenLastCalledWith(
-                    expect.objectContaining({ preferredEngine: 'podman', startFresh, forceRefresh: true, polled: true }),
+                    expect.objectContaining({
+                        preferredEngine: 'podman',
+                        startFresh,
+                        forceRefresh: true,
+                        polled: true,
+                    }),
                     expect.any(Object),
                 );
             } finally {
@@ -994,62 +999,69 @@ describe('Local Quick Start stage details', () => {
         ['podman', 'Podman, used by the existing instance'],
         ['docker', 'Docker, used by the existing instance'],
         [undefined, 'Docker or Podman, not recorded by an earlier version'],
-    ] as const)('locks Keep to the %s owner and unlocks Start fresh without readiness', async (ownerEngine, summary) => {
-        client.trpc.localQuickStart.getWizardContext.query.mockResolvedValue({
-            status: { state: InstanceState.Stopped, missing: true },
-            busy: false,
-            canReuseExistingData: true,
-            suggestedPort: 10273,
-            existingInstance: ownerEngine ? { ownerEngine } : {},
-        });
-        await act(async () =>
-            root.render(
-                <SSRProvider>
-                    <LocalQuickStart key={ownerEngine ?? 'legacy'} />
-                </SSRProvider>,
-            ),
-        );
-        expect(host.textContent).toContain(summary);
-        expect(host.querySelector('[aria-label="Change the container engine"]')).toBeNull();
-        await click(host.querySelector<HTMLInputElement>('input[value="fresh"]')!);
-        await click(button('Change the container engine'));
-        const selectedEngine = ownerEngine ?? 'docker';
-        expect(host.querySelector<HTMLInputElement>(`input[value="${selectedEngine}"]`)?.checked).toBe(true);
-        expect(host.textContent).toContain('Erase the existing data and start empty');
-        expect(host.textContent).not.toContain('Setup creates a new, empty instance');
-        if (ownerEngine === undefined) {
-            expect(host.textContent).toContain(
-                'Earlier versions did not record the engine. They used Docker if it was installed, otherwise Podman.',
+    ] as const)(
+        'locks Keep to the %s owner and unlocks Start fresh without readiness',
+        async (ownerEngine, summary) => {
+            client.trpc.localQuickStart.getWizardContext.query.mockResolvedValue({
+                status: { state: InstanceState.Stopped, missing: true },
+                busy: false,
+                canReuseExistingData: true,
+                suggestedPort: 10273,
+                existingInstance: ownerEngine ? { ownerEngine } : {},
+            });
+            await act(async () =>
+                root.render(
+                    <SSRProvider>
+                        <LocalQuickStart key={ownerEngine ?? 'legacy'} />
+                    </SSRProvider>,
+                ),
             );
-        }
-        const otherEngine = selectedEngine === 'docker' ? 'podman' : 'docker';
-        await click(host.querySelector<HTMLInputElement>(`input[value="${otherEngine}"]`)!);
-        const otherName = otherEngine === 'podman' ? 'Podman' : 'Docker';
-        const ownerName = selectedEngine === 'podman' ? 'Podman' : 'Docker';
-        if (ownerEngine !== undefined) {
-            expect(host.textContent).toContain(`Start empty in ${otherName} and leave the ${ownerName} data as it is`);
-            expect(host.querySelector('table tr')?.textContent).toContain(
-                `Setup creates a new, empty instance in ${otherName}. The existing container and data in ${ownerName} are not erased, and DocumentDB Local stops managing them.`,
-            );
-            expect(host.textContent).not.toContain('Everything stored in DocumentDB Local is erased.');
-        } else {
+            expect(host.textContent).toContain(summary);
+            expect(host.querySelector('[aria-label="Change the container engine"]')).toBeNull();
+            await click(host.querySelector<HTMLInputElement>('input[value="fresh"]')!);
+            await click(button('Change the container engine'));
+            const selectedEngine = ownerEngine ?? 'docker';
+            expect(host.querySelector<HTMLInputElement>(`input[value="${selectedEngine}"]`)?.checked).toBe(true);
             expect(host.textContent).toContain('Erase the existing data and start empty');
             expect(host.textContent).not.toContain('Setup creates a new, empty instance');
-        }
-        await click(button('Hide the container engine setting'));
-        if (ownerEngine !== undefined) {
-            expect(host.querySelector('table tr')?.textContent).toContain('Setup creates a new, empty instance');
-        }
-        await click(host.querySelector<HTMLInputElement>('input[value="reuse"]')!);
-        expect(host.textContent).toContain(summary);
-        expect(host.querySelector('[aria-label="Change the container engine"]')).toBeNull();
-        expect(host.textContent).not.toContain('Setup creates a new, empty instance');
-        if (ownerEngine !== undefined) {
-            expect(host.textContent).toContain(`Start empty in ${otherName} and leave the ${ownerName} data as it is`);
-        }
-        expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
-        expect(client.trpc.localQuickStart.startQuickStart.subscribe).not.toHaveBeenCalled();
-    });
+            if (ownerEngine === undefined) {
+                expect(host.textContent).toContain(
+                    'Earlier versions did not record the engine. They used Docker if it was installed, otherwise Podman.',
+                );
+            }
+            const otherEngine = selectedEngine === 'docker' ? 'podman' : 'docker';
+            await click(host.querySelector<HTMLInputElement>(`input[value="${otherEngine}"]`)!);
+            const otherName = otherEngine === 'podman' ? 'Podman' : 'Docker';
+            const ownerName = selectedEngine === 'podman' ? 'Podman' : 'Docker';
+            if (ownerEngine !== undefined) {
+                expect(host.textContent).toContain(
+                    `Start empty in ${otherName} and leave the ${ownerName} data as it is`,
+                );
+                expect(host.querySelector('table tr')?.textContent).toContain(
+                    `Setup creates a new, empty instance in ${otherName}. The existing container and data in ${ownerName} are not erased, and DocumentDB Local stops managing them.`,
+                );
+                expect(host.textContent).not.toContain('Everything stored in DocumentDB Local is erased.');
+            } else {
+                expect(host.textContent).toContain('Erase the existing data and start empty');
+                expect(host.textContent).not.toContain('Setup creates a new, empty instance');
+            }
+            await click(button('Hide the container engine setting'));
+            if (ownerEngine !== undefined) {
+                expect(host.querySelector('table tr')?.textContent).toContain('Setup creates a new, empty instance');
+            }
+            await click(host.querySelector<HTMLInputElement>('input[value="reuse"]')!);
+            expect(host.textContent).toContain(summary);
+            expect(host.querySelector('[aria-label="Change the container engine"]')).toBeNull();
+            expect(host.textContent).not.toContain('Setup creates a new, empty instance');
+            if (ownerEngine !== undefined) {
+                expect(host.textContent).toContain(
+                    `Start empty in ${otherName} and leave the ${ownerName} data as it is`,
+                );
+            }
+            expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
+            expect(client.trpc.localQuickStart.startQuickStart.subscribe).not.toHaveBeenCalled();
+        },
+    );
 
     it('offers forced Start fresh for an unreadable legacy record before credentials reconciliation', async () => {
         await act(async () =>

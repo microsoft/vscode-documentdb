@@ -362,32 +362,32 @@ the model rows sum to about **35m55s**, not wall-clock elapsed. The combined che
 **2m09s**; the final focused rerun/build is reported above, not added to a purported serial total.
 No CI was run. AIU are not dollars; rounded totals may differ slightly.
 
-| Model | Role | Requests | Model time | AIU | AIU share |
-| --- | --- | ---: | ---: | ---: | ---: |
-| claude-opus-5.5 | advisor | 103 | 13m20s | 469.8 | 63.6% |
-| gpt-6-luna | coding | 14 | 2m38s | 2.6 | 0.4% |
-| gpt-6-luna | checks | 6 | 26s | 0.4 | 0.1% |
-| gpt-6.1-sol | leader | 49 | 7m50s | 100.5 | 13.6% |
-| gpt-6.1-sol | coding | 57 | 10m13s | 152.0 | 20.6% |
-| gpt-6.1-terra | coding | 11 | 1m28s | 12.9 | 1.8% |
+| Model           | Role    | Requests | Model time |   AIU | AIU share |
+| --------------- | ------- | -------: | ---------: | ----: | --------: |
+| claude-opus-5.5 | advisor |      103 |     13m20s | 469.8 |     63.6% |
+| gpt-6-luna      | coding  |       14 |      2m38s |   2.6 |      0.4% |
+| gpt-6-luna      | checks  |        6 |        26s |   0.4 |      0.1% |
+| gpt-6.1-sol     | leader  |       49 |      7m50s | 100.5 |     13.6% |
+| gpt-6.1-sol     | coding  |       57 |     10m13s | 152.0 |     20.6% |
+| gpt-6.1-terra   | coding  |       11 |      1m28s |  12.9 |      1.8% |
 
-| Role | Requests | Model time | AIU | AIU share |
-| --- | ---: | ---: | ---: | ---: |
-| leader | 49 | 7m50s | 100.5 | 13.6% |
-| coding | 82 | 14m20s | 167.6 | 22.7% |
-| advisor | 103 | 13m20s | 469.8 | 63.6% |
-| checks | 6 | 26s | 0.4 | 0.1% |
+| Role    | Requests | Model time |   AIU | AIU share |
+| ------- | -------: | ---------: | ----: | --------: |
+| leader  |       49 |      7m50s | 100.5 |     13.6% |
+| coding  |       82 |     14m20s | 167.6 |     22.7% |
+| advisor |      103 |     13m20s | 469.8 |     63.6% |
+| checks  |        6 |        26s |   0.4 |      0.1% |
 
 **Totals:** leader **100.5 AIU**, subagents **637.7 AIU**, run **738.3 AIU**.
 
-| Model | Role | Input | Output | Cache read | Cache write | Reasoning |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| claude-opus-5.5 | advisor | 7,750,988 | 76,770 | 7,415,086 | 335,680 | 46,730 |
-| gpt-6-luna | coding | 863,008 | 16,681 | 783,411 | 79,555 | 11,928 |
-| gpt-6-luna | checks | 105,969 | 1,538 | 87,203 | 18,748 | 1,075 |
-| gpt-6.1-sol | leader | 4,544,483 | 25,795 | 4,422,407 | 121,929 | 6,133 |
-| gpt-6.1-sol | coding | 5,511,268 | 40,330 | 5,275,545 | 235,552 | 14,162 |
-| gpt-6.1-terra | coding | 565,549 | 4,868 | 501,526 | 63,990 | 806 |
+| Model           | Role    |     Input | Output | Cache read | Cache write | Reasoning |
+| --------------- | ------- | --------: | -----: | ---------: | ----------: | --------: |
+| claude-opus-5.5 | advisor | 7,750,988 | 76,770 |  7,415,086 |     335,680 |    46,730 |
+| gpt-6-luna      | coding  |   863,008 | 16,681 |    783,411 |      79,555 |    11,928 |
+| gpt-6-luna      | checks  |   105,969 |  1,538 |     87,203 |      18,748 |     1,075 |
+| gpt-6.1-sol     | leader  | 4,544,483 | 25,795 |  4,422,407 |     121,929 |     6,133 |
+| gpt-6.1-sol     | coding  | 5,511,268 | 40,330 |  5,275,545 |     235,552 |    14,162 |
+| gpt-6.1-terra   | coding  |   565,549 |  4,868 |    501,526 |      63,990 |       806 |
 
 Cache and reasoning fields may overlap input/output; they are not additive token totals.
 

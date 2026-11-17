@@ -832,7 +832,9 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                 await writeConnectionString(DEFAULT_ALIAS, stored, { displayName: 'Existing', port: QUICK_START_PORT });
                 const docker = runtimeFor({ containers: [{ id: 'old-docker' }], volumeExists: true });
                 const podman = runtimeFor({ volumeExists: true });
-                vi.mocked(docker.forCli).mockImplementation((resolved) => (resolved.cli === 'podman' ? podman : docker));
+                vi.mocked(docker.forCli).mockImplementation((resolved) =>
+                    resolved.cli === 'podman' ? podman : docker,
+                );
                 vi.mocked(podman.pullImage).mockImplementationOnce(async () => {
                     expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({
                         phase: 'provisioning',
@@ -873,7 +875,9 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                 const originalRecord = await getInstance(DEFAULT_ALIAS);
                 const docker = runtimeFor({ containers: [{ id: 'old-docker' }], volumeExists: true });
                 const podman = runtimeFor();
-                vi.mocked(docker.forCli).mockImplementation((resolved) => (resolved.cli === 'podman' ? podman : docker));
+                vi.mocked(docker.forCli).mockImplementation((resolved) =>
+                    resolved.cli === 'podman' ? podman : docker,
+                );
                 const controller = new AbortController();
                 const service = new QuickStartServiceImpl(docker);
                 vi.mocked(podman.pullImage).mockImplementationOnce(async () => {
@@ -941,7 +945,9 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             });
             const service = new QuickStartServiceImpl(runtime);
 
-            const events = await collect(service.provision(new AbortController().signal, { preferredEngine: 'podman' }));
+            const events = await collect(
+                service.provision(new AbortController().signal, { preferredEngine: 'podman' }),
+            );
 
             expect(events.at(-1)?.status).toBe('error');
             expect(runtime.pullImage).toHaveBeenCalledTimes(1);

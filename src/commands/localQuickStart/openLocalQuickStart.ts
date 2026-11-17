@@ -28,7 +28,9 @@ export async function openLocalQuickStart(
     const initialDataChoice = options?.initialDataChoice === 'fresh' ? 'fresh' : undefined;
     // Missing credentials and an explicit Start fresh choice both belong on Configure.
     const initialPhase =
-        initialDataChoice === 'fresh' || status.state === InstanceState.CredentialsMissing ? 'configure' : 'introduction';
+        initialDataChoice === 'fresh' || status.state === InstanceState.CredentialsMissing
+            ? 'configure'
+            : 'introduction';
     const quickStartSessionId = randomUUID();
     context.telemetry.properties.instanceState = status.state;
     context.telemetry.properties.initialStep = initialPhase;

@@ -1226,14 +1226,23 @@ export const LocalQuickStart = (): JSX.Element => {
                     );
                 });
         },
-        [applyDockerRecovery, applyReadiness, preferredEngine, startFresh, stopDockerWait, syncDockerStatus, trpcClient],
+        [
+            applyDockerRecovery,
+            applyReadiness,
+            preferredEngine,
+            startFresh,
+            stopDockerWait,
+            syncDockerStatus,
+            trpcClient,
+        ],
     );
 
     const handleStartDocker = useCallback((): void => {
         // The host re-checks before launching; naming the displayed action keeps it from starting another engine.
         const expectedAction = lastDockerProblemRef.current?.problem.startAction;
         beginDockerWait(
-            () => trpcClient.localQuickStart.startDockerProvider.mutate({ preferredEngine, startFresh, expectedAction }),
+            () =>
+                trpcClient.localQuickStart.startDockerProvider.mutate({ preferredEngine, startFresh, expectedAction }),
             expectedAction === 'startPodmanMachine',
         );
     }, [beginDockerWait, preferredEngine, startFresh, trpcClient]);
