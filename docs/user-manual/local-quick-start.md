@@ -47,11 +47,22 @@ Setting up DocumentDB Local requires:
   preselects the recorded owner. A legacy record has no recorded owner, so Configure preselects
   Docker; older versions used Docker when its CLI was installed and Podman otherwise, so the original
   engine may not be known.
-- With a recorded owner, starting fresh in that same engine erases its container and volume and
-  creates a new instance there. Choosing a different engine creates a new, empty instance there and
-  leaves the old container and volume untouched and no longer managed. Lifecycle actions continue
-  to use the recorded owner until setup in the new engine succeeds. If saved credentials cannot be
-  read, **Start fresh** is the only choice and the panel explains why.
+- **Keep the existing data** continues to use the recorded engine, saved image, saved credentials
+  and existing volume. With a recorded owner, **Start fresh** removes the managed container and data
+  volume from that recorded source engine before creating a new instance in the resolved target
+  engine. The target follows the preference and missing-CLI fallback described above; source cleanup
+  is independent of that choice and must succeed before replacement creation. Configure keeps the
+  deletion warning visible while Start fresh is selected. If cleanup fails, setup stops without
+  creating the replacement.
+- Target readiness, the chosen port and the target image are prepared before the old data is
+  removed. A failure or cancellation during that preparation preserves the source data. After the
+  source volume has been erased, a later failure, cancellation or timeout cannot restore the old
+  ready record, image pin or saved credentials; setup reports that the old data was erased.
+- For older instances whose engine was not recorded, the original engine cannot be established from
+  the record, so the existing cleanup and recovery behavior remains while source selection is
+  deferred. A cross-engine attempt for such an instance does not prove that all old data was
+  removed. If saved credentials cannot be read, **Start fresh** is the only choice and the panel
+  explains why.
 - Access from the selected CLI to an engine running Linux containers.
 - An x64 or arm64 extension host. DocumentDB Local images are published for those architectures.
 

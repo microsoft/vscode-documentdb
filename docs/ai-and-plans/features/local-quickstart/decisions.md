@@ -24,7 +24,7 @@ verified: 2026-08-14
 | 0011 | Rootful default machine and a slow machine list        | Accepted            | Amends 0010 after a native Windows test         | 2026-11-10 | #1076 |
 | 0012 | Podman guidance follows the address in its error       | Accepted            | Simplified; connection resolution rejected      | 2026-11-12 | #1076 |
 | 0013 | Setup outcome, guide and instance connection telemetry | Accepted            | `customPort` replaced by `portChanged`          | 2026-11-04 | —     |
-| 0014 | Start fresh is always offered and unlocks the engine   | Accepted            | Operator's alternative chosen over always-open  | 2026-11-17 | #1096 |
+| 0014 | Start fresh is always offered and unlocks the engine   | Accepted (modified) | Iteration 17 amends recorded-owner behavior; legacy source policy deferred | 2026-11-17 | #1096 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -744,6 +744,7 @@ including runs that stopped because Docker was missing.
 **Status:** Accepted · **Date:** 2026-11-17 · **PR:** #1096 · **Raised by:** the operator in
 pre-release testing
 **Evidence:** [iteration 16](./iterations/16-start-fresh-engine-choice.md) §1–2;
+[iteration 17](./iterations/17-start-fresh-deletes-old-engine-data.md);
 `QuickStartService.ts` (`engineRequestFor`, `getInstanceEngine`, `performReconciliation`,
 `provision` volume-wipe gate), `LocalQuickStart.tsx` (engine row, `dataChoiceBlock`)
 
@@ -766,10 +767,13 @@ instance?
 2. **Start fresh is offered whenever an instance record exists**, not only when stored credentials
    can be read or reconciliation reported `CredentialsMissing`. When the data cannot be kept, Start
    fresh is the only choice and the panel says why.
-3. **Start fresh in the recorded engine erases that engine's data**, as today. **Start fresh in the
-   other engine creates a new, empty instance there and leaves the old container and volume
-   untouched.** The panel says so, and DocumentDB Local stops managing the old ones. It cannot
-   erase them anyway when that engine is not running, which is the case that raised this.
+3. **Original 2026-11-17 engine-switch behavior, superseded for recorded-owner records by the
+   amendment below:** Start fresh in the recorded engine erases that engine's data. Start fresh in
+   the other engine creates a new, empty instance there and leaves the old container and volume
+   untouched. The panel says so, and DocumentDB Local stops managing the old ones. It cannot erase
+   them anyway when that engine is not running, which is the case that raised this. This
+   preserve-and-abandon behavior remains the existing path for legacy records without `engineCli`,
+   whose source-selection policy is deferred.
 4. **A record without `engineCli` is described truthfully, not as "Not recorded" and not as a flat
    "Docker".** Before Podman support, setup used Docker if its CLI was installed and Podman
    otherwise, so such an instance may live in Podman.
@@ -778,18 +782,21 @@ instance?
 6. **No em dashes in user-visible text** added or changed by this work.
 
 This replaces the rule in 0009 §3 that recreation "including Start fresh" uses the recorded owner,
-and 0009 §4 for setup. Lifecycle actions and reconciliation still use the recorded owner until a
-setup in the new engine succeeds; a failed or cancelled attempt restores the previous record and
-credentials (the reservation and rollback added by 0009's 2026-11-16 amendment).
+and 0009 §4 for setup. The original follow-on behavior—keeping lifecycle actions on the previous
+owner until setup in the new engine succeeds, then restoring the previous record and credentials
+after a failed or cancelled attempt—was part of the accepted preserve-and-abandon path. For
+recorded-owner resets it is superseded by the amendment below; the legacy no-`engineCli` path is
+unchanged.
 
-### Why
+### Original rationale
 
-The operator's expectations: an engine that was not recorded must be choosable, and even a recorded
-one may need switching. The operator proposed making **Start fresh** clearly available (in the
-webview and the tree) and approved it after comparing it with an always-editable engine row. The
-comparison favoured it because the user states the intent to abandon the data before the engine
+The operator's expectations at the time: an engine that was not recorded must be choosable, and even
+a recorded one may need switching. The operator proposed making **Start fresh** clearly available
+(in the webview and the tree) and approved it after comparing it with an always-editable engine row.
+The comparison favoured it because the user states the intent to abandon the data before the engine
 can change, the keep-data path cannot be pointed at the wrong engine by accident, and it reuses the
-existing keep/fresh choice rather than adding a separate "engine changed" path to the UI.
+existing keep/fresh choice rather than adding a separate "engine changed" path to the UI. Iteration
+17 amends the recorded-owner behavior; it does not add a new rationale for that earlier decision.
 
 ### Alternatives considered
 
@@ -798,14 +805,40 @@ existing keep/fresh choice rather than adding a separate "engine changed" path t
   at an engine that does not hold the data.
 - **Label a record without `engineCli` as "Docker".** Rejected: untrue for instances created by a
   Podman-only setup before Podman support. The panel must not state a wrong fact.
-- **Erase the old engine's data when switching.** Not chosen: impossible while that engine is down,
-  and silently reaching into an engine the user is moving away from is riskier than leaving it.
+- **Erase the old engine's data when switching.** Not chosen in the original decision: impossible
+  while that engine is down, and silently reaching into an engine the user is moving away from is
+  riskier than leaving it. Iteration 17 supersedes this outcome for records with `engineCli`; it
+  remains the legacy path while source selection is unresolved.
 - **Run Start fresh directly from the tree.** Rejected: Configure owns destructive choices (the
   same reason the `CredentialsMissing` row only opens the panel).
 
-### Consequences
+### Original consequences
 
-- Switching engines leaves an unmanaged container and volume in the old engine. If that container
-  still runs, it holds its port, and the Configure port check moves the suggestion to a free port.
+- For the original preserve-and-abandon path, switching engines leaves an unmanaged container and
+  volume in the old engine. If that container still runs, it holds its port, and the Configure port
+  check moves the suggestion to a free port. This remains the legacy path only while the old engine
+  cannot be identified; it is superseded for recorded owners by the amendment below.
 - Same-engine Start fresh still needs that engine running to erase its data, as before.
 - Tests asserting the engine lock under Start fresh (`locks the existing %s engine…`) are replaced.
+
+### Amendment, 2026-11-17 (iteration 17)
+
+The operator authorized implementation of iteration 17 through the `/lead` request on 2026-11-17.
+This amendment records the resulting behavior for records with `engineCli`; it does not decide a
+new policy for legacy records.
+
+1. For a recorded-owner Start fresh, cleanup uses the recorded source engine, independently of the
+   selected creation target. The creation target follows the selected preference and falls back
+   only when its preferred CLI is missing. Target readiness, chosen-port validation and image
+   preparation happen before source deletion. Source-container and volume cleanup must succeed
+   before replacement creation; a cleanup failure stops setup.
+2. A failure or cancellation during target preparation preserves the source. Once the source volume
+   is erased, later failure, cancellation or timeout does not restore the former ready record, image
+   pin or saved credentials as a usable instance. The outcome reports the confirmed erasure. **Keep
+   the existing data** still uses the existing volume, saved image and credentials.
+3. A record without `engineCli` remains on the pre-existing cleanup and recovery path. Its original
+   source engine cannot be established from the record, so the legacy source-selection policy is
+   deferred; a cross-engine attempt is not evidence that all old data was deleted.
+
+See [iteration 17](./iterations/17-start-fresh-deletes-old-engine-data.md) for the implementation
+scope and recorded verification.

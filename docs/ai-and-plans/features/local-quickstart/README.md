@@ -15,6 +15,19 @@ code:
 
 **Core status:** shipped 0.10.0 · **Verified:** 2026-08-14
 
+> **Iteration 17 implementation; Case 1 verified (2026-11-17):** For
+> records with `engineCli`, Start fresh removes the managed source container and data volume before
+> creating a replacement in the resolved target engine, with the deletion warning visible. Target
+> preparation happens first; failures or cancellation before source deletion preserve its data,
+> while cleanup failure stops replacement creation. Once the source volume is erased, a later
+> failure, cancellation or timeout cannot restore the old ready record, image pin or saved credentials.
+> Keep retains the existing volume, saved image and credentials. Records without `engineCli` retain
+> their legacy cleanup and recovery path; source selection is deferred.
+> [Iteration 17](./iterations/17-start-fresh-deletes-old-engine-data.md) records the
+> change. Case 1 passed: `npm run build` and four focused suites (476 tests). Manual
+> engine/workbench checks remain pending; Case 2 and real-engine verification have not been run.
+> Iteration 16 remains evidence of the earlier behavior.
+
 > Where the design of "run DocumentDB locally from inside VS Code" came from, and why it looks the
 > way it does.
 
@@ -27,11 +40,16 @@ other CLI is installed. Each instance records its owning engine, which remains f
 actions and for a recreate that keeps the data. Start fresh is available for an existing instance
 record and unlocks the engine choice, preselecting the recorded owner or Docker when a legacy record
 has no recorded owner. Earlier versions used Docker when its CLI was installed and Podman otherwise,
-so a legacy record may not identify where its data lives. Starting fresh in the recorded owner
-erases and recreates there; choosing another engine creates an empty instance there and leaves the
-old container and volume untouched and unmanaged. When credentials cannot be read, Start fresh is
-the only choice. Once the container and volume are both gone, setup offers the engine choice again
-without requiring Start fresh (decision 0009, amended; see decision 0014 and
+so a legacy record may not identify where its data lives. For a recorded owner, Start fresh uses
+that owner as the cleanup source and resolves the creation target separately. It prepares the target
+before deleting the source container and volume, and replacement creation waits for cleanup to
+succeed. A pre-deletion preparation failure or cancellation preserves the source; a cleanup failure
+stops setup. After source data is erased, a later failure does not restore the former ready record,
+image pin or saved credentials. A legacy record without `engineCli` retains its existing cleanup
+and recovery behavior; its source-selection policy is deferred, so a cross-engine attempt is not
+proof that all old data was removed. When credentials cannot be read, Start fresh is the only
+choice. Once the container and volume are both gone, setup offers the engine choice again without
+requiring Start fresh (decision 0009, amended; see decision 0014 and
 [iteration 16](./iterations/16-start-fresh-engine-choice.md)).
 
 The approved engine preference and Podman startup behavior are recorded in
@@ -113,12 +131,15 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
   preference; Docker is the fresh default, and the preference itself is not persisted. Execution
   checks both CLIs and falls back to the other only when the preferred CLI is missing and the other
   is installed, not when the preferred engine is stopped. An instance's recorded engine owns its
-  container and data volume, including
-  on recreate; legacy records are resolved only during execution and are not guessed in Configure.
-  When both the old container and volume are confirmed gone, setup can select a new engine. It
-  durably reserves that engine before creating resources so reload can recover an in-progress or
-  timed-out container. Failure, cancellation or timeout discard restores the previous record and
-  credentials only while the attempt still owns its lease; successful setup keeps the new owner.
+  container and data volume for lifecycle actions and data-preserving recreation; legacy records
+  are resolved only during execution and are not guessed in Configure. On recorded-owner Start
+  fresh, target readiness, chosen-port validation and image preparation precede source deletion.
+  Cleanup targets the recorded owner and must finish before replacement creation; failure or
+  cancellation during preparation preserves the source, while cleanup failure stops setup. After
+  source data is erased, failure, cancellation or timeout does not restore the old ready record,
+  image pin or saved credentials as a usable instance, and the outcome reports the confirmed
+  erasure. Keep remains on the existing volume, saved image and credentials. Records without
+  `engineCli` retain the legacy cleanup and recovery path while source selection is deferred.
   Podman runs neither read nor write provider memory and ignore Docker evidence, while Docker's
   existing provider-memory behavior is unchanged.
 - **Engine-specific recovery.** Only the selected engine can receive a start action. On macOS and
@@ -135,10 +156,12 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
   neutral container-engine wording where appropriate.
 - **Collision safety is non-negotiable.** A pre-existing container holding a planned name or port is
   never recreated over. Ours gets re-adopted; anything else is rejected with an inline error.
-- **Existing data is preserved.** A managed container with no stored credentials has them restored
+- **Keep preserves existing data.** A managed container with no stored credentials has them restored
   from its own environment ([0005](./decisions.md#0005---restore-missing-credentials-from-the-managed-container)).
-  A volume without recoverable credentials requires an explicit Start fresh. Its removal waits until the port check and image download succeed. Sample data is
-  loaded only into a new volume, so recreating an instance does not restore documents the user deleted.
+  A volume without recoverable credentials requires an explicit Start fresh. For a recorded-owner
+  fresh reset, target port validation and image preparation finish before source-volume deletion;
+  that deletion must succeed before replacement creation. Sample data is loaded only into a new
+  volume, so recreating an instance does not restore documents the user deleted.
 - **Recreation prepares the saved image, not an upgrade.** Setup and reconciliation record the
   running image's digest when available. Configure uses **Saved image** and **Recreate container**;
   only a recorded digest is described as the exact image rather than a newer image. Execution reuses
@@ -178,6 +201,7 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 | 2026-11-12 | #1076 | Podman guidance follows the address in its error (WSL Windows machine, remote host, user socket)                                     | [iterations/14-podman-connection-detection.md](./iterations/14-podman-connection-detection.md)                                                                                  |
 | 2026-11-13 | #1083 | Recreate keeps the image its data runs on, pinned by digest                                                                          | [iterations/15-recreate-image-pin-review.md](./iterations/15-recreate-image-pin-review.md)                                                                                      |
 | 2026-11-17 | #1096 | Start fresh unlocks the engine choice; implemented, manual engine and workbench checks pending (decision 0014)                       | [iterations/16-start-fresh-engine-choice.md](./iterations/16-start-fresh-engine-choice.md)                                                                                      |
+| 2026-11-17 | #1096 | Start fresh deletes recorded-owner data; legacy source policy deferred; Case 1 (`npm run build`, 476 focused tests) passed; manual engine/workbench checks pending | [iterations/17-start-fresh-deletes-old-engine-data.md](./iterations/17-start-fresh-deletes-old-engine-data.md)                                                                  |
 
 ## Decisions
 
