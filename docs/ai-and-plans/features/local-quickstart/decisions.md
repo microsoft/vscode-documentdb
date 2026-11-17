@@ -24,7 +24,7 @@ verified: 2026-08-14
 | 0011 | Rootful default machine and a slow machine list        | Accepted            | Amends 0010 after a native Windows test         | 2026-11-10 | #1076 |
 | 0012 | Podman guidance follows the address in its error       | Accepted            | Simplified; connection resolution rejected      | 2026-11-12 | #1076 |
 | 0013 | Setup outcome, guide and instance connection telemetry | Accepted            | `customPort` replaced by `portChanged`          | 2026-11-04 | —     |
-| 0014 | Start fresh is always offered and unlocks the engine   | Accepted            | Operator's alternative chosen over always-open  | 2026-11-17 | —     |
+| 0014 | Start fresh is always offered and unlocks the engine   | Accepted            | Operator's alternative chosen over always-open  | 2026-11-17 | #1096 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -741,7 +741,7 @@ including runs that stopped because Docker was missing.
 
 ## 0014 - Start fresh is always offered and unlocks the engine
 
-**Status:** Accepted · **Date:** 2026-11-17 · **PR:** — · **Raised by:** the operator in
+**Status:** Accepted · **Date:** 2026-11-17 · **PR:** #1096 · **Raised by:** the operator in
 pre-release testing
 **Evidence:** [iteration 16](./iterations/16-start-fresh-engine-choice.md) §1–2;
 `QuickStartService.ts` (`engineRequestFor`, `getInstanceEngine`, `performReconciliation`,

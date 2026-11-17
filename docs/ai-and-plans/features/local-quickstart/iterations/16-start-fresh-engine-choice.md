@@ -3,6 +3,7 @@ feature: local-quickstart
 kind: plan
 status: active
 created: 2026-11-17
+prs: [1096]
 decisions: [0014]
 code:
   - src/services/localQuickStart/QuickStartService.ts
@@ -19,7 +20,9 @@ code:
 > **Implemented (2026-11-17), manual checks pending.** Implements
 > [decision 0014](../decisions.md). An existing instance can always be started fresh, and starting
 > fresh is how the user changes its container engine. Keeping the data keeps the engine locked,
-> as before. No PR exists for this branch; nothing was pushed.
+> as before. Pushed as [draft PR #1096](https://github.com/microsoft/vscode-documentdb/pull/1096)
+> against `main`, milestone **1.1.0**. Both requested verification cases passed; the formal
+> pre-review/author-decision workflow and real-engine checks remain outstanding.
 
 ### Implementation coordination (2026-11-17)
 
@@ -329,7 +332,7 @@ This shared environment was not used to mutate real containers, volumes or store
 The existing singleton limitation remains: an already-open panel is revealed without reapplying
 the tree action's initial data choice.
 
-### Verification and decisions
+### Implementation verification and decisions (before PR preparation)
 
 - **Case 1** applies: there is no PR and no ready-for-review request.
 - `npm run l10n` passed (55.353s), explicitly required by this plan; generated changes committed
@@ -395,3 +398,101 @@ Advisor work was the largest measured category (63.6%). A future run could bound
 planning read more tightly around an already-approved plan and send the reviewed call signatures
 with decision packets, while retaining the operator-requested Opus UX and lifecycle reviews.
 The models handled different work; these figures do not rank their quality.
+
+## PR preparation follow-up (2026-11-17)
+
+The operator requested both Case 1 and Case 2, resolution of failures, a push and a PR against
+`main` with milestone `1.1.0`, without changelog changes. The branch was based on the current
+`origin/main` (`11ae94512`). No failures required code fixes. The formatter changed seven
+already-touched files, committed separately as `088d85070`; neither the changelog nor localization
+bundle changed. The 1.1.0 VSIX was packaged successfully, with non-fatal build warnings.
+
+| Case | Command                                                        | Result                                       | Duration |
+| ---- | -------------------------------------------------------------- | -------------------------------------------- | -------: |
+| 1    | `npm run build`                                                | Passed                                       |      45s |
+| 1    | Focused Vitest over the four affected directories listed above | 36 files, 1,438 passed                       |      33s |
+| 2    | `npm run l10n`                                                 | Passed                                       |      55s |
+| 2    | `npm run prettier-fix`                                         | Passed                                       |      66s |
+| 2    | `npm run l10n:check`                                           | Passed, up to date                           |      54s |
+| 2    | `npm run lint`                                                 | Passed                                       |     109s |
+| 2    | `npm run build`                                                | Passed                                       |      36s |
+| 2    | `npm run typecheck:tests`                                      | Passed                                       |      15s |
+| 2    | `npx vitest run`                                               | 419 files, 9,580 passed, 1 skipped, 0 failed |     102s |
+| 2    | `npm run package`                                              | Passed                                       |      22s |
+
+`git diff --check` passed, and the touched feature frontmatter's `code:` paths/globs resolve.
+The leader spot-checked the formatter's whitespace-insensitive source/test diffs; behavior and
+meaningful assertions are unchanged. Only PR metadata and this verification evidence changed
+after the full suite, so they require documentation formatting, not another runtime/build pass.
+
+**Publication:** [PR #1096](https://github.com/microsoft/vscode-documentdb/pull/1096),
+`dev/tnaum/documentdb-local-recovery` into `main`, milestone **1.1.0** (milestone number 62).
+The branch was pushed without rewriting history. The milestone was assigned through the REST
+issues endpoint and its persisted title, base, head and draft state were verified.
+
+**Not ready for review:** the implementation-level advisor reviews are recorded above, but the
+complete `CONTRIBUTING.md` §6 cross-vendor pre-review file and author dispositions are not present.
+The leader did not invent author decisions or treat the advisor reviews as the complete workflow.
+The PR remains a draft. The real-engine/workbench checks in §5 are also still unverified; this
+shared environment was not used to erase or create real instances. No additional advisor session
+was needed: this follow-up made no behavioral or design changes.
+
+### Follow-up usage
+
+Window: **2026-11-17T11:05:29.052Z to 2026-11-17T11:17:59Z**, about **12m30s** wall-clock.
+The check agent elapsed **10m03s**; its check/tool spans totaled **8m58s**. Summed model-request
+time is **3m51s**. These overlap and are not additive. This snapshot excludes final metadata
+recording, the final push and the response. No CI result is included.
+
+| Model       | Role   | Requests | Model time |  AIU | AIU share |
+| ----------- | ------ | -------: | ---------: | ---: | --------: |
+| gpt-6-luna  | checks |       14 |      1m03s |  0.8 |      1.3% |
+| gpt-6.1-sol | leader |       15 |      2m48s | 64.9 |     98.7% |
+
+Role totals match these two rows: leader **64.9 AIU**, checks/subagents **0.8 AIU**, follow-up
+**65.7 AIU**. No coding or advising model was dispatched during this follow-up.
+
+| Model       | Role   |     Input | Output | Cache read | Cache write | Reasoning |
+| ----------- | ------ | --------: | -----: | ---------: | ----------: | --------: |
+| gpt-6-luna  | checks |   275,298 |  5,023 |    248,866 |      26,390 |     3,717 |
+| gpt-6.1-sol | leader | 2,113,812 |  7,200 |  1,961,605 |     152,162 |     2,339 |
+
+For comparison, the **cumulative** window from **09:18:59.515Z to 11:17:59Z** includes the original
+implementation, the intervening advisor-usage explanation and this handoff. It is not the cost
+of this check request alone:
+
+| Model           | Role    | Requests | Model time |   AIU | AIU share |
+| --------------- | ------- | -------: | ---------: | ----: | --------: |
+| claude-opus-5.5 | leader  |        1 |        21s | 106.3 |     11.5% |
+| claude-opus-5.5 | advisor |      103 |     13m20s | 469.8 |     50.9% |
+| gpt-6-luna      | coding  |       14 |      2m38s |   2.6 |      0.3% |
+| gpt-6-luna      | checks  |       20 |      1m29s |   1.2 |      0.1% |
+| gpt-6.1-sol     | leader  |       68 |     12m11s | 178.5 |     19.3% |
+| gpt-6.1-sol     | coding  |       57 |     10m13s | 152.0 |     16.5% |
+| gpt-6.1-terra   | coding  |       11 |      1m28s |  12.9 |      1.4% |
+
+| Role    | Requests | Model time |   AIU | AIU share |
+| ------- | -------: | ---------: | ----: | --------: |
+| leader  |       69 |     12m32s | 284.9 |     30.8% |
+| coding  |       82 |     14m20s | 167.6 |     18.1% |
+| advisor |      103 |     13m20s | 469.8 |     50.9% |
+| checks  |       20 |      1m29s |   1.2 |      0.1% |
+
+**Cumulative totals:** leader **284.9 AIU**, subagents **638.6 AIU**, run **923.4 AIU**.
+The cumulative window is about **1h59m**, including idle time; summed model spans total about
+**41m40s**. Figures are rounded and AIU are not dollars.
+
+| Model           | Role    |     Input | Output | Cache read | Cache write | Reasoning |
+| --------------- | ------- | --------: | -----: | ---------: | ----------: | --------: |
+| claude-opus-5.5 | leader  |   204,357 |  2,073 |          0 |     204,353 |       963 |
+| claude-opus-5.5 | advisor | 7,750,988 | 76,770 |  7,415,086 |     335,680 |    46,730 |
+| gpt-6-luna      | coding  |   863,008 | 16,681 |    783,411 |      79,555 |    11,928 |
+| gpt-6-luna      | checks  |   381,267 |  6,561 |    336,069 |      45,138 |     4,792 |
+| gpt-6.1-sol     | leader  | 7,167,611 | 39,283 |  6,886,001 |     281,406 |    10,530 |
+| gpt-6.1-sol     | coding  | 5,511,268 | 40,330 |  5,275,545 |     235,552 |    14,162 |
+| gpt-6.1-terra   | coding  |   565,549 |  4,868 |    501,526 |      63,990 |       806 |
+
+Cache and reasoning fields may overlap input/output; do not sum them into token totals.
+Leader overhead dominated this follow-up (98.7%), while checks used 0.8 AIU and needed no retry.
+A future check-only handoff can reduce overhead by using a shorter retained leader context;
+there is no evidence here to rank model quality across unlike roles.
