@@ -25,8 +25,10 @@ export async function openLocalQuickStart(
     // Opening the wizard must not resolve or contact an engine; checks belong to execution.
     // Stored facts alone can already say the credentials are missing, which the live status cannot yet.
     const status = await QuickStartService.getWizardStatus().catch(() => QuickStartService.getStatus());
-    // Credentials missing: the explanation and the only way forward are on Configure, so start there.
-    const initialPhase = status.state === InstanceState.CredentialsMissing ? 'configure' : 'introduction';
+    const initialDataChoice = options?.initialDataChoice === 'fresh' ? 'fresh' : undefined;
+    // Missing credentials and an explicit Start fresh choice both belong on Configure.
+    const initialPhase =
+        initialDataChoice === 'fresh' || status.state === InstanceState.CredentialsMissing ? 'configure' : 'introduction';
     const quickStartSessionId = randomUUID();
     context.telemetry.properties.instanceState = status.state;
     context.telemetry.properties.initialStep = initialPhase;
@@ -37,6 +39,7 @@ export async function openLocalQuickStart(
             initialInstanceState: status.state,
             initialInstanceMissing: status.missing === true,
             initialPhase,
+            ...(initialDataChoice ? { initialDataChoice } : {}),
             quickStartSessionId,
         },
         readDeepLinkTelemetry(context.telemetry.properties),

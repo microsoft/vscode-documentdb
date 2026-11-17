@@ -2602,7 +2602,7 @@ export const scenarios = {
             },
             steps: continueSteps,
             readiness: {
-                content: ['Configure recreation', 'Podman · kept from the existing instance', 'Recreate container'],
+                content: ['Configure recreation', 'Podman, used by the existing instance', 'Recreate container'],
                 selectors: ['table'],
                 noProgressbar: true,
             },
@@ -2611,7 +2611,7 @@ export const scenarios = {
                     kind: 'text',
                     name: 'The existing engine is read-only, with no detected availability',
                     selector: 'table',
-                    includes: ['Container engine', 'Podman · kept from the existing instance', 'Saved image'],
+                    includes: ['Container engine', 'Podman, used by the existing instance', 'Saved image'],
                     excludes: ['Found', 'Not found on PATH', 'Detected', 'Preferred container engine'],
                 },
                 {

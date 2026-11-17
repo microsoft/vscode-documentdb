@@ -630,6 +630,14 @@ export const LocalQuickStart = (): JSX.Element => {
     const [savedImagePinned, setSavedImagePinned] = useState(false);
     const [recreating, setRecreating] = useState(false);
     const [preferredEngine, setPreferredEngine] = useState<ContainerCli>('docker');
+    // Seed from the first record only, unless the user already picked an engine.
+    const enginePreferenceSeededRef = useRef(false);
+    useEffect(() => {
+        if (existingInstance !== undefined && !enginePreferenceSeededRef.current) {
+            enginePreferenceSeededRef.current = true;
+            setPreferredEngine(existingInstance.ownerEngine ?? 'docker');
+        }
+    }, [existingInstance]);
     const [editingEngine, setEditingEngine] = useState(false);
     /**
      * Live state of the managed instance, backing the Configure step's guard (review §9.2 Q2).
@@ -651,7 +659,7 @@ export const LocalQuickStart = (): JSX.Element => {
      * The user's explicit recreate-vs-fresh choice (review M4). Nothing is inferred from
      * {@link canReuseExistingData} any more, which is what resolves N1 (a stale inferred value).
      */
-    const [dataChoice, setDataChoice] = useState<'reuse' | 'fresh'>('reuse');
+    const [dataChoice, setDataChoice] = useState<'reuse' | 'fresh'>(configuration.initialDataChoice ?? 'reuse');
     const [stageStatus, setStageStatus] = useState<Record<ProvisionStage, StageStatus>>(emptyStageStatus);
     const [facts, setFacts] = useState<Record<ProvisionStage, StageFacts | undefined>>(emptyStageFacts);
     const [expandedStages, setExpandedStages] = useState<ReadonlySet<ProvisionStage>>(() => new Set());
@@ -721,10 +729,14 @@ export const LocalQuickStart = (): JSX.Element => {
     // instance's stored credentials and data volume only when told to. `canReuseExistingData` says
     // the choice is available (the same predicate the service uses); `dataChoice` is the answer.
     //
-    // A CredentialsMissing instance has no readable secret, so the choice collapses to the guarded
-    // "Start fresh" path explained by the Configure warning rather than a radio.
-    const forcedFresh = instanceState === InstanceState.CredentialsMissing;
+    // Unreadable credentials leave only Start fresh, even before reconciliation reports why.
+    const hasExistingInstance = existingInstance !== undefined;
+    const forcedFresh =
+        instanceState === InstanceState.CredentialsMissing || (hasExistingInstance && !canReuseExistingData);
     const startFresh = forcedFresh || (canReuseExistingData && dataChoice === 'fresh');
+    const engineLocked = hasExistingInstance && !startFresh;
+    const ownerEngine = existingInstance?.ownerEngine;
+    const engineChanged = startFresh && ownerEngine !== undefined && preferredEngine !== ownerEngine;
     const isRecreate = canReuseExistingData && !startFresh;
     const useCustomCredentials = customCredentials && !isRecreate;
     const passwordEncoding = getPasswordEncodingState({
@@ -906,7 +918,7 @@ export const LocalQuickStart = (): JSX.Element => {
             readinessAbortRef.current = abortController;
             try {
                 const result = await trpcClient.localQuickStart.getDockerStatus.query(
-                    { ...request, preferredEngine },
+                    { ...request, preferredEngine, startFresh },
                     { signal: abortController.signal },
                 );
                 if (abortController.signal.aborted) {
@@ -937,7 +949,7 @@ export const LocalQuickStart = (): JSX.Element => {
                 }
             }
         },
-        [applyReadiness, preferredEngine, trpcClient],
+        [applyReadiness, preferredEngine, startFresh, trpcClient],
     );
 
     const stopTimer = useCallback((): void => {
@@ -1171,7 +1183,7 @@ export const LocalQuickStart = (): JSX.Element => {
                         signal: abortController.signal,
                         query: (suppressCommandEcho) =>
                             trpcClient.localQuickStart.getDockerStatus.query(
-                                { forceRefresh: true, polled: true, suppressCommandEcho, preferredEngine },
+                                { forceRefresh: true, polled: true, suppressCommandEcho, preferredEngine, startFresh },
                                 { signal: abortController.signal },
                             ),
                         onResult: (result) => {
@@ -1214,17 +1226,17 @@ export const LocalQuickStart = (): JSX.Element => {
                     );
                 });
         },
-        [applyDockerRecovery, applyReadiness, preferredEngine, stopDockerWait, syncDockerStatus, trpcClient],
+        [applyDockerRecovery, applyReadiness, preferredEngine, startFresh, stopDockerWait, syncDockerStatus, trpcClient],
     );
 
     const handleStartDocker = useCallback((): void => {
         // The host re-checks before launching; naming the displayed action keeps it from starting another engine.
         const expectedAction = lastDockerProblemRef.current?.problem.startAction;
         beginDockerWait(
-            () => trpcClient.localQuickStart.startDockerProvider.mutate({ preferredEngine, expectedAction }),
+            () => trpcClient.localQuickStart.startDockerProvider.mutate({ preferredEngine, startFresh, expectedAction }),
             expectedAction === 'startPodmanMachine',
         );
-    }, [beginDockerWait, preferredEngine, trpcClient]);
+    }, [beginDockerWait, preferredEngine, startFresh, trpcClient]);
 
     // Re-run only the Docker check, after the user follows the guidance. It never starts or resumes
     // provisioning: a pass clears the blocker in place, a fresh failure updates the evidence.
@@ -1713,21 +1725,38 @@ export const LocalQuickStart = (): JSX.Element => {
         </Tooltip>
     );
 
+    const preferredEngineName = preferredEngine === 'docker' ? l10n.t('Docker') : l10n.t('Podman');
+    const ownerEngineName = ownerEngine === 'podman' ? l10n.t('Podman') : l10n.t('Docker');
+    const differentEngineNote = engineChanged
+        ? l10n.t(
+              'Setup creates a new, empty instance in {0}. The existing container and data in {1} are not erased, and DocumentDB Local stops managing them.',
+              preferredEngineName,
+              ownerEngineName,
+          )
+        : undefined;
+    let engineValue = preferredEngineName;
+    if (engineLocked) {
+        engineValue =
+            ownerEngine === undefined
+                ? l10n.t('Docker or Podman, not recorded by an earlier version')
+                : l10n.t('{0}, used by the existing instance', ownerEngineName);
+    }
+
     const settingItems: readonly SettingItem[] = [
         {
             key: 'engine',
             label: l10n.t('Container engine'),
-            value: existingInstance
-                ? existingInstance.ownerEngine === undefined
-                    ? l10n.t('Not recorded')
-                    : l10n.t(
-                          '{0} · kept from the existing instance',
-                          existingInstance.ownerEngine === 'docker' ? 'Docker' : 'Podman',
-                      )
-                : preferredEngine === 'docker'
-                  ? 'Docker'
-                  : 'Podman',
-            action: existingInstance
+            value: (
+                <div className={styles.planCopy}>
+                    {engineValue}
+                    {differentEngineNote && (
+                        <Text size={200} className={styles.muted}>
+                            {differentEngineNote}
+                        </Text>
+                    )}
+                </div>
+            ),
+            action: engineLocked
                 ? undefined
                 : rowAction(
                       editingEngine
@@ -1736,15 +1765,24 @@ export const LocalQuickStart = (): JSX.Element => {
                       editingEngine,
                       () => setEditingEngine((value) => !value),
                   ),
-            editorOpen: editingEngine && !existingInstance,
-            editor: existingInstance ? undefined : (
+            editorOpen: editingEngine && !engineLocked,
+            editor: engineLocked ? undefined : (
                 <Field
                     label={l10n.t('Preferred container engine')}
-                    hint={l10n.t('Setup uses your preferred engine if installed, or the other one otherwise.')}
+                    hint={
+                        hasExistingInstance && ownerEngine === undefined
+                            ? l10n.t(
+                                  'Earlier versions did not record the engine. They used Docker if it was installed, otherwise Podman.',
+                              )
+                            : l10n.t('Setup uses your preferred engine if installed, or the other one otherwise.')
+                    }
                 >
                     <RadioGroup
                         value={preferredEngine}
-                        onChange={(_event, data) => setPreferredEngine(data.value === 'podman' ? 'podman' : 'docker')}
+                        onChange={(_event, data) => {
+                            enginePreferenceSeededRef.current = true;
+                            setPreferredEngine(data.value === 'podman' ? 'podman' : 'docker');
+                        }}
                     >
                         <Radio value="docker" label="Docker" />
                         <Radio value="podman" label="Podman" />
@@ -1917,6 +1955,18 @@ export const LocalQuickStart = (): JSX.Element => {
      * or stopped instance is never walked into a destructive recreate. A credential-unavailable one
      * is explained here before the user can choose the explicit "Start fresh" action.
      */
+    const credentialsMissingMessage = engineChanged ? (
+        <>
+            {l10n.t(
+                'We found an existing DocumentDB Local instance, but its saved credentials are unavailable. Without them, we cannot reopen or reuse the existing data, so you need to start fresh. Nothing has been changed yet.',
+            )}{' '}
+            {differentEngineNote}
+        </>
+    ) : (
+        l10n.t(
+            'We found an existing DocumentDB Local instance, but its saved credentials are unavailable. Without them, we cannot reopen or reuse the existing data, so you need to start fresh. Nothing has been changed yet. Starting fresh erases the existing instance and its data, then creates a new one.',
+        )
+    );
     const existingInstanceNotice = existingInstanceGuard && (
         <MessageBlock
             intent={existingInstanceGuard === 'credentialsMissing' ? 'warning' : 'info'}
@@ -1951,9 +2001,7 @@ export const LocalQuickStart = (): JSX.Element => {
                 ? l10n.t('There is nothing to set up. Open the connection to start using it.')
                 : existingInstanceGuard === 'stopped'
                   ? l10n.t('It is stopped. Start it to use it again, with all your data.')
-                  : l10n.t(
-                        'We found an existing DocumentDB Local instance, but its saved credentials are unavailable. Without them, we cannot reopen or reuse the existing data, so you need to start fresh. Nothing has been changed yet. Starting fresh erases the existing instance and its data, then creates a new one.',
-                    )}
+                  : credentialsMissingMessage}
         </MessageBlock>
     );
 
@@ -1961,7 +2009,7 @@ export const LocalQuickStart = (): JSX.Element => {
      * The recreate-vs-fresh choice (review M4, I2-2). It sits above the settings table because it
      * decides what those settings mean: reusing keeps the instance's stored credentials and image,
      * so the credential/image rows are hidden. Per I2-Q4 there is NO extra confirmation dialog:
-     * the destructive option states the data loss in its own label and is never pre-selected.
+     * the destructive option states the data consequence in its own label.
      *
      * The explanation and the choice share one block so they cannot read as competing controls.
      * `MessageBar` is `role="group"`, which is the right container for a set of related controls.
@@ -1969,7 +2017,7 @@ export const LocalQuickStart = (): JSX.Element => {
      * Hidden whenever setup cannot run (a healthy or stopped instance): offering a choice next to a
      * disabled primary action reads as a third, broken control.
      */
-    const dataChoiceBlock = canReuseExistingData && !forcedFresh && !startBlockedByGuard && (
+    const dataChoiceBlock = hasExistingInstance && canReuseExistingData && !forcedFresh && !startBlockedByGuard && (
         <MessageBlock intent="info">
             {instanceMissing && (
                 <div>
@@ -1992,9 +2040,28 @@ export const LocalQuickStart = (): JSX.Element => {
                     onChange={(_event, data) => setDataChoice(data.value === 'fresh' ? 'fresh' : 'reuse')}
                 >
                     <Radio value="reuse" label={l10n.t('Keep the existing data')} />
-                    <Radio value="fresh" label={l10n.t('Erase the existing data and start empty')} />
+                    <Radio
+                        value="fresh"
+                        label={
+                            ownerEngine !== undefined && preferredEngine !== ownerEngine
+                                ? l10n.t(
+                                      'Start empty in {0} and leave the {1} data as it is',
+                                      preferredEngineName,
+                                      ownerEngineName,
+                                  )
+                                : l10n.t('Erase the existing data and start empty')
+                        }
+                    />
                 </RadioGroup>
             </Field>
+        </MessageBlock>
+    );
+
+    const unreadableDataNotice = forcedFresh && existingInstanceGuard === undefined && (
+        <MessageBlock intent="warning">
+            {l10n.t(
+                'DocumentDB Local was set up on this machine before, and its saved credentials are unavailable, so its data cannot be kept. Setup starts fresh. Nothing has been changed yet.',
+            )}
         </MessageBlock>
     );
 
@@ -2011,6 +2078,7 @@ export const LocalQuickStart = (): JSX.Element => {
     const configure = (
         <>
             {existingInstanceNotice}
+            {unreadableDataNotice}
             {dataRemovedNotice}
             {dataChoiceBlock}
             <Table size="small" aria-label={l10n.t('Setup settings')}>
@@ -2428,7 +2496,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     );
             footerNote = (
                 <>
-                    {actionNote} {telemetryNote}
+                    {!engineChanged && actionNote} {telemetryNote}
                 </>
             );
             secondaryActions = (
@@ -2471,10 +2539,12 @@ export const LocalQuickStart = (): JSX.Element => {
                 // Data this profile can't open makes the next run a Start fresh (#946), so say so here
                 // rather than letting "Retry" erase it.
                 footerNote = forcedFresh
-                    ? l10n.t(
-                          'This deletes the container named {0} and its data volume, then creates a new one. Everything stored in DocumentDB Local is erased.',
-                          QUICK_START_CONTAINER_NAME,
-                      )
+                    ? engineChanged
+                        ? undefined
+                        : l10n.t(
+                              'This deletes the container named {0} and its data volume, then creates a new one. Everything stored in DocumentDB Local is erased.',
+                              QUICK_START_CONTAINER_NAME,
+                          )
                     : canContinueSetup
                       ? l10n.t(
                             'Continuing runs every setup step from the beginning, starting with the container engine check. Nothing has been created on your machine yet.',
