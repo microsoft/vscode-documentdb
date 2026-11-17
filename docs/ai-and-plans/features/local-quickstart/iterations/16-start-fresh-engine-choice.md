@@ -20,6 +20,35 @@ code:
 > can always be started fresh, and starting fresh is how the user changes its container engine.
 > Keeping the data keeps the engine locked, as before.
 
+### Implementation coordination (2026-11-17)
+
+The operator requested implementation with `claude-opus-5.5` advising, particularly on UX.
+The seven accepted items below remain the scope; P6 tests travel with the behavior they cover.
+The advisor recommends these buildable groups, using the recommended models without substitution:
+
+1. **G1, P1 + P5 and their P6 tests, `gpt-6.1-sol`:** service selection, reservation,
+   telemetry and the cross-module `existingInstance` rename, including router and shape-only
+   webview/scenario consumers. Lifecycle and rollback require the default coding tier.
+2. **G2, P2 + P3 and their P6 tests, `gpt-6.1-sol`:** panel entry and the approved UX;
+   depends on G1. Derived state and messaging cross module boundaries.
+3. **G3, P4 and its P6 tests, `gpt-6.1-terra`:** the self-contained tree recovery row;
+   depends on G1, parallel with G2 in disjoint files.
+4. **G4, P7, `gpt-6-luna`:** mechanical user/feature documentation; after G2 and G3.
+
+The initial advisor identified implementation corrections needed to preserve decision 0014:
+reserve only for Start fresh or a removed-owner record, not legacy Keep; let the reservation's
+race check accept an unchanged ready owner; clear the ready-record flag after reservation so
+the old cleanup path cannot delete the lease and credentials; retain forced Start fresh for
+`CredentialsMissing` even without a record; omit contradictory erase-all footers when switching.
+These are corrections to the implementation recipe, not changes to the accepted behavior.
+Keep the existing recovery rows on storage errors using repository-standard error reporting,
+not a silent fallback. The different-engine explanation belongs in the engine value cell so
+closing its editor does not hide it.
+
+No PR exists at the start of this run. Verification is Case 1, plus the plan's explicit
+`npm run l10n`; real-engine/workbench checks remain manual. The create-or-reveal singleton
+limitation in P2.3 remains accepted and must be mentioned in any eventual PR.
+
 ## 1. The dead end this fixes
 
 Found in pre-release testing on a record written before Podman support (no `engineCli`), with
