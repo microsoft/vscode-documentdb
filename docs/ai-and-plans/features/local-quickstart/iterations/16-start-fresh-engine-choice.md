@@ -16,9 +16,10 @@ code:
 
 # 16 — Start fresh is always offered and unlocks the engine
 
-> **Approved, not implemented.** Implements [decision 0014](../decisions.md). An existing instance
-> can always be started fresh, and starting fresh is how the user changes its container engine.
-> Keeping the data keeps the engine locked, as before.
+> **Implemented (2026-11-17), manual checks pending.** Implements
+> [decision 0014](../decisions.md). An existing instance can always be started fresh, and starting
+> fresh is how the user changes its container engine. Keeping the data keeps the engine locked,
+> as before. No PR exists for this branch; nothing was pushed.
 
 ### Implementation coordination (2026-11-17)
 
@@ -165,6 +166,12 @@ Run `npm run l10n` after the strings change.
    re-applied. Accept this for now: the user lands on an open panel and can pick Start fresh there.
    Note it in the PR; do not add a push channel for it.
 
+> **Done (2026-11-17), commit `b4f68c70b`:** implemented by `gpt-6.1-sol`, as recommended,
+> with P3 because the same configuration and view tests cover the entry choice. Decisions:
+> advised (`claude-opus-5.5`, 93%) to accept only the literal `fresh` option, open Configure,
+> and retain the accepted reveal-only singleton behavior. Command tests cover forwarding,
+> invalid input and an already-open panel; no destructive operation occurs on open.
+
 ### P3. Webview
 
 `LocalQuickStart.tsx`
@@ -196,6 +203,18 @@ Run `npm run l10n` after the strings change.
    `forcedFresh` and the guard is not already `credentialsMissing`. Fresh radio label follows §3.
 6. `buildAdvancedOptions` already sends `preferredEngine` and `startFresh`. Pass `startFresh` to
    `getDockerStatus` and `startDockerProvider` too (router inputs gain `startFresh: z.boolean().optional()`).
+
+> **Done (2026-11-17), commit `b4f68c70b`:** implemented by `gpt-6.1-sol`, as recommended.
+> Keep locks the owner; fresh unlocks and seeds it once without overriding user edits.
+> Unreadable records get the approved explanation, including legacy Error records; the
+> no-record `CredentialsMissing` path remains forced fresh. All three readiness calls forward
+> that choice. Decisions: advised (`claude-opus-5.5`, 93%) to keep the changed-engine explanation
+> visible when its editor closes, suppress contradictory erase text, and return `undefined`
+> rather than `false` for an absent failed-step footer note. The regression assertion for the
+> empty info row was confirmed failing before that correction. Sixteen webview/command cases
+> were added; 465 focused tests and 47 scenario tests passed. After the correction, all 112
+> details tests and `npm run build` passed. Generated strings are in `be6107768`; no added or
+> changed user-visible string contains an em dash.
 
 ### P4. Tree
 
@@ -244,11 +263,15 @@ Replace, do not duplicate:
 - `LocalQuickStartItem.test.ts`: the error rows include **Start fresh…** only when an instance
   record exists, with the expected command arguments.
 
-> **Progress (2026-11-17):** `15359d174` adds 19 service/router/telemetry cases, including
+> **Done (2026-11-17), commits `15359d174`, `63b695e43`, `b4f68c70b`:** tests travel with the
+> behavior they cover, as recorded in the implementation grouping. `15359d174` adds 19
+> service/router/telemetry cases, including
 > switched-engine failure/cancellation rollback, reserve-before-pull, legacy Keep, and readiness
-> forwarding. `63b695e43` adds four tree cases. The approved obsolete fresh-engine expectations
-> were replaced; intent-bearing removal/order assertions remain. Webview/command coverage is
-> underway in P2/P3.
+> forwarding. `63b695e43` adds four tree cases; `b4f68c70b` adds 16 webview/command cases and
+> the empty-footer regression assertion. The approved obsolete fresh-engine expectations
+> were replaced; intent-bearing removal/order assertions remain. No `TDD:` contract was weakened.
+> Combined verification passed 1,438 tests in 36 files. The final footer-only correction was
+> then validated by the 112-test details suite and another successful build.
 
 ### P7. Docs
 
@@ -259,6 +282,14 @@ Replace, do not duplicate:
 - Feature `README.md` summary and `design.md` engine note: "including Start fresh" becomes the 0014
   rule.
 - Mark this plan implemented, with the PR, when done.
+
+> **Done (2026-11-17), commit `22b290532`:** implemented by `gpt-6-luna`, as recommended.
+> The user manual, current feature summary and design now distinguish Keep, same-engine fresh,
+> different-engine fresh, legacy ownership, and the tree's reveal-only panel entry. The provision
+> telemetry catalog includes `containerEngineChanged`. Decision: leader, 98%, documentation-only
+> synchronization of accepted decision 0014; no new UX or design decision. Targeted searches
+> found no obsolete current same-engine-all-fresh claims; scoped `git diff --check` passed.
+> Plan status, inline done notes and the outcome below are leader-maintained records.
 
 ## 5. Verification
 
@@ -285,3 +316,82 @@ Manual, on a machine with both engines:
 - **Port check vs. the old container** when the user forces the same port: the existing `portInUse`
   error explains it.
 - **Singleton panel** ignores `initialDataChoice` when already open (P2.3).
+
+## Outcome
+
+### Unverified workbench and real-engine checks
+
+Run the three manual scenarios in §5 before pushing: the legacy/Docker-down recovery into Podman,
+same-engine versus switched-engine recreation, and cancellation during switched-engine pull.
+Check that the old engine's resources survive switching and that cancellation restores its record
+and credentials. These are covered by mocked regression tests, not by an actual dual-engine run.
+This shared environment was not used to mutate real containers, volumes or stored credentials.
+The existing singleton limitation remains: an already-open panel is revealed without reapplying
+the tree action's initial data choice.
+
+### Verification and decisions
+
+- **Case 1** applies: there is no PR and no ready-for-review request.
+- `npm run l10n` passed (55.353s), explicitly required by this plan; generated changes committed
+  separately as `be6107768`.
+- `npm run build` passed (41.337s in the combined batch), and passed again after the final
+  footer correction.
+- `npx vitest run src/webviews/documentdb/localQuickStart src/services/localQuickStart src/tree/connections-view/LocalQuickStart src/commands/localQuickStart`:
+  **36 files, 1,438 tests passed** (31.810s).
+- `npx vitest run --config build/verification/browser/vitest.config.ts build/verification/browser/scenarios.test.ts`:
+  **47 passed** on the G2 implementation. The later footer-only correction does not change scenarios.
+- `npx vitest run src/webviews/documentdb/localQuickStart/LocalQuickStart.details.test.tsx`:
+  **112 passed** on the final revision; the new empty-note assertion failed before the fix.
+- Scoped and combined `git diff --check` passed. Added/changed UI strings were checked for em dashes.
+- Full Case 2 checks, including `prettier-fix`, lint, `l10n:check`, `typecheck:tests`, the full
+  runtime suite and packaging, were **not run**. Run them before a future review handoff.
+- Four advisor contexts (`claude-opus-5.5`), eight consultations including follow-ups: planning/UX,
+  G1 lifecycle, G3 tree and G2 UX. The leader followed their final verdicts. The G1 advisor's
+  initial storage-error expectation was corrected after the worker identified the mismatch;
+  storage errors were not misleadingly reclassified as reservation races.
+- No operator questions were parked or escalated, no tier substitutions or authorization retries
+  occurred, and no external systems were edited. The source plan was already committed at start.
+  Review-driven rework consisted of the reservation-race terminal event and the empty footer row.
+
+### Usage evidence
+
+Window: **2026-11-17T09:18:59.515Z to 2026-11-17T09:52:06Z**, about **33m06s** wall-clock.
+Snapshot from the host event log via `agent-stats.mjs --summary`, with explicit advisor/coding/checks
+roles. Final source-recording work and the final response are excluded. Request times overlap:
+the model rows sum to about **35m55s**, not wall-clock elapsed. The combined check batch took
+**2m09s**; the final focused rerun/build is reported above, not added to a purported serial total.
+No CI was run. AIU are not dollars; rounded totals may differ slightly.
+
+| Model | Role | Requests | Model time | AIU | AIU share |
+| --- | --- | ---: | ---: | ---: | ---: |
+| claude-opus-5.5 | advisor | 103 | 13m20s | 469.8 | 63.6% |
+| gpt-6-luna | coding | 14 | 2m38s | 2.6 | 0.4% |
+| gpt-6-luna | checks | 6 | 26s | 0.4 | 0.1% |
+| gpt-6.1-sol | leader | 49 | 7m50s | 100.5 | 13.6% |
+| gpt-6.1-sol | coding | 57 | 10m13s | 152.0 | 20.6% |
+| gpt-6.1-terra | coding | 11 | 1m28s | 12.9 | 1.8% |
+
+| Role | Requests | Model time | AIU | AIU share |
+| --- | ---: | ---: | ---: | ---: |
+| leader | 49 | 7m50s | 100.5 | 13.6% |
+| coding | 82 | 14m20s | 167.6 | 22.7% |
+| advisor | 103 | 13m20s | 469.8 | 63.6% |
+| checks | 6 | 26s | 0.4 | 0.1% |
+
+**Totals:** leader **100.5 AIU**, subagents **637.7 AIU**, run **738.3 AIU**.
+
+| Model | Role | Input | Output | Cache read | Cache write | Reasoning |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| claude-opus-5.5 | advisor | 7,750,988 | 76,770 | 7,415,086 | 335,680 | 46,730 |
+| gpt-6-luna | coding | 863,008 | 16,681 | 783,411 | 79,555 | 11,928 |
+| gpt-6-luna | checks | 105,969 | 1,538 | 87,203 | 18,748 | 1,075 |
+| gpt-6.1-sol | leader | 4,544,483 | 25,795 | 4,422,407 | 121,929 | 6,133 |
+| gpt-6.1-sol | coding | 5,511,268 | 40,330 | 5,275,545 | 235,552 | 14,162 |
+| gpt-6.1-terra | coding | 565,549 | 4,868 | 501,526 | 63,990 | 806 |
+
+Cache and reasoning fields may overlap input/output; they are not additive token totals.
+
+Advisor work was the largest measured category (63.6%). A future run could bound the initial
+planning read more tightly around an already-approved plan and send the reviewed call signatures
+with decision packets, while retaining the operator-requested Opus UX and lifecycle reviews.
+The models handled different work; these figures do not rank their quality.
