@@ -22,7 +22,7 @@ verified: 2026-08-14
 >
 > **Scope:** UX design and architecture. Not an implementation plan.
 >
-> **Start fresh correction implemented; Case 1 verified (2026-11-17):** For records
+> **Start fresh correction implemented; Case 1 and Case 2 verified (2026-11-17):** For records
 > with `engineCli`, Start fresh deletes the old managed instance and data before replacement,
 > including when the selected engine changes. The deletion warning remains visible. Target readiness,
 > chosen-port validation and image preparation precede source deletion; preparation failure or
@@ -31,8 +31,9 @@ verified: 2026-08-14
 > credentials. Records without `engineCli` retain the legacy cleanup and recovery path while source
 > selection is deferred. [Iteration 17](./iterations/17-start-fresh-deletes-old-engine-data.md)
 > records the implementation. Case 1 passed: `npm run build` and four focused suites (476 tests).
-> Manual engine/workbench checks remain pending; Case 2 and real-engine verification have not been
-> run. Iteration 16 is evidence of the earlier behavior.
+> All Case 2 checks also passed, including strict package-test typechecking, the full runtime suite
+> (9,624 passed, one skipped), and packaging. Required AI pre-review and manual engine/workbench
+> checks remain pending. Iteration 16 is evidence of the earlier behavior.
 >
 > **Docker readiness update:** The provider-neutral behavior in
 > [docker-readiness-implementation-plan.md](./iterations/04-ui-redesign/docker-readiness-implementation-plan.md)

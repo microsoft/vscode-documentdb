@@ -15,7 +15,7 @@ code:
 
 **Core status:** shipped 0.10.0 · **Verified:** 2026-08-14
 
-> **Iteration 17 implementation; Case 1 verified (2026-11-17):** For
+> **Iteration 17 implementation; Case 1 and Case 2 verified (2026-11-17):** For
 > records with `engineCli`, Start fresh removes the managed source container and data volume before
 > creating a replacement in the resolved target engine, with the deletion warning visible. Target
 > preparation happens first; failures or cancellation before source deletion preserve its data,
@@ -24,8 +24,9 @@ code:
 > Keep retains the existing volume, saved image and credentials. Records without `engineCli` retain
 > their legacy cleanup and recovery path; source selection is deferred.
 > [Iteration 17](./iterations/17-start-fresh-deletes-old-engine-data.md) records the
-> change. Case 1 passed: `npm run build` and four focused suites (476 tests). Manual
-> engine/workbench checks remain pending; Case 2 and real-engine verification have not been run.
+> change. Case 1 passed: `npm run build` and four focused suites (476 tests). All Case 2 checks
+> also passed, including strict package-test typechecking, the full runtime suite (9,624 passed,
+> one skipped), and packaging. Required AI pre-review and manual engine/workbench checks remain pending.
 > Iteration 16 remains evidence of the earlier behavior.
 
 > Where the design of "run DocumentDB locally from inside VS Code" came from, and why it looks the

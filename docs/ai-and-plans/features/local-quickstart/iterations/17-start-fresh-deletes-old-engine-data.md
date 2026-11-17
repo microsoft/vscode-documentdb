@@ -23,8 +23,9 @@ code:
 > **Execution authorized (2026-11-17):** the operator subsequently invoked `/lead advisor
 opus 5.5` to implement this plan, emphasizing pragmatic fixes and simpler flow rather than
 > added complexity. The original plan was committed as `c4690a2c0` before application work.
-> PR #1096 remains a draft: Case 1 verification applies; full Case 2 checks, including
-> localization generation and formatting, are deferred until ready for review.
+> At implementation start, PR #1096 was a draft and Case 1 verification applied.
+> The later publication follow-up below records the requested full Case 2 run and
+> the remaining ready-for-review blocker.
 
 ## 1. Operator direction
 
@@ -256,9 +257,10 @@ Depends on P2 and P3.
 
 > **Execution grouping:** documentation is a separate commit. Advisor recommendation:
 > `gpt-6-luna`, for mechanical alignment with verified behavior. Preserve the operator's
-> pre-existing README and design edits. An additional decision entry and external PR edits
-> are not authorized by an unavailable operator; the accepted correction to decision 0014
-> can be recorded factually without inventing rationale.
+> pre-existing README and design edits. At the original handoff, an additional decision entry
+> and external PR edits were not authorized by an unavailable operator. The accepted correction
+> to decision 0014 was recorded factually without inventing rationale; the later publication
+> request authorizes the PR description update.
 
 > **Done for local documentation (2026-11-17), commit `c2b72e4f1`:** actual model
 > `gpt-6-luna`, as recommended (no substitution), aligned the user manual, README, design
@@ -275,13 +277,22 @@ Depends on P2 and P3.
 > No PR edit, push or readiness change was performed. Localization generation and the
 > remaining full Case 2 commands are deliberately deferred until ready for review.
 
+> **Done on publication follow-up (2026-11-17):** the operator subsequently requested
+> pushing, an up-to-date description, both verification cases, and ready-for-review status.
+> The existing PR #1096 targets `main` and has milestone `1.1.0` (number 62).
+> Its description and manual checks now reflect recorded-owner deletion, legacy limitations
+> and the passing full verification below. Generated localization and formatting were
+> committed separately as `25334c9e7`. No changelog entry was added, as requested.
+> Ready-for-review status remains blocked by the required cross-vendor AI pre-review and
+> author decisions; the operator was unavailable when asked about that missing prerequisite.
+
 - [x] Align the [user manual](../../../../user-manual/local-quick-start.md), feature README and design
       with actual deletion and failure behavior. Remove preserve-and-abandon instructions; explain that
       old-engine cleanup must succeed before a cross-engine reset can finish.
-- [ ] Update draft PR #1096's description and manual checks: it currently promises preservation and
+- [x] Update draft PR #1096's description and manual checks: it currently promises preservation and
       unconditional restoration of the previous record after switched-engine failure.
 - [x] Keep iteration 16 as historical implementation evidence. Record changes and verification here.
-- [ ] Generate localization at Case 2 handoff, not during Case 1 work. Do not hand-edit the bundle.
+- [x] Generate localization at Case 2 handoff, not during Case 1 work. Do not hand-edit the bundle.
 
 ## 5. Verification and acceptance
 
@@ -327,7 +338,7 @@ collapsed, post-erasure failure and Wait longer, in light, dark and high-contras
 No real containers or workbench sessions were operated by this run.
 
 Legacy source selection remains parked; the existing unknown-owner behavior was not changed.
-The draft PR description/manual-check edit remains parked for explicit external-edit approval.
+The draft PR description/manual-check edit was completed after the operator's publication request.
 The proposed additional decision entry and alternative new footer prose were not approved;
 neither was introduced. Accepted section 3 copy and an internal event fact were sufficient.
 
@@ -338,11 +349,36 @@ neither was introduced. Accepted section 3 copy and an internal event fact were 
 - Backend worker `npx tsc --noEmit -p .`: passed before the final narrow correction;
   final corrected source was checked by the final build.
 - Browser scenario harness: not run, because no scenario was changed.
-- Full Case 2 checks, including `prettier-fix`, localization generation, localization check,
-  lint, strict package-test typecheck, full runtime suite and packaging: not run.
-  This is still draft/Case 1 work, not a ready-for-review handoff.
+- At the original implementation handoff, full Case 2 checks were deferred. They subsequently
+  passed in the publication follow-up below. The PR remains a draft because the required
+  cross-vendor AI pre-review and author decisions are missing, not because verification failed.
 - The source-confirmed advisor review is recorded inline above. This does not claim that a
   separate ready-for-review AI pre-review or real-engine acceptance has been completed.
+
+### Publication follow-up: both verification cases
+
+The operator requested a simple checks subagent. `gpt-6-luna` ran both cases, with no
+manual code fixes, no dependency installation and no remaining command failures.
+Only generated localization and formatting changed tracked files.
+
+| Case | Command                                  | Result                               | Duration |
+| ---- | ---------------------------------------- | ------------------------------------ | -------: |
+| 1    | `npm run build`                          | Passed                               |  40.06 s |
+| 1    | Focused Vitest invocation from section 5 | Four files, 476 passed               |  27.42 s |
+| 2    | `npm run l10n`                           | Passed                               |  52.86 s |
+| 2    | `npm run prettier-fix`                   | Passed                               |  58.42 s |
+| 2    | `npm run l10n:check`                     | Passed                               |  52.68 s |
+| 2    | `npm run lint`                           | Passed                               | 108.34 s |
+| 2    | `npm run build`                          | Passed                               |  38.42 s |
+| 2    | `npm run typecheck:tests`                | Passed, strict package-test check    |  14.65 s |
+| 2    | `npx vitest run`                         | 419 files, 9,624 passed, one skipped | 102.53 s |
+| 2    | `npm run package`                        | Passed                               |  22.40 s |
+
+No separate current-round cross-vendor review file or author dispositions were found under
+the feature's iterations, and the PR had no submitted reviews. CONTRIBUTING sections 6.1
+and 6.2 therefore still block marking the PR ready. The operator was unavailable when asked
+whether to run the missing review or publish as a draft; checks and publication continue,
+but ready status is not asserted.
 
 ### Advisor decisions and rework
 
