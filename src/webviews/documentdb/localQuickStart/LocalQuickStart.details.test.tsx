@@ -302,7 +302,7 @@ describe('Local Quick Start stage details', () => {
                 busy: false,
                 canReuseExistingData: true,
                 suggestedPort: 10273,
-                instanceEngine: 'podman',
+                existingInstance: { ownerEngine: 'podman' },
                 savedImagePinned,
             });
             await act(async () =>
@@ -972,19 +972,19 @@ describe('Local Quick Start stage details', () => {
     it.each([
         ['podman', 'Podman · kept from the existing instance'],
         ['docker', 'Docker · kept from the existing instance'],
-        ['notRecorded', 'Not recorded'],
-    ])('locks the existing %s engine without readiness, including Start fresh', async (instanceEngine, summary) => {
+        [undefined, 'Not recorded'],
+    ] as const)('locks the existing %s engine without readiness, including Start fresh', async (ownerEngine, summary) => {
         client.trpc.localQuickStart.getWizardContext.query.mockResolvedValue({
             status: { state: InstanceState.Stopped, missing: true },
             busy: false,
             canReuseExistingData: true,
             suggestedPort: 10273,
-            instanceEngine,
+            existingInstance: ownerEngine ? { ownerEngine } : {},
         });
         await act(async () =>
             root.render(
                 <SSRProvider>
-                    <LocalQuickStart key={instanceEngine} />
+                    <LocalQuickStart key={ownerEngine ?? 'legacy'} />
                 </SSRProvider>,
             ),
         );
@@ -1003,7 +1003,7 @@ describe('Local Quick Start stage details', () => {
             busy: false,
             canReuseExistingData: true,
             suggestedPort: 10273,
-            instanceEngine: 'podman',
+            existingInstance: { ownerEngine: 'podman' },
         });
         await act(async () =>
             root.render(
@@ -1022,7 +1022,7 @@ describe('Local Quick Start stage details', () => {
             busy: false,
             canReuseExistingData: true,
             suggestedPort: 10273,
-            instanceEngine: 'podman',
+            existingInstance: { ownerEngine: 'podman' },
         });
         await act(async () =>
             root.render(
@@ -1038,7 +1038,7 @@ describe('Local Quick Start stage details', () => {
             client.trpc.localQuickStart.onInstanceChanged.subscribe.mock.lastCall?.[1].onData({
                 status: { state: InstanceState.NotInstalled },
                 canReuseExistingData: false,
-                instanceEngine: undefined,
+                existingInstance: undefined,
             }),
         );
 

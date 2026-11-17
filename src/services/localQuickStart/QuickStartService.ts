@@ -580,12 +580,16 @@ export class QuickStartServiceImpl {
     private readonly engineReadiness = new Map<ContainerCli, DockerReadiness>();
 
     /** `setupPreference` is passed only by setup paths; lifecycle and reconciliation omit it. */
-    private async engineRequestFor(alias: string, setupPreference?: ContainerCli): Promise<ContainerEngineRequest> {
+    private async engineRequestFor(
+        alias: string,
+        setupPreference?: ContainerCli,
+        startFresh = false,
+    ): Promise<ContainerEngineRequest> {
         const entry = this.stateFor(alias);
         const record = await getInstance(alias);
-        // With its container and volume gone, setup creates a new, empty instance, so the stored owner
-        // no longer pins it. Reconciliation still checks that owner, so switching back can recover it.
-        if (setupPreference !== undefined && this.isRemovedOwnerRecord(alias, record)) {
+        // Starting fresh or replacing removed data creates an empty instance in the chosen engine.
+        // Lifecycle and reconciliation still check the recorded owner.
+        if (setupPreference !== undefined && (startFresh || this.isRemovedOwnerRecord(alias, record))) {
             return { kind: 'preferred', preferred: setupPreference };
         }
         const preferred = setupPreference ?? 'docker';
@@ -736,16 +740,24 @@ export class QuickStartServiceImpl {
         request: Parameters<IContainerRuntime['isDockerReady']>[0] = {},
         preferred: ContainerCli = 'docker',
         alias: string = DEFAULT_ALIAS,
+        startFresh = false,
     ): Promise<DockerReadiness> {
-        return this.checkDockerReadiness({ ...request, engine: await this.engineRequestFor(alias, preferred) });
+        return this.checkDockerReadiness({
+            ...request,
+            engine: await this.engineRequestFor(alias, preferred, startFresh),
+        });
     }
 
     public async startDockerProvider(
         preferred: ContainerCli = 'docker',
         expectedAction?: DockerStartAction,
         alias: string = DEFAULT_ALIAS,
+        startFresh = false,
     ): Promise<DockerLaunchResult> {
-        return this.runtime.startAvailableDockerProvider(await this.engineRequestFor(alias, preferred), expectedAction);
+        return this.runtime.startAvailableDockerProvider(
+            await this.engineRequestFor(alias, preferred, startFresh),
+            expectedAction,
+        );
     }
 
     public getStatus(alias: string = DEFAULT_ALIAS): QuickStartStatus {
@@ -887,15 +899,21 @@ export class QuickStartServiceImpl {
         await this.metadataHydration;
     }
 
-    public async getInstanceEngine(alias: string = DEFAULT_ALIAS): Promise<ContainerCli | 'notRecorded' | undefined> {
+    public async getExistingInstance(
+        alias: string = DEFAULT_ALIAS,
+    ): Promise<{ readonly ownerEngine?: ContainerCli } | undefined> {
         const record = await getInstance(alias);
         const entry = this.stateFor(alias);
         if (record?.phase === 'ready') {
             // Setup creates a new instance once the data is gone, so Configure offers the engine choice.
             if (this.isRemovedOwnerRecord(alias, record)) return undefined;
-            return record.engineCli ?? 'notRecorded';
+            return record.engineCli ? { ownerEngine: record.engineCli } : {};
         }
-        return entry.metadata && !entry.dataRemoved ? entry.engineCli : undefined;
+        return entry.metadata && !entry.dataRemoved && entry.engineCli ? { ownerEngine: entry.engineCli } : undefined;
+    }
+
+    public async hasExistingInstance(alias: string = DEFAULT_ALIAS): Promise<boolean> {
+        return (await this.getExistingInstance(alias)) !== undefined;
     }
 
     public async isSavedImagePinned(alias: string = DEFAULT_ALIAS): Promise<boolean> {
@@ -934,7 +952,7 @@ export class QuickStartServiceImpl {
         busy: boolean;
         canReuseExistingData: boolean;
         suggestedPort: number;
-        instanceEngine?: ContainerCli | 'notRecorded';
+        existingInstance?: { readonly ownerEngine?: ContainerCli };
         savedImagePinned: boolean;
     }> {
         const { status, canReuseExistingData } = await this.readWizardStatus();
@@ -945,7 +963,7 @@ export class QuickStartServiceImpl {
             // container and volume before creating or deleting anything.
             canReuseExistingData,
             suggestedPort: await this.suggestPort(),
-            instanceEngine: await this.getInstanceEngine(),
+            existingInstance: await this.getExistingInstance(),
             savedImagePinned: await this.isSavedImagePinned(),
         };
     }
@@ -1059,7 +1077,7 @@ export class QuickStartServiceImpl {
         // generated ones would fail against existing data.
         const startFresh = options?.startFresh === true;
         const priorState = this.stateFor(alias).state;
-        const engineRequest = await this.engineRequestFor(alias, options?.preferredEngine ?? 'docker');
+        const engineRequest = await this.engineRequestFor(alias, options?.preferredEngine ?? 'docker', startFresh);
         const resolved = this.runtime.resolveCli(engineRequest);
         // Preference evidence exists only when this run chose its CLI; an instance's owner is not a preference.
         const selection = engineRequest.kind === 'preferred' ? resolved : undefined;
@@ -1139,6 +1157,7 @@ export class QuickStartServiceImpl {
         let failureCode: ProvisionFailureCode = 'none';
         let imagePulled: 'true' | 'false' | 'unknown' = 'unknown';
         let checkedReadiness: DockerReadiness | undefined;
+        let containerEngineChanged: 'true' | 'false' | 'legacy' | undefined;
         // A failure is analysed once: inside its stage event (for the stage's `failureCode`) and again
         // by the catch below, which must not re-run the follow-up Docker check.
         let failureAnalysis:
@@ -1231,6 +1250,13 @@ export class QuickStartServiceImpl {
             const existing = await this.findManagedContainer(alias, undefined, engine);
             const recordAtGate = await getInstance(alias);
             let hasReadyRecord = recordAtGate?.phase === 'ready';
+            if (!hasReadyRecord) {
+                containerEngineChanged = 'false';
+            } else if (recordAtGate?.engineCli === undefined) {
+                containerEngineChanged = 'legacy';
+            } else {
+                containerEngineChanged = recordAtGate.engineCli !== resolved.cli ? 'true' : 'false';
+            }
             // RR4 / §5.2 volume-wipe gate: NEVER silently destroy an existing instance's data. A
             // managed container, a durable `ready` record or the data volume itself (its container
             // pruned, or created from another VS Code profile) all mean data this profile can't open
@@ -1308,13 +1334,18 @@ export class QuickStartServiceImpl {
             // Take the durable provisioning lease BEFORE the pull (H3): a host killed anywhere from
             // here to `finalizeReadyInstance` then reconciles as "Provisioning…" (fresh lease) or is
             // scavenged (stale lease) instead of dead-ending. A recreate keeps its `ready` record
-            // while data remains on disk; a removed instance can reserve the newly selected engine.
-            if (!startFresh && engineRequest.kind === 'preferred' && this.isRemovedOwnerRecord(alias, recordAtGate)) {
+            // while data remains on disk; switching engines reserves the newly selected engine.
+            if (
+                engineRequest.kind === 'preferred' &&
+                hasReadyRecord &&
+                recordAtGate?.engineCli !== resolved.cli &&
+                (startFresh || this.isRemovedOwnerRecord(alias, recordAtGate))
+            ) {
                 // An explicitly reselected engine must be discoverable even if this host dies before
                 // readiness. Persist its lease before creating resources, but retain the old record
                 // for failure/discard rollback. Unlike an ordinary lease renewal, this write must succeed.
                 await updateInstance(alias, (current) => {
-                    if (!current || !this.isRemovedOwnerRecord(alias, current)) {
+                    if (current?.phase !== 'ready' || current.engineCli !== recordAtGate?.engineCli) {
                         return undefined;
                     }
                     replacedRecord = current;
@@ -1329,9 +1360,12 @@ export class QuickStartServiceImpl {
                     };
                 });
                 if (!leaseHeld) {
-                    terminalEvent = stageEvent('error', 'error', { key: 'setupAlreadyInProgress' });
+                    failedStage = 'checking';
+                    failureCode = 'other';
+                    yield stageEvent('error', 'error', { key: 'setupAlreadyInProgress' });
                     return;
                 }
+                hasReadyRecord = false;
             } else if (!hasReadyRecord) {
                 // An earlier attempt's record holds the only credentials for a reused volume; a failure puts it back.
                 replacedRecord = reusing ? await getInstance(alias) : undefined;
@@ -1888,6 +1922,9 @@ export class QuickStartServiceImpl {
                 telemetryContext.telemetry.properties.imagePulled = imagePulled;
                 telemetryContext.telemetry.properties.priorState = priorState;
                 telemetryContext.telemetry.properties.startFresh = startFresh ? 'true' : 'false';
+                if (containerEngineChanged !== undefined) {
+                    telemetryContext.telemetry.properties.containerEngineChanged = containerEngineChanged;
+                }
                 telemetryContext.telemetry.properties.refusedCredentialsUnavailable = refusedCredentialsUnavailable
                     ? 'true'
                     : 'false';

@@ -172,6 +172,7 @@ export const localQuickStartRouter = router({
                     resetProviderMemory: z.boolean().optional(),
                     suppressCommandEcho: z.boolean().optional(),
                     preferredEngine: z.enum(['docker', 'podman']).optional(),
+                    startFresh: z.boolean().optional(),
                 })
                 .optional(),
         )
@@ -189,6 +190,8 @@ export const localQuickStartRouter = router({
                     cancellationToken,
                 },
                 input?.preferredEngine,
+                undefined,
+                input?.startFresh === true,
             );
             // Refresh the live container state so the panel opens with an accurate badge
             // (e.g. Missing when the container was removed in another window), which drives
@@ -328,6 +331,7 @@ export const localQuickStartRouter = router({
                     preferredEngine: z.enum(['docker', 'podman']).default('docker'),
                     /** The action the clicked button named; the host launches nothing else. */
                     expectedAction: z.enum(DOCKER_START_ACTIONS).optional(),
+                    startFresh: z.boolean().optional(),
                 })
                 .optional(),
         )
@@ -336,6 +340,8 @@ export const localQuickStartRouter = router({
             const result = await QuickStartService.startDockerProvider(
                 input?.preferredEngine ?? 'docker',
                 input?.expectedAction,
+                undefined,
+                input?.startFresh === true,
             );
             tctx.actionContext.telemetry.properties.dockerLaunchResult = result;
             return result;
@@ -408,9 +414,9 @@ export const localQuickStartRouter = router({
                 if (dirty) {
                     dirty = false;
                     const status = toWebviewStatus(QuickStartService.getStatus());
-                    const instanceEngine = await QuickStartService.getInstanceEngine();
+                    const existingInstance = await QuickStartService.getExistingInstance();
                     const savedImagePinned = await QuickStartService.isSavedImagePinned();
-                    const statusKey = JSON.stringify({ status, instanceEngine, savedImagePinned });
+                    const statusKey = JSON.stringify({ status, existingInstance, savedImagePinned });
                     // The status event also fires when nothing user-visible changed; skipping those
                     // keeps the credential read below off the repeating path.
                     if (statusKey !== lastStatusKey) {
@@ -418,7 +424,7 @@ export const localQuickStartRouter = router({
                         yield {
                             status,
                             canReuseExistingData: await QuickStartService.canReuseExistingData(),
-                            instanceEngine,
+                            existingInstance,
                             savedImagePinned,
                         };
                     }

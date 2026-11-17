@@ -626,7 +626,7 @@ export const LocalQuickStart = (): JSX.Element => {
     /** A Docker problem reported by a later stage (pull / run), backing that stage's remediation. */
     const [stageDockerFailure, setStageDockerFailure] = useState<DockerReadiness | undefined>(undefined);
     const [canReuseExistingData, setCanReuseExistingData] = useState(false);
-    const [instanceEngine, setInstanceEngine] = useState<ContainerCli | 'notRecorded'>();
+    const [existingInstance, setExistingInstance] = useState<{ readonly ownerEngine?: ContainerCli }>();
     const [savedImagePinned, setSavedImagePinned] = useState(false);
     const [recreating, setRecreating] = useState(false);
     const [preferredEngine, setPreferredEngine] = useState<ContainerCli>('docker');
@@ -1260,7 +1260,7 @@ export const LocalQuickStart = (): JSX.Element => {
                 setInstanceMissing(update.status.missing === true);
                 setInstanceDataRemoved(update.status.dataRemoved === true);
                 setCanReuseExistingData(update.canReuseExistingData);
-                setInstanceEngine(update.instanceEngine);
+                setExistingInstance(update.existingInstance);
                 setSavedImagePinned(update.savedImagePinned === true);
                 // The timed-out container is gone (e.g. deleted from the tree), so "Wait longer" has
                 // nothing left to wait for. While it is still retained the instance stays in Error.
@@ -1293,7 +1293,7 @@ export const LocalQuickStart = (): JSX.Element => {
                 setInstanceState(result.status.state);
                 setInstanceMissing(result.status.missing === true);
                 setInstanceDataRemoved(result.status.dataRemoved === true);
-                setInstanceEngine(result.instanceEngine);
+                setExistingInstance(result.existingInstance);
                 setSavedImagePinned(result.savedImagePinned);
                 setSuggestedPort(result.suggestedPort);
                 if (!portTouchedRef.current) {
@@ -1717,14 +1717,17 @@ export const LocalQuickStart = (): JSX.Element => {
         {
             key: 'engine',
             label: l10n.t('Container engine'),
-            value: instanceEngine
-                ? instanceEngine === 'notRecorded'
+            value: existingInstance
+                ? existingInstance.ownerEngine === undefined
                     ? l10n.t('Not recorded')
-                    : l10n.t('{0} · kept from the existing instance', instanceEngine === 'docker' ? 'Docker' : 'Podman')
+                    : l10n.t(
+                          '{0} · kept from the existing instance',
+                          existingInstance.ownerEngine === 'docker' ? 'Docker' : 'Podman',
+                      )
                 : preferredEngine === 'docker'
                   ? 'Docker'
                   : 'Podman',
-            action: instanceEngine
+            action: existingInstance
                 ? undefined
                 : rowAction(
                       editingEngine
@@ -1733,8 +1736,8 @@ export const LocalQuickStart = (): JSX.Element => {
                       editingEngine,
                       () => setEditingEngine((value) => !value),
                   ),
-            editorOpen: editingEngine && !instanceEngine,
-            editor: instanceEngine ? undefined : (
+            editorOpen: editingEngine && !existingInstance,
+            editor: existingInstance ? undefined : (
                 <Field
                     label={l10n.t('Preferred container engine')}
                     hint={l10n.t('Setup uses your preferred engine if installed, or the other one otherwise.')}

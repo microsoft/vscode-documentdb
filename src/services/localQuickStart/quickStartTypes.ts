@@ -205,6 +205,7 @@ export type QuickStartActivationSource =
     | 'dataRemovedNotification'
     | 'treeSetUpRow'
     | 'treeReviewSetupRow'
+    | 'treeStartFreshRow'
     | 'treeRecreateRow'
     | 'treeRetryNode'
     | 'treePreflightRecreateRow'
@@ -213,6 +214,7 @@ export type QuickStartActivationSource =
 
 export interface OpenLocalQuickStartOptions {
     readonly activationSource?: QuickStartActivationSource;
+    readonly initialDataChoice?: 'fresh';
 }
 
 /**
@@ -644,7 +646,7 @@ export interface DockerStatusResult {
 export interface InstanceStatusUpdate {
     readonly status: QuickStartStatus;
     readonly canReuseExistingData: boolean;
-    readonly instanceEngine?: ContainerCli | 'notRecorded';
+    readonly existingInstance?: { readonly ownerEngine?: ContainerCli };
     readonly savedImagePinned?: boolean;
 }
 

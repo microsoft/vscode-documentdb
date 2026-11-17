@@ -2583,7 +2583,7 @@ export const scenarios = {
                             busy: false,
                             canReuseExistingData: true,
                             suggestedPort: 10260,
-                            instanceEngine: 'podman',
+                            existingInstance: { ownerEngine: 'podman' },
                             savedImagePinned: true,
                         },
                     ],
