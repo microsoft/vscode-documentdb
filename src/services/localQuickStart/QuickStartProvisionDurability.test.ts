@@ -779,7 +779,10 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             };
         }
 
-        async function recordedReset(owner: ContainerCli = 'docker', shared = false): Promise<{
+        async function recordedReset(
+            owner: ContainerCli = 'docker',
+            shared = false,
+        ): Promise<{
             runtime: IContainerRuntime;
             source: IContainerRuntime;
             target: IContainerRuntime;
@@ -987,8 +990,10 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         it.each([false, true])(
             'cleans shared backends before creation, with missing preferred CLI=%s',
             async (fallback) => {
-                const { service, runtime, source, target, sourceData, preferredEngine } =
-                    await recordedReset('docker', !fallback);
+                const { service, runtime, source, target, sourceData, preferredEngine } = await recordedReset(
+                    'docker',
+                    !fallback,
+                );
                 if (fallback) {
                     const resolve = vi.mocked(runtime.resolveCli).getMockImplementation()!;
                     vi.mocked(runtime.resolveCli).mockImplementation((request) =>
@@ -1275,9 +1280,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             expect(await service.getExistingInstance()).toBeUndefined();
             expect(await service.isSavedImagePinned()).toBe(false);
             expect(await service.canReuseExistingData()).toBe(false);
-            expect(CredentialCache.deleteCredentials).toHaveBeenCalledWith(
-                expect.stringContaining(DEFAULT_ALIAS),
-            );
+            expect(CredentialCache.deleteCredentials).toHaveBeenCalledWith(expect.stringContaining(DEFAULT_ALIAS));
         });
 
         it.each(['before erasure', 'after erasure'] as const)(
@@ -1558,45 +1561,40 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             },
         );
 
-        it(
-            'preserves the legacy engine-switch behavior, reserving Podman and leaving Docker untouched',
-            async () => {
-                await upsertInstance({
-                    alias: DEFAULT_ALIAS,
-                    displayName: 'Existing',
-                    port: QUICK_START_PORT,
-                    phase: 'ready',
+        it('preserves the legacy engine-switch behavior, reserving Podman and leaving Docker untouched', async () => {
+            await upsertInstance({
+                alias: DEFAULT_ALIAS,
+                displayName: 'Existing',
+                port: QUICK_START_PORT,
+                phase: 'ready',
+            });
+            await writeConnectionString(DEFAULT_ALIAS, stored, { displayName: 'Existing', port: QUICK_START_PORT });
+            const docker = runtimeFor({ containers: [{ id: 'old-docker' }], volumeExists: true });
+            const podman = runtimeFor({ volumeExists: true });
+            vi.mocked(docker.forCli).mockImplementation((resolved) => (resolved.cli === 'podman' ? podman : docker));
+            vi.mocked(podman.pullImage).mockImplementationOnce(async () => {
+                expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({
+                    phase: 'provisioning',
+                    engineCli: 'podman',
+                    operationId: expect.any(String),
                 });
-                await writeConnectionString(DEFAULT_ALIAS, stored, { displayName: 'Existing', port: QUICK_START_PORT });
-                const docker = runtimeFor({ containers: [{ id: 'old-docker' }], volumeExists: true });
-                const podman = runtimeFor({ volumeExists: true });
-                vi.mocked(docker.forCli).mockImplementation((resolved) =>
-                    resolved.cli === 'podman' ? podman : docker,
-                );
-                vi.mocked(podman.pullImage).mockImplementationOnce(async () => {
-                    expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({
-                        phase: 'provisioning',
-                        engineCli: 'podman',
-                        operationId: expect.any(String),
-                    });
-                    expect(await readConnectionString(DEFAULT_ALIAS)).toBe(stored);
-                    expect(podman.removeVolume).not.toHaveBeenCalled();
-                });
-                const service = new QuickStartServiceImpl(docker);
+                expect(await readConnectionString(DEFAULT_ALIAS)).toBe(stored);
+                expect(podman.removeVolume).not.toHaveBeenCalled();
+            });
+            const service = new QuickStartServiceImpl(docker);
 
-                const events = await collect(
-                    service.provision(new AbortController().signal, { preferredEngine: 'podman', startFresh: true }),
-                );
+            const events = await collect(
+                service.provision(new AbortController().signal, { preferredEngine: 'podman', startFresh: true }),
+            );
 
-                expect(events.at(-1)).toMatchObject({ stage: 'done', status: 'done' });
-                expect(podman.pullImage).toHaveBeenCalledTimes(1);
-                expect(podman.removeVolume).toHaveBeenCalledExactlyOnceWith(`${DEFAULT_ALIAS}-data`);
-                expect(docker.removeContainer).not.toHaveBeenCalled();
-                expect(docker.removeVolume).not.toHaveBeenCalled();
-                expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase: 'ready', engineCli: 'podman' });
-                expect(await readConnectionString(DEFAULT_ALIAS)).not.toBe(stored);
-            },
-        );
+            expect(events.at(-1)).toMatchObject({ stage: 'done', status: 'done' });
+            expect(podman.pullImage).toHaveBeenCalledTimes(1);
+            expect(podman.removeVolume).toHaveBeenCalledExactlyOnceWith(`${DEFAULT_ALIAS}-data`);
+            expect(docker.removeContainer).not.toHaveBeenCalled();
+            expect(docker.removeVolume).not.toHaveBeenCalled();
+            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase: 'ready', engineCli: 'podman' });
+            expect(await readConnectionString(DEFAULT_ALIAS)).not.toBe(stored);
+        });
 
         it.each(['pull failure', 'create failure', 'cancel during pull', 'cancel after create'] as const)(
             'preserves the source only before erasure after a switched Start fresh %s',

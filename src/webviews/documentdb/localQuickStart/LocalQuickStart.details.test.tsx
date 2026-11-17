@@ -1044,7 +1044,9 @@ describe('Local Quick Start stage details', () => {
                 expect(host.textContent).toContain('DocumentDB Local follows your VS Code telemetry setting.');
             } else {
                 expect(host.textContent).toContain('Erase the existing data and start empty');
-                expect(host.textContent).not.toContain('Starting fresh deletes the existing DocumentDB Local container');
+                expect(host.textContent).not.toContain(
+                    'Starting fresh deletes the existing DocumentDB Local container',
+                );
             }
             await click(button('Hide the container engine setting'));
             if (ownerEngine !== undefined) {
@@ -1246,44 +1248,47 @@ describe('Local Quick Start stage details', () => {
         { timedOut: false, erased: true },
         { timedOut: true, erased: false },
         { timedOut: true, erased: true },
-    ])('reports only confirmed erasure on failure (timeout=$timedOut, erased=$erased)', async ({ timedOut, erased }) => {
-        await act(async () =>
-            client.trpc.localQuickStart.onInstanceChanged.subscribe.mock.lastCall?.[1].onData({
-                status: { state: InstanceState.Error },
-                canReuseExistingData: true,
-                existingInstance: { ownerEngine: 'podman' },
-            }),
-        );
-        await click(host.querySelector<HTMLInputElement>('input[value="fresh"]')!);
-        await click(button('Change the container engine'));
-        await click(host.querySelector<HTMLInputElement>('input[value="docker"]')!);
-        await click(button('Hide the container engine setting'));
-        await click(button('Start fresh'));
-        await event({ stage: 'error', status: 'error', timedOut, existingDataErased: erased || undefined });
-        const footer = button(timedOut ? 'Wait longer' : 'Start fresh').parentElement?.previousElementSibling;
-        if (erased) {
-            expect(footer?.textContent).toBe('All data in the existing instance is permanently erased.');
-            expect(host.textContent).not.toContain('This deletes the DocumentDB Local container');
-        } else if (timedOut) {
-            expect(footer).toBeNull();
-        } else {
-            expect(footer?.textContent).toBe(
-                'This deletes the DocumentDB Local container and its data volume in Podman, then creates a new instance. All data in the existing instance is permanently erased.',
+    ])(
+        'reports only confirmed erasure on failure (timeout=$timedOut, erased=$erased)',
+        async ({ timedOut, erased }) => {
+            await act(async () =>
+                client.trpc.localQuickStart.onInstanceChanged.subscribe.mock.lastCall?.[1].onData({
+                    status: { state: InstanceState.Error },
+                    canReuseExistingData: true,
+                    existingInstance: { ownerEngine: 'podman' },
+                }),
             );
-        }
-        if (timedOut && erased) {
-            await click(button('Wait longer'));
-            await event({ stage: 'waiting', status: 'error', timedOut: true });
-            expect(button('Wait longer').parentElement?.previousElementSibling?.textContent).toBe(
-                'All data in the existing instance is permanently erased.',
-            );
-            await click(button('Wait longer'));
-            await click(button('Cancel'));
-            expect(button('Wait longer').parentElement?.previousElementSibling?.textContent).toBe(
-                'All data in the existing instance is permanently erased.',
-            );
-        }
-    });
+            await click(host.querySelector<HTMLInputElement>('input[value="fresh"]')!);
+            await click(button('Change the container engine'));
+            await click(host.querySelector<HTMLInputElement>('input[value="docker"]')!);
+            await click(button('Hide the container engine setting'));
+            await click(button('Start fresh'));
+            await event({ stage: 'error', status: 'error', timedOut, existingDataErased: erased || undefined });
+            const footer = button(timedOut ? 'Wait longer' : 'Start fresh').parentElement?.previousElementSibling;
+            if (erased) {
+                expect(footer?.textContent).toBe('All data in the existing instance is permanently erased.');
+                expect(host.textContent).not.toContain('This deletes the DocumentDB Local container');
+            } else if (timedOut) {
+                expect(footer).toBeNull();
+            } else {
+                expect(footer?.textContent).toBe(
+                    'This deletes the DocumentDB Local container and its data volume in Podman, then creates a new instance. All data in the existing instance is permanently erased.',
+                );
+            }
+            if (timedOut && erased) {
+                await click(button('Wait longer'));
+                await event({ stage: 'waiting', status: 'error', timedOut: true });
+                expect(button('Wait longer').parentElement?.previousElementSibling?.textContent).toBe(
+                    'All data in the existing instance is permanently erased.',
+                );
+                await click(button('Wait longer'));
+                await click(button('Cancel'));
+                expect(button('Wait longer').parentElement?.previousElementSibling?.textContent).toBe(
+                    'All data in the existing instance is permanently erased.',
+                );
+            }
+        },
+    );
 
     it('does not carry erasure from a failed attempt into a new setup attempt', async () => {
         await act(async () =>

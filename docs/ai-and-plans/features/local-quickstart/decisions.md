@@ -9,21 +9,21 @@ verified: 2026-08-14
 
 > The decisions that shaped Local Quick Start, and what was rejected on the way.
 
-| #    | Decision                                               | Status              | Changed from the proposal?                      | Date       | PR    |
-| ---- | ------------------------------------------------------ | ------------------- | ----------------------------------------------- | ---------- | ----- |
-| 0001 | Single managed instance, ownership-bounded             | Superseded by 0002  | Accepted as proposed                            | 2026-06-25 | —     |
-| 0002 | Multiple managed instances in v1                       | Accepted            | Reverses 0001 after owner review                | 2026-07-06 | —     |
-| 0003 | Concept F — Docker verified as the first setup stage   | Accepted (modified) | Dedicated readiness page dropped entirely       | 2026-08-03 | #798  |
-| 0004 | Explicit cluster-command opt-ins for managed nodes     | Accepted            | Capability split deferred                       | 2026-08-09 | #876  |
-| 0005 | Restore missing credentials from the managed container | Accepted            | Error-node tree flow deferred                   | 2026-09-29 | #979  |
-| 0006 | Wizard journey telemetry and correlation ids           | Accepted            | Quick Start lineage id not added                | 2026-09-29 | #979  |
-| 0007 | Image usage telemetry follows VS Code's setting        | Accepted            | Accepted as proposed                            | 2026-10-15 | #1018 |
-| 0008 | Set up stages expand to show what each stage did       | Accepted            | Amends 0003's single failure surface            | 2026-11-10 | —     |
-| 0009 | Preferred engine and instance ownership                | Accepted (modified) | Start fresh rule in §3–4 replaced by 0014       | 2026-11-10 | #1076 |
-| 0010 | Platform-gated Podman machine startup                  | Accepted            | Button only for eligible macOS/Windows machines | 2026-11-10 | #1076 |
-| 0011 | Rootful default machine and a slow machine list        | Accepted            | Amends 0010 after a native Windows test         | 2026-11-10 | #1076 |
-| 0012 | Podman guidance follows the address in its error       | Accepted            | Simplified; connection resolution rejected      | 2026-11-12 | #1076 |
-| 0013 | Setup outcome, guide and instance connection telemetry | Accepted            | `customPort` replaced by `portChanged`          | 2026-11-04 | —     |
+| #    | Decision                                               | Status              | Changed from the proposal?                                                 | Date       | PR    |
+| ---- | ------------------------------------------------------ | ------------------- | -------------------------------------------------------------------------- | ---------- | ----- |
+| 0001 | Single managed instance, ownership-bounded             | Superseded by 0002  | Accepted as proposed                                                       | 2026-06-25 | —     |
+| 0002 | Multiple managed instances in v1                       | Accepted            | Reverses 0001 after owner review                                           | 2026-07-06 | —     |
+| 0003 | Concept F — Docker verified as the first setup stage   | Accepted (modified) | Dedicated readiness page dropped entirely                                  | 2026-08-03 | #798  |
+| 0004 | Explicit cluster-command opt-ins for managed nodes     | Accepted            | Capability split deferred                                                  | 2026-08-09 | #876  |
+| 0005 | Restore missing credentials from the managed container | Accepted            | Error-node tree flow deferred                                              | 2026-09-29 | #979  |
+| 0006 | Wizard journey telemetry and correlation ids           | Accepted            | Quick Start lineage id not added                                           | 2026-09-29 | #979  |
+| 0007 | Image usage telemetry follows VS Code's setting        | Accepted            | Accepted as proposed                                                       | 2026-10-15 | #1018 |
+| 0008 | Set up stages expand to show what each stage did       | Accepted            | Amends 0003's single failure surface                                       | 2026-11-10 | —     |
+| 0009 | Preferred engine and instance ownership                | Accepted (modified) | Start fresh rule in §3–4 replaced by 0014                                  | 2026-11-10 | #1076 |
+| 0010 | Platform-gated Podman machine startup                  | Accepted            | Button only for eligible macOS/Windows machines                            | 2026-11-10 | #1076 |
+| 0011 | Rootful default machine and a slow machine list        | Accepted            | Amends 0010 after a native Windows test                                    | 2026-11-10 | #1076 |
+| 0012 | Podman guidance follows the address in its error       | Accepted            | Simplified; connection resolution rejected                                 | 2026-11-12 | #1076 |
+| 0013 | Setup outcome, guide and instance connection telemetry | Accepted            | `customPort` replaced by `portChanged`                                     | 2026-11-04 | —     |
 | 0014 | Start fresh is always offered and unlocks the engine   | Accepted (modified) | Iteration 17 amends recorded-owner behavior; legacy source policy deferred | 2026-11-17 | #1096 |
 
 > Entries below are **semantically** immutable: append new entries rather than

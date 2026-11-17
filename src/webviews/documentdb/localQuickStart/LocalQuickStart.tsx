@@ -2542,20 +2542,21 @@ export const LocalQuickStart = (): JSX.Element => {
                 onPrimary = handleStart;
                 // A fresh retry must state its data consequence before the next run.
                 if (!existingDataErased) {
-                    footerNote = startFresh && recordedOwnerFreshNote
-                        ? recordedOwnerFreshNote
-                        : startFresh
-                          ? l10n.t(
-                                'This deletes the container named {0} and its data volume, then creates a new one. Everything stored in DocumentDB Local is erased.',
-                                QUICK_START_CONTAINER_NAME,
-                            )
-                          : canContinueSetup
-                            ? l10n.t(
-                                  'Continuing runs every setup step from the beginning, starting with the container engine check. Nothing has been created on your machine yet.',
-                              )
-                            : l10n.t(
-                                  'Retrying runs every setup step again from the beginning, starting with the container engine check.',
-                              );
+                    footerNote =
+                        startFresh && recordedOwnerFreshNote
+                            ? recordedOwnerFreshNote
+                            : startFresh
+                              ? l10n.t(
+                                    'This deletes the container named {0} and its data volume, then creates a new one. Everything stored in DocumentDB Local is erased.',
+                                    QUICK_START_CONTAINER_NAME,
+                                )
+                              : canContinueSetup
+                                ? l10n.t(
+                                      'Continuing runs every setup step from the beginning, starting with the container engine check. Nothing has been created on your machine yet.',
+                                  )
+                                : l10n.t(
+                                      'Retrying runs every setup step again from the beginning, starting with the container engine check.',
+                                  );
                 }
                 secondaryActions = (
                     <Button appearance="secondary" onClick={handleBackToConfigure}>

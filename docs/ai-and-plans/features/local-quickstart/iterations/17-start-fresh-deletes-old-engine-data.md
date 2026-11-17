@@ -21,7 +21,7 @@ code:
 > restriction was superseded by the execution authorization below. No PR readiness change.
 
 > **Execution authorized (2026-11-17):** the operator subsequently invoked `/lead advisor
-> opus 5.5` to implement this plan, emphasizing pragmatic fixes and simpler flow rather than
+opus 5.5` to implement this plan, emphasizing pragmatic fixes and simpler flow rather than
 > added complexity. The original plan was committed as `c4690a2c0` before application work.
 > PR #1096 remains a draft: Case 1 verification applies; full Case 2 checks, including
 > localization generation and formatting, are deferred until ready for review.
@@ -46,15 +46,15 @@ images, or uninstall Docker/Podman.
 
 ## 2. Required behavior
 
-| Path | Required result |
-| --- | --- |
-| Keep existing data | Unchanged: use the recorded owner, saved credentials and saved image; keep the volume. |
-| Start fresh, same engine | Delete the managed instance and its data, then create an empty instance. |
-| Start fresh, different recorded engine | Delete the managed instance and data in the old engine, then create the replacement in the resolved target engine. No unmanaged old instance is left behind on success. |
-| Preferred target CLI missing | Keep the existing target fallback rule. Start fresh authorizes deletion, including when fallback returns to the old engine. Report the actual target through existing execution evidence. |
-| Both CLIs address the same backend | Cleanup is idempotent and completes before replacement creation. Never run old-engine cleanup after the replacement exists. No backend-identity detection feature is needed. |
-| Old-engine inspection or deletion fails | Stop with an actionable error. Do not claim a clean slate or continue with an orphaned old instance. Do not silently switch the cleanup target. |
-| No existing instance / data already confirmed removed | Preserve existing new-setup behavior. Do not require an irrelevant old engine. |
+| Path                                                  | Required result                                                                                                                                                                           |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Keep existing data                                    | Unchanged: use the recorded owner, saved credentials and saved image; keep the volume.                                                                                                    |
+| Start fresh, same engine                              | Delete the managed instance and its data, then create an empty instance.                                                                                                                  |
+| Start fresh, different recorded engine                | Delete the managed instance and data in the old engine, then create the replacement in the resolved target engine. No unmanaged old instance is left behind on success.                   |
+| Preferred target CLI missing                          | Keep the existing target fallback rule. Start fresh authorizes deletion, including when fallback returns to the old engine. Report the actual target through existing execution evidence. |
+| Both CLIs address the same backend                    | Cleanup is idempotent and completes before replacement creation. Never run old-engine cleanup after the replacement exists. No backend-identity detection feature is needed.              |
+| Old-engine inspection or deletion fails               | Stop with an actionable error. Do not claim a clean slate or continue with an orphaned old instance. Do not silently switch the cleanup target.                                           |
+| No existing instance / data already confirmed removed | Preserve existing new-setup behavior. Do not require an irrelevant old engine.                                                                                                            |
 
 Keep Configure free of engine probes. Opening the panel or selecting Start fresh never deletes
 anything. Preserve the existing healthy/stopped guards, tree action ordering, singleton panel
@@ -82,16 +82,16 @@ Recorded-owner paths are fully specified and do not depend on that discovery dec
 Use the same destructive meaning for explicit and forced Start fresh, whether credentials are
 readable or not. All user-facing strings remain localized; no em dashes.
 
-| Surface | Planned copy / behavior |
-| --- | --- |
-| Fresh radio | Always **Erase the existing data and start empty**. Remove the engine-dependent preservation label. |
-| Different-engine explanation | **Starting fresh deletes the existing DocumentDB Local container and its data in {old engine}, then sets up a new instance using your selected container engine.** Do not promise the preferred target is final before execution-time fallback resolves. |
-| Configure footer, Start fresh | Always show the destructive action note. Never hide it because the engine changed. |
-| Footer with recorded owner | **This deletes the DocumentDB Local container and its data volume in {old engine}, then creates a new instance. All data in the existing instance is permanently erased.** |
-| Footer without a recorded owner | Use engine-neutral deletion wording only on a path whose cleanup scope has been established; do not invent an owner. |
-| Primary action in Configure | **Start fresh** whenever `startFresh` is true, not only when `forcedFresh` is true. Keep **Recreate container** and new-install **Start DocumentDB Local** unchanged. |
-| Credentials warning | Explain why Keep is unavailable, but remove every promise that the old data is preserved or merely becomes unmanaged. The deletion footer remains visible. |
-| Failed setup / retry | When the next action is still a fresh reset, show the deletion note alongside it. If deletion already happened, report that fact instead of implying the old data can be restored. |
+| Surface                         | Planned copy / behavior                                                                                                                                                                                                                                  |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fresh radio                     | Always **Erase the existing data and start empty**. Remove the engine-dependent preservation label.                                                                                                                                                      |
+| Different-engine explanation    | **Starting fresh deletes the existing DocumentDB Local container and its data in {old engine}, then sets up a new instance using your selected container engine.** Do not promise the preferred target is final before execution-time fallback resolves. |
+| Configure footer, Start fresh   | Always show the destructive action note. Never hide it because the engine changed.                                                                                                                                                                       |
+| Footer with recorded owner      | **This deletes the DocumentDB Local container and its data volume in {old engine}, then creates a new instance. All data in the existing instance is permanently erased.**                                                                               |
+| Footer without a recorded owner | Use engine-neutral deletion wording only on a path whose cleanup scope has been established; do not invent an owner.                                                                                                                                     |
+| Primary action in Configure     | **Start fresh** whenever `startFresh` is true, not only when `forcedFresh` is true. Keep **Recreate container** and new-install **Start DocumentDB Local** unchanged.                                                                                    |
+| Credentials warning             | Explain why Keep is unavailable, but remove every promise that the old data is preserved or merely becomes unmanaged. The deletion footer remains visible.                                                                                               |
+| Failed setup / retry            | When the next action is still a fresh reset, show the deletion note alongside it. If deletion already happened, report that fact instead of implying the old data can be restored.                                                                       |
 
 Retain the telemetry/privacy note alongside the action note. There is still no additional
 confirmation dialog: the explicit choice, primary label and visible footer communicate the
@@ -117,15 +117,15 @@ changes were already present.
 > authorizes the recorded-owner correction, not a new legacy source policy.
 
 - [x] In [QuickStartService.ts](../../../../../src/services/localQuickStart/QuickStartService.ts),
-  capture the existing record and resolve the target once for the attempt.
+      capture the existing record and resolve the target once for the attempt.
 - [x] Pin source cleanup to the record's `engineCli`, independently of the selected target and
-  independently of later lease writes. Keep target fallback separate from source selection.
+      independently of later lease writes. Keep target fallback separate from source selection.
 - [x] Reuse `findManagedContainers(alias, { propagateErrors: true }, engine)` and the existing
-  label/alias ownership rules. Remove all owned containers for this alias, not only the first.
+      label/alias ownership rules. Remove all owned containers for this alias, not only the first.
 - [x] Do not call public `deleteContainer()` from `provision()`: it owns a separate lifecycle
-  guard and tolerates volume-deletion failure with a warning. A fresh reset must not continue
-  unless required cleanup succeeds. Extract only a small private engine-scoped helper if needed;
-  leave the standalone Delete command's behavior unchanged.
+      guard and tolerates volume-deletion failure with a warning. A fresh reset must not continue
+      unless required cleanup succeeds. Extract only a small private engine-scoped helper if needed;
+      leave the standalone Delete command's behavior unchanged.
 
 ### P2. Order destructive work and make retries truthful
 
@@ -149,31 +149,31 @@ Depends on P1.
 > an interrupted claim can block another reset until the existing 20-minute lease expires.
 
 - [x] Check target readiness, validate the chosen port and prepare the target image before erasing
-  the old data. A failed pull or cancellation during preparation must preserve the old volume.
+      the old data. A failed pull or cancellation during preparation must preserve the old volume.
 - [x] Preserve the existing port suggestion and never silently choose another port. An unrelated
-  occupant blocks setup before deletion. If the chosen port belongs to the owned source container,
-  verify that ownership and recheck the port after removal rather than treating it as unrelated.
+      occupant blocks setup before deletion. If the chosen port belongs to the owned source container,
+      verify that ownership and recheck the port after removal rather than treating it as unrelated.
 - [x] Establish ownership of the attempt before destructive operations. Preserve lease/race guards;
-  do not mistake the store's per-process serialization for cross-window atomicity.
+      do not mistake the store's per-process serialization for cross-window atomicity.
 - [x] Remove the source containers and volume with errors propagated. Also clean any existing
-  managed same-alias resources in the resolved target before creation, as Start fresh already does.
-  When source and target share a backend, a second authoritative check can confirm absence; do not
-  turn an inspection failure into "already gone."
+      managed same-alias resources in the resolved target before creation, as Start fresh already does.
+      When source and target share a backend, a second authoritative check can confirm absence; do not
+      turn an inspection failure into "already gone."
 - [x] Keep source ownership recoverable through preparation and interrupted cleanup. Prefer retaining
-  the source record until cleanup completes, then reserving the target before creating its resources.
-  Do not overwrite the only durable source reference early and make reload forget pending cleanup.
+      the source record until cleanup completes, then reserving the target before creating its resources.
+      Do not overwrite the only durable source reference early and make reload forget pending cleanup.
 - [x] Separate rollback before and after the destructive boundary. Before the old volume is erased,
-  retain its credentials and recoverable record, with truthful container state after partial cleanup.
-  After it is erased, never restore its old ready record, image pin or credentials as a usable instance.
+      retain its credentials and recoverable record, with truthful container state after partial cleanup.
+      After it is erased, never restore its old ready record, image pin or credentials as a usable instance.
 - [x] Update `replacedRecord`, `rollBackAttempt`, pending readiness, timeout discard and reconciliation
-  consistently. A failed new-container creation cannot undo deletion of the old data. Persist only
-  the minimal additional reset state if existing record ordering cannot satisfy reload recovery.
+      consistently. A failed new-container creation cannot undo deletion of the old data. Persist only
+      the minimal additional reset state if existing record ordering cannot satisfy reload recovery.
 - [x] Once source data is gone, invalidate stale client/credential caches and metadata. Persist the
-  target lease and new credentials before creating the replacement, preserving crash recovery.
+      target lease and new credentials before creating the replacement, preserving crash recovery.
 - [x] A timeout's **Wait longer** concerns only the replacement. **Start over** or cancellation after
-  deletion must not resurrect the deleted source. Keep cleanup scoped to this attempt's resources.
+      deletion must not resurrect the deleted source. Keep cleanup scoped to this attempt's resources.
 - [x] Surface old-engine failures as old-engine failures, with the original error available in the
-  setup log. Never launch the selected new engine as a purported repair for failed old-engine cleanup.
+      setup log. Never launch the selected new engine as a purported repair for failed old-engine cleanup.
 
 ### P3. Align Configure and failure presentation
 
@@ -195,13 +195,13 @@ Can be developed after P1's source/target contract is settled; integration depen
 > or additional confirmation dialog was introduced.
 
 - [x] Apply section 3 in
-  [LocalQuickStart.tsx](../../../../../src/webviews/documentdb/localQuickStart/LocalQuickStart.tsx):
-  fresh radio, engine note, credentials messages, primary action and both footer branches.
+      [LocalQuickStart.tsx](../../../../../src/webviews/documentdb/localQuickStart/LocalQuickStart.tsx):
+      fresh radio, engine note, credentials messages, primary action and both footer branches.
 - [x] Replace the `!engineChanged && actionNote` suppression and the failed-step suppression.
-  Keep the warning visible with the engine editor collapsed and on forced-fresh recovery.
+      Keep the warning visible with the engine editor collapsed and on forced-fresh recovery.
 - [x] Use existing stage-event/error mechanisms for deletion failures and post-deletion outcomes.
-  Extend typed facts only where the view needs a fact it cannot currently represent; do not infer
-  that deletion happened from `startFresh` alone.
+      Extend typed facts only where the view needs a fact it cannot currently represent; do not infer
+      that deletion happened from `startFresh` alone.
 
 ### P4. Change behavior contracts with the implementation
 
@@ -225,30 +225,30 @@ Tests travel with P1-P3, rather than being deferred to a separate cleanup.
 > remain deferred with the unresolved policy. Real-engine/workbench acceptance is unverified.
 
 - [x] Replace the durability test promising Docker remains untouched after a Podman switch.
-  For both directions, assert source container/volume removal before target creation and a ready
-  record owned by the resolved target.
+      For both directions, assert source container/volume removal before target creation and a ready
+      record owned by the resolved target.
 - [x] Split the current switched-engine rollback tests at the destructive boundary: pull failure
-  and pre-delete cancellation preserve the source; create failure, cancellation after deletion,
-  and timeout discard never restore a deleted source.
+      and pre-delete cancellation preserve the source; create failure, cancellation after deletion,
+      and timeout discard never restore a deleted source.
 - [x] Cover source listing/removal/volume failures: no target creation, no false success, useful
-  error, and retryable state without losing surviving data credentials.
+      error, and retryable state without losing surviving data credentials.
 - [x] Cover missing preferred CLI fallback and both CLI handles sharing one resource store.
-  Assert cleanup finishes before creation, and no subsequent cleanup removes the replacement.
+      Assert cleanup finishes before creation, and no subsequent cleanup removes the replacement.
 - [x] Cover interruption/reload between source cleanup and target creation, a lost reservation,
-  unrelated name/port collisions, and target cleanup failure.
+      unrelated name/port collisions, and target cleanup failure.
 - [x] Keep focused regression assertions for Keep, same-engine fresh, new install, unavailable
-  credentials, label ownership, explicit ports and image-pull-before-data-deletion.
+      credentials, label ownership, explicit ports and image-pull-before-data-deletion.
 - [x] In [LocalQuickStart.details.test.tsx](../../../../../src/webviews/documentdb/localQuickStart/LocalQuickStart.details.test.tsx),
-  replace preservation assertions with the deletion warning, the old engine name, and **Start fresh**
-  for voluntary and forced choices. Assert warnings remain in Configure and the applicable retry
-  footer, including after collapsing the engine editor. Keep no-probes/no-delete-on-selection tests.
+      replace preservation assertions with the deletion warning, the old engine name, and **Start fresh**
+      for voluntary and forced choices. Assert warnings remain in Configure and the applicable retry
+      footer, including after collapsing the engine editor. Keep no-probes/no-delete-on-selection tests.
 - [x] Adjust existing typed browser scenarios for a switched-engine fresh reset and validate the
-  visible footer/primary action. Update telemetry tests only for changed behavior; retain the
-  existing bounded engine-change classification rather than adding unrelated instrumentation.
-  Not applicable to scenarios in this tree: no existing scenario covers this path or pins the
-  changed copy; no scenario was changed or added. The view tests validate the footer and action.
+      visible footer/primary action. Update telemetry tests only for changed behavior; retain the
+      existing bounded engine-change classification rather than adding unrelated instrumentation.
+      Not applicable to scenarios in this tree: no existing scenario covers this path or pins the
+      changed copy; no scenario was changed or added. The view tests validate the footer and action.
 - [ ] Add legacy cases once section 2's unresolved source-selection policy is agreed. If an affected
-  `TDD:` contract fails, stop for the operator's contract decision; do not automatically rewrite it.
+      `TDD:` contract fails, stop for the operator's contract decision; do not automatically rewrite it.
 
 ### P5. Documentation and localization
 
@@ -276,10 +276,10 @@ Depends on P2 and P3.
 > remaining full Case 2 commands are deliberately deferred until ready for review.
 
 - [x] Align the [user manual](../../../../user-manual/local-quick-start.md), feature README and design
-  with actual deletion and failure behavior. Remove preserve-and-abandon instructions; explain that
-  old-engine cleanup must succeed before a cross-engine reset can finish.
+      with actual deletion and failure behavior. Remove preserve-and-abandon instructions; explain that
+      old-engine cleanup must succeed before a cross-engine reset can finish.
 - [ ] Update draft PR #1096's description and manual checks: it currently promises preservation and
-  unconditional restoration of the previous record after switched-engine failure.
+      unconditional restoration of the previous record after switched-engine failure.
 - [x] Keep iteration 16 as historical implementation evidence. Record changes and verification here.
 - [ ] Generate localization at Case 2 handoff, not during Case 1 work. Do not hand-edit the bundle.
 
@@ -366,30 +366,30 @@ time is 51m33s, not wall-clock. The dedicated checks agent used 2m13s in build/t
 across the initial and final runs; the final build and focused tests took 65.058 s combined.
 Worker test spans overlap other work and are not additive to wall-clock time.
 
-| Model | Role | Requests | Model time | AIU | AIU share |
-| --- | --- | ---: | ---: | ---: | ---: |
-| claude-opus-5.5 | advisor | 69 | 15m30s | 621.9 | 70.1% |
-| gpt-6-luna | coding | 52 | 6m57s | 8.2 | 0.9% |
-| gpt-6-luna | checks | 7 | 41s | 0.4 | 0.0% |
-| gpt-6.1-sol | leader | 47 | 12m39s | 95.8 | 10.8% |
-| gpt-6.1-sol | coding | 49 | 11m55s | 132.1 | 14.9% |
-| gpt-6.1-terra | coding | 30 | 3m51s | 28.8 | 3.2% |
+| Model           | Role    | Requests | Model time |   AIU | AIU share |
+| --------------- | ------- | -------: | ---------: | ----: | --------: |
+| claude-opus-5.5 | advisor |       69 |     15m30s | 621.9 |     70.1% |
+| gpt-6-luna      | coding  |       52 |      6m57s |   8.2 |      0.9% |
+| gpt-6-luna      | checks  |        7 |        41s |   0.4 |      0.0% |
+| gpt-6.1-sol     | leader  |       47 |     12m39s |  95.8 |     10.8% |
+| gpt-6.1-sol     | coding  |       49 |     11m55s | 132.1 |     14.9% |
+| gpt-6.1-terra   | coding  |       30 |      3m51s |  28.8 |      3.2% |
 
-| Role | Requests | Model time | AIU | AIU share |
-| --- | ---: | ---: | ---: | ---: |
-| leader | 47 | 12m39s | 95.8 | 10.8% |
-| coding | 131 | 22m43s | 169.1 | 19.1% |
-| advisor | 69 | 15m30s | 621.9 | 70.1% |
-| checks | 7 | 41s | 0.4 | 0.0% |
+| Role    | Requests | Model time |   AIU | AIU share |
+| ------- | -------: | ---------: | ----: | --------: |
+| leader  |       47 |     12m39s |  95.8 |     10.8% |
+| coding  |      131 |     22m43s | 169.1 |     19.1% |
+| advisor |       69 |     15m30s | 621.9 |     70.1% |
+| checks  |        7 |        41s |   0.4 |      0.0% |
 
-| Model | Role | Input | Output | Cache read | Cache write | Reasoning |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| claude-opus-5.5 | advisor | 9,645,351 | 87,644 | 9,116,758 | 528,437 | 62,927 |
-| gpt-6-luna | coding | 4,958,671 | 35,972 | 4,832,849 | 125,666 | 19,690 |
-| gpt-6-luna | checks | 126,233 | 1,664 | 106,870 | 19,342 | 921 |
-| gpt-6.1-sol | leader | 3,675,701 | 31,898 | 3,562,451 | 113,109 | 12,619 |
-| gpt-6.1-sol | coding | 5,623,491 | 38,150 | 5,466,268 | 157,076 | 16,579 |
-| gpt-6.1-terra | coding | 2,288,712 | 11,494 | 2,192,152 | 96,470 | 3,805 |
+| Model           | Role    |     Input | Output | Cache read | Cache write | Reasoning |
+| --------------- | ------- | --------: | -----: | ---------: | ----------: | --------: |
+| claude-opus-5.5 | advisor | 9,645,351 | 87,644 |  9,116,758 |     528,437 |    62,927 |
+| gpt-6-luna      | coding  | 4,958,671 | 35,972 |  4,832,849 |     125,666 |    19,690 |
+| gpt-6-luna      | checks  |   126,233 |  1,664 |    106,870 |      19,342 |       921 |
+| gpt-6.1-sol     | leader  | 3,675,701 | 31,898 |  3,562,451 |     113,109 |    12,619 |
+| gpt-6.1-sol     | coding  | 5,623,491 | 38,150 |  5,466,268 |     157,076 |    16,579 |
+| gpt-6.1-terra   | coding  | 2,288,712 | 11,494 |  2,192,152 |      96,470 |     3,805 |
 
 Reported totals: leader 95.8 AIU, subagents 791.4 AIU, run 887.3 AIU.
 Rounded role rows can differ slightly from the host total. Cache and reasoning fields may
