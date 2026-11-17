@@ -144,6 +144,17 @@ Run `npm run l10n` after the strings change.
    `onInstanceChanged`.
 6. Add `hasExistingInstance(alias)` for the tree (true when `getExistingInstance` is defined).
 
+> **Done (2026-11-17), commit `15359d174`:** implemented by `gpt-6.1-sol`, as recommended.
+> Setup readiness, provider launch and provisioning honor Start fresh while lifecycle and Keep
+> retain ownership. The context migration includes its router, webview and scenario consumers.
+> Decisions: advised (`claude-opus-5.5`, 90%) to reserve only fresh/removed-owner switches,
+> preserve credentials by skipping the old cleanup after reservation, and stream the existing
+> `setupAlreadyInProgress` message when a reservation loses. Storage failures retain their
+> truthful `unexpectedFailure` detail (advisor clarification, 92%); no tests were weakened.
+> The existing no-resource, winner-record and secret assertions remain. Build passed; 1,315
+> service/webview tests and 47 scenario tests passed. After the race-message correction,
+> 209 durability/telemetry tests passed. Final combined validation is still pending.
+
 ### P2. Open the panel with Start fresh selected
 
 1. `OpenLocalQuickStartOptions` gains `initialDataChoice?: 'fresh'`;
@@ -195,12 +206,24 @@ before **Retry setup…**. It runs `localQuickStart.open` with
 `getChildren` is already async. Do not add it to the `CredentialsMissing` row: **Review setup…**
 already lands on the forced Start fresh.
 
+> **Done (2026-11-17), commit `63b695e43`:** implemented by `gpt-6.1-terra`, as recommended.
+> Error rows offer **Start fresh…** before Retry only for an existing record; its command only
+> opens the panel. Decisions: advised (`claude-opus-5.5`, 88%) to preserve recovery rows and
+> explicitly meter a failed existence lookup. Four new cases cover availability, arguments and
+> lookup failure; all 60 tree tests passed. Localization will be generated after P3's strings.
+> P2/P3 must land before shipping this entry point.
+
 ### P5. Telemetry
 
 On `documentDB.quickstart.provision`, add `containerEngineChanged` (`true` / `false` / `legacy`,
 from the P1 `engineChanged` computation and the record). `startFresh`, `preferredContainerEngine`
 and `priorState` already exist. `activationSource=treeStartFreshRow` covers the tree entry. Follow
 the telemetry skill; do not name the property with `error`.
+
+> **Done (2026-11-17), commit `15359d174`:** implemented with P1 by `gpt-6.1-sol` because
+> the same provision gate owns the classification (leader coordination decision, 99%).
+> `containerEngineChanged` is a closed `true`/`false`/`legacy` classification and is omitted
+> before the gate is reached. Advised (`claude-opus-5.5`, 90%); focused telemetry tests passed.
 
 ### P6. Tests
 
@@ -220,6 +243,12 @@ Replace, do not duplicate:
   - legacy record with Start fresh and Podman preferred reserves Podman before pull.
 - `LocalQuickStartItem.test.ts`: the error rows include **Start fresh…** only when an instance
   record exists, with the expected command arguments.
+
+> **Progress (2026-11-17):** `15359d174` adds 19 service/router/telemetry cases, including
+> switched-engine failure/cancellation rollback, reserve-before-pull, legacy Keep, and readiness
+> forwarding. `63b695e43` adds four tree cases. The approved obsolete fresh-engine expectations
+> were replaced; intent-bearing removal/order assertions remain. Webview/command coverage is
+> underway in P2/P3.
 
 ### P7. Docs
 
