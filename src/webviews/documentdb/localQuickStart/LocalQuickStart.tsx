@@ -700,6 +700,7 @@ export const LocalQuickStart = (): JSX.Element => {
     // True when the terminal failure was a readiness timeout (the container was left running),
     // so the failed view offers Wait longer / Start over instead of just Retry (§9.1).
     const [timedOut, setTimedOut] = useState(false);
+    const [existingDataErased, setExistingDataErased] = useState(false);
     // Read by the long-lived instance-status subscription, which would otherwise see a stale value.
     const timedOutRef = useRef(false);
     useEffect(() => {
@@ -998,6 +999,7 @@ export const LocalQuickStart = (): JSX.Element => {
             if (options?.resetStages !== false) {
                 setStageStatus(emptyStageStatus());
                 setFacts(emptyStageFacts());
+                setExistingDataErased(false);
                 setCheckReadiness(undefined);
                 checkReadinessRef.current = undefined;
             } else {
@@ -1019,6 +1021,9 @@ export const LocalQuickStart = (): JSX.Element => {
             const subscription = subscribe({
                 onData(event: StageEvent) {
                     if (myGeneration !== streamGenerationRef.current) return; // superseded/cancelled stream
+                    if (event.existingDataErased === true) {
+                        setExistingDataErased(true);
+                    }
                     if (event.stage === 'checking' && event.dockerReadiness) {
                         applyReadiness(event.dockerReadiness);
                     }
@@ -1738,8 +1743,7 @@ export const LocalQuickStart = (): JSX.Element => {
     const ownerEngineName = ownerEngine === 'podman' ? l10n.t('Podman') : l10n.t('Docker');
     const differentEngineNote = engineChanged
         ? l10n.t(
-              'Setup creates a new, empty instance in {0}. The existing container and data in {1} are not erased, and DocumentDB Local stops managing them.',
-              preferredEngineName,
+              'Starting fresh deletes the existing DocumentDB Local container and its data in {0}, then sets up a new instance using your selected container engine.',
               ownerEngineName,
           )
         : undefined;
@@ -1964,17 +1968,8 @@ export const LocalQuickStart = (): JSX.Element => {
      * or stopped instance is never walked into a destructive recreate. A credential-unavailable one
      * is explained here before the user can choose the explicit "Start fresh" action.
      */
-    const credentialsMissingMessage = engineChanged ? (
-        <>
-            {l10n.t(
-                'We found an existing DocumentDB Local instance, but its saved credentials are unavailable. Without them, we cannot reopen or reuse the existing data, so you need to start fresh. Nothing has been changed yet.',
-            )}{' '}
-            {differentEngineNote}
-        </>
-    ) : (
-        l10n.t(
-            'We found an existing DocumentDB Local instance, but its saved credentials are unavailable. Without them, we cannot reopen or reuse the existing data, so you need to start fresh. Nothing has been changed yet. Starting fresh erases the existing instance and its data, then creates a new one.',
-        )
+    const credentialsMissingMessage = l10n.t(
+        'We found an existing DocumentDB Local instance, but its saved credentials are unavailable. Without them, we cannot reopen or reuse the existing data, so you need to start fresh. Nothing has been changed yet. Starting fresh erases the existing instance and its data, then creates a new one.',
     );
     const existingInstanceNotice = existingInstanceGuard && (
         <MessageBlock
@@ -2049,18 +2044,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     onChange={(_event, data) => setDataChoice(data.value === 'fresh' ? 'fresh' : 'reuse')}
                 >
                     <Radio value="reuse" label={l10n.t('Keep the existing data')} />
-                    <Radio
-                        value="fresh"
-                        label={
-                            ownerEngine !== undefined && preferredEngine !== ownerEngine
-                                ? l10n.t(
-                                      'Start empty in {0} and leave the {1} data as it is',
-                                      preferredEngineName,
-                                      ownerEngineName,
-                                  )
-                                : l10n.t('Erase the existing data and start empty')
-                        }
-                    />
+                    <Radio value="fresh" label={l10n.t('Erase the existing data and start empty')} />
                 </RadioGroup>
             </Field>
         </MessageBlock>
@@ -2449,6 +2433,13 @@ export const LocalQuickStart = (): JSX.Element => {
     let secondaryActions: JSX.Element;
     // Sits directly above the primary action and states what pressing it does to the machine.
     let footerNote: ReactNode;
+    const recordedOwnerFreshNote =
+        ownerEngine !== undefined
+            ? l10n.t(
+                  'This deletes the DocumentDB Local container and its data volume in {0}, then creates a new instance. All data in the existing instance is permanently erased.',
+                  ownerEngineName,
+              )
+            : undefined;
 
     // `isProvisioning` is just `phase === 'provisioning'`, so this switches on `phase` throughout;
     // `'failed'` alone has two footers, split on `timedOut` inside its case.
@@ -2467,7 +2458,7 @@ export const LocalQuickStart = (): JSX.Element => {
             break;
         }
         case 'configure': {
-            primaryLabel = forcedFresh
+            primaryLabel = startFresh
                 ? l10n.t('Start fresh')
                 : isRecreate
                   ? l10n.t('Recreate container')
@@ -2495,17 +2486,18 @@ export const LocalQuickStart = (): JSX.Element => {
                       QUICK_START_CONTAINER_NAME,
                   )
                 : startFresh
-                  ? l10n.t(
+                  ? (recordedOwnerFreshNote ??
+                    l10n.t(
                         'This deletes the container named {0} and its data volume, then creates a new one. Everything stored in DocumentDB Local is erased.',
                         QUICK_START_CONTAINER_NAME,
-                    )
+                    ))
                   : l10n.t(
                         'Starting downloads the official image if needed, then creates and starts one container named {0}. Nothing else on your machine is changed.',
                         QUICK_START_CONTAINER_NAME,
                     );
             footerNote = (
                 <>
-                    {!engineChanged && actionNote} {telemetryNote}
+                    {actionNote} {telemetryNote}
                 </>
             );
             secondaryActions = (
@@ -2527,6 +2519,9 @@ export const LocalQuickStart = (): JSX.Element => {
             break;
         }
         case 'failed': {
+            if (existingDataErased) {
+                footerNote = l10n.t('All data in the existing instance is permanently erased.');
+            }
             if (timedOut) {
                 primaryLabel = l10n.t('Wait longer');
                 primaryIcon = <ArrowClockwiseRegular />;
@@ -2537,7 +2532,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     </Button>
                 );
             } else {
-                primaryLabel = forcedFresh
+                primaryLabel = startFresh
                     ? l10n.t('Start fresh')
                     : canContinueSetup
                       ? l10n.t('Continue setup')
@@ -2545,22 +2540,23 @@ export const LocalQuickStart = (): JSX.Element => {
                 primaryIcon = canContinueSetup ? <RocketRegular /> : <ArrowClockwiseRegular />;
                 primaryDisabled = startingDocker || checkingDockerAgain;
                 onPrimary = handleStart;
-                // Data this profile can't open makes the next run a Start fresh (#946), so say so here
-                // rather than letting "Retry" erase it.
-                footerNote = forcedFresh
-                    ? engineChanged
-                        ? undefined
-                        : l10n.t(
-                              'This deletes the container named {0} and its data volume, then creates a new one. Everything stored in DocumentDB Local is erased.',
-                              QUICK_START_CONTAINER_NAME,
-                          )
-                    : canContinueSetup
-                      ? l10n.t(
-                            'Continuing runs every setup step from the beginning, starting with the container engine check. Nothing has been created on your machine yet.',
-                        )
-                      : l10n.t(
-                            'Retrying runs every setup step again from the beginning, starting with the container engine check.',
-                        );
+                // A fresh retry must state its data consequence before the next run.
+                if (!existingDataErased) {
+                    footerNote = startFresh && recordedOwnerFreshNote
+                        ? recordedOwnerFreshNote
+                        : startFresh
+                          ? l10n.t(
+                                'This deletes the container named {0} and its data volume, then creates a new one. Everything stored in DocumentDB Local is erased.',
+                                QUICK_START_CONTAINER_NAME,
+                            )
+                          : canContinueSetup
+                            ? l10n.t(
+                                  'Continuing runs every setup step from the beginning, starting with the container engine check. Nothing has been created on your machine yet.',
+                              )
+                            : l10n.t(
+                                  'Retrying runs every setup step again from the beginning, starting with the container engine check.',
+                              );
+                }
                 secondaryActions = (
                     <Button appearance="secondary" onClick={handleBackToConfigure}>
                         {l10n.t('Back')}
