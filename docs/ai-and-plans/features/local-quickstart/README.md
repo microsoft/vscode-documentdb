@@ -24,8 +24,10 @@ flow offers Docker and Podman in Configure without checking availability, defaul
 Docker, and does not persist the preference. During execution, setup detects both CLIs, uses the
 preferred CLI when it is installed, and falls back to the other only when it is missing and the
 other CLI is installed. Each instance records its owning engine, which remains fixed for lifecycle
-actions and recreation, including Start fresh. Once its container and volume are both gone, setup
-offers the engine choice again (decision 0009, amended).
+actions and for a recreate that keeps the data. Once its container and volume are both gone, setup
+offers the engine choice again (decision 0009, amended). Approved, not yet implemented: Start fresh
+is offered whenever an instance exists and unlocks the engine choice, leaving data in a previous
+engine untouched (decision 0014, [iteration 16](./iterations/16-start-fresh-engine-choice.md)).
 
 The approved engine preference and Podman startup behavior are recorded in
 [iteration 12](./iterations/12-preferred-engine-and-podman-start.md); implementation progress is
@@ -170,17 +172,19 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 | 2026-11-10 | #1076 | Preferred engine, owning-engine lifecycle safety and platform-gated Podman startup; all P1–P6 phases and final verification complete | [iterations/12-preferred-engine-and-podman-start.md](./iterations/12-preferred-engine-and-podman-start.md), [review](./iterations/13-preferred-engine-implementation-review.md) |
 | 2026-11-12 | #1076 | Podman guidance follows the address in its error (WSL Windows machine, remote host, user socket)                                     | [iterations/14-podman-connection-detection.md](./iterations/14-podman-connection-detection.md)                                                                                  |
 | 2026-11-13 | #1083 | Recreate keeps the image its data runs on, pinned by digest                                                                          | [iterations/15-recreate-image-pin-review.md](./iterations/15-recreate-image-pin-review.md)                                                                                      |
+| 2026-11-17 | —     | Planned: Start fresh always offered and unlocks the engine choice (decision 0014)                                                    | [iterations/16-start-fresh-engine-choice.md](./iterations/16-start-fresh-engine-choice.md)                                                                                      |
 
 ## Decisions
 
-See [decisions.md](./decisions.md). Thirteen entries: the single-instance model (0001, superseded), its
+See [decisions.md](./decisions.md). Fourteen entries: the single-instance model (0001, superseded), its
 reversal to multi-instance (0002), the Concept F wizard information architecture (0003), the
 managed-node cluster-command context boundary plus its deferred replacement (0004), restoring
 missing credentials from the managed container (0005), the wizard journey telemetry and its
 correlation ids (0006), image usage telemetry following VS Code's setting (0007), Details on
 settled setup stages (0008), preferred-engine ownership and platform-gated Podman startup
 (0009–0011), Podman guidance from the address in its error (0012), and the setup outcome, guide and
-instance connection telemetry added in 1.1.0 (0013).
+instance connection telemetry added in 1.1.0 (0013), and Start fresh unlocking the engine choice
+(0014).
 
 ## Open gaps
 

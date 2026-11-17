@@ -19,11 +19,12 @@ verified: 2026-08-14
 | 0006 | Wizard journey telemetry and correlation ids           | Accepted            | Quick Start lineage id not added                | 2026-09-29 | #979  |
 | 0007 | Image usage telemetry follows VS Code's setting        | Accepted            | Accepted as proposed                            | 2026-10-15 | #1018 |
 | 0008 | Set up stages expand to show what each stage did       | Accepted            | Amends 0003's single failure surface            | 2026-11-10 | —     |
-| 0009 | Preferred engine and instance ownership                | Accepted            | Amended: data-removed instances are not pinned  | 2026-11-10 | #1076 |
+| 0009 | Preferred engine and instance ownership                | Accepted (modified) | Start fresh rule in §3–4 replaced by 0014       | 2026-11-10 | #1076 |
 | 0010 | Platform-gated Podman machine startup                  | Accepted            | Button only for eligible macOS/Windows machines | 2026-11-10 | #1076 |
 | 0011 | Rootful default machine and a slow machine list        | Accepted            | Amends 0010 after a native Windows test         | 2026-11-10 | #1076 |
 | 0012 | Podman guidance follows the address in its error       | Accepted            | Simplified; connection resolution rejected      | 2026-11-12 | #1076 |
 | 0013 | Setup outcome, guide and instance connection telemetry | Accepted            | `customPort` replaced by `portChanged`          | 2026-11-04 | —     |
+| 0014 | Start fresh is always offered and unlocks the engine   | Accepted            | Operator's alternative chosen over always-open  | 2026-11-17 | —     |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -737,3 +738,74 @@ including runs that stopped because Docker was missing.
   `portInUse`, and data that cannot be opened (`refusedCredentialsUnavailable`) as `other`.
 - `customPort` disappears from 1.1.0 onwards; queries spanning older versions must treat it as
   unknown rather than `true`.
+
+## 0014 - Start fresh is always offered and unlocks the engine
+
+**Status:** Accepted · **Date:** 2026-11-17 · **PR:** — · **Raised by:** the operator in
+pre-release testing
+**Evidence:** [iteration 16](./iterations/16-start-fresh-engine-choice.md) §1–2;
+`QuickStartService.ts` (`engineRequestFor`, `getInstanceEngine`, `performReconciliation`,
+`provision` volume-wipe gate), `LocalQuickStart.tsx` (engine row, `dataChoiceBlock`)
+
+### Question
+
+An instance record written before Podman support has no `engineCli`. With Docker installed but not
+running, startup reconciliation marks it `Error`, and **Retry setup…** opens Configure showing
+**Container engine: Not recorded** with no way to change it. Setup then tries Docker again and
+never Podman. **Start fresh** is not offered either: it appears only when stored credentials can
+be read or the state is `CredentialsMissing`, and the unreachable engine stops reconciliation
+before it can report `CredentialsMissing`. The tree offers no Delete for a node with no container.
+The only way forward was to start Docker. How should a user change the engine of an existing
+instance?
+
+### Decision
+
+1. **Start fresh is the gate for changing the engine.** With **Keep the existing data**, the engine
+   stays the recorded owner and is read-only, as before. With **Start fresh**, the engine row is
+   editable and pre-selected to the recorded owner (Docker for a record without one).
+2. **Start fresh is offered whenever an instance record exists**, not only when stored credentials
+   can be read or reconciliation reported `CredentialsMissing`. When the data cannot be kept, Start
+   fresh is the only choice and the panel says why.
+3. **Start fresh in the recorded engine erases that engine's data**, as today. **Start fresh in the
+   other engine creates a new, empty instance there and leaves the old container and volume
+   untouched.** The panel says so, and DocumentDB Local stops managing the old ones. It cannot
+   erase them anyway when that engine is not running, which is the case that raised this.
+4. **A record without `engineCli` is described truthfully, not as "Not recorded" and not as a flat
+   "Docker".** Before Podman support, setup used Docker if its CLI was installed and Podman
+   otherwise, so such an instance may live in Podman.
+5. **The tree's error recovery actions gain "Start fresh…"** when an instance record exists. It
+   only opens Configure with Start fresh pre-selected; nothing is erased from the tree.
+6. **No em dashes in user-visible text** added or changed by this work.
+
+This replaces the rule in 0009 §3 that recreation "including Start fresh" uses the recorded owner,
+and 0009 §4 for setup. Lifecycle actions and reconciliation still use the recorded owner until a
+setup in the new engine succeeds; a failed or cancelled attempt restores the previous record and
+credentials (the reservation and rollback added by 0009's 2026-11-16 amendment).
+
+### Why
+
+The operator's expectations: an engine that was not recorded must be choosable, and even a recorded
+one may need switching. The operator proposed making **Start fresh** clearly available (in the
+webview and the tree) and approved it after comparing it with an always-editable engine row. The
+comparison favoured it because the user states the intent to abandon the data before the engine
+can change, the keep-data path cannot be pointed at the wrong engine by accident, and it reuses the
+existing keep/fresh choice rather than adding a separate "engine changed" path to the UI.
+
+### Alternatives considered
+
+- **Engine row always editable, pre-selected to the recorded owner.** Not chosen: fewer clicks,
+  but the data consequence appears only after the switch, and the keep-data path could be pointed
+  at an engine that does not hold the data.
+- **Label a record without `engineCli` as "Docker".** Rejected: untrue for instances created by a
+  Podman-only setup before Podman support. The panel must not state a wrong fact.
+- **Erase the old engine's data when switching.** Not chosen: impossible while that engine is down,
+  and silently reaching into an engine the user is moving away from is riskier than leaving it.
+- **Run Start fresh directly from the tree.** Rejected: Configure owns destructive choices (the
+  same reason the `CredentialsMissing` row only opens the panel).
+
+### Consequences
+
+- Switching engines leaves an unmanaged container and volume in the old engine. If that container
+  still runs, it holds its port, and the Configure port check moves the suggestion to a free port.
+- Same-engine Start fresh still needs that engine running to erase its data, as before.
+- Tests asserting the engine lock under Start fresh (`locks the existing %s engine…`) are replaced.
