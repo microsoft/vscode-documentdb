@@ -42,9 +42,16 @@ Setting up DocumentDB Local requires:
   It falls back to the other engine only when the preferred CLI is missing. An installed but
   stopped engine is not treated as missing, so setup does not switch to the other engine in that
   case.
-- For a recreate that reuses existing data, Configure shows the instance's recorded engine
-  read-only. Start fresh also recreates within that same engine; changing the preference never moves
-  an existing instance to another engine.
+- For a recreate that keeps existing data, Configure shows the instance's recorded engine
+  read-only. For an existing instance record, **Start fresh** makes the engine choice editable and
+  preselects the recorded owner. A legacy record has no recorded owner, so Configure preselects
+  Docker; older versions used Docker when its CLI was installed and Podman otherwise, so the original
+  engine may not be known.
+- With a recorded owner, starting fresh in that same engine erases its container and volume and
+  creates a new instance there. Choosing a different engine creates a new, empty instance there and
+  leaves the old container and volume untouched and no longer managed. Lifecycle actions continue
+  to use the recorded owner until setup in the new engine succeeds. If saved credentials cannot be
+  read, **Start fresh** is the only choice and the panel explains why.
 - Access from the selected CLI to an engine running Linux containers.
 - An x64 or arm64 extension host. DocumentDB Local images are published for those architectures.
 
@@ -292,13 +299,17 @@ Windows-container mode, switch Docker to Linux containers and select **Check Doc
 ## Recovery during setup
 
 After a setup failure, the instance's tree actions appear in this order: **View setup log**,
-**Delete container…** when a container exists, then **Retry setup…**. Retry setup reopens the wizard;
+**Delete container…** when a container exists, **Start fresh…** when an instance record exists, then
+**Retry setup…**. **Start fresh…** only opens Configure with Start fresh selected; it does not start
+setup or erase data. If the setup panel is already open, the action reveals it without changing its
+current data choice. Select **Start fresh** in that panel if needed. Retry setup reopens the wizard;
 it is not an immediate retry. Deleting the container also removes its data volume, so use it only
 when you intend to discard that data.
 
 Other states keep their targeted actions: **Recreate container…** for a missing container,
 **Review setup…** when credentials need attention, or **Review container engine setup…** when offered
-for an engine problem. These are tree-row labels; context-menu titles can differ.
+for an engine problem. **Review setup…** remains the action when credentials are missing and opens
+the required Start fresh flow. These are tree-row labels; context-menu titles can differ.
 
 If the selected container engine becomes unavailable during image pull or container creation, setup returns to its recovery stage. Registry, proxy, image-manifest, and other image-specific failures remain setup errors and are not presented as engine diagnoses.
 

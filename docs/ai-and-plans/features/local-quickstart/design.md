@@ -34,11 +34,17 @@ verified: 2026-08-14
 > not persist the preference. Execution detects both CLIs, uses the preferred one if its CLI is
 > installed, and falls back to the other only when that CLI is missing and the other is installed,
 > not when its engine is stopped.
-> Instances record their owning engine, which remains fixed for lifecycle and recreation, including
-> Start fresh; legacy records are resolved only during execution. Once both container and volume are
-> confirmed gone, setup can select a new engine. Before creating resources it durably reserves that
-> engine for reload recovery, including after a readiness timeout. Failed or discarded attempts
-> restore the previous record and credentials only while still owning the reservation.
+> Instances record their owning engine, which remains fixed for lifecycle actions and recreation
+> that keeps the data. Start fresh unlocks the engine choice for an existing record and preselects
+> its owner, or Docker when a legacy record has no recorded owner. Earlier versions used Docker when
+> its CLI was installed and Podman otherwise, so a legacy record may not identify where its data
+> lives. Starting fresh in the recorded owner erases and recreates there; choosing another engine
+> creates a new, empty instance there and leaves the old container and volume untouched and
+> unmanaged. Lifecycle actions continue using the previous owner until setup in the new engine
+> succeeds. Once both container and volume are confirmed gone, setup can select a new engine.
+> Before creating resources it durably reserves that engine for reload recovery, including after a
+> readiness timeout. Failed or discarded attempts restore the previous record and credentials only
+> while still owning the reservation.
 > Podman runs neither read nor write
 > provider memory and ignore Docker evidence, while Docker's existing provider-memory behavior is
 > unchanged. On macOS and Windows, an explicit Podman machine start is available only for a stopped
@@ -760,7 +766,10 @@ gets a `quickStartSessionId` from the open command, and every event the panel pr
 - `documentDB.quickstart.provision`, one per setup run: `provisionResult`
   (`success`, `cancelled`, `timeout`, `error`), `provisionCorrelationId`, `reused`, `portTaken`,
   `portChanged` (the port differs from the one suggested; replaces `customPort`), `customCreds`,
-  `customImage`, `sampleData`, `priorState`, `startFresh`, `refusedCredentialsUnavailable`,
+  `customImage`, `sampleData`, `priorState`, `startFresh`, `containerEngineChanged` (`true`, `false`,
+  `legacy`; whether the run changes the engine for a ready instance, with `legacy` identifying a
+  ready record without a recorded engine; `false` when there is no ready record),
+  `refusedCredentialsUnavailable`,
   `dockerFailureKind` (the readiness `failureKind` when Docker stopped the run, else `none`),
   `dockerReadinessAtStart` (`ready`, `diagnosed`, `indeterminate`, `notChecked`: the host's last
   readiness before the run's own check), `failedStage` (`none`, `checking`, `pulling`, `creating`,

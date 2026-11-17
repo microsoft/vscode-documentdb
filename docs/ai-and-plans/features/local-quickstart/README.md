@@ -24,10 +24,15 @@ flow offers Docker and Podman in Configure without checking availability, defaul
 Docker, and does not persist the preference. During execution, setup detects both CLIs, uses the
 preferred CLI when it is installed, and falls back to the other only when it is missing and the
 other CLI is installed. Each instance records its owning engine, which remains fixed for lifecycle
-actions and for a recreate that keeps the data. Once its container and volume are both gone, setup
-offers the engine choice again (decision 0009, amended). Approved, not yet implemented: Start fresh
-is offered whenever an instance exists and unlocks the engine choice, leaving data in a previous
-engine untouched (decision 0014, [iteration 16](./iterations/16-start-fresh-engine-choice.md)).
+actions and for a recreate that keeps the data. Start fresh is available for an existing instance
+record and unlocks the engine choice, preselecting the recorded owner or Docker when a legacy record
+has no recorded owner. Earlier versions used Docker when its CLI was installed and Podman otherwise,
+so a legacy record may not identify where its data lives. Starting fresh in the recorded owner
+erases and recreates there; choosing another engine creates an empty instance there and leaves the
+old container and volume untouched and unmanaged. When credentials cannot be read, Start fresh is
+the only choice. Once the container and volume are both gone, setup offers the engine choice again
+without requiring Start fresh (decision 0009, amended; see decision 0014 and
+[iteration 16](./iterations/16-start-fresh-engine-choice.md)).
 
 The approved engine preference and Podman startup behavior are recorded in
 [iteration 12](./iterations/12-preferred-engine-and-podman-start.md); implementation progress is
@@ -172,7 +177,7 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 | 2026-11-10 | #1076 | Preferred engine, owning-engine lifecycle safety and platform-gated Podman startup; all P1–P6 phases and final verification complete | [iterations/12-preferred-engine-and-podman-start.md](./iterations/12-preferred-engine-and-podman-start.md), [review](./iterations/13-preferred-engine-implementation-review.md) |
 | 2026-11-12 | #1076 | Podman guidance follows the address in its error (WSL Windows machine, remote host, user socket)                                     | [iterations/14-podman-connection-detection.md](./iterations/14-podman-connection-detection.md)                                                                                  |
 | 2026-11-13 | #1083 | Recreate keeps the image its data runs on, pinned by digest                                                                          | [iterations/15-recreate-image-pin-review.md](./iterations/15-recreate-image-pin-review.md)                                                                                      |
-| 2026-11-17 | —     | Planned: Start fresh always offered and unlocks the engine choice (decision 0014)                                                    | [iterations/16-start-fresh-engine-choice.md](./iterations/16-start-fresh-engine-choice.md)                                                                                      |
+| 2026-11-17 | —     | Start fresh unlocks the engine choice; implemented, manual engine and workbench checks pending (decision 0014)                        | [iterations/16-start-fresh-engine-choice.md](./iterations/16-start-fresh-engine-choice.md)                                                                                      |
 
 ## Decisions
 
