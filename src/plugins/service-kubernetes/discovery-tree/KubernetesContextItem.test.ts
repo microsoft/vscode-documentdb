@@ -135,8 +135,7 @@ vi.mock('./documentdb/KubernetesResourceItem', () => ({
     },
 }));
 
-/** GlobalState key persisting the discovery view mode (mirrors config.ts). */
-const VIEW_MODE_KEY = 'kubernetes-discovery.viewMode';
+const VIEW_MODE_KEY = 'documentDB.liveConfig.kubernetesViewMode';
 
 function getNamespaceName(child: unknown): string {
     return (child as { namespace: string }).namespace;

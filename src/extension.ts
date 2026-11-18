@@ -78,11 +78,17 @@ export async function activateInternal(
 
         ext.secretStorage = context.secrets;
 
-        try {
-            await LiveConfigService.migrateAtlasViewMode();
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            ext.outputChannel.warn(`[LiveConfig] Failed to migrate the Atlas view mode: ${message}`);
+        const discoveryViewModeMigrations = [
+            ['Atlas', 'migrateAtlasViewMode'],
+            ['Kubernetes', 'migrateKubernetesViewMode'],
+        ] as const;
+        for (const [provider, migrate] of discoveryViewModeMigrations) {
+            try {
+                await LiveConfigService[migrate]();
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                ext.outputChannel.warn(`[LiveConfig] Failed to migrate the ${provider} view mode: ${message}`);
+            }
         }
 
         registerGiveFeedbackCommand(context);

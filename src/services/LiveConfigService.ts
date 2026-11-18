@@ -7,13 +7,16 @@ import { z } from 'zod';
 import { DocumentViewMode } from '../documentdb/DocumentViewMode';
 import { ext } from '../extensionVariables';
 import { type AtlasViewMode } from '../plugins/service-atlas-mongodb/config';
+import { type KubernetesViewMode } from '../plugins/service-kubernetes/config';
 
 const collectionDocumentViewKey = 'documentDB.liveConfig.collectionDocumentView';
 const atlasViewModeKey = 'documentDB.liveConfig.atlasViewMode';
 const legacyAtlasViewModeKey = 'atlas-mongodb-discovery.viewMode';
+const kubernetesViewModeKey = 'documentDB.liveConfig.kubernetesViewMode';
+const legacyKubernetesViewModeKey = 'kubernetes-discovery.viewMode';
 
 export const documentViewModeSchema = z.enum(DocumentViewMode);
-const atlasViewModeSchema = z.enum(['tree', 'list']);
+const discoveryViewModeSchema = z.enum(['tree', 'list']);
 
 /** Remembers UI choices without exposing them as VS Code settings. */
 export class LiveConfigService {
@@ -26,7 +29,11 @@ export class LiveConfigService {
     }
 
     static getAtlasViewMode(): AtlasViewMode {
-        return this.read(atlasViewModeKey, atlasViewModeSchema) ?? this.getLegacyAtlasViewMode() ?? 'tree';
+        return (
+            this.read(atlasViewModeKey, discoveryViewModeSchema) ??
+            this.read(legacyAtlasViewModeKey, discoveryViewModeSchema) ??
+            'tree'
+        );
     }
 
     static async setAtlasViewMode(mode: AtlasViewMode): Promise<void> {
@@ -34,19 +41,35 @@ export class LiveConfigService {
     }
 
     static async migrateAtlasViewMode(): Promise<void> {
-        if (this.read(atlasViewModeKey, atlasViewModeSchema) !== undefined) {
+        await this.migrateDiscoveryViewMode(atlasViewModeKey, legacyAtlasViewModeKey);
+    }
+
+    static getKubernetesViewMode(): KubernetesViewMode {
+        return (
+            this.read(kubernetesViewModeKey, discoveryViewModeSchema) ??
+            this.read(legacyKubernetesViewModeKey, discoveryViewModeSchema) ??
+            'list'
+        );
+    }
+
+    static async setKubernetesViewMode(mode: KubernetesViewMode): Promise<void> {
+        await ext.context.globalState.update(kubernetesViewModeKey, mode);
+    }
+
+    static async migrateKubernetesViewMode(): Promise<void> {
+        await this.migrateDiscoveryViewMode(kubernetesViewModeKey, legacyKubernetesViewModeKey);
+    }
+
+    private static async migrateDiscoveryViewMode(key: string, legacyKey: string): Promise<void> {
+        if (this.read(key, discoveryViewModeSchema) !== undefined) {
             return;
         }
 
-        const legacyMode = this.getLegacyAtlasViewMode();
+        const legacyMode = this.read(legacyKey, discoveryViewModeSchema);
         if (legacyMode !== undefined) {
             // Copy rather than delete so older versions can still read their original key.
-            await this.setAtlasViewMode(legacyMode);
+            await ext.context.globalState.update(key, legacyMode);
         }
-    }
-
-    private static getLegacyAtlasViewMode(): AtlasViewMode | undefined {
-        return this.read(legacyAtlasViewModeKey, atlasViewModeSchema);
     }
 
     private static read<T>(key: string, schema: z.ZodType<T>): T | undefined {

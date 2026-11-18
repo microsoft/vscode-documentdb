@@ -24,9 +24,24 @@ vi.mock('../extensionVariables', () => ({
     },
 }));
 
-const legacyKey = 'atlas-mongodb-discovery.viewMode';
-
-describe('Atlas view mode migration', () => {
+describe.each([
+    {
+        provider: 'Atlas',
+        legacyKey: 'atlas-mongodb-discovery.viewMode',
+        defaultMode: 'tree',
+        get: 'getAtlasViewMode',
+        set: 'setAtlasViewMode',
+        migrate: 'migrateAtlasViewMode',
+    },
+    {
+        provider: 'Kubernetes',
+        legacyKey: 'kubernetes-discovery.viewMode',
+        defaultMode: 'list',
+        get: 'getKubernetesViewMode',
+        set: 'setKubernetesViewMode',
+        migrate: 'migrateKubernetesViewMode',
+    },
+] as const)('$provider view mode migration', ({ legacyKey, defaultMode, get, set, migrate }) => {
     beforeEach(() => {
         state.clear();
         vi.clearAllMocks();
@@ -34,37 +49,38 @@ describe('Atlas view mode migration', () => {
 
     it.each(['tree', 'list'])('copies a legacy %s choice once and retains the original', async (mode) => {
         state.set(legacyKey, mode);
-        await LiveConfigService.migrateAtlasViewMode();
-        await LiveConfigService.migrateAtlasViewMode();
+        await LiveConfigService[migrate]();
+        await LiveConfigService[migrate]();
 
         expect(update).toHaveBeenCalledTimes(1);
         expect(state.get(legacyKey)).toBe(mode);
         state.delete(legacyKey);
-        expect(LiveConfigService.getAtlasViewMode()).toBe(mode);
+        expect(LiveConfigService[get]()).toBe(mode);
     });
 
     it('does not overwrite a newer choice with a legacy value', async () => {
         state.set(legacyKey, 'list');
-        await LiveConfigService.setAtlasViewMode('tree');
-        await LiveConfigService.migrateAtlasViewMode();
+        await LiveConfigService[set]('tree');
+        await LiveConfigService[migrate]();
 
         expect(update).toHaveBeenCalledTimes(1);
-        expect(LiveConfigService.getAtlasViewMode()).toBe('tree');
+        expect(LiveConfigService[get]()).toBe('tree');
     });
 
     it('uses the legacy choice if the copy fails', async () => {
-        state.set(legacyKey, 'list');
+        const mode = defaultMode === 'tree' ? 'list' : 'tree';
+        state.set(legacyKey, mode);
         update.mockRejectedValueOnce(new Error('Storage unavailable'));
-        await expect(LiveConfigService.migrateAtlasViewMode()).rejects.toThrow('Storage unavailable');
-        expect(LiveConfigService.getAtlasViewMode()).toBe('list');
+        await expect(LiveConfigService[migrate]()).rejects.toThrow('Storage unavailable');
+        expect(LiveConfigService[get]()).toBe(mode);
     });
 
-    it('ignores malformed legacy state and defaults to Tree', async () => {
+    it(`ignores malformed legacy state and defaults to ${defaultMode}`, async () => {
         state.set(legacyKey, 'unknown');
-        await LiveConfigService.migrateAtlasViewMode();
+        await LiveConfigService[migrate]();
 
         expect(warn).toHaveBeenCalled();
         expect(update).not.toHaveBeenCalled();
-        expect(LiveConfigService.getAtlasViewMode()).toBe('tree');
+        expect(LiveConfigService[get]()).toBe(defaultMode);
     });
 });
