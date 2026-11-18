@@ -89,6 +89,7 @@ export const CollectionView = (): JSX.Element => {
     // that's our current global context of the view
     const [currentContext, setCurrentContext] = useState<CollectionViewContextType>(() => ({
         ...DefaultCollectionViewContext,
+        currentView: configuration.initialDocumentView,
         activeQuery: {
             ...DefaultCollectionViewContext.activeQuery,
             pageSize: configuration.defaultPageSize,
@@ -460,23 +461,10 @@ export const CollectionView = (): JSX.Element => {
         }
     }, [currentContext.currentViewState?.currentPath]);
 
-    const handleViewChanged = (_optionValue: string) => {
-        let selection: Views;
-
-        switch (_optionValue) {
-            case 'Table View':
-                selection = Views.TABLE;
-                break;
-            case 'Tree View':
-                selection = Views.TREE;
-                break;
-            case 'JSON View':
-                selection = Views.JSON;
-                break;
-            default:
-                selection = Views.TABLE;
-                break;
-        }
+    const handleViewChanged = (selection: Views): void => {
+        void trpcClient.mongoClusters.collectionView.setCollectionDocumentView.mutate(selection).catch((error) => {
+            console.warn('Failed to remember the document view:', error);
+        });
 
         trpcClient.common.reportEvent
             .mutate({

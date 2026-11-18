@@ -17,7 +17,7 @@ import {
 } from '../../../tree/TreeElementWithContextValue';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
 import { atlasTrace } from '../atlasTrace';
-import { getAtlasViewMode } from '../commands/switchAtlasViewMode';
+import { LiveConfigService } from '../../../services/LiveConfigService';
 import { DISCOVERY_PROVIDER_ID } from '../config';
 import { readAtlasCredentials } from '../credentials/atlasCredentialStore';
 import { ADD_ATLAS_CREDENTIAL_COMMAND_ID } from '../credentialsManagement/addAtlasCredential';
@@ -72,7 +72,9 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
      * gated on it: the icon reflects the current mode and the action switches to the other one.
      */
     private get viewModeContextValue(): string {
-        return getAtlasViewMode() === 'list' ? 'discoveryAtlasViewModeList' : 'discoveryAtlasViewModeTree';
+        return LiveConfigService.getAtlasViewMode() === 'list'
+            ? 'discoveryAtlasViewModeList'
+            : 'discoveryAtlasViewModeTree';
     }
 
     async getChildren(): Promise<ExtTreeElementBase[]> {
@@ -82,7 +84,7 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
             return [this.createSignInNode()];
         }
 
-        const listMode = getAtlasViewMode() === 'list';
+        const listMode = LiveConfigService.getAtlasViewMode() === 'list';
         atlasTrace(
             `root: expanding in ${listMode ? 'list' : 'tree'} mode with ${String(credentials.length)} credential(s)`,
         );
@@ -164,7 +166,7 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
      */
     public async refresh(_context: IActionContext): Promise<void> {
         atlasTrace('root: explicit refresh requested');
-        await this.discoveryService.refreshAll({ includeClusters: getAtlasViewMode() === 'list' });
+        await this.discoveryService.refreshAll({ includeClusters: LiveConfigService.getAtlasViewMode() === 'list' });
         ext.discoveryBranchDataProvider.resetNodeErrorState(this.id);
         ext.discoveryBranchDataProvider.refresh(this);
     }
