@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import { Views } from '../../../documentdb/Views';
 import { AtlasExperience } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
+import { LiveConfigService } from '../../../services/LiveConfigService';
 import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
 import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
 import {
@@ -17,7 +18,6 @@ import {
 } from '../../../tree/TreeElementWithContextValue';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
 import { atlasTrace } from '../atlasTrace';
-import { LiveConfigService } from '../../../services/LiveConfigService';
 import { DISCOVERY_PROVIDER_ID } from '../config';
 import { readAtlasCredentials } from '../credentials/atlasCredentialStore';
 import { ADD_ATLAS_CREDENTIAL_COMMAND_ID } from '../credentialsManagement/addAtlasCredential';
