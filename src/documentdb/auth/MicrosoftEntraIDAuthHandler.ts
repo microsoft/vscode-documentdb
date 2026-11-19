@@ -151,14 +151,23 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
             }),
         );
 
+        let invocation = 0;
         const configuration = buildOidcClientConfiguration({
             connectionString,
             policy,
-            oidcCallback: (_params: OIDCCallbackParams): Promise<OIDCResponse> =>
-                Promise.resolve({
+            oidcCallback: (_params: OIDCCallbackParams): Promise<OIDCResponse> => {
+                const result = Promise.resolve({
                     accessToken: session.accessToken,
                     expiresInSeconds: 0,
-                }),
+                });
+                traceAuthFlow(
+                    'interactiveEntra.oidcCallback',
+                    { invocation: ++invocation, outcome: 'returned' },
+                    authCorrelationId,
+                    traceContext,
+                );
+                return result;
+            },
         });
         if (configuration.ignoredTlsBypass || this.clusterCredentials.emulatorConfiguration?.disableEmulatorSecurity) {
             ext.outputChannel.info(

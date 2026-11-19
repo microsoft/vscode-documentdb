@@ -193,6 +193,33 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         },
     );
 
+    it('traces successive OIDC callback invocations under the startup ID without changing the captured result', async () => {
+        const handler = new MicrosoftEntraIDAuthHandler(
+            buildCredentials('mongodb://cluster.mongocluster.cosmos.azure.com/'),
+        );
+        const { options } = await handler.configureAuth(undefined, {
+            startupCorrelationId: 'startup-id',
+            surface: 'extension',
+        });
+        const callback = options.authMechanismProperties?.OIDC_CALLBACK;
+        if (!callback) {
+            throw new Error('Missing OIDC callback');
+        }
+        const params = { version: 1, timeoutContext: new AbortController().signal } as const;
+
+        await expect(callback(params)).resolves.toEqual({ accessToken: 'access-token', expiresInSeconds: 0 });
+        await expect(callback(params)).resolves.toEqual({ accessToken: 'access-token', expiresInSeconds: 0 });
+        expect(getSessionFromVSCode).toHaveBeenCalledTimes(1);
+        expect(
+            mockOutputChannel.info.mock.calls
+                .map(([message]) => String(message))
+                .filter((message) => message.includes('interactiveEntra.oidcCallback')),
+        ).toEqual([
+            '[Authentication] startup=startup-id surface=extension interactiveEntra.oidcCallback: {"invocation":1,"outcome":"returned"}',
+            '[Authentication] startup=startup-id surface=extension interactiveEntra.oidcCallback: {"invocation":2,"outcome":"returned"}',
+        ]);
+    });
+
     it('rechecks the eager captured-token callback and existing TLS hook after trust removal', async (): Promise<void> => {
         let suffix: string | undefined = 'database.example.com';
         vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
