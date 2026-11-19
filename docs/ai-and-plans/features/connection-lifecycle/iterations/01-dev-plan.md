@@ -600,6 +600,12 @@ verdict exists, do not start the work it gates. The fingerprint table (formerly 
 
 **Progress:**
 
+- **Done (2026-11-19), commit `df0c22ade` (WI-1a, `gpt-6.2-sol`):** Added four MongoDB driver
+  contract tests for the pinned 7.2.0 workflow: callback rejection, cached-token speculation,
+  auth code 18 retry, and network error propagation without a retry. The accepted operator strategy
+  (decision 0010) is unchanged; the tests confirm the mocked driver behavior, not the live server's
+  response. All four focused tests and `npx tsc --noEmit -p .` passed. OP-1a is pending tracing.
+
 ---
 
 ## WI-2: Shell and Playground token relays (PR 1)
