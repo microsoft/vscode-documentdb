@@ -609,8 +609,16 @@ verdict exists, do not start the work it gates. The fingerprint table (formerly 
   and final-error traces without changing token handling. The implementation and review were advised
   (`claude-opus-5.5`, high confidence): the driver does not emit the initial code 18 it handles,
   so infer that path from the callback and final numeric code. Four trace tests added; Case 1 build
-  and 92 focused tests passed. **Waiting for OP-1a** before recording the CP-0 verdict or proceeding
-  with renewal.
+  and 92 focused tests passed.
+- **OP-1a / CP-0 (2026-11-19), advised (`claude-opus-5.5`, 80%):** After about two hours idle,
+  the cached client opened two fresh sockets. Both called back with the original captured token
+  and closed before they became ready. The final error was `MongoNetworkError`, with no numeric
+  code exposed. A contemporaneous diagnostics run authenticated with its own client and separate
+  non-interactive session lookup; it did not measure token freshness. The pinned driver's
+  cached-token path calls back after code 18, but the live trace does not show that code directly.
+  Proceed with the accepted silent renewal plan. Keep WI-5 unchanged for now; carry the possible
+  network-error shape to CP-2. OP-1b must verify a post-idle callback and successful operation
+  without prompting, including if the driver has to retry the read on a second socket.
 
 ---
 
