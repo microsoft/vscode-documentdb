@@ -24,6 +24,7 @@ created: 2026-11-19
 | 0010 | Rely on the server to reject expired tokens; replacing a client for the same identity is transparent       | Accepted                    | Operator: no rotation, no out-of-date notices          | 2026-11-19 | —   |
 | 0011 | Disconnect keeps the cached credentials and the verified identity; only Remove drops them                  | Accepted                    | Operator: reverses the #1059 proposal (plan Q3)        | 2026-11-19 | —   |
 | 0012 | Keep the lifecycle design minimal: no state machine, one epoch, no prompts in getClient, one-step teardown | Accepted                    | Operator: approved every proposed simplification       | 2026-11-19 | —   |
+| 0013 | Correct the minimal design where it lost edits, identity or recovery: latch before save, epoch checks      | Accepted (modifies 0012)    | Operator: "update the plan" after the omissions review | 2026-11-19 | —   |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -354,3 +355,35 @@ The dev plan ([iterations/01-dev-plan.md](./iterations/01-dev-plan.md)) now foll
 
 Unchanged: everything that carries an accepted decision (0001 to 0011), the single-flight startup, the
 cancelled-reuse fix, closed-client replacement, the failure classifier and the export and import lease.
+
+## 0013. Correct the minimal design where it lost edits, identity or recovery: latch before save, epoch checks
+
+**Accepted** by the operator on 2026-11-19. It modifies 0012. Source: a review of the dev plan against the
+code for omissions that could lose data, break reconnection or force a redesign; the operator agreed with
+every finding and asked to "update the plan".
+
+The findings, each confirmed in the code, and the corrections now in the dev plan
+([iterations/01-dev-plan.md](./iterations/01-dev-plan.md)):
+
+- **A credential change could be stored while teardown was refused**, and a failed save can still have
+  written the secrets (F-21). Correction: an identity-changing update sets the latch **before** it saves,
+  and new tasks and leases are refused while latched. After the save, the re-read stored connection
+  decides: a changed fingerprint commits the teardown, an unchanged one clears the latch. This keeps 0012's
+  "no reservation"; the latch is the only thing that can be undone.
+- **An old reply could overwrite a newer edit after a Reconnect as the same user.** Correction: host-side
+  results check the per-cluster epoch, not only the fingerprint and the latch, and the Document View
+  applies a reply only if the editor has not changed since the request.
+- **The binding was lost in handoffs** (F-23). Correction: a playground stores its fingerprint on the
+  document's connection, not on the shared evaluator; Collection View passes its fingerprint to import and
+  export, which check it before their first `getClient`.
+- **Recovery was tied to tree expansion.** 0012 removed the operation wrapper. Correction: one stateless
+  function, `runWithClient`, reports failures that happen during an operation; the dashboard sampler
+  classifies errors before it turns them into strings (F-24).
+- **Folder deletion bypassed teardown** (F-23). Correction: it runs the teardown for every connected
+  descendant, with one combined confirmation.
+- **Gates.** OP-1 is split: before the handler change it can only tell code 18 apart from a socket close;
+  renewal is proven after it, on a new socket of the same client (`maxIdleTimeMS`). OT-7 no longer
+  requires in-flight saves to fail, because `close(force)` cancels nothing (F-22); it requires no new
+  submission, no replay, no stale UI update and no claim that an unacknowledged write was not applied.
+
+None of the corrections adds a state machine or a service; 0012's other rules stand.

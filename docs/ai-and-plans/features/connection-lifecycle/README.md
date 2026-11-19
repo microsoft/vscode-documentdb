@@ -74,7 +74,8 @@ See [decisions.md](./decisions.md):
 - 0009 Kubernetes tunnel recovery, case handling and wider network-resilience testing move to #1105;
 - 0010 rely on the server to reject expired tokens; same-identity client replacement is transparent;
 - 0011 Disconnect keeps the cached credentials and the verified identity; only Remove drops them;
-- 0012 a minimal lifecycle design: no state machine, one epoch, no prompts in `getClient`, one-step teardown.
+- 0012 a minimal lifecycle design: no state machine, one epoch, no prompts in `getClient`, one-step teardown;
+- 0013 corrections to 0012: latch before a credential save, epoch checks on replies, bindings carried through handoffs, an operation wrapper, folder deletion runs teardown.
 
 ## Timeline
 
