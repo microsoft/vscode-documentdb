@@ -18,6 +18,9 @@ created: 2026-11-19
 | 0004 | Disconnect lets the user choose: close all affected tabs, or keep them open and disabled                   | Accepted | Operator position; the default is still open (Q2)      | 2026-11-19 | —   |
 | 0005 | Fix stale ARM credentials by upgrading azureauth to v6 (#990), not with a local shim                       | Accepted | Operator: open to updating dependencies                | 2026-11-19 | —   |
 | 0006 | Deliver through `feature/connection-lifecycle` with sub-PRs, avoid PRs on top of open PRs, ship once       | Accepted | Operator chose this over one big PR and GitHub stacks  | 2026-11-19 | —   |
+| 0007 | The Disconnect choice is a VS Code modal with nothing remembered; a setting can set the default            | Accepted | Operator: modal cannot pre-select; no remembering      | 2026-11-19 | —   |
+| 0008 | Upgrade the azext stack as high as viable without breaking workflows, using Azure Resources as reference   | Accepted | Operator: replaces the "minimal versions" proposal     | 2026-11-19 | —   |
+| 0009 | Kubernetes tunnel recovery, cluster ID case handling and wider network-resilience testing move to #1105    | Accepted | Operator: keep 1.2.0 focused; schedule after release   | 2026-11-19 | —   |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -166,3 +169,84 @@ Rejected:
 - **GitHub stacked PRs:** the operator's experience was that updates must move up the chain and the
   PRs end up merged one by one anyway.
 - **Shipping WI-1 and WI-2 early as a patch (plan Q5):** no partial release.
+
+## 0007. The Disconnect choice is a VS Code modal with nothing remembered; a setting can set the default
+
+**Accepted** by the operator on 2026-11-19. It answers plan Q2, which decision 0004 left open. Source:
+operator input on the dev plan's provisional answer A2.
+
+> this will be a modal dialog from vs code, so we can't preselect, we don't need to remember. we can add
+> a setting for users to control their default if they want.
+
+- The Close all / Keep open (disabled) choice from 0004 is a VS Code modal. A modal has no pre-selected
+  button, and its built-in Cancel cancels the whole operation.
+- The choice is **not remembered** between uses.
+- A setting lets users pick a default: `ask` (the default) shows the modal; `closeAll` or
+  `keepOpenDisabled` skips it. The setting never skips the unsaved-edits confirmation.
+- The choice applies to Disconnect, Remove Connection and credential updates that change identity.
+
+Rejected:
+
+- **Pre-select Keep open and remember the last choice in `globalState`** (the earlier proposal): a modal
+  cannot pre-select a button, and a remembered answer that silently changes what the next Disconnect does
+  is less predictable than an explicit setting.
+
+## 0008. Upgrade the azext stack as high as viable without breaking workflows, using Azure Resources as reference
+
+**Accepted** by the operator on 2026-11-19. Source: operator input on the dev plan's provisional
+answer A4.
+
+> check what 'azure resoruces' extension is using, that's the same team that's behind the auzreauth
+> package, and that azure resources extnesion is heavily used., I'd update / upgrade as hihgh as viable
+> and not breaking our fworkflows.
+
+- The #990 upgrade (0005) targets the highest versions of azureauth, azureutils, utils and
+  `@microsoft/vscode-azureresources-api` that keep our workflows working, with one installed copy of each.
+- The Azure Resources extension is the reference, because the same team owns azureauth and the extension
+  is heavily used. On 2026-11-19 its `main` used azureauth `^6.1.0-alpha.2`, azureutils `^4.3.0` and
+  utils `^4.1.0`.
+- The dev plan ([iterations/01-dev-plan.md](./iterations/01-dev-plan.md), WI-3 step 1) holds the version
+  ladder, the evidence and the workflow checks that define "not breaking".
+
+Rejected:
+
+- **The minimal set** (azureauth `6.0.0-alpha.8` with azureutils 4.2 and utils 4.1, the earlier
+  proposal): it stays behind the line the azureauth owners run, and it would mean a second migration
+  later. It remains only as the last fallback if a higher level breaks a workflow that cannot be fixed.
+
+## 0009. Kubernetes tunnel recovery, cluster ID case handling and wider network-resilience testing move to #1105
+
+**Accepted** by the operator on 2026-11-19. Source: operator input during dev planning.
+
+> I'd consider moving kubernetes fixes and the adding 'network resilience' as a new issue to work on
+> once 1.2.0 ships, this would also simplify this dev plan.
+
+Moved to [#1105](https://github.com/microsoft/vscode-documentdb/issues/1105), to be scheduled after
+1.2.0:
+
+- re-creating Kubernetes port-forward tunnels outside the tree. Today only `beforeCachedClientConnect`
+  restores a tunnel, when a tree node expands;
+- tunnel ownership on Disconnect and Remove, and running the teardown when a kubeconfig source is
+  removed;
+- provider-specific cluster ID matching, which the approved plan had put in WI-7. Today
+  `CredentialCache` folds case, so Kubernetes `Prod` and `prod` collide, and task conflict matching does
+  not fold, so it misses Azure case aliases. Both behaviors already exist today;
+- Kubernetes API credential expiry (the AKS exec plugin);
+- a network-resilience test matrix beyond OT-4, including a Kubernetes acceptance test.
+
+**Stays in iteration 1:** generic idle and network-drop recovery. That means closed-client and transient
+classification, the cancelled-reuse fix, closed-client replacement and OT-4, which together are #1102's
+"recover on the next operation without a restart".
+
+**Guard:** tunneled connections must not get worse.
+
+- Connection refused against a port-forward port is `transient`: the client is kept, not evicted.
+- Per-operation resolution does no less than today's tree path.
+
+A tab whose tunnel died therefore behaves exactly as it does today.
+
+Rejected:
+
+- **Doing it in 1.2.0:** it adds a second layer (tunnels) to a release that is already the largest
+  connection change so far, for an authentication method that does not expire. The case-handling bugs
+  already exist and are rarely hit (two contexts that differ only in case).

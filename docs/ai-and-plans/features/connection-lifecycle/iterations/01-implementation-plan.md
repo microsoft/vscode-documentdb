@@ -394,6 +394,9 @@ The largest item. Host side first, then each view.
 - **One teardown**, keyed by stable `clusterId`, with provider-specific equality. Azure case aliases
   must match, but folding Kubernetes context IDs such as `Prod` and `prod` would target different
   resources together. Remove = teardown + delete + clear schema; Disconnect = teardown only.
+  - **Changed 2026-11-19:** provider-specific equality and all Kubernetes tunnel work moved to
+    [#1105](https://github.com/microsoft/vscode-documentdb/issues/1105), after 1.2.0 (decision
+    [0009](../decisions.md)). The teardown keeps each store's current `clusterId` matching.
   - After the task-conflict preflight below, tear down the client, shells, playground, webviews, in-flight token
     requests (sovereign-clouds finding E4), `CredentialCache`, the Entra failure registry, and the
     `SchemaStore` decision.
@@ -428,7 +431,7 @@ The largest item. Host side first, then each view.
 - **Telemetry:** one event with the activation source and teardown counts. No identifiers (#1059).
 - **Tests:**
   - teardown per surface;
-  - Azure case aliases vs distinct Kubernetes context IDs;
+  - ~~Azure case aliases vs distinct Kubernetes context IDs;~~ moved to #1105 (decision 0009);
   - Disconnect blocked for copy source, copy destination and export source; an unrelated cluster
     is not blocked. After the task finishes or is stopped, retrying Disconnect succeeds;
   - a late token response after Disconnect is ignored;
@@ -550,8 +553,9 @@ denominator; a cohort with no challenges is inconclusive, and timing alone does 
 - **Q1:** For a user-initiated action, should the interactive sign-in open **immediately**, or only
   through the **Sign in again** button? The proposal is the button everywhere (decision 0001). A
   first connect from the tree stays interactive, as it is today.
-- **Q2:** The default for the Disconnect choice, and whether to remember it. The proposal is Keep
-  open (disabled), remembered in `globalState`.
+- ~~**Q2:** The default for the Disconnect choice, and whether to remember it. The proposal is Keep
+  open (disabled), remembered in `globalState`.~~ **Resolved 2026-11-19:** a VS Code modal with nothing
+  remembered, plus a setting for the default (decision [0007](../decisions.md)).
 - **Q3:** Should Disconnect drop the `CredentialCache` entry (#1059 proposes yes), so a password
   typed only for a discovery connection must be entered again?
 - **Q4:** Ask the Azure DocumentDB service team whether the server closes connections when the

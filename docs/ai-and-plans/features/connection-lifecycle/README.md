@@ -18,6 +18,7 @@ code:
 - [#1059](https://github.com/microsoft/vscode-documentdb/issues/1059)
 - [#566](https://github.com/microsoft/vscode-documentdb/issues/566)
 - [#990](https://github.com/microsoft/vscode-documentdb/issues/990)
+- follow-up after 1.2.0: [#1105](https://github.com/microsoft/vscode-documentdb/issues/1105) (Kubernetes tunnels, network resilience)
 
 **Branch:** `feature/connection-lifecycle`, with sub-PRs from `dev/tnaum/*` (decision 0006)
 
@@ -66,7 +67,10 @@ See [decisions.md](./decisions.md):
 - 0003 no silent identity change;
 - 0004 the Disconnect tab choice;
 - 0005 azureauth v6;
-- 0006 delivery through a feature branch, shipped once.
+- 0006 delivery through a feature branch, shipped once;
+- 0007 the Disconnect choice is a modal, not remembered, with a setting for the default;
+- 0008 the azext stack is upgraded as high as viable, with Azure Resources as the reference;
+- 0009 Kubernetes tunnel recovery, case handling and wider network-resilience testing move to #1105.
 
 ## Timeline
 

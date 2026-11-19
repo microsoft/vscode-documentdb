@@ -43,7 +43,7 @@ stable pointers.
 
 ### Authority and deviation
 
-1. **Accepted decisions 0001–0006 bind you.** You cannot change them on your own. If the code shows one of
+1. **Accepted decisions 0001–0008 bind you.** You cannot change them on your own. If the code shows one of
    them is wrong or cannot be met, stop and raise it with the operator, giving evidence and alternatives.
    The advisor cannot overrule an accepted decision.
 2. **The approved plan's content binds you**, except where §3 (Tensions) names a conflict. There the advisor
@@ -100,19 +100,19 @@ and just as plainly, what was not.
 
 ---
 
-## 1. Provisional answers to the open questions
+## 1. Answers to the open questions
 
-The operator was not available on 2026-11-19. These are the recommended answers, adopted provisionally
-under rule 4 above.
+The operator was not available on 2026-11-19 at first. They answered A2, A4, A5 and A6 later the same
+day; A1 and A3 are still **provisional** under rule 4 above.
 
-| #   | Question                                             | Provisional answer                                                                                                                                                                                                                                                           | Where it lands         |
-| --- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
-| A1  | Plan Q1: how does sign-in start after a silent miss? | **Only through the Sign in again button**, everywhere. The first connect from the tree stays interactive, as it is today. One rule, and no surface has to decide whether it is in the foreground. This matches 0001.                                                         | WI-1, WI-2, WI-5, WI-6 |
-| A2  | Plan Q2: Disconnect choice, default and memory       | Ask every time. **Keep open (disabled)** is pre-selected the first time; after that, the last choice is pre-selected. The choice is stored under one `globalState` key (pattern: `switchAtlasViewMode.ts`). No setting.                                                      | WI-7                   |
-| A3  | Plan Q3: does Disconnect drop `CredentialCache`?     | **Yes** (#1059 proposal). Saved connections reload from storage on the next expand. A password typed only for a discovery connection must be typed again. Implement it as a teardown option, so flipping the answer is a one-line change.                                    | WI-7                   |
-| A4  | #990: which azext versions?                          | **Probe both, default to the minimal option:** azureauth `6.0.0-alpha.8` (already nested in the lockfile), keeping azureutils `4.2.x` and utils `4.1.x`. Choose the full v5 line only if the probe shows that the minimal option keeps two azureauth copies or needs a shim. | WI-3 (CP-W3)           |
-| A5  | How does Disconnect see an in-flight Export?         | A small **resource lease** API on `TaskService`. Export holds the lease while it runs, and `checkCanProceedAndInformUser` reports it like a task. Export logic is not touched.                                                                                               | WI-7                   |
-| A6  | Where do the dev plan and its progress notes live?   | In this file. Progress is recorded inline per WI here. The approved plan gets a one-line pointer.                                                                                                                                                                            | —                      |
+| #   | Question                                             | Answer                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Status                                                              | Where it lands         |
+| --- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------- |
+| A1  | Plan Q1: how does sign-in start after a silent miss? | **Only through the Sign in again button**, everywhere. The first connect from the tree stays interactive, as it is today. One rule, and no surface has to decide whether it is in the foreground. This matches 0001.                                                                                                                                                                                                                                              | Provisional                                                         | WI-1, WI-2, WI-5, WI-6 |
+| A2  | Plan Q2: Disconnect choice, default and memory       | A **VS Code modal**, which has no pre-selected button and **remembers nothing**. A setting lets users choose a default: `ask` (the default) shows the modal; `closeAll` or `keepOpenDisabled` skips it. The unsaved-edits confirmation still appears when closing. See WI-7 step 3.                                                                                                                                                                               | **Operator, 2026-11-19** (decision 0007)                            | WI-7                   |
+| A3  | Plan Q3: does Disconnect drop `CredentialCache`?     | **Yes** (#1059 proposal). Saved connections reload from storage on the next expand. A password typed only for a discovery connection must be typed again. Implement it as a teardown option, so flipping the answer is a one-line change.                                                                                                                                                                                                                         | Provisional                                                         | WI-7                   |
+| A4  | #990: which azext versions?                          | **As high as viable without breaking our workflows**, using the Azure Resources extension (same team as azureauth, heavily used) as the reference. Ladder and findings are in WI-3 step 1: target L2, fall back to L1, then L0.                                                                                                                                                                                                                                   | **Operator policy, 2026-11-19** (decision 0008)                     | WI-3 (CP-W3)           |
+| A5  | How does Disconnect see an in-flight Export?         | **Reuse the existing mechanism.** Delete Collection, Delete Database and Remove Connection already guard through `checkCanProceedAndInformUser` (`TaskService` resource tracking). Export is the gap: it is not a task and registers nothing, so even Delete Collection does not see a running export today. Close it with a small **resource lease** that feeds the same check. Every existing guard then sees exports too, and the export logic is not touched. | Operator pointed at the existing check; lease is the recommendation | WI-7                   |
+| A6  | Where do the dev plan and its progress notes live?   | In this file. Progress is recorded inline per WI here. The approved plan gets a one-line pointer.                                                                                                                                                                                                                                                                                                                                                                 | **Operator, 2026-11-19**                                            | —                      |
 
 ---
 
@@ -147,6 +147,8 @@ upgrade changes any of them, stop and re-plan the affected WI.
     exactly.
   - Kubernetes IDs keep the context's case (`kubernetes_${source}_${context}__…`), so `Prod` and `prod`
     already collide in `CredentialCache` today.
+  - **Out of scope for this iteration** (decision 0009, #1105). Every store keeps its current matching;
+    this iteration adds no case handling.
 - **F-5. There is no per-cluster registry of open webview panels.**
   - Only the Cluster Dashboard keeps its own `openPanels` map (`clusterDashboardController.ts`).
   - Collection View and Document View open through `openAppWebview`, whose handle exposes `onDisposed`.
@@ -205,7 +207,7 @@ upgrade changes any of them, stop and re-plan the affected WI.
     context `prod` also deletes `Prod`.
   - Task conflict matching (`hasResourceConflict` in `taskServiceResourceTracking.ts`) compares IDs
     exactly, so it misses Azure case aliases.
-  - One equality function in the teardown cannot fix either problem.
+  - Both problems exist today. They are **out of scope** for this iteration (decision 0009, #1105).
 - **F-19. Credential saves can fail without the command knowing.** The Update Credentials `ExecuteStep`
   catches save failures and returns normally, so the command cannot tell whether the save happened.
 - **F-14. VS Code has no API to collapse one tree node.**
@@ -220,9 +222,27 @@ upgrade changes any of them, stop and re-plan the affected WI.
 | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | T-1 | WI-1 requires that a known-expired token is never offered on a new socket. Under F-2 that is only possible with a new `MongoClient` once the issued token expires, roughly once an hour. Decision 0002 says that a new generation re-runs reads from page 1 "because cursors are lost", but under F-6 no surface holds a cursor. Applying 0002 as written would show "results are no longer current" every hour (worse for OT-1). | CP-0       | Distinguish **token rotation** (same fingerprint, planned replacement) from **recovery**. Neither re-runs a query, because paging is offset-based. Show the "results are no longer current" notice only when a surface comes back from the **disconnected** state. This clarifies the intent of 0002, so the operator confirms it as a new decision entry. **Coverage caveat:** rotation at resolution time covers host operations only. Sockets opened by driver pool maintenance (`minPoolSize`), and the shell and playground workers' own driver token caches, still offer the cached token. CP-0 must show that every path is covered, or the operator must explicitly relax the guarantee for that path. A timer-based rotation would resemble the "proactive refresh timers" that 0001 rejected, so it also needs the operator. |
 | T-2 | OT-7 expects the cluster node to "collapse" after Disconnect, but VS Code cannot collapse a single node (F-14).                                                                                                                                                                                                                                                                                                                   | CP-4       | Refresh the node. A disconnected cluster returns **one** child action, "Connect", following the actions-only rule. Its handler reconnects and refreshes. Do not change `TreeItem.id`. Update OT-7's wording at hand-over.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| T-3 | WI-7 must not fold Kubernetes context IDs, but `CredentialCache` already folds them, and task matching does not fold Azure aliases (F-4, F-18).                                                                                                                                                                                                                                                                                   | CP-1, CP-4 | Introduce **one canonical cluster key** in WI-4: `canonicalClusterKey(clusterId)`, lowercase for Azure IDs, exact for everything else. Key every **new** map with it (generations, pending startups, state, registry). In WI-7, apply it to the stores the teardown touches: `CredentialCache`, the Entra failure registry, `SchemaStore`, `ClustersClient._clients`, and task and lease conflict matching. Add migration-safe tests for `Prod`/`prod` and for Azure case aliases. If this grows beyond those stores, raise it with the operator.                                                                                                                                                                                                                                                                                      |
+| T-3 | WI-7 asked for provider-specific cluster ID equality (Azure case aliases match; Kubernetes contexts such as `Prod` and `prod` stay distinct). Today's stores disagree on this (F-4, F-18).                                                                                                                                                                                                                                        | —          | **Withdrawn 2026-11-19:** moved out of this iteration (decision 0009, #1105). Each store keeps its current matching.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | T-4 | Under decision 0002, a classified failure evicts and replaces the client. A background caller such as the dashboard poll or tree count badges could therefore start a new connection every tick.                                                                                                                                                                                                                                  | CP-2       | Only a **foreground** operation, or the rotation in T-1, replaces a generation. Background callers read the state and stop (WI-8). Add a per-cluster backoff of one replacement per 30 s, as a guard against loops.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | T-5 | For Entra, code 18 after the driver's own fresh callback means the server rejected a _fresh_ token: the principal has no database user, or Conditional Access or CAE intervened. That is not the same as `signInRequired`.                                                                                                                                                                                                        | CP-2       | Classify it as `credentialsRejected` with an Entra-specific explanation ("Your account has no access…"). Offer **Sign in again** only when the token came from a session the user can replace. Decide this with the real driver error shapes collected for CP-0.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+
+---
+
+## 3a. Out of scope for this iteration
+
+Moved to [#1105](https://github.com/microsoft/vscode-documentdb/issues/1105) on 2026-11-19 (decision
+0009), to be scheduled after 1.2.0:
+
+- re-creating Kubernetes port-forward tunnels outside the tree (per-operation resolution, recovery);
+- tunnel ownership on Disconnect and Remove, and running the teardown when a kubeconfig source is removed;
+- provider-specific cluster ID matching (the withdrawn T-3; F-4, F-18);
+- Kubernetes API credential expiry (AKS exec plugin);
+- a wider network-resilience test matrix beyond OT-4, including a Kubernetes acceptance test.
+
+Generic idle and network-drop recovery **stays in scope**: closed-client and transient classification,
+the cancelled-reuse fix, closed-client replacement and OT-4. It is #1102's "recover on the next
+operation without a restart". The no-regression rules in WI-5 and WI-6 keep tunneled connections
+working as they do today.
 
 ---
 
@@ -271,7 +291,8 @@ semantics are binding unless a checkpoint changes them.
     after teardown. A binding from before Disconnect therefore never matches a client created after
     Reconnect.
 - **C-5. Connection state, at two levels.**
-  - **Cluster state** is owned by the host and keyed by canonical cluster key. It describes the cluster's
+  - **Cluster state** is owned by the host and keyed by `clusterId`, matched the same way as
+    `ClustersClient._clients` today. It describes the cluster's
     current client: `connected { binding }`, `reconnecting`, `needsAction { reason }`, or
     `disconnected { reason }` (the latch, C-6).
   - **Surface state** is **derived for each registered binding**. It is what the tree, webviews, shells
@@ -313,7 +334,7 @@ verdict exists, do not start the work it gates.
 | CP-1  | Before PR 3 opens                                               | Does C-1 work for every auth method, including the managed identity runtime shape and tunnels? | Fingerprint table tests (WI-4 step 1).                                                                                                                                 |
 | CP-2  | WI-5, after the classifier is drafted, before recovery is wired | The classifier table, T-4 and T-5.                                                             | Classifier table tests run on **real** driver error shapes captured by the contract test and the tree paths.                                                           |
 | CP-3  | Before WI-6 webview work                                        | Split PR 5 into 5a/5b? Is the binding-resolution API and state channel final?                  | Diff size of host-only work; one router converted end to end.                                                                                                          |
-| CP-4  | Before WI-7 starts                                              | Teardown order, T-2 and T-3, the export lease (A5).                                            | Teardown sequence diagram in the PR description.                                                                                                                       |
+| CP-4  | Before WI-7 starts                                              | Teardown order, T-2, the export lease (A5).                                                    | Teardown sequence diagram in the PR description.                                                                                                                       |
 | CP-5  | Before PR F                                                     | Is the hand-over complete?                                                                     | OT-1 to OT-7 results recorded in `# Outcome`, WI-9 queries run on pre-release ingestion.                                                                               |
 
 ---
@@ -560,12 +581,48 @@ verdict exists, do not start the work it gates.
 
 **Steps:**
 
-1. **Version probe (CP-W3).** In a scratch branch, try both version options from A4.
-   - For each, record:
-     - `npm ls @microsoft/vscode-azext-azureauth` (there must be exactly one copy);
-     - the number of `npm run build` errors;
-     - the bundle scan from #990 for duplicate copies and the broken ESM init pattern.
-   - Choose with the advisor. Run `flagging-fresh-dependencies` on the resulting lockfile.
+1. **Version selection (CP-W3), under the A4 policy: as high as viable without breaking our workflows.**
+   - Findings on 2026-11-19:
+     - The **Azure Resources extension** (`vscode-azureresourcegroups` `main`, 0.13.x) uses azureauth
+       `^6.1.0-alpha.2`, azureutils `^4.3.0` and utils `^4.1.0`.
+     - azureutils `4.3.0`, `5.0.0` and `5.1.0` all require azureauth `^6.1.0-alpha.2`.
+     - Our azureutils `4.2.0` requires `^6.0.0-alpha.6`, which **does not** accept `6.1.0-alpha.x`.
+     - utils `4.1.1` and later, including `5.x`, require `@microsoft/vscode-azureresources-api`
+       **`^3.1.1`**. We are on `~2.5.0`; version 3 moved the package to CJS+ESM and finalized the auth
+       challenge API. We use it in about 30 files, mostly for `AzureSubscription` types, plus the Azure
+       Resources branch and workspace providers, `getAzureResourcesExtensionApi` and `unwrapArgs`.
+     - **utils 5.0.0's only breaking change** removes the experimentation (TAS) API, which we do not use.
+       The other public typings from 4.1.0 to 5.1.0 are additive (workflow telemetry,
+       `openReadOnlyFile`, `authentication` on subscription context). Whole-error masking in
+       `callWithTelemetryAndErrorHandling` is unchanged.
+     - azureutils `5.0.0` only bumps it to utils v5; `5.1.0` loosens the Azure client type generics.
+     - In our lockfile, only azureutils depends on the other azext packages, so the root manifest
+       controls all versions.
+   - The ladder (try from the top, stop at the first that passes):
+
+     | Level           | azureauth       | azureutils | utils    | azureresources-api | Note                                                       |
+     | --------------- | --------------- | ---------- | -------- | ------------------ | ---------------------------------------------------------- |
+     | **L2 (target)** | `6.1.0-alpha.2` | `~5.1.0`   | `~5.1.0` | `~3.1.1`           | Highest available; ahead of Azure Resources on utils       |
+     | L1              | `6.1.0-alpha.2` | `~4.3.0`   | `~4.3.0` | `~3.1.1`           | Parity with Azure Resources                                |
+     | L0              | `6.0.0-alpha.8` | `~4.2.0`   | `~4.1.0` | `~2.5.0`           | Minimal; only if L1 breaks a workflow that cannot be fixed |
+
+   - Before choosing, check the lockfile of the Azure Resources release that is published for the utils
+     and azureauth versions it actually resolved.
+   - For each level tried, record:
+     - `npm ls` for all four packages: exactly **one** copy each;
+     - the number of `npm run build` errors and what kind they are;
+     - the bundle scan from #990 for duplicate copies and the broken ESM init pattern;
+     - `flagging-fresh-dependencies` on the resulting lockfile.
+   - **"Not breaking our workflows" means all of these pass:**
+     - Azure Resources view: vCore and RU nodes, and the workspace resource provider;
+     - Discovery: vCore, RU and VMs, with subscription and tenant filters;
+     - sign-in, account changes, MFA and cloud switches;
+     - deep links (`/connect/azure`, with and without a tenant ID);
+     - every `AzureWizard` flow;
+     - the masking test in the telemetry-masking memory: a property containing "error" is still redacted.
+   - Choose with the advisor. If L2 needs more than mechanical changes in the `azureresources-api` 3
+     consumers, step down to L1 and record why.
+
 2. **Migrate the APIs** at every call site that #990 lists:
    - `getSubscriptions` → `getAvailableSubscriptions`;
    - accounts and tenants;
@@ -632,9 +689,6 @@ shim (0005).
 
 **Steps:**
 
-0. **Canonical cluster key** (T-3). Add `canonicalClusterKey(clusterId)`: lowercase for Azure-derived
-   IDs, exact for everything else. Find out how to tell them apart: the ID prefix, or the provider that
-   built it. Key every **new** map in WI-4 and WI-5 with it. WI-7 applies it to the existing stores.
 1. **Fingerprint** (`src/documentdb/connectionFingerprint.ts`, pure).
    - Inputs are the **credentials snapshot actually used** in `initializeClient`, the C-1 identity
      (Entra), and the provider's logical target for tunnels.
@@ -676,7 +730,7 @@ shim (0005).
 4. **Central policy (C-6).**
    - `getClient` takes `{ interaction, trigger, abortSignal }`, with `interaction` defaulting to `'never'`.
    - Add a per-cluster `lastVerifiedIdentity` record (C-1 for Entra; the principal for other methods),
-     keyed by canonical key. It **survives eviction** and is cleared only by teardown (WI-7).
+     keyed by `clusterId` like `ClustersClient._clients`. It **survives eviction** and is cleared only by teardown (WI-7).
    - `initializeClient` stops hardcoding `{ interactive: true }`. It is interactive only when the caller
      allowed it **and** the cluster has no `lastVerifiedIdentity`. Otherwise it is silent and pinned to
      that identity.
@@ -772,6 +826,10 @@ shim (0005).
      | `MongoNotConnectedError`, `topologyClosed`, "Client must be connected" | any        | `clientClosed`               | new generation silently                            | none                                            |
      | network errors, timeouts, server selection with no auth cause          | any        | `transient`                  | keep                                               | Retry                                           |
      | anything else                                                          | any        | `other`                      | keep                                               | existing behavior                               |
+
+   - **No regression for tunneled connections:** connection refused against a Kubernetes port-forward
+     port is `transient`. The client is **kept**, never evicted, so the tree's existing tunnel restore
+     (`beforeCachedClientConnect`) still recovers it. Tunnel recovery itself is #1105.
 
 2. **State owner.**
    - Add `ClustersClient.reportFailure(binding, error)`, or a small `ConnectionStateService` that sits
@@ -905,6 +963,10 @@ shim (0005).
    - A surface **never** prompts. Under C-6 it calls `getClient` with `interaction: 'never'`. If no client
      exists and the cluster is not latched, the reconnect is silent and pinned to `lastVerifiedIdentity`,
      so Entra fails closed with a mismatch instead of prompting.
+   - **No regression for tunneled connections** (Kubernetes `ClusterIP` through port-forward). Creating a
+     new generation from this path may not do less than today's tree path, and it does not re-create
+     tunnels. A tab whose tunnel died behaves as it does today: it fails transiently until a tree expand
+     restores the tunnel. Re-creating the tunnel outside the tree is #1105.
 3. **`ClusterSession`.**
    - It stops holding a `ClustersClient`, and stores the binding instead.
    - `getClient()` becomes an `async` resolve.
@@ -1013,7 +1075,7 @@ shim (0005).
 - the WI-6 registry;
 - `switchAtlasViewMode.ts` (the `globalState` pattern).
 
-**CP-4 first:** the teardown order, T-2, T-3 and the export lease.
+**CP-4 first:** the teardown order, T-2 and the export lease.
 
 **Steps:**
 
@@ -1029,7 +1091,8 @@ shim (0005).
    - **`prepare`**, which may prompt and may be cancelled:
      1. **Preflight:** task and lease conflicts through `checkCanProceedAndInformUser`. On a conflict,
         stop and change nothing; the conflicting task is named.
-     2. **Choice:** Close all or Keep open (A2), only when surfaces are registered.
+     2. **Choice:** Close all or Keep open (A2), only when surfaces are registered and the setting is
+        `ask`. With the setting at `closeAll` or `keepOpenDisabled`, use that value without a modal.
      3. **Dirty check** (only for `close`): if any registered surface reports `hasUnsavedChanges`, ask for
         confirmation. Cancelling leaves every panel, draft and connection intact. That includes the case
         where Remove started the teardown.
@@ -1052,14 +1115,27 @@ shim (0005).
      5. Release the reservation, and refresh the tree (T-2).
    - Releasing a reservation without committing must restore everything to the state before `prepare`.
    - **Never touched:** VS Code auth sessions, the managed identity cache, the ARM cache.
-   - **Keys (T-3, F-18):** apply `canonicalClusterKey` to every store the teardown touches:
-     `CredentialCache`, the Entra failure registry, `SchemaStore`, `ClustersClient._clients`, and task
-     and lease conflict matching. Test that Kubernetes `Prod` and `prod` stay separate, and that Azure
-     case aliases match everywhere.
+   - **Keys:** every store keeps its current `clusterId` matching. Provider-specific equality is out of
+     scope (decision 0009, #1105). Do not add case folding or unfolding in this iteration.
+   - **Kubernetes tunnels:** the teardown does not stop port-forward tunnels, and does not change how
+     removing a kubeconfig source works (#1105).
 3. **Disconnect command** (`vscode-documentdb.command.disconnect`).
    - Add a `connected` tag to the cluster item's `contextValue` while a client exists, and refresh it on
      state changes. Use `viewItem` regex menus in the Connections, Azure Resources and Discovery views.
-   - The Close all / Keep open choice follows A2. Skip the prompt when no surfaces are registered.
+   - **The choice (A2):**
+     - Use a modal warning: `showWarningMessage` with `{ modal: true, detail }` and the two buttons Close
+       all and Keep open (disabled). The built-in Cancel cancels the whole operation.
+     - The modal cannot pre-select a button, and nothing is remembered.
+     - Add a setting, proposed as `documentDB.connections.openTabsOnDisconnect`, with the enum `ask`
+       (default), `closeAll` and `keepOpenDisabled`. `documentDB.shell.multiLinePasteBehavior` is the
+       precedent for an enum with an `ask` default and `enumDescriptions`.
+     - Follow [settings/README.md](../../settings/README.md) for the group, `order` and the ID naming
+       rules. If an existing group fits better than `connections`, use it and record the final ID in
+       Progress.
+     - The same choice applies to Remove Connection and to identity-changing credential updates.
+     - The setting never skips the unsaved-edits confirmation: when Close all is chosen and an editor is
+       dirty, that confirmation still appears.
+     - Skip the modal when no surfaces are registered.
    - Add a disconnected cluster node child action, "Connect" (T-2).
 4. **Remove Connection.** Teardown with reason `connectionRemoved` and `dropCredentials: true`, then delete
    the stored connection and clear the schema, as today. Keep the existing confirmation.
@@ -1086,7 +1162,6 @@ shim (0005).
 **Tests:**
 
 - teardown for each surface type;
-- Azure case aliases compared with distinct Kubernetes contexts;
 - blocked for a copy source, a copy destination and an export source; an unrelated cluster is not
   blocked; Disconnect succeeds once the task is done or stopped;
 - a token response that arrives after Disconnect is ignored;
