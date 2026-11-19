@@ -107,8 +107,42 @@ result may continue, but say so in the message. Record the result in the Progres
   `iterations/01-pr<N>-<topic>-review.md`, for example `01-pr1-entra-renewal-review.md`. When this folder
   reaches three or more iteration-1 documents, ask the operator before promoting it to an
   `iterations/01-…/` folder. Moving the files breaks links in the issues.
-- **PR description:** name the WIs, the provisional answers (§1) the PR relies on, the checkpoint verdicts
-  it implements, and which verification case ran.
+- **PR description:** name the WIs, the issues (next section), the provisional answers (§1) the PR relies
+  on, the checkpoint verdicts it implements, and which verification case ran.
+
+### Issues: link them, and comment on partial fixes
+
+Every PR names the issues it may resolve, using the table below, and says for each one whether it
+**resolves** it or is a **partial fix**.
+
+- **Closing keywords only in PR F.** GitHub closes an issue through `Fixes #n` only when the PR merges into
+  the default branch. Sub-PRs merge into `feature/connection-lifecycle`, so they write
+  `Resolves #n (closes with PR F)` or `Part of #n`. PR F carries `Fixes #n` for every issue that the
+  iteration resolves in full.
+- **Partial fix → a comment on the issue.** When a PR merges with only part of an issue done, post a
+  dedicated comment on that issue (`gh issue comment <n> --body-file <file>`). It contains:
+  - the PR link and the WIs it implemented;
+  - what now works, in user terms;
+  - what is still open, and where it is planned (a later PR, or a follow-up issue);
+  - decisions taken on the way that change the issue's scope, linked to `decisions.md`;
+  - the tests or operator tests that cover it.
+
+  Keep it factual and short. Never include tokens, account names, cluster names or connection strings.
+  Record the comment's link in the WI's Progress block.
+
+- **Work moved to a follow-up issue** (#1105, #1106): when a PR hands work over, comment on the
+  follow-up in the same way, so it can be planned from that comment alone.
+
+| Issue | Title (short)                                     | PRs           | Expected                                                       |
+| ----- | ------------------------------------------------- | ------------- | -------------------------------------------------------------- |
+| #1102 | Keep connections usable across expiry and idle    | 1, 3, 4, 5, 7 | Partial in each sub-PR; resolved by PR F                       |
+| #990  | Upgrade azureauth to v6                           | 2             | Resolved by PR 2 (closes with PR F)                            |
+| #626  | Upgrade azext-utils v3 → v4                       | 2             | Check after CP-W3: likely superseded by the utils v5 upgrade   |
+| #1059 | Disconnect action that ends live sessions         | 6             | Resolved by PR 6 (closes with PR F)                            |
+| #566  | Unified disconnect/remove experience              | 6             | Resolved or partial; decide against the issue text in PR 6     |
+| #1091 | Dashboard health check: pause, back off, stop     | 6 (WI-8)      | Partial unless WI-8 also does the visibility pause and backoff |
+| #1105 | Follow-up: Kubernetes tunnels, network resilience | —             | Not resolved; comment when a PR moves work there               |
+| #1106 | Follow-up: indicate possibly out-of-date results  | —             | Not resolved; comment when a PR moves work there               |
 
 ### Skills to load per work item
 
@@ -381,19 +415,28 @@ verdict exists, do not start the work it gates. The fingerprint table (formerly 
 
 ## 6. PR 0: plan, research, decisions
 
-1. Have the operator create `feature/connection-lifecycle` from `main`, or create it yourself if you
+1. **Carry over the planning commits first.** The plan, research and decisions were written as commits on
+   the local branch `tnaum-ms/issue1102` (from `e22a39b8d` "wip: initial plan" onward). PR 0 is made of
+   **those commits**. Do not re-create the files in a fresh commit, and do not squash or rebase them: the
+   repository merges with merge commits only, so the history stays intact.
+   - Check that the branch holds only docs: `git --no-pager diff --stat origin/main...tnaum-ms/issue1102`.
+   - Push it as the PR 0 head branch, either under its current name or as `dev/tnaum/connection-lifecycle-plan`
+     (`git push origin tnaum-ms/issue1102:refs/heads/dev/tnaum/connection-lifecycle-plan`).
+2. Have the operator create `feature/connection-lifecycle` from `main`, or create it yourself if you
    have permission: `git push origin origin/main:refs/heads/feature/connection-lifecycle`. Deletion and
-   force-push are blocked afterwards, so check the base commit first.
-2. The PR contains:
+   force-push are blocked afterwards, so check the base commit first. It must contain the planning
+   branch's base commit (`git merge-base --is-ancestor $(git merge-base origin/main tnaum-ms/issue1102) origin/main`).
+3. Open PR 0 from that head branch into `feature/connection-lifecycle`. It contains:
    - `research-findings.md`, `decisions.md`, `README.md`;
    - `01-implementation-plan.md` with the pointer to this file;
    - **this file**;
    - the index row in `docs/ai-and-plans/README.md` (already present).
-     The current branch `tnaum-ms/issue1102` can be the head branch; renaming it to `dev/tnaum/*` is
-     optional for PR 0.
-3. Its description states that §4 (C-1 to C-6) is the agreement that lets PR 1–3 run in parallel, and
-   lists A1–A6 for the operator to confirm.
-4. Verification: docs only, so none, beyond `npm run prettier` on the changed Markdown.
+4. Its description:
+   - states that §4 (C-1 to C-6) is the agreement that lets PR 1–3 run in parallel;
+   - lists A1 as the one provisional answer for the operator to confirm;
+   - links the issues as `Part of #1102`, plus #1059, #566 and #990 (references only; PR 0 resolves
+     nothing, so it posts no issue comments).
+5. Verification: docs only, so none, beyond `npm run prettier` on the changed Markdown.
 
 **Progress:**
 
@@ -1339,7 +1382,11 @@ one loop.
    - **OT-7:** also Disconnect while a query or save is in flight. It must fail and be reported, and
      nothing may run afterwards under the old connection. Also Disconnect during an **import**: it must be
      blocked before the Close/Keep prompt, and the import continues.
-4. CP-5 verdict, then open PR F. Watch telemetry for about one week after the merge (WI-9 queries).
+4. CP-5 verdict, then open PR F. Its description carries `Fixes #n` for every issue the iteration
+   resolves in full (see the §0 issue table), and `Part of #n` for the rest.
+5. After the merge: for every linked issue that stays open, post the partial-fix comment (§0), summarizing
+   the whole iteration and what is left. Do the same on #1105 and #1106 for the work handed to them.
+6. Watch telemetry for about one week after the merge (WI-9 queries).
 
 # Outcome
 
