@@ -631,6 +631,9 @@ verdict exists, do not start the work it gates. The fingerprint table (formerly 
   socket authentication on the same client. No `listDatabases.failed` was logged. This verifies
   the post-idle renewal and retry path; no longer wait is needed for OP-1b. The trace cannot alone
   confirm whether the database list was visible or whether a sign-in prompt appeared.
+- **OP-1b passed (2026-11-19), operator verification:** The database list loaded and no sign-in
+  prompt appeared. Resume the remaining PR 1 work. The separate long-wait requirement for OP-6
+  still applies.
 
 ---
 
