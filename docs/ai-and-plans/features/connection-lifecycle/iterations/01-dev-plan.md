@@ -94,8 +94,10 @@ result may continue, but say so in the message. Record the result in the Progres
 
 ### Per-PR workflow
 
-- **Branch:** create `dev/tnaum/<topic>` from `feature/connection-lifecycle`. Follow the approved plan's
-  rules for keeping PRs off each other.
+- **Branch:** create `dev/tnaum/<topic>` from the preceding PR's head and target that branch while
+  the preceding PR is open. If it is already merged, branch from and target
+  `feature/connection-lifecycle`. Do not wait for intermediate approvals or merges; the operator
+  handles those. The advisor checkpoints and explicit operator decisions and tests still apply.
 - **Commits:** one or more commits per WI, never one commit that mixes two WIs. Each commit ends with the
   `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailer.
 - **While working, and for draft PRs:** Case 1 only: `npm run build` plus `npx vitest run <touched paths>`.
@@ -343,9 +345,9 @@ working as they do today.
 
 ## 4. Contracts that cross PRs
 
-The approved plan lets PR 1–3 run in parallel "if PR 0 agrees how WI-1 passes the verified account,
-provider and tenant to WI-4". These contracts are that agreement. The field names are illustrative; the
-semantics are binding unless a checkpoint changes them.
+These contracts define how PRs 1–3 share the verified account, provider and tenant while the
+implementation PRs are stacked. The field names are illustrative; the semantics are binding unless
+a checkpoint changes them.
 
 - **C-1. Verified identity.**
   - WI-1 produces it on the first successful Entra acquisition:
@@ -451,7 +453,7 @@ verdict exists, do not start the work it gates. The fingerprint table (formerly 
    - **this file**;
    - the index row in `docs/ai-and-plans/README.md` (already present).
 4. Its description:
-   - states that §4 (C-1 to C-6) is the agreement that lets PR 1–3 run in parallel;
+   - states that §4 (C-1 to C-6) is the agreement that lets PRs 1–3 share the connection contracts;
    - lists A1 as the one provisional answer for the operator to confirm;
    - links the issues as `Part of #1102`, plus #1059, #566 and #990 (references only; PR 0 resolves
      nothing, so it posts no issue comments).
@@ -459,12 +461,10 @@ verdict exists, do not start the work it gates. The fingerprint table (formerly 
 
 **Progress:**
 
-- **Deferred, escalated (2026-11-19):** The existing planning commits through `453669a59` were
-  verified to be docs-only. The remote feature branch and PR 0 did not exist when checked. Publishing
-  is waiting for operator authorization or operator-created branches and PR. Recommendation: create
-  `feature/connection-lifecycle` from `origin/main`, publish the planning branch as
-  `dev/tnaum/connection-lifecycle-plan`, and open draft PR 0. No implementation PR starts before PR 0
-  merges.
+- **Published (2026-11-19):** [Draft PR 0 (#1107)](https://github.com/microsoft/vscode-documentdb/pull/1107)
+  targets `feature/connection-lifecycle` from `dev/tnaum/connection-lifecycle-plan`. The operator
+  removed the intermediate merge gate: PR 1 can build on PR 0 now. The operator will handle reviews
+  and merges; CP-0 and OP-1a still apply before any OIDC handler change.
 - **Coding model assignments (2026-11-19), advised (`claude-opus-5.5`):** `gpt-6.1-sol` for WI-1
   (including the pre-OP-1a work), WI-2, the WI-3 version probe, WI-4, WI-5, the WI-6 host, and WI-7,
   where auth, lifecycle or cross-module contracts dominate. `mai-code-2` for the WI-6 webviews and
@@ -1084,7 +1084,7 @@ shim (0005).
 - `build/verification/browser/scenarios.ts` and `fixtures.ts`.
 
 PR 5 is one PR. Split it into host and webviews only if the diff becomes too large to review well, as the
-approved plan allows; the webview half then opens after the host half merges.
+approved plan allows; the webview half then stacks on the host half without waiting for it to merge.
 
 ### Host
 

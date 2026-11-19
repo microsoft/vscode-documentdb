@@ -21,7 +21,8 @@ code:
 - follow-up after 1.2.0: [#1105](https://github.com/microsoft/vscode-documentdb/issues/1105) (Kubernetes tunnels, network resilience) and
   [#1106](https://github.com/microsoft/vscode-documentdb/issues/1106) (out-of-date results)
 
-**Branch:** `feature/connection-lifecycle`, with sub-PRs from `dev/tnaum/*` (decision 0006)
+**Branch:** `feature/connection-lifecycle`, with stacked sub-PRs from `dev/tnaum/*`. Implementation
+does not wait for intermediate merges; the operator handles approvals and merges (decision 0006).
 
 > How database connections stay usable across Entra token expiry, idle drops and credential
 > changes, and what open surfaces do when the user must act or the identity changes.
@@ -68,7 +69,7 @@ See [decisions.md](./decisions.md):
 - 0003 no silent identity change;
 - 0004 the Disconnect tab choice;
 - 0005 azureauth v6;
-- 0006 delivery through a feature branch, shipped once;
+- 0006 delivery through a feature branch with stacked sub-PRs, shipped once;
 - 0007 the Disconnect choice is a modal, not remembered, with a setting for the default;
 - 0008 the azext stack is upgraded as high as viable, with Azure Resources as the reference;
 - 0009 Kubernetes tunnel recovery, case handling and wider network-resilience testing move to #1105;

@@ -17,7 +17,7 @@ created: 2026-11-19
 | 0003 | An open surface never moves to a different identity; it becomes disconnected, keeps its state and says why | Accepted                    | Operator requirement                                   | 2026-11-19 | —   |
 | 0004 | Disconnect lets the user choose: close all affected tabs, or keep them open and disabled                   | Accepted                    | Operator position; the default is still open (Q2)      | 2026-11-19 | —   |
 | 0005 | Fix stale ARM credentials by upgrading azureauth to v6 (#990), not with a local shim                       | Accepted                    | Operator: open to updating dependencies                | 2026-11-19 | —   |
-| 0006 | Deliver through `feature/connection-lifecycle` with sub-PRs, avoid PRs on top of open PRs, ship once       | Accepted                    | Operator chose this over one big PR and GitHub stacks  | 2026-11-19 | —   |
+| 0006 | Deliver through `feature/connection-lifecycle` with stacked sub-PRs, ship once                             | Accepted (amended)          | Operator removed the intermediate merge wait           | 2026-11-19 | —   |
 | 0007 | The Disconnect choice is a VS Code modal with nothing remembered; a setting can set the default            | Accepted                    | Operator: modal cannot pre-select; no remembering      | 2026-11-19 | —   |
 | 0008 | Upgrade the azext stack as high as viable without breaking workflows, using Azure Resources as reference   | Accepted                    | Operator: replaces the "minimal versions" proposal     | 2026-11-19 | —   |
 | 0009 | Kubernetes tunnel recovery, cluster ID case handling and wider network-resilience testing move to #1105    | Accepted                    | Operator: keep 1.2.0 focused; schedule after release   | 2026-11-19 | —   |
@@ -140,7 +140,7 @@ Rejected:
   logic, and it would be thrown away when #990 lands.
 - **Staying on 5.1.1, the latest stable.** It still captures the token.
 
-## 0006. Deliver through `feature/connection-lifecycle` with sub-PRs, avoid PRs on top of open PRs, ship once
+## 0006. Deliver through `feature/connection-lifecycle` with stacked sub-PRs, ship once
 
 **Accepted** by the operator on 2026-11-19. Source: operator input during planning.
 
@@ -150,8 +150,13 @@ Rejected:
 > without the 'stack' feature from github. [...] it won't be a partial release, it all will go out
 > at once.
 
-After the evaluation, the operator chose the feature-branch model and asked to reduce PRs opened on
-top of other open PRs: "not required, just welcomed".
+After the evaluation, the operator initially asked to reduce PRs opened on top of other open PRs:
+"not required, just welcomed".
+
+**Amended by the operator on 2026-11-19:** Approvals will take time, so build and open each next
+sub-PR on the preceding PR's branch without waiting for it to merge. The operator will follow up
+with approvals and merges. This changes neither the explicit operator test gates nor the single
+release from the feature branch.
 
 - It follows CONTRIBUTING §1.4 (large features).
 - It fits the repository's enforcement:
@@ -159,8 +164,7 @@ top of other open PRs: "not required, just welcomed".
   - the `feature/**` ruleset requires a reviewed PR and blocks force pushes;
   - only merge commits are allowed, and head branches are deleted on merge.
 - Merge commits keep the original commits. A PR opened on top of another one therefore shrinks to
-  its own diff, and is retargeted automatically, once its base merges. That makes the exception
-  workable without moving updates up the chain.
+  its own diff once its base merges and GitHub retargets it. Verify the retargeting after each merge.
 - The split and the rules are in [the plan's Delivery section](./iterations/01-implementation-plan.md#delivery).
 
 Rejected:
@@ -170,8 +174,7 @@ Rejected:
     review and AI pre-review get worse.
   - Each push dismisses the approval.
   - There are no reviewed checkpoints, and conflicts with `main` are resolved only at the end.
-- **GitHub stacked PRs:** the operator's experience was that updates must move up the chain and the
-  PRs end up merged one by one anyway.
+- **GitHub's stack feature:** not needed; use ordinary PRs targeting the preceding branch.
 - **Shipping WI-1 and WI-2 early as a patch (plan Q5):** no partial release.
 
 ## 0007. The Disconnect choice is a VS Code modal with nothing remembered; a setting can set the default

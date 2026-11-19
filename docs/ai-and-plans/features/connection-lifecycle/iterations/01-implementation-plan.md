@@ -87,10 +87,11 @@ WI-4 ─┴─> WI-5 ─> WI-6 ─> WI-7 ─> WI-8   (lifecycle core, then Disco
 [CONTRIBUTING §1.4](../../../../../CONTRIBUTING.md#14-large-features).
 
 - `feature/connection-lifecycle` is created from `main`.
-- Each sub-PR comes from a `dev/tnaum/<topic>` branch and merges into the feature branch, where it
-  gets its own review, AI pre-review and checks.
+- Each sub-PR comes from a `dev/tnaum/<topic>` branch and ultimately merges into the feature
+  branch, where it gets its own review, AI pre-review and checks. The operator handles approvals
+  and merges.
 - **One** final PR, `feature/connection-lifecycle` → `main`, ships everything in a single release.
-- GitHub's stacked PRs are not used.
+- Use ordinary PRs targeting the preceding branch, not GitHub's stack feature.
 
 **How the repository enforces this** (checked 2026-11-19):
 
@@ -103,22 +104,20 @@ WI-4 ─┴─> WI-5 ─> WI-6 ─> WI-7 ─> WI-8   (lifecycle core, then Disco
 - Repository merge settings: **merge commits only** (squash and rebase are disabled), and head
   branches are deleted on merge.
 
-### Rules for keeping PRs off each other
+### Rules for stacking sub-PRs
 
-The goal is to open few PRs on top of other unmerged PRs. It is preferred, not required.
-
-1. **Open a PR only when everything it depends on has merged** into the feature branch. While a
-   dependency is still in review, keep building on a local branch made from it. Once the dependency
-   merges, `git merge feature/connection-lifecycle` into the local branch, then open the PR against
-   the feature branch.
-2. **Use parallel tracks.** Independent work items each get their own PR off the feature branch,
-   so they never stack (PR 1–3 below).
+1. **Do not wait for approvals or an intermediate merge to start or open the next PR.** Branch from
+   the preceding PR's head and target that branch while its PR is open. If it has already merged,
+   branch from and target `feature/connection-lifecycle` instead.
+2. **Keep implementation gates.** The stack order does not remove any advisor checkpoint or
+   operator decision or test. Stop at those as specified. Run the existing verification locally
+   even when CI does not run on a PR targeting an intermediate branch.
 3. **Group work items into one PR** when they are strongly coupled and reviewable together. Keep
    commits per work item inside the PR, so the inline progress notes can name them.
-4. **Exception:** if waiting would block progress, a PR _may_ target another open PR's branch. Merge
-   commits keep the commits intact, and deleting the base branch on merge makes GitHub retarget the
-   PR to the feature branch automatically. To pick up later changes from the base, use
-   `git merge <base>`. Never rebase or force-push after a human review (CONTRIBUTING §1.6).
+4. **Integrate bottom-up.** Do not merge a sub-PR into the preceding topic branch. After the
+   predecessor merges, verify the next PR targets `feature/connection-lifecycle` before merging it.
+   To pick up later changes from the base, use `git merge <base>`. Never rebase or force-push after a
+   human review (CONTRIBUTING §1.6).
 5. **Sync `main` into the feature branch** through a PR, because force pushes are blocked:
    - weekly, and once more right before the final PR;
    - as a pure merge, with no feature work in it;
@@ -127,24 +126,22 @@ The goal is to open few PRs on top of other unmerged PRs. It is preferred, not r
 
 ### PR split
 
-| PR  | Content                                                                          | Base when opened              | Opens after               |
-| --- | -------------------------------------------------------------------------------- | ----------------------------- | ------------------------- |
-| 0   | This plan, `research-findings.md`, `decisions.md`, README and index row          | feature branch (just created) | —                         |
-| 1   | WI-1 + WI-2: Entra silent renewal, plus the shell and playground relays          | feature branch                | PR 0                      |
-| 2   | WI-3: azureauth v6 (#990) + the diagnostics `signInRequired` mapping             | feature branch                | PR 0                      |
-| 3   | WI-4: client identity and generation, the two cache fixes, telemetry helper      | feature branch                | PR 0                      |
-| 4   | WI-5: failure classifier, recovery, Sign in again, Retry, `onDidChangeSessions`  | feature branch                | PR 1 and PR 3 merged      |
-| 5   | WI-6: surface binding and the disconnected state (host and webviews)             | feature branch                | PR 4 merged               |
-| 6   | WI-7 + WI-8: teardown, Disconnect, Remove, Update Credentials, dashboard polling | feature branch                | PR 5 merged               |
-| 7   | WI-9 + WI-10: telemetry signals and dashboards, documentation                    | feature branch                | PR 6 merged               |
-| F   | `feature/connection-lifecycle` → `main`                                          | `main`                        | all merged, OT-1–7 passed |
+| PR  | Content                                                                          | Base while predecessor is open             |
+| --- | -------------------------------------------------------------------------------- | ------------------------------------------ |
+| 0   | This plan, `research-findings.md`, `decisions.md`, README and index row          | feature branch                             |
+| 1   | WI-1 + WI-2: Entra silent renewal, plus the shell and playground relays          | PR 0 head                                  |
+| 2   | WI-3: azureauth v6 (#990) + the diagnostics `signInRequired` mapping             | PR 1 head                                  |
+| 3   | WI-4: client identity and generation, the two cache fixes, telemetry helper      | PR 2 head                                  |
+| 4   | WI-5: failure classifier, recovery, Sign in again, Retry, `onDidChangeSessions`  | PR 3 head                                  |
+| 5   | WI-6: surface binding and the disconnected state (host and webviews)             | PR 4 head                                  |
+| 6   | WI-7 + WI-8: teardown, Disconnect, Remove, Update Credentials, dashboard polling | PR 5 head                                  |
+| 7   | WI-9 + WI-10: telemetry signals and dashboards, documentation                    | PR 6 head                                  |
+| F   | `feature/connection-lifecycle` → `main`                                          | `main` (all sub-PRs merged, OT-1–7 passed) |
 
-- PR 1–3 can run in parallel if PR 0 agrees how WI-1 passes the verified account, provider and
-  tenant to WI-4. Otherwise, land PR 1 before PR 3; do not reconstruct the identity from a later cache read.
-- PR 4 to PR 7 are sequential, because each builds on the previous one. Under rule 1, local work on
-  the next item may begin early, but its PR opens only after its base has merged.
+- WI-4 consumes the verified account, provider and tenant contract from WI-1. Do not reconstruct
+  the identity from a later cache read.
 - **PR 5 is the largest.** If it becomes too large to review well, split it into host (5a) and
-  webviews (5b). 5b opens after 5a merges, following rule 1.
+  webviews (5b). Stack 5b on 5a, and PR 6 on 5b, following rule 1.
 - **#990 alternative:** #990 is its own issue in the 1.2.0 milestone. It can merge to `main` instead,
   which keeps the busiest lockfile changes off the feature branch; it would still ship in the same
   release. The default is the feature branch, so that the discovery fix and the WI-3 diagnostics
