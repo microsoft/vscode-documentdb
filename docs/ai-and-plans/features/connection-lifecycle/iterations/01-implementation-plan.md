@@ -338,6 +338,8 @@ In [ClustersClient.ts](../../../../../src/documentdb/ClustersClient.ts):
   clients `signInRequired`. Never sign the user out, and never remove sessions (#1059 "must NOT be
   touched"). The event identifies the provider, not the removed account. Silently recheck affected
   bindings and ignore results from stale generations; another account's change must not disconnect this one.
+  - **Changed 2026-11-19 (decision [0012](../decisions.md)):** dropped. The next operation's silent lookup
+    finds a signed-out account and fails with `signInRequired`, with no listener.
 - **Unit tests:**
   - classifier table tests;
   - Retry after `clientClosed` produces a new generation;
@@ -486,6 +488,10 @@ must be queryable without a join or a new persistent identifier.
   `signInAgain`) and `connectionAgeMs`. A callback returning a token is not that success. Keep
   WI-4's classified post-connect failures and WI-7's Disconnect event. Report ARM challenges
   separately from database renewal and verify the final ARM request, not just token acquisition.
+  - **Changed 2026-11-19 (decision [0012](../decisions.md)):** no `connection.recovered` event and no
+    changed-token or remaining-validity measures. `connection.tokenRenewal` keeps its outcome and the token
+    lifetime; recovery shows as successful operations on a replaced client (`clientGeneration` above 1)
+    and fewer late failures.
 - **Release dashboard and acceptance:** check in runnable queries that show daily renewal outcomes
   and changed-token rate (`changed / all completed lookups`), plus p50/p90 token lifetime,
   remaining validity and connection age at refresh, split by version and surface. Show sample
@@ -564,8 +570,11 @@ denominator; a cohort with no challenges is inconclusive, and timing alone does 
 - ~~**Q2:** The default for the Disconnect choice, and whether to remember it. The proposal is Keep
   open (disabled), remembered in `globalState`.~~ **Resolved 2026-11-19:** a VS Code modal with nothing
   remembered, plus a setting for the default (decision [0007](../decisions.md)).
-- **Q3:** Should Disconnect drop the `CredentialCache` entry (#1059 proposes yes), so a password
-  typed only for a discovery connection must be entered again?
+- ~~**Q3:** Should Disconnect drop the `CredentialCache` entry (#1059 proposes yes), so a password
+  typed only for a discovery connection must be entered again?~~ **Resolved 2026-11-19:** no. Disconnect
+  keeps the cached credentials and the verified identity; only Remove drops them (decision
+  [0011](../decisions.md)). The WI-7 teardown bullet above still lists `CredentialCache`; read it as
+  "Remove only".
 - **Q4:** Ask the Azure DocumentDB service team whether the server closes connections when the
   token expires, and whether it ever sends code 391 `ReauthenticationRequired` (research §1).
 - ~~**Q5:** Release slicing. Should WI-1 and WI-2 ship early as a patch (backport skill)? They are

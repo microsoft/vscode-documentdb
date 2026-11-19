@@ -83,14 +83,14 @@ followed by:
 Do not continue past the blocked step until the operator replies. Work that does not depend on the
 result may continue, but say so in the message. Record the result in the Progress block of the WI.
 
-| OP   | When                 | Test                                                                                                                                                 |
-| ---- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| OP-1 | WI-1, CP-0           | Entra connection, idle past the token lifetime (60–90 min or more), then force a new connection. Does the server answer code 18 or close the socket? |
-| OP-2 | WI-3, CP-W3          | The azext workflow checks on the packaged VSIX: Azure sign-in, discovery, filters, deep links, wizards, Azure Resources view.                        |
-| OP-3 | WI-5 done            | OT-2's tree part with a real sign-out: Sign in again, a dismissal, no reprompt.                                                                      |
-| OP-4 | WI-6 done (after 5b) | OT-1 (short form, with the WI-4 hook) and OT-3(a) and (b) on a dev build.                                                                            |
-| OP-5 | WI-7 done            | OT-7 on a dev build, including a Disconnect during a running copy or export, and while a query or save is in flight.                                 |
-| OP-6 | Before PR F (CP-5)   | OT-1 to OT-7 on the packaged VSIX, with at least one real wait of two hours or more (PR F step 3).                                                   |
+| OP   | When               | Test                                                                                                                                                 |
+| ---- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OP-1 | WI-1, CP-0         | Entra connection, idle past the token lifetime (60–90 min or more), then force a new connection. Does the server answer code 18 or close the socket? |
+| OP-2 | WI-3, CP-W3        | The azext workflow checks on the packaged VSIX: Azure sign-in, discovery, filters, deep links, wizards, Azure Resources view.                        |
+| OP-3 | WI-5 done          | OT-2's tree part with a real sign-out: Sign in again, a dismissal, no reprompt.                                                                      |
+| OP-4 | WI-6 done          | OT-1 (short form, with the WI-4 hook) and OT-3(a) and (b) on a dev build.                                                                            |
+| OP-5 | WI-7 done          | OT-7 on a dev build, including a Disconnect during a running copy, export or import, and while a query or save is in flight.                         |
+| OP-6 | Before PR F (CP-5) | OT-1 to OT-7 on the packaged VSIX, with at least one real wait of two hours or more (PR F step 3).                                                   |
 
 ### Per-PR workflow
 
@@ -129,17 +129,17 @@ result may continue, but say so in the message. Record the result in the Progres
 
 ## 1. Answers to the open questions
 
-The operator was not available on 2026-11-19 at first. They answered A2, A4, A5 and A6 later the same
-day; A1 and A3 are still **provisional** under rule 4 above.
+The operator was not available on 2026-11-19 at first. They answered A2 to A6 later the same day; A1 is
+still **provisional** under rule 4 above.
 
-| #   | Question                                             | Answer                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Status                                                              | Where it lands         |
-| --- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------- |
-| A1  | Plan Q1: how does sign-in start after a silent miss? | **Only through the Sign in again button**, everywhere. The first connect from the tree stays interactive, as it is today. One rule, and no surface has to decide whether it is in the foreground. This matches 0001.                                                                                                                                                                                                                                              | Provisional                                                         | WI-1, WI-2, WI-5, WI-6 |
-| A2  | Plan Q2: Disconnect choice, default and memory       | A **VS Code modal**, which has no pre-selected button and **remembers nothing**. A setting lets users choose a default: `ask` (the default) shows the modal; `closeAll` or `keepOpenDisabled` skips it. The unsaved-edits confirmation still appears when closing. See WI-7 step 3.                                                                                                                                                                               | **Operator, 2026-11-19** (decision 0007)                            | WI-7                   |
-| A3  | Plan Q3: does Disconnect drop `CredentialCache`?     | **Yes** (#1059 proposal). Saved connections reload from storage on the next expand. A password typed only for a discovery connection must be typed again. Implement it as a teardown option, so flipping the answer is a one-line change.                                                                                                                                                                                                                         | Provisional                                                         | WI-7                   |
-| A4  | #990: which azext versions?                          | **As high as viable without breaking our workflows**, using the Azure Resources extension (same team as azureauth, heavily used) as the reference. Ladder and findings are in WI-3 step 1: target L2, fall back to L1, then L0.                                                                                                                                                                                                                                   | **Operator policy, 2026-11-19** (decision 0008)                     | WI-3 (CP-W3)           |
-| A5  | How does Disconnect see an in-flight Export?         | **Reuse the existing mechanism.** Delete Collection, Delete Database and Remove Connection already guard through `checkCanProceedAndInformUser` (`TaskService` resource tracking). Export is the gap: it is not a task and registers nothing, so even Delete Collection does not see a running export today. Close it with a small **resource lease** that feeds the same check. Every existing guard then sees exports too, and the export logic is not touched. | Operator pointed at the existing check; lease is the recommendation | WI-7                   |
-| A6  | Where do the dev plan and its progress notes live?   | In this file. Progress is recorded inline per WI here. The approved plan gets a one-line pointer.                                                                                                                                                                                                                                                                                                                                                                 | **Operator, 2026-11-19**                                            | —                      |
+| #   | Question                                             | Answer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Status                                                                                                  | Where it lands         |
+| --- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------- |
+| A1  | Plan Q1: how does sign-in start after a silent miss? | **Only through the Sign in again button**, everywhere. The first connect from the tree stays interactive, as it is today. One rule, and no surface has to decide whether it is in the foreground. This matches 0001.                                                                                                                                                                                                                                                                                                                                                                            | Provisional                                                                                             | WI-1, WI-2, WI-5, WI-6 |
+| A2  | Plan Q2: Disconnect choice, default and memory       | A **VS Code modal**, which has no pre-selected button and **remembers nothing**. A setting lets users choose a default: `ask` (the default) shows the modal; `closeAll` or `keepOpenDisabled` skips it. The unsaved-edits confirmation still appears when closing. See WI-7 step 3.                                                                                                                                                                                                                                                                                                             | **Operator, 2026-11-19** (decision 0007)                                                                | WI-7                   |
+| A3  | Plan Q3: does Disconnect drop `CredentialCache`?     | **No** (reverses the #1059 proposal). Disconnect keeps the `CredentialCache` entry **and** `lastVerifiedIdentity`, so Connect and a tab's Reconnect work without the tree and without retyping a discovery password. Only Remove Connection drops them; an identity-changing credential update replaces them. Keep `dropCredentials` as a teardown option.                                                                                                                                                                                                                                      | **Operator, 2026-11-19** (decision 0011)                                                                | WI-7                   |
+| A4  | #990: which azext versions?                          | **As high as viable without breaking our workflows**, using the Azure Resources extension (same team as azureauth, heavily used) as the reference. Ladder and findings are in WI-3 step 1: target L2, fall back to L1, then L0.                                                                                                                                                                                                                                                                                                                                                                 | **Operator policy, 2026-11-19** (decision 0008)                                                         | WI-3 (CP-W3)           |
+| A5  | How does Disconnect see an in-flight Export?         | **Reuse the existing mechanism.** Delete Collection, Delete Database and Remove Connection already guard through `checkCanProceedAndInformUser` (`TaskService` resource tracking). Export **and Import** are the gap: neither is a task and neither registers anything, so even Delete Collection does not see a running export or import today. Close it with a small **resource lease** that feeds the same check. Every existing guard then sees them too, and the export and import logic is not touched. Copy/paste and copy-indexes are already tasks that register both endpoints (F-9). | Operator pointed at the existing check; lease is the recommendation; operator added Import (2026-11-19) | WI-7                   |
+| A6  | Where do the dev plan and its progress notes live?   | In this file. Progress is recorded inline per WI here. The approved plan gets a one-line pointer.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | **Operator, 2026-11-19**                                                                                | —                      |
 
 ---
 
@@ -194,7 +194,9 @@ upgrade changes any of them, stop and re-plan the affected WI.
     (`PlaygroundEvaluator.evaluate` → `buildInitMessage`), even when the worker is warm.
 - **F-9. Task coverage.**
   - Copy/paste and copy-indexes register both endpoints through `getUsedResources()`.
-  - **Export is not a task.** `exportDocuments.ts` calls `getClient` directly and registers nothing.
+  - **Export and Import are not tasks.** `exportDocuments.ts` and `importDocuments.ts` call `getClient`
+    directly and register nothing. Import calls `getClient` again for every insert batch, so a latch
+    during an import leaves a partial import, and running it again inserts duplicates.
 - **F-10. Remove Connection does not close the client, shells, the playground or webviews.** It deletes
   storage, `CredentialCache` and `SchemaStore` data only.
 - **F-11. Credential updates.**
@@ -214,8 +216,8 @@ upgrade changes any of them, stop and re-plan the affected WI.
     lookup), tree count badges and prefetches.
   - Today **every** startup is interactive: `initializeClient` hardcodes `{ interactive: true }`. A
     background caller can therefore reconnect, or even prompt, after an eviction or a Disconnect.
-  - So the interaction policy and the disconnected latch must be enforced **centrally in `getClient`**
-    (C-6), not per caller.
+  - So `getClient` must **never prompt**, and the latch must be enforced **inside `getClient`** (C-6),
+    not per caller.
 - **F-15. A stopped worker respawns by itself.**
   - `ShellSessionManager.evaluate` re-initializes a dead or stopped worker from the current
     `CredentialCache`. `executePlaygroundCode.ts` recreates the evaluator in the same way.
@@ -229,6 +231,8 @@ upgrade changes any of them, stop and re-plan the affected WI.
   - With no explicit `authSource`, the driver uses the URI's database path (`connection_string.js`, around
     line 307). Only when there is none does it use `admin`.
   - The same user on `/sales` and on `/admin` is therefore two different principals.
+  - The fingerprint hashes the stored connection string, which carries the database path and any
+    `authSource`, so this needs no special handling (WI-4 step 1).
 - **F-18. Cluster ID matching is inconsistent across stores.**
   - `CredentialCache.deleteCredentials` lowercases its key (`CaseInsensitiveMap`), so deleting Kubernetes
     context `prod` also deletes `Prod`.
@@ -237,6 +241,15 @@ upgrade changes any of them, stop and re-plan the affected WI.
   - Both problems exist today. They are **out of scope** for this iteration (decision 0009, #1105).
 - **F-19. Credential saves can fail without the command knowing.** The Update Credentials `ExecuteStep`
   catches save failures and returns normally, so the command cannot tell whether the save happened.
+- **F-20. Only the tree fills `CredentialCache`, and the tree empties it on any connect failure.**
+  - `ClustersClient.initializeClient` starts only from a `CredentialCache` entry. Without one it throws
+    "No credentials found for id {clusterId}" and sets `startup.credentialsMissing`.
+  - Only the tree items' provider-specific `authenticateAndConnect` methods (and Update Credentials,
+    which reloads the entry from storage) fill the cache.
+  - Every `authenticateAndConnect` failure path calls `deleteClient` **and**
+    `CredentialCache.deleteCredentials`, whatever the cause: `DocumentDBClusterItem`, the Azure
+    Resources vCore and RU items, and the Atlas, Kubernetes, VM, vCore and RU discovery items.
+  - So a tree expand during a network outage leaves open surfaces with nothing to reconnect from.
 - **F-14. VS Code has no API to collapse one tree node.**
   - The repository uses `reveal(..., { expand: false })`, which does not collapse a node.
   - Collapsing through a changed `TreeItem.id` would conflict with the `treeId`/`clusterId` rules.
@@ -250,7 +263,7 @@ upgrade changes any of them, stop and re-plan the affected WI.
 | T-1 | WI-1 required that a known-expired token is never offered on a new socket. Under F-2 that is only possible with a new `MongoClient` once the issued token expires. Decision 0002 says a new generation re-runs reads from page 1 "because cursors are lost", but under F-6 no surface holds a cursor. | CP-0       | **Resolved by the operator on 2026-11-19 (decision 0010).** (1) No proactive rotation and no local expiry checks: "the server will tell us, then we can act". An expired token is rejected by the server; the driver then calls the callback, which renews silently. If the server closes the socket instead, the classifier acts on that (WI-5). (2) Replacing a client for the same identity is **transparent**: no re-run and no "out of date" notice, including on return from the disconnected state. Stale-data indication is #1106. |
 | T-2 | OT-7 expects the cluster node to "collapse" after Disconnect, but VS Code cannot collapse a single node (F-14).                                                                                                                                                                                       | CP-4       | Refresh the node. A disconnected cluster returns **one** child action, "Connect", following the actions-only rule. Its handler reconnects and refreshes. Do not change `TreeItem.id`. Update OT-7's wording at hand-over.                                                                                                                                                                                                                                                                                                                  |
 | T-3 | WI-7 asked for provider-specific cluster ID equality (Azure case aliases match; Kubernetes contexts such as `Prod` and `prod` stay distinct). Today's stores disagree on this (F-4, F-18).                                                                                                            | —          | **Withdrawn 2026-11-19:** moved out of this iteration (decision 0009, #1105). Each store keeps its current matching.                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| T-4 | Under decision 0002, a classified failure evicts and replaces the client. A background caller such as the dashboard poll or tree count badges could therefore start a new connection every tick.                                                                                                      | CP-2       | Only a **foreground** operation replaces a generation. Background callers read the state and stop (WI-8). Add a per-cluster backoff of one replacement per 30 s, as a guard against loops.                                                                                                                                                                                                                                                                                                                                                 |
+| T-4 | Under decision 0002, a classified failure evicts and replaces the client. A background caller such as the dashboard poll or tree count badges could therefore start a new connection every tick.                                                                                                      | CP-2       | Only a **foreground** operation replaces a generation. Background callers pass `background: true` and just fail (C-6, WI-8). No backoff: with no background replacement there is no loop to guard against (decision 0012).                                                                                                                                                                                                                                                                                                                 |
 | T-5 | For Entra, code 18 after the driver's own fresh callback means the server rejected a _fresh_ token: the principal has no database user, or Conditional Access or CAE intervened. That is not the same as `signInRequired`.                                                                            | CP-2       | Classify it as `credentialsRejected` with an Entra-specific explanation ("Your account has no access…"). Offer **Sign in again** only when the token came from a session the user can replace. Decide this with the real driver error shapes collected for CP-0.                                                                                                                                                                                                                                                                           |
 
 ---
@@ -292,81 +305,76 @@ semantics are binding unless a checkpoint changes them.
     credentials used.
   - WI-2 builds the same shape at worker spawn.
   - Never logged, never sent to telemetry, never persisted.
-- **C-2. Typed auth errors.**
-  - One error class per outcome, each with a stable `name` and a bounded `reason`:
-    - `EntraSignInRequiredError`, reason `noSession | providerChanged`;
-    - `EntraIdentityMismatchError` (a different account came back);
-    - `EntraTokenRefreshError` (any other failure of the lookup; the cause is kept, but it is never
-      rendered raw).
-  - Messages are localized. Classification uses the `name` (walking `cause`), never the message.
-  - All three are "callback threw" for F-1.
+- **C-2. Typed errors: four classes in total.**
+  - `EntraSignInRequiredError`, reason `noSession | providerChanged`.
+  - `EntraIdentityMismatchError`: a different account came back.
+  - `TokenCallbackError`: wraps **any other** error thrown from an OIDC callback, for every auth method
+    (Entra and managed identity), with a bounded `authMethod`. The original is kept as `cause` and is
+    never rendered raw.
+  - `ConnectionUnavailableError { reason }`: the one error for a client the caller cannot use (the latch,
+    an identity change, missing credentials). `reason` is the C-5 enum.
+  - Messages are localized. Classification uses the `name` (walking `cause`), never the message. Existing
+    name checks that walk `cause`, such as destination rejection, keep working.
+  - The first three are "callback threw" for F-1.
   - Keep the existing `AuthInputUnavailableError` for the non-interactive startup path (diagnostics).
     Either make the new errors related to it or map between them explicitly, so the Entra failure registry
     still skips silent misses (comment in `MicrosoftEntraIDAuthHandler.configureAuth`).
 - **C-3. Token lookup observation.**
   - Every **completed** post-startup token lookup notifies an optional host-only observer, whether it
-    succeeded or failed:
-    `{ outcome: 'returned' | 'noSession' | 'identityMismatch' | 'failed', issuedAtSec?, expiresAtSec?, changed: boolean | 'unknown' }`.
-  - `changed` means "a different issuance": the JWT `iat` or `exp` differs from the previous token
-    returned in the same binding. It is `'unknown'` when either token is opaque, or when there is no
-    earlier observation.
-  - Byte equality is **not** established. Nothing about a token is retained except the previous `iat` and
-    `exp` numbers.
-  - The observer never receives the token, a hash of it or any other claim.
-  - WI-9 uses it for `connection.tokenRenewal`, including the miss outcomes. A WI-5 rule may also read the
-    last `expiresAtSec`, if OP-1 shows that the server closes the socket (CP-0).
+    succeeded or failed: `{ outcome: 'returned' | 'noSession' | 'identityMismatch' | 'failed', lifetimeSeconds? }`.
+  - `lifetimeSeconds` is the JWT `exp` minus `iat`, and is omitted when the token is opaque.
+  - Nothing about a token is retained between lookups. The observer never receives the token, a hash of it
+    or any other claim.
+  - WI-9 uses it for `connection.tokenRenewal`.
 - **C-4. Binding.**
   - Its form is `{ clusterId, fingerprint, generation }`.
-  - **`fingerprint`** is an opaque hash of the logical deployment plus the effective principal (WI-4). It
-    never contains a password and is never sent to telemetry.
+  - **`fingerprint`** is an opaque hash of the stored connection string without its password, plus the
+    principal (WI-4 step 1). It never contains a password and is never sent to telemetry.
   - **`generation`** is a per-cluster number that only ever increases. It is **never reset**, not even
     after teardown. A binding from before Disconnect therefore never matches a client created after
     Reconnect.
-- **C-5. Connection state, at two levels.**
-  - **Cluster state** is owned by the host and keyed by `clusterId`, matched the same way as
-    `ClustersClient._clients` today. It describes the cluster's
-    current client: `connected { binding }`, `reconnecting`, `needsAction { reason }`, or
-    `disconnected { reason }` (the latch, C-6).
-  - **Surface state** is **derived for each registered binding**. It is what the tree, webviews, shells
-    and the playground show:
-    - `connected`;
-    - `reconnecting`;
-    - `disconnected { reason, action }`.
-  - A surface whose fingerprint differs from the cluster's current binding is
-    `disconnected(identityChanged | credentialsChanged)` **even while the cluster is `connected`**. This is
-    what lets the tree and new panels run as identity B while panels opened as A stay disabled.
-  - `reason` is one of: `signInRequired`, `credentialsRejected`, `credentialsChanged`,
+- **C-5. Unavailable reasons, derived on demand.**
+  - There is **no stored connection state** and no state machine. A surface learns where it stands when it
+    resolves its binding (WI-6): it gets a client, or a `ConnectionUnavailableError { reason }`. A router
+    returns that to the webview as structured data (F-12).
+  - A surface whose fingerprint differs from the client the cluster would use now is unavailable with
+    `identityChanged` or `credentialsChanged`, **even while the tree works**. This is what lets the tree and
+    new panels run as identity B while panels opened as A stay disabled.
+  - `reason` is one of: `signInRequired`, `credentialsRejected`, `credentialsMissing`, `credentialsChanged`,
     `identityChanged`, `userDisconnected`, `connectionRemoved`, `unreachable`.
   - `action` is one of: `reconnect`, `signInAgain`, `updateCredentials`, `close`.
-  - Reasons are bounded enums. The webview gets the localized text from the host.
-- **C-6. Central interaction and latch policy, enforced inside `ClustersClient.getClient`.**
-  - **Interaction:**
-    - every call states `interaction: 'allowed' | 'never'`, and the default is `'never'`;
-    - `'allowed'` may prompt **only** when the cluster has no `lastVerifiedIdentity` (a first connect);
-    - once an identity is verified, reconnects are silent and pinned whatever the caller asked for;
-    - interactive sign-in after that happens only in the Sign in again command (A1).
-  - **Latch:** while a cluster is `disconnected` (Disconnect, Remove, a credentials change), `getClient`
-    rejects every caller with a typed `ClusterDisconnectedError`. Background callers are included. Only
-    the explicit Connect and Reconnect actions clear the latch.
-  - **Lifecycle epoch:** a per-cluster counter that increases on every latch, unlatch, eviction and
-    teardown. Every recovery command (Retry, Sign in again, Reconnect) captures the epoch **before** its
-    first `await`, and applies its result only if the epoch is unchanged (compare and swap).
+  - Reasons are bounded enums. The webview gets the localized text and the action from the host.
+  - The only push is teardown: Disconnect with Keep open calls each registered surface's `disable(reason)`
+    (WI-6 host step 1).
+- **C-6. `getClient` rules.**
+  - **It never prompts.** `getClient` is always silent. Only the tree's first connect
+    (`authenticateAndConnect`, through `ClustersClient.connectInteractive`) and the Sign in again command
+    may prompt (A1). Once an identity is verified (`lastVerifiedIdentity`, WI-4), a reconnect is silent and
+    pinned to it.
+  - **Background callers** (the dashboard poll, tree count badges, playground completions) pass
+    `background: true`. They never replace a client; they just fail (T-4).
+  - **Latch:** while a cluster is disconnected (Disconnect, Remove, an identity-changing credentials
+    update), `getClient` throws `ConnectionUnavailableError` with the latch's reason, for every caller.
+    Only the explicit Connect and Reconnect actions clear the latch.
+  - **One epoch:** a per-cluster counter that `invalidate` increases **synchronously** on every latch,
+    unlatch, eviction and teardown. A startup publishes only if the epoch is unchanged. Every recovery
+    command (Retry, Sign in again, Reconnect) captures the epoch **before** its first `await`, and applies
+    its result only if it is unchanged. With the per-client generation, it is the only staleness guard.
 
 ---
 
 ## 5. Advisor checkpoints
 
 Each checkpoint is a short written verdict recorded in the Progress block of the WI named. Until the
-verdict exists, do not start the work it gates.
+verdict exists, do not start the work it gates. The fingerprint table (formerly CP-1) and the PR 5 split
+(formerly CP-3) are ordinary PR review (decision 0012).
 
 | CP    | When                                                            | Question                                                                                                                                                                                                    | Evidence required                                                                                                                                                |
 | ----- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | CP-0  | WI-1, after step 1, before the handler is changed               | What does the server do when an expired token reaches a new socket: does it answer code 18, or close the socket? The strategy itself is decided (0010); this only tells the WI-5 classifier what to act on. | Contract test output, and the **operator test OP-1** (§0): one real waited session, never logging tokens.                                                        |
 | CP-W3 | WI-3, after the version probe                                   | Which azext versions (A4)?                                                                                                                                                                                  | `npm ls` for each package, bundle scan for duplicate copies, build-error list per level, and the **packaged VSIX** loading and passing the WI-3 workflow checks. |
-| CP-1  | Before PR 3 opens                                               | Does C-1 work for every auth method, including the managed identity runtime shape and tunnels?                                                                                                              | Fingerprint table tests (WI-4 step 1).                                                                                                                           |
-| CP-2  | WI-5, after the classifier is drafted, before recovery is wired | The classifier table, T-4 and T-5.                                                                                                                                                                          | Classifier table tests run on **real** driver error shapes captured by the contract test and the tree paths.                                                     |
-| CP-3  | Before WI-6 webview work                                        | Split PR 5 into 5a/5b? Is the binding-resolution API and state channel final?                                                                                                                               | Diff size of host-only work; one router converted end to end.                                                                                                    |
-| CP-4  | Before WI-7 starts                                              | Teardown order, T-2, the export lease (A5).                                                                                                                                                                 | Teardown sequence diagram in the PR description.                                                                                                                 |
+| CP-2  | WI-5, after the classifier is drafted, before recovery is wired | The classifier table and T-5.                                                                                                                                                                               | Classifier table tests run on **real** driver error shapes captured by the contract test and the tree paths.                                                     |
+| CP-4  | Before WI-7 starts                                              | Teardown order, T-2, the export and import lease (A5).                                                                                                                                                      | Teardown sequence diagram in the PR description.                                                                                                                 |
 | CP-5  | Before PR F                                                     | Is the hand-over complete?                                                                                                                                                                                  | OT-1 to OT-7 results recorded in `# Outcome`, WI-9 queries run on pre-release ingestion.                                                                         |
 
 ---
@@ -433,10 +441,9 @@ verdict exists, do not start the work it gates.
    - Act on the result:
      - **code 18, then a second callback, then success:** nothing more to do;
      - **socket closed or reset, with no callback:** the driver keeps its stale cached token, so retrying
-       on the same client cannot recover. Add a WI-5 classifier rule: on an Entra client whose last
-       observed token has expired (C-3), a closed connection during authentication is `clientClosed`, so
-       the next **foreground** operation creates a new generation with a fresh token cache (T-4 still
-       applies).
+       on the same client cannot recover. Add a WI-5 classifier rule: on an Entra client, a closed
+       connection during authentication is `clientClosed`, so the next **foreground** operation creates a
+       new generation with a fresh token cache. No local expiry check (decision 0010).
    - Record the result and the rule, if one was added, in Progress.
 
 3. **Session helper.**
@@ -448,17 +455,17 @@ verdict exists, do not start the work it gates.
      azureauth internal path, so PR 1 and PR 2 do not collide.
    - Read the provider ID through the existing seam in `documentdbTokenResource.ts`, so that PR 2 migrates
      a single place.
-4. **First acquisition.** Keep it as it is (interactive when the policy says so). Then record C-1 from
+4. **First acquisition.** Keep it as it is: interactive, reached only through the tree's first connect
+   (C-6). Then record C-1 from
    `session.account` and the provider ID that was actually used, and return it on `AuthHandlerResponse`.
 5. **The callback.** Replace the closure over `session` with:
    - a silent lookup pinned to the provider, scopes, tenant and `account`;
    - if the provider in use differs from the pinned one: `EntraSignInRequiredError('providerChanged')`;
    - no session: `EntraSignInRequiredError('noSession')`;
    - `session.account.id !== pinned.accountId`: `EntraIdentityMismatchError`;
-   - any other thrown error: `EntraTokenRefreshError` (keep the cause);
+   - any other thrown error: `TokenCallbackError` (keep the cause);
    - a result of `{ accessToken, expiresInSeconds }`, where `expiresInSeconds` comes from the JWT `exp`;
-   - a C-3 notification for every completed lookup, including misses and failures. `changed` compares
-     only the previous `iat` and `exp` numbers; the previous token itself is never kept.
+   - a C-3 notification for every completed lookup, including misses and failures.
 
    Leave `buildOidcClientConfiguration` untouched; it still checks the destination policy around the call.
 
@@ -467,7 +474,7 @@ verdict exists, do not start the work it gates.
    `playgroundWorker.ts`. An unknown `exp` stays unknown (`undefined`). The worker keeps its own fallback
    TTL; WI-9 must not report that fallback as a measured value.
 7. **Failure registry.** A silent miss and an identity mismatch are **not** recorded as token failures,
-   as the existing comment requires. An `EntraTokenRefreshError` is recorded through
+   as the existing comment requires. A `TokenCallbackError` is recorded through
    `recordEntraTokenFailure`, with its `classifyEntraError` rule.
 8. **Explanation.**
    - Register an `ErrorExplanationService` provider (id `entraSignInRequired`) that walks the
@@ -485,7 +492,7 @@ verdict exists, do not start the work it gates.
 **Tests** (extend `MicrosoftEntraIDAuthHandler.test.ts`):
 
 - a second callback asks the provider again, pinned, with `silent: true` and **never** `createIfNone`;
-- the same token bytes while the token is still valid are accepted, and C-3 reports `changed: false`;
+- the same token bytes while the token is still valid are accepted;
 - no session gives `EntraSignInRequiredError`;
 - a different account gives `EntraIdentityMismatchError`;
 - a changed configured provider gives `providerChanged`, and `getSession` is never called with the new
@@ -530,23 +537,20 @@ verdict exists, do not start the work it gates.
 1. **Snapshot and surface binding.**
    - Extend the D12 session snapshot with C-1: `providerId`, `accountId` and `tenantId`. Capture them on
      the **first** token relay of a newly spawned worker.
-   - That first relay may be interactive only while the spawn is user-initiated: opening a shell, or
-     running a playground on a cold worker. Track this with an explicit "initial acquisition pending" flag,
-     not with timing.
+   - The first relay is silent and pinned when the host has a verified identity for the cluster
+     (`lastVerifiedIdentity`, WI-4). Only when the snapshot has no pinned account yet may it be
+     interactive, because opening a shell or running a playground is user-initiated. No separate
+     "initial acquisition pending" flag.
    - Every later relay uses `entraSession.ts` in silent mode with the pinned account, and the same C-2
      errors as WI-1.
-   - Optional optimization (the advisor decides): if the host already has a client for the cluster with a
-     verified identity, seed the snapshot from it, so the initial relay is silent too.
-   - **The shell or playground surface keeps its own binding** (C-4 fingerprint plus C-1), and that
-     binding **outlives the worker** (F-15). It registers in the **same surface registry** as the
-     webviews (WI-6 host step 1), with kind `shell` or `playground`. It consumes the same projected state
-     (C-5) and the same latch (C-6), so host and workers share one lifecycle coordinator, not two state
-     machines. If PR 1 lands before the registry exists, keep the latch behind a small interface that
-     WI-6 moves into the registry. Before an automatic respawn (`ShellSessionManager.evaluate`,
-     `executePlaygroundCode.ts`), check the binding and the surface latch:
+   - **The shell or playground session stores its fingerprint string** (C-4) when it spawns. It does
+     **not** join the surface registry; teardown finds shells through `getRegisteredShellTerminals` and
+     the playground through its evaluator (WI-7). Before an automatic respawn
+     (`ShellSessionManager.evaluate`, `executePlaygroundCode.ts`), compare the fingerprint of the current
+     credentials with the stored one, and check the cluster latch (C-6):
      - same fingerprint and not latched: respawn as today;
-     - a different fingerprint, or latched: do not respawn. Print the disconnected reason and the action.
-     - Only an explicit recovery (Sign in again, Reconnect) may respawn under a new binding.
+     - a different fingerprint, or latched: do not respawn. Print the reason and the action.
+     - Only an explicit recovery (Sign in again, Reconnect) may respawn under a new fingerprint.
 2. **IPC.**
    - Extend `tokenError` with an optional bounded `reason`. Its values are `signInRequired`,
      `identityMismatch`, `destinationRejected` and `refreshFailed`. Keep the existing allow-list pattern
@@ -568,12 +572,19 @@ verdict exists, do not start the work it gates.
      keeps its terminal and prints "Reconnected". The playground respawns on the next run.
    - A different account is an identity change (0003): the shell prints "Signed in as a different account;
      open a new shell to use it". Do not rebind.
+   - **Any other token failure (F-1).** A `refreshFailed` reason, or any other error thrown from the
+     worker's OIDC callback, whatever the auth method (Entra or managed identity), leaves the worker's
+     `MongoClient` broken while the worker process stays alive, so the automatic respawn (F-15) never
+     runs. Mark the worker session as broken when such a reason arrives. The next command, or the next
+     playground run, stops the worker and respawns it under the **same fingerprint**, using the respawn
+     rule in step 1. Print one line, without a modal.
 4. **#1059 note.**
    - Call `PlaygroundEvaluator.buildInitMessage` only when a worker is spawned.
    - A warm run on the same cluster reuses the stored init.
    - A run against a different cluster, or a dead worker, spawns as it does today.
 5. **E4.** A late token response or error from a disposed or replaced worker must change neither state nor
-   diagnostics. Guard by a worker or session instance ID.
+   diagnostics. Ignore messages from a worker that is no longer the session's current worker (compare the
+   worker object); no extra ID.
 
 **Tests:**
 
@@ -586,7 +597,9 @@ verdict exists, do not start the work it gates.
   - a late relay result from a replaced worker is ignored;
   - after the cluster's credentials change to another user, the next shell command does **not** respawn
     silently; it prints `credentialsChanged`. A password-only change does respawn;
-  - a latched (disconnected) shell or playground does not respawn on the next command.
+  - a latched (disconnected) shell or playground does not respawn on its next command;
+  - after a `refreshFailed` token error (Entra and managed identity), the next command respawns the
+    worker once under the same fingerprint, and the command after that runs on the new worker.
 - Add a test of the worker message round trip for `reason` and `authReason`.
 
 **Done when:** Case 1 is green, and the PR 1 pre-review is committed.
@@ -712,6 +725,7 @@ shim (0005).
 - Teardown and late startups cannot publish stale clients.
 - Cancelling a cached reuse never closes the shared client.
 - A closed topology is replaced, never reconnected with old options.
+- `getClient` never prompts (C-6).
 
 **Read first:**
 
@@ -724,82 +738,67 @@ shim (0005).
 **Steps:**
 
 1. **Fingerprint** (`src/documentdb/connectionFingerprint.ts`, pure).
-   - Inputs are the **credentials snapshot actually used** in `initializeClient`, the C-1 identity
-     (Entra), and the provider's logical target for tunnels.
-   - The **deployment** is the normalized seed host list of the original connection string (before
-     reachability rewrites it to `localhost`), or the provider's stable target ID.
-   - The **principal**, per auth method:
-     - Native: user + the **effective** authentication database, using the driver's rules (F-17):
-       explicit `authSource`, else the URI's database path, else `admin`;
-     - Entra: `providerId` + `accountId` + `tenantId`;
-     - managed identity: the client ID, as the runtime credential carries it, or `system-assigned`.
-       **Known limitation:** if an admin replaces a resource's system-assigned identity, the principal
-       changes but the fingerprint does not. That is not the user-driven identity switch that 0003 guards
-       against, so document it rather than research a principal claim;
-     - no auth: `none`.
-   - **Fail closed:** when two inputs might mean the same deployment but normalization is unsure (for
-     example, an SRV string compared with a seed list), the fingerprints **differ**. The user then sees
-     "credentials changed" once and reconnects, which is acceptable.
-   - The Entra `providerId` is part of the fingerprint, so a provider or cloud change is an **identity
-     change**. Open surfaces go disconnected, and Reconnect is an explicit rebind under the current
-     settings.
-   - Hash it (SHA-256, hex, truncated) into an opaque string.
-   - Table tests:
-     - a password-only change keeps the fingerprint;
+   - It hashes two inputs (SHA-256, hex, truncated) into an opaque string:
+     - the **stored connection string without its password**, as it was before reachability rewrote the
+       host to `localhost`. It carries the hosts, the database path and any `authSource`, so F-17 needs no
+       special handling;
+     - the **principal**: the native user name; Entra `providerId` + `accountId` + `tenantId` (C-1); the
+       managed identity client ID, or `system-assigned`; or `none`.
+   - **No normalization.** Any edit to the connection string counts as an identity change. That fails
+     closed: the user sees "credentials changed" once and reconnects.
+   - The Entra `providerId` is part of it, so a provider or cloud change is an identity change too.
+   - **Known limitation:** if an admin replaces a resource's system-assigned identity, the principal
+     changes but the fingerprint does not. That is not the user-driven identity switch that 0003 guards
+     against; document it.
+   - Table tests, reviewed as part of the PR:
+     - a password-only change keeps the fingerprint, including an RU key rotation;
      - another user changes it;
-     - the same user on another host changes it;
-     - the same user with another explicit `authSource` changes it;
-     - the same user with **no** `authSource` and a different URI database (`/sales` against `/admin`)
-       changes it;
+     - an edited connection string changes it;
      - two managed identity client IDs differ;
      - a tunnel's local port change keeps it.
-   - Use this table as the CP-1 evidence.
 2. **Generation.**
    - Keep a static `Map<clusterId, number>` that only ever increases and is never cleared.
    - Each `ClustersClient` instance records `generation`, `fingerprint`, `createdAt` and its credentials
      snapshot.
    - Expose a read-only `binding` (C-4) and `ClustersClient.getBinding(clusterId)`.
 3. **One startup at a time (single flight).**
-   - A `_pendingStartups` map keyed by `clusterId` holds `{ promise, epoch }`.
-   - Every caller awaits the same startup, and each caller's own `abortSignal` rejects only **that
-     caller's** wait.
-   - The startup itself is aborted only when **all** waiters have aborted. Otherwise it continues and
-     publishes.
-   - A per-cluster `epoch` is incremented **synchronously** by `invalidate(clusterId)`. A startup publishes
-     only if the epoch is unchanged; otherwise it closes its own `MongoClient` and rejects with a typed
-     `ClientInvalidatedError`.
+   - A `_pendingStartups` map keyed by `clusterId` holds the startup promise. Every caller awaits it.
+   - A caller's own `abortSignal` rejects only **that caller's** wait. It never aborts the startup, which
+     has its own timeout.
+   - The startup captures the C-6 epoch and publishes only if it is unchanged. Otherwise it closes its own
+     `MongoClient`. Its waiters then get the latch's `ConnectionUnavailableError` if the cluster is
+     latched, or retry once with the current credentials if it is not.
    - `deleteClient` calls `invalidate` **before** its first `await`.
-   - `invalidate` also increments the C-6 lifecycle epoch.
-4. **Central policy (C-6).**
-   - `getClient` takes `{ interaction, trigger, abortSignal }`, with `interaction` defaulting to `'never'`.
+4. **`getClient` rules (C-6).**
+   - `initializeClient` stops hardcoding `{ interactive: true }`; `getClient` is always silent. Its options
+     are `{ trigger, abortSignal, background? }`.
+   - The interactive first connect moves to `ClustersClient.connectInteractive(clusterId)`, called only by
+     the tree items' `authenticateAndConnect` and by Sign in again. No per-call-site audit is needed: every
+     other caller acts on a cluster that the tree has already connected.
    - Add a per-cluster `lastVerifiedIdentity` record (C-1 for Entra; the principal for other methods),
-     keyed by `clusterId` like `ClustersClient._clients`. It **survives eviction** and is cleared only by teardown (WI-7).
-   - `initializeClient` stops hardcoding `{ interactive: true }`. It is interactive only when the caller
-     allowed it **and** the cluster has no `lastVerifiedIdentity`. Otherwise it is silent and pinned to
-     that identity.
-   - Add the disconnected latch: a latched cluster throws `ClusterDisconnectedError` for every caller.
-     WI-7 sets the latch; WI-4 adds the check, the error and the tests.
-   - Audit every `getClient` call site (F-13), and pass `interaction: 'allowed'` only from explicit user
-     connect paths: tree expand, Connect, and one-shot commands on a cluster that is not yet connected.
-     List the audit in Progress.
+     keyed by `clusterId` like `ClustersClient._clients`. It **survives eviction and Disconnect**, and only
+     Remove Connection clears it (WI-7, decision 0011). A silent reconnect is pinned to it.
+   - Add the latch check: a latched cluster throws `ConnectionUnavailableError(reason)` for every caller.
+     WI-7 sets the latch.
+   - Missing credentials throw `ConnectionUnavailableError('credentialsMissing')` instead of today's plain
+     `Error`, whose message shows the raw `clusterId` (F-20).
+   - Pass `background: true` from the dashboard poll, tree count badges and `CollectionNameCache`.
 5. **Cached reuse.**
    - Remove the abort handler that closes the shared client (the cached branch of `getClient`).
    - A cancelled waiter just rejects with `UserCancelledError`.
 6. **Closed topology.**
    - Track closure with the public SDAM event `topologyClosed` on the `MongoClient`, plus our own `close()`
      calls.
-   - `getClient` on a closed client publishes a **new generation**, using the **current** `CredentialCache`
-     and requiring the **same fingerprint**.
-   - If the fingerprint differs, do not publish. Return a typed `IdentityChangedError` for WI-5 and WI-6 to
-     handle.
+   - A foreground `getClient` on a closed client publishes a **new generation**, using the **current**
+     `CredentialCache` and requiring the **same fingerprint**. A background caller fails instead.
+   - If the fingerprint differs, do not publish; throw `ConnectionUnavailableError('identityChanged')`.
    - Today's `client._mongoClient.connect()` call on the cached path goes away.
-7. ~~**Rotation.**~~ Removed: no proactive rotation (decision 0010).
-8. **Telemetry helper.**
+7. **Telemetry helper.**
    - Add `addEstablishedConnectionContext(context, clusterId | client)`. It sets `authMethod`,
      `connectionCorrelationId`, and the measurements `connectionAgeMs` and `clientGeneration`.
    - No property name may contain "error" (masking).
    - WI-5 and WI-6 call it; add the helper and its tests only here.
-9. **Development test hook** (optional, recommended).
+8. **Development test hook** (optional, recommended).
    - Add `vscode-documentdb.debug.connection.simulateExpiry`, following the survey debug commands:
      - declared in `package.json`;
      - registered only in development mode;
@@ -811,21 +810,22 @@ shim (0005).
 **Tests** (`ClustersClient.test.ts`, plus the new fingerprint test):
 
 - two concurrent cold `getClient` calls create one `MongoClient`;
-- cancelling one of two waiters leaves the other connected;
+- cancelling one of two waiters leaves the other connected; cancelling both does not abort the startup;
 - a startup that finishes after `deleteClient` does not publish, and closes its client;
 - a cancelled cached reuse does not close the shared client;
-- `topologyClosed` followed by `getClient` gives a new generation with the same fingerprint;
-- a changed principal followed by `getClient` gives `IdentityChangedError`;
-- a background caller (`interaction: 'never'`) never prompts, even with no client and with credentials
-  cached; a verified cluster reconnects silently even when the caller allowed interaction;
+- `topologyClosed` followed by a foreground `getClient` gives a new generation with the same fingerprint;
+  a background `getClient` does not replace it;
+- a changed principal followed by `getClient` gives `ConnectionUnavailableError('identityChanged')`;
+- `getClient` never prompts, even with no client and with credentials cached; only `connectInteractive`
+  may, and only when the cluster has no `lastVerifiedIdentity`;
 - a latched cluster rejects every caller, including background ones;
+- missing credentials give `credentialsMissing`, with no `clusterId` in the message;
 - generation numbers only ever increase across delete and reconnect;
 - the telemetry helper sets the bounded properties and no forbidden names.
 
 **Done when:**
 
 - Case 1 is green;
-- the CP-1 verdict is recorded;
 - every existing `ClustersClient` test still passes unchanged, or each change is justified in Progress.
 
 **Progress:**
@@ -836,10 +836,10 @@ shim (0005).
 
 **Outcome:**
 
-- One classifier and one state owner.
+- One pure classifier.
 - The tree's Retry actually reconnects.
 - **Sign in again** exists and prompts once per click.
-- Account removal marks the clusters bound to it.
+- A token callback failure never leaves a broken client cached, for any auth method.
 
 **Read first:**
 
@@ -855,30 +855,37 @@ shim (0005).
    - It walks `cause`, plus `MongoServerSelectionError.reason.servers[*].error` where present.
    - Initial table:
 
-     | Signal                                                                 | Auth       | Kind                         | Generation                                         | Offered action                                  |
-     | ---------------------------------------------------------------------- | ---------- | ---------------------------- | -------------------------------------------------- | ----------------------------------------------- |
-     | `EntraSignInRequiredError`                                             | Entra      | `signInRequired`             | replace on recovery (F-1)                          | Sign in again                                   |
-     | `EntraIdentityMismatchError`, `IdentityChangedError`                   | any        | `identityChanged`            | evict; surfaces disconnected                       | Reconnect (rebind)                              |
-     | `EntraTokenRefreshError`                                               | Entra      | `transient`, workflow broken | replace on the next **foreground** operation (T-4) | Retry                                           |
-     | code 18                                                                | Native, RU | `credentialsRejected`        | evict; no automatic retry                          | Update credentials (RU: Retry re-reads the key) |
-     | code 18 after a fresh callback                                         | Entra      | per T-5                      | evict                                              | per T-5                                         |
-     | `MongoNotConnectedError`, `topologyClosed`, "Client must be connected" | any        | `clientClosed`               | new generation silently                            | none                                            |
-     | network errors, timeouts, server selection with no auth cause          | any        | `transient`                  | keep                                               | Retry                                           |
-     | anything else                                                          | any        | `other`                      | keep                                               | existing behavior                               |
+     | Signal                                                                        | Auth       | Kind                         | Generation                                   | Offered action                                  |
+     | ----------------------------------------------------------------------------- | ---------- | ---------------------------- | -------------------------------------------- | ----------------------------------------------- |
+     | `EntraSignInRequiredError`                                                    | Entra      | `signInRequired`             | replace on recovery (F-1)                    | Sign in again                                   |
+     | `EntraIdentityMismatchError`, `ConnectionUnavailableError('identityChanged')` | any        | `identityChanged`            | evict; surfaces unavailable                  | Reconnect (rebind)                              |
+     | `TokenCallbackError` (step 2)                                                 | Entra, MI  | `transient`, workflow broken | replace on the next **foreground** operation | Retry                                           |
+     | `ConnectionUnavailableError('credentialsMissing')` (F-20)                     | any        | `credentialsMissing`         | none to keep                                 | Update credentials                              |
+     | code 18                                                                       | Native, RU | `credentialsRejected`        | evict; no automatic retry                    | Update credentials (RU: Retry re-reads the key) |
+     | code 18 after a fresh callback                                                | Entra      | per T-5                      | evict                                        | per T-5                                         |
+     | `MongoNotConnectedError`, `topologyClosed`, "Client must be connected"        | any        | `clientClosed`               | new generation on the next foreground call   | none                                            |
+     | network errors, timeouts, server selection with no auth cause                 | any        | `transient`                  | keep                                         | Retry                                           |
+     | anything else                                                                 | any        | `other`                      | keep                                         | existing behavior                               |
 
    - **No regression for tunneled connections:** connection refused against a Kubernetes port-forward
      port is `transient`. The client is **kept**, never evicted, so the tree's existing tunnel restore
      (`beforeCachedClientConnect`) still recovers it. Tunnel recovery itself is #1105.
 
-2. **State owner.**
-   - Add `ClustersClient.reportFailure(binding, error)`, or a small `ConnectionStateService` that sits
-     beside it (advisor's choice). It classifies the error and ignores it if `binding.generation` is
-     stale. It evicts according to the table and updates the C-5 **cluster** state. Surface states are
-     projected per binding (WI-6).
-   - It fires `onDidChangeConnectionState(clusterId)`.
-   - A foreground helper `withClusterClient(clusterId, op, { foreground })` resolves the client, runs the operation, reports failures, and applies the T-4 backoff.
-     WI-6 extends it with bindings.
-3. **Tree.**
+2. **Callback failures for every auth method (F-1).**
+   - F-1 applies to **every** throw from the OIDC callback. The managed identity callback
+     (`ManagedIdentityAuthHandler.configureAuth`) rethrows token-service (IMDS) failures and throttling as
+     they are, so today they fall to `other → keep`, and the broken client stays cached until VS Code
+     restarts.
+   - Both handlers wrap such errors in `TokenCallbackError` (C-2). Destination rejection keeps its current
+     handling.
+   - The classifier treats it as `transient`, workflow broken: `reportFailure` marks the client, and the
+     next **foreground** `getClient` replaces it with a new generation and the same fingerprint.
+3. **Report failures.**
+   - Add `ClustersClient.reportFailure(binding, error)`: a function, not a service. It classifies the
+     error and ignores it when `binding.generation` is stale. It evicts or marks the client according to
+     the table, and returns the kind so the caller can choose its UI.
+   - It keeps no connection state and fires no events (C-5).
+4. **Tree.**
    - Route both catch paths in `getChildren` (cached-client reuse and `listDatabases`) through
      `reportFailure`. Keep the modal-plus-actions presentation.
    - Change `createErrorRecoveryChildren` to:
@@ -889,12 +896,18 @@ shim (0005).
      - then **Retry last**.
    - Check that order against the skill text, and update the skill in WI-10 if it differs.
    - Call `addEstablishedConnectionContext` on the failure events of `connect`, `getchildren` and the tree.
-4. **Retry.**
+   - **Keep credentials on recoverable failures (F-20).** In every provider item's `authenticateAndConnect`
+     failure path, still call `deleteClient`, but call `CredentialCache.deleteCredentials` only when the
+     kind is `credentialsRejected`, or `other` as today. For `transient`, `clientClosed` and
+     `signInRequired`, keep the entry: a network outage during a tree expand must not leave open surfaces
+     with nothing to reconnect from, nor make the user retype a discovery password. Put the decision in
+     one shared helper, not in ten copies.
+5. **Retry.**
    - `retryAuthentication` evicts the client (`deleteClient` without clearing credentials) when the last
      kind was `signInRequired`, `credentialsRejected` or `clientClosed`, and then refreshes.
-   - It captures the C-6 lifecycle epoch and the current binding **before** its first `await`. If either
-     changed in the meantime (a Disconnect, or another recovery replaced the client), it does nothing
-     destructive: no eviction, and no latch cleared.
+   - It captures the C-6 epoch **before** its first `await`. If the epoch changed in the meantime (a
+     Disconnect, or another recovery replaced the client), it does nothing destructive: no eviction, and
+     no latch cleared.
    - The `CredentialCache` entry is kept.
    - **RU key exception:** on Retry after `credentialsRejected` for an RU Discovery or Azure Resources
      item:
@@ -902,42 +915,37 @@ shim (0005).
      - an ARM sign-in failure there is reported as "Azure sign-in needed" (WI-3 classifier), not as a
        database rejection;
      - never open a password wizard.
-5. **Sign in again** command (`vscode-documentdb.command.signInAgain`, args: a tree node or `{ clusterId }`).
-   - Read the pinned C-1 from the cluster's `lastVerifiedIdentity` record (WI-4). Capture the C-6
-     lifecycle epoch **before** prompting.
-   - Call `entraSession.ts` interactively for that account and tenant.
-   - **Rejected-but-present session:** if the failure that led here was a server rejection of a token that
-     the silent lookup still returns, use `forceNewSession` for the pinned account instead of
-     `createIfNone`. Prove both paths in tests.
-   - **After the prompt, compare and swap.** If the epoch changed while the user was signing in (for
-     example, a Disconnect), do not evict, do not reconnect and do not clear the latch. Report "The
-     connection was closed while you were signing in."
-   - Same account: evict, start a new generation, and set the cluster state to `connected`.
-   - Different account: the identity changed. Surfaces bound to the old fingerprint project to
-     `disconnected(identityChanged)` (C-5), and the tree continues with the new identity.
-   - A dismissal is a `UserCancelledError`. No code path re-prompts. C-6 enforces this centrally; add a
-     test that background paths cannot prompt.
-6. **`onDidChangeSessions`.**
-   - Register once, at activation.
-   - For events of a provider ID that some live binding pins, silently re-check each affected binding,
-     debounced to about 500 ms.
-   - A missing session sets the state to `signInRequired`.
-   - Results from a stale generation are ignored. Clusters bound to another account are not touched.
-   - Never sign the user out, and never remove a session.
+6. **Sign in again** command (`vscode-documentdb.command.signInAgain`, args: a tree node or `{ clusterId }`).
+   - Read the pinned C-1 from the cluster's `lastVerifiedIdentity` record (WI-4). Capture the C-6 epoch
+     **before** prompting.
+   - Call `entraSession.ts` with `forceNewSession` for that account and tenant, every time. The user
+     clicked, so one prompt is expected, and it also covers a session that the silent lookup still
+     returns but the server rejects.
+   - **After the prompt, check the epoch.** If it changed while the user was signing in (for example, a
+     Disconnect), do not evict, do not reconnect and do not clear the latch. Report "The connection was
+     closed while you were signing in."
+   - Same account: evict and start a new generation.
+   - Different account: the identity changed. Surfaces bound to the old fingerprint become unavailable
+     with `identityChanged` (C-5), and the tree continues with the new identity.
+   - A dismissal is a `UserCancelledError`. Nothing re-prompts, because `getClient` never prompts (C-6).
+   - There is no `onDidChangeSessions` listener (decision 0012). A signed-out account is found by the next
+     operation's silent lookup, which fails with `signInRequired`.
 
 **Tests:**
 
 - classifier table tests on real error shapes;
+- a managed identity callback that throws once: the next foreground operation works on a new
+  generation, and a background tick does not replace the client;
 - Retry after `clientClosed` creates a new generation; after `credentialsRejected` it keeps the
   credentials and does not loop;
 - the RU old/new key pair; an ARM sign-in failure compared with a database rejection;
-- Sign in again with the same account and with a different account; the forced-new-session path;
+- Sign in again with the same account and with a different account, always with `forceNewSession`;
 - no re-prompt after a dismissal;
-- an `onDidChangeSessions` event for another account does not affect this cluster;
 - a stale-generation result is ignored;
 - an old Retry that resolves after the client was replaced does not evict the new client;
 - Sign in again that completes after a Disconnect does not reconnect or clear the latch;
-- the T-4 backoff.
+- a tree expand that fails with a network error keeps the `CredentialCache` entry, and an open surface
+  then reconnects silently once the network is back; a code 18 failure still evicts it.
 
 **Done when:**
 
@@ -949,13 +957,13 @@ shim (0005).
 
 ---
 
-## WI-6: Bind surfaces and add the disconnected state (PR 5, or 5a and 5b)
+## WI-6: Bind surfaces and add the unavailable state (PR 5)
 
 **Outcome:**
 
 - Collection View (all tabs), Document View and the Cluster Dashboard resolve their client per operation
   through a binding.
-- They show C-5 state with a banner and one action.
+- They show an unavailable state (C-5) with a banner and one action.
 - They keep all user state.
 - They never apply stale results.
 - They never run under another identity.
@@ -964,7 +972,7 @@ shim (0005).
 
 - the webview-trpc-messaging and react-webview-architecture skills;
 - `collectionViewRouter.ts`, `indexesTab/indexViewRouter.ts`, `queryInsights/queryInsightsRouter.ts`
-  and `queryInsightsEventsRouter.ts` (it already has a tRPC subscription you can copy);
+  and `queryInsightsEventsRouter.ts`;
 - `QueryInsightsAIService.ts` and `indexAdvisorCommands.ts`;
 - `documentsViewRouter.ts` and `documentView.tsx` (the `isDirty` state);
 - `clusterDashboardRouter.ts` and `ClusterDashboard.tsx`;
@@ -972,35 +980,27 @@ shim (0005).
 - `openAppWebview.ts`;
 - `build/verification/browser/scenarios.ts` and `fixtures.ts`.
 
-**CP-3 first.**
+PR 5 is one PR. Split it into host and webviews only if the diff becomes too large to review well, as the
+approved plan allows; the webview half then opens after the host half merges.
 
-- Convert **one** router end to end (Document View is the smallest) on the host side.
-- Show the API, then decide with the advisor:
-  - whether to split into 5a (host: registry, binding, routers, state channel) and 5b (webviews:
-    banner, disabling, scenarios);
-  - the recommendation is to split, because 5b needs the 5a contract to be stable.
-
-### Host (5a)
+### Host
 
 1. **Surface registry** (`src/documentdb/connectionSurfaces.ts`).
-   - `register({ clusterId, kind, binding, pushState, dispose, hasUnsavedChanges? })` returns a
-     disposable.
+   - A plain list per `clusterId`: `register({ clusterId, kind, disable(reason), dispose, isDirty? })`
+     returns a disposable.
    - Collection View, Document View and the Dashboard register when they open and unregister on
-     `onDisposed`. Shells and the playground register too (WI-2), so there is one registry for every
-     surface.
-   - WI-7 enumerates this registry.
+     `onDisposed`.
+   - Only teardown reads it (WI-7). Shells and the playground do not register (WI-2).
 2. **Binding resolution.**
-   - `resolveBoundClient(binding, { foreground })` has three outcomes:
-     - (a) same fingerprint and generation: return the client;
-     - (b) same fingerprint, the client was replaced or closed for **recovery**: return the current
-       client, transparently, with no re-run and no notice (decision 0010);
-     - (c) a different fingerprint, the cluster is latched `disconnected` (C-6), or `identityChanged`:
-       throw a typed `SurfaceDisconnectedError(reason)`.
-   - Projection rule (C-5): the surface's state comes from comparing **its** binding with the cluster's
-     current binding, never from the cluster state alone.
-   - A surface **never** prompts. Under C-6 it calls `getClient` with `interaction: 'never'`. If no client
-     exists and the cluster is not latched, the reconnect is silent and pinned to `lastVerifiedIdentity`,
-     so Entra fails closed with a mismatch instead of prompting.
+   - `resolveBoundClient(binding, { background? })` has two outcomes:
+     - **the same fingerprint:** return the cluster's current client, whatever its generation. Replacing a
+       client for the same identity is transparent: no re-run and no notice (decision 0010). If there is
+       no client and the cluster is not latched, `getClient` reconnects silently, pinned to
+       `lastVerifiedIdentity`;
+     - **a different fingerprint, or a latched cluster:** throw `ConnectionUnavailableError(reason)`.
+   - A surface **never** prompts (C-6).
+   - Router procedures catch `ConnectionUnavailableError` and return a structured
+     `{ unavailable: { reason, text, action } }` result instead of an error (F-12).
    - **No regression for tunneled connections** (Kubernetes `ClusterIP` through port-forward). Creating a
      new generation from this path may not do less than today's tree path, and it does not re-create
      tunnels. A tab whose tunnel died behaves as it does today: it fails transiently until a tree expand
@@ -1019,48 +1019,42 @@ shim (0005).
    - Re-run the grep from the approved plan, and list every converted call site in Progress.
 5. **Writes.**
    - Save document, inserts and deletes, and index create, drop, hide and unhide.
-   - When the request may have reached the server and the reply was lost (network error or timeout after
-     send), report **outcome unknown**: "The change may or may not have been applied. Refresh to check."
-   - The extension **never resubmits** a write. That is the guarantee, and OT-4's "not replayed" means
-     this. The driver's own retryable writes (`retryWrites`) stay as they are: the server deduplicates
-     them by design, and RU connection strings disable them.
+   - The extension **never resubmits** a write; that is OT-4's "not replayed". A failed write is reported
+     as it is today. The driver's own retryable writes (`retryWrites`) stay as they are: the server
+     deduplicates them by design, and RU connection strings disable them.
    - Test that one application-level submission results in exactly one call to the driver.
-6. **State channel and stale results.**
-   - Each view router gets a `connectionState` subscription, fed by the registry (C-5 surface state). It
-     replays the current state when a view subscribes.
-   - It carries a **surface epoch** that increases on every transition into `disconnected` and on every
-     rebind.
-   - Every request records `{ epoch, generation }` when it starts.
-   - **Before any host-side mutation**, check that the epoch is unchanged and that the generation is
-     acceptable: same fingerprint is acceptable under decision 0010. That covers `ClusterSession`'s
-     `_currentRawDocuments`, its query caches, Query Insights caches and `SchemaStore` updates. A stale
-     result must not change host state at all, so dropping it only at delivery is not enough.
-   - Check again at delivery. The UI applies the same check (5b).
+6. **Stale results.**
+   - Every request records the generation it started with.
+   - **Before any host-side mutation**, check once that the binding still resolves to the same fingerprint
+     and that the cluster is not latched. Otherwise drop the result. That covers `ClusterSession`'s
+     `_currentRawDocuments`, its query caches, the Query Insights caches and `SchemaStore` updates. A stale
+     result must not change host state at all.
 7. Every router error path uses `addEstablishedConnectionContext` (WI-4).
 
-### Webviews (5b)
+### Webviews
 
 1. **Shared UI.**
-   - A `useConnectionState()` hook and a `DisconnectedBanner` component.
-   - The banner is a Fluent `MessageBar` with intent `warning`, the host-provided reason text and **one**
-     action button.
-   - It uses `role="status"` and `aria-live="polite"`.
-   - Put both in the shared webview components folder.
-   - Run the detecting-accessibility-issues skill on them.
+   - A `DisconnectedBanner` component: a Fluent `MessageBar` with intent `warning`, the host-provided
+     reason text and **one** action button. It uses `role="status"` and `aria-live="polite"`.
+   - It shows when a procedure returns `unavailable`, or when the host's `disable(reason)` sends its one
+     message to the panel over the existing webview channel.
+   - Put it in the shared webview components folder, and run the detecting-accessibility-issues skill on
+     it.
 2. **Disabling.**
-   - While disconnected, every action that talks to the server is disabled: run query, paging, refresh,
-     save, delete, insert, index actions, Query Insights stages and AI calls.
+   - While the banner shows, every action that talks to the server is disabled: run query, paging,
+     refresh, save, delete, insert, index actions, Query Insights stages and AI calls.
    - Editors stay **editable**. The user can keep typing.
-   - Responses whose epoch is older than the UI's current epoch are discarded on the UI side too.
+   - A response that arrives while the banner shows is ignored.
 3. **What each view keeps.**
    - **Collection View:** query text, filter, sort, projection, page number and size, the selected tab,
      and the Query Insights results as they were.
    - **Document View:** the dirty editor content and `isDirty`.
    - **Dashboard:** the last data (WI-8 stops the polling).
 4. **Actions.**
-   - **Reconnect** (same fingerprint): resolve again. On success, remove the banner and re-enable the
-     actions; the live region announces "Reconnected". The query is not run automatically, and there is
-     **no** "out of date" notice (decision 0010; see #1106).
+   - **Reconnect** (same fingerprint): clear the latch if one is set, and resolve again. On success,
+     remove the banner and re-enable the actions; the live region announces "Reconnected". The query is
+     not run automatically, and there is **no** "out of date" notice (decision 0010; see #1106). After a
+     Disconnect the credentials are still cached (0011), so this is silent.
    - **Reconnect after an identity change:** an explicit rebind to the new fingerprint, then show "Now
      connected as {label}" (OT-3).
    - **Sign in again:** the WI-5 command.
@@ -1071,17 +1065,18 @@ shim (0005).
      Run is clicked;
    - `documentView/disconnected-dirty`: edit kept, Save disabled;
    - `clusterDashboard/disconnected`;
-   - a scenario that injects a disconnect after typing and then delivers a stale page response: the
-     applied results are not overwritten.
+   - a scenario that injects a disconnect after typing and then delivers a page response: the applied
+     results are not overwritten.
    - Run them with the browser scenario config. Screenshots are artifacts, not baselines.
 
 **Transfers:** do not touch copy, paste or export (approved plan).
 
 **Tests:**
 
-- router tests for the three binding outcomes on each converted router;
+- router tests for both resolution outcomes on each converted router;
 - `ClusterSession` no longer stores a client (a type-level or structural test);
-- the epoch drop on host and UI;
+- a stale result is dropped before any host-side mutation;
+- the webview ignores a response that arrives while the banner shows;
 - one submission for a write whose reply is lost;
 - the scenarios above.
 
@@ -1089,8 +1084,7 @@ shim (0005).
 
 - Case 1 is green;
 - the scenarios pass;
-- OT-1 and OT-3(a) can be reproduced with the WI-4 hook;
-- if split, 5a merges before 5b opens.
+- OT-1 and OT-3(a) can be reproduced with the WI-4 hook.
 
 **Progress:**
 
@@ -1103,13 +1097,11 @@ shim (0005).
 - One teardown serves Disconnect, Remove and identity-changing credential updates.
 - It is guarded by task conflicts and dirty editors.
 - It covers every per-cluster resource.
-- **What it guarantees:** after `commit`, no operation **starts** under the old binding. Operations
-  already in flight are not admitted or tracked individually:
-  - `deleteClient` closes the client with `force`, so they fail;
-  - their failure is reported normally, and a write whose reply was lost is reported as outcome unknown
-    (WI-6);
+- **What it guarantees:** after the commit, no operation **starts** under the old binding. Operations
+  already in flight are not tracked individually:
+  - `deleteClient` closes the client with `force`, so they fail and their failure is reported normally;
   - shell and playground workers are stopped;
-  - tasks and exports are protected by the preflight.
+  - tasks, exports and imports are protected by the conflict check.
 
   This is the right level for an interactive tool; do not build per-operation admission control.
 
@@ -1118,60 +1110,59 @@ shim (0005).
 - `removeConnection.ts`;
 - `resourceUsageHelper.ts` and `taskService.ts` (`getConflictingTasks`);
 - `CopyPasteCollectionTask.ts` and `CopyIndexesTask.ts` (`getUsedResources`);
-- `exportDocuments.ts`;
+- `exportDocuments.ts` and `importDocuments.ts`;
 - `updateCredentials.ts`, including the D12 modal;
 - `updateConnectionString.ts`;
 - `CredentialCache.ts`, `entraTokenFailures.ts` and `SchemaStore.clearCluster`;
 - the WI-6 registry;
 - `switchAtlasViewMode.ts` (the `globalState` pattern).
 
-**CP-4 first:** the teardown order, T-2 and the export lease.
+**CP-4 first:** the teardown order, T-2 and the export and import lease.
 
 **Steps:**
 
-1. **Export lease (A5).**
+1. **Export and import lease (A5).**
    - Add `TaskService.acquireResourceLease(resource, label)`, which returns a disposable.
      `getConflictingTasks` includes active leases.
-   - `exportDocuments.ts` holds the lease for the whole export.
-   - Test that export conflicts with Disconnect of its source, and that an unrelated cluster does not.
-2. **Teardown service** (`src/documentdb/connectionTeardown.ts`).
-   - Two phases: `prepare(clusterId, intent)` and `commit(reservation, options)`.
-     - Disconnect and Remove call both, back to back.
-     - Update Credentials puts the save between them (step 5).
-   - **`prepare`**, which may prompt and may be cancelled:
-     1. **Preflight:** task and lease conflicts through `checkCanProceedAndInformUser`. On a conflict,
-        stop and change nothing; the conflicting task is named.
+   - `exportDocuments.ts` holds the lease for the whole export, and `importDocuments.ts` for the whole
+     import (from the first `getClient` to the last flushed batch), on the target collection.
+   - Copy/paste and copy-indexes are tasks already and need no lease (F-9).
+   - Test that export and import each conflict with Disconnect of their cluster and with Delete
+     Collection of their collection, and that an unrelated cluster does not.
+2. **Teardown** (`src/documentdb/connectionTeardown.ts`): two plain functions, with no reservation and no
+   rollback. Disconnect and Remove call them back to back; Update Credentials puts the save between them
+   (step 5).
+   - **`confirmTeardown(clusterId, intent)`**, which may prompt and may be cancelled. It changes nothing:
+     1. **Conflicts:** task and lease conflicts through `checkCanProceedAndInformUser`. On a conflict,
+        stop; the conflicting task is named.
      2. **Choice:** Close all or Keep open (A2), only when surfaces are registered and the setting is
         `ask`. With the setting at `closeAll` or `keepOpenDisabled`, use that value without a modal.
-     3. **Dirty check** (only for `close`): if any registered surface reports `hasUnsavedChanges`, ask for
-        confirmation. Cancelling leaves every panel, draft and connection intact. That includes the case
-        where Remove started the teardown.
-     4. **Reserve, atomically:** **recheck** task and lease conflicts, because a copy or export may have
-        started while a prompt was open. Then take a per-cluster teardown reservation in `TaskService`.
-        While it is held, new tasks and leases on this cluster are refused with a clear message.
-        If the recheck finds a conflict, release everything and stop.
-   - **`commit`**, which has no prompts and cannot be cancelled:
-     1. **Synchronous section, before any `await`:** set the latch and the cluster state to
-        `disconnected(reason)` (C-6), call `ClustersClient.invalidate` (it increments the lifecycle
-        epoch), increment the surface epochs, and mark in-flight token requests as abandoned (E4).
-     2. **Surfaces:**
-        - `keepDisabled`: push the state;
-        - `close`: dispose the panels;
-        - shells: latch the surface (F-15), print "Disconnected", then stop the worker;
-        - playground: latch it, then stop the worker.
-     3. Close the client (`deleteClient`).
-     4. Clear the `CredentialCache` entry if `dropCredentials` is set (A3), the Entra failure registry,
-        `SchemaStore.clearCluster`, and `lastVerifiedIdentity`.
-     5. Release the reservation, and refresh the tree (T-2).
-   - Releasing a reservation without committing must restore everything to the state before `prepare`.
+     3. **Dirty check** (only for `close`): if any registered surface reports `isDirty`, ask for
+        confirmation. Cancelling leaves every panel, draft and connection intact, also when Remove started
+        the teardown.
+   - **`commitTeardown(clusterId, { reason, choice, dropCredentials })`**, which has no prompts:
+     1. **Recheck** conflicts with `getConflictingTasks`, because a copy, export or import may have started
+        while a prompt was open. On a conflict, stop and inform the user; nothing has changed.
+     2. **With no `await` between the recheck and this step:** set the latch (C-6) with `reason`, and call
+        `ClustersClient.invalidate`, which increases the epoch.
+     3. **Surfaces:** for Keep open, call each registered surface's `disable(reason)`; for Close all,
+        dispose them.
+     4. **Shells** (found through `getRegisteredShellTerminals`): print "Disconnected", then stop the
+        worker. **Playground:** stop the worker. The latch keeps both from respawning (F-15).
+     5. Close the client (`deleteClient`). Clear the Entra failure registry and `SchemaStore.clearCluster`.
+        Clear the `CredentialCache` entry and `lastVerifiedIdentity` **only** when `dropCredentials` is
+        set (Remove). Disconnect keeps both (A3, decision 0011), so Connect and a tab's Reconnect are
+        silent and pinned to the same identity.
+     6. Refresh the tree (T-2).
    - **Never touched:** VS Code auth sessions, the managed identity cache, the ARM cache.
    - **Keys:** every store keeps its current `clusterId` matching. Provider-specific equality is out of
      scope (decision 0009, #1105). Do not add case folding or unfolding in this iteration.
    - **Kubernetes tunnels:** the teardown does not stop port-forward tunnels, and does not change how
      removing a kubeconfig source works (#1105).
 3. **Disconnect command** (`vscode-documentdb.command.disconnect`).
-   - Add a `connected` tag to the cluster item's `contextValue` while a client exists, and refresh it on
-     state changes. Use `viewItem` regex menus in the Connections, Azure Resources and Discovery views.
+   - Add a `connected` tag to the cluster item's `contextValue` while a client exists, and refresh it when
+     the item refreshes. Use `viewItem` regex menus in the Connections, Azure Resources and Discovery
+     views.
    - **The choice (A2):**
      - Use a modal warning: `showWarningMessage` with `{ modal: true, detail }` and the two buttons Close
        all and Keep open (disabled). The built-in Cancel cancels the whole operation.
@@ -1186,7 +1177,7 @@ shim (0005).
      - The setting never skips the unsaved-edits confirmation: when Close all is chosen and an editor is
        dirty, that confirmation still appears.
      - Skip the modal when no surfaces are registered.
-   - Add a disconnected cluster node child action, "Connect" (T-2).
+   - Add a disconnected cluster node child action, "Connect" (T-2). It clears the latch and connects.
 4. **Remove Connection.** Teardown with reason `connectionRemoved` and `dropCredentials: true`, then delete
    the stored connection and clear the schema, as today. Keep the existing confirmation.
 5. **Update Credentials and Update Connection String.**
@@ -1196,13 +1187,14 @@ shim (0005).
    - **Same fingerprint:** save. Only after a confirmed success, call `invalidate` and replace the client
      with a new generation; surfaces continue.
    - **Different fingerprint:**
-     1. `prepare` (preflight, choice, dirty check, reservation) **before** saving.
+     1. `confirmTeardown` **before** saving.
      2. Save.
-     3. On a confirmed success: `commit` with reason `credentialsChanged` and `dropCredentials: false`,
-        so the **new** credentials stay.
-     4. On a failed save: release the reservation. The old binding stays usable, and nothing was latched.
-   - The reservation and the `invalidate` call in `commit` make sure a concurrent connect cannot publish
-     the old credentials after the change.
+     3. On a confirmed success: `commitTeardown` with reason `credentialsChanged` and
+        `dropCredentials: false`, so the **new** credentials stay. `lastVerifiedIdentity` is replaced on
+        the next successful connect.
+     4. On a failed save: nothing was changed, and the old binding stays usable.
+   - The `invalidate` call in `commitTeardown` makes sure a concurrent connect cannot publish the old
+     credentials after the change.
    - Add a **Disconnect** button to the D12 modal for open shells.
 6. **Telemetry.**
    - One `connection.disconnect` event with `source` (`command`, `remove`, `credentialsChanged`),
@@ -1212,17 +1204,20 @@ shim (0005).
 **Tests:**
 
 - teardown for each surface type;
-- blocked for a copy source, a copy destination and an export source; an unrelated cluster is not
-  blocked; Disconnect succeeds once the task is done or stopped;
+- blocked for a copy source, a copy destination, an export source and an import target; an unrelated
+  cluster is not blocked; Disconnect succeeds once the task is done or stopped;
 - a token response that arrives after Disconnect is ignored;
 - Reconnect uses the current credentials and cloud settings;
+- after Disconnect, a tab's Reconnect and the tree's Connect succeed without the tree reloading
+  credentials and without a prompt (native, Entra and discovery with a typed password); after Remove,
+  the `CredentialCache` entry and `lastVerifiedIdentity` are gone;
 - Remove reuses the same teardown;
 - cancelling the dirty prompt changes nothing;
-- a copy or export that starts while the Disconnect prompt is open blocks the commit, and nothing changes;
-- a task or lease cannot start while a teardown reservation is held;
+- a copy, export or import that starts while the Disconnect prompt is open stops the commit, and nothing
+  changes;
 - a shell or playground left open after Disconnect does not respawn on its next command;
-- Disconnect while a query or save is in flight: the operation fails and is reported (a write as outcome
-  unknown), and nothing runs afterwards under the old binding;
+- Disconnect while a query or save is in flight: the operation fails and is reported, and nothing runs
+  afterwards under the old binding;
 - a failed save keeps the old binding;
 - a concurrent connect during Update Credentials does not publish the old credentials.
 
@@ -1234,15 +1229,18 @@ shim (0005).
 
 ## WI-8: Cluster Dashboard health polling (PR 6)
 
-**Outcome:** the poll stops on a terminal state, shows the banner, and resumes with exactly one loop.
+**Outcome:** the poll stops when the cluster is unavailable, shows the banner, and resumes with exactly
+one loop.
 
 **Steps:**
 
-1. `measureRtt` resolves through the WI-6 binding with `foreground: false` (T-4). It returns a
-   structured result, `{ ok, rttMs } | { terminal: reason }`, instead of throwing for terminal states.
-2. The webview poll effect stops on `terminal` and on any `disconnected` state from the channel. It
-   restarts only on `connected`, guarded by one loop token, so that two loops can never run at once.
-3. A late successful ping that started before the disconnect epoch cannot clear the banner (epoch check).
+1. `measureRtt` resolves through the WI-6 binding with `background: true`, so it never replaces a client
+   (T-4). It returns a structured result, `{ ok, rttMs } | { unavailable }`, instead of throwing.
+2. The webview poll effect depends on the banner state: it stops on `unavailable` or on a `disable`
+   message, and starts again after Reconnect. React's effect cleanup keeps it to one loop; no extra loop
+   token.
+3. A ping that resolves while the banner shows is ignored (the WI-6 webview rule), so it cannot clear the
+   banner.
 4. Visibility pause and backoff are the rest of #1091. Do them here only if they are trivial; otherwise
    leave them to #1091.
 
@@ -1257,47 +1255,44 @@ shim (0005).
 
 ---
 
-## WI-9: Token renewal and recovery telemetry (PR 7)
+## WI-9: Token renewal telemetry (PR 7)
 
 **Outcome:** the release can be judged from events that need no joins and no persistent identifiers.
 
 **Steps:**
 
 1. **`connection.tokenRenewal`.**
-   - Emitted from the C-3 observer (host client) and from the host side of the shell and playground relays.
+   - Emitted from the C-3 observer (host client) and from the host side of the shell and playground
+     relays.
    - Once per completed post-startup Entra **database** token lookup. The initial acquisition is excluded.
-   - Properties:
-     - `surface` (`extension`, `shell`, `playground`);
-     - `renewalOutcome`: `changed`, `unchanged`, `noSession`, `identityMismatch`, `failed`, or `unknown`
-       when there is no earlier observation in the same binding.
-   - Measurements: `connectionAgeMs`, `previousTokenObservedAgeSeconds`, `tokenLifetimeSeconds` and
-     `tokenRemainingSeconds`. Omit any value that is unknown; never send 0 or the worker's fallback TTL.
+   - Properties: `surface` (`extension`, `shell`, `playground`) and `renewalOutcome` (`returned`,
+     `noSession`, `identityMismatch`, `failed`).
+   - One measurement: `tokenLifetimeSeconds`. Omit it when unknown; never send 0 or the worker's fallback
+     TTL.
    - Never send a token, hash, claim, account, tenant, cluster ID, fingerprint or host name.
-2. **`connection.recovered`.**
-   - The state owner (WI-5) keeps a "pending recovery" flag per cluster, with the trigger: `silentRenewal`,
-     `reconnect` or `signInAgain`.
-   - The event is emitted on the **first successful database operation** after that flag was set, with
-     `trigger` and `connectionAgeMs`.
-   - A callback returning a token does not count as recovery.
+2. **Recovery, without a new event.** Existing `connect`, `rpc` and `getchildren` events carry
+   `connectionAgeMs` and `clientGeneration` (WI-4 `addEstablishedConnectionContext`). A successful
+   operation on a generation above 1 shows that a replacement worked, and late auth, socket and
+   closed-client failures should drop against the baseline.
 3. **ARM.** Report challenge outcomes separately from database renewal. Confirm that the final ARM request
    succeeded, not just that a token was acquired.
 4. **Volume.**
-   - Both events are background events. If the dashboards keep an event-scope exclusion list for
-     "active users" totals, add `connection.tokenRenewal` to it.
+   - `connection.tokenRenewal` is a background event. If the dashboards keep an event-scope exclusion list
+     for "active users" totals, add it there.
    - Check the expected volume (about one renewal per active Entra client per hour) against the
      telemetry budget.
 5. **Queries.**
    - Commit runnable Kusto queries in a durable `../telemetry.md` at the feature root:
-     - daily renewal outcomes and the changed-token rate;
-     - p50/p90 of lifetime, remaining validity and connection age at refresh;
-     - recoveries by trigger;
+     - daily renewal outcomes;
+     - p50/p90 of the token lifetime;
+     - successful operations on a replaced client (generation above 1);
      - late auth, socket and closed-client failures against the pre-release baseline, using the same
        exposure denominator.
    - Show sample counts and missing timing data next to every percentile.
    - If the operator's telemetry dashboards worktree is available, port the queries there too.
-6. **Fake-clock test** for the token sequence unchanged → changed → silent miss:
+6. **Fake-clock test** for the sequence returned → returned → noSession:
    - check counts and units;
-   - include an opaque token and a database rejection after the lookup.
+   - include an opaque token (no lifetime) and a database rejection after the lookup.
 
 **Done when:**
 
@@ -1342,7 +1337,8 @@ shim (0005).
    - **OT-1:** check the shell separately. After the wait, its worker's own connection must renew without
      a prompt; record the token relay in the output channel, never the token.
    - **OT-7:** also Disconnect while a query or save is in flight. It must fail and be reported, and
-     nothing may run afterwards under the old connection.
+     nothing may run afterwards under the old connection. Also Disconnect during an **import**: it must be
+     blocked before the Close/Keep prompt, and the import continues.
 4. CP-5 verdict, then open PR F. Watch telemetry for about one week after the merge (WI-9 queries).
 
 # Outcome

@@ -22,6 +22,8 @@ created: 2026-11-19
 | 0008 | Upgrade the azext stack as high as viable without breaking workflows, using Azure Resources as reference   | Accepted                    | Operator: replaces the "minimal versions" proposal     | 2026-11-19 | —   |
 | 0009 | Kubernetes tunnel recovery, cluster ID case handling and wider network-resilience testing move to #1105    | Accepted                    | Operator: keep 1.2.0 focused; schedule after release   | 2026-11-19 | —   |
 | 0010 | Rely on the server to reject expired tokens; replacing a client for the same identity is transparent       | Accepted                    | Operator: no rotation, no out-of-date notices          | 2026-11-19 | —   |
+| 0011 | Disconnect keeps the cached credentials and the verified identity; only Remove drops them                  | Accepted                    | Operator: reverses the #1059 proposal (plan Q3)        | 2026-11-19 | —   |
+| 0012 | Keep the lifecycle design minimal: no state machine, one epoch, no prompts in getClient, one-step teardown | Accepted                    | Operator: approved every proposed simplification       | 2026-11-19 | —   |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -285,3 +287,70 @@ Rejected:
   costs a reconnect about every hour, and local expiry checks are unreliable anyway.
 - **Re-run page 1 with a "results are no longer current" notice** (0002 as written): it would appear after
   every reconnect, for no correctness benefit.
+
+## 0011. Disconnect keeps the cached credentials and the verified identity; only Remove drops them
+
+**Accepted** by the operator on 2026-11-19. It answers plan Q3 (dev plan A3), reversing the #1059
+proposal that Disconnect drops `CredentialCache`. Source: operator input on the pre-hand-over review of
+the dev plan.
+
+> we should not drop the credential cache, that was too premature
+
+- **Disconnect** closes the client, stops the shell and playground workers, latches the cluster and
+  handles open surfaces (0004, 0007). It keeps the `CredentialCache` entry and `lastVerifiedIdentity`.
+- **Remove Connection** drops both. An identity-changing credential update keeps the new credentials and
+  replaces the verified identity on its next successful connect.
+- Evidence from the review (the operator's reason is the quote above): `ClustersClient` can start a client only from a `CredentialCache` entry, and only the tree fills it
+  (dev plan F-20). Dropping it on Disconnect would leave a tab's Reconnect with nothing to connect from,
+  because surfaces never prompt. Keeping `lastVerifiedIdentity` makes that Reconnect silent and pinned to
+  the same identity. If the Entra session is gone, it fails with **Sign in again** (0001), never with a
+  prompt for another account.
+- The same review found that the tree drops `CredentialCache` on **every** connect failure, including
+  network errors. The dev plan (WI-5 step 3) now keeps the entry for recoverable failures and evicts it
+  only when credentials were rejected.
+
+Rejected:
+
+- **Drop `CredentialCache` on Disconnect (#1059, the earlier provisional answer A3):** it needs a second
+  credential-loading path outside the tree for every provider (storage, ARM, Atlas, Kubernetes), and the
+  user must retype a password that was typed only for a discovery connection.
+
+## 0012. Keep the lifecycle design minimal: no state machine, one epoch, no prompts in getClient, one-step teardown
+
+**Accepted** by the operator on 2026-11-19, after a review of the dev plan for over-engineering. Source:
+operator input.
+
+> the premise is simple, so I don't want to have too many managers, controllers, and reconcile tools
+> processes in the plan.
+
+> apply all simplifications to the plan, and I approve all simplifications.
+
+The dev plan ([iterations/01-dev-plan.md](./iterations/01-dev-plan.md)) now follows these rules:
+
+- **No stored connection state.** There is no cluster state machine, no projected surface state, no state
+  service with change events, and no tRPC state subscription. A surface learns its state when it resolves
+  its binding; routers return a structured "unavailable" result. The only push is teardown calling
+  `disable(reason)` on each registered surface, and that registry is a plain list.
+- **One staleness guard:** the per-client generation plus one per-cluster epoch. The separate startup,
+  lifecycle and surface epochs, the dashboard loop token and the worker instance IDs are gone. A stale
+  result is checked once on the host, before it changes anything; the webview ignores responses while its
+  banner shows.
+- **`getClient` never prompts.** The `interaction` parameter and the audit of every call site are gone.
+  Only the tree's first connect and Sign in again may prompt. Background callers pass `background: true`
+  and never replace a client.
+- **Teardown is two plain functions** (confirm, then commit), with a conflict recheck right before the
+  commit. No reservation in TaskService and no rollback.
+- **No `onDidChangeSessions` listener.** This changes the approved plan's WI-5. The next operation's
+  silent lookup finds a signed-out account.
+- **Four error classes:** `EntraSignInRequiredError`, `EntraIdentityMismatchError`, `TokenCallbackError`
+  for any other callback throw (all auth methods), and `ConnectionUnavailableError { reason }`.
+- **The fingerprint hashes the stored connection string without its password, plus the principal.** No
+  normalization; any connection-string edit counts as an identity change.
+- **Smaller removals:** the 30 s replacement backoff; startup abort only when every waiter aborted;
+  two Sign in again paths (it always uses `forceNewSession`); shells and the playground in the surface
+  registry; the changed-token telemetry, the remaining-validity measures and `connection.recovered`
+  (this changes the approved plan's WI-9); the "outcome unknown" wording for writes; checkpoints CP-1 and
+  CP-3, which become ordinary PR review. PR 5 stays one PR unless its diff becomes too large.
+
+Unchanged: everything that carries an accepted decision (0001 to 0011), the single-flight startup, the
+cancelled-reuse fix, closed-client replacement, the failure classifier and the export and import lease.
