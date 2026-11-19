@@ -634,6 +634,11 @@ verdict exists, do not start the work it gates. The fingerprint table (formerly 
 - **OP-1b passed (2026-11-19), operator verification:** The database list loaded and no sign-in
   prompt appeared. Resume the remaining PR 1 work. The separate long-wait requirement for OP-6
   still applies.
+- **Done (2026-11-19), commit `5ee98385c` (WI-1d, `gpt-6.2-sol`):** Added a localized, text-only
+  explanation for typed sign-in and identity mismatch errors, including errors wrapped by the
+  driver. Used “this connection” rather than introducing a display-name lookup, as allowed by
+  step 8. Four new tests; 51 focused tests and `npx tsc --noEmit -p .` passed. Localization
+  generation and the remaining PR checks are deferred to handoff.
 
 ---
 
