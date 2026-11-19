@@ -459,6 +459,20 @@ verdict exists, do not start the work it gates. The fingerprint table (formerly 
 
 **Progress:**
 
+- **Deferred, escalated (2026-11-19):** The existing planning commits through `453669a59` were
+  verified to be docs-only. The remote feature branch and PR 0 did not exist when checked. Publishing
+  is waiting for operator authorization or operator-created branches and PR. Recommendation: create
+  `feature/connection-lifecycle` from `origin/main`, publish the planning branch as
+  `dev/tnaum/connection-lifecycle-plan`, and open draft PR 0. No implementation PR starts before PR 0
+  merges.
+- **Coding model assignments (2026-11-19), advised (`claude-opus-5.5`):** `gpt-6.1-sol` for WI-1
+  (including the pre-OP-1a work), WI-2, the WI-3 version probe, WI-4, WI-5, the WI-6 host, and WI-7,
+  where auth, lifecycle or cross-module contracts dominate. `mai-code-2` for the WI-6 webviews and
+  WI-8, which consume those contracts; `gpt-6.1-terra` is the fallback. `gpt-6.1-terra` for WI-3
+  follow-through after the version verdict, WI-9 and WI-10 prose; `gpt-6-luna` for WI-10 cross-links
+  and preview. If a webview design decision is needed, consult the advisor in a fresh session before
+  dispatch. These assignments do not move any operator gate. No coding workers have been started.
+
 ---
 
 ## WI-1: Entra ID, silent renewal on every OIDC callback (PR 1)
