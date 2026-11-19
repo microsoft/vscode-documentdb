@@ -1,0 +1,74 @@
+---
+feature: connection-lifecycle
+kind: notes
+status: active
+created: 2026-11-19
+code:
+    - src/documentdb/ClustersClient.ts
+    - src/documentdb/ClusterSession.ts
+    - src/documentdb/auth/MicrosoftEntraIDAuthHandler.ts
+    - src/tree/documentdb/ClusterItemBase.ts
+---
+
+# Connection lifecycle
+
+**Status:** planned (iteration 1) · **Issues:**
+
+- [#1102](https://github.com/microsoft/vscode-documentdb/issues/1102)
+- [#1059](https://github.com/microsoft/vscode-documentdb/issues/1059)
+- [#566](https://github.com/microsoft/vscode-documentdb/issues/566)
+- [#990](https://github.com/microsoft/vscode-documentdb/issues/990)
+
+**Branch:** `feature/connection-lifecycle`, with sub-PRs from `dev/tnaum/*` (decision 0006)
+
+> How database connections stay usable across Entra token expiry, idle drops and credential
+> changes, and what open surfaces do when the user must act or the identity changes.
+
+## Problem
+
+After an hour or more, connections stop working, and only restarting VS Code helps. There are three
+defects:
+
+1. Interactive Entra ID returns a captured token from the OIDC callback forever.
+2. Azure Discovery holds subscriptions whose ARM token is frozen, and the ARM 401 challenge crashes.
+3. Nothing evicts or recreates a failed client, Retry reuses it, and Collection View tabs hold the
+   old instance.
+
+Evidence, telemetry and source pointers: [research-findings.md](./research-findings.md).
+
+## Intent
+
+- **Recover silently** from token expiry and idle drops. Prompt only on a user click, and never from
+  a token callback.
+- **Keep one client per cluster.** Surfaces resolve it per operation and check its identity
+  fingerprint and generation.
+- **Never change identity under an open surface.** It becomes disconnected, keeps its state, says why
+  and offers one action.
+- **One teardown** serves Disconnect, Remove Connection and identity-changing credential updates.
+
+## Documents
+
+| Document                                                                       | Kind      |
+| ------------------------------------------------------------------------------ | --------- |
+| [research-findings.md](./research-findings.md)                                 | research  |
+| [decisions.md](./decisions.md)                                                 | decisions |
+| [iterations/01-implementation-plan.md](./iterations/01-implementation-plan.md) | plan      |
+
+## Decisions index
+
+See [decisions.md](./decisions.md):
+
+- 0001 silent renewal, never prompt from the callback;
+- 0002 a cached client with identity and generation;
+- 0003 no silent identity change;
+- 0004 the Disconnect tab choice;
+- 0005 azureauth v6;
+- 0006 delivery through a feature branch, shipped once.
+
+## Timeline
+
+| Date       | Event                                                                       |
+| ---------- | --------------------------------------------------------------------------- |
+| 2026-11-18 | Investigation: code read, telemetry attribution, vscode-cosmosdb comparison |
+| 2026-11-19 | Operator decisions 0001–0005; implementation plan (iteration 1)             |
+| 2026-11-19 | Decision 0006: delivery model (feature branch, sub-PRs, one release)        |
