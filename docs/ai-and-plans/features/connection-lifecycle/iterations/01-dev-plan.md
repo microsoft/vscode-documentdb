@@ -624,7 +624,13 @@ verdict exists, do not start the work it gates. The fingerprint table (formerly 
   failures, and bounded lookup observations. Kept the destination policy and Playground TTL
   fallback. Added 15 focused tests and updated dependent test mocks for the new session API.
   The advisor approved the OP-1b candidate (`claude-opus-5.5`, 85% confidence). `npm run build`
-  and all 254 targeted tests passed. **Waiting for OP-1b** before proceeding with the rest of PR 1.
+  and all 254 targeted tests passed.
+- **OP-1b evidence (2026-11-19):** After about 43 minutes idle, Refresh reused the same client.
+  A fresh socket triggered callback invocation 2 (`returned`) and then closed. The next socket
+  became ready without another callback; later sockets and a second Refresh also succeeded at
+  socket authentication on the same client. No `listDatabases.failed` was logged. This verifies
+  the post-idle renewal and retry path; no longer wait is needed for OP-1b. The trace cannot alone
+  confirm whether the database list was visible or whether a sign-in prompt appeared.
 
 ---
 
