@@ -741,6 +741,15 @@ verdict exists, do not start the work it gates. The fingerprint table (formerly 
 
 **Progress:**
 
+- **Deferred, escalated (2026-11-19), advised (`claude-opus-5.5`):** PR 1 does not yet have WI-4's
+  verified identity or fingerprint, or the disconnect latch. The worker IPC and session-local
+  pinning can be built independently, but delivering only those pieces in PR 1 would leave the
+  existing respawn behavior in place until the later guards land. Recommendation: keep WI-2
+  together and deliver it after both prerequisites exist. Alternative: approve a split, with
+  IPC and session-local pinning in PR 1 and the identity and respawn guards later. Also confirm
+  whether A1's provisional **Sign in again** action should remain in the worker delivery. No
+  relay implementation has started.
+
 ---
 
 ## WI-3: Azure discovery on azureauth v6 (#990) (PR 2)
