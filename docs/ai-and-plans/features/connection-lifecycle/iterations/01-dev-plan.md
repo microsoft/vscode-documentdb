@@ -472,6 +472,9 @@ verdict exists, do not start the work it gates. The fingerprint table (formerly 
   follow-through after the version verdict, WI-9 and WI-10 prose; `gpt-6-luna` for WI-10 cross-links
   and preview. If a webview design decision is needed, consult the advisor in a fresh session before
   dispatch. These assignments do not move any operator gate. No coding workers have been started.
+- **Model override (operator, 2026-11-19):** Use `gpt-6.2-sol` for the Sol assignments above.
+  Keep `gpt-6.1-terra` until a GPT-6.2 Terra model is available. The MAI Code 2, Luna, and advisor
+  assignments are unchanged.
 
 ---
 
