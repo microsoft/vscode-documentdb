@@ -55,6 +55,7 @@ Evidence, telemetry and source pointers: [research-findings.md](./research-findi
 | [research-findings.md](./research-findings.md)                                 | research  |
 | [decisions.md](./decisions.md)                                                 | decisions |
 | [iterations/01-implementation-plan.md](./iterations/01-implementation-plan.md) | plan      |
+| [iterations/01-dev-plan.md](./iterations/01-dev-plan.md)                       | plan      |
 
 ## Decisions index
 

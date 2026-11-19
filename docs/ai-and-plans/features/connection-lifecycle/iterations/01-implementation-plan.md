@@ -42,6 +42,10 @@ work. **It deliberately does not specify interfaces**: a dedicated agent designs
 following the decisions. Progress is recorded **inline, against each work item**, when that item is
 committed.
 
+**Execution detail:** [01-dev-plan.md](./01-dev-plan.md) expands each work item into steps, cross-PR
+contracts, advisor checkpoints and provisional answers to the open questions. Progress is recorded inline
+there.
+
 ## Goal
 
 A user who leaves VS Code open for hours, with tabs and shells open, **never has to restart VS Code**
@@ -242,7 +246,7 @@ bundle, filter and cache behavior, and how to verify. Additions from this invest
 
   The place is `classifyResolutionFailure`
   ([resolveTarget.ts:52-82](../../../../../src/connectionDiagnostics/checks/resolveTarget.ts)). Keep it
-  bounded: an   error name and status only in the report, never messages (decision R2 in connectivity-troubleshooter).
+  bounded: an error name and status only in the report, never messages (decision R2 in connectivity-troubleshooter).
   A local probe of `6.0.0-alpha.8` through `createSubscriptionContext` confirmed that a held
   subscription looks up a session again. On a silent miss the actual exception had `name: "Error"`
   and no HTTP status; the current test manufactures `name: "NotSignedInError"`. Use the package's
