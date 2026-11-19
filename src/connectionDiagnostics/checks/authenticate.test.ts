@@ -58,8 +58,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../extensionVariables', () => ({
     ext: { outputChannel: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), trace: vi.fn(), debug: vi.fn() } },
 }));
-vi.mock('@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode', () => ({
-    getSessionFromVSCode: (...args: unknown[]): unknown => mocks.getSessionFromVSCode(...args),
+vi.mock('vscode', async (importOriginal) => ({
+    ...(await importOriginal<typeof vscode>()),
+    authentication: { getSession: mocks.getSessionFromVSCode },
 }));
 vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
     ...(await importOriginal<object>()),
@@ -946,9 +947,11 @@ describe('createAuthenticateCheck', (): void => {
                 hostCloud: 'AzureCloud',
                 entraFailureKind: 'none',
             });
-            expect(mocks.getSessionFromVSCode).toHaveBeenCalledWith([`${publicResource}/.default`], tenant, {
-                silent: true,
-            });
+            expect(mocks.getSessionFromVSCode).toHaveBeenCalledWith(
+                'microsoft',
+                [`${publicResource}/.default`, `VSCODE_TENANT:${tenant}`],
+                { silent: true },
+            );
             for (const call of mocks.getSessionFromVSCode.mock.calls) {
                 expect(JSON.stringify(call[2])).not.toMatch(/createIfNone|forceNewSession/);
             }
@@ -957,6 +960,7 @@ describe('createAuthenticateCheck', (): void => {
         it('keeps audience and tenant mismatches as warnings that never fail the check by themselves', async (): Promise<void> => {
             mocks.getSessionFromVSCode.mockResolvedValue({
                 accessToken: entraToken({ aud: governmentResource, tid: '99999999-2222-3333-4444-555555555555' }),
+                account: { label: 'alice@contoso.example', id: 'account-id' },
             });
             const { result } = await runAuth(
                 setupFor(AuthMethodId.MicrosoftEntraID, publicHost, { entraIdConfig: { tenantId: tenant } }),
@@ -1188,7 +1192,7 @@ describe('createAuthenticateCheck', (): void => {
                 timeouts: { authenticationTimeoutMs: 30 },
             });
             expect(codes(result)).toEqual(['check.timeout']);
-            session.resolve({ accessToken: entraToken() });
+            session.resolve({ accessToken: entraToken(), account: { label: 'alice@contoso.example', id: 'account-id' } });
             await flush();
             expect(deps.createClient).not.toHaveBeenCalled();
         });

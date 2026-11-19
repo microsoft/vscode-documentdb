@@ -133,7 +133,7 @@ describe('playground worker OIDC configuration at the driver boundary', () => {
                 .find((message) => message.type === 'tokenRequest');
             expect(request).toBeDefined();
             receive({ type: 'tokenResponse', requestId: request!.requestId, accessToken: 'dummy-token' });
-            await expect(token).resolves.toMatchObject({ accessToken: 'dummy-token' });
+            await expect(token).resolves.toMatchObject({ accessToken: 'dummy-token', expiresInSeconds: 3500 });
         },
     );
 

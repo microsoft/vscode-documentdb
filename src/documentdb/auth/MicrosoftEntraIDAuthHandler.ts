@@ -3,8 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// eslint-disable-next-line import/no-internal-modules
-import { getSessionFromVSCode } from '@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode';
+import { getConfiguredAuthProviderId } from '@microsoft/vscode-azext-azureauth';
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import { type OIDCCallbackParams, type OIDCResponse } from 'mongodb';
@@ -19,13 +18,29 @@ import {
     type AuthCallerPolicy,
     type AuthPhaseObserver,
 } from './authCallerPolicy';
-import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
+import { type AuthHandler, type AuthHandlerResponse, type VerifiedEntraIdentity } from './AuthHandler';
 import { resolveInteractiveTokenResource, TokenResourceResolutionError } from './documentdbTokenResource';
 import { evaluateEntraDestinationFromSettings, getEntraCustomHostnameSuffix } from './entraDestinationSettings';
 import { classifyEntraError } from './entraErrors/classifyEntraError';
+import {
+    EntraIdentityMismatchError,
+    EntraSignInRequiredError,
+    TokenCallbackError,
+} from './entraErrors/entraCallbackErrors';
 import { clearEntraTokenFailure, recordEntraTokenFailure } from './entraErrors/entraTokenFailures';
+import { getEntraSession } from './entraSession';
 import { EntraDestinationRejectedError } from './oidcAllowedHosts';
 import { buildOidcClientConfiguration, createOidcDestinationPolicy } from './oidcClientOptions';
+import { readJwtTimes } from './tokenExpiry';
+
+interface EntraTokenLookupObservation {
+    readonly outcome: 'returned' | 'noSession' | 'identityMismatch' | 'failed';
+    readonly lifetimeSeconds?: number;
+}
+
+interface EntraCallerPolicy extends AuthCallerPolicy {
+    readonly onTokenLookup?: (observation: EntraTokenLookupObservation) => void;
+}
 
 /**
  * Handler for Microsoft Entra ID authentication via OIDC.
@@ -36,7 +51,7 @@ import { buildOidcClientConfiguration, createOidcDestinationPolicy } from './oid
 export class MicrosoftEntraIDAuthHandler implements AuthHandler {
     constructor(
         private readonly clusterCredentials: CachedClusterCredentials,
-        public readonly policy: AuthCallerPolicy = { interactive: true },
+        public readonly policy: EntraCallerPolicy = { interactive: true },
     ) {}
 
     private notify(notify: (observer: AuthPhaseObserver) => void): void {
@@ -87,18 +102,23 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         // caller looks up an existing session silently and never forces a new one.
         const interactive = this.policy.interactive;
         let session: vscode.AuthenticationSession | undefined;
+        let providerId: string;
+        const resource = resolved.scope;
         this.notify((observer) => observer.onTokenStarted?.());
         try {
-            session = await traceAuthOperation(
+            ({ session, providerId } = await traceAuthOperation(
                 'interactiveEntra.getSession',
                 () =>
-                    withTokenAcquisitionTiming(timings, () =>
-                        getSessionFromVSCode(
-                            [resolved.scope],
+                    withTokenAcquisitionTiming(timings, async () => {
+                        const providerId = getConfiguredAuthProviderId();
+                        const session = await getEntraSession({
+                            providerId,
+                            resource,
                             tenantId,
-                            interactive ? { createIfNone: true } : { silent: true },
-                        ),
-                    ),
+                            mode: interactive ? 'interactive' : 'silent',
+                        });
+                        return { session, providerId };
+                    }),
                 {
                     tenantSpecified: !!tenantId,
                     ...(interactive ? { createIfNone: true } : { silent: true }),
@@ -107,7 +127,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                 },
                 authCorrelationId,
                 traceContext,
-            );
+            ));
 
             if (!session) {
                 traceAuthFlow(
@@ -128,10 +148,11 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                 if (traceContext?.startupProperties) {
                     traceContext.startupProperties.entraFailureKind = 'tokenAcquisitionFailed';
                 }
+                const message = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
                 recordEntraTokenFailure(clusterId, {
                     cloudCategory: resolved.cloudCategory,
                     authMethod: 'interactive',
-                    ruleId: classifyEntraError(error instanceof Error ? error.message : String(error))?.ruleId,
+                    ruleId: classifyEntraError(message)?.ruleId,
                 });
             }
             this.notify((observer) => observer.onTokenFailed?.(error));
@@ -140,6 +161,15 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
 
         policy.assertAllowed();
         clearEntraTokenFailure(clusterId);
+        const { id: accountId, label: accountLabel } = session.account;
+        const verifiedIdentity: VerifiedEntraIdentity = {
+            kind: 'entra',
+            providerId,
+            accountId,
+            accountLabel,
+            tenantId,
+        };
+        const account: vscode.AuthenticationSessionAccountInformation = { id: accountId, label: accountLabel };
         const acquiredSession = session;
         this.notify((observer) =>
             observer.onTokenAcquired?.({
@@ -155,18 +185,59 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         const configuration = buildOidcClientConfiguration({
             connectionString,
             policy,
-            oidcCallback: (_params: OIDCCallbackParams): Promise<OIDCResponse> => {
-                const result = Promise.resolve({
-                    accessToken: session.accessToken,
-                    expiresInSeconds: 0,
-                });
-                traceAuthFlow(
-                    'interactiveEntra.oidcCallback',
-                    { invocation: ++invocation, outcome: 'returned' },
-                    authCorrelationId,
-                    traceContext,
-                );
-                return result;
+            oidcCallback: async (_params: OIDCCallbackParams): Promise<OIDCResponse> => {
+                const currentInvocation = ++invocation;
+                let observation: EntraTokenLookupObservation = { outcome: 'failed' };
+                try {
+                    if (getConfiguredAuthProviderId() !== providerId) {
+                        observation = { outcome: 'noSession' };
+                        throw new EntraSignInRequiredError('providerChanged');
+                    }
+                    const renewed = await getEntraSession({ providerId, resource, tenantId, account, mode: 'silent' });
+                    if (!renewed) {
+                        observation = { outcome: 'noSession' };
+                        throw new EntraSignInRequiredError('noSession');
+                    }
+                    if (renewed.account.id !== accountId) {
+                        observation = { outcome: 'identityMismatch' };
+                        throw new EntraIdentityMismatchError();
+                    }
+                    const { accessToken } = renewed;
+                    const { iatSec, expSec } = readJwtTimes(accessToken);
+                    const lifetimeSeconds = iatSec !== undefined && expSec !== undefined ? expSec - iatSec : undefined;
+                    observation = {
+                        outcome: 'returned',
+                        ...(lifetimeSeconds !== undefined && Number.isFinite(lifetimeSeconds) ? { lifetimeSeconds } : {}),
+                    };
+                    return expSec === undefined
+                        ? { accessToken }
+                        : { accessToken, expiresInSeconds: Math.max(0, Math.floor(expSec - Date.now() / 1000)) };
+                } catch (error) {
+                    if (observation.outcome === 'noSession' || observation.outcome === 'identityMismatch') {
+                        throw error;
+                    }
+                    recordEntraTokenFailure(clusterId, {
+                        cloudCategory: resolved.cloudCategory,
+                        authMethod: 'interactive',
+                        ruleId: classifyEntraError(error instanceof Error ? error.message : String(error))?.ruleId,
+                    });
+                    throw new TokenCallbackError(error);
+                } finally {
+                    traceAuthFlow(
+                        'interactiveEntra.oidcCallback',
+                        {
+                            invocation: currentInvocation,
+                            outcome: observation.outcome === 'returned' ? 'returned' : 'threw',
+                        },
+                        authCorrelationId,
+                        traceContext,
+                    );
+                    try {
+                        this.policy.onTokenLookup?.(observation);
+                    } catch {
+                        // Observers never change the auth flow.
+                    }
+                }
             },
         });
         if (configuration.ignoredTlsBypass || this.clusterCredentials.emulatorConfiguration?.disableEmulatorSecurity) {
@@ -184,6 +255,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         return {
             connectionString: configuration.connectionString,
             options: configuration.options,
+            verifiedIdentity,
         };
     }
 }
