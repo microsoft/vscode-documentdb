@@ -10,17 +10,18 @@ created: 2026-11-19
 > Why connections stay usable across token expiry and idle drops, and how open surfaces behave
 > when credentials or the identity change. Evidence: [research-findings.md](./research-findings.md).
 
-| #    | Decision                                                                                                   | Status   | Changed from the proposal?                             | Date       | PR  |
-| ---- | ---------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------ | ---------- | --- |
-| 0001 | Entra tokens are renewed silently in every OIDC callback; the callback never prompts                       | Accepted | Operator accepted the explanation (2026-11-19)         | 2026-11-19 | —   |
-| 0002 | Keep one cached client per cluster; surfaces resolve it per operation with identity + generation           | Accepted | Operator position: per-operation clients cost too much | 2026-11-19 | —   |
-| 0003 | An open surface never moves to a different identity; it becomes disconnected, keeps its state and says why | Accepted | Operator requirement                                   | 2026-11-19 | —   |
-| 0004 | Disconnect lets the user choose: close all affected tabs, or keep them open and disabled                   | Accepted | Operator position; the default is still open (Q2)      | 2026-11-19 | —   |
-| 0005 | Fix stale ARM credentials by upgrading azureauth to v6 (#990), not with a local shim                       | Accepted | Operator: open to updating dependencies                | 2026-11-19 | —   |
-| 0006 | Deliver through `feature/connection-lifecycle` with sub-PRs, avoid PRs on top of open PRs, ship once       | Accepted | Operator chose this over one big PR and GitHub stacks  | 2026-11-19 | —   |
-| 0007 | The Disconnect choice is a VS Code modal with nothing remembered; a setting can set the default            | Accepted | Operator: modal cannot pre-select; no remembering      | 2026-11-19 | —   |
-| 0008 | Upgrade the azext stack as high as viable without breaking workflows, using Azure Resources as reference   | Accepted | Operator: replaces the "minimal versions" proposal     | 2026-11-19 | —   |
-| 0009 | Kubernetes tunnel recovery, cluster ID case handling and wider network-resilience testing move to #1105    | Accepted | Operator: keep 1.2.0 focused; schedule after release   | 2026-11-19 | —   |
+| #    | Decision                                                                                                   | Status                      | Changed from the proposal?                             | Date       | PR  |
+| ---- | ---------------------------------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------ | ---------- | --- |
+| 0001 | Entra tokens are renewed silently in every OIDC callback; the callback never prompts                       | Accepted                    | Operator accepted the explanation (2026-11-19)         | 2026-11-19 | —   |
+| 0002 | Keep one cached client per cluster; surfaces resolve it per operation with identity + generation           | Accepted (modified by 0010) | Operator position: per-operation clients cost too much | 2026-11-19 | —   |
+| 0003 | An open surface never moves to a different identity; it becomes disconnected, keeps its state and says why | Accepted                    | Operator requirement                                   | 2026-11-19 | —   |
+| 0004 | Disconnect lets the user choose: close all affected tabs, or keep them open and disabled                   | Accepted                    | Operator position; the default is still open (Q2)      | 2026-11-19 | —   |
+| 0005 | Fix stale ARM credentials by upgrading azureauth to v6 (#990), not with a local shim                       | Accepted                    | Operator: open to updating dependencies                | 2026-11-19 | —   |
+| 0006 | Deliver through `feature/connection-lifecycle` with sub-PRs, avoid PRs on top of open PRs, ship once       | Accepted                    | Operator chose this over one big PR and GitHub stacks  | 2026-11-19 | —   |
+| 0007 | The Disconnect choice is a VS Code modal with nothing remembered; a setting can set the default            | Accepted                    | Operator: modal cannot pre-select; no remembering      | 2026-11-19 | —   |
+| 0008 | Upgrade the azext stack as high as viable without breaking workflows, using Azure Resources as reference   | Accepted                    | Operator: replaces the "minimal versions" proposal     | 2026-11-19 | —   |
+| 0009 | Kubernetes tunnel recovery, cluster ID case handling and wider network-resilience testing move to #1105    | Accepted                    | Operator: keep 1.2.0 focused; schedule after release   | 2026-11-19 | —   |
+| 0010 | Rely on the server to reject expired tokens; replacing a client for the same identity is transparent       | Accepted                    | Operator: no rotation, no out-of-date notices          | 2026-11-19 | —   |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -250,3 +251,37 @@ Rejected:
 - **Doing it in 1.2.0:** it adds a second layer (tunnels) to a release that is already the largest
   connection change so far, for an authentication method that does not expire. The case-handling bugs
   already exist and are rarely hit (two contexts that differ only in case).
+
+## 0010. Rely on the server to reject expired tokens; replacing a client for the same identity is transparent
+
+**Accepted** by the operator on 2026-11-19. It answers T-1 in the dev plan. It modifies 0002's "re-run
+reads from the first page", and drops the approved plan's WI-1 requirement that a known-expired token is
+never offered on a new socket. Source: operator input at planning.
+
+> I wouldn't worry about this guarantee, the server will tell us, then we can act, this is easier. sure
+> we can have a local check for some expirations, but that's unreliable anyway.
+
+> no banners about out of date, this can be another future work issue [...] this is really an edge case.
+
+- **Expired tokens:**
+  - No proactive client rotation and no local expiry checks.
+  - The server rejects an expired token with code 18; the driver then calls the OIDC callback again,
+    which renews silently (0001).
+  - The operator test OP-1 in the dev plan confirms what the server actually returns. If it closes the
+    socket instead, the failure classifier acts on that: the next foreground operation gets a new client
+    with a fresh token cache.
+- **Replacing a client for the same identity** (recovery from a closed client, Sign in again with the same
+  account) is **transparent**: open views continue on the new client, with no re-run of the query and no
+  notice. 0002's reason for re-running, lost cursors, does not apply: Collection View pages with offset
+  queries.
+- **No "results may be out of date" notice anywhere in this iteration,** including when a view returns
+  from the disconnected state. Whether to indicate stale data (after a reconnect, a long idle, or writes)
+  is [#1106](https://github.com/microsoft/vscode-documentdb/issues/1106).
+
+Rejected:
+
+- **Proactive rotation when the issued token expires:** it covers only host operations, not the pool's own
+  sockets or the shell and playground workers, unless rotation is coordinated across all of them. It
+  costs a reconnect about every hour, and local expiry checks are unreliable anyway.
+- **Re-run page 1 with a "results are no longer current" notice** (0002 as written): it would appear after
+  every reconnect, for no correctness benefit.

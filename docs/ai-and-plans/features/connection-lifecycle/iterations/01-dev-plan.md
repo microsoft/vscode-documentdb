@@ -65,6 +65,33 @@ commit SHA, what landed, and anything that differed from the plan. Each checkpoi
 verdict there. At the hand-over, add an `# Outcome` chapter to the end of this file: what was verified,
 and just as plainly, what was not.
 
+### Operator tests: announce them clearly
+
+Some checks need the operator: a real cluster, a long wait, a real account, or the packaged VSIX. When
+the work reaches one, **stop** and post a message whose first line is:
+
+> **⏸ OPERATOR TEST NEEDED: OP-n, <name>**
+
+followed by:
+
+- **why** it is needed now, and what it blocks;
+- **setup:** the build to install, the cluster and account, and the settings;
+- **steps**, numbered;
+- **what to send back:** output-channel lines, screenshots, pass or fail per step. Never include tokens;
+- **an estimated duration**, including waits.
+
+Do not continue past the blocked step until the operator replies. Work that does not depend on the
+result may continue, but say so in the message. Record the result in the Progress block of the WI.
+
+| OP   | When                 | Test                                                                                                                                                 |
+| ---- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OP-1 | WI-1, CP-0           | Entra connection, idle past the token lifetime (60–90 min or more), then force a new connection. Does the server answer code 18 or close the socket? |
+| OP-2 | WI-3, CP-W3          | The azext workflow checks on the packaged VSIX: Azure sign-in, discovery, filters, deep links, wizards, Azure Resources view.                        |
+| OP-3 | WI-5 done            | OT-2's tree part with a real sign-out: Sign in again, a dismissal, no reprompt.                                                                      |
+| OP-4 | WI-6 done (after 5b) | OT-1 (short form, with the WI-4 hook) and OT-3(a) and (b) on a dev build.                                                                            |
+| OP-5 | WI-7 done            | OT-7 on a dev build, including a Disconnect during a running copy or export, and while a query or save is in flight.                                 |
+| OP-6 | Before PR F (CP-5)   | OT-1 to OT-7 on the packaged VSIX, with at least one real wait of two hours or more (PR F step 3).                                                   |
+
 ### Per-PR workflow
 
 - **Branch:** create `dev/tnaum/<topic>` from `feature/connection-lifecycle`. Follow the approved plan's
@@ -218,13 +245,13 @@ upgrade changes any of them, stop and re-plan the affected WI.
 
 ## 3. Tensions between the approved plan and the code
 
-| #   | Tension                                                                                                                                                                                                                                                                                                                                                                                                                           | Decided at | Recommendation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T-1 | WI-1 requires that a known-expired token is never offered on a new socket. Under F-2 that is only possible with a new `MongoClient` once the issued token expires, roughly once an hour. Decision 0002 says that a new generation re-runs reads from page 1 "because cursors are lost", but under F-6 no surface holds a cursor. Applying 0002 as written would show "results are no longer current" every hour (worse for OT-1). | CP-0       | Distinguish **token rotation** (same fingerprint, planned replacement) from **recovery**. Neither re-runs a query, because paging is offset-based. Show the "results are no longer current" notice only when a surface comes back from the **disconnected** state. This clarifies the intent of 0002, so the operator confirms it as a new decision entry. **Coverage caveat:** rotation at resolution time covers host operations only. Sockets opened by driver pool maintenance (`minPoolSize`), and the shell and playground workers' own driver token caches, still offer the cached token. CP-0 must show that every path is covered, or the operator must explicitly relax the guarantee for that path. A timer-based rotation would resemble the "proactive refresh timers" that 0001 rejected, so it also needs the operator. |
-| T-2 | OT-7 expects the cluster node to "collapse" after Disconnect, but VS Code cannot collapse a single node (F-14).                                                                                                                                                                                                                                                                                                                   | CP-4       | Refresh the node. A disconnected cluster returns **one** child action, "Connect", following the actions-only rule. Its handler reconnects and refreshes. Do not change `TreeItem.id`. Update OT-7's wording at hand-over.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| T-3 | WI-7 asked for provider-specific cluster ID equality (Azure case aliases match; Kubernetes contexts such as `Prod` and `prod` stay distinct). Today's stores disagree on this (F-4, F-18).                                                                                                                                                                                                                                        | —          | **Withdrawn 2026-11-19:** moved out of this iteration (decision 0009, #1105). Each store keeps its current matching.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| T-4 | Under decision 0002, a classified failure evicts and replaces the client. A background caller such as the dashboard poll or tree count badges could therefore start a new connection every tick.                                                                                                                                                                                                                                  | CP-2       | Only a **foreground** operation, or the rotation in T-1, replaces a generation. Background callers read the state and stop (WI-8). Add a per-cluster backoff of one replacement per 30 s, as a guard against loops.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| T-5 | For Entra, code 18 after the driver's own fresh callback means the server rejected a _fresh_ token: the principal has no database user, or Conditional Access or CAE intervened. That is not the same as `signInRequired`.                                                                                                                                                                                                        | CP-2       | Classify it as `credentialsRejected` with an Entra-specific explanation ("Your account has no access…"). Offer **Sign in again** only when the token came from a session the user can replace. Decide this with the real driver error shapes collected for CP-0.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| #   | Tension                                                                                                                                                                                                                                                                                               | Decided at | Recommendation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| T-1 | WI-1 required that a known-expired token is never offered on a new socket. Under F-2 that is only possible with a new `MongoClient` once the issued token expires. Decision 0002 says a new generation re-runs reads from page 1 "because cursors are lost", but under F-6 no surface holds a cursor. | CP-0       | **Resolved by the operator on 2026-11-19 (decision 0010).** (1) No proactive rotation and no local expiry checks: "the server will tell us, then we can act". An expired token is rejected by the server; the driver then calls the callback, which renews silently. If the server closes the socket instead, the classifier acts on that (WI-5). (2) Replacing a client for the same identity is **transparent**: no re-run and no "out of date" notice, including on return from the disconnected state. Stale-data indication is #1106. |
+| T-2 | OT-7 expects the cluster node to "collapse" after Disconnect, but VS Code cannot collapse a single node (F-14).                                                                                                                                                                                       | CP-4       | Refresh the node. A disconnected cluster returns **one** child action, "Connect", following the actions-only rule. Its handler reconnects and refreshes. Do not change `TreeItem.id`. Update OT-7's wording at hand-over.                                                                                                                                                                                                                                                                                                                  |
+| T-3 | WI-7 asked for provider-specific cluster ID equality (Azure case aliases match; Kubernetes contexts such as `Prod` and `prod` stay distinct). Today's stores disagree on this (F-4, F-18).                                                                                                            | —          | **Withdrawn 2026-11-19:** moved out of this iteration (decision 0009, #1105). Each store keeps its current matching.                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| T-4 | Under decision 0002, a classified failure evicts and replaces the client. A background caller such as the dashboard poll or tree count badges could therefore start a new connection every tick.                                                                                                      | CP-2       | Only a **foreground** operation replaces a generation. Background callers read the state and stop (WI-8). Add a per-cluster backoff of one replacement per 30 s, as a guard against loops.                                                                                                                                                                                                                                                                                                                                                 |
+| T-5 | For Entra, code 18 after the driver's own fresh callback means the server rejected a _fresh_ token: the principal has no database user, or Conditional Access or CAE intervened. That is not the same as `signInRequired`.                                                                            | CP-2       | Classify it as `credentialsRejected` with an Entra-specific explanation ("Your account has no access…"). Offer **Sign in again** only when the token came from a session the user can replace. Decide this with the real driver error shapes collected for CP-0.                                                                                                                                                                                                                                                                           |
 
 ---
 
@@ -238,6 +265,10 @@ Moved to [#1105](https://github.com/microsoft/vscode-documentdb/issues/1105) on 
 - provider-specific cluster ID matching (the withdrawn T-3; F-4, F-18);
 - Kubernetes API credential expiry (AKS exec plugin);
 - a wider network-resilience test matrix beyond OT-4, including a Kubernetes acceptance test.
+
+Moved to [#1106](https://github.com/microsoft/vscode-documentdb/issues/1106) (decision 0010): any
+"results may be out of date" indication. That covers the return from the disconnected state, long idle,
+and writes made from another view or another client.
 
 Generic idle and network-drop recovery **stays in scope**: closed-client and transient classification,
 the cancelled-reuse fix, closed-client replacement and OT-4. It is #1102's "recover on the next
@@ -282,7 +313,8 @@ semantics are binding unless a checkpoint changes them.
   - Byte equality is **not** established. Nothing about a token is retained except the previous `iat` and
     `exp` numbers.
   - The observer never receives the token, a hash of it or any other claim.
-  - WI-4 uses it for T-1 rotation; WI-9 uses it for `connection.tokenRenewal`, including the miss outcomes.
+  - WI-9 uses it for `connection.tokenRenewal`, including the miss outcomes. A WI-5 rule may also read the
+    last `expiresAtSec`, if OP-1 shows that the server closes the socket (CP-0).
 - **C-4. Binding.**
   - Its form is `{ clusterId, fingerprint, generation }`.
   - **`fingerprint`** is an opaque hash of the logical deployment plus the effective principal (WI-4). It
@@ -327,15 +359,15 @@ semantics are binding unless a checkpoint changes them.
 Each checkpoint is a short written verdict recorded in the Progress block of the WI named. Until the
 verdict exists, do not start the work it gates.
 
-| CP    | When                                                            | Question                                                                                       | Evidence required                                                                                                                                                      |
-| ----- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CP-0  | WI-1, after step 1, before the handler is changed               | Which strategy for expired tokens (T-1)? Confirm F-1 and F-2 with the driver contract test.    | Contract test output, plus, if available, an Azure DocumentDB handshake log after expiry (no tokens logged). If T-1 changes the intent of 0002: the operator's answer. |
-| CP-W3 | WI-3, after the version probe                                   | Which azext versions (A4)?                                                                     | `npm ls @microsoft/vscode-azext-azureauth`, bundle scan for duplicate copies, size of the build-error list for each option.                                            |
-| CP-1  | Before PR 3 opens                                               | Does C-1 work for every auth method, including the managed identity runtime shape and tunnels? | Fingerprint table tests (WI-4 step 1).                                                                                                                                 |
-| CP-2  | WI-5, after the classifier is drafted, before recovery is wired | The classifier table, T-4 and T-5.                                                             | Classifier table tests run on **real** driver error shapes captured by the contract test and the tree paths.                                                           |
-| CP-3  | Before WI-6 webview work                                        | Split PR 5 into 5a/5b? Is the binding-resolution API and state channel final?                  | Diff size of host-only work; one router converted end to end.                                                                                                          |
-| CP-4  | Before WI-7 starts                                              | Teardown order, T-2, the export lease (A5).                                                    | Teardown sequence diagram in the PR description.                                                                                                                       |
-| CP-5  | Before PR F                                                     | Is the hand-over complete?                                                                     | OT-1 to OT-7 results recorded in `# Outcome`, WI-9 queries run on pre-release ingestion.                                                                               |
+| CP    | When                                                            | Question                                                                                                                                                                                                    | Evidence required                                                                                                                                                |
+| ----- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CP-0  | WI-1, after step 1, before the handler is changed               | What does the server do when an expired token reaches a new socket: does it answer code 18, or close the socket? The strategy itself is decided (0010); this only tells the WI-5 classifier what to act on. | Contract test output, and the **operator test OP-1** (§0): one real waited session, never logging tokens.                                                        |
+| CP-W3 | WI-3, after the version probe                                   | Which azext versions (A4)?                                                                                                                                                                                  | `npm ls` for each package, bundle scan for duplicate copies, build-error list per level, and the **packaged VSIX** loading and passing the WI-3 workflow checks. |
+| CP-1  | Before PR 3 opens                                               | Does C-1 work for every auth method, including the managed identity runtime shape and tunnels?                                                                                                              | Fingerprint table tests (WI-4 step 1).                                                                                                                           |
+| CP-2  | WI-5, after the classifier is drafted, before recovery is wired | The classifier table, T-4 and T-5.                                                                                                                                                                          | Classifier table tests run on **real** driver error shapes captured by the contract test and the tree paths.                                                     |
+| CP-3  | Before WI-6 webview work                                        | Split PR 5 into 5a/5b? Is the binding-resolution API and state channel final?                                                                                                                               | Diff size of host-only work; one router converted end to end.                                                                                                    |
+| CP-4  | Before WI-7 starts                                              | Teardown order, T-2, the export lease (A5).                                                                                                                                                                 | Teardown sequence diagram in the PR description.                                                                                                                 |
+| CP-5  | Before PR F                                                     | Is the hand-over complete?                                                                                                                                                                                  | OT-1 to OT-7 results recorded in `# Outcome`, WI-9 queries run on pre-release ingestion.                                                                         |
 
 ---
 
@@ -366,7 +398,8 @@ verdict exists, do not start the work it gates.
 - Each OIDC callback returns a token that is valid for the account the connection started with, looked up
   silently.
 - A silent miss produces a typed error that every surface explains the same way.
-- A known-expired token is never offered on a new socket (by the mechanism chosen at CP-0).
+- An expired token that the server rejects is renewed silently. The extension relies on the server's
+  answer, not on local expiry checks (decision 0010).
 
 **Read first:**
 
@@ -391,25 +424,20 @@ verdict exists, do not start the work it gates.
      - (d) a network error does not.
    - Name the suite so it reads as a contract: `driver contract: mongodb OIDC workflow (7.2.0)`. If a
      driver upgrade breaks it, the strategy has to be reviewed again.
-2. **CP-0.** Choose the strategy for expired tokens, using T-1. The options:
-   - **A.** Rely on code 18. This only meets the approved plan's gate if the operator relaxes it.
-   - **B (recommended).** Proactive rotation. `ClustersClient` keeps the latest `expiresAtSec` it learned
-     through C-3. When a client is resolved, for any caller, and that time is in the past (minus a margin
-     of 300 s), it builds a new generation with the same fingerprint before returning. Implement the
-     client side of this in WI-4. WI-1 only provides C-3.
-   - **C.** Clear the driver's internal `TokenCache`. Rejected: it depends on driver internals.
-
-   **Coverage, which must be shown for the chosen option (T-1 caveat):**
-   - (i) host operations that resolve a client;
-   - (ii) sockets the pool opens by itself: check the effective `minPoolSize` and `maxIdleTimeMS`, and
-     whether pool maintenance can open an authenticated socket with no operation pending;
-   - (iii) the shell and playground workers. Their own driver caches the token too; does WI-2 need a
-     worker-side rotation, for example recreating the worker's `MongoClient` when the relayed token
-     expires?
-
-   For each path, record "covered by …" or "operator relaxed the guarantee for this path on <date>".
-
-   Record the verdict, and the operator's answer if T-1 changes intent.
+2. **CP-0.** The strategy is **decided** (T-1, decision 0010): rely on the server. No proactive
+   rotation and no local expiry checks. An expired token is rejected with code 18, and the driver calls
+   our callback, which renews silently (step 5).
+   - Add **tracing** that makes this visible without logging tokens: each callback call with its
+     outcome (C-3), and the server error code or socket error that preceded it.
+   - Then **stop and hand OP-1 to the operator** (§0, operator tests).
+   - Act on the result:
+     - **code 18, then a second callback, then success:** nothing more to do;
+     - **socket closed or reset, with no callback:** the driver keeps its stale cached token, so retrying
+       on the same client cannot recover. Add a WI-5 classifier rule: on an Entra client whose last
+       observed token has expired (C-3), a closed connection during authentication is `clientClosed`, so
+       the next **foreground** operation creates a new generation with a fresh token cache (T-4 still
+       applies).
+   - Record the result and the rule, if one was added, in Progress.
 
 3. **Session helper.**
    - Add `src/documentdb/auth/entraSession.ts`. It calls `vscode.authentication.getSession` with an
@@ -510,7 +538,11 @@ verdict exists, do not start the work it gates.
    - Optional optimization (the advisor decides): if the host already has a client for the cluster with a
      verified identity, seed the snapshot from it, so the initial relay is silent too.
    - **The shell or playground surface keeps its own binding** (C-4 fingerprint plus C-1), and that
-     binding **outlives the worker** (F-15). Before an automatic respawn (`ShellSessionManager.evaluate`,
+     binding **outlives the worker** (F-15). It registers in the **same surface registry** as the
+     webviews (WI-6 host step 1), with kind `shell` or `playground`. It consumes the same projected state
+     (C-5) and the same latch (C-6), so host and workers share one lifecycle coordinator, not two state
+     machines. If PR 1 lands before the registry exists, keep the latch behind a small interface that
+     WI-6 moves into the registry. Before an automatic respawn (`ShellSessionManager.evaluate`,
      `executePlaygroundCode.ts`), check the binding and the surface latch:
      - same fingerprint and not latched: respawn as today;
      - a different fingerprint, or latched: do not respawn. Print the disconnected reason and the action.
@@ -619,6 +651,8 @@ verdict exists, do not start the work it gates.
      - sign-in, account changes, MFA and cloud switches;
      - deep links (`/connect/azure`, with and without a tenant ID);
      - every `AzureWizard` flow;
+     - the **packaged VSIX** (`npm run package`) loads and activates, and the checks above pass on it,
+       not only on a dev build;
      - the masking test in the telemetry-masking memory: a property containing "error" is still redacted.
    - Choose with the advisor. If L2 needs more than mechanical changes in the `azureresources-api` 3
      consumers, step down to L1 and record why.
@@ -698,8 +732,17 @@ shim (0005).
      - Native: user + the **effective** authentication database, using the driver's rules (F-17):
        explicit `authSource`, else the URI's database path, else `admin`;
      - Entra: `providerId` + `accountId` + `tenantId`;
-     - managed identity: the client ID, as the runtime credential carries it, or `system-assigned`;
+     - managed identity: the client ID, as the runtime credential carries it, or `system-assigned`.
+       **Known limitation:** if an admin replaces a resource's system-assigned identity, the principal
+       changes but the fingerprint does not. That is not the user-driven identity switch that 0003 guards
+       against, so document it rather than research a principal claim;
      - no auth: `none`.
+   - **Fail closed:** when two inputs might mean the same deployment but normalization is unsure (for
+     example, an SRV string compared with a seed list), the fingerprints **differ**. The user then sees
+     "credentials changed" once and reconnects, which is acceptable.
+   - The Entra `providerId` is part of the fingerprint, so a provider or cloud change is an **identity
+     change**. Open surfaces go disconnected, and Reconnect is an explicit rebind under the current
+     settings.
    - Hash it (SHA-256, hex, truncated) into an opaque string.
    - Table tests:
      - a password-only change keeps the fingerprint;
@@ -750,11 +793,7 @@ shim (0005).
    - If the fingerprint differs, do not publish. Return a typed `IdentityChangedError` for WI-5 and WI-6 to
      handle.
    - Today's `client._mongoClient.connect()` call on the cached path goes away.
-7. **Rotation (CP-0 option B, if chosen).**
-   - Subscribe to C-3 from the auth handler at startup, and store `tokenExpiresAtSec` on the instance.
-   - Expose `needsRotation(now)`, and apply it inside `getClient` for **every** caller. Rotation is not a
-     failure-driven replacement, so the T-4 background restriction does not apply to it.
-   - Cover the other paths that CP-0 lists, or record their relaxation.
+7. ~~**Rotation.**~~ Removed: no proactive rotation (decision 0010).
 8. **Telemetry helper.**
    - Add `addEstablishedConnectionContext(context, clusterId | client)`. It sets `authMethod`,
      `connectionCorrelationId`, and the measurements `connectionAgeMs` and `clientGeneration`.
@@ -765,8 +804,8 @@ shim (0005).
      - declared in `package.json`;
      - registered only in development mode;
      - listed in `LAZY_COMMANDS` with its reason.
-   - It (a) makes the next N Entra callbacks for a selected cluster behave like a silent miss, (b) marks
-     the token as expired for rotation, and (c) force-closes the pool to simulate an idle drop.
+   - It (a) makes the next N Entra callbacks for a selected cluster behave like a silent miss, and (b)
+     force-closes the pool to simulate an idle drop.
    - Use a dashed context key if one is needed.
 
 **Tests** (`ClustersClient.test.ts`, plus the new fingerprint test):
@@ -837,8 +876,7 @@ shim (0005).
      stale. It evicts according to the table and updates the C-5 **cluster** state. Surface states are
      projected per binding (WI-6).
    - It fires `onDidChangeConnectionState(clusterId)`.
-   - A foreground helper `withClusterClient(clusterId, op, { foreground })` resolves the client (including
-     rotation under CP-0 option B), runs the operation, reports failures, and applies the T-4 backoff.
+   - A foreground helper `withClusterClient(clusterId, op, { foreground })` resolves the client, runs the operation, reports failures, and applies the T-4 backoff.
      WI-6 extends it with bindings.
 3. **Tree.**
    - Route both catch paths in `getChildren` (cached-client reuse and `listDatabases`) through
@@ -948,14 +986,14 @@ shim (0005).
    - `register({ clusterId, kind, binding, pushState, dispose, hasUnsavedChanges? })` returns a
      disposable.
    - Collection View, Document View and the Dashboard register when they open and unregister on
-     `onDisposed`.
+     `onDisposed`. Shells and the playground register too (WI-2), so there is one registry for every
+     surface.
    - WI-7 enumerates this registry.
 2. **Binding resolution.**
    - `resolveBoundClient(binding, { foreground })` has three outcomes:
      - (a) same fingerprint and generation: return the client;
-     - (b) same fingerprint, the client was replaced or closed for **recovery or rotation**: return the
-       current client, with no re-run (T-1, if confirmed). If T-1 is **not** confirmed, follow 0002 as
-       written: re-run the applied query from page 1, and discard old-generation responses;
+     - (b) same fingerprint, the client was replaced or closed for **recovery**: return the current
+       client, transparently, with no re-run and no notice (decision 0010);
      - (c) a different fingerprint, the cluster is latched `disconnected` (C-6), or `identityChanged`:
        throw a typed `SurfaceDisconnectedError(reason)`.
    - Projection rule (C-5): the surface's state comes from comparing **its** binding with the cluster's
@@ -983,7 +1021,9 @@ shim (0005).
    - Save document, inserts and deletes, and index create, drop, hide and unhide.
    - When the request may have reached the server and the reply was lost (network error or timeout after
      send), report **outcome unknown**: "The change may or may not have been applied. Refresh to check."
-   - Never resubmit. Leave the driver's own `retryWrites` as it is.
+   - The extension **never resubmits** a write. That is the guarantee, and OT-4's "not replayed" means
+     this. The driver's own retryable writes (`retryWrites`) stay as they are: the server deduplicates
+     them by design, and RU connection strings disable them.
    - Test that one application-level submission results in exactly one call to the driver.
 6. **State channel and stale results.**
    - Each view router gets a `connectionState` subscription, fed by the registry (C-5 surface state). It
@@ -992,7 +1032,7 @@ shim (0005).
      rebind.
    - Every request records `{ epoch, generation }` when it starts.
    - **Before any host-side mutation**, check that the epoch is unchanged and that the generation is
-     acceptable under T-1 (or under 0002 as written). That covers `ClusterSession`'s
+     acceptable: same fingerprint is acceptable under decision 0010. That covers `ClusterSession`'s
      `_currentRawDocuments`, its query caches, Query Insights caches and `SchemaStore` updates. A stale
      result must not change host state at all, so dropping it only at delivery is not enough.
    - Check again at delivery. The UI applies the same check (5b).
@@ -1014,12 +1054,13 @@ shim (0005).
    - Responses whose epoch is older than the UI's current epoch are discarded on the UI side too.
 3. **What each view keeps.**
    - **Collection View:** query text, filter, sort, projection, page number and size, the selected tab,
-     and Query Insights results with a "stale" marker.
+     and the Query Insights results as they were.
    - **Document View:** the dirty editor content and `isDirty`.
-   - **Dashboard:** the last data, marked stale (WI-8 stops the polling).
+   - **Dashboard:** the last data (WI-8 stops the polling).
 4. **Actions.**
-   - **Reconnect** (same fingerprint): resolve again. On success, show "Reconnected. Results may be out
-     of date. Run the query again to refresh." The query is not run automatically.
+   - **Reconnect** (same fingerprint): resolve again. On success, remove the banner and re-enable the
+     actions; the live region announces "Reconnected". The query is not run automatically, and there is
+     **no** "out of date" notice (decision 0010; see #1106).
    - **Reconnect after an identity change:** an explicit rebind to the new fingerprint, then show "Now
      connected as {label}" (OT-3).
    - **Sign in again:** the WI-5 command.
@@ -1062,6 +1103,15 @@ shim (0005).
 - One teardown serves Disconnect, Remove and identity-changing credential updates.
 - It is guarded by task conflicts and dirty editors.
 - It covers every per-cluster resource.
+- **What it guarantees:** after `commit`, no operation **starts** under the old binding. Operations
+  already in flight are not admitted or tracked individually:
+  - `deleteClient` closes the client with `force`, so they fail;
+  - their failure is reported normally, and a write whose reply was lost is reported as outcome unknown
+    (WI-6);
+  - shell and playground workers are stopped;
+  - tasks and exports are protected by the preflight.
+
+  This is the right level for an interactive tool; do not build per-operation admission control.
 
 **Read first:**
 
@@ -1171,6 +1221,8 @@ shim (0005).
 - a copy or export that starts while the Disconnect prompt is open blocks the commit, and nothing changes;
 - a task or lease cannot start while a teardown reservation is held;
 - a shell or playground left open after Disconnect does not respawn on its next command;
+- Disconnect while a query or save is in flight: the operation fails and is reported (a write as outcome
+  unknown), and nothing runs afterwards under the old binding;
 - a failed save keeps the old binding;
 - a concurrent connect during Update Credentials does not publish the old credentials.
 
@@ -1286,7 +1338,11 @@ shim (0005).
 1. Sync `main` into the feature branch through a pure merge PR (approved plan rule 5).
 2. Run Case 2 on the feature branch head.
 3. Run OT-1 to OT-7 on the packaged VSIX, with at least one real wait of two hours or more. Record each
-   result, and the evidence the approved plan requires, in `# Outcome`.
+   result, and the evidence the approved plan requires, in `# Outcome`. In addition:
+   - **OT-1:** check the shell separately. After the wait, its worker's own connection must renew without
+     a prompt; record the token relay in the output channel, never the token.
+   - **OT-7:** also Disconnect while a query or save is in flight. It must fail and be reported, and
+     nothing may run afterwards under the old connection.
 4. CP-5 verdict, then open PR F. Watch telemetry for about one week after the merge (WI-9 queries).
 
 # Outcome

@@ -202,6 +202,11 @@ that a known-expired token is not offered on a new socket, including speculative
 After a callback threw, the same driver workflow reused the rejection; a fresh workflow succeeded.
 Test that explicit recovery replaces the failed workflow rather than retrying it indefinitely.
 
+> **Changed 2026-11-19 (decision [0010](../decisions.md)):** the "known-expired token is not offered"
+> requirement is dropped. The extension relies on the server rejecting an expired token, after which the
+> driver calls the callback and renews silently. No proactive rotation, no local expiry checks. The
+> operator test OP-1 in [01-dev-plan.md](./01-dev-plan.md) checks what the server actually returns.
+
 ## WI-2: Shell and Playground token relays use the same policy
 
 **Problem:** both relays call `createIfNone: true` inside the worker's token request
@@ -362,6 +367,9 @@ The largest item. Host side first, then each view.
     - same fingerprint, new generation: re-run the applied query from page 1 with a notice that
       results are no longer current. Pages use separate offset queries, not a cursor held between
       pages. Discard old-generation responses on both host and UI; preserve unapplied editor text;
+      - **Changed 2026-11-19 (decision 0010):** transparent: proceed on the current client, with no
+        re-run and no notice. Any "out of date" indication is
+        [#1106](https://github.com/microsoft/vscode-documentdb/issues/1106).
     - different fingerprint, or no client: **disconnected**, with a reason.
   - **The extension never resubmits a write with an unknown outcome.** Report the outcome as
     unknown, not as a definite failure. The driver can retry the same logical write or handle 391
@@ -524,7 +532,7 @@ least once.
 
 | #    | Scenario                             | Steps                                                                                                                                                                                                                                                                                                | Pass when                                                                                                                                                                                                                                                         |
 | ---- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| OT-1 | **Entra, long idle, work open**      | Connect with Entra. Open a Collection View with filter, sort and projection, on page 2. Open a Document View with an unsaved edit. Open the Cluster Dashboard and a shell. Wait ≥ 2 h. Then refresh the tree, run the query, go to the next page, save the document, and run a command in the shell. | Everything works. No sign-in prompt, and no error that needs a click. Text and edits are kept. If page 1 is re-run, the view says why.                                                                                                                            |
+| OT-1 | **Entra, long idle, work open**      | Connect with Entra. Open a Collection View with filter, sort and projection, on page 2. Open a Document View with an unsaved edit. Open the Cluster Dashboard and a shell. Wait ≥ 2 h. Then refresh the tree, run the query, go to the next page, save the document, and run a command in the shell. | Everything works. No sign-in prompt, and no error that needs a click. Text and edits are kept. (No re-run and no out-of-date notice: decision 0010.)                                                                                                              |
 | OT-2 | **Entra, silent renewal impossible** | With the OT-1 surfaces open, sign out of the account in the Accounts menu (or revoke sessions in Entra). Run the query. Dismiss the prompt if one appears. Wait 5 min. Then click **Sign in again** and pick the same account.                                                                       | The action fails once and offers **Sign in again**. The tabs show "sign-in expired" with their content kept. No modal appears on its own, and nothing prompts again after a dismissal. After signing in, the tabs re-enable and the unsaved edit saves.           |
 | OT-3 | **Identity change is never silent**  | (a) Native: with tabs open, use Update Credentials to switch to a different user. Choose "Keep open (disabled)". (b) Repeat, changing only the password of the same user. (c) Entra: in OT-2, sign in again with a _different_ account.                                                              | (a) and (c): tabs are disabled with "credentials changed", no action runs under the new identity, and Reconnect opens a new session and says so. (b): tabs continue.                                                                                              |
 | OT-4 | **Native, idle and network drop**    | Native connection with tabs open. Turn the network off for 2 min, or put the machine to sleep for ≥ 30 min, then restore it. Run a query, refresh the tree, save a document. Also try an insert while offline.                                                                                       | The operations work after restoring, at most after one Retry. The offline insert is reported as failed or unknown and is **not** replayed.                                                                                                                        |

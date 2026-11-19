@@ -246,8 +246,10 @@ read as seconds:
 | Entra ID | 912      | ~2.0 s  | ~9.0 s |
 | No Auth  | 188      | ~0.07 s | ~1.8 s |
 
-A `MongoClient` also owns cursors (Collection View pagination uses `getMore`), server sessions and
-monitoring. A per-operation client would cost seconds per action and break pagination.
+A `MongoClient` also owns server sessions and monitoring, and the shell and playground hold cursors.
+Collection View pagination does **not** hold a cursor: each page is a separate offset (`skip`) query, as
+`ClusterSession.runFindQueryWithCache` shows (corrected 2026-11-19; an earlier version of this document
+said it used `getMore`). A per-operation client would still cost seconds per action.
 
 ## Appendix: queries
 
