@@ -604,7 +604,13 @@ verdict exists, do not start the work it gates. The fingerprint table (formerly 
   contract tests for the pinned 7.2.0 workflow: callback rejection, cached-token speculation,
   auth code 18 retry, and network error propagation without a retry. The accepted operator strategy
   (decision 0010) is unchanged; the tests confirm the mocked driver behavior, not the live server's
-  response. All four focused tests and `npx tsc --noEmit -p .` passed. OP-1a is pending tracing.
+  response. All four focused tests and `npx tsc --noEmit -p .` passed.
+- **Done (2026-11-19), commit `01c0d4846` (WI-1b, `gpt-6.2-sol`):** Added local callback, socket,
+  and final-error traces without changing token handling. The implementation and review were advised
+  (`claude-opus-5.5`, high confidence): the driver does not emit the initial code 18 it handles,
+  so infer that path from the callback and final numeric code. Four trace tests added; Case 1 build
+  and 92 focused tests passed. **Waiting for OP-1a** before recording the CP-0 verdict or proceeding
+  with renewal.
 
 ---
 
