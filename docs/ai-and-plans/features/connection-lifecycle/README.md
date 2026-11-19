@@ -45,6 +45,8 @@ Evidence, telemetry and source pointers: [research-findings.md](./research-findi
 - **Never change identity under an open surface.** It becomes disconnected, keeps its state, says why
   and offers one action.
 - **One teardown** serves Disconnect, Remove Connection and identity-changing credential updates.
+- Disconnect uses the existing task-conflict guard: if a copy or export is using the cluster,
+  leave the task and connection running. The user can retry after the task finishes or is stopped.
 
 ## Documents
 

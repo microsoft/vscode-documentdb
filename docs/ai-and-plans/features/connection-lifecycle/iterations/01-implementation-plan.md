@@ -135,7 +135,8 @@ The goal is to open few PRs on top of other unmerged PRs. It is preferred, not r
 | 7   | WI-9 + WI-10: telemetry signals and dashboards, documentation                    | feature branch                | PR 6 merged               |
 | F   | `feature/connection-lifecycle` → `main`                                          | `main`                        | all merged, OT-1–7 passed |
 
-- **PR 1, PR 2 and PR 3 run in parallel** and never stack.
+- PR 1–3 can run in parallel if PR 0 agrees how WI-1 passes the verified account, provider and
+  tenant to WI-4. Otherwise, land PR 1 before PR 3; do not reconstruct the identity from a later cache read.
 - PR 4 to PR 7 are sequential, because each builds on the previous one. Under rule 1, local work on
   the next item may begin early, but its PR opens only after its base has merged.
 - **PR 5 is the largest.** If it becomes too large to review well, split it into host (5a) and
@@ -184,10 +185,18 @@ The goal is to open few PRs on top of other unmerged PRs. It is preferred, not r
   error-translation skill) so every surface gets the same message: "Your Microsoft sign-in for
   '{cluster}' expired. Sign in again to continue."
 - **Unit tests:**
-  - A second callback invocation returns a new token.
+  - A second callback consults the provider again and uses its result; identical token bytes are
+    valid while the token is still good.
   - A silent miss gives the typed error, and `getSession` is never called with `createIfNone`.
   - A different account is reported as such.
   - The destination policy is still enforced.
+
+**Driver verification gate:** in a local probe at `e22a39b8d`, driver 7.2.0 tried its cached token
+on a new connection even with `expiresInSeconds: 0`. Code 18 on that token triggered the callback;
+a transport failure did not. Returning the JWT lifetime alone does not meet #1102. Demonstrate
+that a known-expired token is not offered on a new socket, including speculative authentication.
+After a callback threw, the same driver workflow reused the rejection; a fresh workflow succeeded.
+Test that explicit recovery replaces the failed workflow rather than retrying it indefinitely.
 
 ## WI-2: Shell and Playground token relays use the same policy
 
@@ -195,14 +204,17 @@ The goal is to open few PRs on top of other unmerged PRs. It is preferred, not r
 ([ShellSessionManager.ts:450](../../../../../src/documentdb/shell/ShellSessionManager.ts),
 [PlaygroundEvaluator.ts:467](../../../../../src/documentdb/playground/PlaygroundEvaluator.ts)).
 
-- Make the relay silent and pinned to the account in the session's D12 identity snapshot
-  ([sovereign-clouds decisions D12](../../sovereign-clouds/decisions.md)).
+- Extend the [D12 snapshot](../../sovereign-clouds/decisions.md): it pins the audience today, **not**
+  the VS Code account. Capture the verified account ID, provider/cloud and tenant on initial
+  acquisition. Fail closed if the provider changes or the returned account does not match.
 - A miss puts the shell or playground into a "sign in again" state: a printed line and an action. It
   never opens a modal during a background refresh.
 - Fold in the #1059 note: `PlaygroundEvaluator.buildInitMessage`
   ([PlaygroundEvaluator.ts:288](../../../../../src/documentdb/playground/PlaygroundEvaluator.ts)) reads
   `CredentialCache` on every run.
-- **Unit tests:** extend the existing relay tests to cover the silent miss and account pinning.
+- **Unit tests:** the current worker IPC drops a sign-in-required error's type. Verify that a
+  bounded reason reaches the host action during both init and a warm evaluation. A healthy warm
+  worker must not need a new cache read; build its init message only when spawning it.
 
 ## WI-3: Azure discovery, azureauth v6 (#990, decision 0005)
 
@@ -230,7 +242,12 @@ bundle, filter and cache behavior, and how to verify. Additions from this invest
 
   The place is `classifyResolutionFailure`
   ([resolveTarget.ts:52-82](../../../../../src/connectionDiagnostics/checks/resolveTarget.ts)). Keep it
-  bounded: an error name and status only, never messages (decision R2 in connectivity-troubleshooter).
+  bounded: an   error name and status only in the report, never messages (decision R2 in connectivity-troubleshooter).
+  A local probe of `6.0.0-alpha.8` through `createSubscriptionContext` confirmed that a held
+  subscription looks up a session again. On a silent miss the actual exception had `name: "Error"`
+  and no HTTP status; the current test manufactures `name: "NotSignedInError"`. Use the package's
+  `isNotSignedInError` guard and test the real exception. A challenge can request interactive
+  step-up; do not infer that ARM discovery shares the database callback's no-prompt behavior.
 
 - **Unit test:** a stored subscription whose first token "expires" still lists clusters (mock the
   session sequence).
@@ -248,6 +265,10 @@ In [ClustersClient.ts](../../../../../src/documentdb/ClustersClient.ts):
   - its creation time.
 
   The fingerprint is derived from **what was used to connect**, not from the current `CredentialCache`.
+  The helper alone returned `native:sam` for two hosts and two auth databases. Bind the logical
+  deployment plus the effective principal (including auth source); for tunnels use the provider's
+  target, not its temporary local port. Test managed identity using the actual runtime credential
+  shape, a password-only change, and the same username on a different deployment or auth source.
 
 - **Fix:** cancelling a _cached_ reuse must not close the shared client.
   - Pointer: the `getClient` abort handler at
@@ -261,6 +282,10 @@ In [ClustersClient.ts](../../../../../src/documentdb/ClustersClient.ts):
 - **Telemetry base:** one helper adds `authMethod`, `connectionAgeMs` and `clientGeneration` to any
   failure that happens after the connection was established. The surfaces in WI-5 and WI-6 call it.
   Follow the telemetry-instrumentation skill; property names must not contain "error" (masking).
+- **Concurrent startup and teardown:** two deferred cold gets produced two clients, and a pending
+  connect repopulated the cache after deletion completed. Share one startup per cluster; invalidate
+  the generation before teardown awaits and check it before publishing or returning a client.
+  Test a late startup after Disconnect, an old Retry after replacement, and cancelling one of two waiters.
 - **Optional test hook, development only:** a command that makes the Entra callback return an
   invalid token N times and drops pooled connections. It lets WI-5 and WI-6 be checked in minutes
   instead of 90.
@@ -286,19 +311,24 @@ In [ClustersClient.ts](../../../../../src/documentdb/ClustersClient.ts):
   - Same account: evict and create a new generation. Surfaces continue (WI-6).
   - Different account: treat it as an identity change (decision 0003).
   - **One** prompt per user click. Dismissing it is respected: no reprompt until the user acts again.
+  - `createIfNone` can return an existing session. Test a still-present but rejected token as well
+    as a missing session; prove that the explicit action obtains usable credentials in both cases.
 - **The tree's Retry must actually reconnect.**
   - [retryAuthentication.ts](../../../../../src/commands/retryAuthentication/retryAuthentication.ts)
     and the cached-client path in
     [ClusterItemBase.ts:358-447](../../../../../src/tree/documentdb/ClusterItemBase.ts) should evict
     the client when the last failure was `signInRequired`, `credentialsRejected` or `clientClosed`.
   - Keep the cached credentials (#1059 open question 1: dropping the client is not the same as
-    forgetting the credentials).
+    forgetting the credentials). Exception: for a rejected RU Discovery key, explicit recovery must
+    reread the primary key from ARM once, not reuse the cached key or open a password wizard.
+    Test an old/new key pair and distinguish an ARM sign-in failure from database rejection.
   - Add **Sign in again** to `createErrorRecoveryChildren`
     ([ClusterItemBase.ts:304-326](../../../../../src/tree/documentdb/ClusterItemBase.ts)), following the
     "actions only" order in the tree-cluster-architecture skill: repairs first, Retry last.
 - **`vscode.authentication.onDidChangeSessions`:** when the bound Entra account disappears, mark its
   clients `signInRequired`. Never sign the user out, and never remove sessions (#1059 "must NOT be
-  touched").
+  touched"). The event identifies the provider, not the removed account. Silently recheck affected
+  bindings and ignore results from stale generations; another account's change must not disconnect this one.
 - **Unit tests:**
   - classifier table tests;
   - Retry after `clientClosed` produces a new generation;
@@ -325,11 +355,13 @@ The largest item. Host side first, then each view.
 
   - Outcomes:
     - same fingerprint and generation: proceed;
-    - same fingerprint, new generation: proceed, and re-run reads from page 1 because cursors are
-      lost, with a notice in the spirit of Cosmos's "results are no longer current";
+    - same fingerprint, new generation: re-run the applied query from page 1 with a notice that
+      results are no longer current. Pages use separate offset queries, not a cursor held between
+      pages. Discard old-generation responses on both host and UI; preserve unapplied editor text;
     - different fingerprint, or no client: **disconnected**, with a reason.
-  - **Writes are never replayed.** A write with an unknown outcome is reported as failed, and the
-    message says the outcome is unknown.
+  - **The extension never resubmits a write with an unknown outcome.** Report the outcome as
+    unknown, not as a definite failure. The driver can retry the same logical write or handle 391
+    internally; test one application submission when the server accepts a write but its reply is lost.
 
 - **Webviews:**
   - Push one connection-state channel per view over tRPC: connected, reconnecting, or disconnected
@@ -341,43 +373,60 @@ The largest item. Host side first, then each view.
   - Views: Collection View (query, documents, indexes and Query Insights tabs), Document View
     (dirty editor) and the Cluster Dashboard.
   - Accessibility: announce the state change (accessibility skill; live region).
-- **Long-running tasks** (copy and paste, import, export, index copy;
-  [DocumentDbDocumentReader.ts](../../../../../src/services/taskService/data-api/readers/DocumentDbDocumentReader.ts)):
-  they resolve a client for each batch. A fingerprint change fails the task with a clear reason and
-  never resumes under the new identity. The cancel-or-ask policy belongs to WI-7.
+- **Transfer scope:** copy and export may keep their current client or stream. Do not redesign
+  transfers to rebind per batch or resume after Disconnect. Protect active tasks from an explicit
+  disconnect using the existing resource-conflict check in WI-7. An unexpected connection loss
+  is not permission to restart a transfer under another identity.
 - **Tests:**
   - router tests for the three binding outcomes;
   - a Collection View scenario: disconnected banner with the query text kept;
   - a Document View scenario: dirty edit kept;
+  - inject a disconnect after typing, then deliver a stale page or document read; neither applied
+    results nor drafts may be overwritten, and disabled actions must issue no server calls;
   - scenarios run through the L2-dev runner (`/scenarios/`, see the copilot instructions).
 
 ## WI-7: Teardown service, Disconnect, Remove and Update Credentials (#1059, #566, decisions 0003, 0004)
 
-- **One teardown**, keyed by `clusterId` and matched case-insensitively. Remove = teardown + delete +
-  clear schema; Disconnect = teardown only.
-  - Follow the full #1059 checklist: client, shells, playground, webviews, tasks, in-flight token
+- **One teardown**, keyed by stable `clusterId`, with provider-specific equality. Azure case aliases
+  must match, but folding Kubernetes context IDs such as `Prod` and `prod` would target different
+  resources together. Remove = teardown + delete + clear schema; Disconnect = teardown only.
+  - After the task-conflict preflight below, tear down the client, shells, playground, webviews, in-flight token
     requests (sovereign-clouds finding E4), `CredentialCache`, the Entra failure registry, and the
     `SchemaStore` decision.
   - Its "must NOT be touched" rules apply: VS Code auth sessions, the managed identity cache, the
     ARM cache.
 - **Disconnect command** on connected clusters in the Connections, Azure Resources and Discovery
   views.
+  - **Check for active tasks first.** Reuse
+    [`checkCanProceedAndInformUser({ clusterId }, …)`](../../../../../src/services/taskService/resourceUsageHelper.ts)
+    as [Remove Connection](../../../../../src/commands/removeConnection/removeConnection.ts) already
+    does. If a copy or export uses this cluster, name the conflicting task and leave **both the task
+    and connection running**. The user can retry Disconnect after the task finishes or they stop it.
+    Do not offer force-disconnect or automatically cancel the task. Verify that export registers its
+    source and copy registers both endpoints; fill registration gaps rather than changing transfer logic.
   - Use dashed context keys (manifest rule in the copilot instructions).
   - When surfaces are open, ask the user: **Close all** or **Keep open (disabled)** (decision 0004;
     default and remembering per Q2).
-  - Close all must not throw away unsaved document edits without the usual dirty-editor confirmation.
+  - Document View is a plain webview panel: `dispose()` has no dirty-editor veto. For Close all,
+    confirm unsaved edits **before** disposing any panel or changing the connection. Cancelling leaves
+    every panel, draft and connection intact, including when Remove initiated teardown.
 - **Update Credentials**
   ([updateCredentials.ts:142-185](../../../../../src/commands/updateCredentials/updateCredentials.ts))
   and Update Connection String compare the old and new fingerprints:
   - **same:** the client is replaced and tabs continue;
-  - **different:** teardown with reason "credentials changed", offering the same Close/Keep choice.
+  - **different:** before saving, run the same task and dirty-panel checks as Disconnect. If approved,
+    tear down with reason "credentials changed", offering the same Close/Keep choice.
+  - Only replace the client after the credential save succeeds; test that a failed save leaves the
+    old binding usable and a concurrent connect cannot publish the previous credentials after replacement.
 
   Today's D12 modal for open shells offers Disconnect as a button (#1059).
 
 - **Telemetry:** one event with the activation source and teardown counts. No identifiers (#1059).
 - **Tests:**
   - teardown per surface;
-  - IDs that differ only in case;
+  - Azure case aliases vs distinct Kubernetes context IDs;
+  - Disconnect blocked for copy source, copy destination and export source; an unrelated cluster
+    is not blocked. After the task finishes or is stopped, retrying Disconnect succeeds;
   - a late token response after Disconnect is ignored;
   - reconnecting uses the current credentials and cloud settings;
   - Remove reuses the same teardown.
@@ -391,24 +440,46 @@ Coordinate with #1091. The minimum for this plan:
   dashboard shows the WI-6 banner instead of starting a connection every 5 s.
 
 Visibility pause and backoff are the rest of #1091 and may ship separately.
+Existing visibility and in-flight guards do not distinguish a missing ping sample from terminal
+auth failure. With fake timers, verify no client lookups on ticks or reveal after Disconnect,
+that a late successful ping cannot clear the banner, and that reconnect starts only one poll loop.
 
-## WI-9: Telemetry check
+## WI-9: Measure token renewal and recovery after release
 
-- **New signals:**
-  - `connection.recovered`, with its trigger (silent renewal, reconnect, sign in again);
-  - silent-renewal outcomes. Use counters with `accumulateTelemetry` on the hot path, or one event
-    per miss;
-  - the Disconnect event;
-  - the WI-4 enrichment on failures after connect.
-- **Dashboards:** extend the errors recipe in the telemetry-dashboards skill (devbox worktree)
-  with:
-  - late failures after connect, by auth method;
-  - successful ARM challenges;
-  - recoveries.
-- **After the pre-release:** rerun the research queries (research appendix). Expected:
-  - Entra-only sessions show almost no late code 18 or socket-closed failures;
-  - `challengeSuccess=true` appears;
-  - "Client must be connected" disappears.
+The [existing correlation IDs](../../../telemetry-correlation-ids.md) identify a client or worker
+startup and optionally link it to cluster metadata. They do **not** tell us when a token changed,
+how long it was valid, or whether the database worked afterward. Reuse `startupCorrelationId`
+for drill-down and `connectionCorrelationId` where already available; the headline metrics below
+must be queryable without a join or a new persistent identifier.
+
+- **When did a refresh happen?** Emit `connection.tokenRenewal` once per completed post-startup
+  Entra database token lookup (host, shell or playground), not per query or dashboard tick.
+  Use the event timestamp, `surface`, and one bounded `renewalOutcome`: `changed`, `unchanged`,
+  `noSession`, `identityMismatch`, `failed`, or `unknown` when there is no prior observation.
+  Compare only within the same binding. Exclude initial acquisition; count a valid unchanged
+  token as successful reuse, **not** a refresh. `changed` means the extension received a
+  different token, not that it observed an MSAL network request. Count successes as well as misses.
+- **What was the lifetime?** On that same event record numeric measurements, not timestamps:
+  `connectionAgeMs` (age of this client/worker at lookup), `previousTokenObservedAgeSeconds`
+  (time since the previous token was first seen, not reset by unchanged lookups),
+  `tokenLifetimeSeconds` (returned token's `exp - iat`) and `tokenRemainingSeconds` (`exp - now`
+  at lookup). Omit unavailable or invalid measurements; never substitute a worker fallback TTL
+  or zero for unknown. Do not retain tokens just for telemetry or send token values, hashes, raw
+  claims, account/tenant IDs, cluster IDs, fingerprints or hostnames.
+- **Did the connection actually recover?** Emit `connection.recovered` once on the first successful
+  database operation after a pending recovery, with trigger (`silentRenewal`, `reconnect` or
+  `signInAgain`) and `connectionAgeMs`. A callback returning a token is not that success. Keep
+  WI-4's classified post-connect failures and WI-7's Disconnect event. Report ARM challenges
+  separately from database renewal and verify the final ARM request, not just token acquisition.
+- **Release dashboard and acceptance:** check in runnable queries that show daily renewal outcomes
+  and changed-token rate (`changed / all completed lookups`), plus p50/p90 token lifetime,
+  remaining validity and connection age at refresh, split by version and surface. Show sample
+  counts and missing timing data alongside percentiles. Trend confirmed recoveries by trigger and
+  late auth/socket/closed-client failures against the pre-release baseline using the same exposure
+  denominator. No lookups or no subsequent operation is **no evidence**, not success.
+  Before rollout, use a fake clock and token sequence (unchanged → changed → silent miss) to
+  verify counts and units; include an opaque token and a database rejection after lookup. Verify
+  the dashboard can read the classified fields from pre-release ingestion before judging outcomes.
 
 ## WI-10: Documentation
 
@@ -456,6 +527,17 @@ least once.
 
 **After release** (telemetry, operator with Kusto access): run the WI-9 queries on the pre-release
 cohort.
+
+**Evidence required for the matrix:** exercise both idle and dropped data-plane connections for
+each supported backend/auth pair. For OT-1 record a new handshake or callback after the wait
+(never log tokens): a successful read on an existing socket does not prove renewal. For OT-2
+distinguish local sign-out from remote revocation; their timing is not established. For OT-5
+force a new handshake after rotation. For OT-7 also try Disconnect during a tracked copy/export:
+verify it is blocked before the Close/Keep prompt and the task continues.
+
+For WI-9, `challengeSuccess=true` means a challenge token was obtained, not that ARM accepted the
+retried request. Check the final operation too. Record the cohort query, time window and exposure
+denominator; a cohort with no challenges is inconclusive, and timing alone does not establish cause.
 
 ---
 
