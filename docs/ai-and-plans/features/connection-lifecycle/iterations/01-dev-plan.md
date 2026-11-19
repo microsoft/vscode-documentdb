@@ -619,6 +619,12 @@ verdict exists, do not start the work it gates. The fingerprint table (formerly 
   Proceed with the accepted silent renewal plan. Keep WI-5 unchanged for now; carry the possible
   network-error shape to CP-2. OP-1b must verify a post-idle callback and successful operation
   without prompting, including if the driver has to retry the read on a second socket.
+- **Done (2026-11-19), commit `d05b66909` (WI-1c, `gpt-6.2-sol`):** Added silent token lookup
+  for the originally verified provider and account, shared JWT time parsing, typed callback
+  failures, and bounded lookup observations. Kept the destination policy and Playground TTL
+  fallback. Added 15 focused tests and updated dependent test mocks for the new session API.
+  The advisor approved the OP-1b candidate (`claude-opus-5.5`, 85% confidence). `npm run build`
+  and all 254 targeted tests passed. **Waiting for OP-1b** before proceeding with the rest of PR 1.
 
 ---
 
