@@ -159,6 +159,18 @@ describe('resolveStreamingWriterSettings', () => {
         );
     });
 
+    it.each(
+        (['fast', 'ruLimited'] as const).flatMap((mode) =>
+            [NaN, Infinity, -Infinity].map((value) => ({ mode, value })),
+        ),
+    )('rejects non-finite batching.$mode.growthFactor value $value', ({ mode, value }) => {
+        expect(() =>
+            resolveStreamingWriterSettings(undefined, { batching: { [mode]: { growthFactor: value } } }),
+        ).toThrow(
+            `Invalid streaming writer setting batching.${mode}.growthFactor: ${String(value)} (expected a finite number).`,
+        );
+    });
+
     it('rejects an unknown start mode', () => {
         const startMode = 'unknown' as NonNullable<StreamingWriterSettings['batching']>['startMode'];
         expect(() => resolveStreamingWriterSettings(undefined, { batching: { startMode } })).toThrow(

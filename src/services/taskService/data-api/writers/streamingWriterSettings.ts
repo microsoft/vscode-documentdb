@@ -89,6 +89,15 @@ export function resolveStreamingWriterSettings(
             );
         }
     }
+    const growthFactors = [
+        ['batching.fast.growthFactor', settings.batching.fast.growthFactor],
+        ['batching.ruLimited.growthFactor', settings.batching.ruLimited.growthFactor],
+    ] as const;
+    for (const [path, value] of growthFactors) {
+        if (!Number.isFinite(value)) {
+            throw new Error(`Invalid streaming writer setting ${path}: ${String(value)} (expected a finite number).`);
+        }
+    }
     if (settings.batching.startMode !== 'fast' && settings.batching.startMode !== 'ru-limited') {
         throw new Error(
             `Invalid streaming writer setting batching.startMode: ${String(settings.batching.startMode)} (expected fast or ru-limited).`,
