@@ -1006,6 +1006,10 @@ shim (0005).
 
 1. **Classifier** (`src/documentdb/connectionFailures.ts`, pure). Draft the table, then hold CP-2.
    - It walks `cause`, plus `MongoServerSelectionError.reason.servers[*].error` where present.
+   - Carry-forward from [PR1 review R5](https://github.com/microsoft/vscode-documentdb/pull/1108#discussion_r4640902166):
+     recheck whether the installed driver can retain callback failures in per-server errors. If it
+     can, use the same bounded traversal for `EntraErrorExplainer`, test mixed-server failures, and
+     render only the rule-based explanation, not raw cause text. Recheck on driver upgrades.
    - Initial table:
 
      | Signal                                                                        | Auth       | Kind                         | Generation                                   | Offered action                                  |

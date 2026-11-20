@@ -74,5 +74,7 @@ and its formatting check then passed. No runtime code changed in that follow-up.
   makes diagnostics observe the result actually sent to the server.
 - **R4, pending wording approval:** Use an account-mismatch explanation that tells the user to
   sign in with the account originally used for the connection.
-- **R5, pending disposition:** The advisor recommends deferring mixed-server AADSTS traversal to
-  the shared WI-5 classifier rather than adding a second traversal in PR1.
+- **R5, deferred to WI-5:** The advisor (`claude-opus-5.5`, 85% confidence) verified from the pinned
+  driver's source that plain callback errors are not stored in per-server descriptions. They reach
+  the caller directly, where the existing cause traversal can explain them. WI-5 carries forward
+  the driver check and the shared explanation path if needed; PR1 does not add a second traversal.
