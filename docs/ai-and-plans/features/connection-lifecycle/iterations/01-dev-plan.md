@@ -895,7 +895,13 @@ shim (0005).
   root type-check passed after it. The rebuilt VSIX passed inspection and its host graph has one
   azureauth ESM copy, with no legacy lowered initializer call in the Azure auth chunk.
   Automated activation did not run in this host because Electron's GUI libraries are missing.
-  **Waiting for OP-2** on the packaged L2 candidate before the CP-W3 verdict.
+- **OP-2 accepted by the operator (2026-11-20):** The packaged extension activated. Discovery,
+  filters, and Refresh/Retry passed. The operator signed out and back in with the same account
+  and accepted the untested account-switch, MFA, and cloud cases. New Connection via Azure
+  service discovery and the Azure Resources RU and vCore/DocumentDB nodes worked. Deep-link URLs
+  were not tested; the operator accepted the risk. Update Credentials and workspace-provider
+  results were not reported. Partial failures could not be reproduced live; focused tests cover
+  partial results and sanitized warnings. Final CP-W3 verdict pending.
 
 ---
 
