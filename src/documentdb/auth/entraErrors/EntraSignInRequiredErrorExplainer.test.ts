@@ -29,7 +29,7 @@ describe('EntraSignInRequiredErrorExplainer', () => {
         error.name = 'EntraIdentityMismatchError';
 
         await expect(explainer.explain({ clusterId, error })).resolves.toBe(
-            'VS Code returned a different Microsoft account for this connection.',
+            'A different Microsoft account was returned for this connection. Sign in with the account you originally used for this connection, then try again.',
         );
     });
 
@@ -42,7 +42,7 @@ describe('EntraSignInRequiredErrorExplainer', () => {
         const error = new MongoServerSelectionError('selection failed', { servers } as unknown as TopologyDescription);
 
         await expect(explainer.explain({ clusterId, error })).resolves.toBe(
-            'VS Code returned a different Microsoft account for this connection.',
+            'A different Microsoft account was returned for this connection. Sign in with the account you originally used for this connection, then try again.',
         );
     });
 

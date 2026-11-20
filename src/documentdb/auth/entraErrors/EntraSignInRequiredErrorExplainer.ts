@@ -24,7 +24,9 @@ export class EntraSignInRequiredErrorExplainer implements ErrorExplanationProvid
                 case 'EntraSignInRequiredError':
                     return l10n.t('Your Microsoft sign-in for this connection expired. Sign in again to continue.');
                 case 'EntraIdentityMismatchError':
-                    return l10n.t('VS Code returned a different Microsoft account for this connection.');
+                    return l10n.t(
+                        'A different Microsoft account was returned for this connection. Sign in with the account you originally used for this connection, then try again.',
+                    );
             }
 
             if (current instanceof MongoServerSelectionError) {
