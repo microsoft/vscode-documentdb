@@ -158,6 +158,10 @@ sub-PR on the preceding PR's branch without waiting for it to merge. The operato
 with approvals and merges. This changes neither the explicit operator test gates nor the single
 release from the feature branch.
 
+**Amended by the operator on 2026-11-20:** PR publication is pre-approved. Push the topic branch
+and open its draft PR without asking for separate confirmation. This does not authorize merges
+or remove review, verification, or operator test gates.
+
 - It follows CONTRIBUTING §1.4 (large features).
 - It fits the repository's enforcement:
   - CI runs on PRs to `feature/**`;

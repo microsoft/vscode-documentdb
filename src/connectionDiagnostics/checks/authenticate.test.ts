@@ -24,6 +24,7 @@ import {
     MongoServerSelectionError,
     type MongoClientOptions,
     type OIDCCallbackParams,
+    type OIDCResponse,
     type TopologyDescription,
 } from 'mongodb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -32,6 +33,7 @@ import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { AuthInputUnavailableError } from '../../documentdb/auth/createAuthHandler';
 import type * as documentdbTokenResource from '../../documentdb/auth/documentdbTokenResource';
 import { type TokenResourceResolverDeps } from '../../documentdb/auth/documentdbTokenResource';
+import { EntraIdentityMismatchError, TokenCallbackError } from '../../documentdb/auth/entraErrors/entraCallbackErrors';
 import type * as entraTokenFailures from '../../documentdb/auth/entraErrors/entraTokenFailures';
 import {
     clearEntraTokenFailure,
@@ -58,8 +60,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../extensionVariables', () => ({
     ext: { outputChannel: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), trace: vi.fn(), debug: vi.fn() } },
 }));
-vi.mock('@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode', () => ({
-    getSessionFromVSCode: (...args: unknown[]): unknown => mocks.getSessionFromVSCode(...args),
+vi.mock('vscode', async (importOriginal) => ({
+    ...(await importOriginal<typeof vscode>()),
+    authentication: { getSession: mocks.getSessionFromVSCode },
 }));
 vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
     ...(await importOriginal<object>()),
@@ -187,6 +190,14 @@ interface FakeClient {
     readonly options: MongoClientOptions;
     readonly connect: ReturnType<typeof vi.fn>;
     readonly close: ReturnType<typeof vi.fn>;
+}
+
+function invokeOidcCallback(client: FakeClient): Promise<OIDCResponse> {
+    const callback = client.options.authMechanismProperties?.OIDC_CALLBACK;
+    if (!callback) {
+        throw new Error('Missing OIDC callback');
+    }
+    return callback({ version: 1, timeoutContext: new AbortController().signal });
 }
 
 let connectBehavior: (client: FakeClient) => Promise<void>;
@@ -946,9 +957,11 @@ describe('createAuthenticateCheck', (): void => {
                 hostCloud: 'AzureCloud',
                 entraFailureKind: 'none',
             });
-            expect(mocks.getSessionFromVSCode).toHaveBeenCalledWith([`${publicResource}/.default`], tenant, {
-                silent: true,
-            });
+            expect(mocks.getSessionFromVSCode).toHaveBeenCalledWith(
+                'microsoft',
+                [`${publicResource}/.default`, `VSCODE_TENANT:${tenant}`],
+                { silent: true },
+            );
             for (const call of mocks.getSessionFromVSCode.mock.calls) {
                 expect(JSON.stringify(call[2])).not.toMatch(/createIfNone|forceNewSession/);
             }
@@ -957,6 +970,7 @@ describe('createAuthenticateCheck', (): void => {
         it('keeps audience and tenant mismatches as warnings that never fail the check by themselves', async (): Promise<void> => {
             mocks.getSessionFromVSCode.mockResolvedValue({
                 accessToken: entraToken({ aud: governmentResource, tid: '99999999-2222-3333-4444-555555555555' }),
+                account: { label: 'alice@contoso.example', id: 'account-id' },
             });
             const { result } = await runAuth(
                 setupFor(AuthMethodId.MicrosoftEntraID, publicHost, { entraIdConfig: { tenantId: tenant } }),
@@ -971,6 +985,151 @@ describe('createAuthenticateCheck', (): void => {
             expect(result.facts.authenticated).toBe(true);
         });
 
+        it('replaces eager evidence with the latest callback claims without changing timing or accepting late events', async (): Promise<void> => {
+            const account = { label: 'alice@contoso.example', id: 'account-id' };
+            const mismatchedToken = entraToken({ aud: governmentResource, tid: 'different-tenant' });
+            const callbackToken = entraToken({ ver: '1.0' });
+            mocks.getSessionFromVSCode
+                .mockResolvedValue({ accessToken: mismatchedToken, account })
+                .mockResolvedValueOnce({ accessToken: mismatchedToken, account })
+                .mockResolvedValueOnce({ accessToken: mismatchedToken, account })
+                .mockResolvedValueOnce({ accessToken: callbackToken, account });
+            connectBehavior = async (client): Promise<void> => {
+                await expect(invokeOidcCallback(client)).resolves.toMatchObject({ accessToken: mismatchedToken });
+                await expect(invokeOidcCallback(client)).resolves.toMatchObject({ accessToken: callbackToken });
+            };
+            const deps = fakeDeps();
+            const now = vi.fn(deps.now);
+            const { result, events, telemetry } = await runAuth(
+                setupFor(AuthMethodId.MicrosoftEntraID, publicHost, { entraIdConfig: { tenantId: tenant } }),
+                { deps: { ...deps, now } },
+            );
+            expect(result.status).toBe('pass');
+            const token = step(result, 'auth.token');
+            expect(token).toMatchObject({
+                status: 'pass',
+                durationMs: 10,
+                facts: { claims: { tokenVersion: '1.0', audience: 'match', tenantMatch: 'match' } },
+            });
+            expect(token.findings).toEqual([]);
+            const snapshots = JSON.stringify([result, events, telemetry]);
+            const clockCalls = now.mock.calls.length;
+            await expect(invokeOidcCallback(clients[0])).resolves.toMatchObject({ accessToken: mismatchedToken });
+            expect(now).toHaveBeenCalledTimes(clockCalls);
+            expect(JSON.stringify([result, events, telemetry])).toBe(snapshots);
+            for (const secret of [callbackToken, callbackToken.split('.')[1], claimSentinel]) {
+                expect(snapshots + outputLines().join('\n')).not.toContain(secret);
+            }
+        });
+
+        it.each(['callback noSession', 'initial providerChanged'] as const)(
+            'skips unavailable Entra input on %s without recording authError',
+            async (kind): Promise<void> => {
+                if (kind === 'callback noSession') {
+                    mocks.getSessionFromVSCode
+                        .mockResolvedValueOnce({
+                            accessToken: entraToken({ aud: governmentResource }),
+                            account: { label: 'alice@contoso.example', id: 'account-id' },
+                        })
+                        .mockResolvedValueOnce(undefined);
+                    connectBehavior = async (client): Promise<void> => {
+                        await invokeOidcCallback(client);
+                    };
+                } else {
+                    mocks.getSessionFromVSCode.mockImplementationOnce(async () => {
+                        vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+                            get: vi.fn((name: string): string | undefined =>
+                                name === 'environment' ? 'USGovernment' : undefined,
+                            ),
+                            inspect: vi.fn().mockReturnValue(undefined),
+                        } as unknown as vscode.WorkspaceConfiguration);
+                        return {
+                            accessToken: entraToken(),
+                            account: { label: 'alice@contoso.example', id: 'account-id' },
+                        };
+                    });
+                }
+                const { result, holder } = await runAuth(setupFor(AuthMethodId.MicrosoftEntraID, publicHost));
+                expect(clients).toHaveLength(kind === 'callback noSession' ? 1 : 0);
+                expect(holder.authError).toBeUndefined();
+                expect(holder.client).toBeUndefined();
+                expect(result).toMatchObject({
+                    status: 'skipped',
+                    skippedBecause: { reason: 'inputUnavailable' },
+                    facts: { signInLimitation: 'silentLookupCannotDistinguishConsent', authenticated: false },
+                });
+                expect(result.facts.account).toBeUndefined();
+                expect(codes(result)).toEqual(['auth.credentialsUnavailable']);
+                expect(step(result, 'auth.token')).toMatchObject({
+                    status: 'skipped',
+                    skippedBecause: { reason: 'inputUnavailable' },
+                });
+                expect(step(result, 'auth.token').facts).toEqual({});
+                expect(step(result, 'auth.token').findings).toEqual([]);
+                expect(step(result, 'auth.serverAuthentication')).toMatchObject({
+                    status: 'skipped',
+                    skippedBecause: { reason: 'dependencySkipped', stepId: 'auth.token' },
+                });
+                expect(recordEntraTokenFailure).not.toHaveBeenCalled();
+            },
+        );
+
+        it.each([
+            [TokenCallbackError, 'resourceNotInTenant', '500011'],
+            [EntraIdentityMismatchError, 'unclassified', undefined],
+        ] as const)(
+            'replaces eager evidence for callback-only %s with bounded token failure evidence',
+            async (errorType, ruleId, aadstsCode): Promise<void> => {
+                const accessToken = entraToken({ aud: governmentResource });
+                mocks.getSessionFromVSCode.mockResolvedValueOnce({
+                    accessToken,
+                    account: { label: 'alice@contoso.example', id: 'account-id' },
+                });
+                if (errorType === TokenCallbackError) {
+                    mocks.getSessionFromVSCode.mockRejectedValueOnce(new Error(`AADSTS500011: ${errorSentinel}`));
+                } else {
+                    mocks.getSessionFromVSCode.mockResolvedValueOnce({
+                        accessToken,
+                        account: { label: errorSentinel, id: 'different-account' },
+                    });
+                }
+                connectBehavior = async (client): Promise<void> => {
+                    await invokeOidcCallback(client);
+                };
+                const { result, holder, events, telemetry } = await runAuth(
+                    setupFor(AuthMethodId.MicrosoftEntraID, publicHost),
+                );
+                expect(holder.authError).toBeInstanceOf(errorType);
+                expect(holder.client).toBeUndefined();
+                expect(result).toMatchObject({ status: 'fail', facts: { authenticated: false } });
+                expect(result.facts.account).toBeUndefined();
+                const token = step(result, 'auth.token');
+                expect(token).toMatchObject({
+                    status: 'fail',
+                    facts: { errorName: errorType.name, ruleId },
+                });
+                expect(token.facts.claims).toBeUndefined();
+                expect(token.facts.aadstsCode).toBe(aadstsCode);
+                expect(token.findings).toEqual([
+                    expect.objectContaining({
+                        code: 'auth.entraTokenFailed',
+                        data: {
+                            ruleId,
+                            ...(aadstsCode === undefined ? {} : { aadstsCode }),
+                            authMethod: AuthMethodId.MicrosoftEntraID,
+                        },
+                    }),
+                ]);
+                const server = step(result, 'auth.serverAuthentication');
+                expect(server.status).toBe('fail');
+                expect(server.findings).toEqual([]);
+                expect(result.findings).toEqual([]);
+                expect(JSON.stringify([result, events, telemetry]) + outputLines().join('\n')).not.toContain(
+                    errorSentinel,
+                );
+            },
+        );
+
         it('never claims acceptance when the token succeeds and the server rejects it', async (): Promise<void> => {
             connectBehavior = (): Promise<void> =>
                 Promise.reject(
@@ -978,7 +1137,11 @@ describe('createAuthenticateCheck', (): void => {
                 );
             const { result, holder } = await runAuth(setupFor(AuthMethodId.MicrosoftEntraID, publicHost));
             expect(result).toMatchObject({ status: 'fail', facts: { authenticated: false } });
-            expect(step(result, 'auth.token').status).toBe('pass');
+            expect(step(result, 'auth.token')).toMatchObject({
+                status: 'pass',
+                facts: { claims: { available: true, audience: 'match', tokenVersion: '2.0' } },
+            });
+            expect(mocks.getSessionFromVSCode).toHaveBeenCalledOnce();
             const server = step(result, 'auth.serverAuthentication');
             expect(server).toMatchObject({
                 status: 'fail',
@@ -1150,6 +1313,48 @@ describe('createAuthenticateCheck', (): void => {
     });
 
     describe('owned client lifetime', (): void => {
+        it('does not summarize a callback lookup that completes after cancellation while connect is pending', async (): Promise<void> => {
+            const controller = new AbortController();
+            const lookup = pending<unknown>();
+            const startedLookup = pending<void>();
+            const finishedCallback = pending<void>();
+            const connection = pending<void>();
+            mocks.getSessionFromVSCode.mockImplementationOnce(async () => ({
+                accessToken: entraToken(),
+                account: { label: 'alice@contoso.example', id: 'account-id' },
+            }));
+            mocks.getSessionFromVSCode.mockImplementationOnce(() => {
+                startedLookup.resolve();
+                return lookup.promise;
+            });
+            connectBehavior = async (client): Promise<void> => {
+                try {
+                    await invokeOidcCallback(client);
+                } finally {
+                    finishedCallback.resolve();
+                }
+                await connection.promise;
+            };
+            const deps = fakeDeps();
+            const now = vi.fn(deps.now);
+            const running = runAuth(setupFor(AuthMethodId.MicrosoftEntraID, publicHost), {
+                signal: controller.signal,
+                deps: { ...deps, now },
+            });
+            await startedLookup.promise;
+            controller.abort();
+            await expect(running).rejects.toBeInstanceOf(DiagnosticsCancelledError);
+            const clockCalls = now.mock.calls.length;
+            lookup.resolve({
+                accessToken: entraToken({ ver: '1.0' }),
+                account: { label: 'alice@contoso.example', id: 'account-id' },
+            });
+            await finishedCallback.promise;
+            expect(now).toHaveBeenCalledTimes(clockCalls);
+            connection.resolve();
+            await flush();
+        });
+
         it('closes a client that finishes connecting after the run timed out, and never publishes it', async (): Promise<void> => {
             const connection = pending<void>();
             connectBehavior = (): Promise<void> => connection.promise;
@@ -1188,7 +1393,10 @@ describe('createAuthenticateCheck', (): void => {
                 timeouts: { authenticationTimeoutMs: 30 },
             });
             expect(codes(result)).toEqual(['check.timeout']);
-            session.resolve({ accessToken: entraToken() });
+            session.resolve({
+                accessToken: entraToken(),
+                account: { label: 'alice@contoso.example', id: 'account-id' },
+            });
             await flush();
             expect(deps.createClient).not.toHaveBeenCalled();
         });

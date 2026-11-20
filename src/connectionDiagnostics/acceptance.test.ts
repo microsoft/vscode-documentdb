@@ -95,8 +95,9 @@ vi.mock('../extensionVariables', () => ({
         outputChannel: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), trace: vi.fn(), debug: vi.fn() },
     },
 }));
-vi.mock('@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode', () => ({
-    getSessionFromVSCode: (...args: unknown[]): unknown => bridge.getSessionFromVSCode(...args),
+vi.mock('vscode', async (importOriginal) => ({
+    ...(await importOriginal<typeof vscode>()),
+    authentication: { getSession: bridge.getSessionFromVSCode },
 }));
 vi.mock('../documentdb/auth/managedIdentityTokenProvider', () => ({
     getManagedIdentityAccessToken: (...args: unknown[]): unknown => bridge.getManagedIdentityAccessToken(...args),

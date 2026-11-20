@@ -6,8 +6,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UserCancelledError, type IActionContext, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
+import { EventEmitter } from 'events';
 import type * as Mongodb from 'mongodb';
-import { MongoClient, MongoServerError, type MongoClientOptions } from 'mongodb';
+import { MongoClient, MongoNetworkError, MongoServerError, type MongoClientOptions } from 'mongodb';
 import { ext } from '../extensionVariables';
 import { traceAuthFlow, type AuthTraceContext } from '../utils/authTrace';
 import { AuthMethodId } from './auth/AuthMethod';
@@ -120,6 +121,8 @@ describe('regular connection startup diagnostics', () => {
     const clusterId = 'private-cluster';
     const mockConnect = vi.fn();
     const mockClose = vi.fn();
+    const mockListDatabases = vi.fn<() => Promise<Mongodb.ListDatabasesResult>>();
+    let poolEvents: EventEmitter;
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -140,8 +143,14 @@ describe('regular connection startup diagnostics', () => {
             vi.advanceTimersByTime(30);
         });
         mockClose.mockResolvedValue(undefined);
+        mockListDatabases.mockReset();
         vi.mocked(MongoClient).mockImplementation(function () {
-            return { connect: mockConnect, close: mockClose } as unknown as MongoClient;
+            poolEvents = new EventEmitter();
+            return Object.assign(poolEvents, {
+                connect: mockConnect,
+                close: mockClose,
+                db: () => ({ admin: () => ({ listDatabases: mockListDatabases }) }),
+            }) as unknown as MongoClient;
         });
         for (const handler of [
             MicrosoftEntraIDAuthHandler,
@@ -162,6 +171,64 @@ describe('regular connection startup diagnostics', () => {
         ClustersClient._lastFailedStartups.clear();
         vi.restoreAllMocks();
         vi.useRealTimers();
+    });
+
+    it('records only allowed pool fields at Debug under the Entra startup ID, starting before connect', async () => {
+        const privateFields = { address: 'private-host:27017', error: new Error('private-error') };
+        mockConnect.mockImplementationOnce(async (): Promise<void> => {
+            poolEvents.emit('connectionCreated', { connectionId: 7, ...privateFields });
+            poolEvents.emit('connectionReady', { connectionId: 7, ...privateFields });
+        });
+        const client = await ClustersClient.getClient(clusterId);
+        poolEvents.emit('connectionClosed', { connectionId: 7, reason: 'idle', ...privateFields });
+        poolEvents.emit('connectionCheckOutFailed', { reason: 'connectionError', ...privateFields });
+        poolEvents.emit('connectionClosed', { connectionId: '<monitor>', reason: 'private-reason', ...privateFields });
+        poolEvents.emit('connectionCheckOutFailed', { reason: 'private-reason', ...privateFields });
+
+        const prefix = `[ClustersClient] startup=${client.connectionCorrelationId}`;
+        expect(vi.mocked(ext.outputChannel.debug).mock.calls).toEqual([
+            [`${prefix} connectionCreated connectionId=7`],
+            [`${prefix} connectionReady connectionId=7`],
+            [`${prefix} connectionClosed connectionId=7 reason=idle`],
+            [`${prefix} connectionCheckOutFailed reason=connectionError`],
+            [`${prefix} connectionClosed`],
+            [`${prefix} connectionCheckOutFailed`],
+        ]);
+    });
+
+    it('logs only bounded listDatabases error details for Entra and rethrows each original error', async () => {
+        const client = await ClustersClient.getClient(clusterId);
+        const serverError = new MongoServerError({ code: 18, errmsg: 'private-server-message' });
+        const networkError = new MongoNetworkError('private-network-message');
+        networkError.code = 'private-code';
+        const otherError = new Error('private-other-message');
+        otherError.name = 'private-name';
+        mockListDatabases
+            .mockRejectedValueOnce(serverError)
+            .mockRejectedValueOnce(networkError)
+            .mockRejectedValueOnce(otherError);
+
+        await expect(client.listDatabases()).rejects.toBe(serverError);
+        await expect(client.listDatabases()).rejects.toBe(networkError);
+        await expect(client.listDatabases()).rejects.toBe(otherError);
+
+        const prefix = `[ClustersClient] startup=${client.connectionCorrelationId} listDatabases.failed`;
+        expect(vi.mocked(ext.outputChannel.debug).mock.calls).toEqual([
+            [`${prefix} kind=MongoServerError code=18`],
+            [`${prefix} kind=MongoNetworkError`],
+            [`${prefix} kind=other`],
+        ]);
+    });
+
+    it('does not attach pool diagnostics or log listDatabases failures for native auth', async () => {
+        CredentialCache.setAuthCredentials(clusterId, AuthMethodId.NativeAuth, 'mongodb://private-host:27017');
+        const client = await ClustersClient.getClient(clusterId);
+        const error = new MongoServerError({ code: 18, errmsg: 'private-server-message' });
+        mockListDatabases.mockRejectedValueOnce(error);
+
+        expect(poolEvents.eventNames()).toEqual([]);
+        await expect(client.listDatabases()).rejects.toBe(error);
+        expect(ext.outputChannel.debug).not.toHaveBeenCalled();
     });
 
     function startupEvent(): RecordedTelemetry {

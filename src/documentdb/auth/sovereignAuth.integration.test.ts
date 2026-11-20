@@ -21,6 +21,7 @@ interface TokenWorker {
 
 const workers = vi.hoisted((): TokenWorker[] => []);
 const getSession = vi.hoisted(() => vi.fn());
+const getHandlerSession = vi.hoisted(() => vi.fn());
 const getManagedToken = vi.hoisted(() => vi.fn());
 const postedMessages = vi.hoisted((): MainToWorkerMessage[] => []);
 const events = vi.hoisted((): { eventName: string; telemetry: ITelemetryContext }[] => []);
@@ -34,6 +35,11 @@ vi.mock('../../extensionVariables', () => ({
 
 vi.mock('@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode', () => ({
     getSessionFromVSCode: getSession,
+}));
+
+vi.mock('vscode', async (importOriginal) => ({
+    ...(await importOriginal<typeof vscode>()),
+    authentication: { getSession: getHandlerSession },
 }));
 
 vi.mock('./managedIdentityTokenProvider', () => ({ getManagedIdentityAccessToken: getManagedToken }));
@@ -176,6 +182,10 @@ describe('sovereign authentication with real audience resolvers', () => {
         selectedCloud = 'USGovernment';
         resetEntraTokenFailuresForTests();
         getSession.mockResolvedValue({ accessToken: 'private-token', account: { label: 'private-account' } });
+        getHandlerSession.mockResolvedValue({
+            accessToken: 'private-token',
+            account: { id: 'account-id', label: 'private-account' },
+        });
         getManagedToken.mockResolvedValue({ accessToken: 'private-token', expiresOnTimestamp: Date.now() + 3_600_000 });
         const configuration = { get: vi.fn(), inspect: vi.fn(), has: vi.fn(), update: vi.fn() };
         configuration.get.mockImplementation((key: string, defaultValue?: unknown): unknown => {
@@ -201,7 +211,11 @@ describe('sovereign authentication with real audience resolvers', () => {
         const { options } = await new MicrosoftEntraIDAuthHandler(
             credentials(AuthMethodId.MicrosoftEntraID, cloud.suffix),
         ).configureAuth(undefined, { startupCorrelationId: 'startup-id', surface: 'extension', startupProperties });
-        expect(getSession).toHaveBeenCalledExactlyOnceWith([cloud.scope], 'private-tenant', { createIfNone: true });
+        expect(getHandlerSession).toHaveBeenCalledExactlyOnceWith(
+            cloud.setting === 'AzureCloud' ? 'microsoft' : 'microsoft-sovereign-cloud',
+            [cloud.scope, 'VSCODE_TENANT:private-tenant'],
+            { createIfNone: true },
+        );
         expect(options.authMechanismProperties?.ALLOWED_HOSTS).toEqual([`*.mongocluster.cosmos.azure.${cloud.suffix}`]);
         expect(startupProperties).toEqual({
             entraDestinationClass: 'documentdbService',
@@ -239,6 +253,7 @@ describe('sovereign authentication with real audience resolvers', () => {
                 expect.any(String),
                 undefined,
             );
+            expect(getHandlerSession).not.toHaveBeenCalled();
             expect(getSession).not.toHaveBeenCalled();
         },
     );

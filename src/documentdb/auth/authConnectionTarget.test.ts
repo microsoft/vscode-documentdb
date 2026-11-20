@@ -7,11 +7,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import type * as documentdbTokenResource from './documentdbTokenResource';
 
-const getSessionFromVSCode = vi.hoisted(() => vi.fn());
+const getSession = vi.hoisted(() => vi.fn());
 const getManagedIdentityAccessToken = vi.hoisted(() => vi.fn());
 
-vi.mock('@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode', () => ({
-    getSessionFromVSCode,
+vi.mock('vscode', async (importOriginal) => ({
+    ...(await importOriginal<typeof vscode>()),
+    authentication: { getSession },
 }));
 
 vi.mock('./managedIdentityTokenProvider', () => ({ getManagedIdentityAccessToken }));
@@ -242,7 +243,7 @@ describe('buildAuthConnectionTarget', () => {
             );
         }
 
-        expect(getSessionFromVSCode).not.toHaveBeenCalled();
+        expect(getSession).not.toHaveBeenCalled();
         expect(getManagedIdentityAccessToken).not.toHaveBeenCalled();
         expect(resolveInteractiveTokenResource).not.toHaveBeenCalled();
         expect(resolveManagedIdentityTokenResource).not.toHaveBeenCalled();

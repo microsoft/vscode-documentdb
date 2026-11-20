@@ -27,6 +27,12 @@ export interface AuthPhaseObserver {
         readonly tenantId?: string;
     }): void;
     onTokenFailed?(error: unknown): void;
+    /** Host-only: summarize callback tokens immediately; never store or log them. */
+    onCallbackTokenObserved?(
+        observation:
+            | { readonly outcome: 'acquired'; readonly accessToken: string; readonly tenantId?: string }
+            | { readonly outcome: 'failed'; readonly error: unknown },
+    ): void;
 }
 
 /**

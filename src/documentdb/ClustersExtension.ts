@@ -143,6 +143,7 @@ import {
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
 import { registerClusterDashboardContextMenuCommands } from '../webviews/documentdb/clusterDashboard/clusterDashboardController';
 import { EntraErrorExplainer } from './auth/entraErrors/EntraErrorExplainer';
+import { EntraSignInRequiredErrorExplainer } from './auth/entraErrors/EntraSignInRequiredErrorExplainer';
 import { PLAYGROUND_FILE_EXTENSION, PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './playground/constants';
 import { PlaygroundBlockHighlighter } from './playground/PlaygroundBlockHighlighter';
 import { PlaygroundCodeLensProvider } from './playground/PlaygroundCodeLensProvider';
@@ -187,6 +188,7 @@ export class ClustersExtension implements vscode.Disposable {
         ErrorExplanationService.registerProvider(new AtlasErrorExplainer());
         // First explanation wins, so source-specific explanations take priority over generic SRV failures.
         ErrorExplanationService.registerProvider(new SrvDnsErrorExplainer());
+        ErrorExplanationService.registerProvider(new EntraSignInRequiredErrorExplainer());
         ErrorExplanationService.registerProvider(new EntraErrorExplainer());
     }
 

@@ -25,4 +25,13 @@ export interface AuthHandler {
 export interface AuthHandlerResponse {
     connectionString: string;
     options: MongoClientOptions;
+    verifiedIdentity?: VerifiedEntraIdentity;
+}
+
+export interface VerifiedEntraIdentity {
+    readonly kind: 'entra';
+    readonly providerId: string;
+    readonly accountId: string;
+    readonly accountLabel: string;
+    readonly tenantId?: string;
 }

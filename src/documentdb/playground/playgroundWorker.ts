@@ -30,7 +30,7 @@ import {
     createOidcDestinationPolicy,
     type OidcDestinationPolicy,
 } from '../auth/oidcClientOptions';
-import { expiresInSecondsFromTimestamp } from '../auth/tokenExpiry';
+import { expiresInSecondsFromTimestamp, readJwtTimes } from '../auth/tokenExpiry';
 import { type MainToWorkerMessage, type WorkerStartupStage, type WorkerToMainMessage } from './workerTypes';
 
 if (!parentPort) {
@@ -212,20 +212,8 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
                 // Parse the JWT exp claim for a meaningful cache duration.
                 // This avoids re-acquiring the token on every database operation
                 // in persistent shell sessions.
-                let expiresInSeconds = 3500; // Conservative default (~1 hour)
-                try {
-                    const payload = accessToken.split('.')[1];
-                    if (payload) {
-                        const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString()) as {
-                            exp?: number;
-                        };
-                        if (typeof decoded.exp === 'number') {
-                            expiresInSeconds = expiresInSecondsFromTimestamp(decoded.exp * 1000);
-                        }
-                    }
-                } catch {
-                    // JWT parsing failed — use conservative default
-                }
+                const { expSec } = readJwtTimes(accessToken);
+                const expiresInSeconds = expSec === undefined ? 3500 : expiresInSecondsFromTimestamp(expSec * 1000);
 
                 return { accessToken, expiresInSeconds };
             },

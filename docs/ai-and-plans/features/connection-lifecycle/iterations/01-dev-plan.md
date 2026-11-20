@@ -98,6 +98,9 @@ result may continue, but say so in the message. Record the result in the Progres
   the preceding PR is open. If it is already merged, branch from and target
   `feature/connection-lifecycle`. Do not wait for intermediate approvals or merges; the operator
   handles those. The advisor checkpoints and explicit operator decisions and tests still apply.
+- **Publish:** pushing the topic branch and opening its draft PR are pre-approved (decision 0006).
+  Do not pause for separate publication confirmation. Normal review and merge requirements remain.
+  Prefix the GitHub title with the plan number, for example `PR0:` or `PR1:`.
 - **Commits:** one or more commits per WI, never one commit that mixes two WIs. Each commit ends with the
   `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailer.
 - **While working, and for draft PRs:** Case 1 only: `npm run build` plus `npx vitest run <touched paths>`.
@@ -600,9 +603,52 @@ verdict exists, do not start the work it gates. The fingerprint table (formerly 
 
 **Progress:**
 
+- **Done (2026-11-19), commit `df0c22ade` (WI-1a, `gpt-6.2-sol`):** Added four MongoDB driver
+  contract tests for the pinned 7.2.0 workflow: callback rejection, cached-token speculation,
+  auth code 18 retry, and network error propagation without a retry. The accepted operator strategy
+  (decision 0010) is unchanged; the tests confirm the mocked driver behavior, not the live server's
+  response. All four focused tests and `npx tsc --noEmit -p .` passed.
+- **Done (2026-11-19), commit `01c0d4846` (WI-1b, `gpt-6.2-sol`):** Added local callback, socket,
+  and final-error traces without changing token handling. The implementation and review were advised
+  (`claude-opus-5.5`, high confidence): the driver does not emit the initial code 18 it handles,
+  so infer that path from the callback and final numeric code. Four trace tests added; Case 1 build
+  and 92 focused tests passed.
+- **OP-1a / CP-0 (2026-11-19), advised (`claude-opus-5.5`, 80%):** After about two hours idle,
+  the cached client opened two fresh sockets. Both called back with the original captured token
+  and closed before they became ready. The final error was `MongoNetworkError`, with no numeric
+  code exposed. A contemporaneous diagnostics run authenticated with its own client and separate
+  non-interactive session lookup; it did not measure token freshness. The pinned driver's
+  cached-token path calls back after code 18, but the live trace does not show that code directly.
+  Proceed with the accepted silent renewal plan. Keep WI-5 unchanged for now; carry the possible
+  network-error shape to CP-2. OP-1b must verify a post-idle callback and successful operation
+  without prompting, including if the driver has to retry the read on a second socket.
+- **Done (2026-11-19), commit `d05b66909` (WI-1c, `gpt-6.2-sol`):** Added silent token lookup
+  for the originally verified provider and account, shared JWT time parsing, typed callback
+  failures, and bounded lookup observations. Kept the destination policy and Playground TTL
+  fallback. Added 15 focused tests and updated dependent test mocks for the new session API.
+  The advisor approved the OP-1b candidate (`claude-opus-5.5`, 85% confidence). `npm run build`
+  and all 254 targeted tests passed.
+- **OP-1b evidence (2026-11-19):** After about 43 minutes idle, Refresh reused the same client.
+  A fresh socket triggered callback invocation 2 (`returned`) and then closed. The next socket
+  became ready without another callback; later sockets and a second Refresh also succeeded at
+  socket authentication on the same client. No `listDatabases.failed` was logged. This verifies
+  the post-idle renewal and retry path; no longer wait is needed for OP-1b. The trace cannot alone
+  confirm whether the database list was visible or whether a sign-in prompt appeared.
+- **OP-1b passed (2026-11-19), operator verification:** The database list loaded and no sign-in
+  prompt appeared. Resume the remaining PR 1 work. The separate long-wait requirement for OP-6
+  still applies.
+- **Done (2026-11-19), commit `5ee98385c` (WI-1d, `gpt-6.2-sol`):** Added a localized, text-only
+  explanation for typed sign-in and identity mismatch errors, including errors wrapped by the
+  driver. Used “this connection” rather than introducing a display-name lookup, as allowed by
+  step 8. Four new tests; 51 focused tests and `npx tsc --noEmit -p .` passed. Localization
+  generation and the remaining PR checks are deferred to handoff.
+- **PR 1 pre-review F2 (2026-11-20), operator decision:** Defer typed webview sign-in errors to
+  the WI-5 classifier and WI-6 structured unavailable response. PR 1 keeps the existing webview
+  error transport. See the [review finding](./01-pr1-entra-renewal-review.md#f2-typed-entra-explanations-do-not-yet-reach-webviews).
+
 ---
 
-## WI-2: Shell and Playground token relays (PR 1)
+## WI-2: Shell and Playground token relays (after WI-7)
 
 **Outcome:**
 
@@ -697,9 +743,21 @@ verdict exists, do not start the work it gates. The fingerprint table (formerly 
     worker once under the same fingerprint, and the command after that runs on the new worker.
 - Add a test of the worker message round trip for `reason` and `authReason`.
 
-**Done when:** Case 1 is green, and the PR 1 pre-review is committed.
+**Done when:** Case 1 is green, and the relay PR pre-review is committed.
 
 **Progress:**
+
+- **Deferred, escalated (2026-11-19), advised (`claude-opus-5.5`):** PR 1 does not yet have WI-4's
+  verified identity or fingerprint, or the disconnect latch. The worker IPC and session-local
+  pinning can be built independently, but delivering only those pieces in PR 1 would leave the
+  existing respawn behavior in place until the later guards land. Recommendation: keep WI-2
+  together and deliver it after both prerequisites exist. Alternative: approve a split, with
+  IPC and session-local pinning in PR 1 and the identity and respawn guards later. Also confirm
+  whether A1's provisional **Sign in again** action should remain in the worker delivery. No
+  relay implementation has started.
+- **Rescheduled (2026-11-20), operator decision:** Finish PR 1 with WI-1 only. Deliver WI-2
+  intact after WI-4's verified identity and fingerprint and WI-7's disconnect latch exist,
+  retaining the planned **Sign in again** action. Do not implement the partial relay option.
 
 ---
 
@@ -948,6 +1006,10 @@ shim (0005).
 
 1. **Classifier** (`src/documentdb/connectionFailures.ts`, pure). Draft the table, then hold CP-2.
    - It walks `cause`, plus `MongoServerSelectionError.reason.servers[*].error` where present.
+   - Carry-forward from [PR1 review R5](https://github.com/microsoft/vscode-documentdb/pull/1108#discussion_r4640902166):
+     recheck whether the installed driver can retain callback failures in per-server errors. If it
+     can, use the same bounded traversal for `EntraErrorExplainer`, test mixed-server failures, and
+     render only the rule-based explanation, not raw cause text. Recheck on driver upgrades.
    - Initial table:
 
      | Signal                                                                        | Auth       | Kind                         | Generation                                   | Offered action                                  |
@@ -1061,6 +1123,9 @@ shim (0005).
 ---
 
 ## WI-6: Bind surfaces and add the unavailable state (PR 5)
+
+**Carry-forward from PR 1:** Verify that a typed sign-in error classified by WI-5 reaches the
+webview as a structured unavailable result, not a generic query error.
 
 **Outcome:**
 

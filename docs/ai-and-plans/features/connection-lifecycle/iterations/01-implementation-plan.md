@@ -69,15 +69,17 @@ and **never loses work** (query text, filters, sort, projection, unsaved documen
 ## Execution order
 
 ```
-WI-1 ─┬─> WI-2                          (Entra, small, independent)
+WI-1 ──┐                                (Entra silent renewal)
       │
 WI-3 ─┤                                 (azureauth v6 / #990, parallel track)
       │
 WI-4 ─┴─> WI-5 ─> WI-6 ─> WI-7 ─> WI-8   (lifecycle core, then Disconnect, then dashboard)
+                              └──> WI-2 (worker relays, after the disconnect guard)
                                     └──> WI-9 (telemetry check) ─> WI-10 (docs)
 ```
 
-- WI-1, WI-2 and WI-3 are independent of the lifecycle core.
+- WI-1 and WI-3 are independent of the lifecycle core. WI-2 needs WI-4's verified identity and
+  fingerprint, and the disconnect latch used by WI-7.
 - WI-1 and WI-2 remove most of the user impact (defect #1). They still ship with everything else;
   there is no partial release (decision [0006](../decisions.md)).
 
@@ -129,7 +131,7 @@ WI-4 ─┴─> WI-5 ─> WI-6 ─> WI-7 ─> WI-8   (lifecycle core, then Disco
 | PR  | Content                                                                          | Base while predecessor is open             |
 | --- | -------------------------------------------------------------------------------- | ------------------------------------------ |
 | 0   | This plan, `research-findings.md`, `decisions.md`, README and index row          | feature branch                             |
-| 1   | WI-1 + WI-2: Entra silent renewal, plus the shell and playground relays          | PR 0 head                                  |
+| 1   | WI-1: Entra silent renewal                                                       | PR 0 head                                  |
 | 2   | WI-3: azureauth v6 (#990) + the diagnostics `signInRequired` mapping             | PR 1 head                                  |
 | 3   | WI-4: client identity and generation, the two cache fixes, telemetry helper      | PR 2 head                                  |
 | 4   | WI-5: failure classifier, recovery, Sign in again, Retry, `onDidChangeSessions`  | PR 3 head                                  |
@@ -140,6 +142,10 @@ WI-4 ─┴─> WI-5 ─> WI-6 ─> WI-7 ─> WI-8   (lifecycle core, then Disco
 
 - WI-4 consumes the verified account, provider and tenant contract from WI-1. Do not reconstruct
   the identity from a later cache read.
+- **WI-2 scheduling (operator approved 2026-11-20):** Deliver the Shell and Playground token relays
+  together, after WI-4's verified identity and connection fingerprint and WI-7's disconnect latch
+  are available. Keep the planned **Sign in again** action. PR 1 is WI-1 only; it does not change
+  worker relay behavior.
 - **PR 5 is the largest.** If it becomes too large to review well, split it into host (5a) and
   webviews (5b). Stack 5b on 5a, and PR 6 on 5b, following rule 1.
 - **#990 alternative:** #990 is its own issue in the 1.2.0 milestone. It can merge to `main` instead,

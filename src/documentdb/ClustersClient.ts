@@ -22,6 +22,9 @@ import { randomUUID } from 'crypto';
 import {
     MongoBulkWriteError,
     MongoClient,
+    MongoError,
+    MongoNetworkError,
+    MongoServerError,
     ObjectId,
     type ClientSession,
     type Collection,
@@ -196,6 +199,7 @@ export class ClustersClient {
     static _clients: Map<string, ClustersClient> = new Map();
 
     private _mongoClient: MongoClient;
+    private _interactiveEntraStartupId?: string;
     private _llmEnhancedFeatureApis: llmEnhancedFeatureApis | null = null;
     private _queryInsightsApis: QueryInsightsApis | null = null;
     private _clusterMetadataPromise: Promise<ClusterMetadata> | null = null;
@@ -420,6 +424,7 @@ export class ClustersClient {
             startup,
             prepared.connectionString,
             prepared.options,
+            authMethod === AuthMethodId.MicrosoftEntraID,
             credentials.emulatorConfiguration,
             abortSignal,
             connectionString,
@@ -442,10 +447,35 @@ export class ClustersClient {
         });
     }
 
+    private traceInteractiveEntraPool(startupId: string): void {
+        const log = (event: string, connectionId?: number | '<monitor>', reason?: string): void => {
+            const idField = typeof connectionId === 'number' ? ` connectionId=${connectionId}` : '';
+            const reasonField = reason === undefined ? '' : ` reason=${reason}`;
+            ext.outputChannel?.debug(`[ClustersClient] startup=${startupId} ${event}${idField}${reasonField}`);
+        };
+        this._mongoClient.on('connectionCreated', ({ connectionId }) => log('connectionCreated', connectionId));
+        this._mongoClient.on('connectionReady', ({ connectionId }) => log('connectionReady', connectionId));
+        this._mongoClient.on('connectionClosed', ({ connectionId, reason }) => {
+            log(
+                'connectionClosed',
+                connectionId,
+                ['idle', 'stale', 'poolClosed', 'error'].includes(reason) ? reason : undefined,
+            );
+        });
+        this._mongoClient.on('connectionCheckOutFailed', ({ reason }) => {
+            log(
+                'connectionCheckOutFailed',
+                undefined,
+                ['poolClosed', 'timeout', 'connectionError'].includes(reason) ? reason : undefined,
+            );
+        });
+    }
+
     private async connect(
         startup: ClientStartup,
         connectionString: string,
         options: MongoClientOptions,
+        interactiveEntra: boolean,
         emulatorConfiguration?: EmulatorConfiguration,
         abortSignal?: AbortSignal,
         originalConnectionString: string = connectionString,
@@ -453,6 +483,10 @@ export class ClustersClient {
         // Create the client instance first so we hold a reference during connection.
         // This allows callers to abort via abortSignal by closing the underlying client.
         this._mongoClient = new MongoClient(connectionString, options);
+        if (interactiveEntra) {
+            this._interactiveEntraStartupId = startup.id;
+            this.traceInteractiveEntraPool(startup.id);
+        }
 
         if (abortSignal?.aborted) {
             ext.outputChannel.debug(
@@ -790,7 +824,24 @@ export class ClustersClient {
         // filter below relies on the `empty` field, which `nameOnly` omits (along with
         // `sizeOnDisk`). Keeping the full listing ensures an empty `admin` database stays
         // hidden while a non-empty `admin` (user-managed roles/collections) remains visible.
-        const rawDatabases: ListDatabasesResult = await this._mongoClient.db().admin().listDatabases();
+        let rawDatabases: ListDatabasesResult;
+        try {
+            rawDatabases = await this._mongoClient.db().admin().listDatabases();
+        } catch (error) {
+            if (this._interactiveEntraStartupId) {
+                let kind = 'other';
+                if (error instanceof MongoServerError) {
+                    kind = 'MongoServerError';
+                } else if (error instanceof MongoNetworkError) {
+                    kind = 'MongoNetworkError';
+                }
+                const code = error instanceof MongoError && typeof error.code === 'number' ? ` code=${error.code}` : '';
+                ext.outputChannel?.debug(
+                    `[ClustersClient] startup=${this._interactiveEntraStartupId} listDatabases.failed kind=${kind}${code}`,
+                );
+            }
+            throw error;
+        }
         const databases: DatabaseItemModel[] = rawDatabases.databases.filter(
             // Filter out the 'admin' database if it's empty
             (databaseInfo) => !(databaseInfo.name && databaseInfo.name.toLowerCase() === 'admin' && databaseInfo.empty),
