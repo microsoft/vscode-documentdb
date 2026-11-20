@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type * as azureAuth from '@microsoft/vscode-azext-azureauth';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as vscode from 'vscode';
@@ -46,7 +47,8 @@ vi.mock('../../extensionVariables', () => ({
     },
 }));
 
-vi.mock('@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode', () => ({
+vi.mock('@microsoft/vscode-azext-azureauth', async (importOriginal) => ({
+    ...(await importOriginal<typeof azureAuth>()),
     getSessionFromVSCode: (...args: unknown[]) => mockGetSessionFromVSCode(...args),
 }));
 

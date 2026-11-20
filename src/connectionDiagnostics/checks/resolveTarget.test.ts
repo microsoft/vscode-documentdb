@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type CheckResult, type RunContext } from '@documentdb-js/connection-diagnostics';
+import { NotSignedInError } from '@microsoft/vscode-azext-azureauth';
 import { describe, expect, it, vi } from 'vitest';
 import { type AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import {
@@ -151,12 +152,41 @@ describe('resolveTarget check (review R2, option A)', (): void => {
             { source: 'azure', reason: 'accessDenied', errorName: 'RestError', statusCode: 403 },
         ],
         [
+            new ConnectionSourceUnavailableError('azure', new NotSignedInError()),
+            'target.sourceInaccessible',
+            { source: 'azure', reason: 'signInRequired', errorName: 'Error' },
+        ],
+        [
             new ConnectionSourceUnavailableError(
                 'azure',
-                withStatus(new Error('expired'), { name: 'NotSignedInError' }),
+                withStatus(new Error('secret challenge'), { statusCode: 401 }),
             ),
             'target.sourceInaccessible',
-            { source: 'azure', reason: 'signInRequired', errorName: 'NotSignedInError' },
+            { source: 'azure', reason: 'signInRequired', errorName: 'Error', statusCode: 401 },
+        ],
+        [
+            new ConnectionSourceUnavailableError(
+                'azure',
+                withStatus(new Error('secret broker detail'), { code: 'interaction_required' }),
+            ),
+            'target.sourceInaccessible',
+            { source: 'azure', reason: 'signInRequired', errorName: 'Error' },
+        ],
+        [
+            new ConnectionSourceUnavailableError(
+                'azure',
+                withStatus(new Error('secret authority detail'), { code: 'AADSTS50076', statusCode: 403 }),
+            ),
+            'target.sourceInaccessible',
+            { source: 'azure', reason: 'signInRequired', errorName: 'Error', statusCode: 403 },
+        ],
+        [
+            new ConnectionSourceUnavailableError(
+                'azure',
+                withStatus(new Error('secret contains AADSTS50076'), { statusCode: 403 }),
+            ),
+            'target.sourceInaccessible',
+            { source: 'azure', reason: 'accessDenied', errorName: 'Error', statusCode: 403 },
         ],
         [
             new ConnectionSourceUnavailableError(

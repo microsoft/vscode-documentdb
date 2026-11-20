@@ -42,10 +42,8 @@ export async function createMongoClustersManagementClient(
     const subContext = createSubscriptionContext(subscription);
     return createAzureClient(
         [context, subContext],
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-expect-error
         (await import('@azure/arm-mongocluster')).MongoClusterManagementClient,
-    ) as unknown as MongoClusterManagementClient;
+    );
 }
 
 export async function createComputeManagementClient(
