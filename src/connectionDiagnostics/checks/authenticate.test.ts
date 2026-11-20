@@ -33,10 +33,7 @@ import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { AuthInputUnavailableError } from '../../documentdb/auth/createAuthHandler';
 import type * as documentdbTokenResource from '../../documentdb/auth/documentdbTokenResource';
 import { type TokenResourceResolverDeps } from '../../documentdb/auth/documentdbTokenResource';
-import {
-    EntraIdentityMismatchError,
-    TokenCallbackError,
-} from '../../documentdb/auth/entraErrors/entraCallbackErrors';
+import { EntraIdentityMismatchError, TokenCallbackError } from '../../documentdb/auth/entraErrors/entraCallbackErrors';
 import type * as entraTokenFailures from '../../documentdb/auth/entraErrors/entraTokenFailures';
 import {
     clearEntraTokenFailure,
@@ -1046,7 +1043,10 @@ describe('createAuthenticateCheck', (): void => {
                             ),
                             inspect: vi.fn().mockReturnValue(undefined),
                         } as unknown as vscode.WorkspaceConfiguration);
-                        return { accessToken: entraToken(), account: { label: 'alice@contoso.example', id: 'account-id' } };
+                        return {
+                            accessToken: entraToken(),
+                            account: { label: 'alice@contoso.example', id: 'account-id' },
+                        };
                     });
                 }
                 const { result, holder } = await runAuth(setupFor(AuthMethodId.MicrosoftEntraID, publicHost));

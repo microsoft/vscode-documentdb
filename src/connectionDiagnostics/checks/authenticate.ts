@@ -334,9 +334,10 @@ export function createAuthenticateCheck(
         let observingCallbackToken = false;
         let callbackInputUnavailable = false;
 
-        function summarizeAcquisition(
-            info: { readonly accessToken: string; readonly tenantId?: string },
-        ): [status: 'pass' | 'warning', facts: Facts, findings: Finding<FindingCode>[]] {
+        function summarizeAcquisition(info: {
+            readonly accessToken: string;
+            readonly tenantId?: string;
+        }): [status: 'pass' | 'warning', facts: Facts, findings: Finding<FindingCode>[]] {
             const claims = summarizeTokenClaims(
                 info.accessToken,
                 { requestedResource, configuredTenantId: info.tenantId },
@@ -346,7 +347,9 @@ export function createAuthenticateCheck(
             return [findings.length > 0 ? 'warning' : 'pass', { claims }, findings];
         }
 
-        function summarizeTokenFailure(error: unknown): [status: 'fail', facts: Facts, findings: Finding<FindingCode>[]] {
+        function summarizeTokenFailure(
+            error: unknown,
+        ): [status: 'fail', facts: Facts, findings: Finding<FindingCode>[]] {
             const classification = classifyEntraError(errorMessages(error));
             const ruleId = classification?.ruleId ?? 'unclassified';
             const aadstsCode = classification?.code;

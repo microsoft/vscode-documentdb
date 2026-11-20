@@ -11,7 +11,10 @@ import type * as documentdbTokenResource from './documentdbTokenResource';
 
 const getSessionFromVSCode = vi.fn();
 const getConfiguredAuthProviderId = vi.fn<() => string>();
-type AzureSignInSettings = Pick<ReturnType<typeof azureAuth.getConfiguredAzureEnv>, 'name' | 'activeDirectoryEndpointUrl'>;
+type AzureSignInSettings = Pick<
+    ReturnType<typeof azureAuth.getConfiguredAzureEnv>,
+    'name' | 'activeDirectoryEndpointUrl'
+>;
 const getConfiguredAzureEnv = vi.fn<() => AzureSignInSettings>();
 const account = { id: 'account-id', label: 'account-label' };
 const session = { accessToken: 'access-token', account };
