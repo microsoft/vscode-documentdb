@@ -59,3 +59,20 @@ formatting, localization check, build, test type-check, full Vitest (9,651 passe
 and VSIX packaging passed. Lint initially rejected an inline import type in the Entra handler
 test. `a0c1d1312` replaced it with a type-only import; full lint, the affected suite (47 passed),
 and its formatting check then passed. No runtime code changed in that follow-up.
+
+## Copilot review follow-up (2026-11-20)
+
+- **R3, done in `cae1db890`:** Startup telemetry recognizes the three typed Entra callback
+  failures as `entraToken`, including wrapped and server-selection errors. The callback does not
+  write startup telemetry. The advisor (`claude-opus-5.5`, 80% confidence) recommended classifying
+  the error at the existing startup boundary; the leader applied that recommendation directly.
+  Build and 79 focused tests passed, including three new cases. [Thread reply](https://github.com/microsoft/vscode-documentdb/pull/1108#discussion_r4641033663).
+- **R1, pending operator approval:** Pin the effective cloud and authority before and after the
+  silent lookup, including when the provider ID does not change.
+- **R2, pending operator decision:** The advisor recommends reusing the initially verified token
+  once, which amends decision 0001. The alternative keeps the silent lookup on every callback and
+  makes diagnostics observe the result actually sent to the server.
+- **R4, pending wording approval:** Use an account-mismatch explanation that tells the user to
+  sign in with the account originally used for the connection.
+- **R5, pending disposition:** The advisor recommends deferring mixed-server AADSTS traversal to
+  the shared WI-5 classifier rather than adding a second traversal in PR1.
