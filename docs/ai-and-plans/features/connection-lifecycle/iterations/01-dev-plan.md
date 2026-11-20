@@ -1034,6 +1034,14 @@ shim (0005).
   (`claude-opus-5.5`) approved the staged winner on the actual PR3 base at 85% confidence.
   The build and 121 focused tests passed. Generations advance only on successful establishment;
   cancelling one waiter no longer closes the client shared by other callers.
+- **WI-4c deferred, escalated (2026-11-20):** The plan allows one retry after a stale startup
+  and specifies the result when a latch is set. It does not specify the unlatched result when
+  that retry is also invalidated. Recommendation: use a neutral retryable error, “The connection
+  changed while it was opening. Try again.” The advisor suggested `credentialsChanged`, which
+  fits the existing enum but can imply a credential change after a plain eviction. Confirm
+  the changes to the existing cancellation tests as well: cancelling a wait must not cancel
+  or misreport the physical startup, and a real startup failure must still be logged and cleaned
+  up. Neither choice was assumed. The two worktrees are ready; no coding variants have run.
 
 ---
 
