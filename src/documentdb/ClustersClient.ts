@@ -175,6 +175,7 @@ type ClientStartupStage =
 
 interface ClientStartup {
     readonly id: string;
+    readonly expectedFingerprint?: string;
     readonly startedAt: number;
     readonly costTimings: ConnectionStartupTimings;
     readonly telemetry: ITelemetryContext;
@@ -310,6 +311,7 @@ export class ClustersClient {
     private _binding: ConnectionBinding;
     private _createdAt: number;
     private _mongoClient: MongoClient;
+    private _closed = false;
     private _interactiveEntraStartupId?: string;
     private _llmEnhancedFeatureApis: llmEnhancedFeatureApis | null = null;
     private _queryInsightsApis: QueryInsightsApis | null = null;
@@ -406,6 +408,7 @@ export class ClustersClient {
         trigger: ClientStartupTrigger,
         epoch: number,
         allowInteractive: boolean,
+        expectedFingerprint?: string,
     ): Promise<void> {
         this.connectionCorrelationId = startupId;
         let originalFailure: { error: unknown } | undefined;
@@ -429,6 +432,7 @@ export class ClustersClient {
                 const startedAt = Date.now();
                 const startup: ClientStartup = {
                     id: startupId,
+                    expectedFingerprint,
                     startedAt,
                     costTimings: new ConnectionStartupTimings(),
                     telemetry: context.telemetry,
@@ -538,6 +542,9 @@ export class ClustersClient {
             connectionString: credentials.connectionString,
             principal: this.#verifiedIdentity,
         });
+        if (startup.expectedFingerprint !== undefined && this._fingerprint !== startup.expectedFingerprint) {
+            throw new ConnectionUnavailableError('identityChanged');
+        }
         const hosts = getHostsFromConnectionString(connectionString);
         const userAgentString = hosts.some((host) => getAzureHostSuffix(host)) ? appendExtensionUserAgent() : undefined;
         if (userAgentString) {
@@ -630,6 +637,9 @@ export class ClustersClient {
         originalConnectionString: string = connectionString,
     ): Promise<void> {
         this._mongoClient = new MongoClient(connectionString, options);
+        this._mongoClient.once('topologyClosed', (): void => {
+            this._closed = true;
+        });
         if (interactiveEntra) {
             this._interactiveEntraStartupId = startup.id;
             this.traceInteractiveEntraPool(startup.id);
@@ -746,21 +756,33 @@ export class ClustersClient {
 
             const epoch = ClustersClient.getEpoch(clusterId);
             const cached = ClustersClient._clients.get(clusterId);
-            let promise: Promise<ClustersClient>;
-            let id: string | undefined;
-            if (cached) {
-                id = cached.connectionCorrelationId;
+            if (cached && !cached._closed) {
+                const id = cached.connectionCorrelationId;
                 if (id) {
                     onStartup?.(id);
                 }
-                promise = cached._mongoClient.connect().then(() => cached);
-            } else {
-                const pending = ClustersClient.getOrStartClient(clusterId, epoch, trigger, allowInteractive, background);
-                id = pending.id;
-                onStartup?.(id);
-                promise = pending.promise;
+                if (epoch !== ClustersClient.getEpoch(clusterId)) {
+                    continue;
+                }
+                if (abortSignal?.aborted) {
+                    ext.outputChannel.debug(`[ClustersClient] startup=${id} wait canceled by user surface=extension`);
+                    throw new UserCancelledError('abortConnection');
+                }
+                if (!cached._closed) {
+                    return cached;
+                }
             }
 
+            // Until a replacement succeeds, the closed entry still pins the connection identity.
+            const { id, promise } = ClustersClient.getOrStartClient(
+                clusterId,
+                epoch,
+                trigger,
+                allowInteractive,
+                background,
+                cached?.fingerprint,
+            );
+            onStartup?.(id);
             try {
                 const client = await waitForClient(promise, abortSignal, id);
                 if (epoch === ClustersClient.getEpoch(clusterId)) {
@@ -781,6 +803,7 @@ export class ClustersClient {
         trigger: ClientStartupTrigger,
         allowInteractive: boolean,
         background: boolean,
+        expectedFingerprint?: string,
     ): PendingStartup {
         const existing = ClustersClient._pendingStartups.get(clusterId);
         if (existing?.epoch === epoch) {
@@ -805,7 +828,7 @@ export class ClustersClient {
         const id = randomUUID();
         // Register before initialization or a caller's onStartup callback can re-enter getClient.
         const promise = Promise.resolve().then(() =>
-            ClustersClient.establishClient(clusterId, epoch, id, trigger, allowInteractive),
+            ClustersClient.establishClient(clusterId, epoch, id, trigger, allowInteractive, expectedFingerprint),
         );
         const pending = { id, epoch, promise };
         ClustersClient._pendingStartups.set(clusterId, pending);
@@ -824,14 +847,16 @@ export class ClustersClient {
         id: string,
         trigger: ClientStartupTrigger,
         allowInteractive: boolean,
+        expectedFingerprint?: string,
     ): Promise<ClustersClient> {
         const client = new ClustersClient(clusterId);
         try {
-            await client.initClient(id, trigger, epoch, allowInteractive);
+            await client.initClient(id, trigger, epoch, allowInteractive, expectedFingerprint);
         } catch (error) {
             if (!(error instanceof UserCancelledError) && epoch === ClustersClient.getEpoch(clusterId)) {
                 ClustersClient._lastFailedStartups.set(clusterId, id);
             }
+            client._closed = true;
             void client._mongoClient?.close().catch(() => {
                 // Ignore close errors during cleanup
             });
@@ -839,6 +864,7 @@ export class ClustersClient {
         }
 
         if (epoch !== ClustersClient.getEpoch(clusterId)) {
+            client._closed = true;
             void client._mongoClient.close().catch(() => {
                 ext.outputChannel.debug(`[ClustersClient] startup=${id} superseded client cleanup failed surface=extension`);
             });
@@ -900,6 +926,7 @@ export class ClustersClient {
         if (client) {
             ClustersClient._clients.delete(clusterId);
             SchemaStore.getInstance().clearCluster(clusterId);
+            client._closed = true;
             await client._mongoClient.close(true);
         }
     }
