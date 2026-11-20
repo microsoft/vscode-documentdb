@@ -67,14 +67,22 @@ and its formatting check then passed. No runtime code changed in that follow-up.
   write startup telemetry. The advisor (`claude-opus-5.5`, 80% confidence) recommended classifying
   the error at the existing startup boundary; the leader applied that recommendation directly.
   Build and 79 focused tests passed, including three new cases. [Thread reply](https://github.com/microsoft/vscode-documentdb/pull/1108#discussion_r4641033663).
-- **R1, pending operator approval:** Pin the effective cloud and authority before and after the
-  silent lookup, including when the provider ID does not change.
-- **R2, pending operator decision:** The advisor recommends reusing the initially verified token
-  once, which amends decision 0001. The alternative keeps the silent lookup on every callback and
-  makes diagnostics observe the result actually sent to the server.
-- **R4, pending wording approval:** Use an account-mismatch explanation that tells the user to
-  sign in with the account originally used for the connection.
+- **R1, done in `98be5f18e`:** The operator approved pinning the effective cloud and authority.
+  The handler checks that snapshot before acquisition, after acquisition, and around silent
+  lookups. The snapshot also covers the wait for token-resource resolution. The advisor
+  (`claude-opus-5.5`, 85% confidence) approved the revised guard. Build and 137 focused tests passed.
+  [Thread reply](https://github.com/microsoft/vscode-documentdb/pull/1108#discussion_r4641386918).
+- **R2, done in `7ed07bd1f`:** The operator kept decision 0001: every callback does a silent
+  lookup. Diagnostics now reports the callback acquisition that supplies the token to the driver,
+  or reports an acquisition failure instead of keeping the earlier token facts. Late callbacks
+  cannot change a finished report. `claude-opus-5.5` approved the implementation at 85% confidence.
+  Build and 213 focused tests passed for the review fixes.
+- **R4, done in `897329a8f`:** The operator approved the actionable account-mismatch heading. It
+  tells users to sign in with the account originally used for the connection. The error detail
+  is unchanged. Localization was regenerated and 16 focused tests passed.
+  [Thread reply](https://github.com/microsoft/vscode-documentdb/pull/1108#discussion_r4641336633).
 - **R5, deferred to WI-5:** The advisor (`claude-opus-5.5`, 85% confidence) verified from the pinned
   driver's source that plain callback errors are not stored in per-server descriptions. They reach
   the caller directly, where the existing cause traversal can explain them. WI-5 carries forward
   the driver check and the shared explanation path if needed; PR1 does not add a second traversal.
+  The operator confirmed this deferral.
