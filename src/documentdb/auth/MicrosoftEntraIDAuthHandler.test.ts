@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type * as azureAuth from '@microsoft/vscode-azext-azureauth';
 import { type PeerCertificate } from 'tls';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
@@ -27,7 +28,7 @@ vi.mock('vscode', async (importOriginal) => ({
 }));
 
 vi.mock('@microsoft/vscode-azext-azureauth', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@microsoft/vscode-azext-azureauth')>()),
+    ...(await importOriginal<typeof azureAuth>()),
     getConfiguredAuthProviderId: (): string => getConfiguredAuthProviderId(),
 }));
 
