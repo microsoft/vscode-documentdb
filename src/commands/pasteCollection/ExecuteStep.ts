@@ -9,11 +9,15 @@ import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
 import { DocumentDbDocumentReader } from '../../services/taskService/data-api/readers/DocumentDbDocumentReader';
 import { DocumentDbStreamingWriter } from '../../services/taskService/data-api/writers/DocumentDbStreamingWriter';
+import { getExtensionCopyCollectionStrings } from '../../services/taskService/extension/extensionCopyCollectionStrings';
+import { createExtensionTaskOptions } from '../../services/taskService/extension/extensionTaskOptions';
+import { TaskService } from '../../services/taskService/extension/taskServiceInstance';
 import { CopyPasteCollectionTask } from '../../services/taskService/tasks/copy-and-paste/CopyPasteCollectionTask';
 import { type CopyPasteConfig } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
-import { isTerminalState, TaskService, TaskState, type Task } from '../../services/taskService/taskService';
+import { isTerminalState, TaskState, type Task } from '../../services/taskService/taskService';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { nonNullValue } from '../../utils/nonNull';
+import { createCollectMetadata, createValidateSource } from './copyPasteCollectionHooks';
 import { createIndexCopier } from './createIndexCopier';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 
@@ -72,7 +76,12 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
         const indexCopier = context.copyIndexes ? createIndexCopier(context) : undefined;
 
         // Create the copy-paste task
-        const task = new CopyPasteCollectionTask(config, reader, writer, indexCopier);
+        const task = new CopyPasteCollectionTask(config, reader, writer, indexCopier, undefined, {
+            ...createExtensionTaskOptions(),
+            copyCollectionStrings: getExtensionCopyCollectionStrings(),
+            validateSource: createValidateSource(config),
+            collectMetadata: createCollectMetadata(config),
+        });
 
         // Register task with the task service
         TaskService.registerTask(task);

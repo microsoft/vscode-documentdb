@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { SchemaStore } from '../../documentdb/SchemaStore';
 import { ext } from '../../extensionVariables';
+import { TaskService } from '../../services/taskService/extension/taskServiceInstance';
 import { checkCanProceedAndInformUser } from '../../services/taskService/resourceUsageHelper';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
@@ -26,6 +27,7 @@ export async function deleteDatabase(context: IActionContext, node: DatabaseItem
 
     // Check if any running tasks are using this database
     const canProceed = await checkCanProceedAndInformUser(
+        TaskService,
         {
             clusterId: node.cluster.clusterId,
             databaseName: node.databaseInfo.name,

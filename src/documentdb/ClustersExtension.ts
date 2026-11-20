@@ -112,9 +112,11 @@ import { disposeQuickStartOutputChannel } from '../services/localQuickStart/Cont
 import { QuickStartErrorExplainer } from '../services/localQuickStart/QuickStartErrorExplainer';
 import { QuickStartService, sweepStaleQuickStartEnvFiles } from '../services/localQuickStart/QuickStartService';
 import { maybeShowReleaseNotesNotification } from '../services/releaseNotesNotification';
+import { recordSurveyActivity } from '../services/survey/SurveyService';
+import { TaskProgressReportingService, TaskService } from '../services/taskService/extension/taskServiceInstance';
 import { DemoTask } from '../services/taskService/tasks/DemoTask';
-import { TaskService } from '../services/taskService/taskService';
-import { TaskProgressReportingService } from '../services/taskService/UI/taskProgressReportingService';
+import { TaskState } from '../services/taskService/taskService';
+import { attachTaskLifecycleLogger } from '../services/taskService/UI/taskLifecycleLogObserver';
 import { maybeShowWelcomeScreen } from '../services/welcomeScreen';
 import {
     CompletionCommandIds,
@@ -291,6 +293,17 @@ export class ClustersExtension implements vscode.Disposable {
 
                 // Initialize TaskService and TaskProgressReportingService
                 TaskProgressReportingService.attach(TaskService);
+                ext.context.subscriptions.push(attachTaskLifecycleLogger(TaskService, ext.outputChannel));
+                ext.context.subscriptions.push(
+                    TaskService.onDidChangeTaskState((e) => {
+                        if (e.newState === TaskState.Completed) {
+                            const type = TaskService.getTask(e.taskId)?.type;
+                            if (type === 'copy-paste-collection' || type === 'copy-paste-indexes') {
+                                recordSurveyActivity('dataManagement');
+                            }
+                        }
+                    }),
+                );
 
                 // Initialize PlaygroundService (connection state + StatusBarItem)
                 const playgroundService = PlaygroundService.getInstance();

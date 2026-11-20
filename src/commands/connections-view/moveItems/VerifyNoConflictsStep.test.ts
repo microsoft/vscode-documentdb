@@ -34,7 +34,7 @@ vi.mock('../../../services/connectionStorageService', () => ({
 const mockFindConflictingTasksForConnections = vi.fn<
     (...args: [string[]]) => Array<{ taskId: string; taskName: string; taskType: string }>
 >(() => []);
-vi.mock('../../../services/taskService/taskService', () => ({
+vi.mock('../../../services/taskService/extension/taskServiceInstance', () => ({
     TaskService: {
         findConflictingTasksForConnections: (connectionIds: string[]) =>
             mockFindConflictingTasksForConnections(connectionIds),

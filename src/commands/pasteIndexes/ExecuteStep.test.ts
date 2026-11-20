@@ -8,9 +8,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { ext } from '../../extensionVariables';
 import { type CollectionIndexCopier } from '../../services/taskService/data-api/indexes/CollectionIndexCopier';
+import { TaskService } from '../../services/taskService/extension/taskServiceInstance';
 import { CopyIndexesTask } from '../../services/taskService/tasks/copy-indexes/CopyIndexesTask';
-import type * as TaskServiceModule from '../../services/taskService/taskService';
-import { TaskService, TaskState, type TaskStateChangeEvent } from '../../services/taskService/taskService';
+import { TaskState, type TaskStateChangeEvent } from '../../services/taskService/taskService';
 import { ExecuteStep } from './ExecuteStep';
 import { type PasteIndexesWizardContext } from './PasteIndexesWizardContext';
 
@@ -29,10 +29,9 @@ vi.mock('../../services/taskService/tasks/copy-indexes/CopyIndexesTask', () => (
         return fakeTask;
     }),
 }));
-vi.mock('../../services/taskService/taskService', async () => {
-    const actual = await vi.importActual<typeof TaskServiceModule>('../../services/taskService/taskService');
-    return { ...actual, TaskService: { registerTask: vi.fn() } };
-});
+vi.mock('../../services/taskService/extension/taskServiceInstance', () => ({
+    TaskService: { registerTask: vi.fn() },
+}));
 vi.mock('../../extensionVariables', () => ({
     ext: {
         state: {

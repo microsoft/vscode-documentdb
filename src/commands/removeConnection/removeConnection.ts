@@ -10,6 +10,7 @@ import { CredentialCache } from '../../documentdb/CredentialCache';
 import { SchemaStore } from '../../documentdb/SchemaStore';
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService } from '../../services/connectionStorageService';
+import { TaskService } from '../../services/taskService/extension/taskServiceInstance';
 import { checkCanProceedAndInformUser } from '../../services/taskService/resourceUsageHelper';
 import {
     refreshParentInConnectionsView,
@@ -44,6 +45,7 @@ export async function removeConnection(
     // Check if any running tasks are using the selected connections
     for (const connection of connectionsToDelete) {
         const canProceed = await checkCanProceedAndInformUser(
+            TaskService,
             {
                 clusterId: connection.cluster.clusterId,
             },
