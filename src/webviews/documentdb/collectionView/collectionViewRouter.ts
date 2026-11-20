@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { ClusterSession } from '../../../documentdb/ClusterSession';
 import { ShellCommandIds } from '../../../documentdb/shell/constants';
 import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmation';
-import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
+import { publicProcedure, publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
 
 import * as l10n from '@vscode/l10n';
 import {
@@ -23,6 +23,7 @@ import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirm
 import { parseFindExpression } from '../../../documentdb/playground/parseFindExpression';
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
+import { documentViewModeSchema, LiveConfigService } from '../../../services/LiveConfigService';
 import { recordSurveyActivityWithInvitation } from '../../../services/survey/SurveyService';
 import {
     COMPLETION_CATEGORIES,
@@ -205,6 +206,10 @@ async function reportCollectionNodeResolutionFailure(
 }
 
 export const collectionsViewRouter = router({
+    setCollectionDocumentView: publicProcedure
+        .input(documentViewModeSchema)
+        .mutation(({ input }) => LiveConfigService.setCollectionDocumentView(input)),
+
     getInfo: publicProcedureWithTelemetry.query(({ ctx }) => {
         const myCtx = ctx as RouterContext;
 

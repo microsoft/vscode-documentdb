@@ -30,6 +30,14 @@ it applies are not documented anywhere in the VS Code API reference.
 
 ## Architecture (intent — code is authoritative for behavior)
 
+### Remembered UI choices are not settings
+
+[`LiveConfigService`](../../../../src/services/LiveConfigService.ts) owns the storage keys,
+defaults, and validation for the Collection View document layout and the MongoDB Atlas and
+Kubernetes discovery layouts. These choices live in extension state, not in VS Code settings.
+A newly opened or reopened Collection View uses the most recently selected layout, or
+Table if none was saved. Panels that are already open do not change.
+
 ### The Settings editor builds its tree from the contribution, and the rules are unwritten
 
 Three behaviours in `createTocTreeForExtensionSettings` (VS Code's

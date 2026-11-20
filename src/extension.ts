@@ -31,6 +31,7 @@ import { globalUriHandler } from './vscodeUriHandler';
 import { type AzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
 import { type DocumentDBExtensionApi, type DocumentDBExtensionApiV030 } from '../api/src';
 import { registerGiveFeedbackCommand } from './commands/giveFeedback/giveFeedback';
+import { LiveConfigService } from './services/LiveConfigService';
 import { MigrationService } from './services/migrationServices';
 import { initializeSurveyInvitation } from './services/survey/invitation/SurveyInvitationView';
 import { initializeSurveyService } from './services/survey/SurveyService';
@@ -76,6 +77,19 @@ export async function activateInternal(
         activateContext.telemetry.measurements.mainFileLoad = (perfStats.loadEndTime - perfStats.loadStartTime) / 1000;
 
         ext.secretStorage = context.secrets;
+
+        const discoveryViewModeMigrations = [
+            ['Atlas', 'migrateAtlasViewMode'],
+            ['Kubernetes', 'migrateKubernetesViewMode'],
+        ] as const;
+        for (const [provider, migrate] of discoveryViewModeMigrations) {
+            try {
+                await LiveConfigService[migrate]();
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                ext.outputChannel.warn(`[LiveConfig] Failed to migrate the ${provider} view mode: ${message}`);
+            }
+        }
 
         registerGiveFeedbackCommand(context);
         try {
