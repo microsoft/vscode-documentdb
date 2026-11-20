@@ -2769,6 +2769,8 @@
   "Skip problematic documents and continue; issues are recorded. Good for scenarios where partial success is acceptable.": "Skip problematic documents and continue; issues are recorded. Good for scenarios where partial success is acceptable.",
   "skipped": "skipped",
   "Skipped": "Skipped",
+  "Skipped an Azure account because its tenants could not be listed.": "Skipped an Azure account because its tenants could not be listed.",
+  "Skipped an Azure tenant because its subscriptions could not be listed.": "Skipped an Azure tenant because its subscriptions could not be listed.",
   "Slow execution": "Slow execution",
   "Small breadcrumb example with buttons": "Small breadcrumb example with buttons",
   "Socket access": "Socket access",

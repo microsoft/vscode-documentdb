@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type * as azureAuth from '@microsoft/vscode-azext-azureauth';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { type callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
@@ -81,7 +82,7 @@ vi.mock('../CredentialCache', () => ({
 }));
 
 vi.mock('@microsoft/vscode-azext-azureauth', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@microsoft/vscode-azext-azureauth')>()),
+    ...(await importOriginal<typeof azureAuth>()),
     getSessionFromVSCode: mocks.interactiveToken,
 }));
 

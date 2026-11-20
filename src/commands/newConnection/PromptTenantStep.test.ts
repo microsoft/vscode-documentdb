@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type * as azureAuth from '@microsoft/vscode-azext-azureauth';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 const mockGetAccounts = vi.fn();
@@ -21,7 +22,7 @@ vi.mock('../../extensionVariables', () => ({
 }));
 
 vi.mock('@microsoft/vscode-azext-azureauth', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@microsoft/vscode-azext-azureauth')>()),
+    ...(await importOriginal<typeof azureAuth>()),
     // A `function`, not an arrow: Vitest 4 calls the implementation with `new`.
     VSCodeAzureSubscriptionProvider: vi.fn().mockImplementation(function () {
         return {
@@ -165,7 +166,10 @@ describe.each([
         expect(mockConfigureAzureCredentials).toHaveBeenCalledTimes(1);
         expect(mockSignIn).toHaveBeenCalledExactlyOnceWith(undefined, { promptIfNeeded: false });
         expect(mockGetAccounts).toHaveBeenCalledExactlyOnceWith({ filter: false, noCache: true });
-        expect(mockGetTenantsForAccount).toHaveBeenCalledExactlyOnceWith(tenant.account, { filter: false, noCache: true });
+        expect(mockGetTenantsForAccount).toHaveBeenCalledExactlyOnceWith(tenant.account, {
+            filter: false,
+            noCache: true,
+        });
         expect((context as IActionContext & { entraIdAuthConfig?: { tenantId?: string } }).entraIdAuthConfig).toEqual({
             tenantId: TENANT_ID,
         });

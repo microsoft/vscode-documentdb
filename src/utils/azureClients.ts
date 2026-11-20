@@ -40,7 +40,10 @@ export async function createMongoClustersManagementClient(
     subscription: AzureSubscription,
 ): Promise<MongoClusterManagementClient> {
     const subContext = createSubscriptionContext(subscription);
-    return createAzureClient([context, subContext], (await import('@azure/arm-mongocluster')).MongoClusterManagementClient);
+    return createAzureClient(
+        [context, subContext],
+        (await import('@azure/arm-mongocluster')).MongoClusterManagementClient,
+    );
 }
 
 export async function createComputeManagementClient(

@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type * as azureAuth from '@microsoft/vscode-azext-azureauth';
 import { getSessionFromVSCode, type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
@@ -30,7 +31,7 @@ vi.mock('@microsoft/vscode-azext-utils', () => ({
     callWithTelemetryAndErrorHandling: vi.fn(),
 }));
 vi.mock('@microsoft/vscode-azext-azureauth', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@microsoft/vscode-azext-azureauth')>()),
+    ...(await importOriginal<typeof azureAuth>()),
     getSessionFromVSCode: vi.fn(),
 }));
 vi.mock('../services/discoveryServices', () => ({
@@ -101,10 +102,12 @@ describe('resolveAzureSubscription', (): void => {
             expect(report).toHaveBeenLastCalledWith('Checking Azure sign-in…');
             return true;
         });
-        azureSubscriptionProvider.getAvailableSubscriptions.mockImplementation(async (): Promise<AzureSubscription[]> => {
-            expect(report).toHaveBeenLastCalledWith('Looking for the subscription…');
-            return [found];
-        });
+        azureSubscriptionProvider.getAvailableSubscriptions.mockImplementation(
+            async (): Promise<AzureSubscription[]> => {
+                expect(report).toHaveBeenLastCalledWith('Looking for the subscription…');
+                return [found];
+            },
+        );
 
         await expect(resolveAzureSubscription(context, request, report)).resolves.toBe(found);
 
@@ -126,7 +129,9 @@ describe('resolveAzureSubscription', (): void => {
             { modal: true, detail: 'Sign in to Azure to open linked-resource.' },
             'Sign in',
         );
-        expect(azureSubscriptionProvider.signIn).toHaveBeenNthCalledWith(2, undefined, { clearSessionPreference: true });
+        expect(azureSubscriptionProvider.signIn).toHaveBeenNthCalledWith(2, undefined, {
+            clearSessionPreference: true,
+        });
         expect(azureSubscriptionProvider.signIn).toHaveBeenCalledTimes(2);
         expect(azureSubscriptionProvider.getAvailableSubscriptions).toHaveBeenCalledExactlyOnceWith(listingOptions);
         expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Azure sign-in: sign-in required');

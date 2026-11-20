@@ -6,9 +6,9 @@
 import { type AzureTenant, type VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import {
     AzureWizardPromptStep,
+    UserCancelledError,
     type IActionContext,
     type IWizardOptions,
-    UserCancelledError,
 } from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';

@@ -157,7 +157,10 @@ describe('resolveTarget check (review R2, option A)', (): void => {
             { source: 'azure', reason: 'signInRequired', errorName: 'Error' },
         ],
         [
-            new ConnectionSourceUnavailableError('azure', withStatus(new Error('secret challenge'), { statusCode: 401 })),
+            new ConnectionSourceUnavailableError(
+                'azure',
+                withStatus(new Error('secret challenge'), { statusCode: 401 }),
+            ),
             'target.sourceInaccessible',
             { source: 'azure', reason: 'signInRequired', errorName: 'Error', statusCode: 401 },
         ],
