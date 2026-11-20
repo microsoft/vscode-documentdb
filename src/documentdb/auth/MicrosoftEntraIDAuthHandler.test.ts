@@ -11,6 +11,8 @@ import type * as documentdbTokenResource from './documentdbTokenResource';
 
 const getSessionFromVSCode = vi.fn();
 const getConfiguredAuthProviderId = vi.fn<() => string>();
+type AzureSignInSettings = Pick<ReturnType<typeof azureAuth.getConfiguredAzureEnv>, 'name' | 'activeDirectoryEndpointUrl'>;
+const getConfiguredAzureEnv = vi.fn<() => AzureSignInSettings>();
 const account = { id: 'account-id', label: 'account-label' };
 const session = { accessToken: 'access-token', account };
 const mockOutputChannel = { info: vi.fn(), error: vi.fn() };
@@ -30,6 +32,7 @@ vi.mock('vscode', async (importOriginal) => ({
 vi.mock('@microsoft/vscode-azext-azureauth', async (importOriginal) => ({
     ...(await importOriginal<typeof azureAuth>()),
     getConfiguredAuthProviderId: (): string => getConfiguredAuthProviderId(),
+    getConfiguredAzureEnv: (): AzureSignInSettings => getConfiguredAzureEnv(),
 }));
 
 vi.mock('./documentdbTokenResource', async (importOriginal) => ({
@@ -74,6 +77,10 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         getSessionFromVSCode.mockReset();
         getSessionFromVSCode.mockResolvedValue(session);
         getConfiguredAuthProviderId.mockReset().mockReturnValue('microsoft');
+        getConfiguredAzureEnv.mockReset().mockReturnValue({
+            name: 'AzureCloud',
+            activeDirectoryEndpointUrl: 'https://login.microsoftonline.com/',
+        });
         vi.mocked(resolveInteractiveTokenResource).mockResolvedValue({
             resource: 'https://ossrdbms-aad.database.windows.net',
             scope: 'https://ossrdbms-aad.database.windows.net/.default',
@@ -356,6 +363,172 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         expect(onTokenLookup.mock.calls).toEqual([[{ outcome }]]);
         expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
     });
+
+    it.each([
+        {
+            name: 'AzureChinaCloud',
+            activeDirectoryEndpointUrl: 'https://login.chinacloudapi.cn/',
+        },
+        {
+            name: 'CustomCloud',
+            activeDirectoryEndpointUrl: 'https://login.microsoftonline.us/',
+        },
+    ])(
+        'rejects a sovereign cloud switch to $name before lookup even when the provider ID is unchanged',
+        async (environment): Promise<void> => {
+            getConfiguredAuthProviderId.mockReturnValue('microsoft-sovereign-cloud');
+            getConfiguredAzureEnv.mockReturnValue({
+                name: 'AzureUSGovernment',
+                activeDirectoryEndpointUrl: 'https://login.microsoftonline.us/',
+            });
+            const { options } = await new MicrosoftEntraIDAuthHandler(
+                buildCredentials('mongodb://cluster.mongocluster.cosmos.azure.us/'),
+            ).configureAuth();
+            getConfiguredAzureEnv.mockReturnValue(environment);
+
+            await expect(
+                options.authMechanismProperties!.OIDC_CALLBACK!({
+                    version: 1,
+                    timeoutContext: new AbortController().signal,
+                }),
+            ).rejects.toMatchObject({ name: 'EntraSignInRequiredError', reason: 'providerChanged' });
+            expect(getSessionFromVSCode).toHaveBeenCalledOnce();
+            expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
+        },
+    );
+
+    it.each(['returns', 'rejects'] as const)(
+        'rejects same-cloud authority path drift when the silent lookup %s',
+        async (lookupOutcome): Promise<void> => {
+            getConfiguredAuthProviderId.mockReturnValue('microsoft-sovereign-cloud');
+            getConfiguredAzureEnv.mockReturnValue({
+                name: 'CustomCloud',
+                activeDirectoryEndpointUrl: 'https://authority.example.com/original/',
+            });
+            const onTokenLookup = vi.fn();
+            const { options } = await new MicrosoftEntraIDAuthHandler(
+                buildCredentials('mongodb://cluster.mongocluster.cosmos.azure.com/'),
+                { interactive: true, onTokenLookup },
+            ).configureAuth();
+            recordEntraTokenFailure('cluster-1', { cloudCategory: 'custom', authMethod: 'interactive' });
+            const priorFailure = getRecentEntraTokenFailure('cluster-1');
+            getSessionFromVSCode.mockImplementationOnce(async () => {
+                getConfiguredAzureEnv.mockReturnValue({
+                    name: 'CustomCloud',
+                    activeDirectoryEndpointUrl: 'https://authority.example.com/changed/',
+                });
+                if (lookupOutcome === 'rejects') {
+                    throw new Error('AADSTS65002: private-lookup-cause');
+                }
+                return { ...session, accessToken: 'mismatched-token' };
+            });
+
+            const result = options.authMechanismProperties!.OIDC_CALLBACK!({
+                version: 1,
+                timeoutContext: new AbortController().signal,
+            });
+            await expect(result).rejects.toMatchObject({ name: 'EntraSignInRequiredError', reason: 'providerChanged' });
+            await expect(result).rejects.not.toHaveProperty('cause');
+            expect(getSessionFromVSCode).toHaveBeenCalledTimes(2);
+            expect(getRecentEntraTokenFailure('cluster-1')).toBe(priorFailure);
+            expect(onTokenLookup.mock.calls).toEqual([[{ outcome: 'noSession' }]]);
+            const logs = JSON.stringify([mockOutputChannel.info.mock.calls, mockOutputChannel.error.mock.calls]);
+            expect(logs).not.toMatch(/authority\.example\.com|mismatched-token|private-lookup-cause|AADSTS65002/);
+        },
+    );
+
+    it.each(['before', 'after'] as const)(
+        'treats an unreadable environment %s the silent lookup as controlled drift',
+        async (when): Promise<void> => {
+            const { options } = await new MicrosoftEntraIDAuthHandler(
+                buildCredentials('mongodb://cluster.mongocluster.cosmos.azure.com/'),
+            ).configureAuth();
+            const makeEnvironmentUnreadable = (): void => {
+                getConfiguredAzureEnv.mockImplementationOnce(() => {
+                    throw new Error('private-configuration-cause');
+                });
+            };
+            if (when === 'before') {
+                makeEnvironmentUnreadable();
+            } else {
+                getSessionFromVSCode.mockImplementationOnce(async () => {
+                    makeEnvironmentUnreadable();
+                    return session;
+                });
+            }
+
+            const result = options.authMechanismProperties!.OIDC_CALLBACK!({
+                version: 1,
+                timeoutContext: new AbortController().signal,
+            });
+            await expect(result).rejects.toMatchObject({ name: 'EntraSignInRequiredError', reason: 'providerChanged' });
+            await expect(result).rejects.not.toHaveProperty('cause');
+            expect(getSessionFromVSCode).toHaveBeenCalledTimes(when === 'before' ? 1 : 2);
+            expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
+            const logs = JSON.stringify([mockOutputChannel.info.mock.calls, mockOutputChannel.error.mock.calls]);
+            expect(logs).not.toContain('private-configuration-cause');
+        },
+    );
+
+    it('does not request a session when the authority changes during resource resolution', async () => {
+        getConfiguredAuthProviderId.mockReturnValue('microsoft-sovereign-cloud');
+        getConfiguredAzureEnv.mockReturnValue({
+            name: 'CustomCloud',
+            activeDirectoryEndpointUrl: 'https://authority.example.com/original/',
+        });
+        const resolveResource = vi.mocked(resolveInteractiveTokenResource);
+        const resolveWithoutDrift = resolveResource.getMockImplementation()!;
+        resolveResource.mockImplementationOnce(async (connectionString) => {
+            const resolved = await resolveWithoutDrift(connectionString);
+            getConfiguredAzureEnv.mockReturnValue({
+                name: 'CustomCloud',
+                activeDirectoryEndpointUrl: 'https://authority.example.com/changed/',
+            });
+            return resolved;
+        });
+
+        const handler = new MicrosoftEntraIDAuthHandler(
+            buildCredentials('mongodb://cluster.mongocluster.cosmos.azure.com/'),
+        );
+        await expect(handler.configureAuth()).rejects.toMatchObject({
+            name: 'EntraSignInRequiredError',
+            reason: 'providerChanged',
+        });
+        expect(getSessionFromVSCode).not.toHaveBeenCalled();
+        expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
+    });
+
+    it.each([true, false])(
+        'does not pin a session or change the prior failure if the initial lookup environment changes (interactive=%s)',
+        async (interactive): Promise<void> => {
+            getConfiguredAuthProviderId.mockReturnValue('microsoft-sovereign-cloud');
+            getConfiguredAzureEnv.mockReturnValue({
+                name: 'AzureUSGovernment',
+                activeDirectoryEndpointUrl: 'https://login.microsoftonline.us/',
+            });
+            recordEntraTokenFailure('cluster-1', { cloudCategory: 'usgov', authMethod: 'interactive' });
+            const priorFailure = getRecentEntraTokenFailure('cluster-1');
+            getSessionFromVSCode.mockImplementationOnce(async () => {
+                getConfiguredAzureEnv.mockReturnValue({
+                    name: 'AzureChinaCloud',
+                    activeDirectoryEndpointUrl: 'https://login.chinacloudapi.cn/',
+                });
+                return session;
+            });
+            const onTokenAcquired = vi.fn();
+            const handler = new MicrosoftEntraIDAuthHandler(
+                buildCredentials('mongodb://cluster.mongocluster.cosmos.azure.us/'),
+                { interactive, observer: { onTokenAcquired } },
+            );
+
+            await expect(handler.configureAuth()).rejects.toMatchObject({
+                name: 'EntraSignInRequiredError',
+                reason: 'providerChanged',
+            });
+            expect(onTokenAcquired).not.toHaveBeenCalled();
+            expect(getRecentEntraTokenFailure('cluster-1')).toBe(priorFailure);
+        },
+    );
 
     it('wraps and records only an unexpected callback failure, without logging its cause', async () => {
         const onTokenLookup = vi.fn();

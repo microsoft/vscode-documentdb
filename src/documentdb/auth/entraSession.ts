@@ -3,8 +3,21 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { getConfiguredAuthProviderId, getConfiguredAzureEnv } from '@microsoft/vscode-azext-azureauth';
 import * as vscode from 'vscode';
 import { toEntraScope } from './entraScopes';
+
+export interface EntraSignInEnvironment {
+    readonly providerId: string;
+    readonly cloudName: string;
+    readonly authority?: string;
+}
+
+export function readEntraSignInEnvironment(): EntraSignInEnvironment {
+    const providerId = getConfiguredAuthProviderId();
+    const { name: cloudName, activeDirectoryEndpointUrl: authority } = getConfiguredAzureEnv();
+    return { providerId, cloudName, authority };
+}
 
 interface EntraSessionRequest {
     providerId: string;
