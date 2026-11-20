@@ -1068,7 +1068,7 @@ shim (0005).
   | `gpt-6.1-sol`, Extra High | `7a1845af5` | 88 | 6m56s | 918k / 21k | 31 | 51.2 AIU |
   | `gpt-6.2-sol`, default | `eb388ef45` | 88 | 5m04s | 1.0M / 13k | 28 | 78.5 AIU |
   | Copilot Fusion Standard (`gpt-6.1-terra`) | `4ac6c4765` | 86 | 3m07s | 911.6k / 12.5k | Not reported | 13.55 AI credits |
-  | Copilot Fusion High | No complete candidate | Not scored | 9m55s reported | 2.0M / 77.1k | Not reported | 184.43 AI credits |
+  | Copilot Fusion High | No complete candidate | Not scored | 9m55s reported | 2.0M / 77.1k | 40 | 184.43 AI credits |
   | `gpt-6.2-sol`, High | `f80f3a325` | 84 | 4m41s | 1.1M / 15k | 28 | 79.6 AIU |
   | `gpt-6.2-sol`, Extra High | `aeabaabd2` | 84 | 7m01s | 1.1M / 18k | 33 | 87.6 AIU |
   | `mai-code-2`, default | `1978a3c80` | 74 | 8m06s | 1.6M / 21k | 41 | 17.0 AIU |
@@ -1081,7 +1081,9 @@ shim (0005).
   one trial per configuration, not a general model ranking.
   Fusion High ran alone on the same baseline and hit the 10-minute limit. It left partial
   implementation changes but no test changes. The partial result was not verified or scored
-  and does not change the delivery selection.
+  and does not change the delivery selection. Fusion chose Critique mode but never finished
+  the Opus 5.5 draft. The first request took 5m15s and reached its 48,000-output-token limit.
+  The draft then made further requests until the timeout; the critic and revision never ran.
 
 - **WI-4d/e deferred, escalated (2026-11-20):** The advisor reviewed the split between silent
   reconnect and closed-client replacement. Before implementing, confirm these reconnect rules:
@@ -1109,6 +1111,13 @@ shim (0005).
   the positional `getClient` signature remains compatible, with an optional background flag.
   The advisor (`claude-opus-5.5`, 85% confidence) approved the implementation. All 372 focused
   tests across 13 files and the TypeScript check passed. WI-4e will handle closed topology.
+- **Done (2026-11-20), commit `4680b459f` (WI-4e, `gpt-6.2-sol`):** Reuse open clients without
+  calling driver `connect()` again. A foreground caller can replace a closed client; concurrent
+  callers share that replacement, including background callers that join it. Reject a different
+  fingerprint before constructing a driver and retain the closed binding, as the operator
+  approved. The leader checked the topology event and caller, epoch, and latch checks against
+  the advised WI-4e contract. Build and 116 focused tests passed. The cancellation and stale
+  retry tests now exercise a pending replacement rather than an obsolete cached `connect()` call.
 
 ---
 
