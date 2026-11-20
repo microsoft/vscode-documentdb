@@ -71,7 +71,7 @@ vi.mock('../../../utils/azureClients', () => ({
     createMongoClustersManagementClient: vi.fn(() => ({ mongoClusters: { get: getCluster } })),
 }));
 vi.mock('../../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: vi.fn(), deleteClient: vi.fn() },
+    ClustersClient: { connectInteractive: vi.fn(), deleteClient: vi.fn() },
 }));
 vi.mock('../../../documentdb/CredentialCache', () => ({
     CredentialCache: { hasCredentials: vi.fn(), setAuthCredentials: vi.fn(), deleteCredentials: vi.fn() },
@@ -116,7 +116,9 @@ describe.each([
     beforeEach((): void => {
         vi.clearAllMocks();
         vi.mocked(CredentialCache.hasCredentials).mockReturnValue(false);
-        vi.mocked(ClustersClient.getClient).mockResolvedValue({ connectionCorrelationId: 'attempt' } as ClustersClient);
+        vi.mocked(ClustersClient.connectInteractive).mockResolvedValue({
+            connectionCorrelationId: 'attempt',
+        } as ClustersClient);
         vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
             inspect: vi.fn(),
         } as unknown as vscode.WorkspaceConfiguration);

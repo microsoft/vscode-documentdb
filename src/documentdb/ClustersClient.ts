@@ -24,6 +24,7 @@ import {
     MongoClient,
     MongoError,
     MongoNetworkError,
+    MongoNotConnectedError,
     MongoServerError,
     ObjectId,
     type ClientSession,
@@ -46,6 +47,7 @@ import { nonNullValue } from '../utils/nonNull';
 import { type VerifiedEntraIdentity } from './auth/AuthHandler';
 import { AuthMethodId } from './auth/AuthMethod';
 import { createAuthHandler } from './auth/createAuthHandler';
+import { EntraSignInRequiredError } from './auth/entraErrors/entraCallbackErrors';
 import { getAzureHostSuffix } from './auth/oidcAllowedHosts';
 import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
 import { computeConnectionFingerprint, type ConnectionPrincipal } from './connectionFingerprint';
@@ -85,6 +87,8 @@ export interface ConnectionBinding {
     readonly fingerprint: string;
     readonly generation: number;
 }
+
+export type VerifiedIdentity = VerifiedEntraIdentity | Exclude<ConnectionPrincipal, { kind: 'entra' }>;
 
 export interface CollectionItemModel {
     name: string;
@@ -226,12 +230,12 @@ function assertDocumentObject(value: unknown, errorCode: 'INVALID_PROJECTION' | 
     return value as Document;
 }
 
-function getConnectionPrincipal(
+function getVerifiedIdentity(
     authMethod: AuthMethodId,
     credentials: CachedClusterCredentials,
     configuredUri: string,
     verifiedIdentity: VerifiedEntraIdentity | undefined,
-): ConnectionPrincipal {
+): VerifiedIdentity {
     switch (authMethod) {
         case AuthMethodId.NativeAuth:
             return { kind: 'native', username: getUserNameFromConnectionString(configuredUri) };
@@ -264,6 +268,17 @@ export class ClustersClient {
     private static readonly _epochs = new Map<string, number>();
     private static readonly _latches = new Map<string, ConnectionUnavailableReason>();
     private static readonly _pendingStartups = new Map<string, PendingStartup>();
+    private static readonly _lastVerifiedIdentities = new Map<string, Readonly<VerifiedIdentity>>();
+
+    /** Last successfully published identity, retained when the client is evicted. */
+    public static getLastVerifiedIdentity(clusterId: string): VerifiedIdentity | undefined {
+        return ClustersClient._lastVerifiedIdentities.get(clusterId);
+    }
+
+    private static getEntraPin(clusterId: string): VerifiedEntraIdentity | undefined {
+        const identity = ClustersClient.getLastVerifiedIdentity(clusterId);
+        return identity?.kind === 'entra' ? identity : undefined;
+    }
 
     public static getEpoch(clusterId: string): number {
         return ClustersClient._epochs.get(clusterId) ?? 0;
@@ -290,6 +305,7 @@ export class ClustersClient {
     }
 
     #startupCredentials: Readonly<CachedClusterCredentials>;
+    #verifiedIdentity: VerifiedIdentity;
     private _fingerprint: string;
     private _binding: ConnectionBinding;
     private _createdAt: number;
@@ -385,7 +401,12 @@ export class ClustersClient {
         return CredentialCache.getCredentials(this.clusterId)?.localQuickStartInstance === true;
     }
 
-    private async initClient(startupId: string, trigger: ClientStartupTrigger): Promise<void> {
+    private async initClient(
+        startupId: string,
+        trigger: ClientStartupTrigger,
+        epoch: number,
+        allowInteractive: boolean,
+    ): Promise<void> {
         this.connectionCorrelationId = startupId;
         let originalFailure: { error: unknown } | undefined;
 
@@ -417,7 +438,7 @@ export class ClustersClient {
                 };
 
                 try {
-                    await this.initializeClient(startup);
+                    await this.initializeClient(startup, epoch, allowInteractive);
                     this.finishClientStartup(startup, 'succeeded');
                 } catch (error) {
                     const canceled = error instanceof UserCancelledError;
@@ -472,7 +493,7 @@ export class ClustersClient {
         );
     }
 
-    private async initializeClient(startup: ClientStartup): Promise<void> {
+    private async initializeClient(startup: ClientStartup, epoch: number, allowInteractive: boolean): Promise<void> {
         const cachedCredentials = CredentialCache.getCredentials(this.clusterId);
         if (!cachedCredentials) {
             startup.credentialsMissing = true;
@@ -481,12 +502,27 @@ export class ClustersClient {
         const credentials = structuredClone(cachedCredentials);
         this.#startupCredentials = credentials;
 
+        const reason = ClustersClient.getLatchReason(this.clusterId);
+        if (reason) {
+            throw new ConnectionUnavailableError(reason);
+        }
+        if (epoch !== ClustersClient.getEpoch(this.clusterId)) {
+            throw new Error(l10n.t('The connection changed while it was opening. Try again.'));
+        }
+
         // default to NativeAuth if nothing is configured
         const authMethod = this.authMethod;
         startup.telemetry.properties.authMethod = authMethod;
 
-        // Ordinary connects may prompt (for example, Microsoft Entra ID sign-in).
-        const authHandler = createAuthHandler(authMethod, credentials, { interactive: true });
+        const pinnedEntraIdentity =
+            authMethod === AuthMethodId.MicrosoftEntraID ? ClustersClient.getEntraPin(this.clusterId) : undefined;
+        if (authMethod === AuthMethodId.MicrosoftEntraID && !pinnedEntraIdentity && !allowInteractive) {
+            throw new EntraSignInRequiredError('noSession');
+        }
+        const authHandler = createAuthHandler(authMethod, credentials, {
+            interactive: allowInteractive && !pinnedEntraIdentity,
+            ...(pinnedEntraIdentity ? { pinnedEntraIdentity } : {}),
+        });
 
         // Configure auth and get connection options
         this.advanceClientStartup(startup, 'stage02ConfiguringAuth');
@@ -497,9 +533,10 @@ export class ClustersClient {
         });
 
         this.advanceClientStartup(startup, 'stage03PreparingClient');
+        this.#verifiedIdentity = getVerifiedIdentity(authMethod, credentials, connectionString, verifiedIdentity);
         this._fingerprint = computeConnectionFingerprint({
             connectionString: credentials.connectionString,
-            principal: getConnectionPrincipal(authMethod, credentials, connectionString, verifiedIdentity),
+            principal: this.#verifiedIdentity,
         });
         const hosts = getHostsFromConnectionString(connectionString);
         const userAgentString = hosts.some((host) => getAzureHostSuffix(host)) ? appendExtensionUserAgent() : undefined;
@@ -648,7 +685,7 @@ export class ClustersClient {
     }
 
     /**
-     * Retrieves an instance of `ClustersClient` based on the provided `clusterId`.
+     * Retrieves an instance of `ClustersClient` without opening sign-in UI.
      *
      * @param clusterId - A required string used to find the cached connection string to connect.
      * It is also used as a key to reuse existing clients.
@@ -657,6 +694,7 @@ export class ClustersClient {
      * @param onStartup - Called with the startup correlation ID of the attempt this call joins.
      * @param trigger - Which code path asks for the client; recorded as `startupTrigger` when this
      * call starts a new `connect.startup`. Callers that do not pass it are recorded as `other`.
+     * @param options - Background callers may reuse a client or join a startup, but never start one.
      * @returns A promise that resolves to an instance of `ClustersClient`.
      */
     public static async getClient(
@@ -664,6 +702,35 @@ export class ClustersClient {
         abortSignal?: AbortSignal,
         onStartup?: (id: string) => void,
         trigger: ClientStartupTrigger = 'other',
+        options?: { readonly background?: boolean },
+    ): Promise<ClustersClient> {
+        return ClustersClient.acquireClient(
+            clusterId,
+            abortSignal,
+            onStartup,
+            trigger,
+            false,
+            options?.background === true,
+        );
+    }
+
+    /** A deliberate connect may open sign-in only when there is no verified Entra identity. */
+    public static async connectInteractive(
+        clusterId: string,
+        abortSignal?: AbortSignal,
+        onStartup?: (id: string) => void,
+        trigger: ClientStartupTrigger = 'treeConnect',
+    ): Promise<ClustersClient> {
+        return ClustersClient.acquireClient(clusterId, abortSignal, onStartup, trigger, true, false);
+    }
+
+    private static async acquireClient(
+        clusterId: string,
+        abortSignal: AbortSignal | undefined,
+        onStartup: ((id: string) => void) | undefined,
+        trigger: ClientStartupTrigger,
+        allowInteractive: boolean,
+        background: boolean,
     ): Promise<ClustersClient> {
         for (let attempt = 0; ; attempt++) {
             const reason = ClustersClient.getLatchReason(clusterId);
@@ -688,7 +755,7 @@ export class ClustersClient {
                 }
                 promise = cached._mongoClient.connect().then(() => cached);
             } else {
-                const pending = ClustersClient.getOrStartClient(clusterId, epoch, trigger);
+                const pending = ClustersClient.getOrStartClient(clusterId, epoch, trigger, allowInteractive, background);
                 id = pending.id;
                 onStartup?.(id);
                 promise = pending.promise;
@@ -708,15 +775,38 @@ export class ClustersClient {
         }
     }
 
-    private static getOrStartClient(clusterId: string, epoch: number, trigger: ClientStartupTrigger): PendingStartup {
+    private static getOrStartClient(
+        clusterId: string,
+        epoch: number,
+        trigger: ClientStartupTrigger,
+        allowInteractive: boolean,
+        background: boolean,
+    ): PendingStartup {
         const existing = ClustersClient._pendingStartups.get(clusterId);
         if (existing?.epoch === epoch) {
             return existing;
         }
 
+        const credentials = CredentialCache.getCredentials(clusterId);
+        if (background) {
+            if (!credentials) {
+                throw new ConnectionUnavailableError('credentialsMissing');
+            }
+            throw new MongoNotConnectedError(l10n.t('The connection is unavailable.'));
+        }
+        if (
+            !allowInteractive &&
+            credentials?.authMechanism === AuthMethodId.MicrosoftEntraID &&
+            !ClustersClient.getEntraPin(clusterId)
+        ) {
+            throw new EntraSignInRequiredError('noSession');
+        }
+
         const id = randomUUID();
         // Register before initialization or a caller's onStartup callback can re-enter getClient.
-        const promise = Promise.resolve().then(() => ClustersClient.establishClient(clusterId, epoch, id, trigger));
+        const promise = Promise.resolve().then(() =>
+            ClustersClient.establishClient(clusterId, epoch, id, trigger, allowInteractive),
+        );
         const pending = { id, epoch, promise };
         ClustersClient._pendingStartups.set(clusterId, pending);
         const clear = (): void => {
@@ -733,10 +823,11 @@ export class ClustersClient {
         epoch: number,
         id: string,
         trigger: ClientStartupTrigger,
+        allowInteractive: boolean,
     ): Promise<ClustersClient> {
         const client = new ClustersClient(clusterId);
         try {
-            await client.initClient(id, trigger);
+            await client.initClient(id, trigger, epoch, allowInteractive);
         } catch (error) {
             if (!(error instanceof UserCancelledError) && epoch === ClustersClient.getEpoch(clusterId)) {
                 ClustersClient._lastFailedStartups.set(clusterId, id);
@@ -756,6 +847,7 @@ export class ClustersClient {
             client._binding = Object.freeze({ clusterId, fingerprint: client._fingerprint, generation });
             client._createdAt = Date.now();
             ClustersClient._generations.set(clusterId, generation);
+            ClustersClient._lastVerifiedIdentities.set(clusterId, Object.freeze({ ...client.#verifiedIdentity }));
             ClustersClient._clients.set(clusterId, client);
             ClustersClient._lastFailedStartups.delete(clusterId);
         }

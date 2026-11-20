@@ -8,7 +8,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UserCancelledError, type IActionContext, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import { EventEmitter } from 'events';
 import type * as Mongodb from 'mongodb';
-import { MongoClient, MongoNetworkError, MongoServerError, type MongoClientOptions } from 'mongodb';
+import {
+    MongoClient,
+    MongoNetworkError,
+    MongoNotConnectedError,
+    MongoServerError,
+    type MongoClientOptions,
+} from 'mongodb';
 import { ext } from '../extensionVariables';
 import { traceAuthFlow, type AuthTraceContext } from '../utils/authTrace';
 import { type VerifiedEntraIdentity } from './auth/AuthHandler';
@@ -136,7 +142,8 @@ describe('ClustersClient', () => {
 });
 
 describe('regular connection startup diagnostics', () => {
-    const clusterId = 'private-cluster';
+    let clusterId: string;
+    let clusterNumber = 0;
     const verifiedIdentity: VerifiedEntraIdentity = {
         kind: 'entra',
         providerId: 'microsoft',
@@ -160,6 +167,7 @@ describe('regular connection startup diagnostics', () => {
     }
 
     beforeEach(() => {
+        clusterId = `private-cluster-${++clusterNumber}`;
         vi.clearAllMocks();
         vi.useFakeTimers();
         mockTelemetryEvents.length = 0;
@@ -206,7 +214,7 @@ describe('regular connection startup diagnostics', () => {
 
     it('publishes a new binding only on successful establishment and advances generations across deletion', async () => {
         expect(ClustersClient.getBinding(clusterId)).toBeUndefined();
-        const first = await ClustersClient.getClient(clusterId);
+        const first = await ClustersClient.connectInteractive(clusterId);
         expect(first.binding).toEqual({ clusterId, fingerprint: first.fingerprint, generation: first.generation });
         expect(first.createdAt).toBe(Date.now());
         expect(await ClustersClient.getClient(clusterId)).toBe(first);
@@ -223,6 +231,111 @@ describe('regular connection startup diagnostics', () => {
         expect(second.generation).toBe(first.generation + 1);
         expect(second.fingerprint).toBe(first.fingerprint);
         expect(second.createdAt).toBeGreaterThan(first.createdAt);
+    });
+
+    it('never hydrates unpinned Entra silently, even after a native connection', async () => {
+        const expectNoSession = async (): Promise<void> => {
+            await expect(ClustersClient.getClient(clusterId, undefined, undefined, 'treeConnect')).rejects.toMatchObject({
+                name: 'EntraSignInRequiredError',
+                reason: 'noSession',
+            });
+        };
+        await expectNoSession();
+        expect(authHandlerFactory.createAuthHandler).not.toHaveBeenCalled();
+
+        const uri = 'mongodb://private-user@private-host:27017';
+        CredentialCache.setAuthCredentials(clusterId, AuthMethodId.NativeAuth, uri);
+        vi.mocked(NativeAuthHandler.prototype.configureAuth).mockResolvedValueOnce({
+            connectionString: uri,
+            options: {},
+        });
+        await ClustersClient.getClient(clusterId);
+        expect(ClustersClient.getLastVerifiedIdentity(clusterId)).toEqual({ kind: 'native', username: 'private-user' });
+        await ClustersClient.deleteClient(clusterId);
+
+        CredentialCache.setAuthCredentials(clusterId, AuthMethodId.MicrosoftEntraID, 'mongodb://private-host:27017');
+        await expectNoSession();
+        expect(MicrosoftEntraIDAuthHandler.prototype.configureAuth).not.toHaveBeenCalled();
+        await ClustersClient.connectInteractive(clusterId);
+        expect(authHandlerFactory.createAuthHandler).toHaveBeenLastCalledWith(
+            AuthMethodId.MicrosoftEntraID,
+            expect.objectContaining({ clusterId }),
+            { interactive: true },
+        );
+        expect(ClustersClient.getLastVerifiedIdentity(clusterId)).toEqual(verifiedIdentity);
+    });
+
+    it('records only the current publication and retains its pin across eviction and reconnect', async () => {
+        const staleHandshake = pauseNextConnect();
+        const staleWaiter = ClustersClient.connectInteractive(clusterId);
+        await staleHandshake.started;
+        expect(ClustersClient.getLastVerifiedIdentity(clusterId)).toBeUndefined();
+        await ClustersClient.deleteClient(clusterId);
+        const currentIdentity = { ...verifiedIdentity, accountId: 'private-current-account' };
+        vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockResolvedValueOnce({
+            connectionString: 'mongodb://private-host:27017',
+            options: {},
+            verifiedIdentity: currentIdentity,
+        });
+        const current = await ClustersClient.connectInteractive(clusterId);
+        const published = ClustersClient.getLastVerifiedIdentity(clusterId);
+        expect(published).toEqual(currentIdentity);
+        staleHandshake.resolve();
+        await expect(staleWaiter).resolves.toBe(current);
+        expect(ClustersClient.getLastVerifiedIdentity(clusterId)).toBe(published);
+
+        await ClustersClient.deleteClient(clusterId);
+        expect(ClustersClient.getLastVerifiedIdentity(clusterId)).toBe(published);
+        const configureAuth = vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth);
+        for (const connect of [ClustersClient.getClient, ClustersClient.connectInteractive]) {
+            configureAuth.mockRejectedValueOnce(new Error('pinned startup failed'));
+            await expect(connect(clusterId)).rejects.toThrow('pinned startup failed');
+            expect(authHandlerFactory.createAuthHandler).toHaveBeenLastCalledWith(
+                AuthMethodId.MicrosoftEntraID,
+                expect.objectContaining({ clusterId }),
+                { interactive: false, pinnedEntraIdentity: currentIdentity },
+            );
+            expect(ClustersClient.getLastVerifiedIdentity(clusterId)).toBe(published);
+        }
+    });
+
+    it('rechecks silent authorization using the credentials cloned during initialization', async () => {
+        CredentialCache.setAuthCredentials(clusterId, AuthMethodId.NativeAuth, 'mongodb://private-host:27017');
+        const waiter = ClustersClient.getClient(clusterId, undefined, () => {
+            CredentialCache.setAuthCredentials(clusterId, AuthMethodId.MicrosoftEntraID, 'mongodb://private-host:27017');
+        });
+        await expect(waiter).rejects.toMatchObject({ name: 'EntraSignInRequiredError', reason: 'noSession' });
+        expect(authHandlerFactory.createAuthHandler).not.toHaveBeenCalled();
+        expect(MongoClient).not.toHaveBeenCalled();
+    });
+
+    it('background calls never start a client, but can reuse a cached one', async () => {
+        const onStartup = vi.fn();
+        const background = (): Promise<ClustersClient> =>
+            ClustersClient.getClient(clusterId, undefined, onStartup, 'clusterDashboardPoll', { background: true });
+
+        await expect(background()).rejects.toBeInstanceOf(MongoNotConnectedError);
+        CredentialCache.deleteCredentials(clusterId);
+        await expect(background()).rejects.toMatchObject({
+            name: 'ConnectionUnavailableError',
+            reason: 'credentialsMissing',
+        });
+        ClustersClient.latch(clusterId, 'userDisconnected');
+        await expect(background()).rejects.toMatchObject({
+            name: 'ConnectionUnavailableError',
+            reason: 'userDisconnected',
+        });
+        expect(onStartup).not.toHaveBeenCalled();
+        expect(authHandlerFactory.createAuthHandler).not.toHaveBeenCalled();
+        expect(MongoClient).not.toHaveBeenCalled();
+        expect(mockTelemetryEvents).toHaveLength(0);
+
+        ClustersClient.unlatch(clusterId);
+        CredentialCache.setAuthCredentials(clusterId, AuthMethodId.NoAuth, 'mongodb://private-host:27017');
+        const client = await ClustersClient.getClient(clusterId);
+        await expect(background()).resolves.toBe(client);
+        expect(onStartup).toHaveBeenCalledExactlyOnceWith(client.connectionCorrelationId);
+        expect(MongoClient).toHaveBeenCalledOnce();
     });
 
     it('binds Entra to the original cached URI and the verified identity, even if credentials change during startup', async () => {
@@ -243,7 +356,7 @@ describe('regular connection startup diagnostics', () => {
             srvResolution: 'fallback',
         });
 
-        const client = await ClustersClient.getClient(clusterId);
+        const client = await ClustersClient.connectInteractive(clusterId);
         expect(MongoClient).toHaveBeenCalledWith(driverUri, {});
         expect(client.fingerprint).toBe(
             computeConnectionFingerprint({ connectionString: originalUri, principal: verifiedIdentity }),
@@ -258,13 +371,13 @@ describe('regular connection startup diagnostics', () => {
             options: {},
         });
 
-        await expect(ClustersClient.getClient(clusterId)).rejects.toThrow('verifiedIdentity');
+        await expect(ClustersClient.connectInteractive(clusterId)).rejects.toThrow('verifiedIdentity');
         expect(ClustersClient.getBinding(clusterId)).toBeUndefined();
         expect(MongoClient).not.toHaveBeenCalled();
     });
 
     it('aborts only one cached waiter while both are waiting for the same driver connection', async () => {
-        const client = await ClustersClient.getClient(clusterId);
+        const client = await ClustersClient.connectInteractive(clusterId);
         let finishConnect!: () => void;
         const pendingConnect = new Promise<void>((resolve) => {
             finishConnect = resolve;
@@ -291,7 +404,7 @@ describe('regular connection startup diagnostics', () => {
         const onStart = vi.fn(() => {
             joined = ClustersClient.getClient(clusterId, undefined, onJoin);
         });
-        const first = ClustersClient.getClient(clusterId, undefined, onStart, 'treeConnect');
+        const first = ClustersClient.connectInteractive(clusterId, undefined, onStart);
         const [client, same] = await Promise.all([first, joined]);
         expect(same).toBe(client);
         expect(onStart).toHaveBeenCalledExactlyOnceWith(client.connectionCorrelationId);
@@ -304,7 +417,12 @@ describe('regular connection startup diagnostics', () => {
     it.each([0, 1])('canceling cold waiter %i leaves the other waiter connected', async (index) => {
         const handshake = pauseNextConnect();
         const controllers = [new AbortController(), new AbortController()];
-        const waits = controllers.map(({ signal }) => ClustersClient.getClient(clusterId, signal));
+        const waits = [
+            ClustersClient.connectInteractive(clusterId, controllers[0].signal),
+            ClustersClient.getClient(clusterId, controllers[1].signal, undefined, 'clusterDashboardPoll', {
+                background: true,
+            }),
+        ];
         await handshake.started;
         controllers[index].abort();
         await expect(waits[index]).rejects.toBeInstanceOf(UserCancelledError);
@@ -318,7 +436,7 @@ describe('regular connection startup diagnostics', () => {
     });
 
     it('closes the superseded driver without publishing it or removing the newer pending startup', async () => {
-        const baseline = await ClustersClient.getClient(clusterId);
+        const baseline = await ClustersClient.connectInteractive(clusterId);
         await ClustersClient.deleteClient(clusterId);
         mockClose.mockClear();
         const closing = deferred();
@@ -356,7 +474,7 @@ describe('regular connection startup diagnostics', () => {
 
     it('reports the latch instead of a failed superseded handshake', async () => {
         const handshake = pauseNextConnect();
-        const waiter = ClustersClient.getClient(clusterId);
+        const waiter = ClustersClient.connectInteractive(clusterId);
         await handshake.started;
         ClustersClient.latch(clusterId, 'userDisconnected');
         handshake.reject(new Error('superseded failure'));
@@ -369,11 +487,11 @@ describe('regular connection startup diagnostics', () => {
 
     it('a stale driver failure does not replace the correlation ID of a newer failure', async () => {
         const stale = pauseNextConnect();
-        const waiter = ClustersClient.getClient(clusterId);
+        const waiter = ClustersClient.connectInteractive(clusterId);
         await stale.started;
         ClustersClient.invalidate(clusterId);
         mockConnect.mockRejectedValueOnce(new Error('current failure'));
-        await expect(ClustersClient.getClient(clusterId)).rejects.toThrow('current failure');
+        await expect(ClustersClient.connectInteractive(clusterId)).rejects.toThrow('current failure');
         const failedId = startupEvent().telemetry.properties.startupCorrelationId;
         expect(ClustersClient.getLastFailedStartupCorrelationId(clusterId)).toBe(failedId);
         stale.reject(new Error('superseded failure'));
@@ -388,7 +506,7 @@ describe('regular connection startup diagnostics', () => {
     });
 
     it('removes the cached entry before closing and leaves a racing replacement alone', async () => {
-        const old = await ClustersClient.getClient(clusterId);
+        const old = await ClustersClient.connectInteractive(clusterId);
         const epoch = ClustersClient.getEpoch(clusterId);
         const closing = deferred();
         mockClose.mockReturnValueOnce(closing.promise);
@@ -404,7 +522,7 @@ describe('regular connection startup diagnostics', () => {
     });
 
     it.each([false, true])('a stale cached waiter has only one retry (latched: %s)', async (latch) => {
-        const cached = await ClustersClient.getClient(clusterId);
+        const cached = await ClustersClient.connectInteractive(clusterId);
         const cachedConnect = pauseNextConnect();
         const onStartup = vi.fn();
         const waiter = ClustersClient.getClient(clusterId, undefined, onStartup);
@@ -453,7 +571,7 @@ describe('regular connection startup diagnostics', () => {
         expect(ClustersClient.getEpoch(clusterId)).toBe(epoch + 2);
         expect(ClustersClient.getLatchReason(clusterId)).toBeUndefined();
 
-        await ClustersClient.getClient(clusterId);
+        await ClustersClient.connectInteractive(clusterId);
         ClustersClient.latch(clusterId, 'credentialsChanged');
         await expect(ClustersClient.getClient(clusterId, undefined, onStartup)).rejects.toMatchObject({
             reason: 'credentialsChanged',
@@ -467,7 +585,7 @@ describe('regular connection startup diagnostics', () => {
         addEstablishedConnectionContext(context, clusterId);
         expect(context).toEqual({ properties: { existing: 'kept' }, measurements: { existing: 1 } });
 
-        const client = await ClustersClient.getClient(clusterId);
+        const client = await ClustersClient.connectInteractive(clusterId);
         CredentialCache.setAuthCredentials(clusterId, AuthMethodId.NoAuth, 'mongodb://replacement.example.com');
         vi.advanceTimersByTime(125);
         addEstablishedConnectionContext(context, clusterId);
@@ -509,7 +627,7 @@ describe('regular connection startup diagnostics', () => {
             poolEvents.emit('connectionCreated', { connectionId: 7, ...privateFields });
             poolEvents.emit('connectionReady', { connectionId: 7, ...privateFields });
         });
-        const client = await ClustersClient.getClient(clusterId);
+        const client = await ClustersClient.connectInteractive(clusterId);
         poolEvents.emit('connectionClosed', { connectionId: 7, reason: 'idle', ...privateFields });
         poolEvents.emit('connectionCheckOutFailed', { reason: 'connectionError', ...privateFields });
         poolEvents.emit('connectionClosed', { connectionId: '<monitor>', reason: 'private-reason', ...privateFields });
@@ -527,7 +645,7 @@ describe('regular connection startup diagnostics', () => {
     });
 
     it('logs only bounded listDatabases error details for Entra and rethrows each original error', async () => {
-        const client = await ClustersClient.getClient(clusterId);
+        const client = await ClustersClient.connectInteractive(clusterId);
         const serverError = new MongoServerError({ code: 18, errmsg: 'private-server-message' });
         const networkError = new MongoNetworkError('private-network-message');
         networkError.code = 'private-code';
@@ -584,7 +702,7 @@ describe('regular connection startup diagnostics', () => {
             options: {},
             verifiedIdentity,
         });
-        await ClustersClient.getClient(clusterId);
+        await ClustersClient.connectInteractive(clusterId);
         expect(vi.mocked(MongoClient).mock.calls[0]?.[1]?.appName).toBe(appName);
     });
 
@@ -609,7 +727,7 @@ describe('regular connection startup diagnostics', () => {
         AuthMethodId.NoAuth,
     ])('summarizes a fresh %s connection with numbered stage timings', async (authMethod) => {
         CredentialCache.setAuthCredentials(clusterId, authMethod, 'mongodb://private-host:27017');
-        const client = await ClustersClient.getClient(clusterId);
+        const client = await ClustersClient.connectInteractive(clusterId, undefined, undefined, 'other');
 
         expect(startupEvent().telemetry).toMatchObject({
             maskEntireErrorMessage: true,
@@ -680,7 +798,7 @@ describe('regular connection startup diagnostics', () => {
                 undefined,
                 { localQuickStartInstance },
             );
-            await ClustersClient.getClient(clusterId);
+            await ClustersClient.connectInteractive(clusterId);
             await vi.dynamicImportSettled();
             await vi.waitFor(() =>
                 expect(mockTelemetryEvents.map((event) => event.eventName)).toEqual(
@@ -702,19 +820,24 @@ describe('regular connection startup diagnostics', () => {
         [AuthMethodId.NativeAuth, NativeAuthHandler],
         [AuthMethodId.NoAuth, NoAuthHandler],
     ] as const)(
-        'constructs the %s handler through the factory with the interactive policy',
+        'constructs the %s handler through the factory with the caller policy',
         async (authMethod, handlerClass): Promise<void> => {
             CredentialCache.setAuthCredentials(clusterId, authMethod, 'mongodb://private-host:27017');
-            await ClustersClient.getClient(clusterId);
+            const interactive = authMethod === AuthMethodId.MicrosoftEntraID;
+            if (interactive) {
+                await ClustersClient.connectInteractive(clusterId);
+            } else {
+                await ClustersClient.getClient(clusterId);
+            }
 
             const factory = vi.mocked(authHandlerFactory.createAuthHandler);
             expect(factory).toHaveBeenCalledTimes(1);
             expect(factory).toHaveBeenCalledWith(authMethod, expect.objectContaining({ clusterId }), {
-                interactive: true,
+                interactive,
             });
             const handler = factory.mock.results[0]?.value as unknown;
             expect(handler).toBeInstanceOf(handlerClass);
-            expect(handler).toHaveProperty('policy', { interactive: true });
+            expect(handler).toHaveProperty('policy', { interactive });
             expect(handlerClass.prototype.configureAuth).toHaveBeenCalledTimes(1);
         },
     );
@@ -727,7 +850,7 @@ describe('regular connection startup diagnostics', () => {
                 return { connectionString: 'mongodb://private-host:27017', options: {}, verifiedIdentity };
             },
         );
-        const client = await ClustersClient.getClient(clusterId);
+        const client = await ClustersClient.connectInteractive(clusterId);
         expect(traceContext).toEqual({
             startupCorrelationId: client.connectionCorrelationId,
             surface: 'extension',
@@ -739,12 +862,12 @@ describe('regular connection startup diagnostics', () => {
         vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockRejectedValueOnce(
             new Error('private-failure'),
         );
-        await expect(ClustersClient.getClient(clusterId)).rejects.toThrow('private-failure');
+        await expect(ClustersClient.connectInteractive(clusterId)).rejects.toThrow('private-failure');
         const failedId = startupEvent().telemetry.properties.startupCorrelationId;
         expect(failedId).toEqual(expect.any(String));
         expect(ClustersClient.getLastFailedStartupCorrelationId(clusterId)).toBe(failedId);
 
-        const client = await ClustersClient.getClient(clusterId);
+        const client = await ClustersClient.connectInteractive(clusterId);
         const events = mockTelemetryEvents.filter((event) => event.eventName === 'connect.startup');
         expect(events[0].telemetry.properties.previousFailedStartupCorrelationId).toBeUndefined();
         expect(events[1].telemetry.properties).toMatchObject({
@@ -756,7 +879,7 @@ describe('regular connection startup diagnostics', () => {
 
     it('does not record a cancelled startup as a failure to follow up on', async () => {
         vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockRejectedValueOnce(new UserCancelledError());
-        await expect(ClustersClient.getClient(clusterId)).rejects.toBeInstanceOf(UserCancelledError);
+        await expect(ClustersClient.connectInteractive(clusterId)).rejects.toBeInstanceOf(UserCancelledError);
         expect(ClustersClient.getLastFailedStartupCorrelationId(clusterId)).toBeUndefined();
     });
 
@@ -782,9 +905,9 @@ describe('regular connection startup diagnostics', () => {
                 );
                 throw new Error('private-resolution-failure');
             });
-            await expect(ClustersClient.getClient(clusterId)).rejects.toThrow('private-resolution-failure');
+            await expect(ClustersClient.connectInteractive(clusterId)).rejects.toThrow('private-resolution-failure');
             const failedProperties = { ...startupEvent().telemetry.properties };
-            await ClustersClient.getClient(clusterId);
+            await ClustersClient.connectInteractive(clusterId);
             const events = mockTelemetryEvents.filter((event) => event.eventName === 'connect.startup');
             expect(events[0].telemetry.properties).toEqual(failedProperties);
             expect(failedProperties).toMatchObject({
@@ -807,7 +930,7 @@ describe('regular connection startup diagnostics', () => {
             throw originalError;
         });
 
-        await expect(ClustersClient.getClient(clusterId, undefined, onStartup)).rejects.toBe(originalError);
+        await expect(ClustersClient.connectInteractive(clusterId, undefined, onStartup)).rejects.toBe(originalError);
         expect(onStartup).toHaveBeenCalledExactlyOnceWith(startupEvent().telemetry.properties.connectionCorrelationId);
         expect(startupEvent().telemetry.properties).toMatchObject({
             result: 'Failed',
@@ -829,7 +952,7 @@ describe('regular connection startup diagnostics', () => {
             stop?.();
             return { connectionString: 'mongodb://private-host:27017', options: {}, verifiedIdentity };
         });
-        await ClustersClient.getClient(clusterId);
+        await ClustersClient.connectInteractive(clusterId);
         expect(startupEvent().telemetry.measurements).toMatchObject({
             tokenAcquireDurationMs: 20,
             databaseConnectDurationMs: 30,
@@ -861,13 +984,13 @@ describe('regular connection startup diagnostics', () => {
     it('preserves driver failures and gives the retry a new correlation ID', async () => {
         const originalError = new Error('private-driver-error');
         mockConnect.mockRejectedValueOnce(originalError);
-        await expect(ClustersClient.getClient(clusterId)).rejects.toBe(originalError);
+        await expect(ClustersClient.connectInteractive(clusterId)).rejects.toBe(originalError);
         const firstEvent = startupEvent();
         expect(firstEvent.telemetry.properties.lastStage).toBe('stage04ConnectingAndAuthenticating');
         expect(JSON.stringify(firstEvent)).not.toContain('private-');
         expect(mockClose).toHaveBeenCalled();
 
-        const client = await ClustersClient.getClient(clusterId);
+        const client = await ClustersClient.connectInteractive(clusterId);
         const events = mockTelemetryEvents.filter((event) => event.eventName === 'connect.startup');
         expect(events).toHaveLength(2);
         expect(client.connectionCorrelationId).not.toBe(firstEvent.telemetry.properties.connectionCorrelationId);
@@ -890,7 +1013,7 @@ describe('regular connection startup diagnostics', () => {
     it('records a canceled wait during the handshake but publishes the abandoned successful startup', async () => {
         const controller = new AbortController();
         const handshake = pauseNextConnect();
-        const waiter = ClustersClient.getClient(clusterId, controller.signal);
+        const waiter = ClustersClient.connectInteractive(clusterId, controller.signal);
         await handshake.started;
         vi.advanceTimersByTime(25);
         controller.abort();
@@ -917,7 +1040,10 @@ describe('regular connection startup diagnostics', () => {
     it('reports and cleans up a genuine driver failure after both cold waiters leave', async () => {
         const handshake = pauseNextConnect();
         const controllers = [new AbortController(), new AbortController()];
-        const waits = controllers.map(({ signal }) => ClustersClient.getClient(clusterId, signal));
+        const waits = [
+            ClustersClient.connectInteractive(clusterId, controllers[0].signal),
+            ClustersClient.getClient(clusterId, controllers[1].signal),
+        ];
         await handshake.started;
         controllers.forEach((controller) => controller.abort());
         await Promise.all(waits.map((wait) => expect(wait).rejects.toBeInstanceOf(UserCancelledError)));
@@ -934,7 +1060,7 @@ describe('regular connection startup diagnostics', () => {
         expect(ClustersClient.getLastFailedStartupCorrelationId(clusterId)).toBe(failedId);
         expect(ClustersClient.getBinding(clusterId)).toBeUndefined();
         expect(mockClose).toHaveBeenCalledTimes(1);
-        expect((await ClustersClient.getClient(clusterId)).connectionCorrelationId).not.toBe(failedId);
+        expect((await ClustersClient.connectInteractive(clusterId)).connectionCorrelationId).not.toBe(failedId);
     });
 
     it('records a credentials failure before auth configuration', async () => {
@@ -963,9 +1089,7 @@ describe('regular connection startup diagnostics', () => {
         const serverError = new MongoServerError({ message: 'private-user authentication failed', code: 18 });
         mockConnect.mockRejectedValueOnce(serverError);
 
-        await expect(ClustersClient.getClient(clusterId, undefined, undefined, 'treeConnect')).rejects.toBe(
-            serverError,
-        );
+        await expect(ClustersClient.connectInteractive(clusterId)).rejects.toBe(serverError);
         const properties = startupEvent().telemetry.properties;
         expect(properties).toMatchObject({
             startupFailureType: '18',
@@ -982,7 +1106,7 @@ describe('regular connection startup diagnostics', () => {
     });
 
     it('records no failure properties on success and no startup event for pre-cancellation', async () => {
-        await ClustersClient.getClient(clusterId, undefined, undefined, 'clusterDashboardPoll');
+        await ClustersClient.connectInteractive(clusterId, undefined, undefined, 'clusterDashboardPoll');
         expect(startupEvent().telemetry.properties).toMatchObject({ startupTrigger: 'clusterDashboardPoll' });
         expect(startupEvent().telemetry.properties.startupFailureType).toBeUndefined();
         expect(startupEvent().telemetry.properties.startupFailureCategory).toBeUndefined();
@@ -1012,7 +1136,7 @@ describe('regular connection startup diagnostics', () => {
             srvResolution: 'fallback',
             summary,
         });
-        const client = await ClustersClient.getClient(clusterId);
+        const client = await ClustersClient.connectInteractive(clusterId);
         expect(MongoClient).toHaveBeenCalledWith(rewritten, preparedOptions);
         expect(CredentialCache.getCredentials(clusterId)?.connectionString).toBe(original);
         const hosts = ['original.global.mongocluster.cosmos.azure.com'];
@@ -1039,14 +1163,14 @@ describe('regular connection startup diagnostics', () => {
         });
         const failure = new Error('ECONNREFUSED');
         mockConnect.mockRejectedValueOnce(failure);
-        await expect(ClustersClient.getClient(clusterId)).rejects.toBe(failure);
+        await expect(ClustersClient.connectInteractive(clusterId)).rejects.toBe(failure);
         expect(policy).toHaveBeenCalledWith(undefined, original);
     });
 
     it('rethrows an SRV preparation failure without constructing a driver', async (): Promise<void> => {
         const failure = new Error('original resolution failure');
         vi.mocked(prepareDriverConnectionString).mockRejectedValueOnce(failure);
-        await expect(ClustersClient.getClient(clusterId)).rejects.toBe(failure);
+        await expect(ClustersClient.connectInteractive(clusterId)).rejects.toBe(failure);
         expect(MongoClient).not.toHaveBeenCalled();
         expect(startupEvent().telemetry.properties).toMatchObject({
             startupOutcome: 'failed',

@@ -132,7 +132,9 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
                 if (!isCurrent()) {
                     return null;
                 }
-                const client = await ClustersClient.getClient(clusterId, undefined, undefined, 'treeChildren');
+                const client = await ClustersClient.getClient(clusterId, undefined, undefined, 'treeChildren', {
+                    background: true,
+                });
                 return client.estimateDocumentCount(dbName, collName);
             });
         } catch {

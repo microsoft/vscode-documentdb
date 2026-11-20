@@ -5,6 +5,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
+import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CollectionItem } from './CollectionItem';
 
 vi.mock('@vscode/l10n', () => ({
@@ -88,6 +89,25 @@ describe('CollectionItem', () => {
         expect(children).toHaveLength(2);
         expect(children[0].id).toBe('connectionsView/cluster-1/db1/coll1/documents');
         expect(children[1].id).toBe('connectionsView/cluster-1/db1/coll1/indexes');
+    });
+
+    it('loads the count in the background using the stable cluster ID', async () => {
+        const estimateDocumentCount = vi.fn().mockResolvedValue(0);
+        vi.mocked(ClustersClient.getClient)
+            .mockClear()
+            .mockResolvedValueOnce({ estimateDocumentCount } as unknown as ClustersClient);
+        const item = new CollectionItem(cluster as never, databaseInfo as never, collectionInfo as never);
+
+        item.loadDocumentCount();
+
+        await vi.waitFor(() => expect(estimateDocumentCount).toHaveBeenCalledExactlyOnceWith('db1', 'coll1'));
+        expect(ClustersClient.getClient).toHaveBeenCalledExactlyOnceWith(
+            'cluster-1',
+            undefined,
+            undefined,
+            'treeChildren',
+            { background: true },
+        );
     });
 
     it('keeps shard key fields with backticks inside their code span', () => {

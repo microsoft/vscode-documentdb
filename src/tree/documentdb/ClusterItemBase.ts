@@ -222,7 +222,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
     }
 
     /**
-     * Connects to the cluster using `ClustersClient.getClient()`, showing a cancellable
+     * Connects to the cluster using `ClustersClient.connectInteractive()`, showing a cancellable
      * notification so the user can abort a long-running connection attempt.
      *
      * @param clusterId - The stable cluster ID for cache and credential lookups.
@@ -250,7 +250,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
 
     protected async getClientWithProgress(clusterId: string): Promise<ClustersClient> {
         const abortController = new AbortController();
-        const clientPromise = ClustersClient.getClient(
+        const clientPromise = ClustersClient.connectInteractive(
             clusterId,
             abortController.signal,
             (id) => {
