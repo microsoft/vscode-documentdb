@@ -4,11 +4,18 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type Document, type WithId } from 'mongodb';
-import { ClustersClient } from '../../../../documentdb/ClustersClient';
+import { type ClustersClient } from '../../../../documentdb/ClustersClient';
 import { createExtensionDataTransferOptions } from '../../extension/extensionDataTransferOptions';
 import { type TaskTelemetryContext } from '../../taskHost';
 import { type DocumentDetails } from '../types';
 import { BaseDocumentReader } from './BaseDocumentReader';
+
+/**
+ * Resolves the client used to read the source collection.
+ *
+ * Called each time the reader needs the client, never at construction time.
+ */
+export type ClustersClientProvider = () => Promise<ClustersClient>;
 
 /**
  * DocumentDB-specific implementation of DocumentReader.
@@ -21,34 +28,33 @@ import { BaseDocumentReader } from './BaseDocumentReader';
  * - Streaming document reads using MongoDB cursor
  * - Fast document counting via estimatedDocumentCount
  * - Support for BSON document types
- * - Connection management via ClustersClient
+ * - Client supplied by the caller through a {@link ClustersClientProvider}
+ *
+ * Unlike `DocumentDbStreamingWriter`, which receives a resolved client, the reader receives a
+ * provider. Resolving the source client is deferred to the task so that a source that was
+ * disconnected after Copy fails in the task's source validation (friendly message, clipboard
+ * cleared, telemetry recorded) instead of in the paste wizard. Keep this lazy.
  */
 export class DocumentDbDocumentReader extends BaseDocumentReader {
     /**
-     * The stable cluster identifier for accessing the DocumentDB cluster.
-     * Used for ClustersClient lookup.
-     *
-     * ⚠️ This should be `cluster.clusterId`, NOT treeId.
-     */
-    private readonly clusterId: string;
-
-    /**
      * Creates a new DocumentDbDocumentReader.
      *
-     * @param clusterId - The stable cluster identifier (clusterId) for client lookup.
-     *   ⚠️ Use cluster.clusterId, NOT treeId.
+     * @param getClient - Resolves the source client. Called lazily, on each count or read.
      * @param databaseName - The name of the database to read from.
      * @param collectionName - The name of the collection to read from.
      */
-    constructor(clusterId: string, databaseName: string, collectionName: string) {
+    constructor(
+        private readonly getClient: ClustersClientProvider,
+        databaseName: string,
+        collectionName: string,
+    ) {
         super(databaseName, collectionName, createExtensionDataTransferOptions());
-        this.clusterId = clusterId;
     }
 
     /**
      * Streams documents from a DocumentDB collection.
      *
-     * Connects to the database using the ClustersClient and streams all documents
+     * Resolves the client through the provider and streams all documents
      * from the collection specified in the constructor. Each document is converted
      * to DocumentDetails format with its _id and full content.
      *
@@ -60,7 +66,7 @@ export class DocumentDbDocumentReader extends BaseDocumentReader {
         signal?: AbortSignal,
         _actionContext?: TaskTelemetryContext,
     ): AsyncIterable<DocumentDetails> {
-        const client = await ClustersClient.getClient(this.clusterId);
+        const client = await this.getClient();
 
         const documentStream = client.streamDocumentsWithQuery(
             this.databaseName,
@@ -93,7 +99,7 @@ export class DocumentDbDocumentReader extends BaseDocumentReader {
         _signal?: AbortSignal,
         _actionContext?: TaskTelemetryContext,
     ): Promise<number> {
-        const client = await ClustersClient.getClient(this.clusterId);
+        const client = await this.getClient();
         // Currently we use estimatedDocumentCount to get a rough idea of the document count
         // estimatedDocumentCount evaluates document counts based on metadata with O(1) complexity
         // We gain performance benefits by avoiding a full collection scan, especially for large collections

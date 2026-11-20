@@ -120,7 +120,7 @@ export abstract class BaseDocumentReader implements DocumentReader {
      *
      * @example
      * // Reading documents without keep-alive
-     * const reader = new DocumentDbDocumentReader(connectionId, dbName, collectionName);
+     * const reader = new DocumentDbDocumentReader(() => ClustersClient.getClient(connectionId), dbName, collectionName);
      * for await (const doc of reader.streamDocuments()) {
      *   console.log(`Read document: ${doc.id}`);
      * }
@@ -189,7 +189,7 @@ export abstract class BaseDocumentReader implements DocumentReader {
      *
      * @example
      * // Counting documents in Azure Cosmos DB for MongoDB (vCore)
-     * const reader = new DocumentDbDocumentReader(connectionId, dbName, collectionName);
+     * const reader = new DocumentDbDocumentReader(() => ClustersClient.getClient(connectionId), dbName, collectionName);
      * const count = await reader.countDocuments();
      * console.log(`Total documents: ${count}`);
      */

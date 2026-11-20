@@ -70,7 +70,13 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
         };
 
         // Create the document reader and writer instances
-        const reader = new DocumentDbDocumentReader(sourceConnectionId, sourceDatabaseName, sourceCollectionName);
+        // The source client is resolved lazily, inside the task, so a disconnected source is
+        // reported by validateSource rather than failing here (see DocumentDbDocumentReader).
+        const reader = new DocumentDbDocumentReader(
+            () => ClustersClient.getClient(sourceConnectionId),
+            sourceDatabaseName,
+            sourceCollectionName,
+        );
         const targetClient = await ClustersClient.getClient(targetConnectionId);
         const writer = new DocumentDbStreamingWriter(targetClient, targetDatabaseName, finalTargetCollectionName);
         const indexCopier = context.copyIndexes ? createIndexCopier(context) : undefined;
