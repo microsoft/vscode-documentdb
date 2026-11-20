@@ -28,6 +28,8 @@ the two deliberately.
 - `src/plugins/service-kubernetes/**` — the provider, source store, discovery tree, view-mode
   switching, and the port-forward machinery
 - `src/services/connectionReachabilityService.ts` — the generic connect-time hook
+- `src/services/LiveConfigService.ts` — the remembered Tree/List preference; it defaults to
+  List and preserves any choice saved by an earlier release
 
 ## User docs
 
