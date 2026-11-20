@@ -1079,6 +1079,23 @@ shim (0005).
   simplicity among the correct candidates; Sol 6.1 High had the strongest tests. This was
   one trial per configuration, not a general model ranking.
 
+- **WI-4d/e deferred, escalated (2026-11-20):** The advisor reviewed the split between silent
+  reconnect and closed-client replacement. Before implementing, confirm these reconnect rules:
+  1. Reject a silent Entra startup without a verified account before asking VS Code for a
+     session. Only a deliberate first connect may prompt.
+  2. Let background callers use a healthy cached client or join an existing startup, but not
+     start or replace one.
+  3. Keep the verified account for Discovery and Azure Resources connections. Those items have
+     no Remove action, so switching accounts may require a reload until there is an explicit
+     account-switch flow.
+  4. Reject a closed-client replacement with a different identity and retain the closed entry,
+     so the next ordinary call cannot start as the new identity.
+  5. Pin account, provider, and tenant for automatic reconnect. Use changed tenant credentials
+     only after an explicit credentials change.
+
+  These are recommendations, not approvals. The decision request went unanswered, and no
+  WI-4d/e code was started. PR2 author sign-off is a separate gate.
+
 ---
 
 ## WI-5: Classify failures and recover: host and tree (PR 4)
