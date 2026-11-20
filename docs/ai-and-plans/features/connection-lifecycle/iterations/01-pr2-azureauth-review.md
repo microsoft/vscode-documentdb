@@ -34,8 +34,9 @@ events. Tenant and subscription caches remain intact. Added two focused regressi
 cloud-invalidation and listener-disposal coverage. The three affected suites (55 tests), root
 type-check, and targeted formatting check passed.
 
-The other three findings remain unchanged as recommended above. Author review of those
-dispositions is pending.
+**Author sign-off (2026-11-20):** The operator accepted the recorded dispositions: keep the
+account-inventory fix, leave the existing Refresh/Retry and filter-wizard behavior unchanged,
+and keep the one-shot freshness design unless the overlap race reproduces.
 
 ## OP-2 and CP-W3
 
