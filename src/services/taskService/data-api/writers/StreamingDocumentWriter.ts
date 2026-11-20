@@ -690,7 +690,11 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
             let outcome: BatchAttemptOutcome<TDocumentId>;
             try {
                 const result = await this.writeBatch(currentBatch, strategy, actionContext);
-                outcome = isBatchAttemptOutcome(result) ? result : { result };
+                // Derive omitted `remaining` for outcomes so the success check below sees unwritten documents.
+                // Plain results keep their existing handling.
+                outcome = isBatchAttemptOutcome(result)
+                    ? { ...result, remaining: result.remaining ?? currentBatch.slice(result.result.processedCount) }
+                    : { result };
             } catch (error) {
                 const errorType = this.classifyError(error, actionContext);
                 if (errorType !== 'throttle' && errorType !== 'network') {

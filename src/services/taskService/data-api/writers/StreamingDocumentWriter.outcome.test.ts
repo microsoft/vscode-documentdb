@@ -298,6 +298,35 @@ describe('StreamingDocumentWriter batch attempt outcomes', () => {
         },
     );
 
+    it('exhausts the retry limit for a returned outcome without progress, remaining documents or error type', async () => {
+        const writer = new OutcomeStreamingWriter({ retry: { maxAttemptsWithoutProgress: 2 } });
+        const documents = createDocuments(3);
+        const onProgress = vi.fn();
+        writer.writeBatch.mockResolvedValue({ result: { processedCount: 0, insertedCount: 0 } });
+
+        await expect(writer.streamDocuments(createDocumentStream(documents), config, { onProgress })).rejects.toThrow(
+            'Failed to complete operation after 2 attempts',
+        );
+
+        expect(writer.writeBatch).toHaveBeenCalledTimes(2);
+        expect(writer.writeBatch.mock.calls[1][0]).toEqual(documents);
+        expect(onProgress).not.toHaveBeenCalled();
+    });
+
+    it('retries the unwritten suffix for a returned partial outcome without remaining documents or error type', async () => {
+        const writer = new OutcomeStreamingWriter();
+        const documents = createDocuments(10);
+        const onProgress = vi.fn();
+        writer.writeBatch.mockResolvedValueOnce({ result: { processedCount: 4, insertedCount: 4 } });
+
+        const result = await writer.streamDocuments(createDocumentStream(documents), config, { onProgress });
+
+        expect(writer.writeBatch).toHaveBeenCalledTimes(2);
+        expect(writer.writeBatch.mock.calls[1][0]).toEqual(documents.slice(4));
+        expect(result).toMatchObject({ totalProcessed: 10, insertedCount: 10 });
+        expect(onProgress.mock.calls.map(([count]) => count)).toEqual([4, 6]);
+    });
+
     it('retries a returned network outcome without changing the batch mode or size', async () => {
         const writer = new OutcomeStreamingWriter();
         const documents = createDocuments(10);
