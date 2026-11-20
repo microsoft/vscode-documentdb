@@ -524,6 +524,44 @@ describe('Task host options', () => {
         expect(() => registry.registerTask(task)).toThrow(`Task with ID ${task.id} already exists`);
     });
 
+    it('finalizes as Stopped without starting work when initialization rejects after Stop', async () => {
+        const work = vi.fn(async (): Promise<void> => {});
+        class AbortAwareInitTask extends HostTestTask {
+            protected onInitialize(signal: AbortSignal): Promise<void> {
+                return new Promise((_resolve, reject) => {
+                    signal.addEventListener('abort', (): void => reject(new Error('Initialization aborted')), {
+                        once: true,
+                    });
+                });
+            }
+        }
+        const task = new AbortAwareInitTask(undefined, work);
+        const states: TaskState[] = [];
+        task.onDidChangeState((event) => states.push(event.newState));
+
+        const start = task.start();
+        task.stop();
+        await expect(start).resolves.toBeUndefined();
+
+        expect(states).toEqual([TaskState.Initializing, TaskState.Stopping, TaskState.Stopped]);
+        expect(task.getStatus().error).toBeUndefined();
+        expect(work).not.toHaveBeenCalled();
+    });
+
+    it('still fails and rejects start when initialization rejects without Stop', async () => {
+        const error = new Error('Initialization failed');
+        class FailingInitTask extends HostTestTask {
+            protected onInitialize(): Promise<void> {
+                return Promise.reject(error);
+            }
+        }
+        const task = new FailingInitTask();
+
+        await expect(task.start()).rejects.toBe(error);
+
+        expect(task.getStatus()).toMatchObject({ state: TaskState.Failed, error });
+    });
+
     it('fails when the telemetry runner throws before invoking the work callback', async () => {
         const error = new Error('Telemetry runner failed');
         const telemetry: TaskTelemetryRunner = async <T>(

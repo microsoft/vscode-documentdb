@@ -304,6 +304,12 @@ export abstract class Task {
                 }
             });
         } catch (error) {
+            // A stop request during initialization is cancellation, not failure: an abort-aware
+            // onInitialize may reject after Stop, so finalize as Stopped without starting work.
+            if (this.abortController.signal.aborted) {
+                this.updateStatus(TaskState.Stopped, this.strings.stoppedDuringInitialization);
+                return;
+            }
             this.updateStatus(TaskState.Failed, this.strings.failedToInitializeTask, 0, error);
             throw error;
         }

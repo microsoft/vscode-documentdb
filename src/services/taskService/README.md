@@ -207,6 +207,7 @@ await task.start();
 2. `onInitialize()` is called with AbortSignal and telemetry context
 3. Task can count documents, ensure target exists, etc.
 4. Telemetry event `taskService.taskInitialization` is recorded
+5. If `onInitialize()` rejects after `stop()`, the task ends as `Stopped` and `doWork()` never runs; any other rejection ends it as `Failed` and rejects `start()`
 
 **Execution Phase:**
 
