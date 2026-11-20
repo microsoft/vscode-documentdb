@@ -1028,6 +1028,12 @@ shim (0005).
   fingerprint comparison winner onto the actual PR3 base. The blind advisor scored it 94/100
   against 88/100 for `mai-code-2` (80% confidence). It hashes the stored URI without its password
   and the principal, preserving all other URI bytes. The build and 13 fingerprint tests passed.
+- **Done (2026-11-20), commit `a9a8d5103` (WI-4b, `gpt-6.2-sol`):** Integrated the client
+  generation, binding, isolated cached-waiter cancellation, and telemetry context helper.
+  The blind scores were 89/100 and 74/100; the selection was provisional until the advisor
+  (`claude-opus-5.5`) approved the staged winner on the actual PR3 base at 85% confidence.
+  The build and 121 focused tests passed. Generations advance only on successful establishment;
+  cancelling one waiter no longer closes the client shared by other callers.
 
 ---
 
