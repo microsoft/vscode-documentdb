@@ -1024,6 +1024,11 @@ shim (0005).
 
 **Progress:**
 
+- **Done (2026-11-20), commit `0e2a89576` (WI-4a, `gpt-6.2-sol`):** Integrated the original
+  fingerprint comparison winner onto the actual PR3 base. The blind advisor scored it 94/100
+  against 88/100 for `mai-code-2` (80% confidence). It hashes the stored URI without its password
+  and the principal, preserving all other URI bytes. The build and 13 fingerprint tests passed.
+
 ---
 
 ## WI-5: Classify failures and recover: host and tree (PR 4)
