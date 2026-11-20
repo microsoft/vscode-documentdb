@@ -5,6 +5,7 @@
 
 import { Environment } from '@azure/ms-rest-azure-env';
 import {
+    AzureSubscriptionProviderBase,
     ExtendedEnvironment,
     NotSignedInError,
     VSCodeAzureSubscriptionProvider,
@@ -68,7 +69,79 @@ describe('AzureSubscriptionProviderWithFilters', () => {
         provider.dispose();
     });
 
-    it.each(['cloud', 'session'] as const)('reloads cached accounts after a %s change', async (kind) => {
+    it('forces fresh account enumeration while preserving other account options', async () => {
+        const baseAccounts = vi.spyOn(VSCodeAzureSubscriptionProvider.prototype, 'getAccounts').mockResolvedValue([]);
+        const provider = new AzureSubscriptionProviderWithFilters();
+        const token = { isCancellationRequested: false, onCancellationRequested: vi.fn() };
+        const options = { filter: false, noCache: false, token };
+
+        await provider.getAccounts();
+        await provider.getAccounts(options);
+
+        expect(baseAccounts.mock.calls).toEqual([[{ noCache: true }], [{ ...options, noCache: true }]]);
+        expect(options.noCache).toBe(false);
+        provider.dispose();
+    });
+
+    it('finds newly signed-in accounts without an event while reusing existing tenant and subscription caches', async () => {
+        const getAccounts = vi.mocked(vscode.authentication.getAccounts);
+        const firstAccount = { id: 'first-account', label: 'First account' };
+        const secondAccount = { id: 'second-account', label: 'Second account' };
+        getAccounts.mockResolvedValueOnce([firstAccount]).mockResolvedValue([firstAccount, secondAccount]);
+        const getTenants = vi
+            .spyOn(AzureSubscriptionProviderBase.prototype, 'getTenantsForAccount')
+            .mockImplementation(async (account) => [{ account, tenantId: `tenant-${account.id}` }]);
+        const getSubscriptions = vi
+            .spyOn(AzureSubscriptionProviderBase.prototype, 'getSubscriptionsForTenant')
+            .mockImplementation(async ({ account, tenantId }) => [
+                {
+                    account,
+                    tenantId,
+                    subscriptionId: `subscription-${account.id}`,
+                    name: account.label,
+                    authentication: { getSession: vi.fn(), getSessionWithScopes: vi.fn() },
+                    credential: { getToken: vi.fn() },
+                    environment: account.environment,
+                    isCustomCloud: false,
+                },
+            ]);
+        const provider = new AzureSubscriptionProviderWithFilters();
+        const options = { filter: false, noCache: false, maximumTenants: 20, dedupe: false };
+
+        try {
+            const first = await provider.getAvailableSubscriptions(options);
+            const second = await provider.getAvailableSubscriptions(options);
+
+            expect(first.map((subscription) => subscription.subscriptionId)).toEqual(['subscription-first-account']);
+            expect(second.map((subscription) => subscription.subscriptionId)).toEqual([
+                'subscription-first-account',
+                'subscription-second-account',
+            ]);
+            expect(getTenants.mock.calls.map(([account]) => account.id)).toEqual(['first-account', 'second-account']);
+            expect(getSubscriptions.mock.calls.map(([tenant]) => tenant.account.id)).toEqual([
+                'first-account',
+                'second-account',
+            ]);
+            expect(getTenants.mock.calls.every(([, passedOptions]) => passedOptions === options)).toBe(true);
+            expect(getSubscriptions.mock.calls.every(([, passedOptions]) => passedOptions === options)).toBe(true);
+            expect(options.noCache).toBe(false);
+
+            const freshOptions = { ...options, noCache: true };
+            await provider.getAvailableSubscriptions(freshOptions);
+            expect(getTenants).toHaveBeenCalledTimes(4);
+            expect(getSubscriptions).toHaveBeenCalledTimes(4);
+            expect(getTenants.mock.calls.slice(2).every(([, passedOptions]) => passedOptions === freshOptions)).toBe(
+                true,
+            );
+            expect(
+                getSubscriptions.mock.calls.slice(2).every(([, passedOptions]) => passedOptions === freshOptions),
+            ).toBe(true);
+        } finally {
+            provider.dispose();
+        }
+    });
+
+    it.each(['cloud', 'session'] as const)('handles tenant and subscription caches after a %s change', async (kind) => {
         const cloudListener = vi.mocked(vscode.workspace.onDidChangeConfiguration);
         const sessionListener = vi.mocked(vscode.authentication.onDidChangeSessions);
         const getAccounts = vi.mocked(vscode.authentication.getAccounts);
@@ -76,14 +149,21 @@ describe('AzureSubscriptionProviderWithFilters', () => {
         sessionListener.mockClear();
         getAccounts.mockClear();
         getAccounts.mockResolvedValue([{ id: 'fixture-account', label: 'Fixture account' }]);
+        const getTenants = vi
+            .spyOn(AzureSubscriptionProviderBase.prototype, 'getTenantsForAccount')
+            .mockImplementation(async (account) => [{ account, tenantId: 'fixture-tenant' }]);
+        const getSubscriptions = vi
+            .spyOn(AzureSubscriptionProviderBase.prototype, 'getSubscriptionsForTenant')
+            .mockResolvedValue([]);
         vi.useFakeTimers();
         const provider = new AzureSubscriptionProviderWithFilters();
-        vi.spyOn(provider, 'getTenantsForAccount').mockResolvedValue([]);
 
         try {
             await provider.getAvailableSubscriptions({ filter: false });
             await provider.getAvailableSubscriptions({ filter: false });
-            expect(getAccounts).toHaveBeenCalledOnce();
+            expect(getAccounts).toHaveBeenCalledTimes(2);
+            expect(getTenants).toHaveBeenCalledOnce();
+            expect(getSubscriptions).toHaveBeenCalledOnce();
 
             if (kind === 'cloud') {
                 cloudListener.mock.calls[0][0]({
@@ -96,7 +176,9 @@ describe('AzureSubscriptionProviderWithFilters', () => {
             }
 
             await provider.getAvailableSubscriptions({ filter: false });
-            expect(getAccounts).toHaveBeenCalledTimes(2);
+            expect(getAccounts).toHaveBeenCalledTimes(3);
+            expect(getTenants).toHaveBeenCalledTimes(kind === 'cloud' ? 2 : 1);
+            expect(getSubscriptions).toHaveBeenCalledTimes(kind === 'cloud' ? 2 : 1);
         } finally {
             provider.dispose();
             vi.useRealTimers();

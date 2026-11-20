@@ -9,6 +9,7 @@ import {
     type AzureAccount,
     type AzureSubscription,
     type AzureTenant,
+    type GetAccountsOptions,
     type GetAvailableSubscriptionsOptions,
     type SubscriptionId,
     type TenantIdAndAccount,
@@ -79,6 +80,10 @@ export class AzureSubscriptionProviderWithFilters extends VSCodeAzureSubscriptio
 
     public requestFreshListing(): void {
         this.freshListingRequested = true;
+    }
+
+    public override getAccounts(options?: GetAccountsOptions): Promise<AzureAccount[]> {
+        return super.getAccounts({ ...options, noCache: true });
     }
 
     public override async getAvailableSubscriptions(
