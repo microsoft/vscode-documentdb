@@ -1068,6 +1068,7 @@ shim (0005).
   | `gpt-6.1-sol`, Extra High | `7a1845af5` | 88 | 6m56s | 918k / 21k | 31 | 51.2 AIU |
   | `gpt-6.2-sol`, default | `eb388ef45` | 88 | 5m04s | 1.0M / 13k | 28 | 78.5 AIU |
   | Copilot Fusion Standard (`gpt-6.1-terra`) | `4ac6c4765` | 86 | 3m07s | 911.6k / 12.5k | Not reported | 13.55 AI credits |
+  | Copilot Fusion High | No complete candidate | Not scored | 9m55s reported | 2.0M / 77.1k | Not reported | 184.43 AI credits |
   | `gpt-6.2-sol`, High | `f80f3a325` | 84 | 4m41s | 1.1M / 15k | 28 | 79.6 AIU |
   | `gpt-6.2-sol`, Extra High | `aeabaabd2` | 84 | 7m01s | 1.1M / 18k | 33 | 87.6 AIU |
   | `mai-code-2`, default | `1978a3c80` | 74 | 8m06s | 1.6M / 21k | 41 | 17.0 AIU |
@@ -1078,6 +1079,9 @@ shim (0005).
   candidate did not honor the retry or latch on an obsolete startup failure. Astra led on
   simplicity among the correct candidates; Sol 6.1 High had the strongest tests. This was
   one trial per configuration, not a general model ranking.
+  Fusion High ran alone on the same baseline and hit the 10-minute limit. It left partial
+  implementation changes but no test changes. The partial result was not verified or scored
+  and does not change the delivery selection.
 
 - **WI-4d/e deferred, escalated (2026-11-20):** The advisor reviewed the split between silent
   reconnect and closed-client replacement. Before implementing, confirm these reconnect rules:
