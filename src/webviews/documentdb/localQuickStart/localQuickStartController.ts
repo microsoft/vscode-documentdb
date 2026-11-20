@@ -20,6 +20,7 @@ export type LocalQuickStartConfigurationType = {
     initialInstanceState?: InstanceState;
     initialInstanceMissing?: boolean;
     initialPhase?: QuickStartWizardPhase;
+    initialDataChoice?: 'fresh';
     /** Correlates every event of this panel, from open to close. */
     quickStartSessionId?: string;
 };

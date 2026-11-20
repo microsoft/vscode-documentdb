@@ -321,7 +321,7 @@ export async function addInlineSource(yaml: string): Promise<KubeconfigSourceRec
  * Adds (or reuses) an inline source and reports whether storage actually
  * changed. Returning a `created` flag lets callers show an accurate "added"
  * vs. "already exists" message — e.g. when a user re-pastes YAML they just
- * copied from the read-only "View Kubeconfig" of an existing inline source.
+ * copied from the read-only "View kubeconfig" of an existing inline source.
  */
 export async function tryAddInlineSource(yaml: string): Promise<TryAddInlineSourceResult> {
     const trimmed = yaml.trim();

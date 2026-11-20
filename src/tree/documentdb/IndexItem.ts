@@ -23,6 +23,12 @@ export class IndexItem implements TreeElement, TreeElementWithExperience, TreeEl
     public readonly experience: Experience;
     public contextValue: string = 'treeItem_index';
 
+    /**
+     * The discovery journey of the cluster this node belongs to, passed down from its parent so
+     * commands run here join that journey in telemetry. For statistics only.
+     */
+    public journeyCorrelationId?: string;
+
     private readonly experienceContextValue: string = '';
 
     constructor(

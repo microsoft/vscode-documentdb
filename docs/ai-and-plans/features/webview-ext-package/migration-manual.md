@@ -319,7 +319,7 @@ export function openAppWebview<TConfiguration>(options: {
     sourceLayout: WEBVIEW_CONFIG.bundle,
     devServerHost: WEBVIEW_CONFIG.devServerHost,
     isBundled: true,
-    logger: rpcConcurrencyLogger, // optional dispatch-level logger
+    logger: dispatchLogger(), // optional; console in development, inert in production
     icon: options.icon,
     viewColumn: options.viewColumn,
   });

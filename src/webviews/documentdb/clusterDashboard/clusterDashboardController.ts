@@ -21,6 +21,7 @@ import {
     type ShowCollectionsMessage,
 } from './clusterDashboardContextMenu';
 import { type RouterContext } from './clusterDashboardRouter';
+import { reportDashboardClosed, trackDashboardLifetime } from './dashboardLifetimeTelemetry';
 import { describeMissingNamespace, resolveNamespaceNode } from './resolveNamespaceNode';
 
 /**
@@ -382,6 +383,15 @@ export function openClusterDashboardWebview(
         panelViewType: 'vscode-documentdb-cluster-dashboard',
         config: initialData,
         context: trpcContext,
+        // Only a new panel is measured: a reveal of an open one returns above and loads nothing.
+        viewLoad: {
+            kind: 'clusterDashboard',
+            correlation: {
+                viewId: initialData.viewId,
+                ...(initialData.dashboardSessionId ? { dashboardSessionId: initialData.dashboardSessionId } : {}),
+                ...(initialData.journeyCorrelationId ? { journeyCorrelationId: initialData.journeyCorrelationId } : {}),
+            },
+        },
         viewColumn: vscode.ViewColumn.One,
         icon: {
             light: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'collection-view-light.svg'),
@@ -390,6 +400,8 @@ export function openClusterDashboardWebview(
     });
 
     openPanels.set(panelKey, { controller, config: initialData });
+    const session = initialData;
+    trackDashboardLifetime(controller, (lifetime) => reportDashboardClosed(lifetime, session));
     controller.onDisposed(() => {
         if (openPanels.get(panelKey)?.controller === controller) {
             openPanels.delete(panelKey);

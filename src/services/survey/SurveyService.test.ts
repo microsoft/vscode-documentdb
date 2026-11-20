@@ -978,6 +978,92 @@ describe('SurveyService', (): void => {
         expect(h.state().lastOutcome).toBeUndefined();
     });
 
+    it('reports a visible invitation hidden once, without state change, and still accepts a later choice', async (): Promise<void> => {
+        const h = createHarness();
+        await invite(h);
+        h.callbacks().onHidden?.();
+        expect(h.sent('survey.invitationHidden')).toHaveLength(0);
+        h.callbacks().onVisible();
+        const writes = h.stateKeyWrites();
+        const state = h.state();
+        h.callbacks().onHidden?.();
+        h.callbacks().onVisible();
+        h.callbacks().onHidden?.();
+        expect(h.sent('survey.invitationHidden')).toEqual([
+            {
+                name: 'survey.invitationHidden',
+                properties: {
+                    invitationSessionId: INVITATION_ID,
+                    surveyCampaignId: DEFAULT_SURVEY_POLICY_CONFIG.campaignId,
+                    surveyPolicyVersion: DEFAULT_SURVEY_POLICY_CONFIG.policyVersion,
+                },
+                measurements: {},
+            },
+        ]);
+        expect(h.stateKeyWrites()).toBe(writes);
+        expect(h.state()).toEqual(state);
+        expect(h.handle.dispose).not.toHaveBeenCalled();
+        expect(h.service.getDebugStatus().invitationActive).toBe(true);
+        await h.callbacks().onChoice('askLater');
+        expect(h.events().slice(-2)).toEqual(['survey.invitationHidden', 'survey.invitationResolved']);
+        expect(h.state().lastOutcome).toBe('askLater');
+    });
+
+    it.each([
+        ['a choice', async (callbacks: SurveyInvitationCallbacks): Promise<void> => callbacks.onChoice('askLater')],
+        ['opt-out', async (callbacks: SurveyInvitationCallbacks): Promise<void> => callbacks.onChoice('neverAgain')],
+        [
+            'opening the form',
+            async (callbacks: SurveyInvitationCallbacks): Promise<void> => {
+                expect(await callbacks.onOpenForm()).toBe('opened');
+            },
+        ],
+    ])('does not report an invitation hidden after %s', async (_label, end): Promise<void> => {
+        const h = createHarness();
+        await invite(h);
+        const callbacks = h.callbacks();
+        callbacks.onVisible();
+        await end(callbacks);
+        callbacks.onHidden?.();
+        expect(h.sent('survey.invitationResolved')).toHaveLength(1);
+        expect(h.sent('survey.invitationHidden')).toHaveLength(0);
+    });
+
+    it('does not report an invitation hidden while a choice is being saved', async (): Promise<void> => {
+        const h = createHarness();
+        await invite(h);
+        h.callbacks().onVisible();
+        const pending = deferred<void>();
+        h.storage.update.mockImplementation(async (key, value): Promise<void> => {
+            await pending.promise;
+            h.storage.write(key, value);
+        });
+        const choice = h.callbacks().onChoice('dismissed');
+        h.callbacks().onHidden?.();
+        pending.resolve();
+        await choice;
+        expect(h.sent('survey.invitationHidden')).toHaveLength(0);
+        expect(h.sent('survey.invitationResolved')).toHaveLength(1);
+    });
+
+    it('does not report an invitation hidden after permission withdrawal', async (): Promise<void> => {
+        const h = createHarness();
+        await invite(h);
+        h.callbacks().onVisible();
+        h.flags.permitted = false;
+        h.service.handlePermissionChanged();
+        h.callbacks().onHidden?.();
+        h.flags.permitted = true;
+        h.callbacks().onHidden?.();
+        expect(h.sent('survey.invitationHidden')).toHaveLength(0);
+    });
+
+    it('does not offer a hidden callback to manually opened feedback', async (): Promise<void> => {
+        const h = createHarness();
+        expect(await h.service.showFeedbackForm('collectionView', 'documents')).toBe(true);
+        expect(h.callbacks().onHidden).toBeUndefined();
+    });
+
     it('cancels eligibility after withdrawal during an active-day write even if permission is restored', async (): Promise<void> => {
         const h = createHarness();
         const pending = deferred<void>();

@@ -25,19 +25,28 @@ Generated graphics (hero images, diagrams) are not framed, but they get the same
    - **Dark**: dark-themed sites, such as the documentdb.io blog. See [Dark Theme](#dark-theme).
    - **Both**: render each image twice, from the same originals.
 
-1. **Collect captures.** Capture VS Code in the light theme at about **1920 px wide** (Windows at 125% scaling gives about 1920 x 1160). Cropped captures of a tree, dialog or quick pick are fine. Blue highlight rectangles drawn in the capture are kept as captured. Use light-theme captures for both themes.
+1. **Collect captures.** Capture VS Code in the light theme at about **1920 px wide** (Windows at 125% scaling gives about 1920 x 1160). Cropped captures of a tree, dialog or quick pick are fine. Blue highlight rectangles drawn in the capture are kept as captured. Use light-theme captures for both themes unless the operator supplies a matching dark VS Code capture for the dark output.
 2. **Name them** `{version}_{feature_name}.png` (snake_case), using the version of the release that shows them, for example `1.0.0_query_playground.png`. Never reuse a name that already exists in the target `images/` folder: older release notes link to those files. Dark-theme output gets a `_dark` suffix automatically (`1.0.0_query_playground_dark.png`), so both versions can live side by side.
 3. **Keep the originals.** Put untouched captures in an `originals/` folder next to the jobs file, outside the committed `images/` folder (keep them locally or in a gitignored scratch folder such as `docs/plan/`). Only framed output is committed. Never edit originals.
 4. **Write a jobs file** (see [references/example-jobs.json](./references/example-jobs.json)). `src` and `out` are relative to the jobs file.
 5. **Pilot one image**, show it to the operator, and agree on the look before running the rest. Ask for approval image by image for small crops and annotated images.
 6. **Run** `python .github/skills/documentation-screenshots/scripts/frame.py path/to/jobs.json` (or add file names to run a subset). Each image takes about 5 seconds. For the dark theme, add `--theme dark` before the jobs file, or set `"theme": "dark"` in the jobs file.
+   With separate light and dark captures, use two jobs files with matching job names: one points
+   `src` at the light captures and sets `"theme": "light"`; the other points `src` at the dark
+   captures and sets `"theme": "dark"`.
 7. **Reference the images** in Markdown. Every framed image is 1920 px wide, so all use the same display width:
 
    ```markdown
    <p align="center"><img src="./images/X.Y.Z_feature_name.png" alt="Describe what the image shows" width="800" style="max-width:100%;height:auto;"></p>
    ```
 
-8. **Verify** every image reference resolves, and delete preview and temporary files.
+8. **Park ready images with no current destination** in `docs/parked-images/` and add them to its
+   README. When one is used, move it to the destination and remove it from the README.
+9. **Verify** every image reference resolves, and delete preview and temporary files.
+
+For walkthrough images in `resources/walkthroughs/`, frame at 1920 px, then use Lanczos to resize
+to **1440 px wide**. For themed walkthrough media, provide `light`, `dark`, `hc` and `hcLight`
+paths; reuse the dark image for `hc` and the light image for `hcLight`.
 
 Preview tip: render previews to a new file name each time (`_preview_a.png`, `_preview_b.png`), because image viewers cache by path. To check the transparent corners, preview on a dark background.
 
@@ -114,7 +123,8 @@ For sites with a dark design, such as the documentdb.io blog, bright framed imag
 
 - Screenshots are **not** dimmed, tinted or inverted. Tests showed that lowering the white point turns white UI into a dull grey and the result looks washed out, while a light screenshot on a dark frame looks natural.
 - Card radius, hairline border, shadow, badges, arrows and the white legend cards.
-- Captures are still taken in the light VS Code theme.
+- Captures are taken in the light VS Code theme by default. If the operator supplies a matching dark
+  VS Code capture, use it for the dark output.
 
 ### Illustrations with their own background
 
@@ -203,3 +213,4 @@ Hero images, diagrams and other rendered graphics are not framed. After renderin
 - [ ] Badges and arrows don't cover UI text or icons
 - [ ] All images referenced with `width="800"` and descriptive alt text (plain Markdown images on documentdb.io)
 - [ ] Every image reference resolves; preview files deleted
+- [ ] Ready images with no current destination are parked and listed in `docs/parked-images/README.md`

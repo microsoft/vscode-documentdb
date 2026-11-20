@@ -22,15 +22,17 @@ wording in the grid plan), and the Stage 6 reviewer part of F20.
 
 ### Automated dependency-freshness check (F11)
 
-- **What:** a GitHub Actions job that fails a PR adding a dependency version younger than the 7-day
-  internal-feed quarantine. Compare newly introduced transitive versions in the lockfile, and fail on
-  incomplete lookups. The `flagging-fresh-dependencies` skill already has machine-readable output and
-  failure exit codes.
+- **Advisory half done (2026-11):** `.github/workflows/dependabot-quarantine.yml` labels each open
+  Dependabot PR `quarantine` or `ready-to-merge` by the npm publish age of the versions it adds. Still
+  deferred: failing the PR check, and covering PRs not opened by Dependabot.
+- **What:** a GitHub Actions job that fails a PR adding a dependency version still inside the hold
+  window. Compare newly introduced transitive versions in the lockfile, and fail on incomplete
+  lookups. The `flagging-fresh-dependencies` skill already has machine-readable output and failure
+  exit codes.
 - **Why deferred:** ADO builds run only when a release is prepared, and the operator prepares them
-  from quarantine-clear versions (operator, 2026-10-01). Age is also only a proxy for feed
-  availability.
+  from versions past the hold window (operator, 2026-10-01).
 - **Revisit when:** ADO builds start running automatically after merge, or a release build fails on a
-  quarantined version.
+  version that is too new.
 
 ### Per-file hash comparison between the GitHub and ADO VSIX (F02, alternative fix)
 

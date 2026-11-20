@@ -125,7 +125,7 @@ export class AtlasOrganizationItem implements TreeElement, TreeElementWithContex
             md.appendMarkdown(
                 escapeMarkdown(
                     vscode.l10n.t(
-                        'Some projects may be hidden. A credential for this organization needs attention; use "Click here to revisit credentials".',
+                        'Some projects may be hidden. A credential for this organization needs attention; use "Review credentials…".',
                     ),
                 ),
             );

@@ -78,21 +78,6 @@ export const DEFAULT_SOURCE_ID = 'default';
  */
 export type KubernetesViewMode = 'list' | 'tree';
 
-/** Default view mode when the user has not toggled it yet. */
-export const DEFAULT_VIEW_MODE: KubernetesViewMode = 'list';
-
-/**
- * GlobalState key persisting the discovery tree {@link KubernetesViewMode}.
- *
- * Stored directly via `ext.context.globalState` (like the release notes version in
- * `src/services/releaseNotesNotification.ts`) rather than a user-facing setting,
- * so the last choice always persists without exposing it in Settings.
- *
- * TODO: a future "internal settings store" abstraction could centralize these
- * ad-hoc globalState keys (see follow-up issue).
- */
-export const DISCOVERY_VIEW_MODE_STATE_KEY = 'kubernetes-discovery.viewMode';
-
 /**
  * Discriminator describing where a kubeconfig source's bytes live.
  *

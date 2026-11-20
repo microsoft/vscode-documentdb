@@ -5,6 +5,7 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { l10n } from 'vscode';
+import { ClustersClient } from '../../documentdb/ClustersClient';
 import { inferViewIdFromTreeId, Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
 import { type TreeElement } from '../../tree/TreeElement';
@@ -45,9 +46,23 @@ function getViewId(node: RetryableTreeNode): Views | undefined {
     return undefined;
 }
 
-export async function retryAuthentication(_context: IActionContext, node: RetryableTreeNode): Promise<void> {
+/**
+ * The failed connection attempt this retry follows up on. The next `connect.startup` for the cluster
+ * names the same attempt in `previousFailedStartupCorrelationId`, which shows whether the retry worked.
+ */
+function failedStartupCorrelationIdOf(node: RetryableTreeNode): string | undefined {
+    const clusterId = (node as { cluster?: { clusterId?: unknown } }).cluster?.clusterId;
+    return typeof clusterId === 'string' ? ClustersClient.getLastFailedStartupCorrelationId(clusterId) : undefined;
+}
+
+export async function retryAuthentication(context: IActionContext, node: RetryableTreeNode): Promise<void> {
     if (!node?.id) {
         throw new Error(l10n.t('No node selected.'));
+    }
+
+    const failedStartupCorrelationId = failedStartupCorrelationIdOf(node);
+    if (failedStartupCorrelationId) {
+        context.telemetry.properties.failedStartupCorrelationId = failedStartupCorrelationId;
     }
 
     const contextValue = node.contextValue;

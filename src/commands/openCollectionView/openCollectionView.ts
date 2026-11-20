@@ -80,6 +80,9 @@ export async function openCollectionViewInternal(
             initialTab: props.initialTab,
         },
         readDeepLinkTelemetry(context.telemetry.properties),
+        typeof context.telemetry.properties.journeyCorrelationId === 'string'
+            ? context.telemetry.properties.journeyCorrelationId
+            : undefined,
     );
 
     // Clean up the ClusterSession when the tab is closed

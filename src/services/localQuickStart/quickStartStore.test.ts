@@ -92,6 +92,34 @@ describe('quickStartStore', () => {
     });
 
     describe('records and credentials', () => {
+        it('round-trips the owning engine on a lease and its ready record', async () => {
+            await upsertInstance({
+                alias: DEFAULT_ALIAS,
+                displayName: 'DocumentDB Local',
+                port: 10260,
+                phase: 'provisioning',
+                operationId: 'operation',
+                leaseAt: Date.now(),
+                engineCli: 'podman',
+            });
+            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({
+                phase: 'provisioning',
+                engineCli: 'podman',
+            });
+
+            await upsertInstance({
+                alias: DEFAULT_ALIAS,
+                displayName: 'DocumentDB Local',
+                port: 10260,
+                phase: 'ready',
+                engineCli: 'podman',
+            });
+            await writeConnectionString(DEFAULT_ALIAS, CONN, { displayName: 'DocumentDB Local', port: 10260 });
+
+            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase: 'ready', engineCli: 'podman' });
+            expect(await readConnectionString(DEFAULT_ALIAS)).toBe(CONN);
+        });
+
         it('round-trips a record and its credentials as one item', async () => {
             await upsertInstance({
                 alias: DEFAULT_ALIAS,

@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { DocumentViewMode } from '../../../src/documentdb/DocumentViewMode';
 import {
     InstanceState,
     type DockerStatusResult,
@@ -65,6 +66,7 @@ const collectionConfig: CollectionViewWebviewConfigurationType = {
     viewId: 'connectionsView',
     databaseName: 'stage0_inventory',
     collectionName: 'stage0_documents',
+    initialDocumentView: DocumentViewMode.TABLE,
     defaultPageSize: 50,
     enableAIQueryGeneration: false,
 };
@@ -476,6 +478,8 @@ const docker: DockerStatusResult = {
         providerEvidence: 'liveDaemon',
         executionTarget: 'local',
         checkedAtMs: 1790884800000,
+        cli: 'docker',
+        cliOnPath: { docker: true, podman: false },
         cliInstalled: true,
         cliVersion: '27.0.0',
         canContinueAnyway: false,
@@ -495,6 +499,7 @@ const instance: InstanceStatusUpdate = { status: docker.status, canReuseExisting
 const common = {
     'common.reportEvent': reply<void>('mutation', undefined),
     'common.reportError': reply<void>('mutation', undefined),
+    'common.reportViewLoad': reply<void>('mutation', undefined),
 } satisfies RpcFixtures;
 
 export const fixtures = {
@@ -588,11 +593,24 @@ export const fixtures = {
         styles: [{ selector: 'table', property: 'border-collapse', expected: 'collapse' }],
         rpc: {
             ...common,
+            'localQuickStart.getWizardContext': reply<Outputs['localQuickStart']['getWizardContext']>('query', {
+                status: docker.status,
+                busy: false,
+                canReuseExistingData: false,
+                savedImagePinned: false,
+                suggestedPort: 10260,
+            }),
             'localQuickStart.getDockerStatus': reply('query', docker),
             'localQuickStart.getStatus': reply<Outputs['localQuickStart']['getStatus']>('query', docker.status),
             'localQuickStart.checkPort': reply<Outputs['localQuickStart']['checkPort']>('query', 'available'),
             'localQuickStart.checkPassword': reply<Outputs['localQuickStart']['checkPassword']>('query', 'ok'),
             'localQuickStart.reportStepChange': reply<void>('mutation', undefined),
+            'localQuickStart.reportDetailsOpened': reply<void>('mutation', undefined),
+            'localQuickStart.startDockerProvider': reply<Outputs['localQuickStart']['startDockerProvider']>(
+                'mutation',
+                'launchAttempted',
+            ),
+            'localQuickStart.copyRecoveryCommand': reply<void>('mutation', undefined),
             'localQuickStart.onInstanceChanged': { type: 'subscription', results: [instance], keepOpen: true },
         },
     },

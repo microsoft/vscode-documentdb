@@ -280,7 +280,7 @@ export function resolveKubeconfigPath(kubeconfigPath?: string): string {
  * `loadFromDefault()` selects a file: the first reachable entry of the
  * `KUBECONFIG` path list (kubectl-style merge), or the standard
  * `~/.kube/config` fallback. Returns `undefined` when none of the candidate
- * paths exist on disk — useful for callers (e.g. "Edit Kubeconfig") that need a
+ * paths exist on disk — useful for callers (e.g. "Edit kubeconfig") that need a
  * real file to open and want to fail gracefully when there is nothing to edit.
  */
 export function resolveExistingDefaultKubeconfigPath(): string | undefined {

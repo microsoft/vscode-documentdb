@@ -56,18 +56,24 @@ and [decision 0001](../build-and-test-stack/decisions.md#0001-workspace-packages
 
 ## Timeline
 
-| Date       | PR   | What changed                                            | Docs                                                                                     |
-| ---------- | ---- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| 2026-05-22 | #676 | Preview hardening and consumer reshape                  | [iterations/01-preview-hardening.md](./iterations/01-preview-hardening.md)               |
-| 2026-06-24 | #766 | Package redesign: design, plan, and review              | [iterations/02-package-redesign/](./iterations/02-package-redesign/)                     |
-| 2026-07-06 | #786 | Publish-readiness tweaks                                | [iterations/03-publish-readiness-tweaks.md](./iterations/03-publish-readiness-tweaks.md) |
-| 2026-07-14 | #795 | Thin telemetry middleware and a generic TelemetryRunner | [iterations/04-thin-telemetry-review.md](./iterations/04-thin-telemetry-review.md)       |
+| Date       | PR   | What changed                                            | Docs                                                                                                                   |
+| ---------- | ---- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 2026-05-22 | #676 | Preview hardening and consumer reshape                  | [iterations/01-preview-hardening.md](./iterations/01-preview-hardening.md)                                             |
+| 2026-06-24 | #766 | Package redesign: design, plan, and review              | [iterations/02-package-redesign/](./iterations/02-package-redesign/)                                                   |
+| 2026-07-06 | #786 | Publish-readiness tweaks                                | [iterations/03-publish-readiness-tweaks.md](./iterations/03-publish-readiness-tweaks.md)                               |
+| 2026-07-14 | #795 | Thin telemetry middleware and a generic TelemetryRunner | [iterations/04-thin-telemetry-review.md](./iterations/04-thin-telemetry-review.md)                                     |
+| 2026-11-16 | —    | R766-S04 closed; `rpcConcurrency` gauge removed (1.1.0) | [review.md, S04 resolution](./iterations/02-package-redesign/review.md#resolution-2026-11-16-s04-closed-gauge-removed) |
 
 ## Decisions
 
 No separate `decisions.md`. The alternatives and their trade-offs are argued in
 [design.md](./design.md) and re-litigated in
 [iterations/02-package-redesign/review.md](./iterations/02-package-redesign/review.md).
+
+- **Per-operation `message` listener stays (R766-S04, closed 2026-11-16).** Production data
+  from the `documentDB.webview.rpcConcurrency` gauge showed per-machine peak concurrency p99 of 5,
+  far below the revisit thresholds, so the gauge was removed. The numbers and the revisit
+  trigger are in the comment on `onReceive` in `packages/vscode-ext-webview/src/webview/connectTrpc.ts`.
 
 ## Open gaps
 

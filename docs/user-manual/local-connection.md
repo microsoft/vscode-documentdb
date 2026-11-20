@@ -16,7 +16,7 @@ The **DocumentDB extension for Visual Studio Code** allows you to connect to loc
 You have two main options for connecting to a local instance:
 
 - **Set up DocumentDB Local:**
-  [Create and manage the official DocumentDB Local container](./local-quick-start) with Docker Engine or Docker Desktop.
+  [Create and manage the official DocumentDB Local container](./local-quick-start) with Docker (Docker Engine or Docker Desktop) or Podman.
 
 - **Use Preconfigured Options:**
   The extension provides ready-to-use configurations for popular local setups:

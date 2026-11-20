@@ -40,14 +40,3 @@ export const ATLAS_SERVICE_ACCOUNT_TOKEN_URL = 'https://cloud.mongodb.com/api/oa
  * never forces a view-mode switch.
  */
 export type AtlasViewMode = 'tree' | 'list';
-
-/** Default view mode when the user has not toggled it yet. */
-export const DEFAULT_ATLAS_VIEW_MODE: AtlasViewMode = 'tree';
-
-/**
- * GlobalState key persisting the discovery tree {@link AtlasViewMode}.
- *
- * Stored directly via `ext.context.globalState`, matching the Kubernetes view-mode key, so the
- * last choice always persists without exposing a user-facing setting.
- */
-export const DISCOVERY_VIEW_MODE_STATE_KEY = `${DISCOVERY_PROVIDER_ID}.viewMode`;

@@ -193,8 +193,7 @@ export class DocumentDBResourceItem extends ClusterItemBase<AzureClusterModel> {
 
                 // Add success telemetry
                 context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
-                context.telemetry.properties.connectionResult = 'success';
-                context.telemetry.properties.connectionCorrelationId = clustersClient.connectionCorrelationId ?? '';
+                this.reportConnectionAttempt(context, 'success', clustersClient);
 
                 return clustersClient;
             } catch (error) {
@@ -206,7 +205,7 @@ export class DocumentDBResourceItem extends ClusterItemBase<AzureClusterModel> {
 
                 // Add error telemetry
                 context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
-                context.telemetry.properties.connectionResult = 'failed';
+                this.reportConnectionAttempt(context, 'failed');
                 context.telemetry.properties.connectionErrorType = error instanceof Error ? error.name : 'UnknownError';
 
                 ext.outputChannel.appendLine(

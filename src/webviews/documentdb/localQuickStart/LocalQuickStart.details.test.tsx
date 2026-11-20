@@ -1,0 +1,2337 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+// @vitest-environment jsdom
+
+import { SSRProvider } from '@fluentui/react-components';
+import { act, StrictMode } from 'react';
+import { createRoot, type Root } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+    InstanceState,
+    PROVISION_STAGES,
+    type DockerReadiness,
+    type InstanceStatusUpdate,
+    type PodmanTarget,
+    type PullingStageFacts,
+    type StageEvent,
+} from '../../../services/localQuickStart/quickStartTypes';
+import { LocalQuickStart } from './LocalQuickStart';
+import { SetupStageDetails } from './SetupStageDetails';
+import { SetupStageRow } from './SetupStageRow';
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+class NoopResizeObserver {
+    public observe(): void {}
+    public unobserve(): void {}
+    public disconnect(): void {}
+}
+window.ResizeObserver ??= NoopResizeObserver;
+
+interface StreamHandlers {
+    readonly onData: (event: StageEvent) => void;
+    readonly onError: (error: unknown) => void;
+}
+
+const client = vi.hoisted(() => {
+    const streams: StreamHandlers[] = [];
+    const mutation = (): { mutate: ReturnType<typeof vi.fn> } => ({ mutate: vi.fn(async () => undefined) });
+    const subscribe = vi.fn((_input: unknown, handlers: StreamHandlers) => {
+        streams.push(handlers);
+        return { unsubscribe: vi.fn() };
+    });
+    return {
+        streams,
+        initialPhase: 'configure',
+        initialDataChoice: undefined as 'fresh' | undefined,
+        trpc: {
+            common: { openUrl: mutation(), openFeedback: mutation(), reportError: mutation(), reportEvent: mutation() },
+            localQuickStart: {
+                getDockerStatus: { query: vi.fn() },
+                getWizardContext: { query: vi.fn() },
+                checkPort: { query: vi.fn(async () => 'available') },
+                onInstanceChanged: {
+                    subscribe: vi.fn(
+                        (
+                            _input: undefined,
+                            _handlers: { onData(update: InstanceStatusUpdate): void; onError(): void },
+                        ) => ({
+                            unsubscribe: vi.fn(),
+                        }),
+                    ),
+                },
+                startQuickStart: { subscribe },
+                waitLonger: { subscribe },
+                discardTimedOut: { mutate: vi.fn(async () => true) },
+                reportStepChange: mutation(),
+                reportDetailsOpened: mutation(),
+                closePanel: mutation(),
+                showOutput: mutation(),
+                openConnection: mutation(),
+                copyRecoveryCommand: mutation(),
+                startDockerProvider: mutation(),
+            },
+        },
+    };
+});
+
+vi.mock('@vscode/l10n', () => ({
+    t: (message: string, ...args: unknown[]): string =>
+        args.reduce<string>((result, value, index) => result.replace(`{${index}}`, String(value)), message),
+}));
+vi.mock('@microsoft/vscode-ext-webview/react', () => ({
+    useConfiguration: () => ({ initialPhase: client.initialPhase, initialDataChoice: client.initialDataChoice }),
+}));
+vi.mock('../../_integration/useTrpcClient', () => ({ useTrpcClient: () => client.trpc }));
+
+const ready: DockerReadiness = {
+    outcome: 'ready',
+    environment: 'linux',
+    endpointKind: 'unixSocket',
+    provider: 'dockerEngine',
+    providerEvidence: 'liveDaemon',
+    executionTarget: 'local',
+    canContinueAnyway: false,
+    checkedAtMs: 1_700_000_000_000,
+    cliInstalled: true,
+    cli: 'docker',
+    daemonReachable: true,
+};
+const failed: DockerReadiness = {
+    ...ready,
+    outcome: 'diagnosed',
+    failureKind: 'permissionDenied',
+    canContinueAnyway: false,
+    daemonReachable: false,
+};
+const stoppedPodman: DockerReadiness = {
+    ...failed,
+    cli: 'podman',
+    engine: 'podman',
+    engineEvidence: 'selectedCli',
+    provider: 'podman',
+    providerEvidence: 'none',
+    environment: 'macos',
+    failureKind: 'daemonUnavailable',
+    startAction: 'startPodmanMachine',
+    podmanMachine: { kind: 'stopped', name: 'custom-vm' },
+};
+const startingPodman: DockerReadiness = {
+    ...stoppedPodman,
+    failureKind: 'daemonStarting',
+    startAction: undefined,
+    podmanMachine: { kind: 'starting', name: 'custom-vm' },
+};
+
+function status(readiness: DockerReadiness): object {
+    return { readiness, status: { state: InstanceState.NotInstalled }, canReuseExistingData: false };
+}
+
+let host: HTMLDivElement;
+let root: Root;
+
+function button(name: string): HTMLButtonElement {
+    const found = [...host.querySelectorAll<HTMLButtonElement>('button')].find(
+        (candidate) => candidate.textContent?.trim() === name || candidate.getAttribute('aria-label') === name,
+    );
+    if (!found) throw new Error(`Missing button: ${name}`);
+    return found;
+}
+
+function toggle(stage: string): HTMLButtonElement | null {
+    return host.querySelector<HTMLButtonElement>(`button[aria-label="Details for ${stage}"]`);
+}
+
+async function click(element: HTMLElement): Promise<void> {
+    await act(async () => element.click());
+}
+
+async function event(value: StageEvent, readiness: DockerReadiness = ready): Promise<void> {
+    const snapshot =
+        value.stage === 'checking' && value.status !== 'active' && !value.dockerReadiness
+            ? { ...value, dockerReadiness: readiness }
+            : value;
+    await act(async () => client.streams.at(-1)?.onData(snapshot));
+}
+
+async function start(): Promise<void> {
+    await click(button('Start DocumentDB Local'));
+}
+
+async function completeSetup(
+    disposition: PullingStageFacts['disposition'],
+    volume: 'new' | 'reused',
+    documentdbVersions?: readonly string[],
+): Promise<void> {
+    await event({ stage: 'checking', status: 'done', facts: { kind: 'checking', port: 10273, portFree: true } });
+    await event({
+        stage: 'pulling',
+        status: 'done',
+        facts: {
+            kind: 'pulling',
+            imageRef: 'official:saved',
+            imageOrigin: disposition ? 'reused' : 'default',
+            imageVersion: 'image-label-not-server-version',
+            disposition,
+        },
+    });
+    await event({
+        stage: 'creating',
+        status: 'done',
+        facts: {
+            kind: 'creating',
+            containerName: 'test-instance',
+            hostPort: 10273,
+            containerPort: 10260,
+            volumeName: 'existing-volume',
+            dataPath: '/data',
+            volume,
+            username: 'test-user',
+        },
+    });
+    await event({
+        stage: 'starting',
+        status: 'done',
+        facts: { kind: 'starting', running: true, boundPort: 10273, boundPortReported: true },
+    });
+    await event({
+        stage: 'waiting',
+        status: 'done',
+        facts: {
+            kind: 'waiting',
+            port: 10273,
+            documentdbVersions,
+            sampleData: volume === 'reused' ? 'keptExisting' : 'loaded',
+        },
+    });
+    await event({ stage: 'done', status: 'done' });
+}
+
+describe('Local Quick Start stage details', () => {
+    beforeEach(async () => {
+        const matches = Element.prototype.matches;
+        vi.spyOn(Element.prototype, 'matches').mockImplementation(function (this: Element, selector: string): boolean {
+            return selector === ':modal' ? false : matches.call(this, selector) === true;
+        });
+        client.streams.length = 0;
+        client.initialPhase = 'configure';
+        client.initialDataChoice = undefined;
+        client.trpc.localQuickStart.reportDetailsOpened.mutate.mockReset().mockResolvedValue(undefined);
+        client.trpc.common.reportError.mutate.mockClear();
+        client.trpc.common.reportEvent.mutate.mockClear();
+        client.trpc.localQuickStart.getDockerStatus.query.mockReset().mockResolvedValue(status(ready));
+        client.trpc.localQuickStart.getWizardContext.query.mockReset().mockResolvedValue({
+            status: { state: InstanceState.NotInstalled },
+            busy: false,
+            canReuseExistingData: false,
+            suggestedPort: 10260,
+        });
+        client.trpc.localQuickStart.startQuickStart.subscribe.mockClear();
+        client.trpc.localQuickStart.startDockerProvider.mutate.mockReset().mockResolvedValue(undefined);
+        client.trpc.localQuickStart.copyRecoveryCommand.mutate.mockReset().mockResolvedValue(undefined);
+        host = document.createElement('div');
+        document.body.appendChild(host);
+        root = createRoot(host);
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <LocalQuickStart />
+                </SSRProvider>,
+            ),
+        );
+    });
+
+    afterEach(async () => {
+        await act(async () => root.unmount());
+        host.remove();
+        vi.restoreAllMocks();
+    });
+
+    it('shows username guidance with an info icon below both credential fields', async () => {
+        const automaticCredentials = host.querySelector<HTMLInputElement>(
+            'input[aria-label="Generate credentials automatically"]',
+        );
+        expect(automaticCredentials).not.toBeNull();
+        await click(automaticCredentials!);
+
+        const username = host.querySelector<HTMLInputElement>('input[placeholder="Enter a username"]');
+        const password = host.querySelector<HTMLInputElement>('input[placeholder="Enter a password"]');
+        const hint = host.querySelector<HTMLElement>('#quickstart-username-hint');
+        expect(username).not.toBeNull();
+        expect(password).not.toBeNull();
+        expect(hint).not.toBeNull();
+        expect(hint?.textContent).toContain('Username: up to 63 ASCII characters');
+        expect(hint?.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+        expect(username?.getAttribute('aria-describedby')?.split(' ')).toContain(hint?.id);
+
+        const fields = hint!.parentElement!;
+        expect(username?.closest('.fui-Field')?.parentElement).toBe(fields);
+        expect(password?.closest('.fui-Field')?.parentElement).toBe(fields);
+        expect([...fields.children].indexOf(hint!)).toBe(2);
+        expect(getComputedStyle(fields).alignItems).toBe('start');
+        expect(getComputedStyle(hint!).gridColumn.replace(/\s/g, '')).toBe('1/-1');
+    });
+
+    it.each([
+        [
+            'reusedPinned',
+            ['1.0.4'],
+            'Reused the saved image. No download needed.',
+            'The saved image was reused without downloading.',
+        ],
+        ['downloadedPinned', ['1.0.4'], 'Downloaded the exact saved image.', 'The exact saved image was downloaded.'],
+        [
+            'reusedTag',
+            ['1.0.4'],
+            'Used the local image without downloading.',
+            'The local image was used without downloading.',
+        ],
+        [
+            'reusedPinned',
+            undefined,
+            'Reused the saved image. No download needed.',
+            'The saved image was reused without downloading.',
+        ],
+    ] as const)(
+        'summarizes %s recreation with server versions %j and keeps every completed Details accessible',
+        async (disposition, versions, stageSummary, imageSummary) => {
+            const savedImagePinned = disposition !== 'reusedTag';
+            client.trpc.localQuickStart.getWizardContext.query.mockResolvedValue({
+                status: { state: InstanceState.Stopped, missing: true },
+                busy: false,
+                canReuseExistingData: true,
+                suggestedPort: 10273,
+                existingInstance: { ownerEngine: 'podman' },
+                savedImagePinned,
+            });
+            await act(async () =>
+                root.render(
+                    <SSRProvider>
+                        <LocalQuickStart key={`recreate-${disposition}-${versions?.join()}`} />
+                    </SSRProvider>,
+                ),
+            );
+            expect(host.textContent).toContain('Configure recreation');
+            expect(host.textContent).toContain('Saved image');
+            expect(host.textContent).toContain('Address');
+            expect(host.textContent).toContain('Credentials');
+            expect(host.textContent).toContain(
+                savedImagePinned
+                    ? 'The exact recorded image, not a newer image. Downloaded only if needed.'
+                    : 'Uses the available local image. The original image identity is not recorded.',
+            );
+            if (!savedImagePinned) expect(host.textContent).not.toContain('exact recorded image');
+            await click(button('Recreate container'));
+            expect(host.textContent).toContain('Recreating DocumentDB Local container');
+            expect(client.trpc.localQuickStart.startQuickStart.subscribe).toHaveBeenLastCalledWith(
+                expect.objectContaining({ port: 10273 }),
+                expect.any(Object),
+            );
+            await completeSetup(disposition, 'reused', versions);
+            expect(host.textContent).toContain('DocumentDB Local is ready');
+            const success = [...host.querySelectorAll('.fui-MessageBar')].find((bar) =>
+                bar.textContent?.includes('Container recreated'),
+            );
+            expect(success?.textContent).toContain(
+                versions
+                    ? 'DocumentDB 1.0.4 is running with your existing data volume and credentials.'
+                    : 'DocumentDB is running with your existing data volume and credentials.',
+            );
+            expect(success?.textContent).toContain(imageSummary);
+            expect(success?.textContent).not.toContain('image-label-not-server-version');
+            expect(host.textContent).toContain(stageSummary);
+            expect(host.textContent).not.toMatch(/All set|up to date/);
+            if (disposition === 'reusedTag') expect(success?.textContent).not.toMatch(/exact|saved image/);
+            for (const stage of [
+                'Checking container engine',
+                'Preparing image',
+                'Creating container',
+                'Starting container',
+                'Waiting for DocumentDB to accept connections',
+            ]) {
+                expect(toggle(stage)?.getAttribute('aria-expanded')).toBe('false');
+                await click(toggle(stage)!);
+                expect(toggle(stage)?.getAttribute('aria-expanded')).toBe('true');
+            }
+            expect(host.textContent).toContain('existing-volume');
+            const logLink = [...host.querySelectorAll<HTMLElement>('a, button')].find(
+                (node) => node.textContent === 'View setup log',
+            );
+            const calls = client.trpc.localQuickStart.showOutput.mutate.mock.calls.length;
+            await click(logLink!);
+            expect(client.trpc.localQuickStart.showOutput.mutate).toHaveBeenCalledTimes(calls + 1);
+            expect(button('Open Connection')).toBeDefined();
+            expect(button('Close')).toBeDefined();
+        },
+    );
+
+    it('does not announce recreation when the selected existing volume was actually gone', async () => {
+        client.trpc.localQuickStart.getWizardContext.query.mockResolvedValue({
+            status: { state: InstanceState.Stopped, missing: true },
+            busy: false,
+            canReuseExistingData: true,
+            suggestedPort: 10273,
+            savedImagePinned: true,
+        });
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <LocalQuickStart key="volume-gone" />
+                </SSRProvider>,
+            ),
+        );
+        await click(button('Recreate container'));
+        await completeSetup('reusedPinned', 'new', ['1.0.4']);
+        expect(host.textContent).toContain('All set');
+        expect(host.textContent).not.toContain('Container recreated');
+        expect(host.textContent).not.toContain('running with your existing data volume');
+        expect(toggle('Creating container')).not.toBeNull();
+    });
+
+    it('keeps fresh setup and Start fresh settings and success separate from recreation', async () => {
+        expect(host.textContent).toContain('Configure setup');
+        expect(button('Start DocumentDB Local')).toBeDefined();
+        await click(button('Change the image tag'));
+        expect(host.querySelector('input[value="latest"]')).not.toBeNull();
+        await start();
+        expect(host.textContent).toContain('Setting up DocumentDB Local');
+        await completeSetup(undefined, 'new');
+        expect(host.textContent).toContain('All set');
+        expect(host.textContent).not.toContain('Container recreated');
+        expect(toggle('Preparing image')).not.toBeNull();
+
+        client.trpc.localQuickStart.getWizardContext.query.mockResolvedValue({
+            status: { state: InstanceState.Stopped, missing: true },
+            busy: false,
+            canReuseExistingData: true,
+            suggestedPort: 10273,
+            existingInstance: {},
+            savedImagePinned: true,
+        });
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <LocalQuickStart key="start-fresh" />
+                </SSRProvider>,
+            ),
+        );
+        await click(host.querySelector<HTMLInputElement>('input[value="fresh"]')!);
+        expect(host.textContent).toContain('Configure setup');
+        expect(host.textContent).not.toContain('Saved image');
+        await click(button('Start fresh'));
+        expect(client.trpc.localQuickStart.startQuickStart.subscribe).toHaveBeenLastCalledWith(
+            expect.objectContaining({ startFresh: true }),
+            expect.any(Object),
+        );
+        await completeSetup(undefined, 'new');
+        expect(host.textContent).toContain('All set');
+        expect(host.textContent).not.toContain('Container recreated');
+    });
+
+    it.each([
+        { docker: false, podman: true },
+        { docker: false, podman: false },
+        { docker: true, podman: true },
+    ])('defaults to Docker with static choices and no pre-execution readiness (%o)', async (cliOnPath) => {
+        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status({ ...ready, cliOnPath }));
+        client.initialPhase = 'introduction';
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <LocalQuickStart key="introduction" />
+                </SSRProvider>,
+            ),
+        );
+        expect(host.textContent).toContain(
+            'You choose a preferred engine in the next step; setup uses the other if it is not installed.',
+        );
+        expect(host.textContent).toContain(
+            'DocumentDB Local gives you an open-source, fully MongoDB-compatible database for local development and testing.',
+        );
+        await click(button('Continue'));
+        const labels = [...host.querySelectorAll('table tr')].map((row) => row.textContent);
+        expect(labels[0]).toContain('Container engineDocker');
+        await click(button('Change the container engine'));
+        const docker = host.querySelector<HTMLInputElement>('input[value="docker"]')!;
+        const podman = host.querySelector<HTMLInputElement>('input[value="podman"]')!;
+        expect(docker.checked).toBe(true);
+        expect(docker.disabled).toBe(false);
+        expect(podman.disabled).toBe(false);
+        expect(host.textContent).toContain(
+            'Setup uses your preferred engine if installed, or the other one otherwise.',
+        );
+        expect(host.textContent).not.toMatch(/Found on PATH|Not found on PATH|Detected|not installed on this machine/);
+        await click(podman);
+        expect(podman.checked).toBe(true);
+        await click(docker);
+        expect(docker.checked).toBe(true);
+        expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
+        expect(client.trpc.localQuickStart.getWizardContext.query).toHaveBeenCalled();
+    });
+
+    it('retains the chosen preference through navigation and sends it unchanged at execution', async () => {
+        await click(button('Change the container engine'));
+        await click(host.querySelector<HTMLInputElement>('input[value="podman"]')!);
+        await click(button('Back'));
+        await click(button('Continue'));
+        expect(host.querySelector<HTMLInputElement>('input[value="podman"]')?.checked).toBe(true);
+        expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
+
+        await start();
+        expect(client.trpc.localQuickStart.startQuickStart.subscribe).toHaveBeenLastCalledWith(
+            expect.objectContaining({ preferredEngine: 'podman' }),
+            expect.any(Object),
+        );
+        await event({ stage: 'checking', status: 'done' });
+        expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
+    });
+
+    it('starts a new wizard with Docker rather than retaining the previous preference', async () => {
+        await click(button('Change the container engine'));
+        await click(host.querySelector<HTMLInputElement>('input[value="podman"]')!);
+
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <LocalQuickStart key="new-wizard" />
+                </SSRProvider>,
+            ),
+        );
+
+        expect(host.querySelector('table tr')?.textContent).toContain('Container engineDocker');
+        await click(button('Change the container engine'));
+        expect(host.querySelector<HTMLInputElement>('input[value="docker"]')?.checked).toBe(true);
+        expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
+    });
+
+    it.each([false, true])(
+        'passes the preference and startFresh=%s to rechecks, provider start, and polling',
+        async (startFresh) => {
+            if (startFresh) {
+                await act(async () =>
+                    client.trpc.localQuickStart.onInstanceChanged.subscribe.mock.lastCall?.[1].onData({
+                        status: { state: InstanceState.Error },
+                        canReuseExistingData: true,
+                        existingInstance: { ownerEngine: 'docker' },
+                    }),
+                );
+                await click(host.querySelector<HTMLInputElement>('input[value="fresh"]')!);
+            }
+            await click(button('Change the container engine'));
+            await click(host.querySelector<HTMLInputElement>('input[value="podman"]')!);
+            const readiness: DockerReadiness = {
+                ...failed,
+                failureKind: 'daemonUnavailable',
+                provider: 'dockerDesktop',
+                environment: 'windows',
+                startAction: 'startDockerDesktopWindows',
+            };
+            client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(readiness));
+            await click(button(startFresh ? 'Start fresh' : 'Start DocumentDB Local'));
+            await event({ stage: 'checking', status: 'error' }, readiness);
+            await click(button('Check Docker again'));
+            expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenLastCalledWith(
+                { forceRefresh: true, resetProviderMemory: true, preferredEngine: 'podman', startFresh },
+                expect.any(Object),
+            );
+            client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(ready));
+            client.trpc.localQuickStart.startDockerProvider.mutate.mockResolvedValue('started');
+
+            vi.useFakeTimers();
+            try {
+                await click(button('Start Docker Desktop'));
+                await act(async () => vi.advanceTimersByTimeAsync(1000));
+
+                expect(client.trpc.localQuickStart.startDockerProvider.mutate).toHaveBeenCalledWith({
+                    preferredEngine: 'podman',
+                    startFresh,
+                    expectedAction: 'startDockerDesktopWindows',
+                });
+                expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenLastCalledWith(
+                    expect.objectContaining({
+                        preferredEngine: 'podman',
+                        startFresh,
+                        forceRefresh: true,
+                        polled: true,
+                    }),
+                    expect.any(Object),
+                );
+            } finally {
+                vi.useRealTimers();
+            }
+        },
+    );
+
+    it('automatically waits for an initially starting Podman machine without sending a startup mutation', async () => {
+        await start();
+        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(
+            status({
+                ...ready,
+                cli: 'podman',
+                engine: 'podman',
+                provider: 'podman',
+            }),
+        );
+        vi.useFakeTimers();
+        try {
+            await event({ stage: 'checking', status: 'error', dockerReadiness: startingPodman });
+            expect(button('Stop waiting')).toBeDefined();
+            expect(host.textContent).toContain('Waiting for Podman to start');
+            expect(host.textContent).toContain('Waiting 00:00');
+            expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
+            await act(async () => vi.advanceTimersByTimeAsync(1_100));
+            await act(async () => vi.advanceTimersByTimeAsync(100));
+            expect(host.textContent).toContain('Ready to set up');
+            expect(host.textContent).toContain('Podman is ready now.');
+            expect(host.textContent).toContain('Podman is ready. Setup has not run yet.');
+            expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenLastCalledWith(
+                {
+                    preferredEngine: 'docker',
+                    startFresh: false,
+                    forceRefresh: true,
+                    polled: true,
+                    suppressCommandEcho: false,
+                },
+                expect.anything(),
+            );
+            expect(client.trpc.localQuickStart.getDockerStatus.query.mock.lastCall?.[1]).toHaveProperty(
+                'signal',
+                expect.any(AbortSignal),
+            );
+            expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('does not automatically restart the same execution wait after Stop or new starting facts', async () => {
+        await start();
+        client.trpc.localQuickStart.getDockerStatus.query.mockImplementation(async () => status({ ...startingPodman }));
+        vi.useFakeTimers();
+        try {
+            await event({ stage: 'checking', status: 'error', dockerReadiness: startingPodman });
+            await act(async () => vi.advanceTimersByTimeAsync(1_000));
+            expect(button('Stop waiting')).toBeDefined();
+            await click(button('Stop waiting'));
+            const count = client.trpc.localQuickStart.getDockerStatus.query.mock.calls.length;
+            await act(async () => vi.advanceTimersByTimeAsync(10_000));
+            expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenCalledTimes(count);
+            await click(button('Check Podman again'));
+            await act(async () => vi.advanceTimersByTimeAsync(10_000));
+            expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenCalledTimes(count + 1);
+            expect(
+                [...host.querySelectorAll('button')].some(
+                    (candidate) => candidate.textContent?.trim() === 'Stop waiting',
+                ),
+            ).toBe(false);
+            expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
+
+            await click(button('Retry setup'));
+            await event({ stage: 'checking', status: 'error', dockerReadiness: { ...startingPodman } });
+            expect(button('Stop waiting')).toBeDefined();
+            expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('does not restart an automatic Podman wait after its deadline', async () => {
+        await start();
+        client.trpc.localQuickStart.getDockerStatus.query.mockImplementation(async () => status({ ...startingPodman }));
+        vi.useFakeTimers();
+        try {
+            await event({ stage: 'checking', status: 'error', dockerReadiness: startingPodman });
+            await act(async () => vi.advanceTimersByTimeAsync(90_100));
+            await act(async () => vi.advanceTimersByTimeAsync(100));
+            const count = client.trpc.localQuickStart.getDockerStatus.query.mock.calls.length;
+            expect(host.textContent).toContain('Podman did not become ready before the wait timed out.');
+            await act(async () => vi.advanceTimersByTimeAsync(10_000));
+            expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenCalledTimes(count);
+            expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('does not automatically poll an initially starting Docker Desktop daemon', async () => {
+        await start();
+        vi.useFakeTimers();
+        try {
+            await event({
+                stage: 'checking',
+                status: 'error',
+                dockerReadiness: {
+                    ...failed,
+                    failureKind: 'daemonStarting',
+                    provider: 'dockerDesktop',
+                    providerEvidence: 'rememberedProvider',
+                },
+            });
+            await act(async () => vi.advanceTimersByTimeAsync(5_000));
+            expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
+            expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
+            expect(
+                [...host.querySelectorAll('button')].some(
+                    (candidate) => candidate.textContent?.trim() === 'Stop waiting',
+                ),
+            ).toBe(false);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('names Podman, not Docker, when a stopped Podman machine fails the check', async () => {
+        await click(button('Change the container engine'));
+        await click(host.querySelector<HTMLInputElement>('input[value="podman"]')!);
+        await start();
+        await event({ stage: 'checking', status: 'error', dockerReadiness: stoppedPodman });
+        expect(host.textContent).toContain('Engine unavailable');
+        expect(host.textContent).toContain(
+            'The Podman machine "custom-vm" is not running. Start it and wait until it is ready.',
+        );
+        expect(host.textContent).toContain('starting with the container engine check');
+        expect(button('Check Podman again')).toBeTruthy();
+        expect(host.textContent).not.toMatch(/Docker daemon|Check Docker|Docker check|Podman Desktop/);
+    });
+
+    it('starts the wait timer on click and cancels waiting without canceling a pending Podman start', async () => {
+        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(stoppedPodman));
+        await click(button('Change the container engine'));
+        await click(host.querySelector<HTMLInputElement>('input[value="podman"]')!);
+        await start();
+        await event({ stage: 'checking', status: 'error', dockerReadiness: stoppedPodman });
+        let finishStart = (_result: string): void => undefined;
+        client.trpc.localQuickStart.startDockerProvider.mutate.mockReturnValueOnce(
+            new Promise((resolve) => {
+                finishStart = resolve;
+            }),
+        );
+        vi.useFakeTimers();
+        try {
+            await click(button('Start Podman machine'));
+            await act(async () => vi.advanceTimersByTimeAsync(2_000));
+            expect(host.textContent).toContain('Waiting 00:02');
+            expect(host.textContent).toContain('Waiting for Podman to start');
+            expect(client.trpc.localQuickStart.startDockerProvider.mutate).toHaveBeenCalledExactlyOnceWith({
+                preferredEngine: 'podman',
+                startFresh: false,
+                expectedAction: 'startPodmanMachine',
+            });
+            await click(button('Stop waiting'));
+            await act(async () => vi.advanceTimersByTimeAsync(100));
+            expect(host.textContent).toContain('Stopped waiting for Podman.');
+            await act(async () => {
+                finishStart('launchAttempted');
+                await vi.advanceTimersByTimeAsync(5_000);
+            });
+            expect(
+                client.trpc.localQuickStart.getDockerStatus.query.mock.calls.some(
+                    ([input]) => (input as { polled?: boolean } | undefined)?.polled,
+                ),
+            ).toBe(false);
+            expect(host.textContent).not.toContain('Waiting 00:');
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it.each(['started', 'launchAttempted'] as const)(
+        'continues readiness polling after a click-time race returns %s',
+        async (launchResult) => {
+            client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(stoppedPodman));
+            await start();
+            await event({ stage: 'checking', status: 'error', dockerReadiness: stoppedPodman });
+            client.trpc.localQuickStart.startDockerProvider.mutate.mockResolvedValueOnce(launchResult);
+            client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(
+                status({
+                    ...ready,
+                    cli: 'podman',
+                    engine: 'podman',
+                    provider: 'podman',
+                }),
+            );
+            vi.useFakeTimers();
+            try {
+                await click(button('Start Podman machine'));
+                await act(async () => vi.advanceTimersByTimeAsync(1_000));
+                expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenLastCalledWith(
+                    {
+                        preferredEngine: 'docker',
+                        startFresh: false,
+                        forceRefresh: true,
+                        polled: true,
+                        suppressCommandEcho: false,
+                    },
+                    expect.anything(),
+                );
+                expect(client.trpc.localQuickStart.getDockerStatus.query.mock.lastCall?.[1]).toHaveProperty(
+                    'signal',
+                    expect.any(AbortSignal),
+                );
+                expect(host.textContent).toContain('Ready to set up');
+                expect(host.textContent).not.toContain('could not be started');
+            } finally {
+                vi.useRealTimers();
+            }
+        },
+    );
+
+    it('names the displayed start action on click and shows the current check when it no longer applies', async () => {
+        // Docker stays the preference; Podman was the fallback when setup ran.
+        const fallback: DockerReadiness = { ...stoppedPodman, preferredEngine: 'docker', cliFallback: true };
+        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(fallback));
+        await start();
+        await event({ stage: 'checking', status: 'error', dockerReadiness: fallback });
+        client.trpc.localQuickStart.startDockerProvider.mutate.mockResolvedValueOnce('notAvailable');
+        client.trpc.localQuickStart.getDockerStatus.query.mockClear().mockResolvedValue(
+            status({
+                ...failed,
+                cli: 'docker',
+                failureKind: 'daemonUnavailable',
+                provider: 'dockerDesktop',
+                environment: 'macos',
+                startAction: 'startDockerDesktopMacOS',
+            }),
+        );
+        vi.useFakeTimers();
+        try {
+            await click(button('Start Podman machine'));
+            await act(async () => vi.advanceTimersByTimeAsync(1_000));
+        } finally {
+            vi.useRealTimers();
+        }
+
+        expect(client.trpc.localQuickStart.startDockerProvider.mutate).toHaveBeenCalledExactlyOnceWith({
+            preferredEngine: 'docker',
+            startFresh: false,
+            expectedAction: 'startPodmanMachine',
+        });
+        expect(host.textContent).toContain('Podman could not be started.');
+        expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenCalledExactlyOnceWith(
+            { preferredEngine: 'docker', startFresh: false },
+            expect.any(Object),
+        );
+        expect(button('Start Docker Desktop')).toBeTruthy();
+        expect(() => button('Start Podman machine')).toThrow();
+    });
+
+    it('stops active Podman readiness polling without sending a startup cancellation', async () => {
+        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(stoppedPodman));
+        await start();
+        await event({ stage: 'checking', status: 'error', dockerReadiness: stoppedPodman });
+        client.trpc.localQuickStart.startDockerProvider.mutate.mockResolvedValueOnce('launchAttempted');
+        vi.useFakeTimers();
+        try {
+            await click(button('Start Podman machine'));
+            await act(async () => vi.advanceTimersByTimeAsync(1_000));
+            const calls = client.trpc.localQuickStart.getDockerStatus.query.mock.calls;
+            const options = calls.at(-1)?.[1] as { signal: AbortSignal };
+            const count = calls.length;
+            expect(options.signal.aborted).toBe(false);
+            await click(button('Stop waiting'));
+            expect(options.signal.aborted).toBe(true);
+            await act(async () => vi.advanceTimersByTimeAsync(10_000));
+            expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenCalledTimes(count);
+            expect(client.trpc.localQuickStart.startDockerProvider.mutate.mock.calls[0]).toHaveLength(1);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it.each([
+        {
+            machine: { kind: 'ambiguous', names: ['vm-one', '<img src=x onerror=alert(1)>'] },
+            text: 'vm-one, <img src=x onerror=alert(1)>',
+        },
+        { machine: { kind: 'otherActive', active: '<b>busy-vm</b>' }, text: '<b>busy-vm</b>' },
+        { machine: { kind: 'running', name: '<em>running-vm</em>' }, text: '<em>running-vm</em>' },
+    ] as const)('renders $machine.kind machine names as plain text with no start action', async ({ machine, text }) => {
+        const readiness: DockerReadiness = { ...stoppedPodman, startAction: undefined, podmanMachine: machine };
+        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(readiness));
+        await start();
+        await event({ stage: 'checking', status: 'error', dockerReadiness: readiness });
+        expect(host.textContent).toContain(text);
+        expect(host.querySelector('img, b, em')).toBeNull();
+        expect(
+            [...host.querySelectorAll('button')].some(
+                (candidate) => candidate.textContent?.trim() === 'Start Podman machine',
+            ),
+        ).toBe(false);
+    });
+
+    it.each([
+        {
+            environment: 'macos',
+            machine: { kind: 'none' },
+            target: { kind: 'unknown' },
+            id: 'podmanMachineInit',
+            commandLine: 'podman machine init',
+            machineName: undefined,
+        },
+        {
+            environment: 'linux',
+            machine: undefined,
+            target: { kind: 'userSocket' },
+            id: 'linuxStartPodmanSocket',
+            commandLine: 'systemctl --user start podman.socket',
+            machineName: undefined,
+        },
+        {
+            environment: 'wsl',
+            machine: undefined,
+            target: { kind: 'userSocket' },
+            id: 'linuxStartPodmanSocket',
+            commandLine: 'systemctl --user start podman.socket',
+            machineName: undefined,
+        },
+        {
+            environment: 'wsl',
+            machine: undefined,
+            target: { kind: 'windowsMachineFromWsl', name: 'podman-machine-default' },
+            id: 'podmanMachineStartOnWindows',
+            commandLine: 'podman machine start podman-machine-default',
+            machineName: 'podman-machine-default',
+        },
+    ] as const)(
+        'copies Podman recovery without starting anything on $environment',
+        async ({ environment, machine, target, id, commandLine, machineName }) => {
+            const readiness: DockerReadiness = {
+                ...stoppedPodman,
+                environment,
+                startAction: undefined,
+                podmanMachine: machine,
+                podmanTarget: target,
+                recoveryCommand: { id, commandLine, machineName, requiresElevation: false },
+            };
+            client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(readiness));
+            await start();
+            await event({ stage: 'checking', status: 'error', dockerReadiness: readiness });
+            expect(host.textContent).toContain(commandLine);
+            if (id === 'podmanMachineStartOnWindows') {
+                expect(host.textContent).toContain(
+                    'Podman in this WSL distribution uses the Podman machine "podman-machine-default" on Windows, and that machine is not reachable. Start it on Windows with this command or from Podman Desktop, then check again.',
+                );
+                expect(host.textContent).toContain('Run in a Windows terminal');
+                expect(host.textContent).not.toContain('systemctl --user start podman.socket');
+            }
+            await click(button('Copy'));
+            expect(client.trpc.localQuickStart.copyRecoveryCommand.mutate).toHaveBeenCalledExactlyOnceWith({
+                id,
+                ...(machineName !== undefined ? { machineName } : {}),
+            });
+            if (id === 'podmanMachineStartOnWindows') {
+                await act(async () => new Promise((resolve) => setTimeout(resolve, 110)));
+                expect(host.textContent).toContain('Recovery command copied.');
+            }
+            expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
+            expect(
+                [...host.querySelectorAll('button')].some((candidate) =>
+                    /Start (?:Podman machine|Docker)/.test(candidate.textContent ?? ''),
+                ),
+            ).toBe(false);
+        },
+    );
+
+    it.each([
+        {
+            target: { kind: 'remote' },
+            text: 'Podman is connected to another computer, which cannot be reached from here. Check its connection with "podman system connection list", then check again.',
+        },
+        {
+            target: { kind: 'local' },
+            text: 'Podman is not reachable. Check its connection with "podman system connection list", then check again.',
+        },
+    ] as const)(
+        'shows $target.kind guidance without an inappropriate action on Linux/WSL',
+        async ({ target, text }) => {
+            const readiness: DockerReadiness = {
+                ...stoppedPodman,
+                environment: 'wsl',
+                startAction: undefined,
+                podmanMachine: undefined,
+                podmanTarget: target satisfies PodmanTarget,
+                failureKind: target.kind === 'remote' ? 'endpointUnreachable' : 'daemonUnavailable',
+            };
+            client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(readiness));
+            await start();
+            await event({ stage: 'checking', status: 'error', dockerReadiness: readiness });
+
+            expect(host.textContent).toContain(text);
+            expect(host.textContent).not.toContain('systemctl --user start podman.socket');
+            expect(() => button('Copy')).toThrow();
+            expect(() => button('Start Podman machine')).toThrow();
+            expect(() => button('Start Docker Desktop')).toThrow();
+            if (target.kind === 'local') {
+                const guidance = host.querySelector('.fui-MessageBarBody')?.textContent;
+                expect(guidance).not.toContain('Podman Desktop');
+                expect(guidance).not.toContain('Podman machine');
+            }
+            expect(client.trpc.localQuickStart.copyRecoveryCommand.mutate).not.toHaveBeenCalled();
+            expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each(['ssh', 'devContainer', 'codespaces', 'otherRemote'] as const)(
+        'never offers a local Podman machine action in %s',
+        async (environment) => {
+            const readiness: DockerReadiness = {
+                ...stoppedPodman,
+                environment,
+                startAction: undefined,
+                podmanMachine: undefined,
+            };
+            client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(readiness));
+            await start();
+            await event({ stage: 'checking', status: 'error', dockerReadiness: readiness });
+            expect(
+                [...host.querySelectorAll('button')].some(
+                    (candidate) => candidate.textContent?.trim() === 'Start Podman machine',
+                ),
+            ).toBe(false);
+            expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each([
+        ['podman', 'Podman, used by the existing instance'],
+        ['docker', 'Docker, used by the existing instance'],
+        [undefined, 'Docker or Podman, not recorded by an earlier version'],
+    ] as const)(
+        'locks Keep to the %s owner and unlocks Start fresh without readiness',
+        async (ownerEngine, summary) => {
+            client.trpc.localQuickStart.getWizardContext.query.mockResolvedValue({
+                status: { state: InstanceState.Stopped, missing: true },
+                busy: false,
+                canReuseExistingData: true,
+                suggestedPort: 10273,
+                existingInstance: ownerEngine ? { ownerEngine } : {},
+            });
+            await act(async () =>
+                root.render(
+                    <SSRProvider>
+                        <LocalQuickStart key={ownerEngine ?? 'legacy'} />
+                    </SSRProvider>,
+                ),
+            );
+            expect(host.textContent).toContain(summary);
+            expect(host.querySelector('[aria-label="Change the container engine"]')).toBeNull();
+            await click(host.querySelector<HTMLInputElement>('input[value="fresh"]')!);
+            await click(button('Change the container engine'));
+            const selectedEngine = ownerEngine ?? 'docker';
+            expect(host.querySelector<HTMLInputElement>(`input[value="${selectedEngine}"]`)?.checked).toBe(true);
+            expect(host.textContent).toContain('Erase the existing data and start empty');
+            expect(host.textContent).not.toContain('Setup creates a new, empty instance');
+            if (ownerEngine === undefined) {
+                expect(host.textContent).toContain(
+                    'Earlier versions did not record the engine. They used Docker if it was installed, otherwise Podman.',
+                );
+            }
+            const otherEngine = selectedEngine === 'docker' ? 'podman' : 'docker';
+            await click(host.querySelector<HTMLInputElement>(`input[value="${otherEngine}"]`)!);
+            const ownerName = selectedEngine === 'podman' ? 'Podman' : 'Docker';
+            if (ownerEngine !== undefined) {
+                expect(button('Start fresh')).toBeDefined();
+                expect(host.textContent).toContain('Erase the existing data and start empty');
+                expect(host.querySelector('table tr')?.textContent).toContain(
+                    `Starting fresh deletes the existing DocumentDB Local container and its data in ${ownerName}, then sets up a new instance using your selected container engine.`,
+                );
+                expect(host.textContent).toContain(
+                    `This deletes the DocumentDB Local container and its data volume in ${ownerName}, then creates a new instance. All data in the existing instance is permanently erased.`,
+                );
+                expect(host.textContent).toContain('DocumentDB Local follows your VS Code telemetry setting.');
+            } else {
+                expect(host.textContent).toContain('Erase the existing data and start empty');
+                expect(host.textContent).not.toContain(
+                    'Starting fresh deletes the existing DocumentDB Local container',
+                );
+            }
+            await click(button('Hide the container engine setting'));
+            if (ownerEngine !== undefined) {
+                expect(host.querySelector('table tr')?.textContent).toContain(
+                    `Starting fresh deletes the existing DocumentDB Local container and its data in ${ownerName}`,
+                );
+                expect(host.textContent).toContain(
+                    `This deletes the DocumentDB Local container and its data volume in ${ownerName}`,
+                );
+            }
+            await click(host.querySelector<HTMLInputElement>('input[value="reuse"]')!);
+            expect(host.textContent).toContain(summary);
+            expect(host.querySelector('[aria-label="Change the container engine"]')).toBeNull();
+            expect(host.textContent).not.toContain('Starting fresh deletes the existing DocumentDB Local container');
+            expect(host.textContent).toContain('Erase the existing data and start empty');
+            expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
+            expect(client.trpc.localQuickStart.startQuickStart.subscribe).not.toHaveBeenCalled();
+        },
+    );
+
+    it('shows the neutral deletion note when a voluntary fresh retry has no recorded owner', async () => {
+        await act(async () =>
+            client.trpc.localQuickStart.onInstanceChanged.subscribe.mock.lastCall?.[1].onData({
+                status: { state: InstanceState.Stopped, missing: true },
+                canReuseExistingData: true,
+                existingInstance: {},
+            }),
+        );
+        expect(host.querySelector<HTMLInputElement>('input[value="reuse"]')?.checked).toBe(true);
+        expect(button('Recreate container')).toBeDefined();
+        await click(host.querySelector<HTMLInputElement>('input[value="fresh"]')!);
+        await click(button('Change the container engine'));
+        await click(host.querySelector<HTMLInputElement>('input[value="podman"]')!);
+        const note =
+            'This deletes the container named vscode-documentdb-local and its data volume, then creates a new one. Everything stored in DocumentDB Local is erased.';
+        expect(host.textContent).toContain(note);
+        expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
+        expect(client.trpc.localQuickStart.startQuickStart.subscribe).not.toHaveBeenCalled();
+        await click(button('Start fresh'));
+        await event({ stage: 'error', status: 'error' });
+        expect(button('Start fresh').parentElement?.previousElementSibling?.textContent).toBe(note);
+    });
+
+    it('offers forced Start fresh for an unreadable legacy record before credentials reconciliation', async () => {
+        await act(async () =>
+            client.trpc.localQuickStart.onInstanceChanged.subscribe.mock.lastCall?.[1].onData({
+                status: { state: InstanceState.Error },
+                canReuseExistingData: false,
+                existingInstance: {},
+            }),
+        );
+        expect(host.textContent).toContain(
+            'DocumentDB Local was set up on this machine before, and its saved credentials are unavailable, so its data cannot be kept. Setup starts fresh. Nothing has been changed yet.',
+        );
+        expect(host.querySelector('input[value="reuse"]')).toBeNull();
+        await click(button('Change the container engine'));
+        expect(host.querySelector<HTMLInputElement>('input[value="docker"]')?.checked).toBe(true);
+        await click(host.querySelector<HTMLInputElement>('input[value="podman"]')!);
+        expect(client.trpc.localQuickStart.startQuickStart.subscribe).not.toHaveBeenCalled();
+        expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
+        await click(button('Start fresh'));
+        expect(client.trpc.localQuickStart.startQuickStart.subscribe).toHaveBeenLastCalledWith(
+            expect.objectContaining({ startFresh: true, preferredEngine: 'podman' }),
+            expect.any(Object),
+        );
+    });
+
+    it('starts with the requested fresh choice selected and the recorded owner preselected', async () => {
+        client.initialDataChoice = 'fresh';
+        client.trpc.localQuickStart.getWizardContext.query.mockResolvedValue({
+            status: { state: InstanceState.Error },
+            busy: false,
+            canReuseExistingData: true,
+            suggestedPort: 10273,
+            existingInstance: { ownerEngine: 'podman' },
+        });
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <LocalQuickStart key="initial-fresh" />
+                </SSRProvider>,
+            ),
+        );
+        expect(host.querySelector<HTMLInputElement>('input[value="fresh"]')?.checked).toBe(true);
+        await click(button('Change the container engine'));
+        expect(host.querySelector<HTMLInputElement>('input[value="podman"]')?.checked).toBe(true);
+        expect(client.trpc.localQuickStart.startQuickStart.subscribe).not.toHaveBeenCalled();
+    });
+
+    it('seeds the first arriving owner only once and keeps later user engine choices', async () => {
+        const update: InstanceStatusUpdate = {
+            status: { state: InstanceState.Error },
+            canReuseExistingData: false,
+            existingInstance: { ownerEngine: 'podman' },
+        };
+        await act(async () =>
+            client.trpc.localQuickStart.onInstanceChanged.subscribe.mock.lastCall?.[1].onData(update),
+        );
+        await click(button('Change the container engine'));
+        expect(host.querySelector<HTMLInputElement>('input[value="podman"]')?.checked).toBe(true);
+        await click(host.querySelector<HTMLInputElement>('input[value="docker"]')!);
+        await act(async () =>
+            client.trpc.localQuickStart.onInstanceChanged.subscribe.mock.lastCall?.[1].onData({
+                ...update,
+                existingInstance: { ownerEngine: 'podman' },
+            }),
+        );
+        expect(host.querySelector<HTMLInputElement>('input[value="docker"]')?.checked).toBe(true);
+    });
+
+    it('does not reapply a later initial data choice to an already open panel', async () => {
+        await act(async () =>
+            client.trpc.localQuickStart.onInstanceChanged.subscribe.mock.lastCall?.[1].onData({
+                status: { state: InstanceState.Error },
+                canReuseExistingData: true,
+                existingInstance: { ownerEngine: 'docker' },
+            }),
+        );
+        client.initialDataChoice = 'fresh';
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <LocalQuickStart />
+                </SSRProvider>,
+            ),
+        );
+        expect(host.querySelector<HTMLInputElement>('input[value="reuse"]')?.checked).toBe(true);
+        expect(host.querySelector('[aria-label="Change the container engine"]')).toBeNull();
+    });
+
+    it('does not overwrite an engine edit made before the first record arrives', async () => {
+        await click(button('Change the container engine'));
+        await click(host.querySelector<HTMLInputElement>('input[value="podman"]')!);
+        await act(async () =>
+            client.trpc.localQuickStart.onInstanceChanged.subscribe.mock.lastCall?.[1].onData({
+                status: { state: InstanceState.Error },
+                canReuseExistingData: true,
+                existingInstance: { ownerEngine: 'docker' },
+            }),
+        );
+        expect(host.textContent).toContain('Docker, used by the existing instance');
+        expect(host.textContent).toContain('Erase the existing data and start empty');
+        await click(host.querySelector<HTMLInputElement>('input[value="fresh"]')!);
+        expect(host.querySelector<HTMLInputElement>('input[value="podman"]')?.checked).toBe(true);
+    });
+
+    it('still forces Start fresh for CredentialsMissing without a record', async () => {
+        await act(async () =>
+            client.trpc.localQuickStart.onInstanceChanged.subscribe.mock.lastCall?.[1].onData({
+                status: { state: InstanceState.CredentialsMissing },
+                canReuseExistingData: false,
+            }),
+        );
+        expect(host.textContent).toContain('DocumentDB Local needs attention');
+        expect(host.textContent).toContain('Starting fresh erases the existing instance and its data');
+        expect(host.textContent).not.toContain('DocumentDB Local was set up on this machine before');
+        expect(host.querySelector('input[value="reuse"]')).toBeNull();
+        await click(button('Start fresh'));
+        expect(client.trpc.localQuickStart.startQuickStart.subscribe).toHaveBeenLastCalledWith(
+            expect.objectContaining({ startFresh: true }),
+            expect.any(Object),
+        );
+    });
+
+    it('keeps switched-engine credentials warnings and Configure and failed footers truthful', async () => {
+        await act(async () =>
+            client.trpc.localQuickStart.onInstanceChanged.subscribe.mock.lastCall?.[1].onData({
+                status: { state: InstanceState.CredentialsMissing },
+                canReuseExistingData: false,
+                existingInstance: { ownerEngine: 'docker' },
+            }),
+        );
+        await click(button('Change the container engine'));
+        await click(host.querySelector<HTMLInputElement>('input[value="podman"]')!);
+        const warning = host.querySelector('.fui-MessageBar');
+        expect(warning?.textContent).toContain('Nothing has been changed yet.');
+        expect(warning?.textContent).toContain(
+            'Starting fresh erases the existing instance and its data, then creates a new one.',
+        );
+        expect(host.textContent).toContain(
+            'Starting fresh deletes the existing DocumentDB Local container and its data in Docker, then sets up a new instance using your selected container engine.',
+        );
+        const footer =
+            'This deletes the DocumentDB Local container and its data volume in Docker, then creates a new instance. All data in the existing instance is permanently erased.';
+        expect(host.textContent).toContain(footer);
+        expect(host.textContent).toContain('DocumentDB Local follows your VS Code telemetry setting.');
+        await click(button('Hide the container engine setting'));
+        expect(host.textContent).toContain(footer);
+        await click(button('Start fresh'));
+        await event({ stage: 'checking', status: 'error', dockerReadiness: stoppedPodman });
+        expect(button('Start fresh')).toBeDefined();
+        expect(host.textContent).toContain(footer);
+        expect(host.textContent).not.toContain('not erased');
+        expect(host.textContent).not.toContain('stops managing them');
+    });
+
+    it.each([
+        { timedOut: false, erased: false },
+        { timedOut: false, erased: true },
+        { timedOut: true, erased: false },
+        { timedOut: true, erased: true },
+    ])(
+        'reports only confirmed erasure on failure (timeout=$timedOut, erased=$erased)',
+        async ({ timedOut, erased }) => {
+            await act(async () =>
+                client.trpc.localQuickStart.onInstanceChanged.subscribe.mock.lastCall?.[1].onData({
+                    status: { state: InstanceState.Error },
+                    canReuseExistingData: true,
+                    existingInstance: { ownerEngine: 'podman' },
+                }),
+            );
+            await click(host.querySelector<HTMLInputElement>('input[value="fresh"]')!);
+            await click(button('Change the container engine'));
+            await click(host.querySelector<HTMLInputElement>('input[value="docker"]')!);
+            await click(button('Hide the container engine setting'));
+            await click(button('Start fresh'));
+            await event({ stage: 'error', status: 'error', timedOut, existingDataErased: erased || undefined });
+            const footer = button(timedOut ? 'Wait longer' : 'Start fresh').parentElement?.previousElementSibling;
+            if (erased) {
+                expect(footer?.textContent).toBe('All data in the existing instance is permanently erased.');
+                expect(host.textContent).not.toContain('This deletes the DocumentDB Local container');
+            } else if (timedOut) {
+                expect(footer).toBeNull();
+            } else {
+                expect(footer?.textContent).toBe(
+                    'This deletes the DocumentDB Local container and its data volume in Podman, then creates a new instance. All data in the existing instance is permanently erased.',
+                );
+            }
+            if (timedOut && erased) {
+                await click(button('Wait longer'));
+                await event({ stage: 'waiting', status: 'error', timedOut: true });
+                expect(button('Wait longer').parentElement?.previousElementSibling?.textContent).toBe(
+                    'All data in the existing instance is permanently erased.',
+                );
+                await click(button('Wait longer'));
+                await click(button('Cancel'));
+                expect(button('Wait longer').parentElement?.previousElementSibling?.textContent).toBe(
+                    'All data in the existing instance is permanently erased.',
+                );
+            }
+        },
+    );
+
+    it('does not carry erasure from a failed attempt into a new setup attempt', async () => {
+        await act(async () =>
+            client.trpc.localQuickStart.onInstanceChanged.subscribe.mock.lastCall?.[1].onData({
+                status: { state: InstanceState.Error },
+                canReuseExistingData: true,
+                existingInstance: { ownerEngine: 'docker' },
+            }),
+        );
+        await click(host.querySelector<HTMLInputElement>('input[value="fresh"]')!);
+        await click(button('Start fresh'));
+        await event({ stage: 'error', status: 'error', existingDataErased: true });
+        await act(async () =>
+            client.trpc.localQuickStart.onInstanceChanged.subscribe.mock.lastCall?.[1].onData({
+                status: { state: InstanceState.NotInstalled },
+                canReuseExistingData: false,
+            }),
+        );
+        await click(button('Retry setup'));
+        await event({ stage: 'error', status: 'error' });
+        expect(host.textContent).not.toContain('All data in the existing instance is permanently erased.');
+    });
+
+    it.each([InstanceState.Running, InstanceState.Stopped])(
+        'preserves the %s guard with an unreadable record',
+        async (state) => {
+            await act(async () =>
+                client.trpc.localQuickStart.onInstanceChanged.subscribe.mock.lastCall?.[1].onData({
+                    status: { state },
+                    canReuseExistingData: false,
+                    existingInstance: { ownerEngine: 'docker' },
+                }),
+            );
+            expect(host.textContent).toContain(
+                state === InstanceState.Running
+                    ? 'DocumentDB Local is already running'
+                    : 'DocumentDB Local is already set up',
+            );
+            expect(host.textContent).not.toContain('DocumentDB Local was set up on this machine before');
+            expect(host.querySelector('input[value="fresh"]')).toBeNull();
+            expect(button('Start fresh').disabled).toBe(true);
+            expect(client.trpc.localQuickStart.startQuickStart.subscribe).not.toHaveBeenCalled();
+        },
+    );
+
+    it('restores a resumable timeout from metadata without a readiness query', async () => {
+        client.trpc.localQuickStart.getWizardContext.query.mockResolvedValue({
+            status: { state: InstanceState.Error, canResumeReadiness: true },
+            busy: false,
+            canReuseExistingData: true,
+            suggestedPort: 10273,
+            existingInstance: { ownerEngine: 'podman' },
+        });
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <LocalQuickStart key="resume" />
+                </SSRProvider>,
+            ),
+        );
+        expect(button('Wait longer')).toBeDefined();
+        expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
+    });
+
+    it('unlocks engine selection after deletion without reloading wizard context or resetting its port', async () => {
+        client.trpc.localQuickStart.getWizardContext.query.mockResolvedValue({
+            status: { state: InstanceState.Stopped, missing: true },
+            busy: false,
+            canReuseExistingData: true,
+            suggestedPort: 10273,
+            existingInstance: { ownerEngine: 'podman' },
+        });
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <LocalQuickStart key="deleted-instance" />
+                </SSRProvider>,
+            ),
+        );
+        expect(host.textContent).toContain('Podman, used by the existing instance');
+        const contextCalls = client.trpc.localQuickStart.getWizardContext.query.mock.calls.length;
+
+        await act(async () =>
+            client.trpc.localQuickStart.onInstanceChanged.subscribe.mock.lastCall?.[1].onData({
+                status: { state: InstanceState.NotInstalled },
+                canReuseExistingData: false,
+                existingInstance: undefined,
+            }),
+        );
+
+        await click(button('Change the container engine'));
+        await click(host.querySelector<HTMLInputElement>('input[value="docker"]')!);
+        expect(host.textContent).toContain('10273');
+        expect(client.trpc.localQuickStart.getWizardContext.query).toHaveBeenCalledTimes(contextCalls);
+        expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
+        await start();
+        expect(client.trpc.localQuickStart.startQuickStart.subscribe).toHaveBeenLastCalledWith(
+            expect.objectContaining({ preferredEngine: 'docker', port: 10273 }),
+            expect.any(Object),
+        );
+    });
+
+    it('replaces engine and PATH evidence on a repeated attempt without a post-check query', async () => {
+        const first: DockerReadiness = {
+            ...ready,
+            cli: 'podman',
+            preferredEngine: 'docker',
+            cliFallback: true,
+            cliVersion: '5.8.3',
+            provider: 'podman',
+            cliOnPath: { docker: false, podman: true },
+        };
+        await start();
+        await event({ stage: 'checking', status: 'done' }, first);
+        await event({ stage: 'pulling', status: 'active' });
+        await event({ stage: 'error', status: 'error' });
+        expect(host.textContent).toContain('Podman 5.8.3 (Docker not found)');
+
+        await click(button('Retry setup'));
+        expect(host.textContent).not.toContain('5.8.3');
+        expect(toggle('Checking container engine')).toBeNull();
+        const second: DockerReadiness = {
+            ...ready,
+            cli: 'docker',
+            preferredEngine: 'docker',
+            cliFallback: false,
+            cliVersion: '28.0.0',
+            cliOnPath: { docker: true, podman: true },
+        };
+        await event({ stage: 'checking', status: 'done' }, second);
+        expect(host.textContent).toContain('Docker CLI 28.0.0 found');
+        expect(host.textContent).not.toContain('5.8.3');
+        await click(toggle('Checking container engine')!);
+        expect(host.textContent).toContain('Found on PATH, not checked');
+        expect(host.textContent).not.toContain('not found, used');
+        expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
+    });
+
+    it('retains the original checking snapshot when waiting longer', async () => {
+        const readiness: DockerReadiness = {
+            ...ready,
+            cli: 'podman',
+            preferredEngine: 'docker',
+            cliFallback: true,
+            cliVersion: '5.8.3',
+            provider: 'podman',
+            cliOnPath: { docker: false, podman: true },
+        };
+        await start();
+        await event({ stage: 'checking', status: 'done' }, readiness);
+        await event({ stage: 'waiting', status: 'active' });
+        await event({ stage: 'error', status: 'error', timedOut: true });
+
+        await click(button('Wait longer'));
+
+        expect(host.textContent).toContain('Podman 5.8.3 (Docker not found)');
+        await click(toggle('Checking container engine')!);
+        expect(host.textContent).toContain('Docker · not found, used Podman');
+        expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
+    });
+
+    it.each(['docker', 'podman'] as const)(
+        'uses the captured %s fallback on a failed check without querying status',
+        async (preferredEngine) => {
+            const cli = preferredEngine === 'docker' ? 'podman' : 'docker';
+            const readiness: DockerReadiness = {
+                ...failed,
+                cli,
+                preferredEngine,
+                cliFallback: true,
+                failureKind: 'daemonUnavailable',
+                cliVersion: '5.8.3',
+                cliOnPath: { docker: cli === 'docker', podman: cli === 'podman' },
+            };
+            await start();
+            await event({ stage: 'checking', status: 'error', dockerReadiness: readiness });
+            expect(host.textContent).toContain(
+                `${cli === 'docker' ? 'Docker' : 'Podman'} 5.8.3 (${preferredEngine === 'docker' ? 'Docker' : 'Podman'} not found)`,
+            );
+            await click(toggle('Checking container engine')!);
+            expect(host.textContent).toContain(
+                `${preferredEngine === 'docker' ? 'Docker' : 'Podman'} · not found, used ${cli === 'docker' ? 'Docker' : 'Podman'}`,
+            );
+            expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
+        },
+    );
+
+    it('reserves an inaccessible blank detail line for every pending and active stage', async () => {
+        const focusFallback = { current: null };
+        for (const stageStatus of ['pending', 'active'] as const) {
+            await act(async () =>
+                root.render(
+                    <SSRProvider>
+                        {PROVISION_STAGES.map((stage) => (
+                            <SetupStageRow
+                                key={stage}
+                                stage={stage}
+                                label={stage}
+                                status={stageStatus}
+                                facts={[{ label: 'Fact', value: 'Value' }]}
+                                expanded={false}
+                                onExpandedChange={() => undefined}
+                                focusFallback={focusFallback}
+                                mutedClassName=""
+                                onShowOutput={() => undefined}
+                            />
+                        ))}
+                    </SSRProvider>,
+                ),
+            );
+            const rows = [...host.querySelectorAll('[role="listitem"]')];
+            expect(rows).toHaveLength(5);
+            for (const row of rows) {
+                const text = row.querySelectorAll('.fui-Text');
+                expect(text).toHaveLength(2);
+                expect(text[1].textContent).toBe('\u00a0');
+                expect(text[1].firstElementChild?.getAttribute('aria-hidden')).toBe('true');
+                expect(text[1].firstElementChild?.className).toBe('');
+                expect(row.querySelector('button')).toBeNull();
+            }
+        }
+    });
+
+    it('styles only the summary, leaving the label and Details toggle outside it', async () => {
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <SetupStageRow
+                        stage="starting"
+                        label="Starting container"
+                        status="done"
+                        detail="Running on port 10273"
+                        facts={[{ label: 'Port', value: '10273' }]}
+                        expanded={false}
+                        onExpandedChange={() => undefined}
+                        focusFallback={{ current: null }}
+                        mutedClassName=""
+                        onShowOutput={() => undefined}
+                    />
+                </SSRProvider>,
+            ),
+        );
+        const [label, detail] = host.querySelectorAll<HTMLElement>('.fui-Text');
+        const summary = detail.querySelector<HTMLElement>('span');
+        const detailsButton = detail.querySelector('button');
+        expect(summary?.textContent).toBe('Running on port 10273');
+        expect(getComputedStyle(summary!).color).toBe('var(--colorNeutralForeground1)');
+        expect(label.classList.contains(summary!.className)).toBe(false);
+        expect(summary?.contains(detailsButton)).toBe(false);
+        expect(detailsButton?.textContent).toContain('Details');
+    });
+
+    it('renders ordinary facts without code and distinguishes qualifications from muted notes', async () => {
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <SetupStageDetails
+                        facts={[
+                            { label: 'Image', value: 'image:tag', note: 'Custom tag' },
+                            { label: 'Bound port', value: '10273', qualification: 'As requested' },
+                            { label: 'Logs', value: 'Streaming to the setup log', action: 'showOutput' },
+                        ]}
+                        mutedClassName="muted-note"
+                        onShowOutput={() => undefined}
+                    />
+                </SSRProvider>,
+            ),
+        );
+        const terms = [...host.querySelectorAll<HTMLElement>('dt')];
+        const values = [...host.querySelectorAll<HTMLElement>('dd')];
+        expect(host.querySelector('code')).toBeNull();
+        expect(terms.map((term) => term.textContent)).toEqual(['Image', 'Bound port', 'Logs']);
+        expect(getComputedStyle(terms[0]).color).toBe('inherit');
+        expect(values[0].textContent).toBe('image:tag · Custom tag');
+        expect(values[0].querySelector('span')?.className).toContain('muted-note');
+        expect(values[1].textContent).toBe('10273 · As requested');
+        expect(values[1].querySelector('span')?.className).toBe('');
+        const link = values[2].querySelector<HTMLElement>('button');
+        expect(link?.textContent).toBe('View setup log');
+        const linkStyle = getComputedStyle(link!);
+        expect(linkStyle.fontFamily).toBe('inherit');
+        expect(linkStyle.fontSize).toBe('inherit');
+        expect(linkStyle.fontWeight).toBe('inherit');
+        expect(linkStyle.lineHeight).toBe('inherit');
+    });
+
+    it('keeps the Creating summary and Details on the reserved line with full ID evidence', async () => {
+        await start();
+        const row = [...host.querySelectorAll('[role="listitem"]')].find((item) =>
+            item.textContent?.includes('Creating container'),
+        );
+        expect(row).toBeDefined();
+        const detail = row!.querySelectorAll('.fui-Text')[1];
+        expect(detail?.textContent).toBe('\u00a0');
+        expect(detail?.firstElementChild?.getAttribute('aria-hidden')).toBe('true');
+        await event({ stage: 'creating', status: 'active' });
+        expect(row!.querySelectorAll('.fui-Text')[1]).toBe(detail);
+        expect(toggle('Creating container')).toBeNull();
+        const containerId = '123456789012345678';
+        await event({
+            stage: 'creating',
+            status: 'done',
+            facts: {
+                kind: 'creating',
+                containerName: 'test-instance',
+                containerId,
+                hostPort: 10273,
+                containerPort: 10260,
+                volumeName: 'test-volume',
+                dataPath: '/data',
+                volume: 'new',
+                username: 'test-user',
+            },
+        });
+        expect(row!.querySelectorAll('.fui-Text')).toHaveLength(2);
+        expect(row!.querySelectorAll('.fui-Text')[1]).toBe(detail);
+        expect(detail.textContent).toContain('Container test-instance');
+        expect(detail.querySelectorAll('button')).toHaveLength(1);
+        expect(detail.querySelector('button')).toBe(toggle('Creating container'));
+        await click(toggle('Creating container')!);
+        const region = row!.querySelector('[role="region"]');
+        const id = region?.querySelector<HTMLElement>('[role="group"][tabindex="0"]');
+        expect(id?.tagName).toBe('SPAN');
+        expect(id?.getAttribute('aria-labelledby')).toBe(id?.firstElementChild?.id);
+        expect(id?.textContent).toBe('123456789012…');
+        await act(async () => {
+            id!.focus();
+            await new Promise((resolve) => setTimeout(resolve, 600));
+        });
+        expect(document.activeElement).toBe(id);
+        const description = id?.getAttribute('aria-describedby');
+        expect(description && document.getElementById(description)?.textContent).toBe(containerId);
+        const tooltip = document.getElementById(description!);
+        expect(getComputedStyle(tooltip!).fontFamily).toBe('var(--fontFamilyBase)');
+        expect(getComputedStyle(tooltip!).fontSize).toBe('var(--fontSizeBase200)');
+        expect(getComputedStyle(tooltip!).lineHeight).toBe('var(--lineHeightBase200)');
+        expect(getComputedStyle(tooltip!).fontWeight).toBe('var(--fontWeightRegular)');
+        expect(getComputedStyle(tooltip!).overflowWrap).toBe('anywhere');
+    });
+
+    it('reports only openings, once each in StrictMode, including reopenings on Done', async () => {
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <StrictMode>
+                        <LocalQuickStart />
+                    </StrictMode>
+                </SSRProvider>,
+            ),
+        );
+        await start();
+        await event({ stage: 'checking', status: 'done', facts: { kind: 'checking', port: 10333, portFree: true } });
+        const report = client.trpc.localQuickStart.reportDetailsOpened.mutate;
+        expect(report).not.toHaveBeenCalled();
+
+        await click(toggle('Checking container engine')!);
+        expect(report).toHaveBeenCalledExactlyOnceWith({ stage: 'checking' });
+        await click(toggle('Checking container engine')!);
+        expect(report).toHaveBeenCalledTimes(1);
+        await click(toggle('Checking container engine')!);
+        expect(report).toHaveBeenCalledTimes(2);
+        await event({ stage: 'done', status: 'done' });
+        expect(report).toHaveBeenCalledTimes(2);
+        await click(toggle('Checking container engine')!);
+        expect(report).toHaveBeenCalledTimes(2);
+        await click(toggle('Checking container engine')!);
+        expect(report.mock.calls).toEqual([[{ stage: 'checking' }], [{ stage: 'checking' }], [{ stage: 'checking' }]]);
+        expect(client.trpc.common.reportEvent.mutate).not.toHaveBeenCalled();
+    });
+
+    it.each([new Error('Disclosure reporting failed'), 'Disclosure reporting failed'])(
+        'reports a failed disclosure mutation without preventing expansion (%s)',
+        async (error) => {
+            client.trpc.localQuickStart.reportDetailsOpened.mutate.mockRejectedValueOnce(error);
+            await start();
+            await event({ stage: 'checking', status: 'done' });
+
+            await click(toggle('Checking container engine')!);
+
+            expect(toggle('Checking container engine')?.getAttribute('aria-expanded')).toBe('true');
+            expect(client.trpc.common.reportError.mutate).toHaveBeenCalledExactlyOnceWith({
+                message: 'Disclosure reporting failed',
+                stack: error instanceof Error ? error.stack : '',
+            });
+        },
+    );
+
+    it('shows collapsed details only for a settled checking row and carries them to Done', async () => {
+        await start();
+        await event({ stage: 'checking', status: 'active' });
+        expect(toggle('Checking container engine')).toBeNull();
+        await event({ stage: 'checking', status: 'done' });
+        const checking = toggle('Checking container engine');
+        expect(checking?.getAttribute('aria-expanded')).toBe('false');
+        await click(checking!);
+        expect(host.textContent).toContain('Docker Engine');
+        expect(toggle('Preparing image')).toBeNull();
+        await event({ stage: 'done', status: 'done' });
+        expect(toggle('Checking container engine')?.getAttribute('aria-expanded')).toBe('true');
+    });
+
+    it.each(['pulling', 'creating'] as const)('keeps engine failure evidence on the failed %s row', async (stage) => {
+        await start();
+        await event({ stage: 'checking', status: 'done' });
+        await event({ stage, status: 'active' });
+        await event({ stage: 'error', status: 'error', dockerReadiness: failed });
+        const name = stage === 'pulling' ? 'Preparing image' : 'Creating container';
+        const check = toggle('Checking container engine');
+        const failure = toggle(name);
+        expect(failure?.getAttribute('aria-expanded')).toBe('false');
+        const description = failure?.getAttribute('aria-describedby');
+        expect(description && document.getElementById(description)?.textContent).toBe('Docker access denied');
+        await click(failure!);
+        expect(host.textContent).toContain('Docker access denied');
+        expect(host.textContent).toContain('View setup log');
+        await click(check!);
+        const regions = [...host.querySelectorAll('[role="region"]')];
+        const checkRegion = regions.find((region) => region.getAttribute('aria-labelledby') === check?.id);
+        expect(checkRegion?.textContent).toContain('Engine is ready');
+    });
+
+    it('shows failed check evidence and moves focus to the focusable disabled footer when rechecking', async () => {
+        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(failed));
+        await start();
+        await event({ stage: 'checking', status: 'active' });
+        await event({ stage: 'checking', status: 'error' }, failed);
+        const checking = toggle('Checking container engine');
+        expect(checking?.getAttribute('aria-expanded')).toBe('false');
+        await click(checking!);
+        expect(host.textContent).toContain('Last checked');
+        expect(host.textContent).toContain('Docker access denied');
+        expect(host.textContent).toContain('View setup log');
+        checking!.focus();
+        let resolveRecheck: (value: object) => void = () => undefined;
+        client.trpc.localQuickStart.getDockerStatus.query.mockImplementationOnce(
+            () => new Promise((resolve) => (resolveRecheck = resolve)),
+        );
+        await click(button('Check Docker again'));
+        expect(toggle('Checking container engine')).toBeNull();
+        expect(document.activeElement).toBe(button('Retry setup'));
+        expect(button('Retry setup').getAttribute('aria-disabled')).toBe('true');
+        await act(async () => resolveRecheck(status(failed)));
+        expect(toggle('Checking container engine')?.getAttribute('aria-expanded')).toBe('false');
+        expect(client.trpc.localQuickStart.reportDetailsOpened.mutate).toHaveBeenCalledExactlyOnceWith({
+            stage: 'checking',
+        });
+        await click(toggle('Checking container engine')!);
+        expect(client.trpc.localQuickStart.reportDetailsOpened.mutate).toHaveBeenCalledTimes(2);
+    });
+
+    it('moves focus from the recheck action to the footer while checking Docker again', async () => {
+        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(failed));
+        await start();
+        await event({ stage: 'checking', status: 'active' });
+        await event({ stage: 'checking', status: 'error' }, failed);
+        let resolveRecheck: (value: object) => void = () => undefined;
+        client.trpc.localQuickStart.getDockerStatus.query.mockImplementationOnce(
+            () => new Promise((resolve) => (resolveRecheck = resolve)),
+        );
+        const recheck = button('Check Docker again');
+        recheck.focus();
+        expect(document.activeElement).toBe(recheck);
+        await click(recheck);
+        expect(recheck.isConnected).toBe(false);
+        expect(document.activeElement).toBe(button('Retry setup'));
+        expect(button('Retry setup').getAttribute('aria-disabled')).toBe('true');
+        await act(async () => resolveRecheck(status(failed)));
+        expect(document.activeElement).toBe(button('Retry setup'));
+    });
+
+    it('collapses an expanded check on retry', async () => {
+        await start();
+        await event({ stage: 'checking', status: 'done' });
+        await event({ stage: 'pulling', status: 'active' });
+        await event({ stage: 'error', status: 'error' });
+        await click(toggle('Checking container engine')!);
+        await click(button('Retry setup'));
+        expect(toggle('Checking container engine')).toBeNull();
+        await event({ stage: 'checking', status: 'done' });
+        expect(toggle('Checking container engine')?.getAttribute('aria-expanded')).toBe('false');
+        expect(client.trpc.localQuickStart.reportDetailsOpened.mutate).toHaveBeenCalledTimes(1);
+        await click(toggle('Checking container engine')!);
+        expect(client.trpc.localQuickStart.reportDetailsOpened.mutate.mock.calls).toEqual([
+            [{ stage: 'checking' }],
+            [{ stage: 'checking' }],
+        ]);
+    });
+
+    it('clears open rows when waiting longer and starting over', async () => {
+        await start();
+        await event({ stage: 'checking', status: 'done' });
+        await event({ stage: 'waiting', status: 'active' });
+        await event({ stage: 'error', status: 'error', timedOut: true });
+        await click(toggle('Checking container engine')!);
+        await click(button('Wait longer'));
+        expect(toggle('Checking container engine')?.getAttribute('aria-expanded')).toBe('false');
+        await event({ stage: 'waiting', status: 'active' });
+        await event({ stage: 'error', status: 'error', timedOut: true });
+        await click(toggle('Checking container engine')!);
+        await click(button('Start over'));
+        await start();
+        await event({ stage: 'checking', status: 'done' });
+        expect(toggle('Checking container engine')?.getAttribute('aria-expanded')).toBe('false');
+        expect(client.trpc.localQuickStart.reportDetailsOpened.mutate).toHaveBeenCalledTimes(2);
+        await click(toggle('Checking container engine')!);
+        expect(client.trpc.localQuickStart.reportDetailsOpened.mutate.mock.calls).toEqual([
+            [{ stage: 'checking' }],
+            [{ stage: 'checking' }],
+            [{ stage: 'checking' }],
+        ]);
+    });
+
+    it('shows each non-readiness stage table in Set up and Done, using plain facts and the existing log action', async () => {
+        await start();
+        await event({ stage: 'checking', status: 'done', facts: { kind: 'checking', port: 10273, portFree: true } });
+        await event({ stage: 'pulling', status: 'active' });
+        expect(toggle('Preparing image')).toBeNull();
+        await event({
+            stage: 'pulling',
+            status: 'done',
+            facts: { kind: 'pulling', imageRef: 'official:test-tag', imageOrigin: 'custom', result: 'downloaded' },
+        });
+        await event({
+            stage: 'creating',
+            status: 'done',
+            facts: {
+                kind: 'creating',
+                containerName: 'test-instance',
+                containerId: 'container-id',
+                hostPort: 10273,
+                containerPort: 10260,
+                volumeName: 'test-volume',
+                dataPath: '/data',
+                volume: 'new',
+                username: 'test-user',
+            },
+        });
+        await event({
+            stage: 'starting',
+            status: 'done',
+            facts: { kind: 'starting', running: true, boundPort: 10273, boundPortReported: true },
+        });
+        for (const stage of [
+            'Checking container engine',
+            'Preparing image',
+            'Creating container',
+            'Starting container',
+        ]) {
+            expect(toggle(stage)?.getAttribute('aria-expanded')).toBe('false');
+            await click(toggle(stage)!);
+        }
+        expect(toggle('Waiting for DocumentDB to accept connections')).toBeNull();
+        const regions = [...host.querySelectorAll('[role="region"]')];
+        expect(regions.some((region) => region.textContent?.includes('official:test-tag'))).toBe(true);
+        expect(regions.every((region) => !region.querySelector('code'))).toBe(true);
+        const imageRegion = regions.find((region) => region.textContent?.includes('official:test-tag'))!;
+        const imageNote = [...imageRegion.querySelectorAll<HTMLElement>('dd span')].find((node) =>
+            node.textContent?.includes('Custom tag'),
+        );
+        expect(getComputedStyle(imageNote!).color).toBe(
+            'var(--vscode-descriptionForeground, var(--colorNeutralForeground2))',
+        );
+        expect(host.textContent).toContain('(hidden)');
+        expect(host.textContent).toContain('Passed in a temporary file');
+        const calls = client.trpc.localQuickStart.showOutput.mutate.mock.calls.length;
+        const logLink = [...host.querySelectorAll<HTMLElement>('[role="button"], button, a')].find(
+            (element) => element.textContent === 'View setup log',
+        );
+        expect(logLink).toBeDefined();
+        await click(logLink!);
+        expect(client.trpc.localQuickStart.showOutput.mutate).toHaveBeenCalledTimes(calls + 1);
+        await event({ stage: 'waiting', status: 'done', facts: { kind: 'waiting', port: 10273 } });
+        await event({ stage: 'done', status: 'done' });
+        expect(host.textContent).toContain('official:test-tag');
+        expect(host.textContent).toContain('test-volume');
+        expect(host.textContent).toContain('10273');
+        await click(toggle('Waiting for DocumentDB to accept connections')!);
+        expect(client.trpc.localQuickStart.reportDetailsOpened.mutate.mock.calls).toEqual([
+            [{ stage: 'checking' }],
+            [{ stage: 'pulling' }],
+            [{ stage: 'creating' }],
+            [{ stage: 'starting' }],
+            [{ stage: 'waiting' }],
+        ]);
+        expect(client.trpc.common.reportEvent.mutate).not.toHaveBeenCalled();
+    });
+
+    it('shows active image origin without disclosure and retains settled summaries on Done', async () => {
+        await start();
+        await event({
+            stage: 'pulling',
+            status: 'active',
+            facts: { kind: 'pulling', imageRef: 'image:custom', imageOrigin: 'custom' },
+        });
+        expect(host.textContent).toContain('Image image:custom · Custom tag');
+        expect(toggle('Preparing image')).toBeNull();
+        await event({
+            stage: 'pulling',
+            status: 'done',
+            facts: { kind: 'pulling', imageRef: 'image:custom', imageOrigin: 'custom', result: 'updated' },
+        });
+        expect(host.textContent).toContain('Updated');
+        expect(toggle('Preparing image')).not.toBeNull();
+        await event({ stage: 'done', status: 'done' });
+        expect(host.textContent).toContain('Updated');
+        expect(toggle('Preparing image')).not.toBeNull();
+    });
+
+    it('replaces the active image summary with literal pull output without repeated step effects', async () => {
+        await start();
+        const pullingFacts = { kind: 'pulling', imageRef: 'image:custom', imageOrigin: 'custom' } as const;
+        await event({ stage: 'pulling', status: 'active', facts: pullingFacts });
+        const summary = 'Image image:custom · Custom tag';
+        expect(host.textContent).toContain(summary);
+        expect(host.textContent).not.toContain('Engine output:');
+        const announcement = [...host.querySelectorAll('[role="status"][aria-live="polite"]')].find(
+            (node) => node.textContent === 'Preparing image…',
+        );
+        expect(announcement).toBeDefined();
+        const mutations: MutationRecord[] = [];
+        const observer = new MutationObserver((records) => mutations.push(...records));
+        observer.observe(announcement!, { childList: true, characterData: true, subtree: true });
+        const stepCalls = client.trpc.localQuickStart.reportStepChange.mutate.mock.calls.length;
+        const detailsCalls = client.trpc.localQuickStart.reportDetailsOpened.mutate.mock.calls.length;
+        const timer = vi.spyOn(globalThis, 'setInterval');
+        const stopTimer = vi.spyOn(globalThis, 'clearInterval');
+        const cancel = button('Cancel');
+        const primary = button('Setting up…');
+        const focus = document.activeElement;
+        try {
+            for (const progress of ['<b>Downloading layer</b>', 'Extracting layer', 'x'.repeat(160)]) {
+                await event({ stage: 'pulling', status: 'active', facts: { ...pullingFacts, progress } });
+                const outputs = [...host.querySelectorAll<HTMLSpanElement>('span[title]')].filter(
+                    (node) => node.textContent === `Engine output: ${progress}`,
+                );
+                expect(outputs).toHaveLength(1);
+                const output = outputs[0];
+                expect(host.textContent).not.toContain(summary);
+                expect(output?.title).toBe(`Engine output: ${progress}`);
+                expect(output?.children).toHaveLength(0);
+                expect(getComputedStyle(output).display).toBe('block');
+                expect(getComputedStyle(output).whiteSpace).toBe('nowrap');
+                expect(getComputedStyle(output).overflow).toBe('hidden');
+                expect(getComputedStyle(output).textOverflow).toBe('ellipsis');
+                expect(getComputedStyle(output.parentElement!).color).toBe('var(--colorNeutralForeground1)');
+                expect(output?.querySelector('b')).toBeNull();
+                expect(output?.closest('[aria-live], [role="status"], [role="alert"], [role="log"]')).toBeNull();
+                expect(announcement?.textContent).toBe('Preparing image…');
+                expect(toggle('Preparing image')).toBeNull();
+                expect(button('Cancel')).toBe(cancel);
+                expect(button('Setting up…')).toBe(primary);
+                expect(primary.disabled).toBe(true);
+                expect(document.activeElement).toBe(focus);
+                expect(client.trpc.localQuickStart.reportStepChange.mutate).toHaveBeenCalledTimes(stepCalls);
+                expect(client.trpc.localQuickStart.reportDetailsOpened.mutate).toHaveBeenCalledTimes(detailsCalls);
+                expect(client.trpc.common.reportEvent.mutate).not.toHaveBeenCalled();
+            }
+            expect(host.textContent).not.toContain('Downloading layer');
+            expect(mutations).toEqual([]);
+            expect(timer).not.toHaveBeenCalled();
+            expect(stopTimer).not.toHaveBeenCalled();
+        } finally {
+            observer.disconnect();
+        }
+        await event({ stage: 'pulling', status: 'done' });
+        expect(host.textContent).not.toContain('Engine output:');
+        expect(host.textContent).toContain('Image image:custom');
+        expect(announcement?.textContent).toBe('');
+        await event({ stage: 'done', status: 'done' });
+        expect(host.textContent).not.toContain('Engine output:');
+        expect(host.textContent).toContain('Image image:custom');
+    });
+
+    it('retains the full active image summary before pull output arrives', async () => {
+        await start();
+        const imageRef = `image:${'x'.repeat(160)}`;
+        const summary = `Image ${imageRef} · Custom tag`;
+        await event({
+            stage: 'pulling',
+            status: 'active',
+            facts: { kind: 'pulling', imageRef, imageOrigin: 'custom' },
+        });
+        const image = [...host.querySelectorAll<HTMLSpanElement>('span[title]')].find(
+            (node) => node.textContent === summary,
+        );
+        expect(image?.title).toBe(summary);
+        expect(image?.children).toHaveLength(0);
+        expect(host.textContent).not.toContain('Engine output:');
+        expect(toggle('Preparing image')).toBeNull();
+    });
+
+    it.each([undefined, '', ' \n\t'])(
+        'replaces active pull output when the next facts have no nonblank line (%s)',
+        async (progress) => {
+            await start();
+            const pullingFacts = { kind: 'pulling', imageRef: 'image:custom', imageOrigin: 'custom' } as const;
+            await event({
+                stage: 'pulling',
+                status: 'active',
+                facts: { ...pullingFacts, progress: 'Downloading layer' },
+            });
+            expect(host.textContent).toContain('Engine output: Downloading layer');
+            await event({ stage: 'pulling', status: 'active', facts: { ...pullingFacts, progress } });
+            expect(host.textContent).not.toContain('Engine output:');
+            expect(host.textContent).not.toContain('Downloading layer');
+            expect(host.textContent).toContain('Image image:custom · Custom tag');
+            expect(toggle('Preparing image')).toBeNull();
+        },
+    );
+
+    it.each(['pulling', 'error'] as const)('clears pull output on a %s failure and retry', async (stage) => {
+        await start();
+        await event({
+            stage: 'pulling',
+            status: 'active',
+            facts: { kind: 'pulling', imageRef: 'image:custom', imageOrigin: 'custom', progress: 'Downloading layer' },
+        });
+        await event({ stage, status: 'error' });
+        expect(host.textContent).not.toContain('Engine output:');
+        expect(host.textContent).toContain('Image image:custom');
+        await click(button('Retry setup'));
+        await event({ stage: 'pulling', status: 'active' });
+        expect(host.textContent).not.toContain('Engine output:');
+        expect(host.textContent).not.toContain('image:custom');
+    });
+
+    it('clears pull output on a stream error', async () => {
+        await start();
+        await event({
+            stage: 'pulling',
+            status: 'active',
+            facts: { kind: 'pulling', imageRef: 'image:custom', imageOrigin: 'custom', progress: 'Downloading layer' },
+        });
+        await act(async () => client.streams.at(-1)?.onError(new Error('Stream failed')));
+        expect(host.textContent).not.toContain('Engine output:');
+        expect(host.textContent).toContain('Image image:custom · Custom tag');
+        expect(host.textContent).toContain('Stream failed');
+    });
+
+    it('clears pull output on cancellation and ignores trailing output before a fresh run', async () => {
+        await start();
+        const activity: StageEvent = {
+            stage: 'pulling',
+            status: 'active',
+            facts: { kind: 'pulling', imageRef: 'image:custom', imageOrigin: 'custom', progress: 'Downloading layer' },
+        };
+        await event(activity);
+        await click(button('Cancel'));
+        await event(activity);
+        expect(host.textContent).not.toContain('Engine output:');
+        await start();
+        await event({ stage: 'pulling', status: 'active' });
+        expect(host.textContent).not.toContain('Engine output:');
+        expect(host.textContent).not.toContain('image:custom');
+        expect(toggle('Preparing image')).toBeNull();
+    });
+
+    it('keeps the image summary ahead of engine failure details', async () => {
+        await start();
+        await event({ stage: 'pulling', status: 'active' });
+        await event({
+            stage: 'error',
+            status: 'error',
+            dockerReadiness: failed,
+            facts: { kind: 'pulling', imageRef: 'image:failed', imageOrigin: 'default' },
+        });
+        expect(host.textContent).toContain('Image image:failed');
+        await click(toggle('Preparing image')!);
+        expect(host.textContent).toContain('Docker access denied');
+    });
+
+    it('makes shortened image IDs keyboard- and mouse-accessible with full descriptions', async () => {
+        const imageId = 'sha256:012345678901234567890123456789';
+        const previousImageId = 'sha256:987654321098765432109876543210';
+        await start();
+        await event({
+            stage: 'pulling',
+            status: 'done',
+            facts: {
+                kind: 'pulling',
+                imageRef: 'image',
+                imageOrigin: 'default',
+                result: 'updated',
+                imageId,
+                previousImageId,
+            },
+        });
+        await click(toggle('Preparing image')!);
+        const region = host.querySelector(`[aria-labelledby="${toggle('Preparing image')!.id}"]`);
+        const triggers = [...region!.querySelectorAll<HTMLElement>('[role="group"][tabindex="0"]')];
+        expect(triggers.every((node) => node.tagName === 'SPAN')).toBe(true);
+        expect(triggers.every((node) => node.getAttribute('aria-labelledby') === node.firstElementChild?.id)).toBe(
+            true,
+        );
+        expect(triggers.map((node) => node.textContent)).toEqual(['sha256:012345678901…', 'sha256:987654321098…']);
+        await act(async () => {
+            triggers[0].focus();
+            await new Promise((resolve) => setTimeout(resolve, 600));
+        });
+        expect(document.activeElement).toBe(triggers[0]);
+        const description = triggers[0].getAttribute('aria-describedby');
+        expect(description && document.getElementById(description)?.textContent).toBe(imageId);
+        await act(async () => {
+            triggers[0].blur();
+            triggers[1].dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+            await new Promise((resolve) => setTimeout(resolve, 600));
+        });
+        const previousDescription = triggers[1].getAttribute('aria-describedby');
+        expect(previousDescription && document.getElementById(previousDescription)?.textContent).toBe(previousImageId);
+    });
+
+    it.each([
+        ['local', 'Runs on this machine'],
+        ['wsl', 'Runs in this WSL environment'],
+        ['ssh', 'Runs on the remote SSH host'],
+        ['devContainer', 'Runs in this dev container'],
+        ['codespaces', 'Runs in this Codespace'],
+        ['otherRemote', 'Runs on the remote extension host'],
+    ] as const)('capitalizes the %s execution target segment', async (executionTarget, expected) => {
+        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status({ ...ready, executionTarget }));
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <LocalQuickStart key={executionTarget} />
+                </SSRProvider>,
+            ),
+        );
+        await start();
+        await event({ stage: 'checking', status: 'done' }, { ...ready, executionTarget });
+        expect(host.textContent).toContain(expected);
+    });
+
+    it.each([
+        ['docker', 'podman', true, 'Podman 5.8.3 (Docker not found)', 'Docker · not found, used Podman'],
+        ['podman', 'docker', true, 'Docker 5.8.3 (Podman not found)', 'Podman · not found, used Docker'],
+        ['docker', 'docker', false, 'Docker CLI 5.8.3 found', 'Docker'],
+        ['podman', 'podman', false, 'Podman CLI 5.8.3 found', 'Podman'],
+    ] as const)(
+        'shows the executed %s preference with selected %s and fallback=%s only after checking',
+        async (preferredEngine, cli, cliFallback, summary, preferredFact) => {
+            const readiness: DockerReadiness = {
+                ...ready,
+                cli,
+                preferredEngine,
+                cliFallback,
+                cliVersion: '5.8.3',
+                provider: cli === 'docker' ? 'dockerEngine' : 'podman',
+                cliOnPath: { docker: cli === 'docker', podman: cli === 'podman' },
+            };
+            if (preferredEngine === 'podman') {
+                await click(button('Change the container engine'));
+                await click(host.querySelector<HTMLInputElement>('input[value="podman"]')!);
+            }
+            expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
+            expect(host.textContent).not.toContain('not found');
+            expect(host.textContent).not.toContain('Preferred engine');
+
+            await start();
+            await event({ stage: 'checking', status: 'done' }, readiness);
+
+            expect(host.textContent).toContain(summary);
+            expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
+            if (!cliFallback) expect(host.textContent).not.toContain('not found');
+            await click(toggle('Checking container engine')!);
+            const region = host.querySelector(`[aria-labelledby="${toggle('Checking container engine')!.id}"]`)!;
+            const labels = [...region.querySelectorAll('dt')];
+            const index = labels.findIndex((label) => label.textContent === 'Preferred engine');
+            expect(labels[index].nextElementSibling?.textContent).toBe(preferredFact);
+            expect(labels[index + 1].textContent).toBe(cli === 'docker' ? 'Docker CLI' : 'Podman CLI');
+            expect(labels[index + 1].nextElementSibling?.textContent).toBe('Found, version 5.8.3');
+            expect(labels[index + 2].textContent).toBe(cli === 'docker' ? 'Podman CLI' : 'Docker CLI');
+            expect(labels[index + 2].nextElementSibling?.textContent).toBe('Not found');
+        },
+    );
+
+    it.each([
+        ['cliMissing', 'No Docker or Podman CLI found'],
+        ['permissionDenied', 'Access denied'],
+        ['daemonUnavailable', 'Daemon not running'],
+        ['daemonStarting', 'Daemon starting'],
+        ['contextUnavailable', 'Context unavailable'],
+        ['endpointUnreachable', 'Endpoint unreachable'],
+        ['unsupportedHost', 'Unsupported host'],
+        ['windowsContainers', 'Windows containers enabled'],
+        ['probeTimedOut', 'Check timed out'],
+        ['unknown', 'Daemon unreachable'],
+    ] as const)('capitalizes the %s failure evidence', async (failureKind, expected) => {
+        const indeterminate = failureKind === 'probeTimedOut' || failureKind === 'unknown';
+        const readiness = {
+            ...failed,
+            outcome: indeterminate ? 'indeterminate' : 'diagnosed',
+            canContinueAnyway: indeterminate,
+            cliInstalled: failureKind !== 'cliMissing',
+            failureKind,
+            provider: 'unknown',
+            cli: 'podman',
+            cliVersion: '5.1',
+        } as DockerReadiness;
+        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(readiness));
+        await start();
+        await event({ stage: 'checking', status: 'error' }, readiness);
+        expect(host.textContent).toContain(expected);
+        if (failureKind !== 'cliMissing') {
+            expect(host.textContent).toContain('Podman CLI 5.1 found');
+        }
+    });
+
+    it.each([
+        ['linux', 'Not running'],
+        ['wsl', 'Not available in this WSL distribution'],
+    ] as const)('capitalizes Docker Desktop failure evidence on %s', async (environment, expected) => {
+        const readiness: DockerReadiness = {
+            ...failed,
+            environment,
+            provider: 'dockerDesktop',
+            failureKind: 'daemonUnavailable',
+        };
+        await start();
+        await event({ stage: 'checking', status: 'error' }, readiness);
+        expect(host.textContent).toContain(expected);
+    });
+
+    it('stores terminal error facts by kind rather than the error event stage', async () => {
+        await start();
+        await event({ stage: 'checking', status: 'done' });
+        await event({ stage: 'pulling', status: 'active' });
+        await event({
+            stage: 'error',
+            status: 'error',
+            facts: { kind: 'pulling', imageRef: 'official:failed-tag', imageOrigin: 'custom' },
+        });
+        expect(toggle('Preparing image')?.getAttribute('aria-expanded')).toBe('false');
+        await click(toggle('Preparing image')!);
+        expect(host.textContent).toContain('official:failed-tag');
+        await click(button('Retry setup'));
+        await event({ stage: 'pulling', status: 'done' });
+        expect(toggle('Preparing image')).toBeNull();
+        expect(host.textContent).not.toContain('official:failed-tag');
+    });
+
+    it.each(['loaded', 'notRequested', 'keptExisting', 'failed'] as const)(
+        'keeps waiting done and shows a visible sample-data sentence only for failed loading (%s)',
+        async (sampleData) => {
+            await start();
+            await event({
+                stage: 'waiting',
+                status: 'done',
+                facts: { kind: 'waiting', port: 10333, attempts: 3, sampleData, displayName: 'DocumentDB Local' },
+            });
+            await event({ stage: 'done', status: 'done' });
+            const waiting = toggle('Waiting for DocumentDB to accept connections');
+            expect(waiting?.getAttribute('aria-expanded')).toBe('false');
+            const sentence = 'Sample data was not loaded. View the setup log for the reason.';
+            expect(host.textContent?.includes(sentence)).toBe(sampleData === 'failed');
+            await click(waiting!);
+            expect(host.textContent).toContain('localhost:10333');
+            expect(host.textContent).toContain('Ping on admin answered after 3 attempts');
+            expect(host.textContent).toContain('Credentials in VS Code secret storage');
+            if (sampleData === 'failed') {
+                const region = host.querySelector(`[aria-labelledby="${waiting!.id}"]`);
+                expect(region?.textContent).toContain('Info: Sample data was not loaded');
+                expect(region?.textContent).toContain('The instance is ready to use without sample data.');
+                expect(region?.textContent).toContain('Next: View setup log');
+                const calls = client.trpc.localQuickStart.showOutput.mutate.mock.calls.length;
+                const link = [...region!.querySelectorAll<HTMLElement>('a, button')].find(
+                    (element) => element.textContent === 'View setup log',
+                );
+                expect(link).toBeDefined();
+                await click(link!);
+                expect(client.trpc.localQuickStart.showOutput.mutate).toHaveBeenCalledTimes(calls + 1);
+            } else {
+                expect(host.textContent).not.toContain('Sample data was not loaded');
+            }
+        },
+    );
+
+    it('shows failed readiness evidence without a success claim and clears it on Wait longer', async () => {
+        await start();
+        await event({ stage: 'waiting', status: 'active' });
+        await event({
+            stage: 'waiting',
+            status: 'error',
+            timedOut: true,
+            facts: {
+                kind: 'waiting',
+                port: 10333,
+                attempts: 4,
+                lastProbeError: 'masked ***',
+                exitCode: 1,
+                lastLogLine: 'fatal ***',
+            },
+        });
+        await click(toggle('Waiting for DocumentDB to accept connections')!);
+        expect(host.textContent).toContain('4 attempts');
+        expect(host.textContent).toContain('masked ***');
+        expect(host.textContent).toContain('fatal ***');
+        expect(host.textContent).not.toContain('Ping on admin answered');
+        expect(host.textContent).not.toContain('Credentials in VS Code secret storage');
+        await click(button('Wait longer'));
+        expect(toggle('Waiting for DocumentDB to accept connections')).toBeNull();
+        expect(host.textContent).not.toContain('masked ***');
+    });
+
+    it('does not claim logs started streaming when starting failed before log following', async () => {
+        await start();
+        await event({ stage: 'starting', status: 'active' });
+        await event({
+            stage: 'error',
+            status: 'error',
+            facts: { kind: 'starting', boundPort: 10273, boundPortReported: false },
+        });
+        await click(toggle('Starting container')!);
+        expect(host.textContent).toContain('10273');
+        const region = host.querySelector(`[aria-labelledby="${toggle('Starting container')!.id}"]`);
+        const boundPort = [...region!.querySelectorAll('dd')].find((node) =>
+            node.textContent?.includes('As requested'),
+        );
+        expect(boundPort?.textContent).toBe('10273 · As requested');
+        expect(boundPort?.querySelector('span')?.className).toBe('');
+        expect(boundPort?.querySelector('code')).toBeNull();
+        expect(host.textContent).not.toContain('Streaming to the setup log');
+    });
+
+    it('keeps earlier facts when waiting longer, but removes them on start over', async () => {
+        await start();
+        await event({ stage: 'checking', status: 'done', facts: { kind: 'checking', port: 10273, portFree: true } });
+        await event({
+            stage: 'pulling',
+            status: 'done',
+            facts: { kind: 'pulling', imageRef: 'official:retained', imageOrigin: 'default' },
+        });
+        await event({ stage: 'waiting', status: 'active' });
+        await event({ stage: 'waiting', status: 'error', timedOut: true, facts: { kind: 'waiting', port: 10273 } });
+        await click(toggle('Preparing image')!);
+        await click(button('Wait longer'));
+        expect(toggle('Preparing image')?.getAttribute('aria-expanded')).toBe('false');
+        await click(toggle('Preparing image')!);
+        expect(host.textContent).toContain('official:retained');
+        await event({ stage: 'waiting', status: 'error', timedOut: true });
+        await click(button('Start over'));
+        await start();
+        await event({ stage: 'pulling', status: 'done' });
+        expect(toggle('Preparing image')).toBeNull();
+        expect(host.textContent).not.toContain('official:retained');
+    });
+});

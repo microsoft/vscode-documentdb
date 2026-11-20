@@ -52,6 +52,12 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
     public readonly experience: Experience;
     public contextValue: string = 'treeItem_collection';
 
+    /**
+     * The discovery journey of the cluster this node belongs to, passed down from its parent so
+     * commands run here join that journey in telemetry. For statistics only.
+     */
+    public journeyCorrelationId?: string;
+
     private readonly experienceContextValue: string = '';
 
     /**
@@ -126,7 +132,7 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
                 if (!isCurrent()) {
                     return null;
                 }
-                const client = await ClustersClient.getClient(clusterId);
+                const client = await ClustersClient.getClient(clusterId, undefined, undefined, 'treeChildren');
                 return client.estimateDocumentCount(dbName, collName);
             });
         } catch {
@@ -149,9 +155,12 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
 
     async getChildren(): Promise<TreeElement[]> {
         const indexesItem = new IndexesItem(this.cluster, this.databaseInfo, this.collectionInfo);
+        indexesItem.journeyCorrelationId = this.journeyCorrelationId;
         indexesItem.loadIndexCount();
+        const documentsItem = new DocumentsItem(this.cluster, this.databaseInfo, this.collectionInfo, this);
+        documentsItem.journeyCorrelationId = this.journeyCorrelationId;
 
-        return [new DocumentsItem(this.cluster, this.databaseInfo, this.collectionInfo, this), indexesItem];
+        return [documentsItem, indexesItem];
     }
 
     getTreeItem(): vscode.TreeItem {

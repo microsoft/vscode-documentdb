@@ -11,6 +11,7 @@
  */
 
 import { type CancellationToken } from 'vscode';
+import { type ContainerCli, type ContainerEngineRequest } from './containerCli';
 
 /** Official DocumentDB local image (github.com/microsoft/documentdb README). */
 export const QUICK_START_IMAGE_REPOSITORY = 'ghcr.io/documentdb/documentdb/documentdb-local';
@@ -29,6 +30,11 @@ export function resolveQuickStartImage(imageTag?: string): string {
     return tag ? `${QUICK_START_IMAGE_REPOSITORY}:${tag}` : QUICK_START_IMAGE;
 }
 
+/** True for an immutable `…/documentdb-local@sha256:…` reference, the form Docker and Podman list in `RepoDigests`. */
+export function isPinnedImageRef(imageRef: string | undefined): imageRef is string {
+    return imageRef?.startsWith(`${QUICK_START_IMAGE_REPOSITORY}@sha256:`) === true;
+}
+
 /**
  * Optional Advanced provisioning overrides (design §5.2 Advanced panel, P1-4).
  * Every field is optional; omitted fields keep the zero-decision defaults
@@ -37,6 +43,7 @@ export function resolveQuickStartImage(imageTag?: string): string {
  * onto an existing data volume — the stored credentials must be reused there.
  */
 export interface AdvancedQuickStartOptions {
+    preferredEngine?: ContainerCli;
     /** Explicit host port. Unlike the default, a conflict ERRORS (never auto-relocated). */
     port?: number;
     /** Custom username (requires a password). Ignored on a Missing-recreate. */
@@ -152,6 +159,26 @@ export const PROVISION_STAGES: readonly ProvisionStage[] = [
     'waiting',
 ] as const;
 
+/** What `docker pull` reported: the image was downloaded, the local copy was current, or neither could be told. */
+export type ImagePullOutcome = 'downloaded' | 'upToDate' | 'unknown';
+
+/**
+ * Why a setup run failed, as reported in `failureCode` on the provision telemetry events. A fixed
+ * set, so it never carries Docker's or the driver's own wording.
+ */
+export type ProvisionFailureCode =
+    | 'none'
+    | 'dockerCliMissing'
+    | 'dockerDaemonUnreachable'
+    | 'dockerPermissionDenied'
+    | 'portInUse'
+    | 'diskFull'
+    | 'imagePullFailed'
+    | 'readinessTimeout'
+    | 'containerExited'
+    | 'cancelled'
+    | 'other';
+
 /** Setup wizard phases. `provisioning` and `failed` both render the Set up step. */
 export const QUICK_START_WIZARD_PHASES = ['introduction', 'configure', 'provisioning', 'failed', 'success'] as const;
 export type QuickStartWizardPhase = (typeof QUICK_START_WIZARD_PHASES)[number];
@@ -178,6 +205,7 @@ export type QuickStartActivationSource =
     | 'dataRemovedNotification'
     | 'treeSetUpRow'
     | 'treeReviewSetupRow'
+    | 'treeStartFreshRow'
     | 'treeRecreateRow'
     | 'treeRetryNode'
     | 'treePreflightRecreateRow'
@@ -186,6 +214,7 @@ export type QuickStartActivationSource =
 
 export interface OpenLocalQuickStartOptions {
     readonly activationSource?: QuickStartActivationSource;
+    readonly initialDataChoice?: 'fresh';
 }
 
 /**
@@ -226,11 +255,76 @@ export interface QuickStartMessage {
     readonly environment?: DockerHostEnvironment;
     /** Image reference, for `imageNotFound`. */
     readonly image?: string;
+    /** Owning engine, when its pinned CLI is missing. */
+    readonly engineCli?: ContainerCli;
     /** The container's exit code, for `containerExited`. */
     readonly exitCode?: number;
     /** Raw daemon / driver text, rendered verbatim beside the localized copy. */
     readonly detail?: string;
 }
+
+/** Allow-listed, per-run setup evidence. Omitted optional fields were not established. */
+export interface CheckingStageFacts {
+    readonly kind: 'checking';
+    readonly port: number;
+    readonly portFree: boolean;
+    readonly removedContainerId?: string;
+}
+
+export interface PullingStageFacts {
+    readonly kind: 'pulling';
+    readonly imageRef: string;
+    readonly imageOrigin: 'default' | 'custom' | 'reused';
+    readonly result?: 'downloaded' | 'updated' | 'upToDate';
+    /** How an existing instance's image was prepared; a local tag does not prove original identity. */
+    readonly disposition?: 'reusedPinned' | 'downloadedPinned' | 'reusedTag';
+    readonly imageId?: string;
+    readonly previousImageId?: string;
+    readonly progress?: string;
+    readonly digest?: string;
+    readonly imageVersion?: string;
+    readonly createdAtMs?: number;
+}
+
+export interface CreatingStageFacts {
+    readonly kind: 'creating';
+    readonly containerName: string;
+    readonly containerId?: string;
+    readonly hostPort: number;
+    readonly containerPort: number;
+    readonly volumeName: string;
+    readonly dataPath: string;
+    readonly volume?: 'new' | 'reused' | 'replaced';
+    readonly username: string;
+}
+
+export interface StartingStageFacts {
+    readonly kind: 'starting';
+    readonly running?: boolean;
+    readonly startedAtMs?: number;
+    readonly boundPort: number;
+    readonly boundPortReported: boolean;
+}
+
+export interface WaitingStageFacts {
+    readonly kind: 'waiting';
+    readonly port: number;
+    readonly displayName?: string;
+    readonly attempts?: number;
+    readonly documentdbVersions?: readonly string[];
+    readonly maxWireVersion?: number;
+    readonly sampleData?: 'loaded' | 'notRequested' | 'keptExisting' | 'failed';
+    readonly lastProbeError?: string;
+    readonly exitCode?: number;
+    readonly lastLogLine?: string;
+}
+
+export type StageFacts =
+    | CheckingStageFacts
+    | PullingStageFacts
+    | CreatingStageFacts
+    | StartingStageFacts
+    | WaitingStageFacts;
 
 /** A single stage transition pushed through the service-level event sink (D13). */
 export interface StageEvent {
@@ -248,10 +342,13 @@ export interface StageEvent {
      * webview offers "Wait longer" / "View logs" / "Start over" instead of a hard failure.
      */
     readonly timedOut?: boolean;
-    /** Typed recovery result when Docker became unavailable during pull or run. */
+    /** Execution's checking snapshot, or typed recovery when the engine became unavailable during pull or run. */
     readonly dockerReadiness?: DockerReadiness;
     /** Set on a setup's terminal event: whether data can be reused once the failed run rolled back. */
     readonly canReuseExistingData?: boolean;
+    /** The old source data was erased during this attempt, even if its replacement failed. */
+    readonly existingDataErased?: boolean;
+    readonly facts?: StageFacts;
 }
 
 /** Metadata describing the currently-managed instance. */
@@ -265,10 +362,10 @@ export interface InstanceMetadata {
     readonly connectionString: string;
     readonly username: string;
     /**
-     * The image reference the instance's data volume was created with (e.g.
-     * `…/documentdb-local:latest`). Reused on a recreate so the persisted cluster is
-     * not silently moved to a different image version. May be undefined for instances
-     * recovered without a readable image (then a recreate falls back to the default).
+     * The image the instance's data volume runs on, pinned to its `…@sha256:` digest once known
+     * (instances set up by earlier versions may still hold a tag such as `…:latest`). Reused on a
+     * recreate so the persisted cluster is not silently moved to a different image version. May be
+     * undefined for instances recovered without a readable image (then a recreate falls back to the default).
      */
     readonly imageRef?: string;
 }
@@ -286,7 +383,21 @@ export type DockerHostEnvironment =
     | 'otherRemote'
     | 'unsupported';
 
-export type DockerProvider = 'dockerDesktop' | 'dockerEngine' | 'unknown';
+export type ContainerEngine = 'docker' | 'podman' | 'unknown';
+
+export type ContainerCliPresence = Readonly<Record<'docker' | 'podman', boolean>>;
+
+export type ContainerEngineEvidence =
+    | 'selectedCli'
+    | 'podmanInfo'
+    | 'podmanShim'
+    | 'serverComponents'
+    | 'dockerDesktopInfo'
+    | 'endpointPath'
+    | 'dockerSocketLink'
+    | 'none';
+
+export type DockerProvider = 'dockerDesktop' | 'dockerEngine' | 'podman' | 'unknown';
 
 export type DockerProviderEvidence =
     | 'liveDaemon'
@@ -309,12 +420,42 @@ export type DockerFailureKind =
 
 export type DockerEndpointKind = 'unixSocket' | 'namedPipe' | 'tcp' | 'ssh' | 'unknown';
 
-export type DockerStartAction =
-    | 'startDockerDesktopWindows'
-    | 'startDockerDesktopMacOS'
-    | 'startDockerDesktopLinux'
-    | 'startDockerDesktopWindowsFromWsl'
-    | 'startRootlessDockerEngineLinux';
+export const DOCKER_START_ACTIONS = [
+    'startDockerDesktopWindows',
+    'startDockerDesktopMacOS',
+    'startDockerDesktopLinux',
+    'startDockerDesktopWindowsFromWsl',
+    'startRootlessDockerEngineLinux',
+    'startPodmanMachine',
+] as const;
+
+export type DockerStartAction = (typeof DOCKER_START_ACTIONS)[number];
+
+export interface PodmanMachineFact {
+    readonly name: string;
+    readonly isDefault: boolean;
+    readonly running: boolean;
+    readonly starting: boolean;
+}
+
+/** Where a failed Podman check tried to connect, from the address in its error. */
+export type PodmanTarget =
+    /** WSL: the socket of a Podman machine running on Windows. */
+    | { readonly kind: 'windowsMachineFromWsl'; readonly name: string }
+    /** Linux / WSL: the rootless user socket. */
+    | { readonly kind: 'userSocket' }
+    /** Another address on this host, such as a machine's SSH port on 127.0.0.1. */
+    | { readonly kind: 'local' }
+    /** A host other than this one. */
+    | { readonly kind: 'remote' }
+    | { readonly kind: 'unknown' };
+
+export type PodmanMachineState =
+    | { readonly kind: 'stopped' | 'starting' | 'running'; readonly name: string }
+    | { readonly kind: 'otherActive'; readonly active: string }
+    | { readonly kind: 'none' }
+    | { readonly kind: 'ambiguous'; readonly names: readonly string[] }
+    | { readonly kind: 'unknown' };
 
 export type DockerLaunchResult = 'started' | 'launchAttempted' | 'notAvailable' | 'failed';
 
@@ -324,8 +465,10 @@ export type DockerPermissionDetail = 'notInGroup' | 'pendingSessionRestart' | 'u
 
 export type DockerServiceManager = 'systemd' | 'service' | 'unknown';
 
+export type DockerProbeKind = 'cliVersion' | 'info' | 'contexts' | 'serverVersion';
+
 export interface DockerProbeEvidence {
-    readonly probe: 'cliVersion' | 'info' | 'contexts';
+    readonly probe: DockerProbeKind;
     readonly exitCode?: number;
     readonly spawnErrorCode?: string;
     readonly stdout: string;
@@ -347,13 +490,21 @@ export interface DockerSocketGroupFacts {
 }
 
 export interface DockerRecoveryCommand {
-    readonly id: 'linuxDockerGroup' | 'linuxStartService' | 'wslStartServiceNoSystemd' | 'wslRestartFromWindows';
+    readonly id:
+        | 'linuxDockerGroup'
+        | 'linuxStartService'
+        | 'wslStartServiceNoSystemd'
+        | 'wslRestartFromWindows'
+        | 'linuxStartPodmanSocket'
+        | 'podmanMachineInit'
+        | 'podmanMachineStartOnWindows';
+    readonly machineName?: string;
     readonly commandLine: string;
     readonly requiresElevation: boolean;
 }
 
 export interface DockerProviderMemory {
-    readonly provider: DockerProvider;
+    readonly provider: Exclude<DockerProvider, 'podman'>;
     readonly endpointKind: DockerEndpointKind;
     readonly hostEnvironment: DockerHostEnvironment;
     readonly daemonArchitecture?: string;
@@ -362,6 +513,7 @@ export interface DockerProviderMemory {
 }
 
 export interface DockerReadinessRequest {
+    readonly engine?: ContainerEngineRequest;
     readonly forceRefresh?: boolean;
     readonly resetProviderMemory?: boolean;
     readonly suppressCommandEcho?: boolean;
@@ -377,11 +529,21 @@ interface DockerReadinessBase {
     readonly providerRecordedAtMs?: number;
     readonly executionTarget: DockerExecutionTarget;
     readonly startAction?: DockerStartAction;
+    readonly podmanMachine?: PodmanMachineState;
+    readonly podmanTarget?: PodmanTarget;
     readonly permissionDetail?: DockerPermissionDetail;
     readonly recoveryCommand?: DockerRecoveryCommand;
     readonly checkedAtMs: number;
     readonly cliInstalled: boolean;
     readonly cliVersion?: string;
+    /** Which CLI ran the check. */
+    readonly cli?: ContainerCli;
+    readonly preferredEngine?: ContainerCli;
+    readonly cliFallback?: boolean;
+    readonly cliOnPath?: ContainerCliPresence;
+    readonly engine?: ContainerEngine;
+    readonly engineEvidence?: ContainerEngineEvidence;
+    readonly serverVersion?: string;
     readonly osType?: 'linux' | 'windows';
     readonly daemonArchitecture?: string;
     readonly diagnosticFingerprint?: string;
@@ -486,6 +648,8 @@ export interface DockerStatusResult {
 export interface InstanceStatusUpdate {
     readonly status: QuickStartStatus;
     readonly canReuseExistingData: boolean;
+    readonly existingInstance?: { readonly ownerEngine?: ContainerCli };
+    readonly savedImagePinned?: boolean;
 }
 
 /** Why a host port cannot be used, or `'available'` when it can (Configure-step validation, L3). */

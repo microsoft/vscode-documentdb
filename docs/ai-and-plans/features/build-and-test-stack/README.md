@@ -114,6 +114,12 @@ coverage into installed-workbench E2E; see the
 6. If a workspace package changed, run `npm run verify:packages` so checks execute against packed
    tarballs rather than workspace sources.
 
+The [November dependency remediation plan](../../dependabot-remediation-2026-11-16.md)
+records the temporary exact Vite/Rolldown and scoped transitive pins needed to
+select aged security fixes, plus their compatibility checks. Its
+[AI pre-review](./iterations/03-november-dependency-security-review.md) records the
+cross-vendor validation. No bundling or test-loading invariant changed.
+
 ## Add a test
 
 1. Put extension tests under `src/**/*.test.{ts,tsx}`. Put package tests under the include pattern

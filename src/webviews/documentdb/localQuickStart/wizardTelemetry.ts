@@ -8,6 +8,7 @@ import { randomUUID } from 'crypto';
 import { trackDeepLinkTelemetry, type DeepLinkTelemetry } from '../../../deepLinks/deepLinkTelemetry';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import {
+    type ProvisionStage,
     type QuickStartWizardPhase,
     type QuickStartWizardStepTrigger,
 } from '../../../services/localQuickStart/quickStartTypes';
@@ -26,6 +27,8 @@ export interface QuickStartWizardSession {
     stepChangeCount: number;
     setupAttemptCount: number;
     waitLongerCount: number;
+    readonly detailsOpenedStages: Set<Exclude<ProvisionStage, 'done' | 'error'>>;
+    detailsOpenCount: number;
     setupSucceeded: boolean;
     closeReason?: 'closeButton';
 }
@@ -46,8 +49,18 @@ export function createWizardSession(
         stepChangeCount: 0,
         setupAttemptCount: 0,
         waitLongerCount: 0,
+        detailsOpenedStages: new Set(),
+        detailsOpenCount: 0,
         setupSucceeded: false,
     };
+}
+
+export function reportWizardDetailsOpened(
+    session: QuickStartWizardSession,
+    stage: Exclude<ProvisionStage, 'done' | 'error'>,
+): void {
+    session.detailsOpenedStages.add(stage);
+    session.detailsOpenCount++;
 }
 
 /** Record a move to another phase as `documentDB.quickstart.wizard.step`. Repeats of the current phase are ignored. */
@@ -91,11 +104,13 @@ export function reportWizardClosed(session: QuickStartWizardSession, now: number
         context.telemetry.properties.closeReason = session.closeReason ?? 'panelClosed';
         context.telemetry.properties.setupSucceeded = session.setupSucceeded ? 'true' : 'false';
         context.telemetry.properties.instanceState = QuickStartService.getStatus().state;
+        context.telemetry.properties.detailsOpenedStages = [...session.detailsOpenedStages].sort().join(',') || 'none';
         // The event closes a session, so its own duration says nothing; this is the time the panel was open.
         context.telemetry.measurements.sessionDurationMs = now - session.openedAt;
         context.telemetry.measurements.timeOnLastStepMs = now - session.phaseEnteredAt;
         context.telemetry.measurements.stepChangeCount = session.stepChangeCount;
         context.telemetry.measurements.setupAttemptCount = session.setupAttemptCount;
         context.telemetry.measurements.waitLongerCount = session.waitLongerCount;
+        context.telemetry.measurements.detailsOpenCount = session.detailsOpenCount;
     });
 }

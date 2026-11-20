@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import { Views } from '../../../documentdb/Views';
 import { AtlasExperience } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
+import { LiveConfigService } from '../../../services/LiveConfigService';
 import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
 import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
 import {
@@ -17,7 +18,6 @@ import {
 } from '../../../tree/TreeElementWithContextValue';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
 import { atlasTrace } from '../atlasTrace';
-import { getAtlasViewMode } from '../commands/switchAtlasViewMode';
 import { DISCOVERY_PROVIDER_ID } from '../config';
 import { readAtlasCredentials } from '../credentials/atlasCredentialStore';
 import { ADD_ATLAS_CREDENTIAL_COMMAND_ID } from '../credentialsManagement/addAtlasCredential';
@@ -72,7 +72,9 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
      * gated on it: the icon reflects the current mode and the action switches to the other one.
      */
     private get viewModeContextValue(): string {
-        return getAtlasViewMode() === 'list' ? 'discoveryAtlasViewModeList' : 'discoveryAtlasViewModeTree';
+        return LiveConfigService.getAtlasViewMode() === 'list'
+            ? 'discoveryAtlasViewModeList'
+            : 'discoveryAtlasViewModeTree';
     }
 
     async getChildren(): Promise<ExtTreeElementBase[]> {
@@ -82,22 +84,18 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
             return [this.createSignInNode()];
         }
 
-        const listMode = getAtlasViewMode() === 'list';
+        const listMode = LiveConfigService.getAtlasViewMode() === 'list';
         atlasTrace(
             `root: expanding in ${listMode ? 'list' : 'tree'} mode with ${String(credentials.length)} credential(s)`,
         );
         const snapshot = await this.discoveryService.listAll({ includeClusters: listMode });
 
-        const children: ExtTreeElementBase[] = [];
+        const children = listMode ? this.buildClusterRows(snapshot) : this.buildOrganizationRows(snapshot, credentials);
         if (snapshotHasFailures(snapshot)) {
             // The recovery row is just another row, so it drops into a flat list unchanged and
             // List mode needs no special casing: a failure never forces a view-mode switch.
             children.push(createRecoveryNode(this, snapshot));
         }
-
-        children.push(
-            ...(listMode ? this.buildClusterRows(snapshot) : this.buildOrganizationRows(snapshot, credentials)),
-        );
 
         if (children.length === 0) {
             atlasTrace('root: nothing visible to any credential, showing the empty placeholder');
@@ -168,7 +166,7 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
      */
     public async refresh(_context: IActionContext): Promise<void> {
         atlasTrace('root: explicit refresh requested');
-        await this.discoveryService.refreshAll({ includeClusters: getAtlasViewMode() === 'list' });
+        await this.discoveryService.refreshAll({ includeClusters: LiveConfigService.getAtlasViewMode() === 'list' });
         ext.discoveryBranchDataProvider.resetNodeErrorState(this.id);
         ext.discoveryBranchDataProvider.refresh(this);
     }
@@ -193,7 +191,7 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
         return createGenericElementWithContext({
             contextValue: 'error',
             id: `${this.id}/sign-in`,
-            label: vscode.l10n.t('Sign in to view MongoDB Atlas clusters'),
+            label: vscode.l10n.t('Add Atlas credentials…'),
             iconPath: new vscode.ThemeIcon('sign-in'),
             commandId: ADD_ATLAS_CREDENTIAL_COMMAND_ID,
             commandArgs: [this],

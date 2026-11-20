@@ -158,7 +158,7 @@ export class KubernetesKubeconfigSourceItem implements TreeElement, TreeElementW
 
     private createKubeconfigRecoveryChildren(message: string): ExtTreeElementBase[] {
         // Modal on purpose: a failed source is only (re)loaded on an explicit user
-        // action (expand or "Click here to retry"). The retry-node cache prevents
+        // action (expand or "Retry"). The retry-node cache prevents
         // getChildren() from re-running on passive tree refreshes, so this modal
         // cannot spam — it fires once per real load attempt.
         void vscode.window.showWarningMessage(
@@ -166,11 +166,7 @@ export class KubernetesKubeconfigSourceItem implements TreeElement, TreeElementW
             { modal: true },
         );
 
-        const children: ExtTreeElementBase[] = [
-            createRetryNode(this.id, this, {
-                commandId: 'vscode-documentdb.command.discoveryView.kubernetes.reloadSource',
-            }),
-        ];
+        const children: ExtTreeElementBase[] = [];
 
         // File sources have an on-disk path, so offer a one-click way to open and fix it.
         if (this.source.kind === 'file' && this.source.path) {
@@ -178,7 +174,7 @@ export class KubernetesKubeconfigSourceItem implements TreeElement, TreeElementW
                 createGenericElementWithContext({
                     contextValue: 'error',
                     id: `${this.id}/edit`,
-                    label: vscode.l10n.t('Edit Kubeconfig'),
+                    label: vscode.l10n.t('Edit kubeconfig'),
                     iconPath: new vscode.ThemeIcon('go-to-file'),
                     commandId: 'vscode-documentdb.command.discoveryView.kubernetes.editSource',
                     commandArgs: [this],
@@ -193,7 +189,7 @@ export class KubernetesKubeconfigSourceItem implements TreeElement, TreeElementW
                 createGenericElementWithContext({
                     contextValue: 'error',
                     id: `${this.id}/view`,
-                    label: vscode.l10n.t('View Kubeconfig'),
+                    label: vscode.l10n.t('View kubeconfig'),
                     iconPath: new vscode.ThemeIcon('eye'),
                     commandId: 'vscode-documentdb.command.discoveryView.kubernetes.viewSource',
                     commandArgs: [this],
@@ -201,6 +197,11 @@ export class KubernetesKubeconfigSourceItem implements TreeElement, TreeElementW
             );
         }
 
+        children.push(
+            createRetryNode(this.id, this, {
+                commandId: 'vscode-documentdb.command.discoveryView.kubernetes.reloadSource',
+            }),
+        );
         return children;
     }
 }
@@ -211,18 +212,18 @@ function buildContextValue(source: KubeconfigSourceRecord): string {
     // re-creatable through the "+" inline action via {@link addDefaultSource}.
     const markers = ['enableRefreshCommand', 'discoveryKubernetesSource', 'discoveryKubernetesSourceMutable'];
 
-    // File sources have an on-disk path, so they additionally expose "Edit Kubeconfig".
+    // File sources have an on-disk path, so they additionally expose "Edit kubeconfig".
     if (source.kind === 'file') {
         markers.push('discoveryKubernetesSourceFile');
     }
 
     // The default source also resolves to a real on-disk kubeconfig (KUBECONFIG
-    // env var or ~/.kube/config), so it likewise exposes "Edit Kubeconfig".
+    // env var or ~/.kube/config), so it likewise exposes "Edit kubeconfig".
     if (source.kind === 'default') {
         markers.push('discoveryKubernetesSourceDefault');
     }
 
-    // Inline (pasted) sources have no on-disk file, so they expose a read-only "View Kubeconfig".
+    // Inline (pasted) sources have no on-disk file, so they expose a read-only "View kubeconfig".
     if (source.kind === 'inline') {
         markers.push('discoveryKubernetesSourceInline');
     }

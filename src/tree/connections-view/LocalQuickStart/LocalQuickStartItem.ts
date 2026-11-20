@@ -32,6 +32,7 @@ import {
     type QuickStartActivationSource,
     type QuickStartStatus,
 } from '../../../services/localQuickStart/quickStartTypes';
+import { meterSilentCatch } from '../../../utils/accumulatingTelemetry';
 import { getResourcesPath } from '../../../utils/icons';
 import { nonNullValue } from '../../../utils/nonNull';
 import { createGenericElementWithContext } from '../../api/createGenericElementWithContext';
@@ -75,7 +76,7 @@ function createQuickStartRetryAction(parentId: string, retryTarget: unknown): Tr
     return createGenericElementWithContext({
         id: `${parentId}/retry`,
         contextValue: 'error',
-        label: l10n.t('Retry setup'),
+        label: l10n.t('Retry setup…'),
         iconPath: new vscode.ThemeIcon('refresh'),
         commandId: 'vscode-documentdb.command.localQuickStart.open',
         commandArgs: openWizardArgs(retryTarget, 'treeRetryNode'),
@@ -107,7 +108,7 @@ function buildPreflightChildren(parentId: string, verdict: QuickStartConnectionP
                 createQuickStartAction(
                     parentId,
                     'preflight/recreate',
-                    l10n.t('Recreate container'),
+                    l10n.t('Recreate container…'),
                     'refresh',
                     open,
                     'treePreflightRecreateRow',
@@ -118,7 +119,7 @@ function buildPreflightChildren(parentId: string, verdict: QuickStartConnectionP
                 createQuickStartAction(
                     parentId,
                     'preflight/reviewDocker',
-                    l10n.t('Review Docker setup'),
+                    l10n.t('Review container engine setup…'),
                     'tools',
                     open,
                     'treePreflightReviewDockerRow',
@@ -133,7 +134,7 @@ function buildPreflightChildren(parentId: string, verdict: QuickStartConnectionP
                 createQuickStartAction(
                     parentId,
                     'preflight/reviewSetup',
-                    l10n.t('Review setup'),
+                    l10n.t('Review setup…'),
                     'tools',
                     open,
                     'treePreflightReviewSetupRow',
@@ -194,13 +195,19 @@ function shortenContainerId(containerId: string): string {
 }
 
 function dockerProviderLabel(readiness: DockerReadiness): string {
+    if (readiness.engine === 'podman') {
+        return readiness.cli === 'docker' ? l10n.t('Podman (through the Docker CLI)') : 'Podman';
+    }
+    if (readiness.engine !== 'docker') {
+        return l10n.t('Container engine');
+    }
     switch (readiness.provider) {
         case 'dockerDesktop':
             return l10n.t('Docker Desktop');
         case 'dockerEngine':
             return l10n.t('Docker Engine');
         default:
-            return l10n.t('Unknown');
+            return 'Docker';
     }
 }
 
@@ -229,14 +236,14 @@ function buildEmptyStateTooltip(): vscode.MarkdownString {
     tooltip.isTrusted = false;
     tooltip.appendMarkdown(`${l10n.t('A local DocumentDB instance, set up for you. No configuration required.')}\n\n`);
     tooltip.appendMarkdown(`- ${l10n.t('Ready in a couple of clicks')}\n`);
-    tooltip.appendMarkdown(`- ${l10n.t('Runs in Docker')}\n`);
+    tooltip.appendMarkdown(`- ${l10n.t('Runs in Docker or Podman')}\n`);
     tooltip.appendMarkdown(`- ${l10n.t('Safe to reset or delete at any time')}\n`);
     return tooltip;
 }
 
 function buildInstanceTooltip(status: QuickStartStatus, baseTooltip?: vscode.MarkdownString): vscode.MarkdownString {
     const metadata = status.metadata;
-    const readiness = QuickStartService.getDockerReadinessSnapshot();
+    const readiness = QuickStartService.getDockerReadinessSnapshot(metadata?.alias);
     const tooltip = new vscode.MarkdownString(baseTooltip?.value ?? `### ${l10n.t('DocumentDB Local')}\n\n`);
     tooltip.isTrusted = false;
 
@@ -259,9 +266,11 @@ function buildInstanceTooltip(status: QuickStartStatus, baseTooltip?: vscode.Mar
 
     if (readiness) {
         tooltip.appendMarkdown('---\n\n');
-        tooltip.appendMarkdown(`**${l10n.t('Docker provider')}:** ${dockerProviderLabel(readiness)}\n\n`);
-        if (readiness.cliVersion) {
-            tooltip.appendMarkdown(`**${l10n.t('Docker version')}:** ${escapeMarkdown(readiness.cliVersion)}\n\n`);
+        tooltip.appendMarkdown(`**${l10n.t('Container engine')}:** ${dockerProviderLabel(readiness)}\n\n`);
+        if (readiness.serverVersion?.trim()) {
+            tooltip.appendMarkdown(
+                `**${l10n.t('Engine version')}:** ${escapeMarkdown(readiness.serverVersion.trim())}\n\n`,
+            );
         }
         if (readiness.daemonArchitecture) {
             tooltip.appendMarkdown(
@@ -272,7 +281,7 @@ function buildInstanceTooltip(status: QuickStartStatus, baseTooltip?: vscode.Mar
             tooltip.appendMarkdown(`**${l10n.t('Container OS')}:** ${containerOsLabel(readiness.osType)}\n\n`);
         }
         tooltip.appendMarkdown(`**${l10n.t('Execution target')}:** ${executionTargetLabel(readiness)}\n\n`);
-        tooltip.appendMarkdown(`**${l10n.t('Docker endpoint')}:** ${dockerEndpointLabel(readiness)}\n\n`);
+        tooltip.appendMarkdown(`**${l10n.t('Engine endpoint')}:** ${dockerEndpointLabel(readiness)}\n\n`);
     }
 
     return tooltip;
@@ -360,6 +369,9 @@ class QuickStartClusterItem extends ClusterItemBase<ConnectionClusterModel> {
                 connectionString,
                 { connectionUser: parsed.username, connectionPassword: parsed.password },
                 this.cluster.emulatorConfiguration,
+                undefined,
+                undefined,
+                { localQuickStartInstance: true },
             );
 
             // Retain authentication error handling; client acquisition reports the connection once.
@@ -423,15 +435,15 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
 
     /**
      * Actionable recovery for a GENUINE failure (review §9.2 Q4 / N3). The tree renders recovery
-     * ACTIONS, not error text: a retry node that reopens the wizard (the operation that failed —
-     * see I2-Q2), the setup log, and — once a container exists — Delete Container.
+     * ACTIONS, not error text: the setup log, the "Delete container…" action once a container
+     * exists, Start fresh when an instance record exists, and finally a retry node that reopens
+     * the wizard (the operation that failed — I2-Q2).
      *
      * `Missing` and `CredentialsMissing` deliberately do NOT come here: they are service states
      * with their own actionable rows, not fetch failures (I2-Q5).
      */
-    private createErrorRecoveryChildren(includeDelete: boolean): TreeElement[] {
+    private async createErrorRecoveryChildren(includeDelete: boolean): Promise<TreeElement[]> {
         const children: TreeElement[] = [
-            createQuickStartRetryAction(this.id, this),
             createQuickStartAction(
                 this.id,
                 'viewLogs',
@@ -446,13 +458,40 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 createGenericElementWithContext({
                     id: `${this.id}/delete`,
                     contextValue: 'error',
-                    label: l10n.t('Delete container'),
+                    label: l10n.t('Delete container…'),
                     iconPath: new vscode.ThemeIcon('trash'),
                     commandId: 'vscode-documentdb.command.localQuickStart.delete',
                 }),
             );
         }
 
+        let hasExistingInstance = false;
+        try {
+            hasExistingInstance = await QuickStartService.hasExistingInstance();
+        } catch {
+            meterSilentCatch('LocalQuickStartItem_hasExistingInstance');
+        }
+
+        if (hasExistingInstance) {
+            children.push(
+                createGenericElementWithContext({
+                    id: `${this.id}/startFresh`,
+                    contextValue: 'treeItem_quickStartAction',
+                    label: l10n.t('Start fresh…'),
+                    iconPath: new vscode.ThemeIcon('discard'),
+                    commandId: 'vscode-documentdb.command.localQuickStart.open',
+                    commandArgs: [
+                        undefined,
+                        {
+                            activationSource: 'treeStartFreshRow',
+                            initialDataChoice: 'fresh',
+                        } satisfies OpenLocalQuickStartOptions,
+                    ],
+                }),
+            );
+        }
+
+        children.push(createQuickStartRetryAction(this.id, this));
         return children;
     }
 
@@ -482,7 +521,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 createQuickStartAction(
                     this.id,
                     'recreate',
-                    l10n.t('Recreate container'),
+                    l10n.t('Recreate container…'),
                     'refresh',
                     'vscode-documentdb.command.localQuickStart.open',
                     'treeRecreateRow',
@@ -490,7 +529,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 createQuickStartAction(
                     this.id,
                     'delete',
-                    l10n.t('Delete container'),
+                    l10n.t('Delete container…'),
                     'trash',
                     'vscode-documentdb.command.localQuickStart.delete',
                 ),
@@ -557,7 +596,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 case InstanceState.Stopped:
                     return [row('state_stopped', instanceStateLabel(status.state), idle)];
                 case InstanceState.Error:
-                    return this.createErrorRecoveryChildren(true);
+                    return await this.createErrorRecoveryChildren(true);
                 default:
                     break;
             }
@@ -571,7 +610,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 createQuickStartAction(
                     this.id,
                     'reviewSetup',
-                    l10n.t('Review setup'),
+                    l10n.t('Review setup…'),
                     'tools',
                     'vscode-documentdb.command.localQuickStart.open',
                     'treeReviewSetupRow',
@@ -595,7 +634,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
         // A wizard failure that never got as far as creating anything (no metadata) is still
         // reported as recovery actions. There is no container yet, so Delete is not offered.
         if (status.state === InstanceState.Error) {
-            return this.createErrorRecoveryChildren(false);
+            return await this.createErrorRecoveryChildren(false);
         }
 
         // NotInstalled (no metadata) → empty-state row that opens the Quick Start wizard.

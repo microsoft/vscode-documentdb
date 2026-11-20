@@ -319,6 +319,7 @@ export class AzureVMResourceItem extends ClusterItemBase<VirtualMachineModel> {
                     context.telemetry.properties.connectionResult = 'cancelled';
                     throw error;
                 }
+                this.reportConnectionAttempt(context, 'failed');
                 ext.outputChannel.appendLine(
                     l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
                 );
@@ -341,7 +342,7 @@ export class AzureVMResourceItem extends ClusterItemBase<VirtualMachineModel> {
                 }),
             );
 
-            context.telemetry.properties.connectionCorrelationId = clustersClient.connectionCorrelationId ?? '';
+            this.reportConnectionAttempt(context, 'success', clustersClient);
 
             return clustersClient;
         });

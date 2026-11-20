@@ -6,25 +6,35 @@
 import { Dropdown, Option } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
 import { useContext, type JSX } from 'react';
-import { CollectionViewContext } from '../../collectionViewContext';
+import { CollectionViewContext, Views } from '../../collectionViewContext';
 
-const defaultView: string = 'Table View';
-
-export function ViewSwitcher({ onViewChanged }): JSX.Element {
+export function ViewSwitcher({ onViewChanged }: { onViewChanged: (view: Views) => void }): JSX.Element {
     const [currentContext] = useContext(CollectionViewContext);
+    const labels = {
+        [Views.TABLE]: l10n.t('Table View'),
+        [Views.TREE]: l10n.t('Tree View'),
+        [Views.JSON]: l10n.t('JSON View'),
+    };
 
     return (
         <Dropdown
             disabled={currentContext.isLoading}
-            style={{ minWidth: '120px', maxWidth: '120px' }}
-            defaultValue={defaultView}
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
-            onOptionSelect={(_, data) => onViewChanged(data.optionValue)}
+            className="collectionDocumentViewSwitcher"
+            value={labels[currentContext.currentView]}
+            selectedOptions={[currentContext.currentView]}
+            onOptionSelect={(_, data) => {
+                const selection = Object.values(Views).find((view) => view === data.optionValue);
+                if (selection !== undefined) {
+                    onViewChanged(selection);
+                }
+            }}
             aria-label={l10n.t('Select view type')}
         >
-            <Option key="table">{l10n.t('Table View')}</Option>
-            <Option key="tree">{l10n.t('Tree View')}</Option>
-            <Option key="json">{l10n.t('JSON View')}</Option>
+            {Object.values(Views).map((view) => (
+                <Option key={view} value={view}>
+                    {labels[view]}
+                </Option>
+            ))}
         </Dropdown>
     );
 }

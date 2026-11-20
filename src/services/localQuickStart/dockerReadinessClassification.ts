@@ -5,6 +5,8 @@
 
 import { createHash } from 'crypto';
 import {
+    type ContainerEngine,
+    type ContainerEngineEvidence,
     type DockerEndpointKind,
     type DockerEndpointProbe,
     type DockerFailureKind,
@@ -14,7 +16,165 @@ import {
     type DockerProviderEvidence,
     type DockerProviderMemory,
     type DockerReadinessOutcome,
+    type PodmanMachineFact,
+    type PodmanMachineState,
+    type PodmanTarget,
 } from './quickStartTypes';
+
+/** Where a failed Podman call tried to connect, read from its `dial unix|tcp …:` error text. */
+export type PodmanDialTarget =
+    | { readonly transport: 'unix'; readonly path: string }
+    | { readonly transport: 'tcp'; readonly host: string };
+
+export function parsePodmanDialTarget(stderr: string): PodmanDialTarget | undefined {
+    const unix = /\bdial unix (\/[^\r\n]*?): /.exec(stderr);
+    if (unix) {
+        return { transport: 'unix', path: unix[1] };
+    }
+    const tcp = /\bdial tcp (?:\[([^\]\s]+)\]|([^\s:[\]]+)):\d+: /.exec(stderr);
+    if (tcp) {
+        return { transport: 'tcp', host: tcp[1] ?? tcp[2] };
+    }
+    const lookup = /\bdial tcp: lookup ([^\s:]+)/.exec(stderr);
+    return lookup ? { transport: 'tcp', host: lookup[1] } : undefined;
+}
+
+/** Podman machine names that are safe to show in a copy-only `podman machine start <name>` command. */
+export const PODMAN_MACHINE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+function isLoopbackHost(host: string): boolean {
+    const normalized = host.toLowerCase();
+    return normalized === 'localhost' || normalized === '::1' || /^127\.\d+\.\d+\.\d+$/.test(normalized);
+}
+
+export function classifyPodmanTarget(
+    dial: PodmanDialTarget | undefined,
+    environment: DockerHostEnvironment,
+): PodmanTarget {
+    if (dial?.transport === 'tcp') {
+        // Podman machines are reached over SSH on 127.0.0.1, so only another host is remote.
+        return isLoopbackHost(dial.host) ? { kind: 'local' } : { kind: 'remote' };
+    }
+    if (dial?.transport !== 'unix') {
+        return { kind: 'unknown' };
+    }
+    const windowsMachine = /^\/mnt\/wsl\/podman-sockets\/([^/]+)\/podman-(?:user|root)\.sock$/.exec(dial.path);
+    if (environment === 'wsl' && windowsMachine && PODMAN_MACHINE_NAME.test(windowsMachine[1])) {
+        return { kind: 'windowsMachineFromWsl', name: windowsMachine[1] };
+    }
+    if (
+        (environment === 'linux' || environment === 'wsl') &&
+        /^\/run\/user\/\d+\/podman\/podman\.sock$/.test(dial.path)
+    ) {
+        return { kind: 'userSocket' };
+    }
+    return { kind: 'local' };
+}
+
+export function parsePodmanMachineList(output: string): readonly PodmanMachineFact[] | undefined {
+    try {
+        const parsed: unknown = JSON.parse(output);
+        if (!Array.isArray(parsed)) {
+            return undefined;
+        }
+        const machines: PodmanMachineFact[] = [];
+        for (const value of parsed as unknown[]) {
+            if (
+                typeof value !== 'object' ||
+                value === null ||
+                !('Name' in value) ||
+                typeof value.Name !== 'string' ||
+                !value.Name.trim() ||
+                !('Default' in value) ||
+                typeof value.Default !== 'boolean' ||
+                !('Running' in value) ||
+                typeof value.Running !== 'boolean' ||
+                !('Starting' in value) ||
+                typeof value.Starting !== 'boolean'
+            ) {
+                return undefined;
+            }
+            machines.push({
+                name: value.Name,
+                isDefault: value.Default,
+                running: value.Running,
+                starting: value.Starting,
+            });
+        }
+        return machines;
+    } catch {
+        return undefined;
+    }
+}
+
+/** Name of the default connection in `podman system connection list --format json`. */
+export function parsePodmanDefaultConnection(output: string): string | undefined {
+    try {
+        const parsed: unknown = JSON.parse(output);
+        if (!Array.isArray(parsed)) {
+            return undefined;
+        }
+        for (const value of parsed as unknown[]) {
+            if (
+                typeof value === 'object' &&
+                value !== null &&
+                'Default' in value &&
+                value.Default === true &&
+                'Name' in value &&
+                typeof value.Name === 'string'
+            ) {
+                return value.Name;
+            }
+        }
+        return undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+export function classifyPodmanMachineState(
+    machines: readonly PodmanMachineFact[],
+    defaultConnection?: string,
+): PodmanMachineState {
+    if (machines.length === 0) {
+        return { kind: 'none' };
+    }
+    const defaults = machines.filter(
+        (machine) => machine.isDefault || (!!defaultConnection && defaultConnection === `${machine.name}-root`),
+    );
+    let target: PodmanMachineFact | undefined;
+    if (defaults.length === 1) {
+        target = defaults[0];
+    } else if (defaults.length === 0 && machines.length === 1) {
+        target = machines[0];
+    }
+    if (!target) {
+        return { kind: 'ambiguous', names: machines.map((machine) => machine.name) };
+    }
+    if (target.starting) {
+        return { kind: 'starting', name: target.name };
+    }
+    if (target.running) {
+        return { kind: 'running', name: target.name };
+    }
+    const active = machines.find((machine) => machine !== target && (machine.starting || machine.running));
+    if (active) {
+        return { kind: 'otherActive', active: active.name };
+    }
+    return { kind: 'stopped', name: target.name };
+}
+
+export interface ContainerEngineInput {
+    readonly cli: 'docker' | 'podman';
+    readonly cliInstalled: boolean;
+    readonly cliVersionStdout?: string;
+    readonly cliVersionStderr?: string;
+    readonly podmanInfo?: boolean;
+    readonly daemonOperatingSystem?: string;
+    readonly serverComponentNames?: ReadonlyArray<string>;
+    readonly endpointAddress?: string;
+    readonly dockerSocketTarget?: string;
+}
 
 export type DockerFailureClassification =
     | {
@@ -49,6 +209,7 @@ export interface DockerProviderClassificationEvidence {
     readonly environment: DockerHostEnvironment;
     readonly daemonReachable: boolean;
     readonly daemonOperatingSystem?: string;
+    readonly engine?: ContainerEngine;
     readonly contexts?: ReadonlyArray<DockerProviderContext>;
     readonly activeEndpoint?: DockerProviderEndpoint;
     readonly rememberedProvider?: DockerProviderMemory;
@@ -71,6 +232,8 @@ const DAEMON_UNAVAILABLE_SIGNATURES: ReadonlyArray<RegExp> = [
     /is the docker daemon running/i,
     /error during connect/i,
     /connection refused/i,
+    /cannot connect to podman/i,
+    /unable to connect to podman socket/i,
 ];
 
 const CONTEXT_UNAVAILABLE_SIGNATURES: ReadonlyArray<RegExp> = [
@@ -162,6 +325,40 @@ function isDockerDesktopOperatingSystem(operatingSystem: string | undefined): bo
     return operatingSystem !== undefined && /(?:^|\s)docker desktop(?:\s|$)/i.test(operatingSystem);
 }
 
+export function classifyContainerEngine(input: ContainerEngineInput): {
+    engine: ContainerEngine;
+    engineEvidence: ContainerEngineEvidence;
+} {
+    if (input.cli === 'podman' && input.cliInstalled) {
+        return { engine: 'podman', engineEvidence: 'selectedCli' };
+    }
+    if (input.podmanInfo === true) {
+        return { engine: 'podman', engineEvidence: 'podmanInfo' };
+    }
+    if (
+        input.cliVersionStdout?.startsWith('podman version') ||
+        input.cliVersionStderr?.includes('Emulate Docker CLI using podman')
+    ) {
+        return { engine: 'podman', engineEvidence: 'podmanShim' };
+    }
+    if (input.serverComponentNames?.includes('Podman Engine')) {
+        return { engine: 'podman', engineEvidence: 'serverComponents' };
+    }
+    if (isDockerDesktopOperatingSystem(input.daemonOperatingSystem)) {
+        return { engine: 'docker', engineEvidence: 'dockerDesktopInfo' };
+    }
+    if (input.serverComponentNames?.includes('Engine')) {
+        return { engine: 'docker', engineEvidence: 'serverComponents' };
+    }
+    if (input.endpointAddress?.toLowerCase().includes('podman')) {
+        return { engine: 'unknown', engineEvidence: 'endpointPath' };
+    }
+    if (input.dockerSocketTarget?.toLowerCase().includes('podman')) {
+        return { engine: 'unknown', engineEvidence: 'dockerSocketLink' };
+    }
+    return { engine: 'unknown', engineEvidence: 'none' };
+}
+
 function isDockerDesktopEndpoint(endpoint: string | undefined): boolean {
     return endpoint !== undefined && DOCKER_DESKTOP_ENDPOINT_SIGNATURES.some((signature) => signature.test(endpoint));
 }
@@ -180,6 +377,9 @@ function canUseInstalledDesktopEvidence(environment: DockerHostEnvironment): boo
 
 export function classifyDockerProvider(evidence: DockerProviderClassificationEvidence): DockerProviderClassification {
     if (evidence.daemonReachable) {
+        if (evidence.engine === 'podman') {
+            return { provider: 'podman', providerEvidence: 'liveDaemon' };
+        }
         if (!evidence.daemonOperatingSystem) {
             return { provider: 'unknown', providerEvidence: 'liveDaemon' };
         }

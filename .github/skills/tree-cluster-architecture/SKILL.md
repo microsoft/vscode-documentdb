@@ -186,11 +186,17 @@ If a command is intentionally unavailable, gate it explicitly with context value
 
 The tree shows **actions, never error or information rows**. When expanding a cluster fails, the
 reason goes in a **modal** (`showErrorMessage(..., { modal: true, detail })`, translated through
-`ErrorExplanationService` where available). The children are only recovery actions: Retry,
-"Diagnose this connection…", "Click here to open the shell" (on every failure, so experts can debug
+`ErrorExplanationService` where available). The children are only recovery actions:
+"Diagnose connection…", "Open shell" (on every failure, so experts can debug
 in the shell even when connecting or sign-in failed), and provider-owned
 actions such as "Update credentials…" via `errorRecoveryActions`
 (`ClusterItemBase.createErrorRecoveryChildren`).
+
+Keep a fixed relative order: configuration/targeted repairs, diagnosis/inspection, shell,
+destructive recovery, and **Retry always last** (including "Retry setup…").
+Providers prepend repairs; Update connection string precedes Update credentials when both exist.
+Failure classification changes availability, never ordering. When healthy resources coexist with
+recovery actions, render the healthy resources first and the recovery block last.
 
 Do not add a child whose purpose is to show a message (an error label, a "sign-in required" row,
 a tooltip-only info node), even with an icon. Better wording belongs in the modal and in the

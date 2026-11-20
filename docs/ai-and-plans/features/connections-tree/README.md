@@ -43,11 +43,19 @@ specific behaviors:
 - **Item counts on tree nodes** are opt-in and bounded. The UX rationale for where counts appear,
   and where they deliberately do not, is in the item-counting iteration.
 - **Failures are a modal plus action rows.** The tree holds actions, never error or information rows.
-  A failed expand shows the reason in a modal, and its children are recovery actions only (Retry,
-  Diagnose this connection…, Open shell, Update credentials…). WI-28 of the connectivity troubleshooter
+  A failed expand shows the reason in a modal, and its children are recovery actions only
+  (Update credentials…, Diagnose connection…, Open shell, Retry). WI-28 of the connectivity troubleshooter
   (2026-11-02) replaced the modal with a "Sign-in required to list databases" row; the operator
   rejected that because it breaks this rule, and it was reverted. The rule is in the
   `tree-cluster-architecture` skill.
+- **Recovery actions have a fixed order; Retry is always last.** The operator accepted this order
+  in #1088: configuration and targeted repairs, diagnosis and inspection, shell, destructive recovery,
+  then Retry. Repeating an unchanged failed attempt should not be the recommended first step.
+  Classification controls which actions are available, not their relative position.
+  Saved connections prepend Update credentials…; when Update connection string… is available, it
+  precedes credentials. Shared cluster recovery is Diagnose connection…, Open shell, Retry.
+  Healthy resources precede recovery actions where both coexist. Quick Start keeps deletion
+  penultimate and Retry setup… last rather than making an exception to the retry rule.
 - **Connection load is not a storage read per node.** The storage-load work separates what is
   wrapped in memory from what is read on demand, and says so explicitly, because the previous shape
   made the cost invisible.
@@ -81,6 +89,18 @@ and `startupOutcome` (`succeeded`, `failed`, or `canceled`). The framework suppl
 `duration` in seconds. `<stage>DurationMs` and `lastStageDurationMs` are milliseconds. The log's
 `stageDurationsMs` contains those same stage timings, with a total `elapsedMs`. Success and cancellation
 summaries use Trace; failures use Error. No per-stage log or telemetry events are added.
+
+From 1.1.0 the event also carries `startupTrigger`: which code path asked for the client
+(`treeConnect`, `treeChildren`, `collectionView`, `documentView`, `clusterDashboard`,
+`clusterDashboardPoll`, `playgroundCompletion`, or `other` for callers that do not pass one).
+Failed startups (not succeeded or canceled ones) also carry `startupFailureType`, the original
+error's `parseError` type kept only when it looks like an identifier or a code of up to six digits
+(else `other`), and `startupFailureCategory`: `credentialsUnavailable`, `entraToken`,
+`authentication`, `authorization`, `invalidConnectionString`, `unsupported`, `tls`, `dns`,
+`timeout`, `network`, `serverSelection` or `other`. Both are computed from the original error
+because the event sets `maskEntireErrorMessage`, which redacts every property named like `error`
+or `exception`; that is also why neither name contains those words. See
+`src/documentdb/utils/startupFailureTelemetry.ts`.
 
 The same event also carries `tokenAcquireDurationMs` for the actual provider call and
 `databaseConnectDurationMs` for driver connection work excluding overlapping token acquisition.

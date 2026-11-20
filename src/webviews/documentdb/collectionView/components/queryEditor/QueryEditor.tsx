@@ -241,6 +241,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                 void trpcClient.mongoClusters.collectionView.completionAccepted.mutate({
                     category: normalizeCompletionCategory(category),
                 }),
+            () => void trpcClient.mongoClusters.collectionView.completionOffered.mutate(),
         );
 
         // Create model with URI scheme for contextual completions
