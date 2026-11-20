@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type Check, type CheckOutcome, type Finding, type RunContext } from '@documentdb-js/connection-diagnostics';
+import { isNotSignedInError } from '@microsoft/vscode-azext-azureauth';
 import {
     ConnectionEndpointUnavailableError,
     ConnectionInputCancelledError,
@@ -24,6 +25,19 @@ const SIGN_IN_ERROR_NAMES: ReadonlySet<string> = new Set([
     'CredentialUnavailableError',
     'NotSignedInError',
 ]);
+
+function isAzureSignInSignal(error: unknown): boolean {
+    if (isNotSignedInError(error)) {
+        return true;
+    }
+    if (!(error instanceof Error)) {
+        return false;
+    }
+    const code = 'code' in error ? error.code : undefined;
+    return [error.name, code].some(
+        (value) => typeof value === 'string' && (value === 'interaction_required' || /^AADSTS\d{5,9}$/.test(value)),
+    );
+}
 
 function finding(code: FindingCode, data: Readonly<Record<string, unknown>>, text: string): Finding<FindingCode> {
     return { code, severity: 'error', data, detail: { language: 'en', text } };
@@ -68,7 +82,11 @@ export function classifyResolutionFailure(error: unknown): Finding<FindingCode> 
         );
     }
     let reason: SourceInaccessibleReason = 'other';
-    if (status === 401 || (cause instanceof Error && SIGN_IN_ERROR_NAMES.has(cause.name))) {
+    if (
+        status === 401 ||
+        (cause instanceof Error && SIGN_IN_ERROR_NAMES.has(cause.name)) ||
+        (source === 'azure' && isAzureSignInSignal(cause))
+    ) {
         reason = 'signInRequired';
     } else if (status === 403) {
         reason = 'accessDenied';

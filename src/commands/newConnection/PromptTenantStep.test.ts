@@ -5,8 +5,9 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
-const mockGetTenants = vi.fn();
-const mockIsSignedIn = vi.fn();
+const mockGetAccounts = vi.fn();
+const mockGetTenantsForAccount = vi.fn();
+const mockSignIn = vi.fn();
 // Read eagerly by the credentialsManagement factory below, which `vi.mock` hoists above this line.
 const { mockConfigureAzureCredentials } = vi.hoisted(() => ({ mockConfigureAzureCredentials: vi.fn() }));
 const mockOutputChannel = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
@@ -19,12 +20,14 @@ vi.mock('../../extensionVariables', () => ({
     },
 }));
 
-vi.mock('@microsoft/vscode-azext-azureauth', () => ({
+vi.mock('@microsoft/vscode-azext-azureauth', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@microsoft/vscode-azext-azureauth')>()),
     // A `function`, not an arrow: Vitest 4 calls the implementation with `new`.
     VSCodeAzureSubscriptionProvider: vi.fn().mockImplementation(function () {
         return {
-            getTenants: mockGetTenants,
-            isSignedIn: mockIsSignedIn,
+            getAccounts: mockGetAccounts,
+            getTenantsForAccount: mockGetTenantsForAccount,
+            signIn: mockSignIn,
         };
     }),
 }));
@@ -51,6 +54,8 @@ vi.mock('../../plugins/api-shared/azure/credentialsManagement', () => ({
     configureAzureCredentials: mockConfigureAzureCredentials,
 }));
 
+import { Environment } from '@azure/ms-rest-azure-env';
+import { ExtendedEnvironment } from '@microsoft/vscode-azext-azureauth';
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { traceTenantLookup } from '../../plugins/api-shared/azure/traceTenantLookup';
@@ -62,7 +67,11 @@ const tenant = {
     tenantId: TENANT_ID,
     displayName: 'Example Organization',
     defaultDomain: 'example.test',
-    account: { id: 'account', label: 'alex@example.test' },
+    account: {
+        id: 'account',
+        label: 'alex@example.test',
+        environment: new ExtendedEnvironment(Environment.AzureCloud, false),
+    },
 };
 
 type PromptTenantStep = NewConnectionPromptTenantStep | UpdateCredentialsPromptTenantStep;
@@ -107,8 +116,9 @@ describe.each([
 ])('PromptTenantStep for %s', (_name, makeStep: () => PromptTenantStep) => {
     beforeEach(() => {
         vi.clearAllMocks();
-        mockIsSignedIn.mockReset().mockResolvedValue(true);
-        mockGetTenants.mockReset().mockResolvedValue([tenant]);
+        mockSignIn.mockReset().mockResolvedValue(true);
+        mockGetAccounts.mockReset().mockResolvedValue([tenant.account]);
+        mockGetTenantsForAccount.mockReset().mockResolvedValue([tenant]);
         mockConfigureAzureCredentials.mockResolvedValue(undefined);
     });
 
@@ -137,12 +147,13 @@ describe.each([
         expect(mockOutputChannel.info).toHaveBeenCalledTimes(2);
         expect(mockOutputChannel.info.mock.calls[1][0]).toContain('"skipped":true');
         expect(mockOutputChannel.info.mock.calls[1][0]).toContain('notInteractiveEntra');
-        expect(mockIsSignedIn).not.toHaveBeenCalled();
-        expect(mockGetTenants).not.toHaveBeenCalled();
+        expect(mockSignIn).not.toHaveBeenCalled();
+        expect(mockGetAccounts).not.toHaveBeenCalled();
+        expect(mockGetTenantsForAccount).not.toHaveBeenCalled();
     });
 
     it('runs account management before listing tenants when signed out', async () => {
-        mockIsSignedIn.mockResolvedValue(false);
+        mockSignIn.mockResolvedValue(false);
         const showQuickPick = vi.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
             const items = await itemsPromise;
             return items.find((item) => (item as { tenant?: unknown }).tenant);
@@ -152,7 +163,9 @@ describe.each([
         await makeStep().prompt(context as never);
 
         expect(mockConfigureAzureCredentials).toHaveBeenCalledTimes(1);
-        expect(mockGetTenants).toHaveBeenCalledTimes(1);
+        expect(mockSignIn).toHaveBeenCalledExactlyOnceWith(undefined, { promptIfNeeded: false });
+        expect(mockGetAccounts).toHaveBeenCalledExactlyOnceWith({ filter: false, noCache: true });
+        expect(mockGetTenantsForAccount).toHaveBeenCalledExactlyOnceWith(tenant.account, { filter: false, noCache: true });
         expect((context as IActionContext & { entraIdAuthConfig?: { tenantId?: string } }).entraIdAuthConfig).toEqual({
             tenantId: TENANT_ID,
         });
@@ -162,7 +175,7 @@ describe.each([
     });
 
     it('re-enumerates tenants after account management without exiting the wizard', async () => {
-        mockIsSignedIn.mockResolvedValue(true);
+        mockSignIn.mockResolvedValue(true);
         const showQuickPick = vi
             .fn()
             .mockImplementationOnce(async (items: Promise<unknown[]>) => {
@@ -178,7 +191,11 @@ describe.each([
         await makeStep().prompt(context as never);
 
         expect(showQuickPick).toHaveBeenCalledTimes(2);
-        expect(mockGetTenants).toHaveBeenCalledTimes(2);
+        expect(mockGetAccounts.mock.calls).toEqual([[{ filter: false }], [{ filter: false, noCache: true }]]);
+        expect(mockGetTenantsForAccount.mock.calls).toEqual([
+            [tenant.account, { filter: false }],
+            [tenant.account, { filter: false, noCache: true }],
+        ]);
         expect(mockConfigureAzureCredentials).toHaveBeenCalledTimes(1);
         expect((context as IActionContext & { entraIdAuthConfig?: { tenantId?: string } }).entraIdAuthConfig).toEqual({
             tenantId: TENANT_ID,
@@ -186,7 +203,7 @@ describe.each([
     });
 
     it('distinguishes a successful empty result from failure and timeout', async () => {
-        mockGetTenants.mockResolvedValue([]);
+        mockGetTenantsForAccount.mockResolvedValue([]);
         const context = makeFallbackContext();
 
         await makeStep().prompt(context as never);
@@ -204,7 +221,7 @@ describe.each([
             code: 'AuthorizationFailed',
             statusCode: 403,
         });
-        mockGetTenants.mockRejectedValue(error);
+        mockGetTenantsForAccount.mockRejectedValue(error);
 
         await makeStep().prompt(makeFallbackContext() as never);
 
@@ -215,7 +232,7 @@ describe.each([
     });
 
     it('does not print unrecognized error metadata', async () => {
-        mockGetTenants.mockRejectedValue(
+        mockGetTenantsForAccount.mockRejectedValue(
             Object.assign(new Error('secret-token'), {
                 name: tenant.account.label,
                 code: 'secret-token',
@@ -230,7 +247,7 @@ describe.each([
     });
 
     it('does not print arbitrary thrown values', async () => {
-        mockGetTenants.mockRejectedValue(`secret-token ${tenant.account.label}`);
+        mockGetTenantsForAccount.mockRejectedValue(`secret-token ${tenant.account.label}`);
 
         await makeStep().prompt(makeFallbackContext() as never);
 
@@ -239,19 +256,20 @@ describe.each([
     });
 
     it('logs sign-in failure while preserving the existing true fallback', async () => {
-        mockIsSignedIn.mockRejectedValue(new Error('secret-token'));
+        mockSignIn.mockRejectedValue(new Error('secret-token'));
 
         await makeStep().prompt(makeFallbackContext() as never);
 
         expect(outputText()).toMatch(/isSignedIn: failed in/);
         expect(mockConfigureAzureCredentials).not.toHaveBeenCalled();
-        expect(mockGetTenants).toHaveBeenCalledTimes(1);
+        expect(mockGetAccounts).toHaveBeenCalledExactlyOnceWith({ filter: false });
+        expect(mockGetTenantsForAccount).toHaveBeenCalledExactlyOnceWith(tenant.account, { filter: false });
         expect(outputText()).not.toContain('secret-token');
     });
 
     it('logs sign-in timeout while preserving the existing true fallback', async () => {
         vi.useFakeTimers();
-        mockIsSignedIn.mockReturnValue(new Promise<boolean>(() => {}));
+        mockSignIn.mockReturnValue(new Promise<boolean>(() => {}));
 
         const prompt = makeStep().prompt(makeFallbackContext() as never);
         await vi.advanceTimersByTimeAsync(5000);
@@ -259,13 +277,14 @@ describe.each([
 
         expect(outputText()).toContain('isSignedIn: timed out after 5000 ms; using fallback (signedIn=true)');
         expect(mockConfigureAzureCredentials).not.toHaveBeenCalled();
-        expect(mockGetTenants).toHaveBeenCalledTimes(1);
+        expect(mockGetAccounts).toHaveBeenCalledExactlyOnceWith({ filter: false });
+        expect(mockGetTenantsForAccount).toHaveBeenCalledExactlyOnceWith(tenant.account, { filter: false });
     });
 
     it('logs late tenant completion without replacing the timeout fallback', async () => {
         vi.useFakeTimers();
         let completeLookup!: (tenants: (typeof tenant)[]) => void;
-        mockGetTenants.mockReturnValue(
+        mockGetTenantsForAccount.mockReturnValue(
             new Promise<(typeof tenant)[]>((resolve) => {
                 completeLookup = resolve;
             }),
@@ -290,7 +309,7 @@ describe.each([
     it('logs late provider rejection after a timeout', async () => {
         vi.useFakeTimers();
         let failLookup!: (reason: Error) => void;
-        mockGetTenants.mockReturnValue(
+        mockGetTenantsForAccount.mockReturnValue(
             new Promise<(typeof tenant)[]>((_resolve, reject) => {
                 failLookup = reject;
             }),
@@ -308,7 +327,7 @@ describe.each([
 
     it('offers an explicit retry after timeout and allows 30 seconds for it', async () => {
         vi.useFakeTimers();
-        mockGetTenants
+        mockGetTenantsForAccount
             .mockReturnValueOnce(new Promise<(typeof tenant)[]>(() => {}))
             .mockImplementationOnce(() => new Promise((resolve) => setTimeout(() => resolve([tenant]), 29_000)));
         const showQuickPick = vi
@@ -328,7 +347,11 @@ describe.each([
         const prompt = makeStep().prompt(context as never);
 
         await vi.advanceTimersByTimeAsync(5000);
-        expect(mockGetTenants).toHaveBeenCalledTimes(2);
+        expect(mockGetAccounts.mock.calls).toEqual([[{ filter: false }], [{ filter: false, noCache: true }]]);
+        expect(mockGetTenantsForAccount.mock.calls).toEqual([
+            [tenant.account, { filter: false }],
+            [tenant.account, { filter: false, noCache: true }],
+        ]);
         await vi.advanceTimersByTimeAsync(29_000);
         await prompt;
 
@@ -339,7 +362,7 @@ describe.each([
 
     it('keeps manual entry, account management, and retry available after a retry timeout', async () => {
         vi.useFakeTimers();
-        mockGetTenants.mockReturnValue(new Promise<(typeof tenant)[]>(() => {}));
+        mockGetTenantsForAccount.mockReturnValue(new Promise<(typeof tenant)[]>(() => {}));
         const showQuickPick = vi
             .fn()
             .mockImplementationOnce(async (itemsPromise: Promise<{ isRetryOption?: boolean }[]>) =>
@@ -367,7 +390,8 @@ describe.each([
         await vi.advanceTimersByTimeAsync(35_000);
         await prompt;
 
-        expect(mockGetTenants).toHaveBeenCalledTimes(2);
+        expect(mockGetAccounts).toHaveBeenCalledTimes(2);
+        expect(mockGetTenantsForAccount).toHaveBeenCalledTimes(2);
     });
 
     it.each([
@@ -375,9 +399,9 @@ describe.each([
         ['failure', new Error('synthetic failure'), 'Unable to load tenants'],
     ])('offers retry for a %s result without misreporting a timeout', async (_name, error, detail) => {
         if (error) {
-            mockGetTenants.mockRejectedValueOnce(error);
+            mockGetTenantsForAccount.mockRejectedValueOnce(error);
         } else {
-            mockGetTenants.mockResolvedValueOnce([]);
+            mockGetTenantsForAccount.mockResolvedValueOnce([]);
         }
         const showQuickPick = vi.fn().mockImplementation(
             async (
@@ -396,7 +420,8 @@ describe.each([
         );
 
         await makeStep().prompt(makeContext(showQuickPick) as never);
-        expect(mockGetTenants).toHaveBeenCalledTimes(1);
+        expect(mockGetAccounts).toHaveBeenCalledTimes(1);
+        expect(mockGetTenantsForAccount).toHaveBeenCalledTimes(1);
     });
 });
 

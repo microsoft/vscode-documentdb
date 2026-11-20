@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
+import { getSessionFromVSCode, type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import * as vscode from 'vscode';
@@ -29,6 +29,10 @@ vi.mock('../extensionVariables', () => ({
 vi.mock('@microsoft/vscode-azext-utils', () => ({
     callWithTelemetryAndErrorHandling: vi.fn(),
 }));
+vi.mock('@microsoft/vscode-azext-azureauth', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@microsoft/vscode-azext-azureauth')>()),
+    getSessionFromVSCode: vi.fn(),
+}));
 vi.mock('../services/discoveryServices', () => ({
     DiscoveryService: { getProvider: vi.fn() },
 }));
@@ -37,9 +41,16 @@ vi.mock('../plugins/api-shared/azure/subscriptionFiltering/subscriptionFiltering
 }));
 
 const azureSubscriptionProvider = {
-    isSignedIn: vi.fn<AzureSubscriptionProviderWithFilters['isSignedIn']>(),
     signIn: vi.fn<AzureSubscriptionProviderWithFilters['signIn']>(),
-    getSubscriptions: vi.fn<AzureSubscriptionProviderWithFilters['getSubscriptions']>(),
+    getAvailableSubscriptions: vi.fn<AzureSubscriptionProviderWithFilters['getAvailableSubscriptions']>(),
+};
+const listingOptions = { filter: false, maximumTenants: Number.POSITIVE_INFINITY };
+
+const session: vscode.AuthenticationSession = {
+    id: 'session-id',
+    accessToken: 'token',
+    account: { id: 'account-id', label: 'account-id' },
+    scopes: [],
 };
 
 const provider = {
@@ -76,9 +87,9 @@ beforeEach((): void => {
         },
     );
     provider.configureCredentials.mockResolvedValue(undefined);
-    azureSubscriptionProvider.isSignedIn.mockResolvedValue(true);
     azureSubscriptionProvider.signIn.mockResolvedValue(true);
-    azureSubscriptionProvider.getSubscriptions.mockResolvedValue([]);
+    azureSubscriptionProvider.getAvailableSubscriptions.mockResolvedValue([]);
+    vi.mocked(getSessionFromVSCode).mockResolvedValue(session);
     vi.mocked(isTenantFilteredOut).mockReturnValue(false);
 });
 
@@ -86,11 +97,11 @@ describe('resolveAzureSubscription', (): void => {
     it('reports sign-in and subscription lookup before running each step', async (): Promise<void> => {
         const report = vi.fn<(message: string) => void>();
         const found = subscription('tenant-id', 'account-id');
-        azureSubscriptionProvider.isSignedIn.mockImplementation(async (): Promise<boolean> => {
+        azureSubscriptionProvider.signIn.mockImplementation(async (): Promise<boolean> => {
             expect(report).toHaveBeenLastCalledWith('Checking Azure sign-in…');
             return true;
         });
-        azureSubscriptionProvider.getSubscriptions.mockImplementation(async (): Promise<AzureSubscription[]> => {
+        azureSubscriptionProvider.getAvailableSubscriptions.mockImplementation(async (): Promise<AzureSubscription[]> => {
             expect(report).toHaveBeenLastCalledWith('Looking for the subscription…');
             return [found];
         });
@@ -102,21 +113,22 @@ describe('resolveAzureSubscription', (): void => {
 
     it('prompts a signed-out user, signs in, and resolves an unfiltered subscription', async (): Promise<void> => {
         const found = subscription('tenant-id', 'account-id');
-        azureSubscriptionProvider.isSignedIn.mockResolvedValue(false);
-        azureSubscriptionProvider.getSubscriptions.mockResolvedValue([found]);
+        azureSubscriptionProvider.signIn.mockResolvedValueOnce(false);
+        azureSubscriptionProvider.getAvailableSubscriptions.mockResolvedValue([found]);
         (vscode.window.showInformationMessage as Mock).mockResolvedValue('Sign in');
 
         await expect(resolveAzureSubscription(context, request)).resolves.toBe(found);
 
         expect(DiscoveryService.getProvider).toHaveBeenCalledWith(request.providerId);
-        expect(azureSubscriptionProvider.isSignedIn).toHaveBeenCalledWith();
+        expect(azureSubscriptionProvider.signIn).toHaveBeenNthCalledWith(1, undefined, { promptIfNeeded: false });
         expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
             'Sign in to Azure',
             { modal: true, detail: 'Sign in to Azure to open linked-resource.' },
             'Sign in',
         );
-        expect(azureSubscriptionProvider.signIn).toHaveBeenCalledWith();
-        expect(azureSubscriptionProvider.getSubscriptions).toHaveBeenCalledExactlyOnceWith(false);
+        expect(azureSubscriptionProvider.signIn).toHaveBeenNthCalledWith(2, undefined, { clearSessionPreference: true });
+        expect(azureSubscriptionProvider.signIn).toHaveBeenCalledTimes(2);
+        expect(azureSubscriptionProvider.getAvailableSubscriptions).toHaveBeenCalledExactlyOnceWith(listingOptions);
         expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Azure sign-in: sign-in required');
         expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Azure sign-in confirmation: accepted');
         expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] 1 matching subscription(s) found');
@@ -132,7 +144,7 @@ describe('resolveAzureSubscription', (): void => {
     });
 
     it('returns undefined without listing subscriptions when the Azure sign-in prompt is dismissed', async (): Promise<void> => {
-        azureSubscriptionProvider.isSignedIn.mockResolvedValue(false);
+        azureSubscriptionProvider.signIn.mockResolvedValueOnce(false);
         (vscode.window.showInformationMessage as Mock).mockResolvedValue(undefined);
 
         await expect(resolveAzureSubscription(context, request)).resolves.toBeUndefined();
@@ -145,12 +157,11 @@ describe('resolveAzureSubscription', (): void => {
             result: 'Canceled',
         });
         expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Azure sign-in confirmation: dismissed');
-        expect(azureSubscriptionProvider.signIn).not.toHaveBeenCalled();
-        expect(azureSubscriptionProvider.getSubscriptions).not.toHaveBeenCalled();
+        expect(azureSubscriptionProvider.signIn).toHaveBeenCalledExactlyOnceWith(undefined, { promptIfNeeded: false });
+        expect(azureSubscriptionProvider.getAvailableSubscriptions).not.toHaveBeenCalled();
     });
 
     it('treats a false Azure sign-in result as cancellation', async (): Promise<void> => {
-        azureSubscriptionProvider.isSignedIn.mockResolvedValue(false);
         azureSubscriptionProvider.signIn.mockResolvedValue(false);
         (vscode.window.showInformationMessage as Mock).mockResolvedValue('Sign in');
 
@@ -158,13 +169,24 @@ describe('resolveAzureSubscription', (): void => {
 
         expect(context.telemetry.properties.userCancelledAtStep).toBe('AzureSignIn');
         expect(context.telemetry.properties.failureStage).toBe('azureSignIn');
-        expect(azureSubscriptionProvider.getSubscriptions).not.toHaveBeenCalled();
+        expect(azureSubscriptionProvider.getAvailableSubscriptions).not.toHaveBeenCalled();
+    });
+
+    it('propagates unrelated silent sign-in failures without prompting or listing subscriptions', async () => {
+        const failure = new Error('Azure authentication provider failed');
+        azureSubscriptionProvider.signIn.mockRejectedValueOnce(failure);
+
+        await expect(resolveAzureSubscription(context, request)).rejects.toBe(failure);
+
+        expect(azureSubscriptionProvider.signIn).toHaveBeenCalledExactlyOnceWith(undefined, { promptIfNeeded: false });
+        expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+        expect(azureSubscriptionProvider.getAvailableSubscriptions).not.toHaveBeenCalled();
     });
 
     it('uses the case-insensitive tenant hint to select between accounts sharing a subscription ID', async (): Promise<void> => {
         const otherTenant = subscription('other-tenant', 'account-one');
         const hintedTenant = subscription('tenant-id', 'account-two');
-        azureSubscriptionProvider.getSubscriptions.mockResolvedValue([otherTenant, hintedTenant]);
+        azureSubscriptionProvider.getAvailableSubscriptions.mockResolvedValue([otherTenant, hintedTenant]);
 
         await expect(resolveAzureSubscription(context, { ...request, tenantId: 'TENANT-ID' })).resolves.toBe(
             hintedTenant,
@@ -176,13 +198,13 @@ describe('resolveAzureSubscription', (): void => {
             tenantSignInRequired: 'false',
         });
         expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
-        expect(azureSubscriptionProvider.signIn).not.toHaveBeenCalled();
+        expect(azureSubscriptionProvider.signIn).toHaveBeenCalledExactlyOnceWith(undefined, { promptIfNeeded: false });
     });
 
     it('prefers the first non-filtered account when there is no tenant hint', async (): Promise<void> => {
         const filtered = subscription('tenant-one', 'account-one');
         const visible = subscription('tenant-two', 'account-two');
-        azureSubscriptionProvider.getSubscriptions.mockResolvedValue([filtered, visible]);
+        azureSubscriptionProvider.getAvailableSubscriptions.mockResolvedValue([filtered, visible]);
         vi.mocked(isTenantFilteredOut).mockImplementation(
             (tenantId, accountId): boolean => tenantId === filtered.tenantId && accountId === filtered.account.id,
         );
@@ -196,7 +218,7 @@ describe('resolveAzureSubscription', (): void => {
 
     it('falls back to the first candidate when all matching tenants are filtered out', async (): Promise<void> => {
         const first = subscription('tenant-one', 'account-one');
-        azureSubscriptionProvider.getSubscriptions.mockResolvedValue([
+        azureSubscriptionProvider.getAvailableSubscriptions.mockResolvedValue([
             first,
             subscription('tenant-two', 'account-two'),
         ]);
@@ -211,14 +233,14 @@ describe('resolveAzureSubscription', (): void => {
     it('signs into the hinted tenant and retries unfiltered subscription resolution exactly once', async (): Promise<void> => {
         const report = vi.fn<(message: string) => void>();
         const found = subscription('tenant-id', 'account-id');
-        azureSubscriptionProvider.getSubscriptions.mockResolvedValueOnce([]).mockResolvedValueOnce([found]);
+        azureSubscriptionProvider.getAvailableSubscriptions.mockResolvedValueOnce([]).mockResolvedValueOnce([found]);
         (vscode.window.showInformationMessage as Mock).mockImplementation(async (): Promise<string> => {
             expect(report).not.toHaveBeenCalledWith('Signing in to tenant…');
             return 'Sign in to tenant';
         });
-        azureSubscriptionProvider.signIn.mockImplementation(async (): Promise<boolean> => {
+        vi.mocked(getSessionFromVSCode).mockImplementation(async (): Promise<vscode.AuthenticationSession> => {
             expect(report).toHaveBeenLastCalledWith('Signing in to tenant…');
-            return true;
+            return session;
         });
 
         await expect(resolveAzureSubscription(context, { ...request, tenantId: 'TENANT-ID' }, report)).resolves.toBe(
@@ -240,10 +262,16 @@ describe('resolveAzureSubscription', (): void => {
             },
             'Sign in to tenant',
         );
-        expect(azureSubscriptionProvider.signIn).toHaveBeenCalledExactlyOnceWith('TENANT-ID');
-        expect(azureSubscriptionProvider.getSubscriptions).toHaveBeenCalledTimes(2);
-        expect(azureSubscriptionProvider.getSubscriptions).toHaveBeenNthCalledWith(1, false);
-        expect(azureSubscriptionProvider.getSubscriptions).toHaveBeenNthCalledWith(2, false);
+        expect(getSessionFromVSCode).toHaveBeenCalledExactlyOnceWith(undefined, 'TENANT-ID', {
+            createIfNone: true,
+            clearSessionPreference: true,
+        });
+        expect(azureSubscriptionProvider.getAvailableSubscriptions).toHaveBeenCalledTimes(2);
+        expect(azureSubscriptionProvider.getAvailableSubscriptions).toHaveBeenNthCalledWith(1, listingOptions);
+        expect(azureSubscriptionProvider.getAvailableSubscriptions).toHaveBeenNthCalledWith(2, {
+            ...listingOptions,
+            noCache: true,
+        });
         expect(context.telemetry.properties).toEqual({
             failureStage: 'resolveSubscription',
             azureSignInRequired: 'false',
@@ -252,13 +280,16 @@ describe('resolveAzureSubscription', (): void => {
     });
 
     it('treats a false tenant sign-in result as cancellation without retrying subscription lookup', async (): Promise<void> => {
-        azureSubscriptionProvider.signIn.mockResolvedValue(false);
+        vi.mocked(getSessionFromVSCode).mockResolvedValue(undefined);
         (vscode.window.showInformationMessage as Mock).mockResolvedValue('Sign in to tenant');
 
         await expect(resolveAzureSubscription(context, { ...request, tenantId: 'tenant-id' })).resolves.toBeUndefined();
 
-        expect(azureSubscriptionProvider.signIn).toHaveBeenCalledExactlyOnceWith('tenant-id');
-        expect(azureSubscriptionProvider.getSubscriptions).toHaveBeenCalledExactlyOnceWith(false);
+        expect(getSessionFromVSCode).toHaveBeenCalledExactlyOnceWith(undefined, 'tenant-id', {
+            createIfNone: true,
+            clearSessionPreference: true,
+        });
+        expect(azureSubscriptionProvider.getAvailableSubscriptions).toHaveBeenCalledExactlyOnceWith(listingOptions);
         expect(context.telemetry.properties).toMatchObject({
             tenantSignInRequired: 'true',
             deepLinkOutcome: 'canceled',
@@ -271,7 +302,7 @@ describe('resolveAzureSubscription', (): void => {
     });
 
     it('throws with a working Manage Azure accounts button when the tenant retry still cannot find the subscription', async (): Promise<void> => {
-        azureSubscriptionProvider.getSubscriptions.mockResolvedValue([
+        azureSubscriptionProvider.getAvailableSubscriptions.mockResolvedValue([
             subscription('other-tenant', 'account-id'),
             subscription('tenant-id', 'account-id', 'different-subscription'),
         ]);
@@ -281,8 +312,11 @@ describe('resolveAzureSubscription', (): void => {
             'We could not find subscription Subscription-ID among your signed-in Azure accounts. Check that you are signed in with the right account and to the right Azure cloud.',
         );
 
-        expect(azureSubscriptionProvider.getSubscriptions).toHaveBeenCalledTimes(2);
-        expect(azureSubscriptionProvider.signIn).toHaveBeenCalledExactlyOnceWith('tenant-id');
+        expect(azureSubscriptionProvider.getAvailableSubscriptions).toHaveBeenCalledTimes(2);
+        expect(getSessionFromVSCode).toHaveBeenCalledExactlyOnceWith(undefined, 'tenant-id', {
+            createIfNone: true,
+            clearSessionPreference: true,
+        });
         expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(1);
         expect(context.telemetry.properties).toEqual({
             failureStage: 'resolveSubscription',
@@ -314,13 +348,14 @@ describe('resolveAzureSubscription', (): void => {
 
         expect(context.telemetry.properties.userCancelledAtStep).toBe('AzureTenantSignIn');
         expect(context.telemetry.properties.tenantSignInRequired).toBe('true');
-        expect(azureSubscriptionProvider.getSubscriptions).toHaveBeenCalledTimes(1);
-        expect(azureSubscriptionProvider.signIn).not.toHaveBeenCalled();
+        expect(azureSubscriptionProvider.getAvailableSubscriptions).toHaveBeenCalledExactlyOnceWith(listingOptions);
+        expect(azureSubscriptionProvider.signIn).toHaveBeenCalledExactlyOnceWith(undefined, { promptIfNeeded: false });
+        expect(getSessionFromVSCode).not.toHaveBeenCalled();
         expect(context.errorHandling.buttons).toBeUndefined();
     });
 
     it('throws without a tenant prompt when no subscription matches and there is no tenant hint', async (): Promise<void> => {
-        azureSubscriptionProvider.getSubscriptions.mockResolvedValue([
+        azureSubscriptionProvider.getAvailableSubscriptions.mockResolvedValue([
             subscription('tenant-id', 'account-id', 'different-subscription'),
         ]);
 
@@ -329,8 +364,9 @@ describe('resolveAzureSubscription', (): void => {
         );
 
         expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
-        expect(azureSubscriptionProvider.signIn).not.toHaveBeenCalled();
-        expect(azureSubscriptionProvider.getSubscriptions).toHaveBeenCalledExactlyOnceWith(false);
+        expect(azureSubscriptionProvider.signIn).toHaveBeenCalledExactlyOnceWith(undefined, { promptIfNeeded: false });
+        expect(getSessionFromVSCode).not.toHaveBeenCalled();
+        expect(azureSubscriptionProvider.getAvailableSubscriptions).toHaveBeenCalledExactlyOnceWith(listingOptions);
         expect(context.telemetry.properties.tenantSignInRequired).toBe('false');
         expect(context.telemetry.measurements.subscriptionAccountCount).toBe(0);
         expect(context.errorHandling.buttons?.[0].title).toBe('Manage Azure accounts');
@@ -346,8 +382,8 @@ describe('resolveAzureSubscription', (): void => {
             );
 
             expect(context.telemetry.properties.failureStage).toBe('azureSignIn');
-            expect(azureSubscriptionProvider.isSignedIn).not.toHaveBeenCalled();
-            expect(azureSubscriptionProvider.getSubscriptions).not.toHaveBeenCalled();
+            expect(azureSubscriptionProvider.signIn).not.toHaveBeenCalled();
+            expect(azureSubscriptionProvider.getAvailableSubscriptions).not.toHaveBeenCalled();
             expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
         },
     );

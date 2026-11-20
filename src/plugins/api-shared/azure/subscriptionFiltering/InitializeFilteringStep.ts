@@ -14,7 +14,10 @@ import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import { type QuickPickItem } from 'vscode';
 import { askToConfigureCredentials } from '../askToConfigureCredentials';
-import { type AzureSubscriptionProviderWithFilters } from '../AzureSubscriptionProviderWithFilters';
+import {
+    getUnfilteredAzureTenants,
+    type AzureSubscriptionProviderWithFilters,
+} from '../AzureSubscriptionProviderWithFilters';
 import { tenantSignInLimiter } from '../tenantSignInLimiter';
 import { type FilteringWizardContext } from './FilteringWizardContext';
 import { FilterSubscriptionSubStep } from './FilterSubscriptionSubStep';
@@ -61,7 +64,7 @@ export class InitializeFilteringStep extends AzureWizardPromptStep<FilteringWiza
         const azureSubscriptionProvider = context.azureSubscriptionProvider;
 
         const tenantLoadStartTime = Date.now();
-        const allTenants = await azureSubscriptionProvider.getTenants();
+        const allTenants = await getUnfilteredAzureTenants(azureSubscriptionProvider);
 
         // Filter to only show authenticated tenants
         // Check sign-in status for all tenants with bounded parallelism
@@ -71,7 +74,7 @@ export class InitializeFilteringStep extends AzureWizardPromptStep<FilteringWiza
                     return { tenant, isSignedIn: false };
                 }
                 const isSignedIn = await tenantSignInLimiter(() =>
-                    azureSubscriptionProvider.isSignedIn(tenant.tenantId, tenant.account),
+                    azureSubscriptionProvider.signIn(tenant, { promptIfNeeded: false }),
                 );
                 return { tenant, isSignedIn };
             }),
@@ -93,7 +96,10 @@ export class InitializeFilteringStep extends AzureWizardPromptStep<FilteringWiza
         context.telemetry.measurements.authenticatedTenantsCount = context.availableTenants.length;
 
         const subscriptionLoadStartTime = Date.now();
-        context.allSubscriptions = await azureSubscriptionProvider.getSubscriptions(false);
+        context.allSubscriptions = await azureSubscriptionProvider.getAvailableSubscriptions({
+            filter: false,
+            maximumTenants: Number.POSITIVE_INFINITY,
+        });
         context.telemetry.measurements.subscriptionLoadTimeMs = Date.now() - subscriptionLoadStartTime;
         context.telemetry.measurements.allSubscriptionsCount = context.allSubscriptions.length;
 

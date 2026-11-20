@@ -80,7 +80,8 @@ vi.mock('../CredentialCache', () => ({
     },
 }));
 
-vi.mock('@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode', () => ({
+vi.mock('@microsoft/vscode-azext-azureauth', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@microsoft/vscode-azext-azureauth')>()),
     getSessionFromVSCode: mocks.interactiveToken,
 }));
 

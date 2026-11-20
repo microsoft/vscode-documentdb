@@ -140,7 +140,7 @@ export class AccountTenantsStep extends AzureWizardPromptStep<CredentialsManagem
             ext.outputChannel.appendLine(l10n.t('Starting sign-in to tenant: {0}', tenantName));
 
             // Sign in to the specific tenant
-            const success = await context.azureSubscriptionProvider.signIn(tenantId, tenant.account);
+            const success = await context.azureSubscriptionProvider.signIn({ tenantId, account: tenant.account });
 
             if (success) {
                 ext.outputChannel.appendLine(l10n.t('Successfully signed in to tenant: {0}', tenantName));

@@ -6,6 +6,8 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
+import { getVisibleDiscoveryProviders } from '../../services/discoveryProviderVisibility';
+import { DiscoveryService } from '../../services/discoveryServices';
 
 export async function refreshView(_context: IActionContext, view: Views): Promise<void> {
     switch (view) {
@@ -13,6 +15,9 @@ export async function refreshView(_context: IActionContext, view: Views): Promis
             ext.connectionsBranchDataProvider.refresh();
             break;
         case Views.DiscoveryView:
+            for (const { id } of await getVisibleDiscoveryProviders()) {
+                DiscoveryService.getProvider(id)?.prepareExplicitReload?.();
+            }
             ext.discoveryBranchDataProvider.refresh();
             break;
         default:

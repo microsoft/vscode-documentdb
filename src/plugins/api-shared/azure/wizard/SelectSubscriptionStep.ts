@@ -10,7 +10,10 @@ import { QuickPickItemKind, ThemeIcon, Uri, window, type QuickPickItem } from 'v
 import { type NewConnectionWizardContext } from '../../../../commands/newConnection/NewConnectionWizardContext';
 import { ext } from '../../../../extensionVariables';
 import { askToConfigureCredentials } from '../askToConfigureCredentials';
-import { type AzureSubscriptionProviderWithFilters } from '../AzureSubscriptionProviderWithFilters';
+import {
+    getUnfilteredAzureTenants,
+    type AzureSubscriptionProviderWithFilters,
+} from '../AzureSubscriptionProviderWithFilters';
 import { getDuplicateSubscriptions } from '../subscriptionFiltering/subscriptionFilteringHelpers';
 import { AzureContextProperties } from './AzureContextProperties';
 
@@ -46,12 +49,13 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
         // Create async function to provide better loading UX and debugging experience
         const getSubscriptionQuickPickItems = async (): Promise<(QuickPickItem & { id: string })[]> => {
             // Note: No tenant filtering here, because this flow should allow the user to access everything with no filtering.
-            subscriptions = await subscriptionProvider.getSubscriptions(false);
+            subscriptions = await subscriptionProvider.getAvailableSubscriptions({
+                filter: false,
+                maximumTenants: Number.POSITIVE_INFINITY,
+            });
 
             // This information is extracted to improve the UX, that's why there are fallbacks to 'undefined'
-            // Note to future maintainers: we used to run getSubscriptions and getTenants "in parallel", however
-            // this lead to incorrect responses from getSubscriptions. We didn't investigate
-            const tenantPromise = subscriptionProvider.getTenants().catch(() => undefined);
+            const tenantPromise = getUnfilteredAzureTenants(subscriptionProvider).catch(() => undefined);
             const timeoutPromise = new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 5000));
             const knownTenants = await Promise.race([tenantPromise, timeoutPromise]);
 
