@@ -639,6 +639,9 @@ verdict exists, do not start the work it gates. The fingerprint table (formerly 
   driver. Used “this connection” rather than introducing a display-name lookup, as allowed by
   step 8. Four new tests; 51 focused tests and `npx tsc --noEmit -p .` passed. Localization
   generation and the remaining PR checks are deferred to handoff.
+- **PR 1 pre-review F2 (2026-11-20), operator decision:** Defer typed webview sign-in errors to
+  the WI-5 classifier and WI-6 structured unavailable response. PR 1 keeps the existing webview
+  error transport. See the [review finding](./01-pr1-entra-renewal-review.md#f2-typed-entra-explanations-do-not-yet-reach-webviews).
 
 ---
 
@@ -1113,6 +1116,9 @@ shim (0005).
 ---
 
 ## WI-6: Bind surfaces and add the unavailable state (PR 5)
+
+**Carry-forward from PR 1:** Verify that a typed sign-in error classified by WI-5 reaches the
+webview as a structured unavailable result, not a generic query error.
 
 **Outcome:**
 

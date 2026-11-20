@@ -21,7 +21,7 @@ are not in the checked-in bundle. Generate the bundle as already scheduled for C
 
 ## F2. Typed Entra explanations do not yet reach webviews
 
-**Confirmed; delivery decision pending.** The existing webview explanation request passes only
+**Confirmed; deferred to WI-5/WI-6.** The existing webview explanation request passes only
 an error message. The new explainer needs the typed error or its cause chain. The current
 Collection View path can show a generic heading; the detail depends on what survives transport.
 
@@ -31,7 +31,8 @@ allowlisted error name to the current webview request, but that still does not c
 server-selection causes and would add call-site changes that WI-6 replaces. Do not match raw
 message text or wrap errors solely to transport explanations.
 
-**Author decision:** Pending.
+**Author decision (2026-11-20):** Defer F2 to WI-5/WI-6. PR 1 will not add a temporary webview
+transport for typed sign-in errors.
 
 ## Independent sweep
 
