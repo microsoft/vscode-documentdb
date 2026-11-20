@@ -57,7 +57,7 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@fluentui/react-components": "~9.74",
+    "@fluentui/react-components": "~9.75.1",
     "@fluentui/react-icons": "~2.0",
     "@fluentui/react-motion-components-preview": "^0.15.6",
     "react": ">=19"

@@ -199,7 +199,7 @@ describe('package archives: check-packages.mjs --archives', () => {
         assert.match(result.stdout, /\nAll package checks passed\.\n$/);
         assert.ok(result.stdout.includes(`sha256 ${readTarball(good).sha256}`));
         assert.match(result.stdout, /Checks not run: publint .*; @arethetypeswrong\/cli /);
-        assert.match(result.stdout, /"vitestWithoutInline": "not applicable/);
+        assert.match(result.stdout, /"hostVscode": true/);
     });
 
     it('rejects a packed test file', () => {
