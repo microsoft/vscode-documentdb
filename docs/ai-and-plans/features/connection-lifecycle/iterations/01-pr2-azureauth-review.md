@@ -48,3 +48,12 @@ accepted the untested deep-link URLs; partial failures were not reproducible liv
 
 CP-W3 retains L2 (Claude Opus 5.5, 85% confidence). L1 uses the same azureauth and Azure
 Resources API versions, so stepping down does not reduce the remaining risk.
+
+## Final review handoff (2026-11-20)
+
+Case 2 verification at `4858e97d0` passed formatting, localization check, build, test
+type-check, full Vitest (9,684 passed, one skipped), and VSIX packaging. Lint initially
+reported unresolved types in the fresh worktree; it passed when rerun after the workspace
+build generated the package declarations. No source changes were needed. Automated VSIX
+activation remains unavailable on this host; the operator accepted the manual OP-2 result
+and its coverage gaps above.
