@@ -19,6 +19,9 @@ and [EntraSignInRequiredErrorExplainer.ts](../../../../../src/documentdb/auth/en
 are not in the checked-in bundle. Generate the bundle as already scheduled for Case 2, then run
 `npm run l10n:check`. No wording change is needed.
 
+**Resolved:** `a52f06320` regenerates the bundle with exactly five new keys. `npm run l10n:check`
+passed.
+
 ## F2. Typed Entra explanations do not yet reach webviews
 
 **Confirmed; deferred to WI-5/WI-6.** The existing webview explanation request passes only
@@ -48,3 +51,11 @@ transport for typed sign-in errors.
 
 OP-1b passed with a real cluster: the database list loaded after idle and no sign-in prompt
 appeared. That test did not cover webview failure presentation or replacement after a silent miss.
+
+## Review handoff (2026-11-20)
+
+Case 2 ran on `6e108f0a3` with the generated localization and formatting applied. Localization,
+formatting, localization check, build, test type-check, full Vitest (9,651 passed, one skipped),
+and VSIX packaging passed. Lint initially rejected an inline import type in the Entra handler
+test. `a0c1d1312` replaced it with a type-only import; full lint, the affected suite (47 passed),
+and its formatting check then passed. No runtime code changed in that follow-up.
