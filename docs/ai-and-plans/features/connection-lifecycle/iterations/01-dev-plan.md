@@ -1099,6 +1099,12 @@ shim (0005).
   an account. For rule 3, the operator accepted the reload limitation as an edge case. Finish
   silent reconnect first, then closed-client replacement. PR2's pre-review was signed off
   separately and does not block this work.
+- **Done (2026-11-20), commit `6a53cf19e` (WI-4d, `gpt-6.2-sol`):** Reconnect silently with the
+  verified provider, account and tenant. Only a deliberate first connect may prompt, and
+  background calls cannot start a client. The shared tree helper uses `connectInteractive`;
+  the positional `getClient` signature remains compatible, with an optional background flag.
+  The advisor (`claude-opus-5.5`, 85% confidence) approved the implementation. All 372 focused
+  tests across 13 files and the TypeScript check passed. WI-4e will handle closed topology.
 
 ---
 
@@ -1556,6 +1562,10 @@ behave as today.
 **Done when:** Case 1 is green, and the OT-7 flows can be reproduced on a dev build.
 
 **Progress:**
+
+- **Carry-forward from WI-4d:** An explicit Update Credentials that changes the tenant must
+  replace or clear the old verified Entra identity so the next connect can use the saved
+  tenant (decision 0011). Automatic reconnect remains pinned until that explicit update.
 
 ---
 
