@@ -1042,6 +1042,11 @@ shim (0005).
   the changes to the existing cancellation tests as well: cancelling a wait must not cancel
   or misreport the physical startup, and a real startup failure must still be logged and cleaned
   up. Neither choice was assumed. The two worktrees are ready; no coding variants have run.
+- **WI-4c operator decision (2026-11-20):** Use the neutral retryable error “The connection
+  changed while it was opening. Try again.” if the one retry is also superseded and no latch
+  is set. Do not add a new unavailable reason or a third attempt. A latch takes precedence.
+  Cancellation assertions continue to follow the approved waiter-only behavior and retain
+  coverage of actual startup failures, telemetry and cleanup.
 
 ---
 
