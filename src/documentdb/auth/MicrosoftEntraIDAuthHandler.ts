@@ -207,7 +207,9 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                     const lifetimeSeconds = iatSec !== undefined && expSec !== undefined ? expSec - iatSec : undefined;
                     observation = {
                         outcome: 'returned',
-                        ...(lifetimeSeconds !== undefined && Number.isFinite(lifetimeSeconds) ? { lifetimeSeconds } : {}),
+                        ...(lifetimeSeconds !== undefined && Number.isFinite(lifetimeSeconds)
+                            ? { lifetimeSeconds }
+                            : {}),
                     };
                     return expSec === undefined
                         ? { accessToken }

@@ -131,7 +131,7 @@ WI-4 ─┴─> WI-5 ─> WI-6 ─> WI-7 ─> WI-8   (lifecycle core, then Disco
 | PR  | Content                                                                          | Base while predecessor is open             |
 | --- | -------------------------------------------------------------------------------- | ------------------------------------------ |
 | 0   | This plan, `research-findings.md`, `decisions.md`, README and index row          | feature branch                             |
-| 1   | WI-1: Entra silent renewal                                                      | PR 0 head                                  |
+| 1   | WI-1: Entra silent renewal                                                       | PR 0 head                                  |
 | 2   | WI-3: azureauth v6 (#990) + the diagnostics `signInRequired` mapping             | PR 1 head                                  |
 | 3   | WI-4: client identity and generation, the two cache fixes, telemetry helper      | PR 2 head                                  |
 | 4   | WI-5: failure classifier, recovery, Sign in again, Retry, `onDidChangeSessions`  | PR 3 head                                  |

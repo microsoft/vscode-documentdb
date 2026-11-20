@@ -1192,7 +1192,10 @@ describe('createAuthenticateCheck', (): void => {
                 timeouts: { authenticationTimeoutMs: 30 },
             });
             expect(codes(result)).toEqual(['check.timeout']);
-            session.resolve({ accessToken: entraToken(), account: { label: 'alice@contoso.example', id: 'account-id' } });
+            session.resolve({
+                accessToken: entraToken(),
+                account: { label: 'alice@contoso.example', id: 'account-id' },
+            });
             await flush();
             expect(deps.createClient).not.toHaveBeenCalled();
         });

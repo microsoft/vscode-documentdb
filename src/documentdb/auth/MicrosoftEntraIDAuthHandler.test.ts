@@ -298,7 +298,10 @@ describe('MicrosoftEntraIDAuthHandler', () => {
             return session;
         });
         await expect(
-            options.authMechanismProperties!.OIDC_CALLBACK!({ version: 1, timeoutContext: new AbortController().signal }),
+            options.authMechanismProperties!.OIDC_CALLBACK!({
+                version: 1,
+                timeoutContext: new AbortController().signal,
+            }),
         ).rejects.toBeInstanceOf(EntraDestinationRejectedError);
         expect(getSessionFromVSCode).toHaveBeenCalledTimes(2);
     });
@@ -310,7 +313,10 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         const accessToken = `header.${Buffer.from('{"exp":1}').toString('base64url')}.signature`;
         getSessionFromVSCode.mockResolvedValueOnce({ accessToken, account });
         await expect(
-            options.authMechanismProperties!.OIDC_CALLBACK!({ version: 1, timeoutContext: new AbortController().signal }),
+            options.authMechanismProperties!.OIDC_CALLBACK!({
+                version: 1,
+                timeoutContext: new AbortController().signal,
+            }),
         ).resolves.toEqual({ accessToken, expiresInSeconds: 0 });
         expect(getSessionFromVSCode).toHaveBeenCalledTimes(2);
     });

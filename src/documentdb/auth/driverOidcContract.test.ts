@@ -102,7 +102,10 @@ describe('driver contract: mongodb OIDC workflow (7.2.0)', () => {
             .mockResolvedValueOnce({ accessToken: 'dummy-cached-token' })
             .mockResolvedValueOnce({ accessToken: 'dummy-renewed-token' });
         const workflow = new AutomatedCallbackWorkflow(new TokenCache(), callback);
-        await workflow.execute({ command: vi.fn<FakeConnection['command']>().mockResolvedValue({ ok: 1 }) }, credentials);
+        await workflow.execute(
+            { command: vi.fn<FakeConnection['command']>().mockResolvedValue({ ok: 1 }) },
+            credentials,
+        );
         expect(callback).toHaveBeenCalledTimes(1);
 
         const command = vi
@@ -121,7 +124,10 @@ describe('driver contract: mongodb OIDC workflow (7.2.0)', () => {
     it('propagates a network error without calling the callback again or retrying the command', async () => {
         const callback = vi.fn<OIDCCallbackFunction>().mockResolvedValue({ accessToken: 'dummy-cached-token' });
         const workflow = new AutomatedCallbackWorkflow(new TokenCache(), callback);
-        await workflow.execute({ command: vi.fn<FakeConnection['command']>().mockResolvedValue({ ok: 1 }) }, credentials);
+        await workflow.execute(
+            { command: vi.fn<FakeConnection['command']>().mockResolvedValue({ ok: 1 }) },
+            credentials,
+        );
         expect(callback).toHaveBeenCalledTimes(1);
 
         const error = new MongoNetworkError('dummy network failure');
