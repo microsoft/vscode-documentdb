@@ -234,10 +234,12 @@ runtime, and so does this package. Your webview CSP needs `style-src 'unsafe-inl
 what Fluent already required of you.
 
 **Unit tests under Node.js.** The package imports named exports from `@fluentui/react-components`
-and `@fluentui/react-icons`, as webview bundlers need for tree-shaking. Fluent UI 9.75 loads as
-native ESM in Node.js, so its components import the icons' ESM build. Use `@fluentui/react-icons`
-2.0.345 or later in Node-based tests: earlier ESM builds use extensionless imports that Node.js
-cannot resolve.
+and `@fluentui/react-icons`, as webview bundlers need for tree-shaking. When loaded via `import`,
+Fluent UI 9.75 uses native ESM in Node.js and imports the icons' ESM build. Older icons builds,
+including 2.0.324, use extensionless imports that Node.js cannot resolve. This repository uses
+2.0.345, whose ESM imports include file extensions, and has verified Node-based tests without a
+Fluent-specific Vitest dependency optimizer. This is a tested version, not a claim that every
+earlier icons release is incompatible.
 
 ### Component guidance: Skeleton
 
