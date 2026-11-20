@@ -882,6 +882,12 @@ shim (0005).
   results with a sanitized output diagnostic for failed tenants. Preserving visible failure and
   Retry instead would require a larger change to listing. Neither behavior change was adopted.
   OP-2 and the final CP-W3 verdict remain pending.
+- **Unblocked (2026-11-20), operator decisions:** Keep successful subscription results when an
+  account or tenant cannot be listed, and record a sanitized diagnostic in the Output channel.
+  Keep the SDK's default ARM challenge behavior. The operator allowed that fallback if keeping
+  browsing silent required more than a small update. A prompt override would have to cover
+  both the SDK listing pipeline and subscription authentication, so PR2 will not add one.
+  OP-2 should include checking where prompts appear and what happens when they are dismissed.
 
 ---
 
