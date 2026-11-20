@@ -1093,8 +1093,12 @@ shim (0005).
   5. Pin account, provider, and tenant for automatic reconnect. Use changed tenant credentials
      only after an explicit credentials change.
 
-  These are recommendations, not approvals. The decision request went unanswered, and no
-  WI-4d/e code was started. PR2 author sign-off is a separate gate.
+  The initial request went unanswered, so implementation did not start at that checkpoint.
+- **WI-4d/e approved (2026-11-20), operator decision:** The operator accepted all five rules above.
+  For rule 1, the operator preferred requiring an explicit first connect to silently picking
+  an account. For rule 3, the operator accepted the reload limitation as an edge case. Finish
+  silent reconnect first, then closed-client replacement. PR2's pre-review was signed off
+  separately and does not block this work.
 
 ---
 
