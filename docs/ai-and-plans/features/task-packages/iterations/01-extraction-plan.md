@@ -280,7 +280,7 @@ settings layering and `computeRetryDelay`. The existing writer suite passes unto
 
 ---
 
-## Phase 3: Registry housekeeping
+## Phase 3: Registry and lifecycle housekeeping
 
 ### 3.1 Retention of finished tasks
 
@@ -289,6 +289,15 @@ Decide and implement how long terminal tasks stay registered. Open question.
 ### 3.2 Conflict check at registration
 
 Decide whether `registerTask` should refuse a task whose resources conflict. Open question.
+
+### 3.3 Initialization failure ends the task
+
+The extension's telemetry runner (`callWithTelemetryAndErrorHandling`) swallows errors thrown by
+`onInitialize`, so a task whose initialization fails still moves to Running and runs `doWork`
+(see Outcome, "Found while working"). Make an initialization failure end the task as Failed
+without starting work, show the error once, and keep a stop during initialization ending as
+Stopped (the default-runner case was fixed in #1068). This changes extension behaviour, so it
+ships as its own PR and must land before Phase 5.
 
 ---
 
@@ -381,7 +390,7 @@ Found while working, not changed:
 
 - `callWithTelemetryAndErrorHandling` swallows errors thrown by `onInitialize`, so a task whose
   initialization fails (for example with `SourceValidationError`) shows the error and then still
-  moves to Running and runs `doWork`. This happens today and is unchanged.
+  moves to Running and runs `doWork`. This happens today and is unchanged; scheduled as 3.3.
 - `TaskProgressReportingService.detach()` destructures task-ID strings and uses only their first
   character.
 - `UI/**` and `resourceUsageHelper.ts` still call `vscode.l10n.t` and use `ext`. Under decision
