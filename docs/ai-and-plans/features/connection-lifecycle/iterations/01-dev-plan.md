@@ -642,7 +642,7 @@ verdict exists, do not start the work it gates. The fingerprint table (formerly 
 
 ---
 
-## WI-2: Shell and Playground token relays (PR 1)
+## WI-2: Shell and Playground token relays (after WI-7)
 
 **Outcome:**
 
@@ -737,7 +737,7 @@ verdict exists, do not start the work it gates. The fingerprint table (formerly 
     worker once under the same fingerprint, and the command after that runs on the new worker.
 - Add a test of the worker message round trip for `reason` and `authReason`.
 
-**Done when:** Case 1 is green, and the PR 1 pre-review is committed.
+**Done when:** Case 1 is green, and the relay PR pre-review is committed.
 
 **Progress:**
 
@@ -749,6 +749,9 @@ verdict exists, do not start the work it gates. The fingerprint table (formerly 
   IPC and session-local pinning in PR 1 and the identity and respawn guards later. Also confirm
   whether A1's provisional **Sign in again** action should remain in the worker delivery. No
   relay implementation has started.
+- **Rescheduled (2026-11-20), operator decision:** Finish PR 1 with WI-1 only. Deliver WI-2
+  intact after WI-4's verified identity and fingerprint and WI-7's disconnect latch exist,
+  retaining the planned **Sign in again** action. Do not implement the partial relay option.
 
 ---
 
