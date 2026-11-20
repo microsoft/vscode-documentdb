@@ -190,7 +190,11 @@ describe('Entra error rule table', () => {
                 const message = rule.explain(context);
                 expect(message).not.toMatch(/[\n\r\u2013\u2014]/);
                 expect(message).toMatch(/Microsoft|administrator|help desk|verification/);
-                expect(message.endsWith(Links.SovereignClouds)).toBe(true);
+                expect(
+                    message.endsWith(
+                        rule.id === 'oidcHostNotAllowed' ? Links.EntraTrustedServers : Links.SovereignClouds,
+                    ),
+                ).toBe(true);
                 expect(message).not.toMatch(/[0-9a-f]{8}-[0-9a-f-]{27}|msal-no-broker/i);
             }
         }

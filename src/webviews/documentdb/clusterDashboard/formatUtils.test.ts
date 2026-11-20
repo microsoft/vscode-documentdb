@@ -5,75 +5,58 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { getClusterVersions, parseDocumentDbEngineVersion } from './formatUtils';
+import { formatApproximateCount, formatBytes, formatExactCount, formatUptime } from './formatUtils';
 
-describe('parseDocumentDbEngineVersion', () => {
+describe('formatBytes', () => {
     it.each([
-        ['0.117-0;0.117.0', '0.117-0 · 0.117.0'],
-        ['0.117.0', '0.117.0'],
-        ['0.118-1', '0.118-1'],
-        [' ; 0.117-0 ; 0.117.0 ; ', '0.117-0 · 0.117.0'],
-        ['0.117-0;0.118.0', '0.117-0 · 0.118.0'],
-        ['0.117-0;0.118.0-rc.1', '0.117-0 · 0.118.0-rc.1'],
-        ['1.117-3;2.0.0;12.1-1', '1.117-3 · 2.0.0 · 12.1-1'],
-        [' ; 1.117-3 ; 2.0.0 ; 12.1-1 ; ', '1.117-3 · 2.0.0 · 12.1-1'],
-        ['0.117.0;0.118.0', '0.117.0 · 0.118.0'],
-        ['0.117-0;0.118-1', '0.117-0 · 0.118-1'],
-        ['0.117-0;0.117.0;12.1-1', '0.117-0 · 0.117.0 · 12.1-1'],
-        ['2.0.0;1.117-3;12.1-1;4.0.0', '2.0.0 · 1.117-3 · 12.1-1 · 4.0.0'],
-        [undefined, undefined],
-        ['', undefined],
-        [' ; ; ', undefined],
-        ['unknown', undefined],
-        ['[object Object]', undefined],
-        ['0.117-0;unknown', undefined],
-        ['unknown;0.117.0', undefined],
-        ['1.117-3;2.0.0;unknown', undefined],
-    ])('parses %p as %p', (raw, expected) => {
-        expect(parseDocumentDbEngineVersion(raw)).toBe(expected);
+        [0, '0 B'],
+        [1023, '1023 B'],
+        [1024, '1.00 KB'],
+        [1536, '1.50 KB'],
+        [1024 * 1024, '1.00 MB'],
+        [100 * 1024, '100 KB'],
+    ])('formats %p as %s', (value, expected) => {
+        expect(formatBytes(value)).toBe(expected);
+    });
+
+    it.each([undefined, null, NaN, Infinity])('uses the placeholder for %p', (value) => {
+        expect(formatBytes(value)).toBe('—');
+        expect(formatBytes(value, 'unavailable')).toBe('unavailable');
     });
 });
 
-describe('getClusterVersions', () => {
-    it('distinguishes the engine from the API version', () => {
-        expect(
-            getClusterVersions({
-                topology_hello_internal_documentdb_versions: '0.117-0;0.117.0',
-                serverInfo_version: ' 7.0.0 ',
-            }),
-        ).toEqual({ engine: '0.117-0 · 0.117.0', api: '7.0.0', server: undefined });
+describe('count formatting', () => {
+    it('uses platform number formatting for approximate and exact counts', () => {
+        const value = 4812004;
+        expect(formatApproximateCount(value)).toBe(
+            new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(value),
+        );
+        expect(formatExactCount(value)).toBe(
+            new Intl.NumberFormat(undefined, { useGrouping: true, maximumFractionDigits: 0 }).format(value),
+        );
     });
 
-    it.each([undefined, '', ' ', 'unknown', '7.0.0;8.0.0', '[object Object]'])(
-        'omits an unclear API version %p independently of the engine',
-        (serverInfo_version) => {
-            expect(
-                getClusterVersions({
-                    topology_hello_internal_documentdb_versions: '0.117.0',
-                    serverInfo_version,
-                }),
-            ).toEqual({ engine: '0.117.0', api: undefined, server: undefined });
-        },
-    );
+    it.each([undefined, null, NaN, Infinity])('omits unavailable counts %p', (value) => {
+        expect(formatApproximateCount(value)).toBe('—');
+        expect(formatApproximateCount(value, 'unavailable')).toBe('unavailable');
+        expect(formatExactCount(value)).toBeUndefined();
+    });
+});
 
-    it('retains the API when the reported engine version is ambiguous', () => {
-        expect(
-            getClusterVersions({
-                topology_hello_internal_documentdb_versions: '0.117.0;unknown',
-                serverInfo_version: '7.0.0',
-            }),
-        ).toEqual({ engine: undefined, api: '7.0.0', server: undefined });
+describe('formatUptime', () => {
+    it.each([
+        [0, '0m'],
+        [59, '0m'],
+        [60, '1m'],
+        [3600, '1h 0m'],
+        [86400, '1d 0h 0m'],
+        [3 * 86400 + 4 * 3600 + 12 * 60, '3d 4h 12m'],
+    ])('formats %p as %s', (value, expected) => {
+        expect(formatUptime(value)).toBe(expected);
     });
 
-    it('preserves server wording without evidence of a separate DocumentDB engine', () => {
-        expect(getClusterVersions({ serverInfo_version: '8.0.11' })).toEqual({
-            engine: undefined,
-            api: undefined,
-            server: '8.0.11',
-        });
-    });
-
-    it('omits versions when neither is known', () => {
-        expect(getClusterVersions({})).toEqual({ engine: undefined, api: undefined, server: undefined });
+    it.each([undefined, null, NaN, Infinity, -1])('uses the placeholder for %p', (value) => {
+        expect(formatUptime(value)).toBe('—');
+        expect(formatUptime(value, 'unavailable')).toBe('unavailable');
     });
 });

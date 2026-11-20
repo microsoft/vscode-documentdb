@@ -41,6 +41,16 @@ export type DockerGuidanceKey =
     | 'pendingRestartContainer'
     | 'dockerDesktopNotRunning'
     | 'daemonNotRunning'
+    | 'podmanNotRunning'
+    | 'podmanNotRunningLinux'
+    | 'podmanSocketNotRunning'
+    | 'podmanWindowsMachineFromWsl'
+    | 'podmanRemoteUnreachable'
+    | 'podmanMachineMissing'
+    | 'podmanMachineStopped'
+    | 'podmanMachineAmbiguous'
+    | 'podmanMachineOtherActive'
+    | 'podmanMachineRunning'
     | 'daemonStarting'
     | 'wslIntegrationUnavailable'
     | 'remoteDockerUnavailable'
@@ -51,21 +61,48 @@ export type DockerGuidanceKey =
     | 'windowsContainers'
     | 'notAccessible';
 
-export type DockerRecoveryNoteKey = 'groupMembershipNewSession' | 'restartWslDistribution' | 'runsDockerService';
+export type DockerRecoveryNoteKey =
+    | 'groupMembershipNewSession'
+    | 'restartWslDistribution'
+    | 'runsDockerService'
+    | 'runInWindowsTerminal';
 
-export type DockerGuideKey =
-    | 'install'
-    | 'installWindowsDesktop'
-    | 'installMacDesktop'
-    | 'linuxPostInstall'
-    | 'dockerTroubleshooting'
-    | 'dockerContexts'
-    | 'wslIntegration'
-    | 'remoteDocker'
-    | 'linuxContainers'
-    | 'learnMore';
+/** Every Docker and Podman guide the Quick Start panel can link to. */
+export const DOCKER_GUIDE_KEYS = [
+    'install',
+    'installWindowsDesktop',
+    'installMacDesktop',
+    'linuxPostInstall',
+    'dockerTroubleshooting',
+    'podmanMachine',
+    'dockerContexts',
+    'wslIntegration',
+    'remoteDocker',
+    'linuxContainers',
+    'learnMore',
+] as const;
 
-export type DockerStartLabelKey = 'startDockerDesktop' | 'startDocker';
+export type DockerGuideKey = (typeof DOCKER_GUIDE_KEYS)[number];
+
+/**
+ * Where each guide points. The extension host opens these by key, so the panel never hands it a URL
+ * and every click is counted against the guide it opened.
+ */
+export const DOCKER_GUIDE_URLS: Readonly<Record<DockerGuideKey, string>> = {
+    install: 'https://docs.docker.com/engine/install/',
+    installWindowsDesktop: 'https://docs.docker.com/desktop/setup/install/windows-install/',
+    installMacDesktop: 'https://docs.docker.com/desktop/setup/install/mac-install/',
+    linuxPostInstall: 'https://docs.docker.com/engine/install/linux-postinstall/',
+    dockerTroubleshooting: 'https://docs.docker.com/engine/daemon/troubleshoot/',
+    podmanMachine: 'https://docs.podman.io/en/latest/markdown/podman-machine-start.1.html',
+    dockerContexts: 'https://docs.docker.com/engine/manage-resources/contexts/',
+    wslIntegration: 'https://docs.docker.com/desktop/features/wsl/',
+    remoteDocker: 'https://docs.docker.com/engine/security/protect-access/',
+    linuxContainers: 'https://docs.docker.com/desktop/setup/install/windows-install/',
+    learnMore: 'https://docs.docker.com/engine/install/',
+};
+
+export type DockerStartLabelKey = 'startDockerDesktop' | 'startDocker' | 'startPodmanMachine';
 
 export type DockerExecutionTargetKey = 'local' | 'wsl' | 'ssh' | 'devContainer' | 'codespaces' | 'otherRemote';
 
@@ -90,8 +127,14 @@ export type DockerDetailFailureKey =
  * the fact behind it, so a line never contains a placeholder.
  */
 export type DockerDetailSegment =
-    | { readonly kind: 'provider'; readonly provider: DockerProvider; readonly version?: string }
-    | { readonly kind: 'cli'; readonly version?: string }
+    | { readonly kind: 'provider'; readonly provider: DockerProvider }
+    | {
+          readonly kind: 'cli';
+          readonly cli?: 'docker' | 'podman';
+          readonly version?: string;
+          readonly preferredEngine?: DockerReadiness['preferredEngine'];
+          readonly cliFallback?: boolean;
+      }
     | { readonly kind: 'platform'; readonly osType?: 'linux' | 'windows'; readonly architecture?: string }
     | { readonly kind: 'executionTarget'; readonly target: DockerExecutionTargetKey }
     | { readonly kind: 'failure'; readonly failure: DockerDetailFailureKey };
@@ -268,6 +311,32 @@ function getGuidance(readiness: DockerReadiness): DockerGuidanceKey {
         case 'permissionDenied':
             return getPermissionGuidance(readiness);
         case 'daemonUnavailable':
+            if (readiness.cli === 'podman' || readiness.engineEvidence === 'podmanShim') {
+                if (readiness.environment === 'linux' || readiness.environment === 'wsl') {
+                    switch (readiness.podmanTarget?.kind) {
+                        case 'windowsMachineFromWsl':
+                            return 'podmanWindowsMachineFromWsl';
+                        case 'userSocket':
+                            return 'podmanSocketNotRunning';
+                        default:
+                            return 'podmanNotRunningLinux';
+                    }
+                }
+                switch (readiness.podmanMachine?.kind) {
+                    case 'none':
+                        return 'podmanMachineMissing';
+                    case 'stopped':
+                        return 'podmanMachineStopped';
+                    case 'ambiguous':
+                        return 'podmanMachineAmbiguous';
+                    case 'otherActive':
+                        return 'podmanMachineOtherActive';
+                    case 'running':
+                        return 'podmanMachineRunning';
+                    default:
+                        break;
+                }
+            }
             if (readiness.environment === 'wsl' && readiness.provider === 'dockerDesktop' && !readiness.startAction) {
                 return 'wslIntegrationUnavailable';
             }
@@ -277,12 +346,17 @@ function getGuidance(readiness: DockerReadiness): DockerGuidanceKey {
             if (readiness.provider === 'dockerDesktop' && readiness.providerEvidence !== 'installedApplication') {
                 return 'dockerDesktopNotRunning';
             }
-            return 'daemonNotRunning';
+            return readiness.cli === 'podman' || readiness.engineEvidence === 'podmanShim'
+                ? 'podmanNotRunning'
+                : 'daemonNotRunning';
         case 'daemonStarting':
             return 'daemonStarting';
         case 'contextUnavailable':
             return 'contextUnavailable';
         case 'endpointUnreachable':
+            if (readiness.podmanTarget?.kind === 'remote') {
+                return 'podmanRemoteUnreachable';
+            }
             return 'endpointUnreachable';
         case 'probeTimedOut':
             return 'checkTimedOut';
@@ -313,7 +387,12 @@ function getGuide(readiness: DockerReadiness): DockerGuideKey {
             if (readiness.environment === 'wsl' && readiness.provider === 'dockerDesktop' && !readiness.startAction) {
                 return 'wslIntegration';
             }
-            return isRemoteEnvironment(readiness) ? 'remoteDocker' : 'dockerTroubleshooting';
+            if (isRemoteEnvironment(readiness)) {
+                return 'remoteDocker';
+            }
+            return readiness.cli === 'podman' || readiness.engineEvidence === 'podmanShim'
+                ? 'podmanMachine'
+                : 'dockerTroubleshooting';
         case 'windowsContainers':
             return 'linuxContainers';
         case 'unsupportedHost':
@@ -330,6 +409,8 @@ function getGuide(readiness: DockerReadiness): DockerGuideKey {
 
 function getStartLabel(startAction: DockerStartAction | undefined): DockerStartLabelKey | undefined {
     switch (startAction) {
+        case 'startPodmanMachine':
+            return 'startPodmanMachine';
         case 'startRootlessDockerEngineLinux':
             return 'startDocker';
         case 'startDockerDesktopWindows':
@@ -398,14 +479,34 @@ function getPlatformSegment(readiness: DockerReadiness): DockerDetailSegment | u
     return { kind: 'platform', osType: readiness.osType, architecture: readiness.daemonArchitecture };
 }
 
+/** `docker -v` and `podman -v` print "<program> version <number>[, build …]"; show only the number. */
+export function formatCliVersion(cliVersion: string): string {
+    return /\bversion\s+v?([^\s,]+)/i.exec(cliVersion)?.[1] ?? cliVersion;
+}
+
 function composeDetail(
     readiness: DockerReadiness,
     state: DockerReadinessPresentationState,
 ): readonly DockerDetailSegment[] {
     const segments: DockerDetailSegment[] = [];
+    const cliSegment: DockerDetailSegment = {
+        kind: 'cli',
+        cli: readiness.cli,
+        version: readiness.cliVersion ? formatCliVersion(readiness.cliVersion) : undefined,
+        ...(readiness.cliInstalled &&
+        readiness.cliFallback === true &&
+        readiness.preferredEngine &&
+        readiness.cli &&
+        readiness.preferredEngine !== readiness.cli
+            ? { preferredEngine: readiness.preferredEngine, cliFallback: true }
+            : {}),
+    };
 
     if (state === 'ready') {
-        segments.push({ kind: 'provider', provider: readiness.provider, version: readiness.cliVersion });
+        segments.push({ kind: 'provider', provider: readiness.provider });
+        if (readiness.cliVersion || cliSegment.cliFallback) {
+            segments.push(cliSegment);
+        }
         const platform = getPlatformSegment(readiness);
         if (platform) {
             segments.push(platform);
@@ -421,7 +522,7 @@ function composeDetail(
     }
 
     // The CLI version is not the provider's version, so on a failure the two are separate facts.
-    segments.push({ kind: 'cli', version: readiness.cliVersion });
+    segments.push(cliSegment);
     if (readiness.provider !== 'unknown') {
         segments.push({ kind: 'provider', provider: readiness.provider });
     }
@@ -439,9 +540,13 @@ function getRecoveryNote(readiness: DockerReadiness): DockerRecoveryNoteKey | un
             return 'groupMembershipNewSession';
         case 'wslRestartFromWindows':
             return 'restartWslDistribution';
+        case 'podmanMachineStartOnWindows':
+            return 'runInWindowsTerminal';
         case 'linuxStartService':
         case 'wslStartServiceNoSystemd':
             return 'runsDockerService';
+        case 'linuxStartPodmanSocket':
+        case 'podmanMachineInit':
         case undefined:
             return undefined;
     }

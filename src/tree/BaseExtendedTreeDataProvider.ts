@@ -6,7 +6,7 @@
 import { createContextValue, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../extensionVariables';
-import { ConnectionDiagnosticsService } from '../services/connectionDiagnosticsService';
+import { ErrorExplanationService } from '../services/errorExplanationService';
 import { dispose } from '../utils/vscodeUtils';
 import { type ExtendedTreeDataProvider } from './ExtendedTreeDataProvider';
 import { type TreeElement } from './TreeElement';
@@ -194,6 +194,11 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
      */
     getParent(element: T): T | null | undefined {
         return this.parentCache.getParent(element);
+    }
+
+    /** Returns only children the view has already loaded; never triggers a fetch. */
+    public getCachedChildren(parent: T): T[] {
+        return this.parentCache.getChildren(parent);
     }
 
     /**
@@ -463,8 +468,8 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
      * // With view-specific error-recovery actions (Connections provider):
      * //
      * // Error-recovery nodes come from two layers:
-     * //  - The ELEMENT layer owns failure-type nodes ("retry", "open shell") and appends them itself.
-     * //  - The PROVIDER layer (here) owns view-specific nodes via `errorRecoveryActions`. Each action
+     * //  - The ELEMENT layer owns diagnosis and shell, followed by retry.
+     * //  - The PROVIDER layer (here) prepends view-specific repairs via `errorRecoveryActions`. Each action
      * //    may declare a `forContextValues` whitelist, matched against the FAILING element's
      * //    contextValue tags, so an action only appears for the node types it makes sense for.
      * const children = await this.wrapGetChildrenWithErrorAndStateHandling(
@@ -481,7 +486,7 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
      *           createGenericElementWithContext({
      *             contextValue: 'error',
      *             id: `${el.id}/updateCredentials`,
-     *             label: vscode.l10n.t('Click here to update credentials'),
+     *             label: vscode.l10n.t('Update credentials…'),
      *             iconPath: new vscode.ThemeIcon('key'),
      *             commandId: 'vscode-documentdb.command.connectionsView.updateCredentials',
      *             commandArgs: [el],
@@ -500,7 +505,7 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
         options: {
             detectErrorState?: (element: T, children: T[] | null | undefined) => boolean;
             /**
-             * View-specific error-recovery actions appended when an error is detected. Each action is
+             * View-specific repairs prepended when an error is detected, before diagnosis and retry. Each action is
              * gated by an optional `forContextValues` whitelist (see {@link elementMatchesContextValues}).
              */
             errorRecoveryActions?: ReadonlyArray<{
@@ -510,7 +515,7 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
                  * to attach for any failing element.
                  */
                 forContextValues?: string[];
-                /** Builds the recovery node(s) to append for this action. */
+                /** Builds the recovery node(s) to prepend for this action. */
                 create: (element: T) => T[];
             }>;
             contextValue?: string | string[]; // For automatic context value appending - single or multiple values
@@ -536,15 +541,14 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
             : isTreeElementWithRetryChildren(element) && element.hasRetryNode(children);
 
         if (hasError && element.id) {
-            // 4. Optionally append view-specific error-recovery actions (e.g. "update credentials").
+            // 4. Prepend view-specific repairs (e.g. "update credentials") before diagnosis and retry.
             //    Each action may be gated to specific node types via `forContextValues`, so it only
             //    appears when a matching element fails (e.g. a cluster, but not a database/index).
             if (options.errorRecoveryActions) {
-                for (const action of options.errorRecoveryActions) {
-                    if (this.elementMatchesContextValues(element, action.forContextValues)) {
-                        children?.push(...action.create(element));
-                    }
-                }
+                const recoveryChildren = options.errorRecoveryActions
+                    .filter((action) => this.elementMatchesContextValues(element, action.forContextValues))
+                    .flatMap((action) => action.create(element));
+                children?.unshift(...recoveryChildren);
             }
 
             // 5. Store the complete error state (error nodes + recovery actions) in our cache for future refreshes
@@ -603,14 +607,14 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
             // Cluster nodes and everything below them carry the same `cluster` model but share no
             // interface, so this is structural rather than an `instanceof`.
             const clusterId = (element as { cluster?: { clusterId?: string } }).cluster?.clusterId;
-            const diagnosis = clusterId ? await ConnectionDiagnosticsService.explain({ clusterId, error }) : undefined;
+            const explanation = clusterId ? await ErrorExplanationService.explain({ clusterId, error }) : undefined;
 
-            if (diagnosis) {
-                context.telemetry.properties.diagnosisProviderId = diagnosis.providerId;
+            if (explanation) {
+                context.telemetry.properties.explanationProviderId = explanation.providerId;
                 context.errorHandling.suppressDisplay = true;
                 // `detail` is only rendered for modal messages, so the raw text is appended instead.
                 const cause = error instanceof Error ? error.message : String(error);
-                void vscode.window.showErrorMessage(`${diagnosis.message} (${cause})`);
+                void vscode.window.showErrorMessage(`${explanation.message} (${cause})`);
             }
 
             throw error;

@@ -39,12 +39,8 @@ import { Links } from '../constants';
 import { ext } from '../extensionVariables';
 import { meterSilentCatch } from '../utils/accumulatingTelemetry';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
-import { type AuthHandler } from './auth/AuthHandler';
 import { AuthMethodId } from './auth/AuthMethod';
-import { ManagedIdentityAuthHandler } from './auth/ManagedIdentityAuthHandler';
-import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
-import { NativeAuthHandler } from './auth/NativeAuthHandler';
-import { NoAuthHandler } from './auth/NoAuthHandler';
+import { createAuthHandler } from './auth/createAuthHandler';
 import { getAzureHostSuffix } from './auth/oidcAllowedHosts';
 import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
@@ -67,6 +63,7 @@ import { getHostsFromConnectionString } from './utils/connectionStringHelpers';
 import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
 import { parseDocumentId } from './utils/parseDocumentId';
+import { applyStartupFailureTelemetry, type ClientStartupTrigger } from './utils/startupFailureTelemetry';
 import { resolveAllowInvalidCertificates } from './utils/tlsException';
 import { toFilterQueryObj } from './utils/toFilterQuery';
 
@@ -167,6 +164,8 @@ interface ClientStartup {
     readonly stageDurationsMs: Partial<Record<ClientStartupStage, number>>;
     stage: ClientStartupStage;
     stageStartedAt: number;
+    /** Set when no cached credentials existed, so the failure category does not depend on a localized message. */
+    credentialsMissing?: boolean;
 }
 
 /**
@@ -214,6 +213,17 @@ export class ClustersClient {
     public connectionCorrelationId?: string;
 
     /**
+     * Per cluster, the `startupCorrelationId` of the last startup that failed and was not yet
+     * followed by a successful one. Lets recovery actions (connection diagnosis, the next retry)
+     * name the failure they follow up on. Random IDs only; cleared when a startup succeeds.
+     */
+    static readonly _lastFailedStartups = new Map<string, string>();
+
+    public static getLastFailedStartupCorrelationId(clusterId: string): string | undefined {
+        return ClustersClient._lastFailedStartups.get(clusterId);
+    }
+
+    /**
      * Private constructor - use getClient() instead.
      * Connections/Clients are being cached and reused.
      *
@@ -251,9 +261,19 @@ export class ClustersClient {
     //     }
     // }
 
-    private async initClient(abortSignal?: AbortSignal): Promise<void> {
+    /** Whether this client starts the Local Quick Start managed instance, as marked in its cached credentials. */
+    private isLocalQuickStartInstance(): boolean {
+        return CredentialCache.getCredentials(this.clusterId)?.localQuickStartInstance === true;
+    }
+
+    private async initClient(
+        abortSignal: AbortSignal | undefined,
+        onStartup: ((id: string) => void) | undefined,
+        trigger: ClientStartupTrigger,
+    ): Promise<void> {
         const startupId = randomUUID();
         this.connectionCorrelationId = startupId;
+        onStartup?.(startupId);
         let originalFailure: { error: unknown } | undefined;
 
         try {
@@ -264,6 +284,14 @@ export class ClustersClient {
                 context.telemetry.properties.connectionCorrelationId = startupId;
                 context.telemetry.properties.startupCorrelationId = startupId;
                 context.telemetry.properties.surface = 'extension';
+                context.telemetry.properties.startupTrigger = trigger;
+                context.telemetry.properties.localQuickStartInstance = this.isLocalQuickStartInstance()
+                    ? 'true'
+                    : 'false';
+                const previousFailedStartupId = ClustersClient._lastFailedStartups.get(this.clusterId);
+                if (previousFailedStartupId) {
+                    context.telemetry.properties.previousFailedStartupCorrelationId = previousFailedStartupId;
+                }
                 const startedAt = Date.now();
                 const startup: ClientStartup = {
                     id: startupId,
@@ -280,6 +308,12 @@ export class ClustersClient {
                     this.finishClientStartup(startup, 'succeeded');
                 } catch (error) {
                     const canceled = error instanceof UserCancelledError;
+                    if (!canceled) {
+                        // Computed from the original error: the masked telemetry error carries no cause.
+                        applyStartupFailureTelemetry(context.telemetry.properties, error, {
+                            credentialsMissing: startup.credentialsMissing,
+                        });
+                    }
                     this.finishClientStartup(startup, canceled ? 'canceled' : 'failed');
                     originalFailure = { error };
                     if (canceled) {
@@ -328,6 +362,7 @@ export class ClustersClient {
     private async initializeClient(startup: ClientStartup, abortSignal?: AbortSignal): Promise<void> {
         const credentials = CredentialCache.getCredentials(this.clusterId);
         if (!credentials) {
+            startup.credentialsMissing = true;
             throw new Error(l10n.t('No credentials found for id {clusterId}', { clusterId: this.clusterId }));
         }
 
@@ -335,24 +370,8 @@ export class ClustersClient {
         const authMethod = credentials?.authMechanism ?? AuthMethodId.NativeAuth;
         startup.telemetry.properties.authMethod = authMethod;
 
-        // TODO: add a proper factory pattern here when more methods are added
-        let authHandler: AuthHandler;
-        switch (authMethod) {
-            case AuthMethodId.NativeAuth:
-                authHandler = new NativeAuthHandler(credentials);
-                break;
-            case AuthMethodId.MicrosoftEntraID:
-                authHandler = new MicrosoftEntraIDAuthHandler(credentials);
-                break;
-            case AuthMethodId.ManagedIdentity:
-                authHandler = new ManagedIdentityAuthHandler(credentials);
-                break;
-            case AuthMethodId.NoAuth:
-                authHandler = new NoAuthHandler(credentials);
-                break;
-            default:
-                throw new Error(l10n.t('Unsupported authentication method: {0}', authMethod));
-        }
+        // Ordinary connects may prompt (for example, Microsoft Entra ID sign-in).
+        const authHandler = createAuthHandler(authMethod, credentials, { interactive: true });
 
         // Configure auth and get connection options
         this.advanceClientStartup(startup, 'stage02ConfiguringAuth');
@@ -372,12 +391,14 @@ export class ClustersClient {
         // Emit static metadata (domain info) BEFORE the connection attempt.
         // This ensures destination telemetry is available even when connections fail.
         const correlationId = startup.id;
+        const localQuickStartInstance = credentials.localQuickStartInstance === true ? 'true' : 'false';
         void callWithTelemetryAndErrorHandling('connect.staticmetadata', async (context) => {
             const { getDomainMetadata } = await import('./utils/getClusterMetadata');
             const domainMetadata = getDomainMetadata(hosts);
             context.telemetry.properties = {
                 startupCorrelationId: correlationId,
                 connectionCorrelationId: correlationId,
+                localQuickStartInstance,
                 ...context.telemetry.properties,
                 ...domainMetadata,
             };
@@ -414,6 +435,7 @@ export class ClustersClient {
                 authmethod: authMethod,
                 startupCorrelationId: correlationId,
                 connectionCorrelationId: correlationId,
+                localQuickStartInstance,
                 ...context.telemetry.properties,
                 ...metadata,
             };
@@ -541,11 +563,22 @@ export class ClustersClient {
      * It is also used as a key to reuse existing clients.
      * @param abortSignal - Optional signal to abort the connection attempt. When aborted,
      * the in-progress connection is closed and a `UserCancelledError` is thrown.
+     * @param onStartup - Called with the startup correlation ID of the attempt this call joins.
+     * @param trigger - Which code path asks for the client; recorded as `startupTrigger` when this
+     * call starts a new `connect.startup`. Callers that do not pass it are recorded as `other`.
      * @returns A promise that resolves to an instance of `ClustersClient`.
      */
-    public static async getClient(clusterId: string, abortSignal?: AbortSignal): Promise<ClustersClient> {
+    public static async getClient(
+        clusterId: string,
+        abortSignal?: AbortSignal,
+        onStartup?: (id: string) => void,
+        trigger: ClientStartupTrigger = 'other',
+    ): Promise<ClustersClient> {
         if (ClustersClient._clients.has(clusterId)) {
             const client = ClustersClient._clients.get(clusterId) as ClustersClient;
+            if (client.connectionCorrelationId) {
+                onStartup?.(client.connectionCorrelationId);
+            }
 
             // Wire up abort for cached client reconnection so the cancellable
             // progress UI can also cancel a reconnection attempt.
@@ -582,9 +615,13 @@ export class ClustersClient {
         const client = new ClustersClient(clusterId);
         try {
             // Cluster metadata is set in initClient
-            await client.initClient(abortSignal);
+            await client.initClient(abortSignal, onStartup, trigger);
             ClustersClient._clients.set(clusterId, client);
+            ClustersClient._lastFailedStartups.delete(clusterId);
         } catch (error) {
+            if (!(error instanceof UserCancelledError) && !abortSignal?.aborted && client.connectionCorrelationId) {
+                ClustersClient._lastFailedStartups.set(clusterId, client.connectionCorrelationId);
+            }
             // On failure (including abort), clean up the partially-created client
             void client._mongoClient?.close().catch(() => {
                 // Ignore close errors during cleanup

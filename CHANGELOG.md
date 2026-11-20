@@ -1,13 +1,44 @@
 # Change Log
 
-## 1.0.2
+## 1.1.0
+
+### New Features
+
+- **Connection Diagnostics**: Adds step-by-step connection checks with expandable evidence, timings, recovery guidance, and Markdown or JSON reports. Supports working and failed connections, identifier hiding for shared reports, cancellation, and explicit retries with longer diagnostic timeouts. [#100](https://github.com/microsoft/vscode-documentdb/issues/100), [#1066](https://github.com/microsoft/vscode-documentdb/pull/1066)
+- **Podman for DocumentDB Local**: Adds Docker or Podman selection in Configure, falling back only when the preferred CLI is missing. Keeps existing instances on their recorded engine and offers explicit startup of eligible stopped Podman machines on macOS and Windows. [#1065](https://github.com/microsoft/vscode-documentdb/pull/1065), [#1076](https://github.com/microsoft/vscode-documentdb/pull/1076)
+- **Azure Resource Links**: Opens Azure DocumentDB clusters and Azure Cosmos DB for MongoDB (RU) accounts by resource ID through Service Discovery. Both Azure-resource and connection-string links can request the Cluster Dashboard or Interactive Shell, optionally scoped to a database. [#1067](https://github.com/microsoft/vscode-documentdb/pull/1067)
+
+### Improvements
+
+- **Local Setup Details**: Adds expandable Details to completed and failed setup stages, including engine checks, image identity, container and volume details, readiness, and sample-data outcome. Shows image-download activity and calls out sample-data failures even when the instance is ready. [#1072](https://github.com/microsoft/vscode-documentdb/pull/1072)
+- **Connection Link Confirmations**: Consolidates connection-string link confirmations into one target-aware decision, while always confirming new saved connections. Azure resource links guide sign-in and request approval before changing discovery visibility filters; failed or cancelled connections do not open the requested destination. [#1067](https://github.com/microsoft/vscode-documentdb/pull/1067)
+- **Consistent Recovery Actions**: Uses direct tree labels such as Diagnose connection…, Open shell, and Retry. Orders repairs and investigation before retrying, puts Retry last, and keeps healthy Atlas discovery results above the relevant recovery action. [#1058](https://github.com/microsoft/vscode-documentdb/issues/1058), [#1088](https://github.com/microsoft/vscode-documentdb/pull/1088)
+
+### Fixes
+
+- **Local Credentials Layout**: Fixes username and password field alignment in DocumentDB Local setup. Places username guidance below both inputs as a full-width note with an info icon. [#1092](https://github.com/microsoft/vscode-documentdb/pull/1092)
+- **Local Container Recreation**: Preserves a recorded image digest when recreating a container with existing data, avoiding an unintended upgrade through a floating tag. Older tag-only instances use the local image or stop with guidance if it is missing, rather than automatically downloading a potentially newer image. [#1083](https://github.com/microsoft/vscode-documentdb/pull/1083)
 
 ### Security
 
-- **Connection Links**: A link that would add a new connection now always asks for confirmation and shows the connection target, even when URL handling confirmations are disabled. A link can request turning off TLS certificate validation only for a target on your own machine, and only after you confirm; for any other target, validation stays on.
-- **Microsoft Entra ID Sign-in**: Limits the hosts that can receive a Microsoft Entra ID access token to the known Azure public and sovereign cloud domains.
-- **No-Authentication Connections**: Applies the same host check as the other authentication methods before relaxing TLS certificate validation, and applies a TLS exception you accepted for a local IP address such as `127.0.0.1` or `::1`.
-- **Build and Release Pipelines**: Hardens the npm package build, release and publishing pipelines, and adds a CI check that rejects committed npm registry credentials. The installed extension is not affected.
+- **Entra ID Trusted Servers**: Restricts account and managed-identity tokens to recognized Azure DocumentDB service suffixes or a validated machine-scoped custom suffix. Enforces destination and certificate checks across saved connections, links, Interactive Shell, and Query Playground; URI options cannot override the selected authentication method or weaken these checks. [#1077](https://github.com/microsoft/vscode-documentdb/pull/1077)
+- **Bundled Dependency Security**: Updates the runtime dependency `body-parser` to 2.4.0, incorporating the upstream security fix for CVE-2026-111181 in HTTP request parsing. [#1052](https://github.com/microsoft/vscode-documentdb/pull/1052)
+- **Authentication and Proxy Dependencies**: Updates Azure Identity to 4.14.1 with MSAL Node 7.1.0, `proxy-addr` to 2.0.8, and `basic-ftp` to 6.2.6. Addresses upstream authorization-code disclosure, proxy address handling, and FTP parser denial-of-service and crash vulnerabilities, and removes the vulnerable `uuid` 8.3.2 dependency. [#1087](https://github.com/microsoft/vscode-documentdb/pull/1087)
+
+## 1.0.2
+
+### New Features & Improvements
+
+- **Cloud-Aware Entra ID Authentication**: Requests tokens for the selected Azure public, US Government, China, or custom cloud, detects cloud mismatches before sign-in, and supports cloud-aware managed identity and copied connection strings. Sovereign sign-in still requires Microsoft-side preauthorization. [#1050](https://github.com/microsoft/vscode-documentdb/pull/1050)
+- **Actionable Sign-in Diagnostics**: Explains Microsoft Entra ID errors and Windows broker failures with guidance on settings, administrator action, or Microsoft-side fixes. Adds cloud-resolution tracing and a sovereign-cloud configuration and troubleshooting guide. [#1050](https://github.com/microsoft/vscode-documentdb/pull/1050)
+- **Credential Update Reliability**: Refreshes cached credentials and restarts the cluster's Query Playground worker after Update Credentials. Open Interactive Shell sessions retain their original connection and token-refresh credentials, with a notification explaining when new credentials take effect. [#1050](https://github.com/microsoft/vscode-documentdb/pull/1050)
+- **SRV Resolver Test Reliability**: Makes resolver tests deterministic on Windows and restricted CI runners by controlling socket errors, timers, and TCP framing. Adds lifecycle regression coverage without changing production DNS behavior. [#1041](https://github.com/microsoft/vscode-documentdb/pull/1041)
+
+### Security
+
+- **Connection Links**: Always confirms links that add connections and displays their targets, regardless of confirmation settings. Allows links to disable TLS certificate validation only for local hosts after explicit approval. [#1040](https://github.com/microsoft/vscode-documentdb/pull/1040)
+- **Microsoft Entra ID Token Protection**: Restricts token delivery to known Azure public and sovereign cloud domains, or an explicitly configured custom hostname suffix in machine-scoped user settings. Connection strings cannot widen their own allowlist. [#1040](https://github.com/microsoft/vscode-documentdb/pull/1040), [#1050](https://github.com/microsoft/vscode-documentdb/pull/1050)
+- **No-Authentication Connections**: Applies the same host checks as other authentication methods before relaxing TLS certificate validation, and honors accepted TLS exceptions for local IP addresses such as `127.0.0.1` or `::1`. [#1040](https://github.com/microsoft/vscode-documentdb/pull/1040)
 
 ## 1.0.1
 

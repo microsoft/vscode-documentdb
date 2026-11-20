@@ -172,6 +172,20 @@ describe('DocumentDBShellPty', () => {
     });
 
     describe('open', () => {
+        it('carries URL attribution into actual shell startup', async (): Promise<void> => {
+            const deepLink = { deepLinkCorrelationId: 'link-attempt', deepLinkSource: 'docs' };
+            pty = new DocumentDBShellPty({ ...defaultOptions, deepLink });
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            expect(mockSessionTelemetry).toHaveLength(1);
+            expect(mockSessionTelemetry[0]).toMatchObject({
+                ...deepLink,
+                activationSource: 'deepLink',
+                shellSessionId: pty.shellSessionId,
+            });
+            pty.close();
+        });
+
         it('keeps the metadata link captured when the shell was created', async (): Promise<void> => {
             const existingClient = vi.spyOn(ClustersClient, 'getExistingClient');
             existingClient.mockReturnValue({ connectionCorrelationId: 'original-id' } as ClustersClient);
@@ -968,6 +982,21 @@ describe('DocumentDBShellPty', () => {
             // 'help' is a real completion candidate, so it owns the row.
             expect(written).toContain(`${GHOST_STYLE}p`);
             expect(written).not.toContain(`${GHOST_STYLE}p me`);
+        });
+
+        it('counts a shown completion as offered by the shell', async () => {
+            (accumulateTelemetry as Mock).mockClear();
+
+            pty.handleInput('hel');
+            await afterGhostDebounce();
+
+            const offered = (accumulateTelemetry as Mock).mock.calls.find(
+                ([eventName]) => eventName === 'completion.offered',
+            );
+            expect(offered).toBeDefined();
+            const sample = { measurements: {} as Record<string, number> };
+            (offered?.[1] as (s: typeof sample) => void)(sample);
+            expect(sample.measurements).toEqual({ src_shell: 1 });
         });
 
         it('yields to the description of a fully typed candidate', async () => {

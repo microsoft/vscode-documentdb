@@ -9,20 +9,21 @@ status: active
 "Accepted" entries were approved by the operator. Superseded entries are kept for their rejected
 alternatives.
 
-| ID  | Status                      | Summary                                                                                                         |
-| --- | --------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| D1  | **Accepted** (operator)     | The preauthorization gap is fixed outside the extension; no own client ID                                       |
-| D2  | **Accepted** (operator)     | Implement without sovereign-cloud access, copying patterns proven elsewhere                                     |
-| D3  | **Accepted** (operator)     | Entra sign-in errors are classified in one table, routed through the diagnostics service                        |
-| D4  | **Superseded** by D6 and D7 | Which signal decides the cloud                                                                                  |
-| D5  | **Superseded** by D6        | Custom clouds keep the public audience                                                                          |
-| D6  | **Accepted** (operator)     | Interactive sign-in: cloud from VS Code's setting; custom clouds resolved, never public                         |
-| D7  | **Accepted** (operator)     | Managed identity: cloud from an override, the cluster host, then IMDS; otherwise fail clearly                   |
-| D8  | **Accepted** (operator)     | Stop before requesting a token when the cluster host and the selected cloud clearly disagree                    |
-| D9  | **Accepted** (operator)     | An opaque broker error in a sovereign cloud gets a hedged message that asks for the on-screen code              |
-| D10 | **Accepted** (operator)     | Messages are text only in this iteration; no buttons                                                            |
-| D11 | **Accepted** (operator)     | No public-audience fallback for China unless telemetry shows it works today                                     |
-| D12 | **Accepted** (operator)     | Open sessions keep the token audience and credentials they started with; Update Credentials does not touch them |
+| ID  | Status                            | Summary                                                                                            |
+| --- | --------------------------------- | -------------------------------------------------------------------------------------------------- |
+| D1  | **Accepted** (operator)           | The preauthorization gap is fixed outside the extension; no own client ID                          |
+| D2  | **Accepted** (operator)           | Implement without sovereign-cloud access, copying patterns proven elsewhere                        |
+| D3  | **Accepted** (operator)           | Entra sign-in errors are classified in one table, routed through the diagnostics service           |
+| D4  | **Superseded** by D6 and D7       | Which signal decides the cloud                                                                     |
+| D5  | **Superseded** by D6              | Custom clouds keep the public audience                                                             |
+| D6  | **Accepted** (operator)           | Interactive sign-in: cloud from VS Code's setting; custom clouds resolved, never public            |
+| D7  | **Accepted** (operator)           | Managed identity: cloud from an override, the cluster host, then IMDS; otherwise fail clearly      |
+| D8  | **Accepted** (operator)           | Stop before requesting a token when the cluster host and the selected cloud clearly disagree       |
+| D9  | **Accepted** (operator)           | An opaque broker error in a sovereign cloud gets a hedged message that asks for the on-screen code |
+| D10 | **Accepted** (operator)           | Messages are text only in this iteration; no buttons                                               |
+| D11 | **Accepted** (operator)           | No public-audience fallback for China unless telemetry shows it works today                        |
+| D12 | **Accepted** (amended 2026-11-10) | Open sessions keep identity/audience; current destination trust is rechecked on token relays       |
+| D13 | **Accepted** (operator scope)     | Entra destinations use service suffixes and the existing narrow machine-scoped Option B override   |
 
 ---
 
@@ -189,6 +190,13 @@ hold no tokens and no new secrets, because the audience is a public URL.
 - Token refresh in an open session never reads `CredentialCache`. Clearing the cache therefore does
   not break it, whether the cause is Update Credentials, a failed tree connection, Remove Connection
   or Quick Start. Changing a setting mid-session does not change that session's audience.
+- **2026-11-10 amendment:** the session snapshots its authentication identity as well as audience
+  and original connection. Token relays ignore message-supplied method, tenant and client IDs and
+  do not reconstruct the principal from live cache state. Destination trust is not snapshotted:
+  every relay checks the original connection against the current machine-scoped `hostnameSuffix`.
+  Removing trust can reject the next relay without changing identity or audience. It does not
+  forcibly disconnect an already authenticated socket. See deep-links
+  [D0018](../deep-links/decisions.md#0018--entra-tokens-go-only-to-service-destinations-with-the-existing-option-b-override).
 - Update Credentials **writes the new values into `CredentialCache`** instead of deleting them. It
   still drops the main-thread client, so the next connection uses the new values. Implementation
   must confirm that the tree connects from these cached values exactly as it would from the stored
@@ -212,3 +220,22 @@ Rejected alternatives:
   so open sessions would still break.
 - **Keep credentials in the cache when a tree connection fails.** This changes about 10 tree items
   and the behaviour of credential prompts. It is deferred to the Disconnect design (#1059).
+
+## D13. Service suffixes and the existing Option B override
+
+**Accepted scope**, authorized by the operator on 2026-11-10 in
+[deep-links iteration 4](../deep-links/iterations/04-entra-token-destination-hardening.md#accepted-execution-plan-2026-11-10).
+The exact Option B statement and separately attributed implementation reasoning are recorded in
+[D0018](../deep-links/decisions.md#0018--entra-tokens-go-only-to-service-destinations-with-the-existing-option-b-override).
+
+Cloud inference and token audience selection do not authorize a destination. All Entra seeds must
+match the service suffixes `mongocluster.cosmos.azure.com`, `mongocluster.cosmos.azure.us`,
+`mongocluster.cosmos.azure.cn`, or the one validated custom suffix in the existing machine setting.
+Certificate/hostname validation and socket-level policy checks remain mandatory, including for
+custom aliases. The setting does not become a list and no per-connection or global bypass is added.
+
+This narrows the old cloud-wide OIDC patterns without changing the audience/resource-manager
+settings or requiring ARM permission for every database user. Government inclusion follows the
+operator confirmation in the accepted plan, not live service/certificate validation. The public
+[trusted-server page](../../../user-manual/entra-id-trusted-servers.md) replaces blanket advice to
+set a suffix whenever the driver rejects a host.

@@ -24,6 +24,12 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
     public readonly experience: Experience;
     public contextValue: string = 'treeItem_database';
 
+    /**
+     * The discovery journey of the cluster this node belongs to, passed down from its parent so
+     * commands run here join that journey in telemetry. For statistics only.
+     */
+    public journeyCorrelationId?: string;
+
     private readonly experienceContextValue: string = '';
 
     /**
@@ -64,7 +70,12 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
         const myGeneration = ++this.expansionGeneration;
         const isCurrent = (): boolean => this.expansionGeneration === myGeneration;
 
-        const client: ClustersClient = await ClustersClient.getClient(this.cluster.clusterId);
+        const client: ClustersClient = await ClustersClient.getClient(
+            this.cluster.clusterId,
+            undefined,
+            undefined,
+            'treeChildren',
+        );
         const collections = await client.listCollections(this.databaseInfo.name);
 
         // Update the collection count from the full list we just fetched. This
@@ -102,6 +113,7 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
 
         return collections.map((collection) => {
             const collectionItem = new CollectionItem(this.cluster, this.databaseInfo, collection, isCurrent);
+            collectionItem.journeyCorrelationId = this.journeyCorrelationId;
             // Start loading document count in background (fire-and-forget).
             collectionItem.loadDocumentCount();
             return collectionItem;
@@ -124,7 +136,7 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
 
     private async fetchAndUpdateCount(): Promise<void> {
         try {
-            const client = await ClustersClient.getClient(this.cluster.clusterId);
+            const client = await ClustersClient.getClient(this.cluster.clusterId, undefined, undefined, 'treeChildren');
             const { count, hasMore } = await client.countCollections(this.databaseInfo.name, COLLECTION_COUNT_LIMIT);
             // `getChildren()` may have run while this request was in flight and
             // established the exact count. Never replace an exact count with

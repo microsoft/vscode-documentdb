@@ -15,15 +15,22 @@ import * as vscode from 'vscode';
 import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
 import { settingsKeys } from '../../settingsKeys';
-import { type AuthTraceContext } from '../../utils/authTrace';
-import { type DocumentDBCustomEnvironment } from '../auth/documentdbTokenResource';
-import { getOidcAllowedHosts } from '../auth/oidcAllowedHosts';
+import { traceEntraDestination, type AuthTraceContext } from '../../utils/authTrace';
+import { getEntraCustomHostnameSuffix } from '../auth/entraDestinationSettings';
+import { removeConflictingOidcMechanism } from '../auth/nonOidcConnectionString';
+import {
+    EntraDestinationRejectedError,
+    evaluateEntraDestination,
+    normalizeCustomHostnameSuffix,
+} from '../auth/oidcAllowedHosts';
+import { createOidcDestinationPolicy } from '../auth/oidcClientOptions';
 import { SettingsHintError } from '../shell/SettingsHintError';
 import { prepareDriverConnectionString } from '../srv/prepareDriverConnectionString';
 import { ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import {
     type MainToWorkerMessage,
     type SerializableExecutionResult,
+    type SerializableOidcDestinationPolicy,
     type WorkerStartupStage,
     type WorkerToMainMessage,
 } from './workerTypes';
@@ -111,6 +118,8 @@ export class WorkerSessionManager implements vscode.Disposable {
     private _workerClusterId: string | undefined;
     private _startup: WorkerStartup | undefined;
     private _startupAbortController: AbortController | undefined;
+    private _oidcDestinationPolicy: SerializableOidcDestinationPolicy | undefined;
+    private _oidcConfigurationListener: vscode.Disposable | undefined;
 
     // ─── Telemetry tracking ──────────────────────────────────────────────────
     /** Number of workers spawned during this manager's lifetime. */
@@ -205,6 +214,7 @@ export class WorkerSessionManager implements vscode.Disposable {
      * Gracefully shut down the worker: close the database client, then terminate thread.
      */
     async shutdown(): Promise<void> {
+        this.revokeOidcDestinationPolicy();
         if (!this._worker || this._workerState === 'idle') {
             this.terminateWorker('intentional');
             return;
@@ -322,8 +332,44 @@ export class WorkerSessionManager implements vscode.Disposable {
         this._workerState = 'spawning';
         const options = { ...initMsg.clientOptions };
         const usesOidc = initMsg.authMechanism === 'MicrosoftEntraID' || initMsg.authMechanism === 'ManagedIdentity';
+        const customHostnameSuffix = usesOidc
+            ? normalizeCustomHostnameSuffix(getEntraCustomHostnameSuffix())
+            : undefined;
+        if (usesOidc) {
+            const decision = evaluateEntraDestination(initMsg.connectionString, customHostnameSuffix);
+            traceEntraDestination(decision, startup.requestId, {
+                startupCorrelationId: startup.requestId,
+                surface: startup.surface,
+                startupProperties: startup.telemetry.properties,
+            });
+            if (!decision.allowed) {
+                throw new EntraDestinationRejectedError(decision);
+            }
+            this._oidcDestinationPolicy = {
+                originalConnectionString: initMsg.connectionString,
+                customHostnameSuffix,
+                revoked: new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT),
+            };
+            if (decision.customSuffixUsed) {
+                const revoked = new Int32Array(this._oidcDestinationPolicy.revoked);
+                this._oidcConfigurationListener = vscode.workspace.onDidChangeConfiguration((event) => {
+                    if (
+                        event.affectsConfiguration(settingsKeys.customEnvironment) &&
+                        normalizeCustomHostnameSuffix(getEntraCustomHostnameSuffix()) !== customHostnameSuffix
+                    ) {
+                        Atomics.store(revoked, 0, 1);
+                    }
+                });
+            }
+        }
+        const oidcDestinationPolicy = this._oidcDestinationPolicy;
+        const policy = usesOidc
+            ? createOidcDestinationPolicy(initMsg.connectionString, getEntraCustomHostnameSuffix)
+            : undefined;
         const prepared = await prepareDriverConnectionString({
-            connectionString: initMsg.connectionString,
+            connectionString: usesOidc
+                ? initMsg.connectionString
+                : removeConflictingOidcMechanism(initMsg.connectionString),
             // The worker adds OIDC itself; the mechanism is passed so a TXT authSource is not applied.
             options: usesOidc ? { ...options, authMechanism: 'MONGODB-OIDC' } : options,
             surface: initMsg.persistent ? 'shell' : 'playground',
@@ -337,6 +383,10 @@ export class WorkerSessionManager implements vscode.Disposable {
         if (abortSignal.aborted) {
             throw new UserCancelledError('workerStartup');
         }
+        policy?.assertAllowed();
+        if (oidcDestinationPolicy && Atomics.load(new Int32Array(oidcDestinationPolicy.revoked), 0) !== 0) {
+            throw new EntraDestinationRejectedError({ hostCount: 0 });
+        }
         // Keep the worker's OIDC callback local, and never structured-clone driver functions.
         const preparedInitMsg: MainToWorkerMessage & { type: 'init' } = {
             ...initMsg,
@@ -347,11 +397,7 @@ export class WorkerSessionManager implements vscode.Disposable {
                 appName: prepared.options.appName,
                 tls: prepared.options.tls,
             },
-            oidcAllowedHosts: getOidcAllowedHosts(
-                initMsg.connectionString,
-                vscode.workspace.getConfiguration().get<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment)
-                    ?.hostnameSuffix,
-            ),
+            oidcDestinationPolicy,
         };
         this._spawnCount++;
         this._lastSpawnTime = Date.now();
@@ -577,7 +623,11 @@ export class WorkerSessionManager implements vscode.Disposable {
                     if (msg.success) {
                         pending.resolve(undefined);
                     } else {
-                        pending.reject(new Error(msg.error ?? 'Worker init failed'));
+                        pending.reject(
+                            msg.errorName === 'EntraDestinationRejectedError'
+                                ? new EntraDestinationRejectedError({ hostCount: 0 })
+                                : new Error(msg.error ?? 'Worker init failed'),
+                        );
                     }
                 }
                 break;
@@ -650,6 +700,7 @@ export class WorkerSessionManager implements vscode.Disposable {
     // ─── Private: Worker cleanup ─────────────────────────────────────────────
 
     private terminateWorker(reason: 'intentional' | 'forced'): void {
+        this.revokeOidcDestinationPolicy();
         this._startupAbortController?.abort();
         this.finishStartup('terminated');
         const wasAlive = !!this._worker;
@@ -683,6 +734,7 @@ export class WorkerSessionManager implements vscode.Disposable {
 
     /** Handles an exit of the current worker. Intentional exits are tracked by worker.terminated. */
     private handleWorkerExit(): void {
+        this.revokeOidcDestinationPolicy();
         this.finishStartup('exited');
         ext.outputChannel?.warn('[WorkerSessionManager] Unexpected worker exit detected');
         void callWithTelemetryAndErrorHandling('worker.unexpectedExit', async (context) => {
@@ -702,5 +754,14 @@ export class WorkerSessionManager implements vscode.Disposable {
             entry.reject(new Error('Worker exited unexpectedly'));
         }
         this._pendingRequests.clear();
+    }
+
+    private revokeOidcDestinationPolicy(): void {
+        if (this._oidcDestinationPolicy) {
+            Atomics.store(new Int32Array(this._oidcDestinationPolicy.revoked), 0, 1);
+            this._oidcDestinationPolicy = undefined;
+        }
+        this._oidcConfigurationListener?.dispose();
+        this._oidcConfigurationListener = undefined;
     }
 }

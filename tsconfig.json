@@ -38,6 +38,7 @@
     { "path": "packages/documentdb-js-shell-api-types" },
     { "path": "packages/documentdb-js-shell-runtime" },
     { "path": "packages/documentdb-js-srv-resolver" },
+    { "path": "packages/documentdb-js-connection-diagnostics" },
     { "path": "packages/vscode-ext-webview" },
     { "path": "packages/vscode-ext-webview-fluentui" }
   ]

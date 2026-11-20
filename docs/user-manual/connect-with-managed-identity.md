@@ -12,6 +12,12 @@ This is the right choice for a shared jump box, a build agent, or any Azure VM w
 
 For Azure US Government, Azure China, or a custom cloud, see [Sovereign Clouds](./sovereign-clouds).
 
+Managed identity follows the same [trusted-server policy](./entra-id-trusted-servers) as account
+sign-in: every destination must be a recognized Azure DocumentDB service host or fall under a
+confirmed, narrow custom service suffix, and must pass TLS certificate and hostname validation.
+Localhost, IP addresses, tunnel addresses, and trailing-dot names are not accepted; disabling TLS
+validation does not make an alias trusted.
+
 **Table of Contents**
 
 - [Before you start](#before-you-start)
@@ -43,7 +49,8 @@ identity, the server returns a generic authentication error instead.
 
 The underlying credential library also works on App Service, Container Apps, Azure Arc enabled servers and AKS, and nothing here deliberately blocks those. They are simply not scenarios the extension claims or verifies, so treat success there as a bonus rather than a guarantee.
 
-On a machine that is not Azure hosted, the method is still listed, and selecting it produces a clear message rather than a silent failure.
+For a trusted destination, the method is still listed on a machine that is not Azure hosted, and
+selecting it produces a clear message rather than a silent failure.
 
 ## Important: the identity and the cluster must be in the same tenant
 
@@ -114,9 +121,10 @@ A connection string in the form documented by Microsoft Learn is recognized auto
 mongodb+srv://<client-id>@<cluster>.mongocluster.cosmos.azure.com/?authMechanism=MONGODB-OIDC&authMechanismProperties=ENVIRONMENT:azure,TOKEN_RESOURCE:https://ossrdbms-aad.database.windows.net
 ```
 
-When you paste this, the extension selects managed identity, takes the client ID from the user
-position, and does not ask you again. Leave the user position empty to request this machine's
-identity without a selector.
+When you paste this for a trusted destination, the extension selects managed identity, takes the
+client ID from the user position, and does not ask you again. Leave the user position empty to
+request this machine's identity without a selector. A declaration of `ENVIRONMENT:azure` is an
+identity hint, not permission to send a token to an otherwise untrusted server.
 
 If `ENVIRONMENT:azure` is missing, the string establishes only the Microsoft Entra ID family. A
 GUID in the user position is highlighted as a managed identity candidate, but you confirm it in the
@@ -140,7 +148,7 @@ No password prompt appears, because there is no password to include. See [Copy C
 | This managed identity belongs to Microsoft Entra tenant ..., but the cluster is in tenant ... | The VM and the cluster are in different tenants. Use Entra ID sign-in instead. See [the tenant section](#important-the-identity-and-the-cluster-must-be-in-the-same-tenant).                                                                                                  |
 | The connection is refused after a token was obtained                                          | Authentication worked but the cluster does not recognize the identity. Register it on the cluster as described in [Before you start](#before-you-start). If the connection came from a pasted connection string, also check that the cluster is in the same tenant as the VM. |
 | We could not determine which Azure cloud this virtual machine is in                           | The cluster uses your own DNS name and the VM is not in the public cloud. Set `documentDB.customEnvironment.ossrdbmsEndpoint`. See [Sovereign Clouds](./sovereign-clouds#what-you-need-to-configure).                                                                         |
-| The driver does not appear to allow this cluster host for Microsoft Entra ID authentication   | The cluster uses your own DNS name. Set `documentDB.customEnvironment.hostnameSuffix`. See [Sovereign Clouds](./sovereign-clouds#documentdbcustomenvironmenthostnamesuffix).                                                                                                  |
+| Microsoft Entra ID isn't allowed for this server, or the driver does not allow the host       | Compare every host with the Azure portal connection string first. Report an unrecognized service endpoint before considering a narrow suffix override. See [Microsoft Entra ID Trusted Servers](./entra-id-trusted-servers).                                                  |
 
 ## How it differs from Entra ID
 

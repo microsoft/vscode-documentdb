@@ -41,10 +41,77 @@ export interface ConnectionReachabilityProvider {
      * @param clusterId The stable cluster identifier, when the caller knows it. Providers may use
      * this to record a `clusterId` to source-metadata mapping, so that a later failure against the
      * same cluster can be attributed back to this source by a
-     * {@link import('./connectionDiagnosticsService').ConnectionDiagnosticsProvider}. The stored
+     * {@link import('./errorExplanationService').ErrorExplanationProvider}. The stored
      * connection properties are not available on those later paths.
+     * @param intent How the caller wants preparation to behave; absent for an ordinary connect.
+     * @returns What the provider observed, when it can tell; nothing otherwise.
      */
-    ensureReachable(connectionProperties: Record<string, unknown>, clusterId?: string): Promise<void>;
+    ensureReachable(
+        connectionProperties: Record<string, unknown>,
+        clusterId?: string,
+        intent?: ConnectionReachabilityIntent,
+    ): Promise<void | ConnectionReachabilityResult>;
+}
+
+/** How a caller wants preparation to behave. Absent means an ordinary, interactive connect. */
+export interface ConnectionReachabilityIntent {
+    /**
+     * `false` for connection diagnostics: a provider must not show a dialog or notification,
+     * and fails with a typed error (such as {@link LocalPortInUseError}) where it would otherwise ask.
+     */
+    readonly interactive?: boolean;
+    /** Confirm the source's backend before reporting the endpoint ready. */
+    readonly verifyEndpoint?: boolean;
+    /** Checked by providers before a side effect, such as starting a tunnel. */
+    readonly signal?: AbortSignal;
+}
+
+/** What a provider observed while preparing. */
+export interface ConnectionReachabilityResult {
+    /**
+     * A shared tunnel the provider started or found running. It is not owned by the caller and stays
+     * open after it, like the tunnel an ordinary connect sets up.
+     */
+    readonly sharedTunnel?: 'started' | 'reused' | 'externalAssumed';
+}
+
+export type ConnectionPreparationReason =
+    | 'sourceUnreachable'
+    | 'accessDenied'
+    | 'targetNotFound'
+    | 'noReadyBackend'
+    | 'sourceMissing'
+    | 'other';
+
+export class ConnectionPreparationError extends Error {
+    constructor(
+        public readonly reason: ConnectionPreparationReason,
+        /** Host-only evidence. Never copy this error into diagnostic results or reports. */
+        public readonly sourceError: unknown,
+        public readonly statusCode?: number,
+    ) {
+        super('Connection preparation failed');
+        this.name = 'ConnectionPreparationError';
+    }
+}
+
+/** A provider needed a local port that another program or another tunnel already holds. */
+export class LocalPortInUseError extends Error {
+    constructor(
+        public readonly localPort: number,
+        public readonly holder: 'otherProgram' | 'otherTunnel',
+        message: string,
+    ) {
+        super(message);
+        this.name = 'LocalPortInUseError';
+    }
+}
+
+/** Observes provider preparation without affecting the connect flow. */
+export interface ConnectionReachabilityObserver {
+    onProviderStarted?(providerId: string): void;
+    onProviderCompleted?(providerId: string, elapsedMs: number, result?: ConnectionReachabilityResult): void;
+    onProviderFailed?(providerId: string, elapsedMs: number, error: unknown): void;
 }
 
 /**
@@ -84,6 +151,8 @@ class ConnectionReachabilityServiceImpl {
     public async ensureReachable(
         connectionProperties: Record<string, unknown> | undefined,
         clusterId?: string,
+        observer?: ConnectionReachabilityObserver,
+        intent?: ConnectionReachabilityIntent,
     ): Promise<void> {
         if (!connectionProperties) {
             return;
@@ -91,8 +160,29 @@ class ConnectionReachabilityServiceImpl {
 
         for (const provider of this.providers) {
             if (provider.appliesTo(connectionProperties)) {
-                await provider.ensureReachable(connectionProperties, clusterId);
+                this.notifyObserver((): void => observer?.onProviderStarted?.(provider.id));
+                const startedAt = Date.now();
+                let result: void | ConnectionReachabilityResult;
+                try {
+                    result = await provider.ensureReachable(connectionProperties, clusterId, intent);
+                } catch (error) {
+                    this.notifyObserver((): void =>
+                        observer?.onProviderFailed?.(provider.id, Date.now() - startedAt, error),
+                    );
+                    throw error;
+                }
+                this.notifyObserver((): void =>
+                    observer?.onProviderCompleted?.(provider.id, Date.now() - startedAt, result ?? undefined),
+                );
             }
+        }
+    }
+
+    private notifyObserver(callback: () => void): void {
+        try {
+            callback();
+        } catch {
+            // Observers must never change provider outcomes or interrupt the connect flow.
         }
     }
 

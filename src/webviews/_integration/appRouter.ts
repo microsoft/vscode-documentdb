@@ -27,8 +27,13 @@ import { type BaseRouterContext as FrameworkBaseRouterContext } from '@microsoft
 import * as vscode from 'vscode';
 import { z } from 'zod';
 import { type API } from '../../DocumentDBExperiences';
+import {
+    readDeepLinkTelemetry,
+    trackDeepLinkTelemetry,
+    type DeepLinkTelemetry,
+} from '../../deepLinks/deepLinkTelemetry';
 import { ext } from '../../extensionVariables';
-import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
+import { ErrorExplanationService } from '../../services/errorExplanationService';
 import { getSurveyService } from '../../services/survey/SurveyService';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { isFeedbackPermitted, showFeedbackDisabledMessage } from '../../utils/feedbackPermission';
@@ -37,9 +42,12 @@ import { atlasCredentialsRouter } from '../documentdb/atlasCredentials/atlasCred
 import { clusterDashboardRouter } from '../documentdb/clusterDashboard/clusterDashboardRouter';
 import { collectionsViewRouter as collectionViewRouter } from '../documentdb/collectionView/collectionViewRouter';
 import { indexViewRouter } from '../documentdb/collectionView/indexesTab/indexViewRouter';
+import { connectionDiagnosticsRouter } from '../documentdb/connectionDiagnostics/connectionDiagnosticsRouter';
 import { documentsViewRouter as documentViewRouter } from '../documentdb/documentView/documentsViewRouter';
 import { localQuickStartRouter } from '../documentdb/localQuickStart/localQuickStartRouter';
+import { confirmInput, showModalConfirmation, type ConfirmResult } from './commonDialogs';
 import { WEBVIEW_CONFIG } from './configuration';
+import { type ViewLoadTracker } from './observability/viewLoadTelemetry';
 import { publicProcedure, publicProcedureWithTelemetry, router } from './trpc';
 
 // Re-export tRPC primitives for backward compatibility with existing imports.
@@ -72,18 +80,24 @@ export { publicProcedure, publicProcedureWithTelemetry, router };
  * })
  * ```
  */
-export type BaseRouterContext = FrameworkBaseRouterContext & {
-    dbExperience: API;
-    /**
-     * Label used in telemetry event names to identify the source webview
-     * (combined with `WEBVIEW_CONFIG.telemetry.webviewEventPrefix` to form
-     * the final event name, e.g. `documentDB.webview.event.${webviewName}.${eventName}`).
-     *
-     * This is **not** the same as the registry key (`viewType`) passed to the
-     * `openAppWebview` factory / framework `openWebview` options.
-     */
-    webviewName: string;
-};
+export type BaseRouterContext = FrameworkBaseRouterContext &
+    Partial<DeepLinkTelemetry> & {
+        dbExperience: API;
+        /**
+         * Label used in telemetry event names to identify the source webview
+         * (combined with `WEBVIEW_CONFIG.telemetry.webviewEventPrefix` to form
+         * the final event name, e.g. `documentDB.webview.event.${webviewName}.${eventName}`).
+         *
+         * This is **not** the same as the registry key (`viewType`) passed to the
+         * `openAppWebview` factory / framework `openWebview` options.
+         */
+        webviewName: string;
+        /**
+         * The panel's load-time tracker, set by `openAppWebview` only for views that report
+         * `documentDB.webview.viewLoaded`. Shared by every operation of the panel.
+         */
+        viewLoad?: ViewLoadTracker;
+    };
 
 /**
  * eventName: string,
@@ -99,7 +113,8 @@ const commonRouter = router({
                 (viewName !== 'collectionView' &&
                     viewName !== 'clusterDashboard' &&
                     viewName !== 'atlasCredentials' &&
-                    viewName !== 'localQuickStart') ||
+                    viewName !== 'localQuickStart' &&
+                    viewName !== 'connectionDiagnostics') ||
                 (viewName === 'collectionView') !== (input.collectionTab !== undefined)
             ) {
                 throw new Error('Invalid feedback source');
@@ -134,8 +149,33 @@ const commonRouter = router({
                     context.telemetry.properties.experience = myCtx.dbExperience;
                     Object.assign(context.telemetry.properties, input.properties ?? {});
                     Object.assign(context.telemetry.measurements, input.measurements ?? {});
+                    trackDeepLinkTelemetry(context, readDeepLinkTelemetry(myCtx));
                 },
             );
+        }),
+    /**
+     * Load-time milestones of the calling panel. Plain `publicProcedure`: the milestones feed the
+     * panel's single `documentDB.webview.viewLoaded` event, so a per-call RPC event would only
+     * duplicate it. Views without a tracker, repeated milestones and remounts are ignored.
+     */
+    reportViewLoad: publicProcedure
+        .input(
+            z.discriminatedUnion('milestone', [
+                z.object({ milestone: z.literal('webviewReady') }),
+                z.object({
+                    milestone: z.literal('firstData'),
+                    outcome: z.enum(['dataShown', 'empty', 'failed']),
+                    firstDataRpcMs: z.number().nonnegative().optional(),
+                }),
+            ]),
+        )
+        .mutation(({ input, ctx }): void => {
+            const tracker = (ctx as BaseRouterContext).viewLoad;
+            if (input.milestone === 'webviewReady') {
+                tracker?.markWebviewReady();
+            } else {
+                tracker?.markFirstData(input.outcome, input.firstDataRpcMs);
+            }
         }),
     reportError: publicProcedure
         // This is the input schema of your procedure, two parameters, both strings
@@ -158,6 +198,7 @@ const commonRouter = router({
                     context.telemetry.properties.experience = myCtx.dbExperience;
 
                     Object.assign(context.telemetry.properties, input.properties ?? {});
+                    trackDeepLinkTelemetry(context, readDeepLinkTelemetry(myCtx));
 
                     const newError = new Error(input.message);
                     // If it's a rendering error in the webview, swap the stack with the componentStack which is more helpful
@@ -187,8 +228,8 @@ const commonRouter = router({
             return null;
         }
 
-        const diagnosis = await ConnectionDiagnosticsService.explain({ clusterId, error: input.message });
-        return diagnosis?.message ?? null;
+        const explanation = await ErrorExplanationService.explain({ clusterId, error: input.message });
+        return explanation?.message ?? null;
     }),
     displayErrorMessage: publicProcedure
         .input(
@@ -221,6 +262,15 @@ const commonRouter = router({
             );
             return { action };
         }),
+    /**
+     * A modal "continue or cancel" dialog: `message`, an optional `detail`, one `confirmLabel` button
+     * and VS Code's own Cancel. Returns `{ confirmed }`; Cancel, Escape and closing the dialog all
+     * return `false`. The caller localizes every string. Not for destructive actions, which follow
+     * the confirmation-style setting through `getConfirmationAsInSettings`.
+     */
+    confirm: publicProcedure
+        .input(confirmInput)
+        .mutation(({ input }): Promise<ConfirmResult> => showModalConfirmation(input)),
     /**
      * Unconditional information toast. Use for messages the user must always
      * see; completion notices belong in `displayOperationSummary` instead.
@@ -284,6 +334,7 @@ export const appRouter = router({
         indexView: indexViewRouter,
     },
     localQuickStart: localQuickStartRouter,
+    connectionDiagnostics: connectionDiagnosticsRouter,
 });
 
 // Export type router type signature, this is used by the client.

@@ -15,13 +15,16 @@ node .github/skills/flagging-fresh-dependencies/scripts/find-fresh-dependencies.
 
 Scans `package-lock.json` and `api/package-lock.json` against the public npm registry (takes ~20 s for ~1,800 versions; publish time comes from the registry `time` map, which is authoritative). Prints each fresh `name@version` with age, UTC publish time, prod/dev scope, and the dependency chain to a declared dependency (`via`).
 
-| Option            | Purpose                                                                                  |
-| ----------------- | ---------------------------------------------------------------------------------------- |
-| `[lockfile ...]`  | Explicit lockfiles, e.g. one from `git show origin/main:package-lock.json`               |
-| `--days N`        | Window size (default 7)                                                                  |
-| `--now <ISO>`     | Fixed reference time (use the user's current time for exact ages)                        |
-| `--json`          | Machine-readable output                                                                  |
-| `--fail-on-fresh` | Exit 1 if anything is fresh (exit 3 = lookup failures, result incomplete; 2 = bad usage) |
+| Option              | Purpose                                                                                               |
+| ------------------- | ----------------------------------------------------------------------------------------------------- |
+| `[lockfile ...]`    | Explicit lockfiles, e.g. one from `git show origin/main:package-lock.json`                            |
+| `--days N`          | Window size (default 7)                                                                               |
+| `--now <ISO>`       | Fixed reference time (use the user's current time for exact ages)                                     |
+| `--json`            | Machine-readable output                                                                               |
+| `--fail-on-fresh`   | Exit 1 if anything is fresh (exit 3 = lookup failures, result incomplete; 2 = bad usage)              |
+| `--baseline <file>` | Check only versions missing from this lockfile, e.g. what a PR adds over its base; takes one lockfile |
+
+The `dependabot-quarantine` workflow runs this script with `--json --baseline`, so keep that interface working.
 
 Zero results is a valid answer: say so, with the counts printed by the script. If exit code is 3, rerun before concluding anything.
 

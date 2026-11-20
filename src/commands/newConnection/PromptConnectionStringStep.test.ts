@@ -28,7 +28,7 @@ vi.mock('../../extensionVariables', () => ({
 beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
-        get: vi.fn().mockReturnValue(undefined),
+        inspect: vi.fn().mockReturnValue(undefined),
     } as unknown as vscode.WorkspaceConfiguration);
 });
 function expectPrivateInferenceOutput(): void {
@@ -85,7 +85,7 @@ describe('PromptConnectionStringStep', () => {
         ['cluster.mongo.cosmos.azure.com', undefined, false],
     ])('classifies configured, lookalike, and RU host %s', async (host, suffix, recognized) => {
         vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
-            get: vi.fn().mockReturnValue({ hostnameSuffix: suffix }),
+            inspect: vi.fn().mockReturnValue({ globalValue: { hostnameSuffix: suffix } }),
         } as unknown as vscode.WorkspaceConfiguration);
         const context = makeContext(`mongodb://${host}:10255/`);
         await new PromptConnectionStringStep().prompt(context);
@@ -101,7 +101,7 @@ describe('PromptConnectionStringStep', () => {
         );
     });
 
-    it('keeps managed identity available when an explicit hint uses a custom host', async () => {
+    it('does not preselect or offer managed identity for an unapproved host despite an explicit hint', async () => {
         const clientId = '11111111-2222-3333-4444-555555555555';
         const context = makeContext(
             `mongodb://${clientId}@private.documentdb.internal:10260/?authMechanism=MONGODB-OIDC&authMechanismProperties=${publicAuthMechanismProperties}`,
@@ -109,9 +109,9 @@ describe('PromptConnectionStringStep', () => {
 
         await new PromptConnectionStringStep().prompt(context);
 
-        expect(context.selectedAuthenticationMethod).toBe(AuthMethodId.ManagedIdentity);
-        expect(context.availableAuthenticationMethods).toContain(AuthMethodId.ManagedIdentity);
-        expect(context.managedIdentityAuthConfig).toEqual({ clientId });
+        expect(context.selectedAuthenticationMethod).toBeUndefined();
+        expect(context.availableAuthenticationMethods).toEqual([AuthMethodId.NativeAuth, AuthMethodId.NoAuth]);
+        expect(context.managedIdentityAuthConfig).toBeUndefined();
         expect(context.connectionStringAuthFacts).toMatchObject({
             usesOidc: true,
             declaresAzureMachineWorkflow: true,
@@ -120,7 +120,7 @@ describe('PromptConnectionStringStep', () => {
         });
     });
 
-    it('deduces the Entra family but not the token source from OIDC plus a GUID', async () => {
+    it('does not preselect the Entra family for an unapproved host from OIDC plus a GUID', async () => {
         const clientId = '11111111-2222-3333-4444-555555555555';
         const context = makeContext(
             `mongodb://${clientId}@private.documentdb.internal:10260/?authMechanism=MONGODB-OIDC`,
@@ -128,8 +128,8 @@ describe('PromptConnectionStringStep', () => {
 
         await new PromptConnectionStringStep().prompt(context);
 
-        expect(context.selectedAuthenticationMethod).toBe(AuthMethodId.MicrosoftEntraID);
-        expect(context.managedIdentityAuthConfig).toEqual({ clientId });
+        expect(context.selectedAuthenticationMethod).toBeUndefined();
+        expect(context.managedIdentityAuthConfig).toBeUndefined();
         expect(context.connectionStringAuthFacts?.declaresAzureMachineWorkflow).toBe(false);
     });
 
@@ -149,14 +149,14 @@ describe('PromptConnectionStringStep', () => {
         });
     });
 
-    it('keeps an unusable machine identity visible for correction without storing machine-flow markers', async () => {
+    it('keeps rejected OIDC facts for explanation without selecting Entra or storing machine-flow markers', async () => {
         const context = makeContext(
             `mongodb://display-name@private.documentdb.internal:10260/?authMechanism=MONGODB-OIDC&authMechanismProperties=${publicAuthMechanismProperties}`,
         );
 
         await new PromptConnectionStringStep().prompt(context);
 
-        expect(context.selectedAuthenticationMethod).toBe(AuthMethodId.MicrosoftEntraID);
+        expect(context.selectedAuthenticationMethod).toBeUndefined();
         expect(context.connectionStringAuthFacts).toMatchObject({
             declaresAzureMachineWorkflow: true,
             username: 'display-name',
@@ -164,5 +164,43 @@ describe('PromptConnectionStringStep', () => {
         });
         expect(context.connectionString).not.toContain('authMechanism');
         expect(context.connectionString).not.toContain('display-name');
+    });
+
+    it.each([
+        'cluster.eastus.cloudapp.azure.com',
+        'cluster.mongo.cosmos.azure.com',
+        'cluster.mongocluster.cosmos.azure.com,other.example.com',
+        'cluster.mongocluster.cosmos.azure.com.',
+    ])('suppresses both Entra options for rejected destination %s', async (hosts) => {
+        const context = makeContext(`mongodb://${hosts}/?authMechanism=MONGODB-OIDC`);
+
+        await new PromptConnectionStringStep().prompt(context);
+
+        expect(context.selectedAuthenticationMethod).toBeUndefined();
+        expect(context.availableAuthenticationMethods).toEqual([AuthMethodId.NativeAuth, AuthMethodId.NoAuth]);
+    });
+
+    it('still preselects managed identity from an explicit hint for an approved destination', async () => {
+        const context = makeContext(
+            `mongodb://11111111-2222-3333-4444-555555555555@cluster.mongocluster.cosmos.azure.com/?authMechanism=MONGODB-OIDC&authMechanismProperties=${publicAuthMechanismProperties}`,
+        );
+
+        await new PromptConnectionStringStep().prompt(context);
+
+        expect(context.selectedAuthenticationMethod).toBe(AuthMethodId.ManagedIdentity);
+        expect(context.managedIdentityAuthConfig).toEqual({ clientId: '11111111-2222-3333-4444-555555555555' });
+    });
+
+    it('preserves pasted native credentials on a rejected Entra destination', async () => {
+        const context = makeContext('mongodb://native-user:native-password@other.example.com/');
+
+        await new PromptConnectionStringStep().prompt(context);
+
+        expect(context.nativeAuthConfig).toEqual({
+            connectionUser: 'native-user',
+            connectionPassword: 'native-password',
+        });
+        expect(context.connectionString).not.toContain('native-password');
+        expect(context.availableAuthenticationMethods).toEqual([AuthMethodId.NativeAuth, AuthMethodId.NoAuth]);
     });
 });

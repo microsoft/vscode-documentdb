@@ -16,7 +16,7 @@ The **DocumentDB extension for Visual Studio Code** allows you to connect to loc
 You have two main options for connecting to a local instance:
 
 - **Set up DocumentDB Local:**
-  [Create and manage the official DocumentDB Local container](./local-quick-start) with Docker Engine or Docker Desktop.
+  [Create and manage the official DocumentDB Local container](./local-quick-start) with Docker (Docker Engine or Docker Desktop) or Podman.
 
 - **Use Preconfigured Options:**
   The extension provides ready-to-use configurations for popular local setups:
@@ -43,6 +43,11 @@ TLS/SSL provides encryption for data in transit, protecting your information fro
 ### Local Development Considerations
 
 We understand that setting up TLS/SSL for local deployments can sometimes be inconvenient or unnecessary, especially when you're just experimenting or developing on your own machine. For this reason, the extension allows you to disable the security requirement for local connections. When this option is selected, the extension will not verify SSL/TLS certificates.
+
+This applies to username/password and no-authentication connections, not Microsoft Entra ID.
+Account sign-in and managed identity require a [trusted service host and valid
+certificate](./entra-id-trusted-servers); localhost, IP addresses, and tunnel addresses are not
+accepted for those methods.
 
 ### A Note on Security Best Practices
 

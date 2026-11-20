@@ -7,16 +7,12 @@ import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microso
 import * as vscode from 'vscode';
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
+import { LiveConfigService } from '../../../services/LiveConfigService';
 import { type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
 import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
 import { containsRetryNode, createRetryNode } from '../../../tree/api/retryNode';
-import {
-    DEFAULT_VIEW_MODE,
-    DISCOVERY_PROVIDER_ID,
-    DISCOVERY_VIEW_MODE_STATE_KEY,
-    type KubernetesViewMode,
-} from '../config';
+import { DISCOVERY_PROVIDER_ID } from '../config';
 import {
     createCoreApi,
     listDocumentDBServices,
@@ -54,15 +50,6 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
         // Sanitize context name for tree ID (replace / with _)
         const sanitizedName = contextInfo.name.replace(/\//g, '_');
         this.id = `${parentId}/${sanitizedName}`;
-    }
-
-    /**
-     * Reads the global discovery view mode. Stored directly in globalState (see
-     * {@link DISCOVERY_VIEW_MODE_STATE_KEY}) so the synchronous getter is valid
-     * during both `getChildren` and `getTreeItem`.
-     */
-    private getViewMode(): KubernetesViewMode {
-        return ext.context.globalState.get<KubernetesViewMode>(DISCOVERY_VIEW_MODE_STATE_KEY, DEFAULT_VIEW_MODE);
     }
 
     async getChildren(): Promise<TreeElement[] | null | undefined> {
@@ -165,7 +152,7 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
                     (result) => result.services !== undefined && result.services.length > 0,
                 ).length;
 
-                const viewMode = this.getViewMode();
+                const viewMode = LiveConfigService.getKubernetesViewMode();
                 context.telemetry.properties.kubernetesViewMode = viewMode;
 
                 if (viewMode === 'list') {
@@ -296,7 +283,9 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
         // Append the current view-mode marker so the context-menu / inline "View as …" toggle
         // commands can target this node and show the icon matching the active mode.
         const viewModeMarker =
-            this.getViewMode() === 'tree' ? 'discoveryKubernetesViewModeTree' : 'discoveryKubernetesViewModeList';
+            LiveConfigService.getKubernetesViewMode() === 'tree'
+                ? 'discoveryKubernetesViewModeTree'
+                : 'discoveryKubernetesViewModeList';
         const contextValue = `${this.contextValue};${viewModeMarker}`;
 
         return {
@@ -421,7 +410,7 @@ function classifyConnectionError(errorMessage: string): { summary: string; hint:
  * the connection.
  *
  * The modal cannot spam the user: a failed connection is only (re)loaded on an
- * explicit user action (expanding the node or clicking "Click here to retry"),
+ * explicit user action (expanding the node or clicking "Retry"),
  * and the retry-node cache (see {@link hasRetryNode}) prevents `getChildren()`
  * from re-running on passive tree refreshes.
  */

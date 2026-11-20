@@ -1225,6 +1225,30 @@ event cheap — it is a gauge sample, so do **not** `suppressIfSuccessful` (we n
 the successful samples), and let the 20-call / 30-second batching keep the volume
 negligible.
 
+### Resolution (2026-11-16): S04 closed, gauge removed
+
+Appended after the fact; the text above is left as written.
+
+- **Reading.** `documentDB.webview.rpcConcurrency` shipped in 0.10.0–1.0.2
+  (`dbbf99695`, PR #766). 19 Oct–15 Nov 2026, 1,149 machines: per-machine peak
+  `dist_concurrentRpcOps_max` p50 2, p95 3, p99 5; 4 machines above 8, one at 52;
+  no machine averaged 8 or more. That is the first row of the table above, well
+  below the revisit thresholds.
+- **Decision.** Keep the per-operation listener; S04 is closed. The DocumentDB
+  `rpcConcurrencyLogger` and its event are removed in 1.1.0. The package keeps
+  `ProcedureLogEntry.concurrent`: it is published API and costs nothing without a
+  consumer. The finding and the revisit trigger now sit in a comment on `onReceive`
+  in `packages/vscode-ext-webview/src/webview/connectTrpc.ts`.
+- **Why remove rather than keep.** The batched "negligible" volume assumption did
+  not hold. The Cluster Dashboard health poll (every 5 s, telemetry-suppressed per
+  call but still counted by the logger) made the gauge 1,157,635 rows, 65% of all
+  non-activation events; about 95% of rows were paced at the poll interval, many
+  from panels left open for days.
+- **Correction.** "`dist_auto_duration_ms_*` — per-op latency, recorded for free"
+  above is wrong. `accumulateTelemetry` times its own populator callback, not the
+  RPC; the logger never recorded `durationMs`. The gauge carried no request latency.
+  Per-view load time is now `documentDB.webview.viewLoaded`.
+
 ## R766-N06 — create-or-reveal (unchanged)
 
 > ✅ **Documented in Iteration 2** [R766-N06]. Added a "Create-or-reveal

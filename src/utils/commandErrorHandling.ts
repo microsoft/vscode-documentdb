@@ -11,7 +11,7 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import { unwrapArgs } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
-import { ConnectionDiagnosticsService } from '../services/connectionDiagnosticsService';
+import { ErrorExplanationService } from '../services/errorExplanationService';
 
 /**
  * UserFacingError represents an error that should be prominently displayed to the user
@@ -107,7 +107,7 @@ export function registerCommandWithModalErrors(
  *
  * Separate from {@link registerCommandWithTreeNodeUnwrappingAndModalErrors}: the database commands
  * (create, drop, import, export, index) report their failures as notifications today, and a
- * diagnosis is not a reason to start blocking the user with a modal. Only the wording changes, and
+ * explanation is not a reason to start blocking the user with a modal. Only the wording changes, and
  * only when a provider recognises the cluster.
  *
  * @param commandId The command ID to register
@@ -136,16 +136,14 @@ export function registerCommandWithTreeNodeUnwrappingAndDiagnostics<T>(
 
                 const clusterId = (unwrappedArgs[0] as unknown as { cluster?: { clusterId?: string } } | undefined)
                     ?.cluster?.clusterId;
-                const diagnosis = clusterId
-                    ? await ConnectionDiagnosticsService.explain({ clusterId, error })
-                    : undefined;
+                const explanation = clusterId ? await ErrorExplanationService.explain({ clusterId, error }) : undefined;
 
-                if (diagnosis) {
-                    context.telemetry.properties.diagnosisProviderId = diagnosis.providerId;
+                if (explanation) {
+                    context.telemetry.properties.explanationProviderId = explanation.providerId;
                     context.errorHandling.suppressDisplay = true;
                     // `detail` is only rendered for modal messages, so the raw text is appended.
                     const cause = error instanceof Error ? error.message : String(error);
-                    void vscode.window.showErrorMessage(`${diagnosis.message} (${cause})`);
+                    void vscode.window.showErrorMessage(`${explanation.message} (${cause})`);
                 }
 
                 // The error itself is never modified, so telemetry and identity checks still work.
@@ -205,14 +203,12 @@ export function registerCommandWithTreeNodeUnwrappingAndModalErrors<T>(
                 // infrastructure can be explained instead of showing the raw driver error.
                 const clusterId = (unwrappedArgs[0] as unknown as { cluster?: { clusterId?: string } } | undefined)
                     ?.cluster?.clusterId;
-                const diagnosis = clusterId
-                    ? await ConnectionDiagnosticsService.explain({ clusterId, error })
-                    : undefined;
+                const explanation = clusterId ? await ErrorExplanationService.explain({ clusterId, error }) : undefined;
 
-                if (diagnosis) {
-                    context.telemetry.properties.diagnosisProviderId = diagnosis.providerId;
+                if (explanation) {
+                    context.telemetry.properties.explanationProviderId = explanation.providerId;
                     context.errorHandling.suppressDisplay = true;
-                    await vscode.window.showErrorMessage(diagnosis.message, {
+                    await vscode.window.showErrorMessage(explanation.message, {
                         modal: true,
                         detail: error instanceof Error ? error.message : String(error),
                     });

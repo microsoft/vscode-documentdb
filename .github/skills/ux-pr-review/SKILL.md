@@ -83,7 +83,7 @@ The headline one:
 > **nothing at all** (a silent early-return with only output-channel text). List every
 > occurrence with its file reference and flag the divergences. The house style across
 > shipped discovery providers is: **errors → modal + output channel; tree rows → actions
-> only; a single canonical "Click here to retry" node.**
+> only; a single canonical "Retry" node.**
 
 Seed these as **Flag** items in the document so the operator can confirm them live.
 

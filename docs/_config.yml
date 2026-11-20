@@ -70,6 +70,7 @@ exclude:
     - node_modules
     - ai-and-plans/
     - blog-posts/
+    - parked-images/
     - atlas-mongodb-discovery-flow.md
     - index-advisor-data-flow.md
     - localization.md

@@ -1,0 +1,42 @@
+name: Dependabot quarantine labels
+
+# pull_request_target since Dependabot's pull_request runs get a read-only token; never check out or run PR code here.
+on:
+    pull_request_target:
+        types: [opened, reopened, synchronize]
+    # Daily, so a quarantine label clears without a new push.
+    schedule:
+        - cron: '23 6 * * *'
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+# Every run reconciles all open Dependabot PRs, so a queued run supersedes an older queued one.
+concurrency:
+    group: dependabot-quarantine
+    cancel-in-progress: false
+
+jobs:
+    label:
+        if: github.event_name != 'pull_request_target' || github.event.pull_request.user.login == 'dependabot[bot]'
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+            # Enough for the issues label endpoints on a PR; issues: write is not needed.
+            pull-requests: write
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  ref: main
+                  persist-credentials: false
+
+            - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+              with:
+                  node-version-file: .nvmrc
+
+            - name: Label Dependabot PRs
+              run: node .github/scripts/dependabot-quarantine.cjs
+              env:
+                  GH_TOKEN: ${{ github.token }}

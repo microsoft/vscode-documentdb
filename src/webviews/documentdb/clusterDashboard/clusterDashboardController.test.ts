@@ -18,7 +18,7 @@ vi.mock('vscode', () => ({
 
 vi.mock('@microsoft/vscode-azext-utils', () => ({
     callWithTelemetryAndErrorHandling: vi.fn(async (_eventId: string, callback: (context: unknown) => Promise<void>) =>
-        callback({ telemetry: { properties: {}, measurements: {} } }),
+        callback({ telemetry: { properties: {}, measurements: {} }, errorHandling: {} }),
     ),
 }));
 
@@ -41,6 +41,7 @@ vi.mock('./resolveNamespaceNode', () => ({
 
 import * as vscode from 'vscode';
 import { openCollectionViewInternal } from '../../../commands/openCollectionView/openCollectionView';
+import { openAppWebview } from '../../_integration/openAppWebview';
 import { CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS } from './clusterDashboardContextMenu';
 import { openClusterDashboardWebview, registerClusterDashboardContextMenuCommands } from './clusterDashboardController';
 import { resolveNamespaceNode } from './resolveNamespaceNode';
@@ -54,7 +55,7 @@ type FakeController = {
     onDisposed: (handler: () => void) => void;
     revealToForeground: Mock;
     dispose: () => void;
-    panel: { webview: { postMessage: Mock } };
+    panel: { webview: { postMessage: Mock }; visible: boolean; onDidChangeViewState: Mock };
 };
 
 function createFakeController(): FakeController {
@@ -63,7 +64,11 @@ function createFakeController(): FakeController {
     return {
         isDisposed: false,
         revealToForeground: vi.fn(),
-        panel: { webview: { postMessage: vi.fn().mockResolvedValue(true) } },
+        panel: {
+            webview: { postMessage: vi.fn().mockResolvedValue(true) },
+            visible: true,
+            onDidChangeViewState: vi.fn(() => ({ dispose: vi.fn() })),
+        },
         onDisposed(handler: () => void): void {
             handlers.push(handler);
         },
@@ -88,6 +93,30 @@ function open(clusterId: string, selectedDatabaseName?: string): FakeController 
 }
 
 describe('openClusterDashboardWebview panel lifecycle', () => {
+    it('attributes the original session without retagging it when another URL reuses the panel', (): void => {
+        vi.clearAllMocks();
+        const config = {
+            clusterId: 'url-dashboard',
+            clusterDisplayName: 'Cluster',
+            viewId: 'discoveryView',
+            refreshIntervalMs: 5000,
+            showDashboardOnConnect: false,
+        };
+        const firstLink = { deepLinkCorrelationId: 'first-click', deepLinkSource: 'portal' };
+        const first = openClusterDashboardWebview(config, firstLink);
+        const second = openClusterDashboardWebview(config, {
+            deepLinkCorrelationId: 'second-click',
+            deepLinkSource: 'docs',
+        });
+        expect(second).toBe(first);
+        expect(openAppWebview).toHaveBeenCalledExactlyOnceWith(
+            expect.objectContaining({
+                context: expect.objectContaining(firstLink),
+            }),
+        );
+        first.dispose();
+    });
+
     it('reuses the existing panel instead of opening a duplicate', () => {
         const first = open(CLUSTER);
         const second = open(CLUSTER);

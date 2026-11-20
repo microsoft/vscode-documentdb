@@ -19,6 +19,9 @@ export interface AuthenticateWizardContext extends IActionContext {
      * These are raw strings that may include unknown methods not yet in our AuthMethodId enum.
      */
     availableAuthMethods?: string[];
+    /** Current destination, when available, takes precedence over the precomputed policy decision. */
+    connectionString?: string;
+    entraDestinationAllowed?: boolean;
 
     /** These values will be populated by the wizard. */
 

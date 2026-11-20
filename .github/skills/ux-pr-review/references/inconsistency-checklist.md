@@ -22,7 +22,7 @@ and list every occurrence side by side:
 in a passive row, and another in nothing. Decide one rule and apply it feature-wide.
 
 **House style (verified across shipped discovery providers):** errors → **modal + output
-channel**; tree rows are **actions only**; a single canonical **"Click here to retry"**
+channel**; tree rows are **actions only**; a single canonical **"Retry"**
 node — never a passive in-tree error-summary row.
 
 ## 2. Silent no-ops on user actions
@@ -59,7 +59,7 @@ sibling command does prompt.
 
 ## 5. Empty state & first-run dead ends
 
-- Does the empty state offer an **actionable** row ("Click here to…"), or a passive
+- Does the empty state offer an **actionable** row (such as "Add kubeconfig…"), or a passive
   message? Passive-only states with no action are dead ends.
 - After a failed/leftover state, is there **always a way out** (Delete / Recreate / Retry)?
   A state that shows a warning but exposes **no command** is stuck.

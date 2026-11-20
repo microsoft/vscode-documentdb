@@ -3,13 +3,50 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as l10n from '@vscode/l10n';
+import { isIP } from 'net';
 import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString';
 import { type DocumentDBEntraCloud } from './entraScopes';
 
-// Safe default when we cannot positively identify an Azure endpoint. This is the
-// historical behavior and covers the public cloud (including private endpoints,
-// which still resolve under *.azure.com).
-const DEFAULT_ALLOWED_HOSTS = ['*.azure.com'];
+export const BUILT_IN_ENTRA_DESTINATION_SUFFIXES = [
+    'mongocluster.cosmos.azure.com',
+    'mongocluster.cosmos.azure.us',
+    'mongocluster.cosmos.azure.cn',
+] as const;
+
+const CUSTOMER_HOSTING_SUFFIXES = [
+    'cloudapp.azure.com',
+    'cloudapp.usgovcloudapi.net',
+    'cloudapp.chinacloudapi.cn',
+] as const;
+
+export type EntraDestinationClass = 'documentdbService' | 'customSuffix' | 'otherAzure' | 'other';
+
+export interface EntraDestinationDecision {
+    allowed: boolean;
+    destinationClass: EntraDestinationClass;
+    allowedHostPatterns: readonly string[];
+    customSuffixUsed?: string;
+    rejection?: { microsoftCloudDomain: boolean; serviceLabel: boolean };
+    firstHost?: string;
+    hostCount: number;
+}
+
+export class EntraDestinationRejectedError extends Error {
+    public readonly firstHost: string;
+    public readonly additionalHostCount: number;
+
+    constructor(decision: Pick<EntraDestinationDecision, 'firstHost' | 'hostCount'>) {
+        super(l10n.t("Microsoft Entra ID isn't allowed for this server."));
+        this.name = 'EntraDestinationRejectedError';
+        this.firstHost = getHostname(decision.firstHost ?? '') ?? '';
+        this.additionalHostCount = Math.max(0, decision.hostCount - 1);
+    }
+}
+
+export function isEntraDestinationRejectedError(error: unknown): error is EntraDestinationRejectedError {
+    return error instanceof EntraDestinationRejectedError;
+}
 
 // The registrable `azure.<tld>` suffixes owned by Microsoft for the public and
 // sovereign clouds. This is a closed list on purpose: `azure` under any other
@@ -19,66 +56,93 @@ const KNOWN_AZURE_TOP_LEVEL_DOMAINS: ReadonlySet<string> = new Set(['com', 'us',
 /** Recognizes DocumentDB service hosts without trusting lookalikes or arbitrary Azure services. */
 export function hasDocumentDBHost(hosts: readonly string[], customHostnameSuffix?: string): boolean {
     const customSuffix = normalizeCustomHostnameSuffix(customHostnameSuffix);
-    return hosts.some((host) => {
-        const hostname = getHostname(host);
-        const azureSuffix = getAzureHostSuffix(host);
-        return (
-            !!hostname &&
-            ((!!azureSuffix && hostname.endsWith(`.mongocluster.cosmos.${azureSuffix}`)) ||
-                (!!customSuffix && hostname.endsWith(`.${customSuffix}`)))
-        );
-    });
+    const patterns = BUILT_IN_ENTRA_DESTINATION_SUFFIXES.map((suffix) => `*.${suffix}`);
+    if (customSuffix) {
+        patterns.push(`*.${customSuffix}`);
+    }
+    return hosts.some((host) => isEntraDestinationHostAllowed(host, patterns));
 }
 
 /**
- * Resolve the OIDC ALLOWED_HOSTS list from a connection string.
- *
- * ALLOWED_HOSTS is a security control: the driver only sends the OIDC token to a
- * server whose hostname matches one of these patterns. It must therefore stay a
- * curated allowlist. We intentionally do NOT echo the raw connection-string host
- * back into the allowlist: doing so would let an attacker-supplied host (e.g.
- * `evil.com`) widen its own allowlist to `*.evil.com`, defeating the control.
- *
- * Instead we recognize the known Azure cloud suffixes (`azure.com`, `azure.us`,
- * `azure.cn`) and allow only `*.<suffix>`. This keeps the public-cloud posture
- * identical to the previous hardcoded `*.azure.com` while extending it to the
- * sovereign clouds. Anything we cannot positively classify as one of these
- * clouds falls back to the safe public-cloud default.
- *
- * A custom cloud's DocumentDB host suffix (`documentDB.customEnvironment.hostnameSuffix`)
- * is trusted only when the user configured it explicitly and the host actually ends with it.
- *
- * The token audience for each cloud is chosen separately, in `documentdbTokenResource.ts`.
+ * Legacy recognition API. Rejected destinations return no patterns; callers that acquire
+ * tokens must use evaluateEntraDestination and reject before acquisition.
  */
 export function getOidcAllowedHosts(connectionString: string, customHostnameSuffix?: string): string[] {
+    return [...evaluateEntraDestination(connectionString, customHostnameSuffix).allowedHostPatterns];
+}
+
+export function isEntraDestinationHostAllowed(host: string, patterns: readonly string[]): boolean {
+    const hostname = getHostname(host);
+    if (!hostname || !isDnsName(hostname)) {
+        return false;
+    }
+    return patterns.some((pattern) => {
+        if (!pattern.startsWith('*.')) {
+            return false;
+        }
+        const suffix = pattern.slice(2);
+        return isDnsName(suffix) && hostname.endsWith(`.${suffix.toLowerCase()}`);
+    });
+}
+
+export function evaluateEntraDestination(
+    connectionString: string,
+    customHostnameSuffix?: unknown,
+): EntraDestinationDecision {
+    let hosts: string[];
     try {
         const parsed = new DocumentDBConnectionString(connectionString);
-        const customSuffix = normalizeCustomHostnameSuffix(customHostnameSuffix);
-
-        // Deduplicate so a replica-set connection string with several hosts in
-        // the same cloud yields a single `*.azure.<tld>` entry.
-        const suffixes = new Set<string>();
-        for (const host of parsed.hosts ?? []) {
-            const suffix = getAzureHostSuffix(host);
-            if (suffix) {
-                suffixes.add(suffix);
-                continue;
-            }
-
-            const hostname = getHostname(host);
-            if (customSuffix && hostname?.endsWith(`.${customSuffix}`)) {
-                suffixes.add(customSuffix);
-            }
+        if (parsed.hash) {
+            throw new Error('Invalid connection string fragment');
         }
-
-        if (suffixes.size > 0) {
-            return [...suffixes].map((suffix) => `*.${suffix}`);
-        }
+        hosts = parsed.hosts;
     } catch {
-        // Connection string could not be parsed; fall back to the safe default.
+        hosts = [];
     }
 
-    return DEFAULT_ALLOWED_HOSTS;
+    const customSuffix = normalizeCustomHostnameSuffix(customHostnameSuffix);
+    const patterns = new Set<string>();
+    let customSuffixUsed: string | undefined;
+    let rejected = hosts.length === 0;
+    let microsoftCloudDomain = false;
+    let serviceLabel = false;
+    for (const host of hosts) {
+        const builtin = BUILT_IN_ENTRA_DESTINATION_SUFFIXES.find((suffix) =>
+            isEntraDestinationHostAllowed(host, [`*.${suffix}`]),
+        );
+        if (builtin) {
+            patterns.add(`*.${builtin}`);
+        } else if (customSuffix && isEntraDestinationHostAllowed(host, [`*.${customSuffix}`])) {
+            patterns.add(`*.${customSuffix}`);
+            customSuffixUsed = customSuffix;
+        } else {
+            rejected = true;
+            const hostname = getHostname(host);
+            microsoftCloudDomain ||=
+                !!getAzureHostSuffix(host) ||
+                !!hostname?.endsWith('.usgovcloudapi.net') ||
+                !!hostname?.endsWith('.chinacloudapi.cn') ||
+                hostname === 'windows.net' ||
+                !!hostname?.endsWith('.windows.net');
+            serviceLabel ||= !!hostname?.split('.').some((label) => label === 'mongocluster' || label === 'documentdb');
+        }
+    }
+
+    let destinationClass: EntraDestinationClass = 'documentdbService';
+    if (rejected) {
+        destinationClass = microsoftCloudDomain ? 'otherAzure' : 'other';
+    } else if (customSuffixUsed) {
+        destinationClass = 'customSuffix';
+    }
+
+    return {
+        allowed: !rejected,
+        destinationClass,
+        allowedHostPatterns: rejected ? [] : [...patterns],
+        ...(rejected ? { rejection: { microsoftCloudDomain, serviceLabel } } : { customSuffixUsed }),
+        firstHost: getHostname(hosts[0] ?? ''),
+        hostCount: hosts.length,
+    };
 }
 
 export interface AzureHostCloud {
@@ -130,35 +194,60 @@ export function getAzureCloudFromHosts(connectionString: string): AzureHostCloud
 
 /**
  * Validates `documentDB.customEnvironment.hostnameSuffix` and returns it without the
- * leading dot. Bare TLDs and common two-label public suffixes can never be trusted.
+ * leading dot. Public suffixes and parents of service/customer-hosting namespaces
+ * cannot be used to restore cloud-wide token delivery.
  */
 export function normalizeCustomHostnameSuffix(value: unknown): string | undefined {
     if (typeof value !== 'string') {
         return undefined;
     }
 
-    const suffix = value.trim().toLowerCase().replace(/^\./, '');
+    const trimmed = value.trim().replace(/^\./, '');
+    if (!isDnsName(trimmed)) {
+        return undefined;
+    }
+    const suffix = trimmed.toLowerCase();
     const labels = suffix.split('.');
-    if (labels.length < 2 || labels.some((label) => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) {
+    if (labels.length < 2 || labels.includes('cloudapp')) {
         return undefined;
     }
     if (/^(?:com|co|net|org|gov)\.[a-z]{2}$/.test(suffix)) {
+        return undefined;
+    }
+    if (
+        [...BUILT_IN_ENTRA_DESTINATION_SUFFIXES, ...CUSTOMER_HOSTING_SUFFIXES].some(
+            (protectedSuffix) => protectedSuffix === suffix || protectedSuffix.endsWith(`.${suffix}`),
+        )
+    ) {
         return undefined;
     }
 
     return suffix;
 }
 
-function getHostname(host: string): string | undefined {
-    // `hosts` entries may carry a port (e.g. `cluster.azure.com:10255`) and an
-    // IPv6 literal is wrapped in brackets; neither is part of the suffix.
+function isDnsName(hostname: string): boolean {
     return (
-        host
-            .replace(/^\[.*\]/, '') // drop bracketed IPv6 literals (never Azure FQDNs)
-            .split(':')[0]
-            ?.trim()
-            .toLowerCase() || undefined
+        hostname.length > 0 &&
+        hostname.length <= 253 &&
+        !/[^A-Za-z0-9.-]/.test(hostname) &&
+        !isIP(hostname) &&
+        hostname.split('.').every((label) => /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/.test(label))
     );
+}
+
+function getHostname(host: string): string | undefined {
+    const match = /^(\[[^\]]+\]|[^:]+)(?::([0-9]+))?$/.exec(host);
+    if (!match || match[0] !== host) {
+        return undefined;
+    }
+    if (match[2] !== undefined && (Number(match[2]) < 1 || Number(match[2]) > 65535)) {
+        return undefined;
+    }
+    const hostname = match[1];
+    // IPs and trailing dots are safe to display, but never pass isDnsName for authorization.
+    const displayName = hostname.endsWith('.') ? hostname.slice(0, -1) : hostname;
+    const address = hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname;
+    return isDnsName(displayName) || isIP(address) ? hostname.toLowerCase() : undefined;
 }
 
 /**

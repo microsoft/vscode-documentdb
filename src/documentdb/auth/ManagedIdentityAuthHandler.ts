@@ -3,24 +3,22 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
-import { type MongoClientOptions, type OIDCResponse } from 'mongodb';
-import * as vscode from 'vscode';
-import { settingsKeys } from '../../settingsKeys';
-import { traceAuthFlow, traceAuthOperation, type AuthTraceContext } from '../../utils/authTrace';
+import { type OIDCResponse } from 'mongodb';
+import { ext } from '../../extensionVariables';
+import { traceAuthFlow, traceAuthOperation, traceEntraDestination, type AuthTraceContext } from '../../utils/authTrace';
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { withTokenAcquisitionTiming, type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
-import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString';
-import { resolveAllowInvalidCertificates } from '../utils/tlsException';
+import { notifyAuthPhaseObserver, type AuthCallerPolicy, type AuthPhaseObserver } from './authCallerPolicy';
 import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
-import {
-    resolveManagedIdentityTokenResource,
-    TokenResourceResolutionError,
-    type DocumentDBCustomEnvironment,
-} from './documentdbTokenResource';
+import { resolveManagedIdentityTokenResource, TokenResourceResolutionError } from './documentdbTokenResource';
+import { evaluateEntraDestinationFromSettings, getEntraCustomHostnameSuffix } from './entraDestinationSettings';
+import { classifyEntraError } from './entraErrors/classifyEntraError';
 import { clearEntraTokenFailure, recordEntraTokenFailure } from './entraErrors/entraTokenFailures';
 import { getManagedIdentityAccessToken } from './managedIdentityTokenProvider';
-import { getOidcAllowedHosts } from './oidcAllowedHosts';
+import { EntraDestinationRejectedError } from './oidcAllowedHosts';
+import { buildOidcClientConfiguration, createOidcDestinationPolicy } from './oidcClientOptions';
 import { expiresInSecondsFromTimestamp } from './tokenExpiry';
 
 /**
@@ -31,32 +29,61 @@ import { expiresInSecondsFromTimestamp } from './tokenExpiry';
  * driver's own `ENVIRONMENT: 'azure'` machine flow is never used at runtime, because its failures
  * surface as an opaque HTTP status code, which is exactly the wrong experience for the
  * multiple-identity case this feature exists to fix.
+ *
+ * Managed identity never prompts, so the caller policy does not change the flow; only its observer
+ * is notified. The token phase runs inside the driver's `OIDC_CALLBACK`, after the driver connected.
  */
 export class ManagedIdentityAuthHandler implements AuthHandler {
     private readonly tokenCorrelationId = randomUUID();
 
-    constructor(private readonly clusterCredentials: CachedClusterCredentials) {}
+    constructor(
+        private readonly clusterCredentials: CachedClusterCredentials,
+        public readonly policy: AuthCallerPolicy = { interactive: true },
+    ) {}
+
+    private notify(notify: (observer: AuthPhaseObserver) => void): void {
+        notifyAuthPhaseObserver(this.policy.observer, notify);
+    }
 
     public async configureAuth(
         timings?: ConnectionStartupTimings,
         traceContext?: AuthTraceContext,
     ): Promise<AuthHandlerResponse> {
+        const { connectionString, clusterId } = this.clusterCredentials;
+        const decision = evaluateEntraDestinationFromSettings(connectionString);
+        traceEntraDestination(decision, this.tokenCorrelationId, traceContext);
+        if (!decision.allowed) {
+            throw new EntraDestinationRejectedError(decision);
+        }
+        const policy = createOidcDestinationPolicy(connectionString, getEntraCustomHostnameSuffix);
         const clientId = this.clusterCredentials.managedIdentityConfig?.clientId;
         const tenantId = this.clusterCredentials.managedIdentityConfig?.tenantId;
         let resolved: Awaited<ReturnType<typeof resolveManagedIdentityTokenResource>>;
         try {
-            resolved = await resolveManagedIdentityTokenResource(this.clusterCredentials.connectionString);
+            resolved = await resolveManagedIdentityTokenResource(connectionString);
             traceAuthFlow('entraCloud.resolved', resolved.details, this.tokenCorrelationId, traceContext);
         } catch (error) {
             if (error instanceof TokenResourceResolutionError) {
                 traceAuthFlow('entraCloud.unresolved', error.details, this.tokenCorrelationId, traceContext);
             }
+            this.notify((observer) =>
+                observer.onSignInConfigurationFailed?.(
+                    error instanceof TokenResourceResolutionError
+                        ? { kind: error.kind, details: error.details }
+                        : { kind: 'unknown', details: {} },
+                ),
+            );
             throw error;
         }
-        const customHostnameSuffix = vscode.workspace
-            .getConfiguration()
-            .get<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment)?.hostnameSuffix;
-        const allowedHosts = getOidcAllowedHosts(this.clusterCredentials.connectionString, customHostnameSuffix);
+        policy.assertAllowed();
+        this.notify((observer) =>
+            observer.onSignInConfigurationResolved?.({
+                details: resolved.details,
+                cloudCategory: resolved.cloudCategory,
+                tokenResourceReason: resolved.reason,
+                allowedHosts: policy.allowedHostPatterns,
+            }),
+        );
         traceAuthFlow(
             'managedIdentity.configureOidc',
             {
@@ -65,77 +92,70 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
                 tokenAcquisition: 'deferredUntilDriverCallback',
                 cloudCategory: resolved.cloudCategory,
                 tokenResourceReason: resolved.reason,
-                allowedHosts: allowedHosts.join(','),
             },
             this.tokenCorrelationId,
             traceContext,
         );
 
-        const dbConnectionString = new DocumentDBConnectionString(this.clusterCredentials.connectionString);
-        dbConnectionString.username = '';
-        dbConnectionString.password = '';
-        // The URL form must not compete with `MongoClientOptions.authMechanismProperties`; leaving
-        // `ENVIRONMENT:azure` in place risks the driver taking its own instance-metadata path.
-        dbConnectionString.searchParams.delete('authMechanism');
-        dbConnectionString.searchParams.delete('authMechanismProperties');
-        dbConnectionString.searchParams.delete('tls');
-
-        const options: MongoClientOptions = {
-            authMechanism: 'MONGODB-OIDC',
-            tls: true,
-            authMechanismProperties: {
-                ALLOWED_HOSTS: allowedHosts,
-                OIDC_CALLBACK: async (): Promise<OIDCResponse> => {
-                    try {
-                        const token = await traceAuthOperation(
-                            'managedIdentity.oidcCallback',
-                            () =>
-                                withTokenAcquisitionTiming(timings, () =>
-                                    getManagedIdentityAccessToken(
-                                        [resolved.scope],
-                                        clientId,
-                                        tenantId,
-                                        this.tokenCorrelationId,
-                                        traceContext,
-                                    ),
+        const configuration = buildOidcClientConfiguration({
+            connectionString,
+            policy,
+            oidcCallback: async (): Promise<OIDCResponse> => {
+                const currentDecision = evaluateEntraDestinationFromSettings(connectionString);
+                traceEntraDestination(currentDecision, this.tokenCorrelationId, traceContext);
+                if (!currentDecision.allowed) {
+                    throw new EntraDestinationRejectedError(currentDecision);
+                }
+                policy.assertAllowed();
+                this.notify((observer) => observer.onTokenStarted?.());
+                let token: Awaited<ReturnType<typeof getManagedIdentityAccessToken>>;
+                try {
+                    token = await traceAuthOperation(
+                        'managedIdentity.oidcCallback',
+                        () =>
+                            withTokenAcquisitionTiming(timings, () =>
+                                getManagedIdentityAccessToken(
+                                    [resolved.scope],
+                                    clientId,
+                                    tenantId,
+                                    this.tokenCorrelationId,
+                                    traceContext,
                                 ),
-                            {},
-                            this.tokenCorrelationId,
-                            traceContext,
-                        );
-
-                        clearEntraTokenFailure(this.clusterCredentials.clusterId);
-                        return {
-                            accessToken: token.accessToken,
-                            expiresInSeconds: expiresInSecondsFromTimestamp(token.expiresOnTimestamp),
-                        };
-                    } catch (error) {
-                        if (traceContext?.startupProperties) {
-                            traceContext.startupProperties.errorKind = 'tokenAcquisitionFailed';
-                        }
-                        recordEntraTokenFailure(this.clusterCredentials.clusterId, {
-                            cloudCategory: resolved.cloudCategory,
-                            authMethod: 'managedIdentity',
-                        });
-                        throw error;
+                            ),
+                        {},
+                        this.tokenCorrelationId,
+                        traceContext,
+                    );
+                } catch (error) {
+                    if (traceContext?.startupProperties) {
+                        traceContext.startupProperties.entraFailureKind = 'tokenAcquisitionFailed';
                     }
-                },
+                    recordEntraTokenFailure(clusterId, {
+                        cloudCategory: resolved.cloudCategory,
+                        authMethod: 'managedIdentity',
+                        ruleId: classifyEntraError(error instanceof Error ? error.message : String(error))?.ruleId,
+                    });
+                    this.notify((observer) => observer.onTokenFailed?.(error));
+                    throw error;
+                }
+                policy.assertAllowed();
+                clearEntraTokenFailure(clusterId);
+                this.notify((observer) => observer.onTokenAcquired?.({ accessToken: token.accessToken, tenantId }));
+                return {
+                    accessToken: token.accessToken,
+                    expiresInSeconds: expiresInSecondsFromTimestamp(token.expiresOnTimestamp),
+                };
             },
-        };
-
-        // Same host-gated TLS exception policy as every other handler.
-        if (
-            resolveAllowInvalidCertificates(
-                this.clusterCredentials.emulatorConfiguration?.disableEmulatorSecurity,
-                this.clusterCredentials.connectionString,
-            )
-        ) {
-            options.tlsAllowInvalidCertificates = true;
+        });
+        if (configuration.ignoredTlsBypass || this.clusterCredentials.emulatorConfiguration?.disableEmulatorSecurity) {
+            ext.outputChannel.info(
+                l10n.t('[Auth] TLS validation bypass parameters are ignored for Microsoft Entra ID connections.'),
+            );
         }
 
         return {
-            connectionString: dbConnectionString.toString(),
-            options,
+            connectionString: configuration.connectionString,
+            options: configuration.options,
         };
     }
 }

@@ -15,7 +15,7 @@ import { type MongoClientOptions } from 'mongodb';
 import { type SrvResolutionSummary } from './srvResolutionSummary';
 import { type SrvResolutionTelemetry } from './srvResolutionTelemetry';
 
-export type SrvResolutionSurface = 'extension' | 'shell' | 'playground';
+export type SrvResolutionSurface = 'extension' | 'shell' | 'playground' | 'connectionDiagnostics';
 
 export interface PrepareDriverConnectionStringInput {
     readonly connectionString: string;
@@ -33,7 +33,7 @@ export interface PreparedDriverConnectionString {
     readonly summary?: SrvResolutionSummary;
 }
 
-function fallbackMode(): SrvFallbackMode {
+export function getSrvFallbackMode(): SrvFallbackMode {
     if (process.env.DOCUMENTDB_DISABLE_SRV_FALLBACK === '1') {
         return 'off';
     }
@@ -82,7 +82,7 @@ export async function prepareDriverConnectionString(
         const result = await resolveSrvForDriver({
             connectionString: input.connectionString,
             options: input.options,
-            fallback: fallbackMode(),
+            fallback: getSrvFallbackMode(),
             deadlineMs: Math.min(FALLBACK_MAX_DEADLINE_MS, getConnectionTimeoutMs()),
             signal: input.abortSignal,
             logger: { trace: (message: string): void => ext.outputChannel?.trace(message) },

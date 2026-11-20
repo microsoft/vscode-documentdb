@@ -6,7 +6,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type initWebviewTrpc as InitWebviewTrpc } from '@microsoft/vscode-ext-webview';
+import * as vscode from 'vscode';
 import { API } from '../../../DocumentDBExperiences';
+import {
+    type DockerReadiness,
+    QUICK_START_IMAGE_REPOSITORY,
+    type StageEvent,
+} from '../../../services/localQuickStart/quickStartTypes';
 
 const mockStartDockerProvider = vi.fn();
 const mockIsDockerReady = vi.fn();
@@ -15,6 +21,12 @@ const mockRefreshLiveState = vi.fn();
 const mockCanReuseExistingData = vi.fn();
 const mockSuggestPort = vi.fn();
 const mockProvision = vi.fn();
+const mockOpenExternal = vi.fn();
+const mockGetDockerReadinessSnapshot = vi.fn();
+const mockProcedureTelemetry = vi.fn();
+const mockGetWizardContext = vi.fn();
+const mockGetExistingInstance = vi.fn();
+const mockIsSavedImagePinned = vi.fn();
 
 vi.mock('../../../services/survey/SurveyService', (): object => ({ recordSurveyActivity: vi.fn() }));
 
@@ -24,26 +36,34 @@ const fireStatusChange = (): void => statusListeners.forEach((listener) => liste
 
 vi.mock('vscode', () => ({
     commands: { executeCommand: vi.fn() },
-    env: { clipboard: { writeText: vi.fn() } },
+    env: {
+        clipboard: { writeText: vi.fn() },
+        openExternal: (...args: unknown[]) => mockOpenExternal(...args) as unknown,
+    },
+    Uri: { parse: (value: string) => ({ toString: () => value }) },
 }));
 
 vi.mock('../../../services/localQuickStart/ContainerRuntime', () => ({
     ContainerRuntime: { isDockerReady: (...args: unknown[]) => mockIsDockerReady(...args) as unknown },
     getQuickStartOutputChannel: () => ({ show: vi.fn() }),
-    startDockerProvider: () => mockStartDockerProvider() as unknown,
 }));
 
 vi.mock('../../../services/localQuickStart/QuickStartService', () => ({
     QuickStartService: {
         discardTimedOutInstance: vi.fn(),
-        checkDockerReadiness: (...args: unknown[]) => mockIsDockerReady(...args) as unknown,
+        checkInstanceDockerReadiness: (...args: unknown[]) => mockIsDockerReady(...args) as unknown,
+        startDockerProvider: (...args: unknown[]) => mockStartDockerProvider(...args) as unknown,
         getStatus: (...args: unknown[]) => mockGetStatus(...args) as unknown,
         isBusy: false,
         provision: (...args: unknown[]) => mockProvision(...args) as unknown,
         refreshLiveState: (...args: unknown[]) => mockRefreshLiveState(...args) as unknown,
         canReuseExistingData: (...args: unknown[]) => mockCanReuseExistingData(...args) as unknown,
         suggestPort: (...args: unknown[]) => mockSuggestPort(...args) as unknown,
+        getWizardContext: (...args: unknown[]) => mockGetWizardContext(...args) as unknown,
+        getExistingInstance: (...args: unknown[]) => mockGetExistingInstance(...args) as unknown,
+        isSavedImagePinned: (...args: unknown[]) => mockIsSavedImagePinned(...args) as unknown,
         checkPort: vi.fn(),
+        getDockerReadinessSnapshot: (...args: unknown[]) => mockGetDockerReadinessSnapshot(...args) as unknown,
         onDidChangeStatus: (listener: () => void) => {
             statusListeners.add(listener);
             return { dispose: () => statusListeners.delete(listener) };
@@ -68,15 +88,20 @@ vi.mock('../../_integration/trpc', async () => {
     return {
         createCallerFactory: trpc.createCallerFactory,
         publicProcedure: trpc.publicProcedure,
-        publicProcedureWithTelemetry: trpc.publicProcedure,
+        publicProcedureWithTelemetry: trpc.publicProcedure.use(({ next }): ReturnType<typeof next> => {
+            mockProcedureTelemetry();
+            return next();
+        }),
         router: trpc.router,
     };
 });
 
 // Emits through azext-utils, which this file's minimal `vscode` stub cannot load (see above).
 const mockReportWizardStep = vi.fn();
+const mockReportWizardDetailsOpened = vi.fn();
 vi.mock('./wizardTelemetry', () => ({
     reportWizardStep: (...args: unknown[]) => mockReportWizardStep(...args) as unknown,
+    reportWizardDetailsOpened: (...args: unknown[]) => mockReportWizardDetailsOpened(...args) as unknown,
 }));
 
 import { createCallerFactory } from '../../_integration/trpc';
@@ -93,6 +118,8 @@ function wizardSession(): QuickStartWizardSession {
         stepChangeCount: 1,
         setupAttemptCount: 0,
         waitLongerCount: 0,
+        detailsOpenedStages: new Set(),
+        detailsOpenCount: 0,
         setupSucceeded: false,
     };
 }
@@ -119,7 +146,62 @@ function createContext(): RouterContext & {
 describe('localQuickStartRouter', () => {
     beforeEach(() => {
         mockSuggestPort.mockResolvedValue(10260);
+        mockGetExistingInstance.mockReset().mockResolvedValue(undefined);
+        mockIsSavedImagePinned.mockReset().mockResolvedValue(false);
     });
+
+    it.each([
+        [`${QUICK_START_IMAGE_REPOSITORY}@sha256:${'a'.repeat(64)}`, true],
+        [`${QUICK_START_IMAGE_REPOSITORY}:latest`, false],
+        [undefined, false],
+    ])('reports only recorded pin knowledge for Configure (%s)', async (imageRef, savedImagePinned) => {
+        mockGetWizardContext.mockResolvedValue({
+            status: { state: 'Stopped', missing: true, metadata: { imageRef, connectionString: 'secret' } },
+            busy: false,
+            canReuseExistingData: true,
+            suggestedPort: 10260,
+            savedImagePinned,
+        });
+        const caller = createCallerFactory(localQuickStartRouter)(createContext());
+        const result = await caller.getWizardContext();
+        expect(result.savedImagePinned).toBe(savedImagePinned);
+        expect(JSON.stringify(result)).not.toContain('secret');
+        expect(JSON.stringify(result)).not.toContain('imageRef');
+    });
+
+    it.each([{ ownerEngine: 'docker' }, { ownerEngine: 'podman' }, {}, undefined] as const)(
+        'returns metadata-only wizard context for engine %s without leaking credentials or probing',
+        async (existingInstance) => {
+            mockIsDockerReady.mockClear();
+            mockRefreshLiveState.mockClear();
+            mockGetWizardContext.mockResolvedValue({
+                status: {
+                    state: 'NotInstalled',
+                    canResumeReadiness: true,
+                    metadata: { connectionString: 'secret', username: 'secret' },
+                },
+                busy: false,
+                canReuseExistingData: true,
+                savedImagePinned: false,
+                suggestedPort: 10273,
+                existingInstance,
+            });
+            const caller = createCallerFactory(localQuickStartRouter)(createContext());
+
+            const result = await caller.getWizardContext();
+
+            expect(result).toMatchObject({
+                status: { state: 'NotInstalled', canResumeReadiness: true },
+                busy: false,
+                canReuseExistingData: true,
+                suggestedPort: 10273,
+                existingInstance,
+            });
+            expect(result.status.metadata).toBeUndefined();
+            expect(mockIsDockerReady).not.toHaveBeenCalled();
+            expect(mockRefreshLiveState).not.toHaveBeenCalled();
+        },
+    );
 
     /**
      * The success screen's primary action. It used to be wired to `connectionsView.focus` alone,
@@ -181,7 +263,109 @@ describe('localQuickStartRouter', () => {
 
         expect(mockIsDockerReady).toHaveBeenCalledWith(
             expect.objectContaining({ forceRefresh: true, resetProviderMemory: true }),
+            undefined,
+            undefined,
+            false,
         );
+    });
+
+    describe('openGuide', () => {
+        beforeEach(() => {
+            mockOpenExternal.mockReset().mockResolvedValue(true);
+            mockGetDockerReadinessSnapshot.mockReset();
+        });
+
+        it('opens the guide URL resolved on the host and records the guide and journey', async () => {
+            mockGetDockerReadinessSnapshot.mockReturnValue({ outcome: 'diagnosed', failureKind: 'cliMissing' });
+            const context = { ...createContext(), wizardSession: wizardSession() };
+            const caller = createCallerFactory(localQuickStartRouter)(context);
+
+            await caller.openGuide({ guide: 'installWindowsDesktop' });
+
+            expect(mockOpenExternal).toHaveBeenCalledTimes(1);
+            expect(String(mockOpenExternal.mock.calls[0][0])).toBe(
+                'https://docs.docker.com/desktop/setup/install/windows-install/',
+            );
+            expect(context.actionContext.telemetry.properties).toMatchObject({
+                guide: 'installWindowsDesktop',
+                wizardStep: 'configure',
+                quickStartSessionId: 'session-1',
+                dockerFailureKind: 'cliMissing',
+            });
+        });
+
+        it('omits dockerFailureKind when the last readiness found no failure', async () => {
+            mockGetDockerReadinessSnapshot.mockReturnValue({ outcome: 'ready' });
+            const context = createContext();
+            const caller = createCallerFactory(localQuickStartRouter)(context);
+
+            await caller.openGuide({ guide: 'dockerTroubleshooting' });
+
+            expect(context.actionContext.telemetry.properties.guide).toBe('dockerTroubleshooting');
+            expect(context.actionContext.telemetry.properties).not.toHaveProperty('dockerFailureKind');
+        });
+
+        // The panel names a guide; it can never make the host open an arbitrary address.
+        it('rejects anything but a known guide key', async () => {
+            const caller = createCallerFactory(localQuickStartRouter)(createContext());
+
+            await expect(caller.openGuide({ guide: 'https://example.com' as 'install' })).rejects.toThrow();
+            expect(mockOpenExternal).not.toHaveBeenCalled();
+        });
+    });
+
+    it.each([
+        ['linuxStartPodmanSocket', 'systemctl --user start podman.socket'],
+        ['podmanMachineInit', 'podman machine init'],
+    ] as const)('copies the fixed %s command without starting an engine', async (id, commandLine) => {
+        const context = createContext();
+        const caller = createCallerFactory(localQuickStartRouter)(context);
+        await caller.copyRecoveryCommand({ id });
+        expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith(commandLine);
+        expect(mockStartDockerProvider).not.toHaveBeenCalled();
+        expect(context.actionContext.telemetry.properties.recoveryCommandId).toBe(id);
+    });
+
+    it('builds the Windows machine clipboard command on the host and records only its id', async () => {
+        vi.mocked(vscode.env.clipboard.writeText).mockClear();
+        mockStartDockerProvider.mockClear();
+        const context = createContext();
+        const caller = createCallerFactory(localQuickStartRouter)(context);
+
+        await caller.copyRecoveryCommand({ id: 'podmanMachineStartOnWindows', machineName: 'podman-machine-default' });
+
+        expect(vscode.env.clipboard.writeText).toHaveBeenCalledExactlyOnceWith(
+            'podman machine start podman-machine-default',
+        );
+        expect(mockStartDockerProvider).not.toHaveBeenCalled();
+        expect(context.actionContext.telemetry.properties).toEqual({
+            recoveryCommandId: 'podmanMachineStartOnWindows',
+        });
+    });
+
+    it.each([undefined, 'vm;whoami', '-vm'])(
+        'rejects Windows copy with invalid machine name %j without touching the clipboard',
+        async (machineName) => {
+            vi.mocked(vscode.env.clipboard.writeText).mockClear();
+            const caller = createCallerFactory(localQuickStartRouter)(createContext());
+
+            await expect(
+                caller.copyRecoveryCommand({ id: 'podmanMachineStartOnWindows', machineName }),
+            ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+            expect(vscode.env.clipboard.writeText).not.toHaveBeenCalled();
+        },
+    );
+
+    it('rejects a machine name on a fixed command', async () => {
+        vi.mocked(vscode.env.clipboard.writeText).mockClear();
+        const caller = createCallerFactory(localQuickStartRouter)(createContext());
+
+        await expect(
+            caller.copyRecoveryCommand({ id: 'linuxStartPodmanSocket', machineName: 'vm' }),
+        ).rejects.toMatchObject({
+            code: 'BAD_REQUEST',
+        });
+        expect(vscode.env.clipboard.writeText).not.toHaveBeenCalled();
     });
 
     it('returns and records the typed provider launch result', async () => {
@@ -191,6 +375,133 @@ describe('localQuickStartRouter', () => {
 
         await expect(caller.startDockerProvider()).resolves.toBe('failed');
         expect(context.actionContext.telemetry.properties.dockerLaunchResult).toBe('failed');
+    });
+
+    describe('preferred engine', () => {
+        it.each(['done', 'error'] as const)(
+            'records original checking readiness on the %s subscription event without a query',
+            async (status) => {
+                const base = {
+                    environment: 'linux',
+                    endpointKind: 'unixSocket',
+                    provider: 'podman',
+                    providerEvidence: 'none',
+                    executionTarget: 'local',
+                    checkedAtMs: 1,
+                    cliInstalled: true,
+                    cli: 'podman',
+                    preferredEngine: 'docker',
+                    cliFallback: true,
+                    canContinueAnyway: false,
+                } as const;
+                const readiness: DockerReadiness =
+                    status === 'done'
+                        ? { ...base, outcome: 'ready', daemonReachable: true }
+                        : { ...base, outcome: 'diagnosed', daemonReachable: false, failureKind: 'daemonUnavailable' };
+                mockProvision.mockImplementation(async function* (): AsyncGenerator<StageEvent> {
+                    yield { stage: 'checking', status, dockerReadiness: readiness };
+                });
+                mockIsDockerReady.mockClear();
+                const context = createContext();
+                const caller = createCallerFactory(localQuickStartRouter)(context);
+                const stream = await caller.startQuickStart({ preferredEngine: 'docker' });
+
+                for await (const event of stream) {
+                    expect(event.dockerReadiness).toBe(readiness);
+                }
+
+                expect(context.actionContext.telemetry.properties).toMatchObject({
+                    preferredContainerEngine: 'docker',
+                    containerCliFallback: 'true',
+                    containerCli: 'podman',
+                    dockerReadinessOutcome: readiness.outcome,
+                });
+                expect(mockIsDockerReady).not.toHaveBeenCalled();
+                mockProvision.mockReset();
+            },
+        );
+
+        it.each(['docker', 'podman'] as const)(
+            'forwards %s to readiness, provider start and provision',
+            async (preferredEngine) => {
+                const caller = createCallerFactory(localQuickStartRouter)(createContext());
+                mockProvision.mockImplementation(async function* () {});
+
+                await caller.getDockerStatus({ preferredEngine });
+                await caller.startDockerProvider({ preferredEngine });
+                const stream = (await caller.startQuickStart({ preferredEngine })) as AsyncGenerator<unknown>;
+                await stream.next();
+
+                expect(mockIsDockerReady).toHaveBeenLastCalledWith(
+                    expect.anything(),
+                    preferredEngine,
+                    undefined,
+                    false,
+                );
+                expect(mockStartDockerProvider).toHaveBeenLastCalledWith(preferredEngine, undefined, undefined, false);
+                expect(mockProvision).toHaveBeenLastCalledWith(
+                    expect.anything(),
+                    { preferredEngine },
+                    undefined,
+                    expect.any(String),
+                );
+                mockProvision.mockReset();
+            },
+        );
+
+        it.each([false, true])('forwards startFresh=%s to setup readiness and provider launch', async (startFresh) => {
+            const caller = createCallerFactory(localQuickStartRouter)(createContext());
+
+            await caller.getDockerStatus({ preferredEngine: 'podman', startFresh });
+            await caller.startDockerProvider({
+                preferredEngine: 'podman',
+                expectedAction: 'startPodmanMachine',
+                startFresh,
+            });
+
+            expect(mockIsDockerReady).toHaveBeenLastCalledWith(expect.anything(), 'podman', undefined, startFresh);
+            expect(mockStartDockerProvider).toHaveBeenLastCalledWith(
+                'podman',
+                'startPodmanMachine',
+                undefined,
+                startFresh,
+            );
+        });
+
+        it('forwards the start action the button named and rejects an unknown one', async () => {
+            const caller = createCallerFactory(localQuickStartRouter)(createContext());
+            await caller.startDockerProvider({ preferredEngine: 'docker', expectedAction: 'startPodmanMachine' });
+            expect(mockStartDockerProvider).toHaveBeenLastCalledWith('docker', 'startPodmanMachine', undefined, false);
+            await expect(
+                caller.startDockerProvider({ expectedAction: 'startAnything' } as unknown as Parameters<
+                    typeof caller.startDockerProvider
+                >[0]),
+            ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+        });
+
+        it('defaults provider start to Docker for omitted input and an empty object', async () => {
+            const caller = createCallerFactory(localQuickStartRouter)(createContext());
+            await caller.startDockerProvider();
+            expect(mockStartDockerProvider).toHaveBeenLastCalledWith('docker', undefined, undefined, false);
+            await caller.startDockerProvider({});
+            expect(mockStartDockerProvider).toHaveBeenLastCalledWith('docker', undefined, undefined, false);
+        });
+
+        it.each(['containerd', 'Docker', '', null, 1])(
+            'rejects invalid preference %j on every entry point',
+            async (preferredEngine) => {
+                const caller = createCallerFactory(localQuickStartRouter)(createContext());
+                await expect(
+                    caller.getDockerStatus({ preferredEngine } as Parameters<typeof caller.getDockerStatus>[0]),
+                ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+                await expect(
+                    caller.startDockerProvider({ preferredEngine } as Parameters<typeof caller.startDockerProvider>[0]),
+                ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+                await expect(
+                    caller.startQuickStart({ preferredEngine } as Parameters<typeof caller.startQuickStart>[0]),
+                ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+            },
+        );
     });
 
     // Each of these used to reach Docker and fail there: a readiness timeout, a container that
@@ -246,6 +557,54 @@ describe('localQuickStartRouter', () => {
     });
 
     describe('wizard session', () => {
+        beforeEach(() => {
+            mockProcedureTelemetry.mockClear();
+            mockReportWizardDetailsOpened.mockClear();
+        });
+
+        it.each(['checking', 'pulling', 'creating', 'starting', 'waiting'] as const)(
+            'records a %s disclosure without procedure telemetry or an action context',
+            async (stage) => {
+                const session = wizardSession();
+                const context: RouterContext = {
+                    dbExperience: API.DocumentDB,
+                    webviewName: 'localQuickStart',
+                    closePanel: vi.fn(),
+                    wizardSession: session,
+                };
+                const caller = createCallerFactory(localQuickStartRouter)(context);
+
+                await caller.reportDetailsOpened({ stage });
+
+                expect(mockReportWizardDetailsOpened).toHaveBeenCalledExactlyOnceWith(session, stage);
+                expect(mockProcedureTelemetry).not.toHaveBeenCalled();
+            },
+        );
+
+        it.each(['unknown', 'done', 'error'])('rejects the non-disclosure stage %s', async (stage) => {
+            const context = {
+                ...createContext(),
+                wizardSession: wizardSession(),
+            };
+            const caller = createCallerFactory(localQuickStartRouter)(context);
+
+            await expect(
+                caller.reportDetailsOpened({ stage } as Parameters<typeof caller.reportDetailsOpened>[0]),
+            ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+            expect(mockReportWizardDetailsOpened).not.toHaveBeenCalled();
+            expect(mockProcedureTelemetry).not.toHaveBeenCalled();
+        });
+
+        it('ignores a disclosure when no panel session is present', async () => {
+            const caller = createCallerFactory(localQuickStartRouter)(createContext());
+
+            await expect(caller.reportDetailsOpened({ stage: 'checking' })).resolves.toBeUndefined();
+
+            expect(mockReportWizardDetailsOpened).not.toHaveBeenCalled();
+            expect(mockProcedureTelemetry).not.toHaveBeenCalled();
+        });
+
         it('reports a step change against the panel session', async () => {
             const session = wizardSession();
             const context = { ...createContext(), wizardSession: session };
@@ -343,6 +702,7 @@ describe('localQuickStartRouter', () => {
             expect(first).toEqual({
                 status: expect.objectContaining({ state: 'Stopped', missing: true }),
                 canReuseExistingData: true,
+                savedImagePinned: false,
             });
         });
 
@@ -358,6 +718,7 @@ describe('localQuickStartRouter', () => {
             expect(first).toEqual({
                 status: expect.objectContaining({ dataRemoved: true }),
                 canReuseExistingData: false,
+                savedImagePinned: false,
             });
         });
 
@@ -371,6 +732,36 @@ describe('localQuickStartRouter', () => {
             // The removal is what the guard needs: same state, different `missing`.
             expect(received[0].status.missing).toBe(false);
             expect(received[1].status.missing).toBe(true);
+        });
+
+        it('pushes engine-only changes, including deletion, without re-reading wizard context or checking readiness', async () => {
+            mockGetStatus.mockReturnValue({ state: 'NotInstalled' });
+            mockCanReuseExistingData.mockResolvedValue(false);
+            mockGetExistingInstance.mockResolvedValueOnce({ ownerEngine: 'podman' }).mockResolvedValue(undefined);
+            mockGetWizardContext.mockClear();
+
+            const received = await drain(2);
+
+            expect(received).toMatchObject([
+                { existingInstance: { ownerEngine: 'podman' } },
+                { existingInstance: undefined },
+            ]);
+            expect(mockGetWizardContext).not.toHaveBeenCalled();
+            expect(mockIsDockerReady).not.toHaveBeenCalled();
+        });
+
+        it('pushes a newly recorded image pin even when the instance state and engine did not change', async () => {
+            mockGetStatus.mockReturnValue({
+                state: 'Stopped',
+                missing: true,
+                metadata: { connectionString: 'secret' },
+            });
+            mockIsSavedImagePinned.mockResolvedValueOnce(false).mockResolvedValue(true);
+            mockCanReuseExistingData.mockResolvedValue(true);
+            const received = await drain(2);
+            expect(received).toMatchObject([{ savedImagePinned: false }, { savedImagePinned: true }]);
+            expect(JSON.stringify(received)).not.toContain('secret');
+            expect(JSON.stringify(received)).not.toContain('imageRef');
         });
 
         it('never calls Docker, because the tree fires this event on a cooldown', async () => {

@@ -11,6 +11,8 @@ export const isMacOS: boolean = /^darwin/.test(process.platform);
 export const modifierKey: string = isMacOS ? '⌘' : 'Ctrl';
 
 export namespace Links {
+    export const EntraTrustedServers: string =
+        'https://microsoft.github.io/vscode-documentdb/user-manual/entra-id-trusted-servers/';
     export const LocalConnectionDebuggingTips: string = 'https://aka.ms/vscode-documentdb-local-connections';
     export const SrvDnsTroubleshooting: string =
         'https://microsoft.github.io/vscode-documentdb/user-manual/troubleshooting-srv-dns';

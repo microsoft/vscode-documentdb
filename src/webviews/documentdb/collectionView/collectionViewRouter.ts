@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { ClusterSession } from '../../../documentdb/ClusterSession';
 import { ShellCommandIds } from '../../../documentdb/shell/constants';
 import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmation';
-import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
+import { publicProcedure, publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
 
 import * as l10n from '@vscode/l10n';
 import {
@@ -23,8 +23,13 @@ import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirm
 import { parseFindExpression } from '../../../documentdb/playground/parseFindExpression';
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
+import { documentViewModeSchema, LiveConfigService } from '../../../services/LiveConfigService';
 import { recordSurveyActivityWithInvitation } from '../../../services/survey/SurveyService';
-import { COMPLETION_CATEGORIES, CompletionSources } from '../../../telemetry/completionCategories';
+import {
+    COMPLETION_CATEGORIES,
+    COMPLETION_OFFERED_EVENT,
+    CompletionSources,
+} from '../../../telemetry/completionCategories';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
 import { accumulateTelemetry } from '../../../utils/accumulatingTelemetry';
 import { escapeJsString } from '../../../utils/escapeJsString';
@@ -201,6 +206,10 @@ async function reportCollectionNodeResolutionFailure(
 }
 
 export const collectionsViewRouter = router({
+    setCollectionDocumentView: publicProcedure
+        .input(documentViewModeSchema)
+        .mutation(({ input }) => LiveConfigService.setCollectionDocumentView(input)),
+
     getInfo: publicProcedureWithTelemetry.query(({ ctx }) => {
         const myCtx = ctx as RouterContext;
 
@@ -697,6 +706,15 @@ export const collectionsViewRouter = router({
             skip: parsed.skip,
             limit: parsed.limit,
         };
+    }),
+
+    /** Called once per panel, the first time the query editor offers a completion. */
+    completionOffered: publicProcedureWithTelemetry.mutation(({ ctx }) => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
+        myCtx.actionContext.telemetry.suppressAll = true;
+        accumulateTelemetry(COMPLETION_OFFERED_EVENT, (sample) => {
+            sample.measurements[`src_${CompletionSources.CollectionView}`] = 1;
+        });
     }),
 
     completionAccepted: publicProcedureWithTelemetry

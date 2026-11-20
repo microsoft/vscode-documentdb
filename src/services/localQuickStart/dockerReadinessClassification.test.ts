@@ -9,15 +9,325 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { parseDockerInfoFacts } from './dockerProbes';
 import {
+    classifyContainerEngine,
     classifyDockerFailure,
     classifyDockerProvider,
+    classifyPodmanMachineState,
+    classifyPodmanTarget,
     getDockerDiagnosticFingerprint,
+    parsePodmanDefaultConnection,
+    parsePodmanDialTarget,
+    parsePodmanMachineList,
+    type ContainerEngineInput,
 } from './dockerReadinessClassification';
 import { type DockerEndpointProbe, type DockerHostEnvironment, type DockerProbeEvidence } from './quickStartTypes';
+
+describe('Podman machine facts', () => {
+    it('parses the strict public JSON fields without altering the machine name', () => {
+        expect(
+            parsePodmanMachineList(
+                '[{"Name":"custom machine","Default":true,"Running":false,"Starting":false,"VMType":"qemu"}]',
+            ),
+        ).toEqual([{ name: 'custom machine', isDefault: true, running: false, starting: false }]);
+        expect(parsePodmanMachineList('[]')).toEqual([]);
+    });
+
+    it.each([
+        'not json',
+        'null',
+        '{}',
+        '[null]',
+        '[true]',
+        '[[]]',
+        '[{"Name":"","Default":true,"Running":false,"Starting":false}]',
+        '[{"Name":"   ","Default":true,"Running":false,"Starting":false}]',
+        '[{"Name":1,"Default":true,"Running":false,"Starting":false}]',
+        '[{"Name":"vm","Default":"true","Running":false,"Starting":false}]',
+        '[{"Name":"vm","Default":true,"Running":0,"Starting":false}]',
+        '[{"Name":"vm","Default":true,"Running":false,"Starting":null}]',
+        '[{"Name":"vm","Running":false,"Starting":false}]',
+        '[{"Name":"vm","Default":true,"Running":false}]',
+    ])('rejects unknown machine facts: %s', (output) => {
+        expect(parsePodmanMachineList(output)).toBeUndefined();
+    });
+
+    const stopped = { name: 'custom-vm', isDefault: false, running: false, starting: false };
+    it.each([
+        { machines: [], expected: { kind: 'none' } },
+        { machines: [stopped], expected: { kind: 'stopped', name: 'custom-vm' } },
+        {
+            machines: [stopped, { ...stopped, name: 'default-vm', isDefault: true }],
+            expected: { kind: 'stopped', name: 'default-vm' },
+        },
+        {
+            machines: [stopped, { ...stopped, name: 'other' }],
+            expected: { kind: 'ambiguous', names: ['custom-vm', 'other'] },
+        },
+        {
+            machines: [{ ...stopped, starting: true, running: true }],
+            expected: { kind: 'starting', name: 'custom-vm' },
+        },
+        { machines: [{ ...stopped, running: true }], expected: { kind: 'running', name: 'custom-vm' } },
+        {
+            machines: [
+                { ...stopped, isDefault: true },
+                { ...stopped, name: 'busy', running: true },
+            ],
+            expected: { kind: 'otherActive', active: 'busy' },
+        },
+        {
+            machines: [
+                { ...stopped, isDefault: true },
+                { ...stopped, name: 'busy', starting: true },
+            ],
+            expected: { kind: 'otherActive', active: 'busy' },
+        },
+        {
+            machines: [
+                { ...stopped, isDefault: true },
+                { ...stopped, name: 'other', isDefault: true },
+            ],
+            expected: { kind: 'ambiguous', names: ['custom-vm', 'other'] },
+        },
+    ])('selects live machine state $expected.kind', ({ machines, expected }) => {
+        expect(classifyPodmanMachineState(machines)).toEqual(expected);
+    });
+
+    // Podman 6.1.4 on Windows, rootful machine: `machine list` reports Default false for it.
+    const rootfulConnections = JSON.stringify([
+        { Name: 'custom-vm', URI: 'ssh://user@127.0.0.1:65532/run/user/1000/podman/podman.sock', Default: false },
+        { Name: 'custom-vm-root', URI: 'ssh://root@127.0.0.1:65532/run/podman/podman.sock', Default: true },
+    ]);
+
+    it('reads the default connection name', () => {
+        expect(parsePodmanDefaultConnection(rootfulConnections)).toBe('custom-vm-root');
+    });
+
+    it.each(['not json', 'null', '{}', '[]', '[null]', '[{"Name":"vm","Default":false}]', '[{"Default":true}]'])(
+        'finds no default connection in %s',
+        (output) => {
+            expect(parsePodmanDefaultConnection(output)).toBeUndefined();
+        },
+    );
+
+    it.each([
+        { connection: 'custom-vm-root', expected: { kind: 'stopped', name: 'custom-vm' } },
+        { connection: 'elsewhere', expected: { kind: 'ambiguous', names: ['custom-vm', 'other'] } },
+        { connection: undefined, expected: { kind: 'ambiguous', names: ['custom-vm', 'other'] } },
+    ])('targets the rootful machine behind default connection $connection', ({ connection, expected }) => {
+        expect(classifyPodmanMachineState([stopped, { ...stopped, name: 'other' }], connection)).toEqual(expected);
+    });
+});
 
 function readFixture(name: string): string {
     return fs.readFileSync(path.join(__dirname, '__fixtures__', 'docker', name), 'utf8');
 }
+
+describe('Podman target from the dialled address', () => {
+    const cannotConnect = 'Cannot connect to Podman. Please verify your connection to the Linux system.\n';
+    it.each([
+        {
+            name: 'a Windows machine from WSL',
+            environment: 'wsl',
+            stderr: 'Error: unable to connect to Podman socket: failed to connect: dial unix /mnt/wsl/podman-sockets/podman-machine-default/podman-user.sock: connect: no such file or directory',
+            target: { kind: 'windowsMachineFromWsl', name: 'podman-machine-default' },
+        },
+        {
+            name: 'the rootless user socket',
+            environment: 'linux',
+            stderr: 'Error: unable to connect to Podman socket: dial unix /run/user/1000/podman/podman.sock: connect: connection refused',
+            target: { kind: 'userSocket' },
+        },
+        {
+            name: 'the root socket',
+            environment: 'wsl',
+            stderr: 'Error: unable to connect to Podman socket: dial unix /run/podman/podman.sock: connect: permission denied',
+            target: { kind: 'local' },
+        },
+        {
+            name: 'a machine on 127.0.0.1',
+            environment: 'macos',
+            stderr: 'Error: unable to connect to Podman socket: failed to connect: dial tcp 127.0.0.1:63483: connect: connection refused',
+            target: { kind: 'local' },
+        },
+        {
+            name: 'another host',
+            environment: 'macos',
+            stderr: 'Error: unable to connect to Podman socket: failed to connect: dial tcp 10.0.0.5:22: i/o timeout',
+            target: { kind: 'remote' },
+        },
+        {
+            name: 'an IPv6 host',
+            environment: 'linux',
+            stderr: 'Error: unable to connect to Podman socket: dial tcp [fd00::5]:22: connect: no route to host',
+            target: { kind: 'remote' },
+        },
+        {
+            name: 'an unresolvable host',
+            environment: 'wsl',
+            stderr: 'Error: unable to connect to Podman socket: dial tcp: lookup podman.example on 10.255.255.254:53: no such host',
+            target: { kind: 'remote' },
+        },
+        { name: 'no address', environment: 'linux', stderr: 'Error: unexpected', target: { kind: 'unknown' } },
+    ] as const)('classifies $name', ({ environment, stderr, target }) => {
+        expect(classifyPodmanTarget(parsePodmanDialTarget(cannotConnect + stderr), environment)).toEqual(target);
+    });
+
+    it('treats the WSL machine socket path outside WSL as merely local', () => {
+        const dial = parsePodmanDialTarget(
+            'dial unix /mnt/wsl/podman-sockets/podman-machine-default/podman-user.sock: connect: refused',
+        );
+        expect(classifyPodmanTarget(dial, 'linux')).toEqual({ kind: 'local' });
+    });
+
+    it('never puts an unsafe machine name into a target', () => {
+        const dial = parsePodmanDialTarget('dial unix /mnt/wsl/podman-sockets/-vm/podman-user.sock: connect: refused');
+        expect(classifyPodmanTarget(dial, 'wsl')).toEqual({ kind: 'local' });
+    });
+});
+
+describe('classifyContainerEngine', () => {
+    it.each([
+        {
+            name: 'installed selected Podman CLI',
+            input: { cli: 'podman' },
+            engine: 'podman',
+            engineEvidence: 'selectedCli',
+        },
+        {
+            name: 'verified Podman info',
+            input: { podmanInfo: true },
+            engine: 'podman',
+            engineEvidence: 'podmanInfo',
+        },
+        {
+            name: 'Podman shim version stdout',
+            input: { cliVersionStdout: 'podman version 6.0.2\n' },
+            engine: 'podman',
+            engineEvidence: 'podmanShim',
+        },
+        {
+            name: 'Podman shim version stderr',
+            input: {
+                cliVersionStderr: 'Emulate Docker CLI using podman. Create /etc/containers/nodocker to quiet msg.\n',
+            },
+            engine: 'podman',
+            engineEvidence: 'podmanShim',
+        },
+        {
+            name: 'Podman server component',
+            input: { serverComponentNames: ['Podman Engine'] },
+            engine: 'podman',
+            engineEvidence: 'serverComponents',
+        },
+        {
+            name: 'Docker Desktop daemon info',
+            input: { daemonOperatingSystem: 'Docker Desktop' },
+            engine: 'docker',
+            engineEvidence: 'dockerDesktopInfo',
+        },
+        {
+            name: 'Docker server component',
+            input: { serverComponentNames: ['Engine', 'containerd', 'runc', 'docker-init'] },
+            engine: 'docker',
+            engineEvidence: 'serverComponents',
+        },
+        {
+            name: 'Podman endpoint inference',
+            input: { endpointAddress: 'unix:///run/user/1000/podman/podman.sock' },
+            engine: 'unknown',
+            engineEvidence: 'endpointPath',
+        },
+        {
+            name: 'Podman socket link inference',
+            input: { dockerSocketTarget: '/run/podman/podman.sock' },
+            engine: 'unknown',
+            engineEvidence: 'dockerSocketLink',
+        },
+    ] as const)('classifies $name', ({ input, engine, engineEvidence }) => {
+        expect(classifyContainerEngine({ cli: 'docker', cliInstalled: true, ...input })).toEqual({
+            engine,
+            engineEvidence,
+        });
+    });
+
+    it.each([
+        {
+            name: 'selected CLI before info',
+            input: { cli: 'podman', podmanInfo: true },
+            engine: 'podman',
+            engineEvidence: 'selectedCli',
+        },
+        {
+            name: 'info before shim output',
+            input: { podmanInfo: true, cliVersionStdout: 'podman version 6.0.2' },
+            engine: 'podman',
+            engineEvidence: 'podmanInfo',
+        },
+        {
+            name: 'shim before Docker server component',
+            input: { cliVersionStderr: 'Emulate Docker CLI using podman', serverComponentNames: ['Engine'] },
+            engine: 'podman',
+            engineEvidence: 'podmanShim',
+        },
+        {
+            name: 'Podman component before Docker Desktop',
+            input: { serverComponentNames: ['Engine', 'Podman Engine'], daemonOperatingSystem: 'Docker Desktop' },
+            engine: 'podman',
+            engineEvidence: 'serverComponents',
+        },
+        {
+            name: 'Docker Desktop before Docker component',
+            input: { daemonOperatingSystem: 'Docker Desktop', serverComponentNames: ['Engine'] },
+            engine: 'docker',
+            engineEvidence: 'dockerDesktopInfo',
+        },
+        {
+            name: 'positive Docker evidence before endpoint inference',
+            input: { serverComponentNames: ['Engine'], endpointAddress: 'unix:///run/podman/podman.sock' },
+            engine: 'docker',
+            engineEvidence: 'serverComponents',
+        },
+        {
+            name: 'endpoint inference before socket link inference',
+            input: {
+                endpointAddress: 'npipe:////./pipe/podman-machine-default',
+                dockerSocketTarget: '/run/podman.sock',
+            },
+            engine: 'unknown',
+            engineEvidence: 'endpointPath',
+        },
+    ] as const)('prefers $name', ({ input, engine, engineEvidence }) => {
+        expect(classifyContainerEngine({ cli: 'docker', cliInstalled: true, ...input })).toEqual({
+            engine,
+            engineEvidence,
+        });
+    });
+
+    it.each([
+        { name: 'selected Docker CLI alone', input: {} },
+        { name: 'missing selected Podman CLI', input: { cli: 'podman', cliInstalled: false } },
+        { name: 'unverified Podman info', input: { podmanInfo: false } },
+        { name: 'Docker client version alone', input: { cliVersionStdout: 'Docker version 28.1.1' } },
+        {
+            name: 'Podman mentioned later in stdout',
+            input: { cliVersionStdout: 'Client connected to podman version 6.0.2' },
+        },
+        { name: 'generic Podman error', input: { cliVersionStderr: 'Cannot connect to Podman' } },
+        { name: 'ambiguous server components', input: { serverComponentNames: ['My Podman Engine', 'containerd'] } },
+        { name: 'generic daemon OS', input: { daemonOperatingSystem: 'Ubuntu 24.04' } },
+        { name: 'non-Desktop daemon OS', input: { daemonOperatingSystem: 'NotDocker Desktop' } },
+        { name: 'Docker socket path', input: { endpointAddress: '/var/run/docker.sock' } },
+    ] satisfies ReadonlyArray<{ name: string; input: Partial<ContainerEngineInput> }>)(
+        'makes no engine claim for $name',
+        ({ input }) => {
+            expect(classifyContainerEngine({ cli: 'docker', cliInstalled: true, ...input })).toEqual({
+                engine: 'unknown',
+                engineEvidence: 'none',
+            });
+        },
+    );
+});
 
 describe('classifyDockerFailure', () => {
     it('classifies the reported Ubuntu socket EACCES as permission denied', () => {
@@ -58,6 +368,23 @@ describe('classifyDockerFailure', () => {
             accessErrorCode,
             source: 'platformDefault',
         };
+
+        expect(classifyDockerFailure({ infoProbe, endpointProbe })).toEqual({
+            failureKind: 'daemonUnavailable',
+            outcome: 'diagnosed',
+        });
+    });
+
+    it('reads a stopped Podman machine from its stderr when the Docker socket still answers', () => {
+        const infoProbe: DockerProbeEvidence = {
+            probe: 'info',
+            exitCode: 125,
+            stdout: '',
+            stderr: 'Cannot connect to Podman. Please verify your connection to the Linux system using `podman system connection list`',
+            endedBy: 'exit',
+            durationMs: 10,
+        };
+        const endpointProbe = { kind: 'unixSocket', source: 'platformDefault' } as const;
 
         expect(classifyDockerFailure({ infoProbe, endpointProbe })).toEqual({
             failureKind: 'daemonUnavailable',
@@ -221,6 +548,26 @@ describe('classifyDockerProvider', () => {
     });
 
     it.each([
+        {
+            name: 'live positively identified Podman daemon',
+            evidence: {
+                environment: 'linux',
+                daemonReachable: true,
+                engine: 'podman',
+                daemonOperatingSystem: 'Ubuntu 24.04',
+            },
+            expected: { provider: 'podman', providerEvidence: 'liveDaemon' },
+        },
+        {
+            name: 'live Podman daemon without Docker OS metadata',
+            evidence: { environment: 'macos', daemonReachable: true, engine: 'podman' },
+            expected: { provider: 'podman', providerEvidence: 'liveDaemon' },
+        },
+        {
+            name: 'unreachable Podman without live provider evidence',
+            evidence: { environment: 'linux', daemonReachable: false, engine: 'podman' },
+            expected: { provider: 'unknown', providerEvidence: 'none' },
+        },
         {
             name: 'live Docker Desktop daemon',
             evidence: { environment: 'macos', daemonReachable: true, daemonOperatingSystem: 'Docker Desktop' },

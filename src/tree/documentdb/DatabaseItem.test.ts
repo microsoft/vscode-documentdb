@@ -132,6 +132,16 @@ describe('DatabaseItem - async collection count loading', () => {
         expect(desc).not.toContain('+');
     });
 
+    // Commands on a collection of a discovered cluster join the cluster's discovery journey.
+    it('passes its discovery journey to the collections it lists', async () => {
+        const item = new DatabaseItem(cluster, databaseInfo);
+        item.journeyCorrelationId = 'journey-1';
+
+        const children = (await item.getChildren()) as Array<{ journeyCorrelationId?: string }>;
+
+        expect(children.map((child) => child.journeyCorrelationId)).toEqual(['journey-1', 'journey-1', 'journey-1']);
+    });
+
     it('includes collection count in tooltip when loaded', async () => {
         const item = new DatabaseItem(cluster, databaseInfo);
 

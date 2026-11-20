@@ -5,8 +5,10 @@
 
 import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 import { randomUUID } from 'crypto';
+import { trackDeepLinkTelemetry, type DeepLinkTelemetry } from '../../../deepLinks/deepLinkTelemetry';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import {
+    type ProvisionStage,
     type QuickStartWizardPhase,
     type QuickStartWizardStepTrigger,
 } from '../../../services/localQuickStart/quickStartTypes';
@@ -16,6 +18,7 @@ import {
  * so a journey can be followed step by step and its exit point found.
  */
 export interface QuickStartWizardSession {
+    readonly deepLink?: DeepLinkTelemetry;
     readonly id: string;
     readonly openedAt: number;
     readonly initialPhase: QuickStartWizardPhase;
@@ -24,6 +27,8 @@ export interface QuickStartWizardSession {
     stepChangeCount: number;
     setupAttemptCount: number;
     waitLongerCount: number;
+    readonly detailsOpenedStages: Set<Exclude<ProvisionStage, 'done' | 'error'>>;
+    detailsOpenCount: number;
     setupSucceeded: boolean;
     closeReason?: 'closeButton';
 }
@@ -32,8 +37,10 @@ export function createWizardSession(
     id: string | undefined,
     initialPhase: QuickStartWizardPhase = 'introduction',
     now: number = Date.now(),
+    deepLink?: DeepLinkTelemetry,
 ): QuickStartWizardSession {
     return {
+        deepLink,
         id: id ?? randomUUID(),
         openedAt: now,
         initialPhase,
@@ -42,8 +49,18 @@ export function createWizardSession(
         stepChangeCount: 0,
         setupAttemptCount: 0,
         waitLongerCount: 0,
+        detailsOpenedStages: new Set(),
+        detailsOpenCount: 0,
         setupSucceeded: false,
     };
+}
+
+export function reportWizardDetailsOpened(
+    session: QuickStartWizardSession,
+    stage: Exclude<ProvisionStage, 'done' | 'error'>,
+): void {
+    session.detailsOpenedStages.add(stage);
+    session.detailsOpenCount++;
 }
 
 /** Record a move to another phase as `documentDB.quickstart.wizard.step`. Repeats of the current phase are ignored. */
@@ -64,6 +81,7 @@ export function reportWizardStep(
     const stepChangeIndex = session.stepChangeCount;
 
     void callWithTelemetryAndErrorHandling('documentDB.quickstart.wizard.step', (context) => {
+        trackDeepLinkTelemetry(context, session.deepLink);
         context.errorHandling.suppressDisplay = true;
         context.telemetry.properties.quickStartSessionId = session.id;
         context.telemetry.properties.fromStep = from;
@@ -78,6 +96,7 @@ export function reportWizardStep(
 /** Record where the journey ended as `documentDB.quickstart.wizard.close`. */
 export function reportWizardClosed(session: QuickStartWizardSession, now: number = Date.now()): void {
     void callWithTelemetryAndErrorHandling('documentDB.quickstart.wizard.close', (context) => {
+        trackDeepLinkTelemetry(context, session.deepLink);
         context.errorHandling.suppressDisplay = true;
         context.telemetry.properties.quickStartSessionId = session.id;
         context.telemetry.properties.initialStep = session.initialPhase;
@@ -85,11 +104,13 @@ export function reportWizardClosed(session: QuickStartWizardSession, now: number
         context.telemetry.properties.closeReason = session.closeReason ?? 'panelClosed';
         context.telemetry.properties.setupSucceeded = session.setupSucceeded ? 'true' : 'false';
         context.telemetry.properties.instanceState = QuickStartService.getStatus().state;
+        context.telemetry.properties.detailsOpenedStages = [...session.detailsOpenedStages].sort().join(',') || 'none';
         // The event closes a session, so its own duration says nothing; this is the time the panel was open.
         context.telemetry.measurements.sessionDurationMs = now - session.openedAt;
         context.telemetry.measurements.timeOnLastStepMs = now - session.phaseEnteredAt;
         context.telemetry.measurements.stepChangeCount = session.stepChangeCount;
         context.telemetry.measurements.setupAttemptCount = session.setupAttemptCount;
         context.telemetry.measurements.waitLongerCount = session.waitLongerCount;
+        context.telemetry.measurements.detailsOpenCount = session.detailsOpenCount;
     });
 }

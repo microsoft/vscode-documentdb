@@ -14,22 +14,32 @@
  *   chunk splits it across a buffer boundary. Inspect stdout is the exception:
  *   it carries the container env, so it is not echoed at all.
  * - `docker run` is detached (D4); because a detached run streams nothing back,
- *   {@link ContainerRuntime.followLogs} streams `docker logs -f` so the channel
+ *   {@link IContainerEngineOps.followLogs} streams `docker logs -f` so the channel
  *   isn't silent during the readiness wait.
  * - Credentials reach the container through a temp `--env-file`, never argv.
  */
 
 import {
-    DockerClient,
+    type DockerClient,
     type InspectContainersItem,
     type Like,
     type ListContainersItem,
+    type PodmanClient,
     ShellStreamCommandRunnerFactory,
 } from '@microsoft/vscode-container-client';
 import { type Shell, type ShellQuotedString, ShellQuoting } from '@microsoft/vscode-processutils';
 import * as net from 'net';
 import { Writable } from 'stream';
 import * as vscode from 'vscode';
+import { meterSilentCatch as meterQuickStartSilentCatch } from '../../utils/accumulatingTelemetry';
+import {
+    type ContainerEngineRequest,
+    createContainerClient,
+    findOnPath,
+    resolveContainerCli,
+    type ResolvedContainerCli,
+    resolvePinnedContainerCli,
+} from './containerCli';
 import { type DockerCommandResponse, getDockerShellProvider, runDockerCommand } from './dockerCommand';
 import { CapturingTeeWritable } from './dockerProbes';
 import { startDockerProvider as launchDockerProvider } from './DockerProviderLauncher';
@@ -39,8 +49,25 @@ import {
     type DockerLaunchResult,
     type DockerReadiness,
     type DockerReadinessRequest,
+    type DockerStartAction,
+    type ImagePullOutcome,
     QUICK_START_PORT,
 } from './quickStartTypes';
+
+/**
+ * Read one line of `docker pull` output. Both the classic and the containerd image store end a
+ * pull with one of these two status lines; other lines (and other CLIs such as Podman, or a changed
+ * wording) tell nothing, so the pull's outcome stays unknown.
+ */
+export function classifyImagePullLine(line: string): ImagePullOutcome | undefined {
+    if (/^Status: Downloaded newer image for /i.test(line.trim())) {
+        return 'downloaded';
+    }
+    if (/^Status: Image is up to date for /i.test(line.trim())) {
+        return 'upToDate';
+    }
+    return undefined;
+}
 
 /**
  * Shell used to run docker commands. A shell provider is REQUIRED so the runner
@@ -89,9 +116,12 @@ export function disposeQuickStartOutputChannel(): void {
 class MaskedChannelWritable extends Writable {
     private readonly lineBuffer: MaskingLineBuffer;
 
-    constructor(channel: vscode.OutputChannel, secrets: ReadonlyArray<string>) {
+    constructor(channel: vscode.OutputChannel, secrets: ReadonlyArray<string>, onLine?: (line: string) => void) {
         super();
-        this.lineBuffer = new MaskingLineBuffer((line) => channel.appendLine(line), secrets);
+        this.lineBuffer = new MaskingLineBuffer((line) => {
+            channel.appendLine(line);
+            onLine?.(line);
+        }, secrets);
     }
 
     public override _write(chunk: unknown, _encoding: BufferEncoding, callback: (error?: Error | null) => void): void {
@@ -120,6 +150,13 @@ export interface CreateContainerOptions {
     readonly command?: ReadonlyArray<string>;
 }
 
+export interface RuntimeImageFacts {
+    readonly id: string;
+    readonly digest?: string;
+    readonly version?: string;
+    readonly createdAtMs?: number;
+}
+
 /**
  * IO surface of the Docker-backed runtime (WI-0). Extracted so {@link QuickStartService}
  * can be unit-tested against a mock runtime with no real Docker daemon. The pure inspectors
@@ -128,8 +165,24 @@ export interface CreateContainerOptions {
  */
 export interface IContainerRuntime {
     isDockerReady(request?: DockerReadinessRequest): Promise<DockerReadiness>;
+    /** `expectedAction` is the action the button named; a check that now selects another one launches nothing. */
+    startAvailableDockerProvider(
+        request: ContainerEngineRequest,
+        expectedAction?: DockerStartAction,
+    ): Promise<DockerLaunchResult>;
     isPortFree(port?: number): Promise<boolean>;
-    pullImage(imageRef: string, token?: vscode.CancellationToken): Promise<void>;
+    resolveCli(request: ContainerEngineRequest): ResolvedContainerCli;
+    forCli(resolved: Pick<ResolvedContainerCli, 'cli' | 'executable'>): IContainerEngineOps;
+}
+
+export interface IContainerEngineOps {
+    pullImage(imageRef: string, token?: vscode.CancellationToken, onProgress?: (line: string) => void): Promise<void>;
+    /** `digest` is the one listed for `repository`, by default `imageRef`'s own; an image ID has none. */
+    inspectImage(
+        imageRef: string,
+        token?: vscode.CancellationToken,
+        repository?: string,
+    ): Promise<RuntimeImageFacts | 'absent' | undefined>;
     createAndRunContainer(
         options: CreateContainerOptions,
         secrets: ReadonlyArray<string>,
@@ -167,14 +220,14 @@ export interface IContainerRuntime {
 }
 
 /**
- * Stateless wrapper around a single Docker {@link DockerClient}. Each call
- * builds a fresh runner so its line-buffered stdout/stderr writables don't leak state
- * between commands.
+ * Stateless wrapper around the Docker or Podman CLI. Each call builds a fresh runner so its
+ * line-buffered stdout/stderr writables don't leak state between commands.
  */
 class ContainerRuntimeImpl implements IContainerRuntime {
-    private readonly client = new DockerClient();
+    private readonly engines = new Map<string, ContainerEngineOps>();
     private readonly readinessService = new DockerReadinessService({
-        client: this.client,
+        getClient: (resolved) => this.engineFor(resolved).client,
+        getCliOnPath: (resolved) => resolved.onPath,
         shellProvider: SHELL_PROVIDER,
         createProbeOutput: () => {
             const channel = getQuickStartOutputChannel();
@@ -186,6 +239,89 @@ class ContainerRuntimeImpl implements IContainerRuntime {
             };
         },
     });
+
+    public resolveCli(request: ContainerEngineRequest): ResolvedContainerCli {
+        return request.kind === 'pinned'
+            ? resolvePinnedContainerCli(request.cli)
+            : resolveContainerCli(request.preferred);
+    }
+
+    private engineFor(resolved: Pick<ResolvedContainerCli, 'cli' | 'executable'>): ContainerEngineOps {
+        const key = `${resolved.cli}|${resolved.executable}`;
+        let engine = this.engines.get(key);
+        if (!engine) {
+            engine = new ContainerEngineOps(createContainerClient(resolved));
+            this.engines.set(key, engine);
+        }
+        return engine;
+    }
+
+    public forCli(resolved: Pick<ResolvedContainerCli, 'cli' | 'executable'>): IContainerEngineOps {
+        return this.engineFor(resolved);
+    }
+
+    public isDockerReady(request?: DockerReadinessRequest): Promise<DockerReadiness> {
+        return this.readinessService.getReadiness(request);
+    }
+
+    public async startAvailableDockerProvider(
+        request: ContainerEngineRequest,
+        expectedAction?: DockerStartAction,
+    ): Promise<DockerLaunchResult> {
+        const readiness = await this.readinessService.getReadiness({ engine: request, forceRefresh: true });
+        if (readiness.outcome === 'ready') {
+            // The engine came up between showing the button and the click; the caller's poll confirms it.
+            return 'started';
+        }
+        if (expectedAction && readiness.startAction && readiness.startAction !== expectedAction) {
+            // A fresh run re-resolves the preference, so a CLI installed since the check can select another engine.
+            getQuickStartOutputChannel().appendLine(
+                `[readiness] start action changed from ${expectedAction} to ${readiness.startAction}; nothing was started`,
+            );
+            return 'notAvailable';
+        }
+        if (!readiness.startAction) {
+            if (readiness.podmanMachine?.kind === 'running') {
+                return 'started';
+            }
+            if (readiness.podmanMachine?.kind === 'starting') {
+                return 'launchAttempted';
+            }
+            return 'notAvailable';
+        }
+        const result =
+            readiness.startAction === 'startPodmanMachine'
+                ? await launchDockerProvider(
+                      readiness.startAction,
+                      { onOutput: (output) => getQuickStartOutputChannel().appendLine(sanitizeOutput(output, [])) },
+                      {
+                          environment: readiness.environment,
+                          provider: 'podman',
+                          providerEvidence: 'none',
+                          podmanExecutable: findOnPath('podman'),
+                      },
+                  )
+                : await launchDockerProvider(readiness.startAction);
+        await this.readinessService.recordLaunchResult(
+            result,
+            readiness.startAction === 'startPodmanMachine' ? 'podman' : (readiness.cli ?? 'docker'),
+        );
+        return result;
+    }
+
+    /** True if the TCP port can be bound on loopback right now (pre-check, design §8.3). */
+    public isPortFree(port: number = QUICK_START_PORT): Promise<boolean> {
+        return new Promise<boolean>((resolve) => {
+            const server = net.createServer();
+            server.once('error', () => resolve(false));
+            server.once('listening', () => server.close(() => resolve(true)));
+            server.listen(port, '127.0.0.1');
+        });
+    }
+}
+
+class ContainerEngineOps implements IContainerEngineOps {
+    public constructor(public readonly client: DockerClient | PodmanClient) {}
 
     private makeRunner(
         secrets: ReadonlyArray<string>,
@@ -216,46 +352,93 @@ class ContainerRuntimeImpl implements IContainerRuntime {
         secrets: ReadonlyArray<string> = [],
         token?: vscode.CancellationToken,
         timeoutMs?: number,
+        onLine?: (line: string) => void,
     ): Promise<T | undefined> {
         const channel = getQuickStartOutputChannel();
         return runDockerCommand(command, {
             shellProvider: SHELL_PROVIDER,
             secrets,
             onCommand: (commandLine: string) => channel.appendLine('$ ' + maskSecrets(commandLine, secrets)),
-            stdOutPipe: new MaskedChannelWritable(channel, secrets),
-            stdErrPipe: new MaskedChannelWritable(channel, secrets),
+            stdOutPipe: new MaskedChannelWritable(channel, secrets, onLine),
+            stdErrPipe: new MaskedChannelWritable(channel, secrets, onLine),
             cancellationToken: token,
             timeoutMs,
         });
     }
 
-    /** CLI-on-PATH + daemon-reachable check (design §9 prereq cards). */
-    public isDockerReady(request?: DockerReadinessRequest): Promise<DockerReadiness> {
-        return this.readinessService.getReadiness(request);
+    public async pullImage(
+        imageRef: string,
+        token?: vscode.CancellationToken,
+        onProgress?: (line: string) => void,
+    ): Promise<void> {
+        await this.runCommand(this.client.pullImage({ imageRef }), [], token, undefined, onProgress);
     }
 
-    public async startAvailableDockerProvider(): Promise<DockerLaunchResult> {
-        const readiness = await this.readinessService.getReadiness({ forceRefresh: true });
-        if (!readiness.startAction) {
-            return 'notAvailable';
+    public async inspectImage(
+        imageRef: string,
+        token?: vscode.CancellationToken,
+        repository: string = imageRef.split('@')[0].replace(/:[^/:]+$/, ''),
+    ): Promise<RuntimeImageFacts | 'absent' | undefined> {
+        const bounds = {
+            shellProvider: SHELL_PROVIDER,
+            cancellationToken: token,
+            timeoutMs: POLLED_QUERY_TIMEOUT_MS,
+        };
+        try {
+            const command = await this.client.inspectImages({ imageRefs: [imageRef] });
+            const items = await runDockerCommand(
+                { ...command, parse: (output) => command.parse(output, true) },
+                bounds,
+            );
+            const item = items?.[0];
+            if (item) {
+                const parsed: unknown = JSON.parse(item.raw);
+                const isRecord = (value: unknown): value is Record<string, unknown> =>
+                    typeof value === 'object' && value !== null && !Array.isArray(value);
+                const record: unknown = Array.isArray(parsed)
+                    ? parsed.find((value: unknown) => isRecord(value) && value.Id === item.id)
+                    : parsed;
+                const created = isRecord(record) && record.Id === item.id ? record.Created : undefined;
+                const createdAtMs = typeof created === 'string' ? Date.parse(created) : NaN;
+                // Podman empties RepoDigests once the tag moves on, but keeps the pulled digest and past names.
+                const pulledFrom =
+                    isRecord(record) &&
+                    record.Id === item.id &&
+                    typeof record.Digest === 'string' &&
+                    Array.isArray(record.NamesHistory) &&
+                    record.NamesHistory.some(
+                        (name: unknown) =>
+                            typeof name === 'string' && name.split('@')[0].replace(/:[^/:]+$/, '') === repository,
+                    )
+                        ? record.Digest
+                        : undefined;
+                const digest =
+                    item.repoDigests.find((value) => value.split('@')[0] === repository)?.split('@')[1] ?? pulledFrom;
+                const version = item.labels['org.opencontainers.image.version'];
+                return {
+                    id: item.id,
+                    digest,
+                    version: version && version.length <= 64 ? version : undefined,
+                    // The client turns a missing Created into today's date; only trust the source field.
+                    createdAtMs:
+                        Number.isFinite(createdAtMs) && createdAtMs >= Date.UTC(2000, 0, 1) ? createdAtMs : undefined,
+                };
+            }
+        } catch {
+            meterQuickStartSilentCatch('quickStart_inspectImage');
         }
-        const result = await launchDockerProvider(readiness.startAction);
-        await this.readinessService.recordLaunchResult(result);
-        return result;
-    }
-
-    /** True if the TCP port can be bound on loopback right now (pre-check, design §8.3). */
-    public isPortFree(port: number = QUICK_START_PORT): Promise<boolean> {
-        return new Promise<boolean>((resolve) => {
-            const server = net.createServer();
-            server.once('error', () => resolve(false));
-            server.once('listening', () => server.close(() => resolve(true)));
-            server.listen(port, '127.0.0.1');
-        });
-    }
-
-    public async pullImage(imageRef: string, token?: vscode.CancellationToken): Promise<void> {
-        await this.runCommand(this.client.pullImage({ imageRef }), [], token);
+        try {
+            const command = await this.client.listImages({ references: [imageRef] });
+            const items = await runDockerCommand(
+                { ...command, parse: (output) => command.parse(output, true) },
+                bounds,
+            );
+            // Reference filters cannot reliably prove absence for a digest reference.
+            return items?.length === 0 && !imageRef.includes('@') ? 'absent' : undefined;
+        } catch {
+            meterQuickStartSilentCatch('quickStart_inspectImage_listImages');
+            return undefined;
+        }
     }
 
     /** `docker run` detached, returning the new container id. */
@@ -488,14 +671,26 @@ export function hasExited(item: InspectContainersItem): boolean {
     return status === 'exited' || status === 'dead';
 }
 
-/** The exit code Docker recorded for a stopped container; the normalized item omits it. */
-export function getExitCode(item: InspectContainersItem): number | undefined {
+interface RawInspectRecord {
+    readonly Id?: unknown;
+    readonly State?: { ExitCode?: unknown };
+    readonly HostConfig?: { PortBindings?: Record<string, Array<{ HostPort?: unknown }> | null> };
+}
+
+/** Docker's `raw` is this container's record; Podman's is the whole inspect array. */
+function readRawInspect(item: InspectContainersItem): RawInspectRecord | undefined {
     try {
-        const raw = JSON.parse(item.raw) as { State?: { ExitCode?: unknown } };
-        return typeof raw.State?.ExitCode === 'number' ? raw.State.ExitCode : undefined;
+        const parsed = JSON.parse(item.raw) as RawInspectRecord | RawInspectRecord[];
+        return Array.isArray(parsed) ? (parsed.find((record) => record.Id === item.id) ?? parsed[0]) : parsed;
     } catch {
         return undefined;
     }
+}
+
+/** The exit code Docker recorded for a stopped container; the normalized item omits it. */
+export function getExitCode(item: InspectContainersItem): number | undefined {
+    const exitCode = readRawInspect(item)?.State?.ExitCode;
+    return typeof exitCode === 'number' ? exitCode : undefined;
 }
 
 /** The host port a container was published on. Unlike {@link getBoundHostPort}, also known while it is stopped. */
@@ -503,15 +698,8 @@ export function getPublishedHostPort(
     item: InspectContainersItem,
     containerPort: number = QUICK_START_PORT,
 ): number | undefined {
-    try {
-        const raw = JSON.parse(item.raw) as {
-            HostConfig?: { PortBindings?: Record<string, Array<{ HostPort?: unknown }> | null> };
-        };
-        const hostPort = Number(raw.HostConfig?.PortBindings?.[`${containerPort}/tcp`]?.[0]?.HostPort);
-        return Number.isInteger(hostPort) && hostPort > 0 ? hostPort : undefined;
-    } catch {
-        return undefined;
-    }
+    const hostPort = Number(readRawInspect(item)?.HostConfig?.PortBindings?.[`${containerPort}/tcp`]?.[0]?.HostPort);
+    return Number.isInteger(hostPort) && hostPort > 0 ? hostPort : undefined;
 }
 
 /** Singleton Docker-backed runtime; the default injected into {@link QuickStartService} (WI-0). */
@@ -521,6 +709,9 @@ export const ContainerRuntime: IContainerRuntime = containerRuntime;
 /**
  * Recompute provider capability and revalidate the selected action immediately before launch.
  */
-export async function startDockerProvider(): Promise<DockerLaunchResult> {
-    return containerRuntime.startAvailableDockerProvider();
+export async function startDockerProvider(
+    request: ContainerEngineRequest = { kind: 'preferred', preferred: 'docker' },
+    expectedAction?: DockerStartAction,
+): Promise<DockerLaunchResult> {
+    return containerRuntime.startAvailableDockerProvider(request, expectedAction);
 }

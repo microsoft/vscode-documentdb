@@ -5,6 +5,8 @@
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import { l10n, window } from 'vscode';
+import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import { evaluateEntraDestinationFromSettings } from '../../documentdb/auth/entraDestinationSettings';
 import { areAllHostsLocal, canonicalizeTlsException } from '../../documentdb/utils/tlsException';
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
@@ -46,7 +48,26 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCSWizardContext> {
                 connectionString: canonicalTls.connectionString,
             };
 
+            let clearedEntraMethod = false;
             if (isConnection(connection)) {
+                const entraAllowed = evaluateEntraDestinationFromSettings(canonicalTls.connectionString).allowed;
+                connection.properties.availableAuthMethods = entraAllowed
+                    ? [
+                          AuthMethodId.NativeAuth,
+                          AuthMethodId.MicrosoftEntraID,
+                          AuthMethodId.ManagedIdentity,
+                          AuthMethodId.NoAuth,
+                      ]
+                    : [AuthMethodId.NativeAuth, AuthMethodId.NoAuth];
+                if (
+                    !entraAllowed &&
+                    (connection.properties.selectedAuthMethod === AuthMethodId.MicrosoftEntraID ||
+                        connection.properties.selectedAuthMethod === AuthMethodId.ManagedIdentity)
+                ) {
+                    connection.properties.selectedAuthMethod = undefined;
+                    clearedEntraMethod = true;
+                }
+
                 // Host-gate BOTH emulator flags against the EDITED hosts. Editing a local emulator or
                 // TLS-exception connection to a public/mixed host therefore CLEARS allow-invalid (so
                 // the public host validates certificates) AND clears `isEmulator` in storage — neither
@@ -65,8 +86,17 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCSWizardContext> {
             }
 
             await ConnectionStorageService.save(resourceType, connection, true);
+            context.connectionStringSaved = true;
 
-            showConfirmationAsInSettings(l10n.t('Connection updated successfully.'));
+            if (clearedEntraMethod) {
+                void window.showInformationMessage(
+                    l10n.t(
+                        "Connection updated. Microsoft Entra ID isn't available for the new server, so choose another method when you connect.",
+                    ),
+                );
+            } else {
+                showConfirmationAsInSettings(l10n.t('Connection updated successfully.'));
+            }
         } catch (pushError) {
             ext.outputChannel.error(l10n.t('Failed to update connection: {0}', String(pushError)));
             void window.showErrorMessage(l10n.t('Failed to update the connection.'));

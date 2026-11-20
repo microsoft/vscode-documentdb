@@ -19,6 +19,7 @@ export const defaultStatusLabels: Readonly<Record<StatusListItemStatus, string>>
     done: 'done',
     error: 'failed',
     warning: 'warning',
+    skipped: 'skipped',
 };
 
 export const StatusLabelsContext = createContext<Readonly<Record<StatusListItemStatus, string>>>(defaultStatusLabels);

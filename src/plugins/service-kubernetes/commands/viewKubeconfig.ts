@@ -63,7 +63,7 @@ export function registerInlineKubeconfigContentProvider(): vscode.Disposable {
  * it elsewhere, and re-adds the source via "Paste kubeconfig YAML from clipboard".
  *
  * File and default sources are backed by real on-disk files and use the
- * editable "Edit Kubeconfig" action instead.
+ * editable "Edit kubeconfig" action instead.
  */
 export async function viewKubeconfig(context: IActionContext, node: KubernetesKubeconfigSourceItem): Promise<void> {
     context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
@@ -76,7 +76,7 @@ export async function viewKubeconfig(context: IActionContext, node: KubernetesKu
     if (node.source.kind !== 'inline') {
         context.telemetry.properties.kubeconfigSourceResult = 'notAnInlineSource';
         void vscode.window.showWarningMessage(
-            vscode.l10n.t('Only pasted kubeconfig sources can be viewed. Use "Edit Kubeconfig" for file sources.'),
+            vscode.l10n.t('Only pasted kubeconfig sources can be viewed. Use "Edit kubeconfig" for file sources.'),
             { modal: true },
         );
         return;

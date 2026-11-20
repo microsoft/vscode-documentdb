@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "strict": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    // Version 3's ESM wrapper has no declarations; use the same CommonJS declarations as the host.
+    "paths": {
+      "mongodb-connection-string-url": ["../../node_modules/mongodb-connection-string-url/lib/index.d.ts"]
+    },
+    "sourceMap": true,
+    "inlineSources": true,
+    "types": ["node"]
+  },
+  "references": [{ "path": "../documentdb-js-srv-resolver" }],
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "src/**/*.test.ts", "src/test/**"]
+}

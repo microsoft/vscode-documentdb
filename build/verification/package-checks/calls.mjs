@@ -132,6 +132,14 @@ export const allChecks = {
         return 'rewriteSrvUri rewrote SRV and TXT records; resolver functions exported';
     },
 
+    '@documentdb-js/connection-diagnostics': async (load) => {
+        const m = await load('@documentdb-js/connection-diagnostics');
+        assert.ok(m.builtInFindingCodes.includes('tcp.refused'));
+        assert.equal(m.isBuiltInFindingCode('auth.failed'), false);
+        assert.equal(m.resolveTimeouts('default').runTimeoutMs, 300000);
+        return 'built-in finding codes include tcp.refused and exclude auth.failed; default run timeout is 300000 ms';
+    },
+
     '@microsoft/vscode-ext-webview': async (load) => {
         const m = await load('@microsoft/vscode-ext-webview');
         const { appRouter, createCallerFactory } = greetRouter(m);

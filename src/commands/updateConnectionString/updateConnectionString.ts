@@ -5,9 +5,12 @@
 
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { ClustersClient } from '../../documentdb/ClustersClient';
+import { CredentialCache } from '../../documentdb/CredentialCache';
 import { maskSensitiveValuesInTelemetry } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
+import { ext } from '../../extensionVariables';
 import { ConnectionStorageService } from '../../services/connectionStorageService';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
 import { resolveStorageZone } from '../../tree/connections-view/models/ConnectionClusterModel';
@@ -26,13 +29,14 @@ import { type UpdateCSWizardContext } from './UpdateCSWizardContext';
  * 3. ExecuteStep: Saves updated connection string to storage
  * 4. Post-wizard: Refreshes the view
  *
- * Note: This command does NOT prompt for reconnection or handle error node states.
- * Use updateCredentials command for error recovery scenarios.
+ * Only a successful destination-rejection recovery edit clears cached connection and error state.
+ * Other edits retain the existing connection lifecycle.
  */
 export async function updateConnectionString(context: IActionContext, node: DocumentDBClusterItem): Promise<void> {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
     }
+    const recoveringRejectedDestination = node.lastConnectionFailureReason === 'entraDestinationRejected';
 
     // Extract the connection string but hide the username and password
 
@@ -58,6 +62,7 @@ export async function updateConnectionString(context: IActionContext, node: Docu
         isEmulator: Boolean(node.cluster.emulatorConfiguration?.isEmulator),
         storageZone: resolveStorageZone(node.cluster),
         storageId: node.storageId,
+        connectionStringSaved: false,
     };
 
     const wizard = new AzureWizard(wizardContext, {
@@ -68,6 +73,14 @@ export async function updateConnectionString(context: IActionContext, node: Docu
 
     await wizard.prompt();
     await wizard.execute();
+
+    if (recoveringRejectedDestination && wizardContext.connectionStringSaved) {
+        await ClustersClient.deleteClient(node.cluster.clusterId);
+        CredentialCache.deleteCredentials(node.cluster.clusterId);
+        ext.connectionsBranchDataProvider.resetNodeErrorState(node.id);
+        node.lastConnectionFailureReason = undefined;
+        node.lastConnectionOutcome = undefined;
+    }
 
     await refreshView(context, Views.ConnectionsView);
 }

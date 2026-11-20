@@ -12,6 +12,7 @@ import {
     type MessageBarProps,
     MessageBarTitle,
 } from '@fluentui/react-components';
+import { ErrorCircleFilled, WarningRegular } from '@fluentui/react-icons';
 import { type JSX, type ReactNode } from 'react';
 
 const useStyles = makeStyles({
@@ -20,12 +21,31 @@ const useStyles = makeStyles({
     body: { display: 'flex', flexDirection: 'column', gap: '8px' },
 });
 
+/**
+ * House glyphs for the intents whose Fluent default reads differently from the rest of the product
+ * (Fluent uses a diamond for errors and a filled triangle for warnings). Success and info keep
+ * Fluent's own glyph.
+ */
+function houseIcon(intent: MessageBarIntent): MessageBarProps['icon'] {
+    switch (intent) {
+        case 'error':
+            return <ErrorCircleFilled />;
+        case 'warning':
+            return <WarningRegular />;
+        default:
+            return undefined;
+    }
+}
+
 export interface MessageBlockProps {
     /** @default 'info' */
     readonly intent?: MessageBarIntent;
     /** Rendered on its own line above the message. */
     readonly title?: ReactNode;
-    /** Overrides the glyph Fluent picks for {@link intent}. Fluent's own icon slot type. */
+    /**
+     * Overrides the glyph for {@link intent}. Errors default to `ErrorCircleFilled` and warnings to
+     * `WarningRegular`; other intents use Fluent's glyph. Fluent's own icon slot type.
+     */
     readonly icon?: MessageBarProps['icon'];
     /** Buttons, in reading order. */
     readonly actions?: ReactNode;
@@ -57,7 +77,7 @@ export const MessageBlock = ({ intent = 'info', title, icon, actions, children }
     const styles = useStyles();
 
     return (
-        <MessageBar intent={intent} layout="multiline" icon={icon}>
+        <MessageBar intent={intent} layout="multiline" icon={icon ?? houseIcon(intent)}>
             <MessageBarBody className={styles.body}>
                 {title !== undefined && <MessageBarTitle>{title}</MessageBarTitle>}
                 {children}

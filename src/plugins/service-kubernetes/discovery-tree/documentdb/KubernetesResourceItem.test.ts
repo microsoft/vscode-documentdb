@@ -3,10 +3,18 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { type CoreV1Api, type KubeConfig } from '@kubernetes/client-node';
 import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
+import * as vscode from 'vscode';
+import { classifyResolutionFailure } from '../../../../connectionDiagnostics/checks/resolveTarget';
 import { ext } from '../../../../extensionVariables';
+import {
+    ConnectionEndpointUnavailableError,
+    ConnectionSourceUnavailableError,
+} from '../../../../tree/documentdb/diagnosticCredentialRead';
+import type * as KubernetesClient from '../../kubernetesClient';
 import { KUBERNETES_PORT_FORWARD_METADATA_PROPERTY } from '../../portForwardMetadata';
 import { KubernetesResourceItem } from './KubernetesResourceItem';
 
@@ -148,18 +156,22 @@ vi.mock('../../kubernetesClient', () => ({
 
 // Mock PortForwardTunnelManager
 const mockStartTunnel = vi.fn();
+const mockListTunnels = vi.fn((): unknown[] => []);
 vi.mock('../../portForwardTunnel', () => ({
     PortForwardTunnelManager: {
         getInstance: () => ({
             startTunnel: mockStartTunnel,
+            listTunnels: mockListTunnels,
         }),
     },
 }));
 
 // Mock promptForLocalPort
 const mockPromptForLocalPort = vi.fn();
+const mockSuggestLocalPort = vi.fn();
 vi.mock('../../promptForLocalPort', () => ({
     promptForLocalPort: (...args: unknown[]) => mockPromptForLocalPort(...args),
+    suggestLocalPort: (...args: unknown[]) => mockSuggestLocalPort(...args),
 }));
 
 // Mock the source store so getSource() returns a known label without touching StorageService.
@@ -775,6 +787,351 @@ describe('KubernetesResourceItem', () => {
     // -------------------------------------------------------------------------
     // nodeport-loadbalancer-safety – warning surfacing (issue 2)
     // -------------------------------------------------------------------------
+    describe('connection diagnostics read (review R1/R2, option A)', () => {
+        const mockKubeConfig = { name: 'mock-kc' };
+        const mockCoreApi = { name: 'mock-api' };
+        const read = (): { signal: AbortSignal } => ({ signal: new AbortController().signal });
+
+        function clusterIpItem(type: 'ClusterIP' | 'LoadBalancer' | 'NodePort' = 'ClusterIP'): KubernetesResourceItem {
+            return new KubernetesResourceItem(
+                'corr-diag',
+                'default',
+                { name: 'my-ctx', cluster: 'my-cluster', user: 'my-user', server: 'https://api.example.com:6443' },
+                {
+                    sourceKind: 'dko',
+                    name: 'diag-svc',
+                    displayName: 'Diag Service',
+                    serviceName: 'diag-svc',
+                    namespace: 'default',
+                    type,
+                    port: 10260,
+                    clusterIP: '10.0.0.1',
+                },
+                'discoveryView/kubernetes-discovery/default',
+            );
+        }
+
+        function expectSilent(): void {
+            expect(mockPromptForLocalPort).not.toHaveBeenCalled();
+            expect(mockStartTunnel).not.toHaveBeenCalled();
+            expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+            expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+            expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+        }
+
+        beforeEach(() => {
+            mockLoadConfiguredKubeConfig.mockResolvedValue(mockKubeConfig);
+            mockCreateCoreApi.mockResolvedValue(mockCoreApi);
+            mockResolveDocumentDBCredentials.mockResolvedValue(undefined);
+            mockListTunnels.mockReturnValue([]);
+            mockSuggestLocalPort.mockResolvedValue(27100);
+            mockBuildPortForwardConnectionString.mockImplementation(
+                (_service: unknown, port: number) => `mongodb://127.0.0.1:${port}/`,
+            );
+            mockResolveServiceEndpoint.mockResolvedValue({
+                kind: 'needsPortForward',
+                serviceName: 'diag-svc',
+                namespace: 'default',
+                remotePort: 10260,
+                suggestedLocalPort: 10260,
+            });
+        });
+
+        it('returns the endpoint and port-forward metadata for ClusterIP without prompting or starting a tunnel', async () => {
+            const creds = await clusterIpItem().getCredentialsForDiagnostics(read());
+
+            expect(creds?.connectionString).toBe('mongodb://127.0.0.1:27100/');
+            expect(creds?.connectionProperties?.[KUBERNETES_PORT_FORWARD_METADATA_PROPERTY]).toMatchObject({
+                kind: 'kubernetesClusterIpPortForward',
+                serviceName: 'diag-svc',
+                servicePort: 10260,
+                localPort: 27100,
+            });
+            expect(mockSuggestLocalPort).toHaveBeenCalledWith(10260, expect.anything());
+            expectSilent();
+        });
+
+        it('uses the local port of a tunnel already running for the same service', async () => {
+            mockListTunnels.mockReturnValue([
+                {
+                    sourceId: 'default',
+                    contextName: 'my-ctx',
+                    namespace: 'default',
+                    serviceName: 'other',
+                    localPort: 1,
+                    remotePort: 10260,
+                },
+                {
+                    sourceId: 'default',
+                    contextName: 'my-ctx',
+                    namespace: 'default',
+                    serviceName: 'diag-svc',
+                    localPort: 31000,
+                    remotePort: 10260,
+                },
+            ]);
+
+            const creds = await clusterIpItem().getCredentialsForDiagnostics(read());
+
+            expect(creds?.connectionString).toBe('mongodb://127.0.0.1:31000/');
+            expect(mockSuggestLocalPort).not.toHaveBeenCalled();
+            expectSilent();
+        });
+
+        it.each(['pending', 'unreachable'] as const)(
+            'reports a %s endpoint as a typed error instead of a modal warning',
+            async (kind) => {
+                mockResolveServiceEndpoint.mockResolvedValue({
+                    kind,
+                    reason: 'No external IP for service "diag-svc".',
+                });
+
+                const pending = clusterIpItem('LoadBalancer').getCredentialsForDiagnostics(read());
+
+                await expect(pending).rejects.toBeInstanceOf(ConnectionEndpointUnavailableError);
+                await expect(pending).rejects.toMatchObject({ source: 'kubernetes', reason: kind });
+                expectSilent();
+            },
+        );
+
+        it('keeps the InternalIP warning out of the UI and the output channel', async () => {
+            mockResolveServiceEndpoint.mockResolvedValue({
+                kind: 'ready',
+                connectionString: 'mongodb://10.0.0.1:30017/',
+                warning: 'InternalIP fallback warning',
+            });
+
+            const creds = await clusterIpItem('NodePort').getCredentialsForDiagnostics(read());
+
+            expect(creds?.connectionString).toBe('mongodb://10.0.0.1:30017/');
+            expect(ext.outputChannel.appendLine).not.toHaveBeenCalled();
+            expectSilent();
+        });
+
+        it('wraps an unreachable Kubernetes API request as a typed source failure', async () => {
+            const apiError = Object.assign(new Error('connect ECONNREFUSED 10.0.0.1:6443'), { code: 'ECONNREFUSED' });
+            const listResources = vi.fn().mockRejectedValue(apiError);
+            const actual = await vi.importActual<typeof KubernetesClient>('../../kubernetesClient');
+            mockLoadConfiguredKubeConfig.mockResolvedValue({
+                makeApiClient: vi.fn().mockReturnValue({ listNamespacedCustomObject: listResources }),
+            });
+            mockResolveDocumentDBCredentials.mockImplementationOnce(actual.resolveDocumentDBCredentials);
+
+            const pending = clusterIpItem().getCredentialsForDiagnostics(read());
+
+            await expect(pending).rejects.toBeInstanceOf(ConnectionSourceUnavailableError);
+            await expect(pending).rejects.toMatchObject({ source: 'kubernetes', sourceError: apiError });
+            expect(mockCreateCoreApi).toHaveBeenCalledExactlyOnceWith(expect.anything(), 'my-ctx');
+            expect(listResources).toHaveBeenCalledExactlyOnceWith({
+                group: 'documentdb.io',
+                version: 'preview',
+                namespace: 'default',
+                plural: 'dbs',
+            });
+            expectSilent();
+        });
+
+        it('stops before any Kubernetes I/O when the run was already cancelled', async () => {
+            const controller = new AbortController();
+            controller.abort();
+
+            await expect(clusterIpItem().getCredentialsForDiagnostics({ signal: controller.signal })).rejects.toThrow();
+            expect(mockLoadConfiguredKubeConfig).not.toHaveBeenCalled();
+            expectSilent();
+        });
+
+        it('leaves the ordinary connect read unchanged: it still prompts and starts the tunnel', async () => {
+            mockPromptForLocalPort.mockResolvedValue(10260);
+
+            await clusterIpItem().getCredentials();
+
+            expect(mockPromptForLocalPort).toHaveBeenCalledOnce();
+            expect(mockStartTunnel).toHaveBeenCalledOnce();
+        });
+
+        describe('strict credential API requests', () => {
+            const listResources = vi.fn();
+            const readSecret = vi.fn<CoreV1Api['readNamespacedSecret']>();
+            const coreApi = { readNamespacedSecret: readSecret } as unknown as CoreV1Api;
+            const kubeConfig = {
+                makeApiClient: vi.fn().mockReturnValue({ listNamespacedCustomObject: listResources }),
+            } as unknown as KubeConfig;
+
+            function item(sourceKind: 'dko' | 'generic'): KubernetesResourceItem {
+                const base = clusterIpItem();
+                return new KubernetesResourceItem(
+                    'corr-diag',
+                    'default',
+                    base.contextInfo,
+                    {
+                        ...base.serviceInfo,
+                        sourceKind,
+                        name: 'documentdb-service-diag',
+                        serviceName: 'documentdb-service-diag',
+                        credentialSecretName: 'annotated-secret',
+                    },
+                    'discoveryView/kubernetes-discovery/default',
+                );
+            }
+
+            beforeEach(async () => {
+                const actual = await vi.importActual<typeof KubernetesClient>('../../kubernetesClient');
+                mockResolveDocumentDBCredentials.mockImplementation(actual.resolveDocumentDBCredentials);
+                mockResolveGenericServiceCredentials.mockImplementation(actual.resolveGenericServiceCredentials);
+                mockLoadConfiguredKubeConfig.mockResolvedValue(kubeConfig);
+                mockCreateCoreApi.mockResolvedValue(coreApi);
+                listResources.mockReset().mockResolvedValue({
+                    items: [{ metadata: { name: 'diag' }, spec: { documentDbCredentialSecret: 'dko-secret' } }],
+                });
+                readSecret.mockReset().mockResolvedValue({
+                    data: {
+                        username: Buffer.from('private-user').toString('base64'),
+                        password: Buffer.from('private-password').toString('base64'),
+                    },
+                });
+            });
+
+            afterEach(() => {
+                mockResolveDocumentDBCredentials.mockReset();
+                mockResolveGenericServiceCredentials.mockReset();
+            });
+
+            it.each([
+                ['dko', 'list'],
+                ['generic', 'list'],
+                ['dko', 'secret'],
+                ['generic', 'secret'],
+            ] as const)(
+                'classifies a real %s %s request network failure as source-inaccessible',
+                async (kind, stage) => {
+                    const error = Object.assign(new Error('private-secret private-service private-namespace'), {
+                        code: 'ECONNREFUSED',
+                    });
+                    if (kind === 'generic') {
+                        listResources.mockResolvedValue({ items: [] });
+                    }
+                    if (stage === 'list') {
+                        listResources.mockRejectedValue(error);
+                    } else {
+                        readSecret.mockRejectedValue(error);
+                    }
+                    let caught: unknown;
+                    try {
+                        await item(kind).getCredentialsForDiagnostics(read());
+                    } catch (failure) {
+                        caught = failure;
+                    }
+                    expect(caught).toBeInstanceOf(ConnectionSourceUnavailableError);
+                    expect(caught).toMatchObject({ source: 'kubernetes', sourceError: error });
+                    expect((caught as ConnectionSourceUnavailableError).sourceError).toBe(error);
+                    const finding = classifyResolutionFailure(caught);
+                    expect(finding).toMatchObject({
+                        code: 'target.sourceInaccessible',
+                        data: { source: 'kubernetes', reason: 'unreachable', errorName: 'Error' },
+                    });
+                    expect(JSON.stringify(finding)).not.toContain('private-');
+                    expect(listResources).toHaveBeenCalledOnce();
+                    expect(readSecret).toHaveBeenCalledTimes(stage === 'secret' ? 1 : 0);
+                    expectSilent();
+                },
+            );
+
+            it('keeps DKO-list 403 strict for DKO targets and preserves its original status', async () => {
+                const error = Object.assign(new Error('private-permissions'), { code: 403 });
+                listResources.mockRejectedValue(error);
+                const pending = item('dko').getCredentialsForDiagnostics(read());
+                await expect(pending).rejects.toMatchObject({ source: 'kubernetes', sourceError: error });
+                await pending.catch((failure: unknown): void => {
+                    expect(classifyResolutionFailure(failure)).toMatchObject({
+                        code: 'target.sourceInaccessible',
+                        data: { source: 'kubernetes', reason: 'accessDenied', statusCode: 403 },
+                    });
+                });
+                expect(mockResolveDocumentDBCredentials).toHaveBeenCalledWith(
+                    coreApi,
+                    kubeConfig,
+                    'default',
+                    'documentdb-service-diag',
+                    { strict: true },
+                );
+                expect(readSecret).not.toHaveBeenCalled();
+                expectSilent();
+            });
+
+            it.each([403, 404])('allows a generic annotated Secret after DKO-list %s', async (code) => {
+                listResources.mockRejectedValue(Object.assign(new Error('private-list-error'), { code }));
+                const credentials = await item('generic').getCredentialsForDiagnostics(read());
+                expect(credentials?.nativeAuthConfig).toEqual({
+                    connectionUser: 'private-user',
+                    connectionPassword: 'private-password',
+                });
+                expect(credentials).not.toHaveProperty('credentialReadIssue');
+                expect(readSecret).toHaveBeenCalledExactlyOnceWith({ name: 'annotated-secret', namespace: 'default' });
+                expect(mockResolveDocumentDBCredentials).toHaveBeenCalledWith(
+                    coreApi,
+                    kubeConfig,
+                    'default',
+                    'documentdb-service-diag',
+                    { strict: true, ignoreDkoAccessDenied: true },
+                );
+                expect(mockResolveGenericServiceCredentials).toHaveBeenCalledWith(
+                    coreApi,
+                    'default',
+                    'annotated-secret',
+                    { strict: true },
+                );
+                expectSilent();
+            });
+
+            it('treats no DKO CRD as missing credentials for a DKO service, without generic fallback', async () => {
+                listResources.mockRejectedValue(Object.assign(new Error('private-list-error'), { code: 404 }));
+                const credentials = await item('dko').getCredentialsForDiagnostics(read());
+                expect(credentials?.nativeAuthConfig).toBeUndefined();
+                expect(credentials).not.toHaveProperty('credentialReadIssue');
+                expect(readSecret).not.toHaveBeenCalled();
+                expect(mockResolveGenericServiceCredentials).not.toHaveBeenCalled();
+                expectSilent();
+            });
+
+            it.each([
+                ['dko', 403, 'accessDenied'],
+                ['dko', 404, 'notFound'],
+                ['generic', 403, 'accessDenied'],
+                ['generic', 404, 'notFound'],
+            ] as const)('returns metadata without a password after a %s Secret %s', async (kind, code, reason) => {
+                if (kind === 'generic') {
+                    listResources.mockResolvedValue({ items: [] });
+                }
+                readSecret.mockRejectedValue(Object.assign(new Error('private-secret private-namespace'), { code }));
+                const credentials = await item(kind).getCredentialsForDiagnostics(read());
+                expect(credentials?.credentialReadIssue).toEqual({ source: 'kubernetes', reason });
+                expect(credentials?.nativeAuthConfig).toBeUndefined();
+                expect(credentials?.connectionString).toBe('mongodb://127.0.0.1:27100/');
+                expect(credentials?.connectionProperties?.[KUBERNETES_PORT_FORWARD_METADATA_PROPERTY]).toMatchObject({
+                    serviceName: 'documentdb-service-diag',
+                    localPort: 27100,
+                });
+                expect(readSecret).toHaveBeenCalledOnce();
+                expectSilent();
+            });
+
+            it.each([403, 404])(
+                'does not fall back to an annotated Secret after a known DKO Secret %s issue',
+                async (code) => {
+                    readSecret.mockRejectedValue(Object.assign(new Error('private-secret'), { code }));
+                    const credentials = await item('generic').getCredentialsForDiagnostics(read());
+                    expect(credentials?.credentialReadIssue).toEqual({
+                        source: 'kubernetes',
+                        reason: code === 403 ? 'accessDenied' : 'notFound',
+                    });
+                    expect(readSecret).toHaveBeenCalledExactlyOnceWith({ name: 'dko-secret', namespace: 'default' });
+                    expect(mockResolveGenericServiceCredentials).not.toHaveBeenCalled();
+                    expectSilent();
+                },
+            );
+        });
+    });
+
     describe('endpoint warning surfacing', () => {
         const mockKubeConfig = { name: 'mock-kc' };
         const mockCoreApi = { name: 'mock-api' };

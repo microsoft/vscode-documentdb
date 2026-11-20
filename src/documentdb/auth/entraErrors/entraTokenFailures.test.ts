@@ -66,6 +66,22 @@ describe('Entra token failure registry', () => {
         expect(getRecentEntraTokenFailure('azureresource')).toEqual(latestFailure);
     });
 
+    it('keeps the optional classifier rule and drops it when a later failure has no classification', (): void => {
+        recordEntraTokenFailure('cluster-1', {
+            cloudCategory: 'usgov',
+            authMethod: 'interactive',
+            ruleId: 'firstPartyPreauthorization',
+        });
+        expect(getRecentEntraTokenFailure('cluster-1')).toEqual({
+            cloudCategory: 'usgov',
+            authMethod: 'interactive',
+            ruleId: 'firstPartyPreauthorization',
+            timestamp: Date.now(),
+        });
+        recordEntraTokenFailure('cluster-1', { cloudCategory: 'public', authMethod: 'interactive' });
+        expect(getRecentEntraTokenFailure('cluster-1')).not.toHaveProperty('ruleId');
+    });
+
     it('expires a failure after ten minutes by default', (): void => {
         recordEntraTokenFailure('cluster-1', { cloudCategory: 'china', authMethod: 'managedIdentity' });
         vi.advanceTimersByTime(10 * 60_000);

@@ -7,6 +7,7 @@ import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microso
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
+import { type DeepLinkTelemetry } from '../../../deepLinks/deepLinkTelemetry';
 
 import { openCollectionViewInternal } from '../../../commands/openCollectionView/openCollectionView';
 import { API } from '../../../DocumentDBExperiences';
@@ -20,6 +21,7 @@ import {
     type ShowCollectionsMessage,
 } from './clusterDashboardContextMenu';
 import { type RouterContext } from './clusterDashboardRouter';
+import { reportDashboardClosed, trackDashboardLifetime } from './dashboardLifetimeTelemetry';
 import { describeMissingNamespace, resolveNamespaceNode } from './resolveNamespaceNode';
 
 /**
@@ -337,6 +339,7 @@ export function registerClusterDashboardContextMenuCommands(context: vscode.Exte
 
 export function openClusterDashboardWebview(
     initialData: ClusterDashboardWebviewConfigurationType,
+    deepLink?: DeepLinkTelemetry,
 ): AppWebviewController<ClusterDashboardWebviewConfigurationType> {
     const panelKey = getPanelKey(initialData.clusterId, initialData.selectedDatabaseName);
     const existingPanel = openPanels.get(panelKey);
@@ -354,6 +357,7 @@ export function openClusterDashboardWebview(
     // eslint-disable-next-line prefer-const
     let controller: AppWebviewController<ClusterDashboardWebviewConfigurationType>;
     const trpcContext: RouterContext = {
+        ...deepLink,
         dbExperience: API.DocumentDB,
         webviewName: 'clusterDashboard',
         clusterId: initialData.clusterId,
@@ -379,6 +383,15 @@ export function openClusterDashboardWebview(
         panelViewType: 'vscode-documentdb-cluster-dashboard',
         config: initialData,
         context: trpcContext,
+        // Only a new panel is measured: a reveal of an open one returns above and loads nothing.
+        viewLoad: {
+            kind: 'clusterDashboard',
+            correlation: {
+                viewId: initialData.viewId,
+                ...(initialData.dashboardSessionId ? { dashboardSessionId: initialData.dashboardSessionId } : {}),
+                ...(initialData.journeyCorrelationId ? { journeyCorrelationId: initialData.journeyCorrelationId } : {}),
+            },
+        },
         viewColumn: vscode.ViewColumn.One,
         icon: {
             light: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'collection-view-light.svg'),
@@ -387,6 +400,8 @@ export function openClusterDashboardWebview(
     });
 
     openPanels.set(panelKey, { controller, config: initialData });
+    const session = initialData;
+    trackDashboardLifetime(controller, (lifetime) => reportDashboardClosed(lifetime, session));
     controller.onDisposed(() => {
         if (openPanels.get(panelKey)?.controller === controller) {
             openPanels.delete(panelKey);

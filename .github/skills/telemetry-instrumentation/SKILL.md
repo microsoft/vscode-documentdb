@@ -73,7 +73,7 @@ import { registerCommandWithTreeNodeUnwrappingAndModalErrors } from '../../utils
 
 ### tRPC Procedures (auto-telemetry)
 
-Webview tRPC calls get telemetry automatically via `publicProcedureWithTelemetry`. Each call emits `documentDB.rpc.{type}.{path}` with result, error, abort tracking. The DocumentDB `TelemetryRunner` contributes the full `IActionContext` to `ctx.actionContext` (narrow `ctx` to `WithTelemetry<RouterContext>` to read it):
+Webview tRPC calls get telemetry automatically via `publicProcedureWithTelemetry`. Each call emits `documentDB.rpc.{type}.{path}` with result, error, abort tracking. On failure `error` is only the tRPC code (usually `INTERNAL_SERVER_ERROR`); from 1.1.0 `causeType` carries the allow-listed type (class name or server code such as `11000`) of the innermost specific cause. The DocumentDB `TelemetryRunner` contributes the full `IActionContext` to `ctx.actionContext` (narrow `ctx` to `WithTelemetry<RouterContext>` to read it):
 
 ```typescript
 myProcedure: publicProcedureWithTelemetry.input(schema).query(async ({ ctx, input }) => {

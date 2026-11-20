@@ -110,6 +110,18 @@ export function connectTrpc<TRouter extends AnyRouter>(
     // Register a handler for response messages from the extension host. tRPC
     // calls this when a request is made and the returned unsubscribe when the
     // response has been consumed, so the listener is per-operation.
+    //
+    // Cost (R766-S04): one `window` listener per in-flight call, so every
+    // response is checked by all N listeners, O(N) per message. A single
+    // listener with a `Map<id, callback>` would make it O(1), at the price of a
+    // shared routing table. Measured in production by DocumentDB's
+    // `rpcConcurrency` gauge (0.10.0-1.0.2, PR #766, commit dbbf99695), using
+    // `ProcedureLogEntry.concurrent`. 19 Oct-15 Nov 2026, per-machine peak
+    // concurrency: p50 2, p95 3, p99 5; 4 of 1,149 machines above 8, max 52; no
+    // machine averaged 8 or more. The revisit thresholds were a peak of 32 or
+    // more in about 1% of sessions, or an average of 8 or more. Conclusion: keep
+    // the per-call listener; the gauge was retired in 1.1.0. Revisit if
+    // long-lived subscriptions or a new view keep many calls in flight at once.
     const onReceive = (callback: (message: VsCodeLinkResponseMessage) => void): (() => void) => {
         const handler = (event: MessageEvent): void => {
             // Structural guard (R766-N01 / R766-C03): the webview `window` bus may

@@ -64,6 +64,17 @@ export function openDocumentWebview(
         panelViewType: 'vscode-documentdb-document-view',
         config: initialData,
         context: trpcContext,
+        // A new document has nothing to load, so only opened documents report their load time.
+        viewLoad:
+            initialData.mode === 'add'
+                ? undefined
+                : {
+                      kind: 'documentView',
+                      correlation: {
+                          viewId: initialData.viewId,
+                          documentMode: initialData.mode === 'edit' ? 'edit' : 'view',
+                      },
+                  },
         viewColumn: vscode.ViewColumn.Active,
         icon: {
             light: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'document-view-light.svg'),

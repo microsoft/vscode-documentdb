@@ -4,9 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { type DeepLinkTelemetry } from '../../../deepLinks/deepLinkTelemetry';
 
+import { type DocumentViewMode } from '../../../documentdb/DocumentViewMode';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
+import { LiveConfigService } from '../../../services/LiveConfigService';
 import { SettingsService } from '../../../services/SettingsService';
 import { settingsKeys } from '../../../settingsKeys';
 import { type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
@@ -27,6 +30,7 @@ export type CollectionViewWebviewConfigurationType = {
     viewId: string;
     databaseName: string;
     collectionName: string;
+    initialDocumentView: DocumentViewMode;
     defaultPageSize: number;
     enableAIQueryGeneration: boolean;
     feedbackPermitted?: boolean;
@@ -48,7 +52,12 @@ export type CollectionViewWebviewConfigurationType = {
 };
 
 export function openCollectionWebview(
-    initialData: Omit<CollectionViewWebviewConfigurationType, 'defaultPageSize' | 'enableAIQueryGeneration'>,
+    initialData: Omit<
+        CollectionViewWebviewConfigurationType,
+        'defaultPageSize' | 'enableAIQueryGeneration' | 'initialDocumentView'
+    >,
+    deepLink?: DeepLinkTelemetry,
+    journeyCorrelationId?: string,
 ): AppWebviewController<CollectionViewWebviewConfigurationType> {
     const title: string = `${initialData.databaseName}/${initialData.collectionName}`;
 
@@ -60,11 +69,13 @@ export function openCollectionWebview(
 
     const fullInitialData: CollectionViewWebviewConfigurationType = {
         ...initialData,
+        initialDocumentView: LiveConfigService.getCollectionDocumentView(),
         defaultPageSize,
         enableAIQueryGeneration,
     };
 
     const trpcContext: RouterContext = {
+        ...deepLink,
         dbExperience: API.DocumentDB,
         webviewName: 'collectionView',
         sessionId: initialData.sessionId,
@@ -81,6 +92,15 @@ export function openCollectionWebview(
         panelViewType: 'vscode-documentdb-collection-view',
         config: fullInitialData,
         context: trpcContext,
+        viewLoad: {
+            kind: 'collectionView',
+            correlation: {
+                collectionSessionId: initialData.sessionId,
+                viewId: initialData.viewId,
+                initialTab: initialData.initialTab ?? 'tab_result',
+                ...(journeyCorrelationId ? { journeyCorrelationId } : {}),
+            },
+        },
         viewColumn: vscode.ViewColumn.One,
         icon: {
             light: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'collection-view-light.svg'),

@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
-import { ConnectionDiagnosticsService } from '../services/connectionDiagnosticsService';
+import { ErrorExplanationService } from '../services/errorExplanationService';
 import { BaseExtendedTreeDataProvider } from './BaseExtendedTreeDataProvider';
 import { type TreeElement } from './TreeElement';
 
@@ -49,7 +49,7 @@ describe('BaseExtendedTreeDataProvider error translation', () => {
     let showErrorMessage: MockInstance;
 
     beforeEach(() => {
-        ConnectionDiagnosticsService.resetForTests();
+        ErrorExplanationService.resetForTests();
         // The vscode mock exposes showErrorMessage as a shared vi.fn(), so its call history
         // survives restoreAllMocks and has to be cleared explicitly.
         showErrorMessage = vi.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
@@ -57,12 +57,12 @@ describe('BaseExtendedTreeDataProvider error translation', () => {
     });
 
     afterEach(() => {
-        ConnectionDiagnosticsService.resetForTests();
+        ErrorExplanationService.resetForTests();
         vi.restoreAllMocks();
     });
 
     it('shows the explanation and suppresses the default notification', async () => {
-        ConnectionDiagnosticsService.registerProvider({
+        ErrorExplanationService.registerProvider({
             id: 'test',
             explain: () => Promise.resolve('DocumentDB Local does not appear to be running.'),
         });
@@ -77,11 +77,11 @@ describe('BaseExtendedTreeDataProvider error translation', () => {
             'DocumentDB Local does not appear to be running. (connect ECONNREFUSED 127.0.0.1:10260)',
         );
         expect(context.errorHandling.suppressDisplay).toBe(true);
-        expect(context.telemetry.properties.diagnosisProviderId).toBe('test');
+        expect(context.telemetry.properties.explanationProviderId).toBe('test');
     });
 
     it('rethrows the original error object untouched', async () => {
-        ConnectionDiagnosticsService.registerProvider({ id: 'test', explain: () => Promise.resolve('explained') });
+        ErrorExplanationService.registerProvider({ id: 'test', explain: () => Promise.resolve('explained') });
 
         class CustomError extends Error {
             public readonly code = 'ECONNREFUSED';
@@ -110,7 +110,7 @@ describe('BaseExtendedTreeDataProvider error translation', () => {
 
     it('does not consult providers for an element that has no cluster', async () => {
         const explain = vi.fn().mockResolvedValue('should not be used');
-        ConnectionDiagnosticsService.registerProvider({ id: 'test', explain });
+        ErrorExplanationService.registerProvider({ id: 'test', explain });
 
         await expect(
             new TestProvider().fetch({ id: 'view/folder' } as TreeElement, actionContext(), () =>
