@@ -83,4 +83,54 @@ describe('Emitter', () => {
         expect(consoleError).toHaveBeenCalledOnce();
         consoleError.mockRestore();
     });
+
+    it('delivers an event fired from a listener only after the current event reached every listener', () => {
+        const emitter = new Emitter<string>();
+        const received: string[] = [];
+        emitter.event((value) => {
+            received.push(`first:${value}`);
+            if (value === 'running') {
+                emitter.fire('stopping');
+            }
+        });
+        emitter.event((value) => received.push(`second:${value}`));
+
+        emitter.fire('running');
+
+        expect(received).toEqual(['first:running', 'second:running', 'first:stopping', 'second:stopping']);
+    });
+
+    it('does not deliver a queued event to a listener disposed before its turn', () => {
+        const emitter = new Emitter<string>();
+        const second = vi.fn();
+        emitter.event((value) => {
+            if (value === 'running') {
+                emitter.fire('stopping');
+                secondSubscription.dispose();
+            }
+        });
+        const secondSubscription = emitter.event(second);
+
+        emitter.fire('running');
+
+        expect(second).not.toHaveBeenCalled();
+    });
+
+    it('keeps delivering queued events after a listener throws', () => {
+        const emitter = new Emitter<string>();
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const after = vi.fn();
+        emitter.event((value) => {
+            if (value === 'running') {
+                emitter.fire('stopping');
+                throw new Error('listener failed');
+            }
+        });
+        emitter.event(after);
+
+        emitter.fire('running');
+
+        expect(after.mock.calls).toEqual([['running'], ['stopping']]);
+        consoleError.mockRestore();
+    });
 });

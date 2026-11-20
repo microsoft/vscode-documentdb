@@ -227,6 +227,22 @@ describe('TaskService', () => {
         expect(progressUpdates).toEqual([0, 20, 40, 60, 80, 100]);
     });
 
+    it('delivers state changes in order when a listener stops the task on Running', async () => {
+        const task = new TestTask('Reentrant Stop Task', { workSteps: 1, stepDuration: 5 });
+        const observed: TaskState[] = [];
+        task.onDidChangeState((event) => {
+            if (event.newState === TaskState.Running) {
+                task.stop();
+            }
+        });
+        task.onDidChangeState((event) => observed.push(event.newState));
+
+        await task.start();
+        await waitForTaskCompletion(task);
+
+        expect(observed).toEqual([TaskState.Initializing, TaskState.Running, TaskState.Stopping, TaskState.Stopped]);
+    });
+
     it('should handle task failure with error message', async () => {
         const task = new TestTask('Failing Task', {
             shouldFail: true,

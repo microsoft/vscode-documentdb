@@ -106,7 +106,8 @@ subpath exports with `typesVersions` fallbacks, a Vitest project, `tsconfig.test
   - `Task`, `TaskState`, `isTerminalState`, `TaskStatus`, the state change event types
   - the registry as a class or `createTaskService()` factory, never a module singleton
   - `ResourceDefinition`, `ResourceTrackingTask`, `hasResourceConflict` and the conflict queries
-  - a minimal event emitter whose events match the `vscode.Event` call signature
+  - a minimal event emitter whose events match the `vscode.Event` call signature and its delivery
+    order: an event fired from a listener waits until the current event has reached every listener
   - injected seams: `TaskLogger` (shaped like `LogOutputChannel`), a telemetry runner (same
     pattern as `TelemetryRunner` in `@microsoft/vscode-ext-webview/host`), and `TaskStrings` with
     English defaults
