@@ -98,6 +98,8 @@ result may continue, but say so in the message. Record the result in the Progres
   the preceding PR is open. If it is already merged, branch from and target
   `feature/connection-lifecycle`. Do not wait for intermediate approvals or merges; the operator
   handles those. The advisor checkpoints and explicit operator decisions and tests still apply.
+- **Publish:** pushing the topic branch and opening its draft PR are pre-approved (decision 0006).
+  Do not pause for separate publication confirmation. Normal review and merge requirements remain.
 - **Commits:** one or more commits per WI, never one commit that mixes two WIs. Each commit ends with the
   `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailer.
 - **While working, and for draft PRs:** Case 1 only: `npm run build` plus `npx vitest run <touched paths>`.
