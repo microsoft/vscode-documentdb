@@ -26,7 +26,7 @@ created: 2026-11-05
 | 0012 | Keep task telemetry event and property names                             | Proposed            | —                                                                      | 2026-11-05 | —   |
 | 0013 | Ship 0.x until the contract review with the NoSQL team                   | Proposed            | —                                                                      | 2026-11-05 | —   |
 | 0014 | Document packages with examples, reference code and a For agents section | Accepted            | Requested by the maintainer                                            | 2026-11-05 | —   |
-| 0015 | The DocumentDB reader receives a lazy client provider                    | Proposed            | Maintainer asked to address plan item 1.5 now                          | 2026-11-20 | —   |
+| 0015 | The DocumentDB reader receives a lazy client provider                    | Accepted            | Confirmed by the maintainer                                            | 2026-11-20 | —   |
 
 > Entries below are semantically immutable. Append a new decision rather than rewriting an old one,
 > and record a reversal as a new entry plus a status change in the table.
@@ -313,7 +313,7 @@ tarball means an agent can read it from `node_modules` without network access.
 
 ## 0015 — The DocumentDB reader receives a lazy client provider
 
-**Status:** Proposed · **Date:** 2026-11-20 · **Raised by:** maintainer (scope), agent (shape)
+**Status:** Accepted · **Date:** 2026-11-20 · **Raised by:** maintainer
 
 ### Decision
 
