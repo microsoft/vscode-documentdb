@@ -505,6 +505,25 @@ describe('Task host options', () => {
         expect(terminalStatuses[0].error).toBe(error);
     });
 
+    it('keeps default strings for explicitly undefined overrides', async () => {
+        const task = new HostTestTask(
+            { strings: { stoppedWithMessage: undefined, taskStopped: undefined } },
+            (signal: AbortSignal): Promise<void> =>
+                new Promise((resolve) => {
+                    signal.addEventListener('abort', (): void => resolve(), { once: true });
+                }),
+        );
+        const registry = createTaskService({ strings: { taskAlreadyExists: undefined } });
+        registry.registerTask(task);
+
+        await task.start();
+        task.stop();
+        await waitForTaskCompletion(task);
+
+        expect(task.getStatus()).toMatchObject({ state: TaskState.Stopped, message: 'Task stopped. Stopping task...' });
+        expect(() => registry.registerTask(task)).toThrow(`Task with ID ${task.id} already exists`);
+    });
+
     it('fails when the telemetry runner throws before invoking the work callback', async () => {
         const error = new Error('Telemetry runner failed');
         const telemetry: TaskTelemetryRunner = async <T>(

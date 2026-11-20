@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type TaskLogger, type TaskTelemetryContext } from '../../taskHost';
+import { mergeStrings, type TaskLogger, type TaskTelemetryContext } from '../../taskHost';
 import {
     type DataTransferOptions,
     type DataTransferStrings,
@@ -43,7 +43,7 @@ export abstract class BaseDocumentReader implements DocumentReader {
         this.databaseName = databaseName;
         this.collectionName = collectionName;
         this.logger = options?.logger ?? noopDataTransferLogger;
-        this.strings = { ...defaultDataTransferStrings, ...options?.strings };
+        this.strings = mergeStrings(defaultDataTransferStrings, options?.strings);
     }
 
     /**

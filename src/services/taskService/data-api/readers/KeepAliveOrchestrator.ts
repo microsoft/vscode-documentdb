@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import Denque from 'denque';
-import { type TaskLogger } from '../../taskHost';
+import { mergeStrings, type TaskLogger } from '../../taskHost';
 import {
     type DataTransferOptions,
     type DataTransferStrings,
@@ -147,7 +147,7 @@ export class KeepAliveOrchestrator {
 
     constructor(config?: KeepAliveConfig, options?: DataTransferOptions) {
         this.logger = options?.logger ?? noopDataTransferLogger;
-        this.strings = { ...defaultDataTransferStrings, ...options?.strings };
+        this.strings = mergeStrings(defaultDataTransferStrings, options?.strings);
         // Filter out undefined values to ensure defaults are used
         // (object spread would overwrite defaults with undefined if keys exist)
         this.config = {

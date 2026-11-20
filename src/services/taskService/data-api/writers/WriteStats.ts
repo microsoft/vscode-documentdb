@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { mergeStrings } from '../../taskHost';
 import { type DataTransferOptions, type DataTransferStrings, defaultDataTransferStrings } from '../dataTransferHost';
 import {
     ConflictResolutionStrategy,
@@ -56,7 +57,7 @@ export class WriteStats {
     private readonly strings: DataTransferStrings;
 
     constructor(options?: DataTransferOptions) {
-        this.strings = { ...defaultDataTransferStrings, ...options?.strings };
+        this.strings = mergeStrings(defaultDataTransferStrings, options?.strings);
     }
 
     /**

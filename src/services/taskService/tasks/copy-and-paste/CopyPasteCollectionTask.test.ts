@@ -270,6 +270,17 @@ describe('CopyPasteCollectionTask injected strings', () => {
         expect(task.progressUpdates).toContainEqual({ progress: 0, message: 'Preparing 20 indexes' });
         expect(task.progressUpdates).toContainEqual({ progress: 100, message: 'Source collection is empty.' });
     });
+
+    it('keeps the default task name for an explicitly undefined override', () => {
+        const reader = { streamDocuments: vi.fn() } as unknown as DocumentReader;
+        const writer = { streamDocuments: vi.fn() } as unknown as StreamingDocumentWriter;
+        const defaultTask = new TestCopyPasteCollectionTask(config, reader, writer, undefined, 0);
+        const task = new TestCopyPasteCollectionTask(config, reader, writer, undefined, 0, {
+            copyCollectionStrings: { taskName: undefined },
+        });
+
+        expect(task.name).toBe(defaultTask.name);
+    });
 });
 
 describe('CopyPasteCollectionTask injected hooks', () => {

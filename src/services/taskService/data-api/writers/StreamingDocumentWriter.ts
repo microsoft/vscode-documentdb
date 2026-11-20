@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type TaskLogger, type TaskTelemetryContext } from '../../taskHost';
+import { mergeStrings, type TaskLogger, type TaskTelemetryContext } from '../../taskHost';
 import { type DataTransferStrings, defaultDataTransferStrings, noopDataTransferLogger } from '../dataTransferHost';
 import {
     type AbortBatchResult,
@@ -295,7 +295,7 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
         this.databaseName = databaseName;
         this.collectionName = collectionName;
         this.logger = options?.logger ?? noopDataTransferLogger;
-        this.strings = { ...defaultDataTransferStrings, ...options?.strings };
+        this.strings = mergeStrings(defaultDataTransferStrings, options?.strings);
         this.settings = resolveStreamingWriterSettings(options?.adapterDefaults, options?.settings);
         this.batchSizeAdapter = new BatchSizeAdapter(this.settings.batching, {
             logger: this.logger,

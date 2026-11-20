@@ -6,7 +6,7 @@
 import { type CollectionIndexCopier, type IndexCopyResult } from '../../data-api/indexes/CollectionIndexCopier';
 import { type DocumentReader } from '../../data-api/types';
 import { type StreamingDocumentWriter, StreamingWriterError } from '../../data-api/writers/StreamingDocumentWriter';
-import { type TaskTelemetryContext } from '../../taskHost';
+import { mergeStrings, type TaskTelemetryContext } from '../../taskHost';
 import { Task } from '../../taskService';
 import { type ResourceDefinition, type ResourceTrackingTask } from '../../taskServiceResourceTracking';
 import {
@@ -74,7 +74,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
     ) {
         super(options);
         this.config = config;
-        this.copyCollectionStrings = { ...defaultCopyCollectionStrings, ...options?.copyCollectionStrings };
+        this.copyCollectionStrings = mergeStrings(defaultCopyCollectionStrings, options?.copyCollectionStrings);
         this.validateSource = options?.validateSource;
         this.collectMetadata = options?.collectMetadata;
         this.documentReader = documentReader;

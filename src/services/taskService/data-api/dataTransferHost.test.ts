@@ -109,4 +109,22 @@ describe('data transfer host injection', () => {
             new TestWriter(options, true).streamDocuments(new TestReader().streamDocuments(), config),
         ).rejects.toThrow('Write operation failed: test failure');
     });
+
+    it('keeps default strings for explicitly undefined overrides', async () => {
+        const options: DataTransferOptions = { strings: { inserted: undefined, writeOperationFailed: undefined } };
+        const defaultProgress = vi.fn();
+        const onProgress = vi.fn();
+
+        await new TestWriter().streamDocuments(new TestReader().streamDocuments(), config, {
+            onProgress: defaultProgress,
+        });
+        await new TestWriter(options).streamDocuments(new TestReader(options).streamDocuments(), config, {
+            onProgress,
+        });
+
+        expect(onProgress.mock.calls).toEqual(defaultProgress.mock.calls);
+        await expect(
+            new TestWriter(options, true).streamDocuments(new TestReader().streamDocuments(), config),
+        ).rejects.toThrow('Write operation failed: test failure');
+    });
 });

@@ -57,6 +57,20 @@ export const defaultTaskStrings: TaskStrings = {
     taskNotFound: (id: string): string => `Task with ID ${id} not found`,
 };
 
+/**
+ * Merges partial string overrides into their defaults. An override that is explicitly `undefined`
+ * keeps the default instead of replacing it.
+ */
+export function mergeStrings<T extends object>(defaults: T, overrides?: Partial<T>): T {
+    const merged = { ...defaults };
+    for (const [key, value] of Object.entries(overrides ?? {})) {
+        if (value !== undefined) {
+            (merged as Record<string, unknown>)[key] = value;
+        }
+    }
+    return merged;
+}
+
 export interface TaskOptions {
     logger?: TaskLogger;
     telemetry?: TaskTelemetryRunner;

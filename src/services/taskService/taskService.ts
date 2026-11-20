@@ -6,6 +6,7 @@
 import { Emitter, type Disposable, type Event } from './events';
 import {
     defaultTaskStrings,
+    mergeStrings,
     type TaskLogger,
     type TaskOptions,
     type TaskStrings,
@@ -185,7 +186,7 @@ export abstract class Task {
     protected constructor(options?: TaskOptions) {
         this.logger = options?.logger ?? noopLogger;
         this.telemetry = options?.telemetry ?? defaultTelemetryRunner;
-        this.strings = { ...defaultTaskStrings, ...options?.strings };
+        this.strings = mergeStrings(defaultTaskStrings, options?.strings);
         this.id = crypto.randomUUID();
         this._status = {
             state: TaskState.Pending,
@@ -588,7 +589,7 @@ class TaskServiceImpl implements TaskService {
     public readonly onDidChangeTaskState = this._onDidChangeTaskState.event;
 
     constructor(options?: { strings?: Partial<TaskStrings> }) {
-        this.strings = { ...defaultTaskStrings, ...options?.strings };
+        this.strings = mergeStrings(defaultTaskStrings, options?.strings);
     }
 
     public registerTask(task: Task): void {
