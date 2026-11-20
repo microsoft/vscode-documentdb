@@ -128,7 +128,9 @@ export class CollectionNameCache implements vscode.Disposable {
 
         const fetchPromise = (async (): Promise<void> => {
             try {
-                const client = await ClustersClient.getClient(clusterId, undefined, undefined, 'playgroundCompletion');
+                const client = await ClustersClient.getClient(clusterId, undefined, undefined, 'playgroundCompletion', {
+                    background: true,
+                });
                 // This call populates ClustersClient._collectionsCache
                 await client.listCollections(databaseName);
             } catch (error) {

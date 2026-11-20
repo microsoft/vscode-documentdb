@@ -136,7 +136,9 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
 
     private async fetchAndUpdateCount(): Promise<void> {
         try {
-            const client = await ClustersClient.getClient(this.cluster.clusterId, undefined, undefined, 'treeChildren');
+            const client = await ClustersClient.getClient(this.cluster.clusterId, undefined, undefined, 'treeChildren', {
+                background: true,
+            });
             const { count, hasMore } = await client.countCollections(this.databaseInfo.name, COLLECTION_COUNT_LIMIT);
             // `getChildren()` may have run while this request was in flight and
             // established the exact count. Never replace an exact count with

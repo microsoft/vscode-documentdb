@@ -47,6 +47,7 @@ import { type CachedClusterCredentials } from '../CredentialCache';
 import { ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { AuthInputUnavailableError, type AuthPhaseObserver } from './authCallerPolicy';
 import { buildAuthConnectionTarget } from './authConnectionTarget';
+import { type VerifiedEntraIdentity } from './AuthHandler';
 import { AuthMethodId } from './AuthMethod';
 import { resolveInteractiveTokenResource, TokenResourceResolutionError } from './documentdbTokenResource';
 import {
@@ -74,6 +75,14 @@ function buildCredentials(connectionString: string): CachedClusterCredentials {
 }
 
 describe('MicrosoftEntraIDAuthHandler', () => {
+    const pinnedEntraIdentity: VerifiedEntraIdentity = {
+        kind: 'entra',
+        providerId: 'microsoft',
+        accountId: account.id,
+        accountLabel: account.label,
+        tenantId: 'pinned-tenant',
+    };
+
     beforeEach(() => {
         vi.clearAllMocks();
         resetEntraTokenFailuresForTests();
@@ -103,6 +112,52 @@ describe('MicrosoftEntraIDAuthHandler', () => {
     afterEach((): void => {
         resetEntraTokenFailuresForTests();
     });
+
+    it.each(['pinned-tenant', undefined])('uses the pinned tenant %s, never the cached tenant', async (tenantId) => {
+        const pin = { ...pinnedEntraIdentity, tenantId };
+        const result = await new MicrosoftEntraIDAuthHandler(
+            buildCredentials('mongodb://cluster.mongocluster.cosmos.azure.com/'),
+            { interactive: true, pinnedEntraIdentity: pin },
+        ).configureAuth();
+
+        const scopes = ['https://ossrdbms-aad.database.windows.net/.default'];
+        if (tenantId !== undefined) {
+            scopes.push(`VSCODE_TENANT:${tenantId}`);
+        }
+        expect(getSessionFromVSCode).toHaveBeenCalledExactlyOnceWith(pin.providerId, scopes, { silent: true, account });
+        expect(result.verifiedIdentity).toEqual(pin);
+    });
+
+    it.each(['providerChanged', 'noSession', 'identityMismatch'] as const)(
+        'fails closed on a pinned %s without changing the existing failure context',
+        async (failure) => {
+            const credentials = buildCredentials('mongodb://cluster.mongocluster.cosmos.azure.com/');
+            recordEntraTokenFailure(credentials.clusterId, { cloudCategory: 'public', authMethod: 'interactive' });
+            const previousFailure = getRecentEntraTokenFailure(credentials.clusterId);
+            const startupProperties: Record<string, string> = {};
+            if (failure === 'providerChanged') {
+                getConfiguredAuthProviderId.mockReturnValue('different-provider');
+            } else if (failure === 'noSession') {
+                getSessionFromVSCode.mockResolvedValue(undefined);
+            } else {
+                getSessionFromVSCode.mockResolvedValue({ ...session, account: { ...account, id: 'different-account' } });
+            }
+
+            const configuring = new MicrosoftEntraIDAuthHandler(credentials, {
+                interactive: false,
+                pinnedEntraIdentity,
+            }).configureAuth(undefined, { startupCorrelationId: 'startup', surface: 'extension', startupProperties });
+            if (failure === 'identityMismatch') {
+                await expect(configuring).rejects.toBeInstanceOf(EntraIdentityMismatchError);
+            } else {
+                await expect(configuring).rejects.toBeInstanceOf(EntraSignInRequiredError);
+                await expect(configuring).rejects.toMatchObject({ reason: failure });
+            }
+            expect(getSessionFromVSCode).toHaveBeenCalledTimes(failure === 'providerChanged' ? 0 : 1);
+            expect(getRecentEntraTokenFailure(credentials.clusterId)).toBe(previousFailure);
+            expect(startupProperties.entraFailureKind).not.toBe('tokenAcquisitionFailed');
+        },
+    );
 
     it.each([
         'mongodb://attacker.cloudapp.azure.com/',

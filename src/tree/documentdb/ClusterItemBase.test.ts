@@ -71,7 +71,7 @@ vi.mock('../../documentdb/CredentialCache', () => ({
 }));
 
 vi.mock('../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: vi.fn(), exists: vi.fn().mockReturnValue(false), getExistingClient: vi.fn() },
+    ClustersClient: { connectInteractive: vi.fn(), exists: vi.fn().mockReturnValue(false), getExistingClient: vi.fn() },
 }));
 
 vi.mock('../../extensionVariables', () => ({
@@ -348,7 +348,7 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
     it('does not reopen the dashboard on refresh or when the tree node is recreated', async () => {
         mockGetSetting.mockReturnValue(true);
         const client = makeClient(vi.fn().mockResolvedValue([{ name: 'database' }]));
-        ClustersClientMock.getClient.mockResolvedValue(client);
+        ClustersClientMock.connectInteractive.mockResolvedValue(client);
         const item = new TestClusterItem(makeCluster(), client);
 
         await item.getChildren();
@@ -365,7 +365,7 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
         mockGetSetting.mockReturnValue(true);
         mockHasCredentials.mockReturnValue(true);
         const client = makeClient(vi.fn().mockResolvedValue([{ name: 'database' }]));
-        ClustersClientMock.getClient.mockResolvedValue(client);
+        ClustersClientMock.connectInteractive.mockResolvedValue(client);
         ClustersClientMock.exists.mockReturnValueOnce(true).mockReturnValueOnce(false);
         const item = new TestClusterItem(makeCluster(), client);
 
@@ -424,7 +424,7 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
         mockHasCredentials.mockReturnValue(true);
 
         // jest-mock-vscode's withProgress is a no-op vi.fn(); make it actually run the task so
-        // getClientWithProgress() exercises ClustersClient.getClient() and surfaces its rejection.
+        // getClientWithProgress() exercises ClustersClient.connectInteractive() and surfaces its rejection.
         (vscode.window.withProgress as unknown as Mock).mockImplementation(
             (
                 _options: unknown,
@@ -437,7 +437,7 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
     });
 
     it('returns a retry node when reusing the cached client fails (without listing databases)', async () => {
-        (ClustersClientMock.getClient as Mock).mockRejectedValue(new Error('server down'));
+        (ClustersClientMock.connectInteractive as Mock).mockRejectedValue(new Error('server down'));
 
         // listDatabases must never be reached when the cached client cannot connect.
         const listDatabases = vi.fn();
@@ -456,7 +456,7 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
     });
 
     it('uses the trusted-server modal and preserves action-only recovery for a cached rejection', async (): Promise<void> => {
-        ClustersClientMock.getClient.mockRejectedValue(
+        ClustersClientMock.connectInteractive.mockRejectedValue(
             new EntraDestinationRejectedError({ firstHost: 'other.example.com:27017', hostCount: 2 }),
         );
         const cluster = makeCluster();
@@ -465,7 +465,7 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
 
         const children = await item.getChildren();
 
-        expect(ClustersClientMock.getClient).toHaveBeenCalledWith(
+        expect(ClustersClientMock.connectInteractive).toHaveBeenCalledWith(
             'cluster-1',
             expect.anything(),
             expect.any(Function),
@@ -499,12 +499,12 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
 
     it('clears the destination rejection reason after a successful cached retry', async (): Promise<void> => {
         const item = new TestClusterItem(makeCluster(), null);
-        ClustersClientMock.getClient.mockRejectedValueOnce(
+        ClustersClientMock.connectInteractive.mockRejectedValueOnce(
             new EntraDestinationRejectedError({ firstHost: 'other.example.com', hostCount: 1 }),
         );
         await item.getChildren();
         expect(item.lastConnectionFailureReason).toBe('entraDestinationRejected');
-        ClustersClientMock.getClient.mockResolvedValueOnce(makeClient(vi.fn().mockResolvedValue([])));
+        ClustersClientMock.connectInteractive.mockResolvedValueOnce(makeClient(vi.fn().mockResolvedValue([])));
 
         await item.getChildren();
 
@@ -513,7 +513,7 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
     });
 
     it('surfaces a modal and records telemetry with failurePhase=cachedClientConnect', async () => {
-        (ClustersClientMock.getClient as Mock).mockRejectedValue(new Error('server down'));
+        (ClustersClientMock.connectInteractive as Mock).mockRejectedValue(new Error('server down'));
 
         const item = new TestClusterItem(makeCluster(), makeClient(vi.fn()));
 
@@ -536,7 +536,7 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
     });
 
     it('returns an empty array (no retry node) when the user cancels the cached connection', async () => {
-        (ClustersClientMock.getClient as Mock).mockRejectedValue(new UserCancelledError());
+        (ClustersClientMock.connectInteractive as Mock).mockRejectedValue(new UserCancelledError());
 
         const item = new TestClusterItem(makeCluster(), makeClient(vi.fn()));
 
@@ -601,7 +601,7 @@ describe('ClusterItemBase.connect', () => {
         mockTelemetryEvents.length = 0;
 
         // jest-mock-vscode's withProgress is a no-op vi.fn(); make it run the task so the
-        // cached path actually reaches ClustersClient.getClient().
+        // cached path actually reaches ClustersClient.connectInteractive().
         (vscode.window.withProgress as unknown as Mock).mockImplementation(
             (
                 _options: unknown,
@@ -619,7 +619,7 @@ describe('ClusterItemBase.connect', () => {
         const item = new ConnectTestClusterItem(makeCluster(), null);
         item.lastConnectionOutcome = 'canceled';
         item.lastConnectionCorrelationId = 'previous-attempt';
-        ClustersClientMock.getClient.mockImplementationOnce(
+        ClustersClientMock.connectInteractive.mockImplementationOnce(
             async (_clusterId, _signal, onAttempt): Promise<ClustersClient> => {
                 expect(item.lastConnectionOutcome).toBeUndefined();
                 expect(item.lastConnectionCorrelationId).toBeUndefined();
@@ -640,7 +640,7 @@ describe('ClusterItemBase.connect', () => {
     it('keys the credential cache and the client on clusterId, never on the tree position', async () => {
         mockHasCredentials.mockReturnValue(true);
         const cached = makeClient(vi.fn());
-        (ClustersClientMock.getClient as Mock).mockResolvedValue(cached);
+        (ClustersClientMock.connectInteractive as Mock).mockResolvedValue(cached);
 
         const cluster = makeMovedCluster();
         const item = new ConnectTestClusterItem(cluster, null);
@@ -651,7 +651,7 @@ describe('ClusterItemBase.connect', () => {
         // Keying either lookup on the tree position opens a second, duplicate connection.
         expect(mockHasCredentials).toHaveBeenCalledWith(cluster.clusterId);
         expect(mockHasCredentials).not.toHaveBeenCalledWith(cluster.treeId);
-        expect(ClustersClientMock.getClient).toHaveBeenCalledWith(
+        expect(ClustersClientMock.connectInteractive).toHaveBeenCalledWith(
             cluster.clusterId,
             expect.anything(),
             expect.any(Function),
@@ -667,12 +667,12 @@ describe('ClusterItemBase.connect', () => {
         await expect(item.connect()).resolves.toBe(fresh);
         expect(item.authenticateCalls).toBe(1);
         expect(item.beforeCachedCalls).toBe(0);
-        expect(ClustersClientMock.getClient).not.toHaveBeenCalled();
+        expect(ClustersClientMock.connectInteractive).not.toHaveBeenCalled();
     });
 
     it('returns null when the user cancels the progress notification on the cached path', async () => {
         mockHasCredentials.mockReturnValue(true);
-        (ClustersClientMock.getClient as Mock).mockRejectedValue(new UserCancelledError());
+        (ClustersClientMock.connectInteractive as Mock).mockRejectedValue(new UserCancelledError());
 
         const item = new ConnectTestClusterItem(makeCluster(), null);
 
@@ -684,7 +684,7 @@ describe('ClusterItemBase.connect', () => {
 
     it('propagates a genuine failure on the cached path so the command can report it', async () => {
         mockHasCredentials.mockReturnValue(true);
-        (ClustersClientMock.getClient as Mock).mockRejectedValue(new Error('server down'));
+        (ClustersClientMock.connectInteractive as Mock).mockRejectedValue(new Error('server down'));
 
         const item = new ConnectTestClusterItem(makeCluster(), null);
 
@@ -694,7 +694,7 @@ describe('ClusterItemBase.connect', () => {
 
     it('reports a cached destination rejection through the same modal without reauthenticating', async (): Promise<void> => {
         mockHasCredentials.mockReturnValue(true);
-        ClustersClientMock.getClient.mockRejectedValue(
+        ClustersClientMock.connectInteractive.mockRejectedValue(
             new EntraDestinationRejectedError({ firstHost: 'other.example.com', hostCount: 1 }),
         );
         const item = new ConnectTestClusterItem(makeMovedCluster(), null);

@@ -79,7 +79,7 @@ const mockGetClient = vi.fn();
 vi.mock('../../../documentdb/ClustersClient', () => ({
     ClustersClient: {
         exists: vi.fn().mockReturnValue(false),
-        getClient: (...args: unknown[]) => mockGetClient(...args),
+        connectInteractive: (...args: unknown[]) => mockGetClient(...args),
     },
 }));
 

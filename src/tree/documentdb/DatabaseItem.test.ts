@@ -81,6 +81,13 @@ describe('DatabaseItem - async collection count loading', () => {
         item.loadCollectionCount();
         await flushAsync();
 
+        expect(ClustersClient.getClient).toHaveBeenCalledExactlyOnceWith(
+            cluster.clusterId,
+            undefined,
+            undefined,
+            'treeChildren',
+            { background: true },
+        );
         expect(countCollectionsMock).toHaveBeenCalledWith('testdb', COLLECTION_COUNT_LIMIT);
         expect(listCollectionsMock).not.toHaveBeenCalled();
         expect(notifyChildrenChangedMock).toHaveBeenCalledWith(item.id);
@@ -124,6 +131,13 @@ describe('DatabaseItem - async collection count loading', () => {
         // Now expand the node, which fetches the full list
         const children = await item.getChildren();
 
+        expect(ClustersClient.getClient).toHaveBeenNthCalledWith(
+            2,
+            cluster.clusterId,
+            undefined,
+            undefined,
+            'treeChildren',
+        );
         expect(listCollectionsMock).toHaveBeenCalledTimes(1);
         expect(children).toHaveLength(3);
         // Description now shows exact count, no "+"

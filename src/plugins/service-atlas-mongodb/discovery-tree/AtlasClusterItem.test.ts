@@ -109,7 +109,7 @@ vi.mock('../../../documentdb/CredentialCache', () => ({
 
 vi.mock('../../../documentdb/ClustersClient', () => ({
     ClustersClient: {
-        getClient: vi.fn(),
+        connectInteractive: vi.fn(),
         deleteClient: vi.fn(),
     },
 }));
