@@ -35,4 +35,15 @@ cloud-invalidation and listener-disposal coverage. The three affected suites (55
 type-check, and targeted formatting check passed.
 
 The other three findings remain unchanged as recommended above. Author review of those
-dispositions and the live OP-2 results are pending.
+dispositions is pending.
+
+## OP-2 and CP-W3
+
+The operator accepted OP-2 after testing the installed VSIX. Activation, Discovery, filters,
+Refresh/Retry, same-account sign-out/sign-in, Azure New Connection discovery, and the Azure
+Resources RU and vCore/DocumentDB nodes worked. Different-account switching, MFA, sovereign
+cloud, Update Credentials and workspace-provider checks were not confirmed. The operator
+accepted the untested deep-link URLs; partial failures were not reproducible live.
+
+CP-W3 retains L2 (Claude Opus 5.5, 85% confidence). L1 uses the same azureauth and Azure
+Resources API versions, so stepping down does not reduce the remaining risk.

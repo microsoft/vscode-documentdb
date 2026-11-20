@@ -901,7 +901,12 @@ shim (0005).
   service discovery and the Azure Resources RU and vCore/DocumentDB nodes worked. Deep-link URLs
   were not tested; the operator accepted the risk. Update Credentials and workspace-provider
   results were not reported. Partial failures could not be reproduced live; focused tests cover
-  partial results and sanitized warnings. Final CP-W3 verdict pending.
+  partial results and sanitized warnings.
+- **CP-W3 (2026-11-20), advised (`claude-opus-5.5`, 85% confidence):** Retain L2:
+  azureauth `6.1.0-alpha.2`, azureutils and utils `5.1.0`, and Azure Resources API `3.1.1`.
+  The build, installed dependency tree, bundle inspection, and operator-accepted OP-2 support
+  this choice. L1 uses the same azureauth and Azure Resources API versions and does not reduce
+  the remaining risks. The untested OP-2 cases above remain unverified.
 
 ---
 
