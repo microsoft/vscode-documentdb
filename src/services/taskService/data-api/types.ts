@@ -82,7 +82,7 @@ export interface StreamingWriterOptions extends DataTransferOptions {
  *
  * @example
  * // Create a reader for a specific source
- * const reader = new DocumentDbDocumentReader(connectionId, databaseName, collectionName);
+ * const reader = new DocumentDbDocumentReader(() => ClustersClient.getClient(connectionId), databaseName, collectionName);
  *
  * // Stream documents from the configured source
  * for await (const doc of reader.streamDocuments()) {

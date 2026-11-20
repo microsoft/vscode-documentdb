@@ -188,6 +188,12 @@ calling `ClustersClient.getClient(clusterId)`.
 >
 > Leader recommendation: C now, plus a separate PR for the initialization bug; B if 1.5
 > should land in this round. Awaiting the operator's choice.
+>
+> **Done (2026-11-20) with option B, decision 0015,** in the stacked PR "[task engine pr1.5]"
+> on top of PR #1068. The reader takes `getClient: () => Promise<ClustersClient>`, called on each
+> count and read (not memoized); `ExecuteStep` passes
+> `() => ClustersClient.getClient(sourceConnectionId)`. Behaviour-neutral: the stale-clipboard path
+> still runs in the task. Tests: `DocumentDbDocumentReader.test.ts`.
 
 ### 1.6 Publish the writer's subclass contract
 
@@ -380,7 +386,7 @@ today.
 # Outcome
 
 **In progress (2026-11-05).** Phases 0, 1 and 2 landed in place on `dev/tnaum/npm-task-engine`,
-except 1.5, which is deferred pending an operator decision (see its note). All steps are
+except 1.5, which landed later as a lazy client provider in a stacked PR (see its note). All steps are
 behaviour-neutral for the DocumentDB path. After this round, the code that will move imports
 `vscode` or `ext` only in `UI/**` and `resourceUsageHelper.ts`, as planned. Phase 3 (open
 questions), Phase 4 (the NoSQL team's review) and Phase 5 (extraction, which waits for Phase 4)

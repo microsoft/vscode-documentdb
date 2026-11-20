@@ -26,6 +26,7 @@ created: 2026-11-05
 | 0012 | Keep task telemetry event and property names                             | Proposed            | —                                                                      | 2026-11-05 | —   |
 | 0013 | Ship 0.x until the contract review with the NoSQL team                   | Proposed            | —                                                                      | 2026-11-05 | —   |
 | 0014 | Document packages with examples, reference code and a For agents section | Accepted            | Requested by the maintainer                                            | 2026-11-05 | —   |
+| 0015 | The DocumentDB reader receives a lazy client provider                    | Accepted            | Confirmed by the maintainer                                            | 2026-11-20 | —   |
 
 > Entries below are semantically immutable. Append a new decision rather than rewriting an old one,
 > and record a reversal as a new entry plus a status change in the table.
@@ -309,3 +310,33 @@ tarball means an agent can read it from `node_modules` without network access.
 - **Links to `main`:** they rot when files move; a tag keeps them stable.
 - **Agent guidance only in this repository's `.github/skills/`:** invisible to other repositories.
 - **Untested README snippets:** they drift from the API silently.
+
+## 0015 — The DocumentDB reader receives a lazy client provider
+
+**Status:** Accepted · **Date:** 2026-11-20 · **Raised by:** maintainer
+
+### Decision
+
+Plan item 1.5 lands as a client provider, not a client instance. `DocumentDbDocumentReader` takes
+`getClient: () => Promise<ClustersClient>` and calls it each time it counts or reads; it no longer
+calls `ClustersClient.getClient` itself. `ExecuteStep` passes
+`() => ClustersClient.getClient(sourceConnectionId)`. The writer keeps receiving a resolved client.
+
+### Reasoning
+
+The maintainer asked for 1.5 to be addressed now rather than deferred ("I'd like 1.5 addressed
+now"). Of the options in the plan's 1.5 note, the provider is the only one that removes the static
+lookup from the reader without changing behaviour (0008): the source client is still resolved
+inside the task, so a source disconnected after Copy still fails in `validateSource` with the
+friendly message, the cleared clipboard and the `sourceClusterDisconnected` telemetry. The provider
+is not memoized, so each call happens exactly where the old `getClient` call was.
+
+### Rejected alternatives
+
+- **Resolved client instance, as the plan worded it:** `ExecuteStep` would resolve the source
+  client before the task exists, so a missing-credentials source would fail in the wizard with the
+  raw error and skip the PR #490 handling.
+- **Fix the swallowed-initialization bug first, then pass an instance:** a deliberate behaviour
+  change; it still needs validation before client resolution. Kept as a separate follow-up.
+- **Make the writer lazy too, for symmetry:** changes when target failures surface; no need.
+- **Defer or drop:** the maintainer chose to address it now.
