@@ -11,13 +11,20 @@ import type * as Mongodb from 'mongodb';
 import { MongoClient, MongoNetworkError, MongoServerError, type MongoClientOptions } from 'mongodb';
 import { ext } from '../extensionVariables';
 import { traceAuthFlow, type AuthTraceContext } from '../utils/authTrace';
+import { type VerifiedEntraIdentity } from './auth/AuthHandler';
 import { AuthMethodId } from './auth/AuthMethod';
 import * as authHandlerFactory from './auth/createAuthHandler';
 import { ManagedIdentityAuthHandler } from './auth/ManagedIdentityAuthHandler';
 import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
 import { NativeAuthHandler } from './auth/NativeAuthHandler';
 import { NoAuthHandler } from './auth/NoAuthHandler';
-import { ClustersClient, getIndexExclusionReason, type IndexItemModel } from './ClustersClient';
+import {
+    addEstablishedConnectionContext,
+    ClustersClient,
+    getIndexExclusionReason,
+    type IndexItemModel,
+} from './ClustersClient';
+import { computeConnectionFingerprint } from './connectionFingerprint';
 import { CredentialCache } from './CredentialCache';
 import { prepareDriverConnectionString } from './srv/prepareDriverConnectionString';
 import { type SrvResolutionSummary } from './srv/srvResolutionSummary';
@@ -119,6 +126,13 @@ describe('ClustersClient', () => {
 
 describe('regular connection startup diagnostics', () => {
     const clusterId = 'private-cluster';
+    const verifiedIdentity: VerifiedEntraIdentity = {
+        kind: 'entra',
+        providerId: 'microsoft',
+        accountId: 'private-test-account-id',
+        accountLabel: 'private-test-account-label',
+        tenantId: 'private-test-tenant',
+    };
     const mockConnect = vi.fn();
     const mockClose = vi.fn();
     const mockListDatabases = vi.fn<() => Promise<Mongodb.ListDatabasesResult>>();
@@ -160,9 +174,123 @@ describe('regular connection startup diagnostics', () => {
         ]) {
             vi.spyOn(handler.prototype, 'configureAuth').mockImplementation(async () => {
                 vi.advanceTimersByTime(20);
-                return { connectionString: 'mongodb://private-host:27017', options: {} };
+                return {
+                    connectionString: 'mongodb://private-host:27017',
+                    options: {},
+                    ...(handler === MicrosoftEntraIDAuthHandler ? { verifiedIdentity } : {}),
+                };
             });
         }
+    });
+
+    it('publishes a new binding only on successful establishment and advances generations across deletion', async () => {
+        expect(ClustersClient.getBinding(clusterId)).toBeUndefined();
+        const first = await ClustersClient.getClient(clusterId);
+        expect(first.binding).toEqual({ clusterId, fingerprint: first.fingerprint, generation: first.generation });
+        expect(first.createdAt).toBe(Date.now());
+        expect(await ClustersClient.getClient(clusterId)).toBe(first);
+        expect(ClustersClient.getBinding(clusterId)).toBe(first.binding);
+
+        await ClustersClient.deleteClient(clusterId);
+        expect(ClustersClient.getBinding(clusterId)).toBeUndefined();
+        mockConnect.mockRejectedValueOnce(new Error('driver failure'));
+        await expect(ClustersClient.getClient(clusterId)).rejects.toThrow('driver failure');
+        expect(ClustersClient.getBinding(clusterId)).toBeUndefined();
+
+        const second = await ClustersClient.getClient(clusterId);
+        expect(ClustersClient.getBinding(clusterId)).toBe(second.binding);
+        expect(second.generation).toBe(first.generation + 1);
+        expect(second.fingerprint).toBe(first.fingerprint);
+        expect(second.createdAt).toBeGreaterThan(first.createdAt);
+    });
+
+    it('binds Entra to the original cached URI and the verified identity, even if credentials change during startup', async () => {
+        const originalUri = 'mongodb+srv://original.example.com/database?authSource=admin';
+        const driverUri = 'mongodb://localhost:27018/database';
+        CredentialCache.setAuthCredentials(clusterId, AuthMethodId.MicrosoftEntraID, originalUri);
+        vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockImplementationOnce(async () => {
+            CredentialCache.setAuthCredentials(clusterId, AuthMethodId.NoAuth, 'mongodb://replacement.example.com');
+            return {
+                connectionString: `${originalUri}&authMechanism=MONGODB-OIDC`,
+                options: {},
+                verifiedIdentity,
+            };
+        });
+        vi.mocked(prepareDriverConnectionString).mockResolvedValueOnce({
+            connectionString: driverUri,
+            options: {},
+            srvResolution: 'fallback',
+        });
+
+        const client = await ClustersClient.getClient(clusterId);
+        expect(MongoClient).toHaveBeenCalledWith(driverUri, {});
+        expect(client.fingerprint).toBe(
+            computeConnectionFingerprint({ connectionString: originalUri, principal: verifiedIdentity }),
+        );
+        expect(CredentialCache.getCredentials(clusterId)?.authMechanism).toBe(AuthMethodId.NoAuth);
+        expect(client.authMethod).toBe(AuthMethodId.MicrosoftEntraID);
+    });
+
+    it('does not publish an Entra binding when auth does not return a verified identity', async () => {
+        vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockResolvedValueOnce({
+            connectionString: 'mongodb://private-host:27017',
+            options: {},
+        });
+
+        await expect(ClustersClient.getClient(clusterId)).rejects.toThrow('verifiedIdentity');
+        expect(ClustersClient.getBinding(clusterId)).toBeUndefined();
+        expect(MongoClient).not.toHaveBeenCalled();
+    });
+
+    it('aborts only one cached waiter while both are waiting for the same driver connection', async () => {
+        const client = await ClustersClient.getClient(clusterId);
+        let finishConnect!: () => void;
+        const pendingConnect = new Promise<void>((resolve) => {
+            finishConnect = resolve;
+        });
+        mockConnect.mockReturnValue(pendingConnect);
+        const controller = new AbortController();
+        const cancelled = ClustersClient.getClient(clusterId, controller.signal);
+        const other = ClustersClient.getClient(clusterId, new AbortController().signal);
+        expect(mockConnect).toHaveBeenCalledTimes(3);
+
+        controller.abort();
+        await expect(cancelled).rejects.toBeInstanceOf(UserCancelledError);
+        expect(mockClose).not.toHaveBeenCalled();
+
+        finishConnect();
+        await expect(other).resolves.toBe(client);
+        expect(ClustersClient.getBinding(clusterId)).toBe(client.binding);
+        expect(mockClose).not.toHaveBeenCalled();
+    });
+
+    it('adds only bounded established-connection context by ID or client and does nothing without one', async () => {
+        const context: ITelemetryContext = { properties: { existing: 'kept' }, measurements: { existing: 1 } };
+        addEstablishedConnectionContext(context, clusterId);
+        expect(context).toEqual({ properties: { existing: 'kept' }, measurements: { existing: 1 } });
+
+        const client = await ClustersClient.getClient(clusterId);
+        CredentialCache.setAuthCredentials(clusterId, AuthMethodId.NoAuth, 'mongodb://replacement.example.com');
+        vi.advanceTimersByTime(125);
+        addEstablishedConnectionContext(context, clusterId);
+        expect(context).toEqual({
+            properties: {
+                existing: 'kept',
+                authMethod: AuthMethodId.MicrosoftEntraID,
+                connectionCorrelationId: client.connectionCorrelationId,
+            },
+            measurements: { existing: 1, connectionAgeMs: 125, clientGeneration: client.generation },
+        });
+        expect(JSON.stringify(context)).not.toContain(client.fingerprint);
+        expect(JSON.stringify(context)).not.toContain('private-');
+
+        vi.advanceTimersByTime(25);
+        addEstablishedConnectionContext(context, client);
+        expect(context.measurements.connectionAgeMs).toBe(150);
+        await ClustersClient.deleteClient(clusterId);
+        vi.advanceTimersByTime(25);
+        addEstablishedConnectionContext(context, client);
+        expect(context.measurements.connectionAgeMs).toBe(150);
     });
 
     afterEach(() => {
@@ -252,6 +380,7 @@ describe('regular connection startup diagnostics', () => {
         vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockResolvedValueOnce({
             connectionString: `mongodb://${host}/`,
             options: {},
+            verifiedIdentity,
         });
         await ClustersClient.getClient(clusterId);
         expect(vi.mocked(MongoClient).mock.calls[0]?.[1]?.appName).toBe(appName);
@@ -393,7 +522,7 @@ describe('regular connection startup diagnostics', () => {
         vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockImplementationOnce(
             async (_timings, context) => {
                 traceContext = context;
-                return { connectionString: 'mongodb://private-host:27017', options: {} };
+                return { connectionString: 'mongodb://private-host:27017', options: {}, verifiedIdentity };
             },
         );
         const client = await ClustersClient.getClient(clusterId);
@@ -496,7 +625,7 @@ describe('regular connection startup diagnostics', () => {
             const stop = timings?.startTokenAcquire();
             vi.advanceTimersByTime(20);
             stop?.();
-            return { connectionString: 'mongodb://private-host:27017', options: {} };
+            return { connectionString: 'mongodb://private-host:27017', options: {}, verifiedIdentity };
         });
         await ClustersClient.getClient(clusterId);
         expect(startupEvent().telemetry.measurements).toMatchObject({
@@ -638,6 +767,7 @@ describe('regular connection startup diagnostics', () => {
         vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockResolvedValueOnce({
             connectionString: original,
             options: {},
+            verifiedIdentity,
         });
         vi.mocked(prepareDriverConnectionString).mockResolvedValueOnce({
             connectionString: rewritten,
@@ -663,6 +793,7 @@ describe('regular connection startup diagnostics', () => {
         vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockResolvedValueOnce({
             connectionString: original,
             options: {},
+            verifiedIdentity,
         });
         vi.mocked(prepareDriverConnectionString).mockResolvedValueOnce({
             connectionString: 'mongodb://resolved.example.com/',

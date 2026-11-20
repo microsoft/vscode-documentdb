@@ -42,10 +42,13 @@ import { Links } from '../constants';
 import { ext } from '../extensionVariables';
 import { meterSilentCatch } from '../utils/accumulatingTelemetry';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
+import { nonNullValue } from '../utils/nonNull';
+import { type VerifiedEntraIdentity } from './auth/AuthHandler';
 import { AuthMethodId } from './auth/AuthMethod';
 import { createAuthHandler } from './auth/createAuthHandler';
 import { getAzureHostSuffix } from './auth/oidcAllowedHosts';
 import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
+import { computeConnectionFingerprint, type ConnectionPrincipal } from './connectionFingerprint';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
 import { QueryError } from './errors/QueryError';
 import {
@@ -62,7 +65,7 @@ import { SchemaStore } from './SchemaStore';
 import { prepareDriverConnectionString } from './srv/prepareDriverConnectionString';
 import { type SrvResolutionSummary } from './srv/srvResolutionSummary';
 import { ConnectionStartupTimings } from './utils/ConnectionStartupTimings';
-import { getHostsFromConnectionString } from './utils/connectionStringHelpers';
+import { getHostsFromConnectionString, getUserNameFromConnectionString } from './utils/connectionStringHelpers';
 import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
 import { parseDocumentId } from './utils/parseDocumentId';
@@ -74,6 +77,12 @@ export interface DatabaseItemModel {
     name: string;
     sizeOnDisk?: number;
     empty?: boolean;
+}
+
+export interface ConnectionBinding {
+    readonly clusterId: string;
+    readonly fingerprint: string;
+    readonly generation: number;
 }
 
 export interface CollectionItemModel {
@@ -182,6 +191,24 @@ function assertDocumentObject(value: unknown, errorCode: 'INVALID_PROJECTION' | 
     return value as Document;
 }
 
+function getConnectionPrincipal(
+    authMethod: AuthMethodId,
+    credentials: CachedClusterCredentials,
+    configuredUri: string,
+    verifiedIdentity: VerifiedEntraIdentity | undefined,
+): ConnectionPrincipal {
+    switch (authMethod) {
+        case AuthMethodId.NativeAuth:
+            return { kind: 'native', username: getUserNameFromConnectionString(configuredUri) };
+        case AuthMethodId.ManagedIdentity:
+            return { kind: 'managedIdentity', clientId: credentials.managedIdentityConfig?.clientId };
+        case AuthMethodId.MicrosoftEntraID:
+            return nonNullValue(verifiedIdentity, 'verifiedIdentity', 'ClustersClient.ts');
+        case AuthMethodId.NoAuth:
+            return { kind: 'none' };
+    }
+}
+
 export class ClustersClient {
     /**
      * Cache of active MongoDB clients, keyed by clusterId.
@@ -198,6 +225,12 @@ export class ClustersClient {
      */
     static _clients: Map<string, ClustersClient> = new Map();
 
+    private static readonly _generations = new Map<string, number>();
+
+    #startupCredentials: Readonly<CachedClusterCredentials>;
+    private _fingerprint: string;
+    private _binding: ConnectionBinding;
+    private _createdAt: number;
     private _mongoClient: MongoClient;
     private _interactiveEntraStartupId?: string;
     private _llmEnhancedFeatureApis: llmEnhancedFeatureApis | null = null;
@@ -236,6 +269,26 @@ export class ClustersClient {
      */
     private constructor(private readonly clusterId: string) {
         return;
+    }
+
+    public get binding(): ConnectionBinding {
+        return this._binding;
+    }
+
+    public get createdAt(): number {
+        return this._createdAt;
+    }
+
+    public get generation(): number {
+        return this.binding.generation;
+    }
+
+    public get fingerprint(): string {
+        return this.binding.fingerprint;
+    }
+
+    public get authMethod(): AuthMethodId {
+        return this.#startupCredentials.authMechanism ?? AuthMethodId.NativeAuth;
     }
 
     // TODO: add support for single databases via connection string.
@@ -364,14 +417,16 @@ export class ClustersClient {
     }
 
     private async initializeClient(startup: ClientStartup, abortSignal?: AbortSignal): Promise<void> {
-        const credentials = CredentialCache.getCredentials(this.clusterId);
-        if (!credentials) {
+        const cachedCredentials = CredentialCache.getCredentials(this.clusterId);
+        if (!cachedCredentials) {
             startup.credentialsMissing = true;
             throw new Error(l10n.t('No credentials found for id {clusterId}', { clusterId: this.clusterId }));
         }
+        const credentials = structuredClone(cachedCredentials);
+        this.#startupCredentials = credentials;
 
         // default to NativeAuth if nothing is configured
-        const authMethod = credentials?.authMechanism ?? AuthMethodId.NativeAuth;
+        const authMethod = this.authMethod;
         startup.telemetry.properties.authMethod = authMethod;
 
         // Ordinary connects may prompt (for example, Microsoft Entra ID sign-in).
@@ -379,13 +434,17 @@ export class ClustersClient {
 
         // Configure auth and get connection options
         this.advanceClientStartup(startup, 'stage02ConfiguringAuth');
-        const { connectionString, options } = await authHandler.configureAuth(startup.costTimings, {
+        const { connectionString, options, verifiedIdentity } = await authHandler.configureAuth(startup.costTimings, {
             startupCorrelationId: startup.id,
             surface: 'extension',
             startupProperties: startup.telemetry.properties,
         });
 
         this.advanceClientStartup(startup, 'stage03PreparingClient');
+        this._fingerprint = computeConnectionFingerprint({
+            connectionString: credentials.connectionString,
+            principal: getConnectionPrincipal(authMethod, credentials, connectionString, verifiedIdentity),
+        });
         const hosts = getHostsFromConnectionString(connectionString);
         const userAgentString = hosts.some((host) => getAzureHostSuffix(host)) ? appendExtensionUserAgent() : undefined;
         if (userAgentString) {
@@ -595,8 +654,8 @@ export class ClustersClient {
      *
      * @param clusterId - A required string used to find the cached connection string to connect.
      * It is also used as a key to reuse existing clients.
-     * @param abortSignal - Optional signal to abort the connection attempt. When aborted,
-     * the in-progress connection is closed and a `UserCancelledError` is thrown.
+     * @param abortSignal - Optional signal that rejects the call with `UserCancelledError` on abort.
+     * A cold startup closes its in-progress connection; a cached reuse cancels only this caller's wait.
      * @param onStartup - Called with the startup correlation ID of the attempt this call joins.
      * @param trigger - Which code path asks for the client; recorded as `startupTrigger` when this
      * call starts a new `connect.startup`. Callers that do not pass it are recorded as `other`.
@@ -614,33 +673,27 @@ export class ClustersClient {
                 onStartup?.(client.connectionCorrelationId);
             }
 
-            // Wire up abort for cached client reconnection so the cancellable
-            // progress UI can also cancel a reconnection attempt.
             if (abortSignal?.aborted) {
                 throw new UserCancelledError('abortConnection');
             }
 
-            const onAbort = (): void => {
-                void client._mongoClient.close().catch(() => {
-                    // Ignore close errors when aborting during reconnect
-                });
-            };
-            abortSignal?.addEventListener('abort', onAbort, { once: true });
-
-            try {
-                // if the client is already connected, it's a NOOP.
-                // Note: connectionCorrelationId retains the value from the initial
-                // connection (set in initClient). This is by design — the correlation
-                // ID links the original connect/staticmetadata/getmetadata events.
-                // Cached reconnects don't emit new metadata events, so no new ID is needed.
+            // Preserve the original startup correlation ID on cached reuse.
+            if (!abortSignal) {
                 await client._mongoClient.connect();
-            } catch (error) {
-                if (abortSignal?.aborted) {
-                    throw new UserCancelledError('abortConnection');
-                }
-                throw error;
+                return client;
+            }
+            let onAbort: (() => void) | undefined;
+            try {
+                await new Promise<MongoClient>((resolve, reject) => {
+                    onAbort = (): void => reject(new UserCancelledError('abortConnection'));
+                    abortSignal.addEventListener('abort', onAbort, { once: true });
+                    // Keep observing the driver promise even if the caller stops waiting.
+                    void client._mongoClient.connect().then(resolve, reject);
+                });
             } finally {
-                abortSignal?.removeEventListener('abort', onAbort);
+                if (onAbort) {
+                    abortSignal.removeEventListener('abort', onAbort);
+                }
             }
 
             return client;
@@ -650,6 +703,10 @@ export class ClustersClient {
         try {
             // Cluster metadata is set in initClient
             await client.initClient(abortSignal, onStartup, trigger);
+            const generation = (ClustersClient._generations.get(clusterId) ?? 0) + 1;
+            client._binding = Object.freeze({ clusterId, fingerprint: client._fingerprint, generation });
+            client._createdAt = Date.now();
+            ClustersClient._generations.set(clusterId, generation);
             ClustersClient._clients.set(clusterId, client);
             ClustersClient._lastFailedStartups.delete(clusterId);
         } catch (error) {
@@ -696,6 +753,10 @@ export class ClustersClient {
      */
     public static getExistingClient(clusterId: string): ClustersClient | undefined {
         return ClustersClient._clients.get(clusterId);
+    }
+
+    public static getBinding(clusterId: string): ConnectionBinding | undefined {
+        return ClustersClient.getExistingClient(clusterId)?.binding;
     }
 
     public static getSrvResolution(clusterId: string): SrvResolutionSummary | undefined {
@@ -1525,4 +1586,16 @@ export class ClustersClient {
         }
         return this._llmEnhancedFeatureApis.unhideIndex(databaseName, collectionName, indexName);
     }
+}
+
+export function addEstablishedConnectionContext(context: ITelemetryContext, cluster: string | ClustersClient): void {
+    const client = typeof cluster === 'string' ? ClustersClient.getExistingClient(cluster) : cluster;
+    if (!client || ClustersClient.getExistingClient(client.binding.clusterId) !== client) {
+        return;
+    }
+
+    context.properties.authMethod = client.authMethod;
+    context.properties.connectionCorrelationId = client.connectionCorrelationId;
+    context.measurements.connectionAgeMs = Math.max(0, Date.now() - client.createdAt);
+    context.measurements.clientGeneration = client.generation;
 }
