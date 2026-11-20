@@ -888,6 +888,14 @@ shim (0005).
   browsing silent required more than a small update. A prompt override would have to cover
   both the SDK listing pipeline and subscription authentication, so PR2 will not add one.
   OP-2 should include checking where prompts appear and what happens when they are dismissed.
+- **OP-2 candidate ready (2026-11-20):** [Draft PR2 #1111](https://github.com/microsoft/vscode-documentdb/pull/1111)
+  contains the L2 migration (`1869c22ab`) and local account-cache fix (`423c2e1b7`). The
+  [PR2 pre-review](./01-pr2-azureauth-review.md) records the findings and verification. The full
+  suite passed before the cache follow-up (9,682 passed, one skipped); 55 focused tests and
+  root type-check passed after it. The rebuilt VSIX passed inspection and its host graph has one
+  azureauth ESM copy, with no legacy lowered initializer call in the Azure auth chunk.
+  Automated activation did not run in this host because Electron's GUI libraries are missing.
+  **Waiting for OP-2** on the packaged L2 candidate before the CP-W3 verdict.
 
 ---
 
