@@ -867,6 +867,22 @@ shim (0005).
 
 **Progress:**
 
+- **Deferred, awaiting operator decisions (2026-11-20):** The L2 probe installed one copy of each
+  azext package and found no fresh versions among the 13 newly resolved packages. The partial
+  migration passed 402 focused tests; the build still has 19 diagnostics in the unconverted
+  subscription-listing paths. No draft or packaged candidate is ready.
+- **ARM challenge prompts:** The advisor (`claude-opus-5.5`) verified that each planned v6 level
+  can prompt on a challenge during passive Discovery. The SDK has no supported option to limit
+  prompts to explicit actions. Recommended for operator consideration: preserve silent
+  Discovery, accepting that its own wizard and deep-link flows would also forgo step-up. The
+  alternatives are to accept the v6 prompt behavior or widen the design to distinguish passive
+  and explicit calls.
+- **Partial subscription results:** The advisor verified that v6 can skip tenants after ARM
+  failures and return a partial list. Recommended for operator consideration: retain healthy
+  results with a sanitized output diagnostic for failed tenants. Preserving visible failure and
+  Retry instead would require a larger change to listing. Neither behavior change was adopted.
+  OP-2 and the final CP-W3 verdict remain pending.
+
 ---
 
 ## WI-4: Client identity, generation and the two cache fixes (PR 3)
