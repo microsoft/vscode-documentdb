@@ -49,6 +49,7 @@ import { createAuthHandler } from './auth/createAuthHandler';
 import { getAzureHostSuffix } from './auth/oidcAllowedHosts';
 import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
 import { computeConnectionFingerprint, type ConnectionPrincipal } from './connectionFingerprint';
+import { ConnectionUnavailableError, type ConnectionUnavailableReason } from './ConnectionUnavailableError';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
 import { QueryError } from './errors/QueryError';
 import {
@@ -180,6 +181,40 @@ interface ClientStartup {
     credentialsMissing?: boolean;
 }
 
+interface PendingStartup {
+    readonly id: string;
+    readonly epoch: number;
+    readonly promise: Promise<ClustersClient>;
+}
+
+async function waitForClient(
+    promise: Promise<ClustersClient>,
+    signal: AbortSignal | undefined,
+    startupId: string | undefined,
+): Promise<ClustersClient> {
+    if (!signal) {
+        return promise;
+    }
+    let onAbort!: () => void;
+    try {
+        return await new Promise<ClustersClient>((resolve, reject) => {
+            onAbort = (): void => {
+                ext.outputChannel.debug(`[ClustersClient] startup=${startupId} wait canceled by user surface=extension`);
+                reject(new UserCancelledError('abortConnection'));
+            };
+            // Observe settlement even if this caller has already left.
+            void promise.then(resolve, reject);
+            if (signal.aborted) {
+                onAbort();
+            } else {
+                signal.addEventListener('abort', onAbort, { once: true });
+            }
+        });
+    } finally {
+        signal.removeEventListener('abort', onAbort);
+    }
+}
+
 /**
  * Validates that a parsed BSON value is a plain object (not a scalar, array, or null).
  * Throws a QueryError if the value is not a plain object.
@@ -226,6 +261,33 @@ export class ClustersClient {
     static _clients: Map<string, ClustersClient> = new Map();
 
     private static readonly _generations = new Map<string, number>();
+    private static readonly _epochs = new Map<string, number>();
+    private static readonly _latches = new Map<string, ConnectionUnavailableReason>();
+    private static readonly _pendingStartups = new Map<string, PendingStartup>();
+
+    public static getEpoch(clusterId: string): number {
+        return ClustersClient._epochs.get(clusterId) ?? 0;
+    }
+
+    public static invalidate(clusterId: string): number {
+        const epoch = ClustersClient.getEpoch(clusterId) + 1;
+        ClustersClient._epochs.set(clusterId, epoch);
+        return epoch;
+    }
+
+    public static latch(clusterId: string, reason: ConnectionUnavailableReason): void {
+        ClustersClient._latches.set(clusterId, reason);
+        ClustersClient.invalidate(clusterId);
+    }
+
+    public static unlatch(clusterId: string): void {
+        ClustersClient._latches.delete(clusterId);
+        ClustersClient.invalidate(clusterId);
+    }
+
+    public static getLatchReason(clusterId: string): ConnectionUnavailableReason | undefined {
+        return ClustersClient._latches.get(clusterId);
+    }
 
     #startupCredentials: Readonly<CachedClusterCredentials>;
     private _fingerprint: string;
@@ -245,7 +307,7 @@ export class ClustersClient {
 
     /**
      * This client's startup ID, also published as `startupCorrelationId`. Links `connect.startup`,
-     * `connect.staticmetadata`, `connect.getmetadata` and SRV events. Generated once per `initClient` call.
+     * `connect.staticmetadata`, `connect.getmetadata` and SRV events. Generated once per cold startup.
      */
     public connectionCorrelationId?: string;
 
@@ -323,14 +385,8 @@ export class ClustersClient {
         return CredentialCache.getCredentials(this.clusterId)?.localQuickStartInstance === true;
     }
 
-    private async initClient(
-        abortSignal: AbortSignal | undefined,
-        onStartup: ((id: string) => void) | undefined,
-        trigger: ClientStartupTrigger,
-    ): Promise<void> {
-        const startupId = randomUUID();
+    private async initClient(startupId: string, trigger: ClientStartupTrigger): Promise<void> {
         this.connectionCorrelationId = startupId;
-        onStartup?.(startupId);
         let originalFailure: { error: unknown } | undefined;
 
         try {
@@ -361,7 +417,7 @@ export class ClustersClient {
                 };
 
                 try {
-                    await this.initializeClient(startup, abortSignal);
+                    await this.initializeClient(startup);
                     this.finishClientStartup(startup, 'succeeded');
                 } catch (error) {
                     const canceled = error instanceof UserCancelledError;
@@ -416,11 +472,11 @@ export class ClustersClient {
         );
     }
 
-    private async initializeClient(startup: ClientStartup, abortSignal?: AbortSignal): Promise<void> {
+    private async initializeClient(startup: ClientStartup): Promise<void> {
         const cachedCredentials = CredentialCache.getCredentials(this.clusterId);
         if (!cachedCredentials) {
             startup.credentialsMissing = true;
-            throw new Error(l10n.t('No credentials found for id {clusterId}', { clusterId: this.clusterId }));
+            throw new ConnectionUnavailableError('credentialsMissing');
         }
         const credentials = structuredClone(cachedCredentials);
         this.#startupCredentials = credentials;
@@ -475,7 +531,6 @@ export class ClustersClient {
                 startupCorrelationId: startup.id,
                 connectionCorrelationId: startup.id,
             },
-            abortSignal,
             startupTelemetry: startup.telemetry,
         });
         this._srvResolution = prepared.summary;
@@ -485,7 +540,6 @@ export class ClustersClient {
             prepared.options,
             authMethod === AuthMethodId.MicrosoftEntraID,
             credentials.emulatorConfiguration,
-            abortSignal,
             connectionString,
         );
 
@@ -536,48 +590,13 @@ export class ClustersClient {
         options: MongoClientOptions,
         interactiveEntra: boolean,
         emulatorConfiguration?: EmulatorConfiguration,
-        abortSignal?: AbortSignal,
         originalConnectionString: string = connectionString,
     ): Promise<void> {
-        // Create the client instance first so we hold a reference during connection.
-        // This allows callers to abort via abortSignal by closing the underlying client.
         this._mongoClient = new MongoClient(connectionString, options);
         if (interactiveEntra) {
             this._interactiveEntraStartupId = startup.id;
             this.traceInteractiveEntraPool(startup.id);
         }
-
-        if (abortSignal?.aborted) {
-            ext.outputChannel.debug(
-                `[ClustersClient] startup=${startup.id} canceled before connecting (already aborted signal) surface=extension`,
-            );
-            await this._mongoClient.close();
-            throw new UserCancelledError('abortConnection');
-        }
-
-        // Track whether connect() has resolved so the abort handler can avoid
-        // closing an already-connected client during the micro window between
-        // connect() resolving and removeEventListener firing. This window exists
-        // because abort events are dispatched synchronously when abort() is
-        // called: if abort() fires during the synchronous continuation after
-        // connect() resolves but before the listener is removed, the handler
-        // would close the now-connected client without this guard.
-        let connected = false;
-
-        // Wire up abort: closing the client causes the pending connect() to reject
-        const onAbort = (): void => {
-            if (connected) {
-                // connect() already resolved — do not close the connected client.
-                return;
-            }
-            ext.outputChannel.debug(
-                `[ClustersClient] startup=${startup.id} abort requested; closing client to interrupt connection handshake surface=extension`,
-            );
-            void this._mongoClient.close().catch(() => {
-                // Ignore close errors during abort cleanup
-            });
-        };
-        abortSignal?.addEventListener('abort', onAbort, { once: true });
 
         try {
             this.advanceClientStartup(startup, 'stage04ConnectingAndAuthenticating');
@@ -587,24 +606,10 @@ export class ClustersClient {
             } finally {
                 stopDatabaseConnect();
             }
-            connected = true;
-
-            // Remove the abort listener immediately after connect() resolves so
-            // that a late cancellation during synchronous API init below cannot
-            // close an already-connected client while the method continues as
-            // "successful". The connected flag above serves as a belt-and-suspenders
-            // guard in case abort fires between the assignment and this removal.
-            abortSignal?.removeEventListener('abort', onAbort);
-
             this.advanceClientStartup(startup, 'stage05InitializingApis');
             this._llmEnhancedFeatureApis = new llmEnhancedFeatureApis(this._mongoClient);
             this._queryInsightsApis = new QueryInsightsApis(this._mongoClient);
         } catch (error) {
-            if (abortSignal?.aborted) {
-                ext.outputChannel.debug(`[ClustersClient] startup=${startup.id} canceled by user surface=extension`);
-                throw new UserCancelledError('abortConnection');
-            }
-
             const message = parseError(error).message;
             // Surface the friendly local-connection tips only for a genuinely local-ish connection
             // (emulator, OR a local connection that opted into the TLS exception — host-gated the
@@ -630,13 +635,6 @@ export class ClustersClient {
                 );
             }
             throw error;
-        } finally {
-            // Clean up the abort listener if we didn't already remove it in the
-            // success path (i.e., connect() failed). In the success path the
-            // listener was already removed above.
-            if (abortSignal && !connected) {
-                abortSignal.removeEventListener('abort', onAbort);
-            }
         }
     }
 
@@ -655,7 +653,7 @@ export class ClustersClient {
      * @param clusterId - A required string used to find the cached connection string to connect.
      * It is also used as a key to reuse existing clients.
      * @param abortSignal - Optional signal that rejects the call with `UserCancelledError` on abort.
-     * A cold startup closes its in-progress connection; a cached reuse cancels only this caller's wait.
+     * Cancellation stops only this caller's wait, not the underlying connection.
      * @param onStartup - Called with the startup correlation ID of the attempt this call joins.
      * @param trigger - Which code path asks for the client; recorded as `startupTrigger` when this
      * call starts a new `connect.startup`. Callers that do not pass it are recorded as `other`.
@@ -667,59 +665,100 @@ export class ClustersClient {
         onStartup?: (id: string) => void,
         trigger: ClientStartupTrigger = 'other',
     ): Promise<ClustersClient> {
-        if (ClustersClient._clients.has(clusterId)) {
-            const client = ClustersClient._clients.get(clusterId) as ClustersClient;
-            if (client.connectionCorrelationId) {
-                onStartup?.(client.connectionCorrelationId);
+        for (let attempt = 0; ; attempt++) {
+            const reason = ClustersClient.getLatchReason(clusterId);
+            if (reason) {
+                throw new ConnectionUnavailableError(reason);
             }
-
             if (abortSignal?.aborted) {
                 throw new UserCancelledError('abortConnection');
             }
-
-            // Preserve the original startup correlation ID on cached reuse.
-            if (!abortSignal) {
-                await client._mongoClient.connect();
-                return client;
+            if (attempt === 2) {
+                throw new Error(l10n.t('The connection changed while it was opening. Try again.'));
             }
-            let onAbort: (() => void) | undefined;
+
+            const epoch = ClustersClient.getEpoch(clusterId);
+            const cached = ClustersClient._clients.get(clusterId);
+            let promise: Promise<ClustersClient>;
+            let id: string | undefined;
+            if (cached) {
+                id = cached.connectionCorrelationId;
+                if (id) {
+                    onStartup?.(id);
+                }
+                promise = cached._mongoClient.connect().then(() => cached);
+            } else {
+                const pending = ClustersClient.getOrStartClient(clusterId, epoch, trigger);
+                id = pending.id;
+                onStartup?.(id);
+                promise = pending.promise;
+            }
+
             try {
-                await new Promise<MongoClient>((resolve, reject) => {
-                    onAbort = (): void => reject(new UserCancelledError('abortConnection'));
-                    abortSignal.addEventListener('abort', onAbort, { once: true });
-                    // Keep observing the driver promise even if the caller stops waiting.
-                    void client._mongoClient.connect().then(resolve, reject);
-                });
-            } finally {
-                if (onAbort) {
-                    abortSignal.removeEventListener('abort', onAbort);
+                const client = await waitForClient(promise, abortSignal, id);
+                if (epoch === ClustersClient.getEpoch(clusterId)) {
+                    return client;
+                }
+            } catch (error) {
+                if (epoch === ClustersClient.getEpoch(clusterId)) {
+                    throw error;
                 }
             }
+            // Both a stale success and a stale failure use the same retry, after checking the latch.
+        }
+    }
 
-            return client;
+    private static getOrStartClient(clusterId: string, epoch: number, trigger: ClientStartupTrigger): PendingStartup {
+        const existing = ClustersClient._pendingStartups.get(clusterId);
+        if (existing?.epoch === epoch) {
+            return existing;
         }
 
+        const id = randomUUID();
+        // Register before initialization or a caller's onStartup callback can re-enter getClient.
+        const promise = Promise.resolve().then(() => ClustersClient.establishClient(clusterId, epoch, id, trigger));
+        const pending = { id, epoch, promise };
+        ClustersClient._pendingStartups.set(clusterId, pending);
+        const clear = (): void => {
+            if (ClustersClient._pendingStartups.get(clusterId) === pending) {
+                ClustersClient._pendingStartups.delete(clusterId);
+            }
+        };
+        void promise.then(clear, clear);
+        return pending;
+    }
+
+    private static async establishClient(
+        clusterId: string,
+        epoch: number,
+        id: string,
+        trigger: ClientStartupTrigger,
+    ): Promise<ClustersClient> {
         const client = new ClustersClient(clusterId);
         try {
-            // Cluster metadata is set in initClient
-            await client.initClient(abortSignal, onStartup, trigger);
-            const generation = (ClustersClient._generations.get(clusterId) ?? 0) + 1;
-            client._binding = Object.freeze({ clusterId, fingerprint: client._fingerprint, generation });
-            client._createdAt = Date.now();
-            ClustersClient._generations.set(clusterId, generation);
-            ClustersClient._clients.set(clusterId, client);
-            ClustersClient._lastFailedStartups.delete(clusterId);
+            await client.initClient(id, trigger);
         } catch (error) {
-            if (!(error instanceof UserCancelledError) && !abortSignal?.aborted && client.connectionCorrelationId) {
-                ClustersClient._lastFailedStartups.set(clusterId, client.connectionCorrelationId);
+            if (!(error instanceof UserCancelledError) && epoch === ClustersClient.getEpoch(clusterId)) {
+                ClustersClient._lastFailedStartups.set(clusterId, id);
             }
-            // On failure (including abort), clean up the partially-created client
             void client._mongoClient?.close().catch(() => {
                 // Ignore close errors during cleanup
             });
             throw error;
         }
 
+        if (epoch !== ClustersClient.getEpoch(clusterId)) {
+            void client._mongoClient.close().catch(() => {
+                ext.outputChannel.debug(`[ClustersClient] startup=${id} superseded client cleanup failed surface=extension`);
+            });
+        } else {
+            const generation = (ClustersClient._generations.get(clusterId) ?? 0) + 1;
+            client._binding = Object.freeze({ clusterId, fingerprint: client._fingerprint, generation });
+            client._createdAt = Date.now();
+            ClustersClient._generations.set(clusterId, generation);
+            ClustersClient._clients.set(clusterId, client);
+            ClustersClient._lastFailedStartups.delete(clusterId);
+        }
         return client;
     }
 
@@ -764,13 +803,12 @@ export class ClustersClient {
     }
 
     public static async deleteClient(clusterId: string): Promise<void> {
-        if (ClustersClient._clients.has(clusterId)) {
-            const client = ClustersClient._clients.get(clusterId) as ClustersClient;
-            await client._mongoClient.close(true);
+        ClustersClient.invalidate(clusterId);
+        const client = ClustersClient._clients.get(clusterId);
+        if (client) {
             ClustersClient._clients.delete(clusterId);
-
-            // Clear cached schema data for this cluster
             SchemaStore.getInstance().clearCluster(clusterId);
+            await client._mongoClient.close(true);
         }
     }
 
