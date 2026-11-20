@@ -1047,6 +1047,37 @@ shim (0005).
   is set. Do not add a new unavailable reason or a third attempt. A latch takes precedence.
   Cancellation assertions continue to follow the approved waiter-only behavior and retain
   coverage of actual startup failures, telemetry and cleanup.
+- **Done (2026-11-20), commit `61e9cd4f5` (WI-4c, `gpt-6.2-astra`, High, large context):**
+  Integrated the top blind-review candidate with bounded follow-up changes. Concurrent callers
+  share a startup for the current epoch; cancellation only ends a caller's wait. A superseded
+  client cannot publish or delay a retry while closing. Added the stale-handshake failure and
+  latch regression; the build and 108 focused tests passed on the delivery branch. The operator
+  chose the neutral second-invalidation message. The advisor (`claude-opus-5.5`) approved the
+  corrected candidate for delivery at 85% confidence. Full Case 2 and localization generation
+  remain deferred to PR3 handoff.
+
+  **WI-4c blind comparison:** Same baseline (`9a4d28dfa`), accepted behavior, build and focused
+  selectors. Scores describe the original candidates, not the corrected delivery commit. The
+  ranking had 60–65% confidence. Test counts differ because candidates authored their own tests.
+  Fusion ran alone via the Copilot CLI; its AI credits are reported separately from AIU.
+
+  | Variant | Candidate | Score | Elapsed | Input / output tokens | Tool calls | Usage |
+  | --- | --- | ---: | ---: | ---: | ---: | ---: |
+  | `gpt-6.2-astra`, High, large context | `89d642e66` | 92 | 4m03s | 737k / 12k | 27 | 254.7 AIU |
+  | `gpt-6.1-sol`, High | `18e933d13` | 89 | 8m16s | 1.1M / 24k | 33 | 55.8 AIU |
+  | `gpt-6.1-sol`, Extra High | `7a1845af5` | 88 | 6m56s | 918k / 21k | 31 | 51.2 AIU |
+  | `gpt-6.2-sol`, default | `eb388ef45` | 88 | 5m04s | 1.0M / 13k | 28 | 78.5 AIU |
+  | Copilot Fusion Standard (`gpt-6.1-terra`) | `4ac6c4765` | 86 | 3m07s | 911.6k / 12.5k | Not reported | 13.55 AI credits |
+  | `gpt-6.2-sol`, High | `f80f3a325` | 84 | 4m41s | 1.1M / 15k | 28 | 79.6 AIU |
+  | `gpt-6.2-sol`, Extra High | `aeabaabd2` | 84 | 7m01s | 1.1M / 18k | 33 | 87.6 AIU |
+  | `mai-code-2`, default | `1978a3c80` | 74 | 8m06s | 1.6M / 21k | 41 | 17.0 AIU |
+  | `gpt-6.1-sol`, Medium | `2cb904a18` | 73, fix required | 5m46s | 982k / 14k | 28 | 41.3 AIU |
+  | `claude-opus-5.5`, default, large context | `a0b581b07` | Disqualified | 7m53s | 2.5M / 44k | 29 | 201.1 AIU |
+
+  The medium-effort candidate could replace a cached client without closing it. The Opus
+  candidate did not honor the retry or latch on an obsolete startup failure. Astra led on
+  simplicity among the correct candidates; Sol 6.1 High had the strongest tests. This was
+  one trial per configuration, not a general model ranking.
 
 ---
 
