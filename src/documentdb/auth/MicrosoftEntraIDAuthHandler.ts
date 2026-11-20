@@ -275,6 +275,33 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                 }
             },
         });
+        const properties = configuration.options.authMechanismProperties;
+        const callback = properties?.OIDC_CALLBACK;
+        if (this.policy.observer?.onCallbackTokenObserved && properties && callback) {
+            properties.OIDC_CALLBACK = async (params): Promise<OIDCResponse> => {
+                try {
+                    // Report acquisition only after the configured callback re-checks destination trust.
+                    const response = await callback(params);
+                    this.notify((observer) =>
+                        observer.onCallbackTokenObserved?.({
+                            outcome: 'acquired',
+                            accessToken: response.accessToken,
+                            tenantId,
+                        }),
+                    );
+                    return response;
+                } catch (error) {
+                    if (
+                        error instanceof EntraSignInRequiredError ||
+                        error instanceof EntraIdentityMismatchError ||
+                        error instanceof TokenCallbackError
+                    ) {
+                        this.notify((observer) => observer.onCallbackTokenObserved?.({ outcome: 'failed', error }));
+                    }
+                    throw error;
+                }
+            };
+        }
         if (configuration.ignoredTlsBypass || this.clusterCredentials.emulatorConfiguration?.disableEmulatorSecurity) {
             ext.outputChannel.info(
                 l10n.t('[Auth] TLS validation bypass parameters are ignored for Microsoft Entra ID connections.'),

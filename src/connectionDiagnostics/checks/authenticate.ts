@@ -30,6 +30,7 @@ import {
 } from '../../documentdb/auth/createAuthHandler';
 import { TokenResourceResolutionError } from '../../documentdb/auth/documentdbTokenResource';
 import { classifyEntraError } from '../../documentdb/auth/entraErrors/classifyEntraError';
+import { EntraSignInRequiredError } from '../../documentdb/auth/entraErrors/entraCallbackErrors';
 import { getRecentEntraTokenFailure } from '../../documentdb/auth/entraErrors/entraTokenFailures';
 import { getCloudForTokenResource } from '../../documentdb/auth/entraScopes';
 import {
@@ -130,6 +131,8 @@ const knownErrorNames: ReadonlySet<string> = new Set([
     'UserCancelledError',
     'TokenResourceResolutionError',
     'AuthInputUnavailableError',
+    'EntraIdentityMismatchError',
+    'TokenCallbackError',
     'CredentialUnavailableError',
     'AuthenticationRequiredError',
     'AggregateAuthenticationError',
@@ -211,13 +214,21 @@ class AuthSteps {
         record.findings.push(...findings);
     }
 
-    /** Overrides an already recorded result, for a phase whose failure becomes known later. */
-    public replace(id: AuthStepId, status: CheckStatus, findings: readonly Finding<FindingCode>[]): void {
+    /** Replaces a phase's evidence without changing its original timing. */
+    public replace(
+        id: AuthStepId,
+        status: CheckStatus,
+        facts: Facts,
+        findings: readonly Finding<FindingCode>[],
+        skippedBecause?: StepRecord['skippedBecause'],
+    ): void {
         const record = this.get(id);
         record.startedAt ??= this.now();
         record.finishedAt ??= this.now();
         record.status = status;
-        record.findings.push(...findings);
+        record.skippedBecause = skippedBecause;
+        record.facts = facts;
+        record.findings = [...findings];
     }
 
     public skip(id: AuthStepId, reason: SkipReason, stepId?: AuthStepId): void {
@@ -320,6 +331,31 @@ export function createAuthenticateCheck(
         const timings = new ConnectionStartupTimings();
         let requestedResource = '';
         let tokenFailed = false;
+        let observingCallbackToken = false;
+        let callbackInputUnavailable = false;
+
+        function summarizeAcquisition(
+            info: { readonly accessToken: string; readonly tenantId?: string },
+        ): [status: 'pass' | 'warning', facts: Facts, findings: Finding<FindingCode>[]] {
+            const claims = summarizeTokenClaims(
+                info.accessToken,
+                { requestedResource, configuredTenantId: info.tenantId },
+                deps.now(),
+            );
+            const findings = claimFindings(claims);
+            return [findings.length > 0 ? 'warning' : 'pass', { claims }, findings];
+        }
+
+        function summarizeTokenFailure(error: unknown): [status: 'fail', facts: Facts, findings: Finding<FindingCode>[]] {
+            const classification = classifyEntraError(errorMessages(error));
+            const ruleId = classification?.ruleId ?? 'unclassified';
+            const aadstsCode = classification?.code;
+            return [
+                'fail',
+                { ...errorFacts(error), ruleId, ...(aadstsCode === undefined ? {} : { aadstsCode }) },
+                [entraTokenFailedFinding(ruleId, aadstsCode, method)],
+            ];
+        }
 
         const observer: AuthPhaseObserver = {
             onSignInConfigurationResolved(info): void {
@@ -338,32 +374,33 @@ export function createAuthenticateCheck(
             },
             onTokenAcquired(info): void {
                 // The token is summarized here and never stored; only the allowlisted summary remains.
-                const claims = summarizeTokenClaims(
-                    info.accessToken,
-                    { requestedResource, configuredTenantId: info.tenantId },
-                    deps.now(),
-                );
                 if (info.account?.label) {
                     facts.account = info.account.label;
                 }
-                const findings = claimFindings(claims);
-                steps?.finish('auth.token', findings.length > 0 ? 'warning' : 'pass', { claims }, findings);
+                steps?.finish('auth.token', ...summarizeAcquisition(info));
             },
             onTokenFailed(error): void {
-                if (error instanceof AuthInputUnavailableError) {
+                if (error instanceof AuthInputUnavailableError || error instanceof EntraSignInRequiredError) {
                     steps?.finish('auth.token', 'skipped', {}, [], { reason: 'inputUnavailable' });
                     return;
                 }
                 tokenFailed = true;
-                const classification = classifyEntraError(errorMessages(error));
-                const ruleId = classification?.ruleId ?? 'unclassified';
-                const aadstsCode = classification?.code;
-                steps?.finish(
-                    'auth.token',
-                    'fail',
-                    { ...errorFacts(error), ruleId, ...(aadstsCode === undefined ? {} : { aadstsCode }) },
-                    [entraTokenFailedFinding(ruleId, aadstsCode, method)],
-                );
+                steps?.finish('auth.token', ...summarizeTokenFailure(error));
+            },
+            onCallbackTokenObserved(observation): void {
+                if (!observingCallbackToken || signal.aborted) {
+                    return;
+                }
+                callbackInputUnavailable =
+                    observation.outcome === 'failed' && observation.error instanceof EntraSignInRequiredError;
+                tokenFailed = observation.outcome === 'failed' && !callbackInputUnavailable;
+                if (observation.outcome === 'acquired') {
+                    steps?.replace('auth.token', ...summarizeAcquisition(observation));
+                } else if (callbackInputUnavailable) {
+                    steps?.replace('auth.token', 'skipped', {}, [], { reason: 'inputUnavailable' });
+                } else {
+                    steps?.replace('auth.token', ...summarizeTokenFailure(observation.error));
+                }
             },
         };
 
@@ -380,6 +417,9 @@ export function createAuthenticateCheck(
             status: CheckStatus;
             findings?: Finding<FindingCode>[];
         }): CheckOutcome<FindingCode> => {
+            if (tokenFailed && method === AuthMethodId.MicrosoftEntraID) {
+                delete facts.account;
+            }
             const costs = timings.finish();
             if (costs.tokenAcquireDurationMs !== undefined) {
                 facts.tokenMs = Math.round(costs.tokenAcquireDurationMs);
@@ -419,8 +459,9 @@ export function createAuthenticateCheck(
             const handler = createAuthHandler(method, credentials, { interactive: false, observer });
             configured = await handler.configureAuth(timings, traceContext);
         } catch (error) {
-            if (error instanceof AuthInputUnavailableError) {
-                return finish(inputUnavailable(error.missing, method, steps, facts));
+            if (error instanceof AuthInputUnavailableError || error instanceof EntraSignInRequiredError) {
+                const missing = error instanceof AuthInputUnavailableError ? error.missing : 'entraSession';
+                return finish(inputUnavailable(missing, method, steps, facts));
             }
             getRunOwnedClient().authError = error;
             if (isEntraDestinationRejectedError(error)) {
@@ -491,12 +532,20 @@ export function createAuthenticateCheck(
             signal.addEventListener('abort', onAbort, { once: true });
             const stopDatabaseConnect = timings.startDatabaseConnect();
             try {
+                observingCallbackToken = true;
                 await ownedClient.connect();
             } finally {
+                observingCallbackToken = false;
                 stopDatabaseConnect();
                 signal.removeEventListener('abort', onAbort);
             }
         } catch (error) {
+            if (method === AuthMethodId.MicrosoftEntraID && signal.aborted) {
+                return finish({ status: 'fail' });
+            }
+            if (callbackInputUnavailable) {
+                return finish(inputUnavailable('entraSession', method, steps, facts));
+            }
             if (!(error instanceof AuthInputUnavailableError)) getRunOwnedClient().authError = error;
             failure ??= { error, phase: 'connect' };
             return finish(connectFailure(error, client, options, seedAddresses(context, driverConnectionString)));
@@ -506,6 +555,9 @@ export function createAuthenticateCheck(
             // The run already ended; the late client is closed and never published.
             await client.close().catch((): void => undefined);
             return finish({ status: 'fail' });
+        }
+        if (callbackInputUnavailable) {
+            return finish(inputUnavailable('entraSession', method, steps, facts));
         }
         getRunOwnedClient().client = client;
         steps?.finish('auth.serverAuthentication', 'pass');
@@ -535,8 +587,11 @@ export function createAuthenticateCheck(
                     "Microsoft Entra ID isn't allowed for this server.",
                 );
                 if (steps) {
-                    steps.replace('auth.signInConfiguration', 'fail', [finding]);
-                    steps.get('auth.signInConfiguration').facts.allHostsAllowed = false;
+                    const signIn = steps.get('auth.signInConfiguration');
+                    steps.replace('auth.signInConfiguration', 'fail', { ...signIn.facts, allHostsAllowed: false }, [
+                        ...signIn.findings,
+                        finding,
+                    ]);
                     steps.skip('auth.serverAuthentication', 'dependencyFailed', 'auth.signInConfiguration');
                     return { status: 'fail' };
                 }
@@ -636,6 +691,7 @@ export function createAuthenticateCheck(
         facts: Facts,
     ): { status: CheckStatus; findings: Finding<FindingCode>[] } {
         if (missing === 'entraSession') {
+            delete facts.account;
             // The silent lookup cannot tell "not signed in" from a consent or preauthorization
             // failure; an earlier recorded failure is evidence only and never changes the outcome.
             facts.signInLimitation = 'silentLookupCannotDistinguishConsent';
@@ -647,7 +703,7 @@ export function createAuthenticateCheck(
                     ...(earlier.ruleId === undefined ? {} : { ruleId: earlier.ruleId }),
                 };
             }
-            steps?.finish('auth.token', 'skipped', {}, [], { reason: 'inputUnavailable' });
+            steps?.replace('auth.token', 'skipped', {}, [], { reason: 'inputUnavailable' });
             steps?.skip('auth.serverAuthentication', 'dependencySkipped', 'auth.token');
         }
         facts.authenticated = false;
