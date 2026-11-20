@@ -100,6 +100,7 @@ result may continue, but say so in the message. Record the result in the Progres
   handles those. The advisor checkpoints and explicit operator decisions and tests still apply.
 - **Publish:** pushing the topic branch and opening its draft PR are pre-approved (decision 0006).
   Do not pause for separate publication confirmation. Normal review and merge requirements remain.
+  Prefix the GitHub title with the plan number, for example `PR0:` or `PR1:`.
 - **Commits:** one or more commits per WI, never one commit that mixes two WIs. Each commit ends with the
   `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailer.
 - **While working, and for draft PRs:** Case 1 only: `npm run build` plus `npx vitest run <touched paths>`.
