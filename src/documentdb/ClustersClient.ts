@@ -50,6 +50,7 @@ import { createAuthHandler } from './auth/createAuthHandler';
 import { EntraSignInRequiredError } from './auth/entraErrors/entraCallbackErrors';
 import { getAzureHostSuffix } from './auth/oidcAllowedHosts';
 import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
+import { classifyConnectionFailure, type ConnectionFailure } from './connectionFailures';
 import { computeConnectionFingerprint, type ConnectionPrincipal } from './connectionFingerprint';
 import { ConnectionUnavailableError, type ConnectionUnavailableReason } from './ConnectionUnavailableError';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
@@ -307,6 +308,17 @@ export class ClustersClient {
         return ClustersClient._latches.get(clusterId);
     }
 
+    public static clearCredentialRejection(clusterId: string, epoch: number): boolean {
+        if (
+            ClustersClient.getEpoch(clusterId) !== epoch ||
+            ClustersClient.getLatchReason(clusterId) !== 'credentialsRejected'
+        ) {
+            return false;
+        }
+        ClustersClient.unlatch(clusterId);
+        return true;
+    }
+
     #startupCredentials: Readonly<CachedClusterCredentials>;
     #verifiedIdentity: VerifiedIdentity;
     private _fingerprint: string;
@@ -314,6 +326,7 @@ export class ClustersClient {
     private _createdAt: number;
     private _mongoClient: MongoClient;
     private _closed = false;
+    private _replacement?: 'replaceOnNextForeground' | 'replaceOnRecovery';
     private _interactiveEntraStartupId?: string;
     private _llmEnhancedFeatureApis: llmEnhancedFeatureApis | null = null;
     private _queryInsightsApis: QueryInsightsApis | null = null;
@@ -758,7 +771,10 @@ export class ClustersClient {
 
             const epoch = ClustersClient.getEpoch(clusterId);
             const cached = ClustersClient._clients.get(clusterId);
-            if (cached && !cached._closed) {
+            if (cached?._replacement === 'replaceOnRecovery') {
+                throw new ConnectionUnavailableError('signInRequired');
+            }
+            if (cached?.canReuse()) {
                 const id = cached.connectionCorrelationId;
                 if (id) {
                     onStartup?.(id);
@@ -770,12 +786,12 @@ export class ClustersClient {
                     ext.outputChannel.debug(`[ClustersClient] startup=${id} wait canceled by user surface=extension`);
                     throw new UserCancelledError('abortConnection');
                 }
-                if (!cached._closed) {
+                if (cached.canReuse()) {
                     return cached;
                 }
             }
 
-            // Until a replacement succeeds, the closed entry still pins the connection identity.
+            // Until a replacement succeeds, the old entry still pins the connection identity.
             const { id, promise } = ClustersClient.getOrStartClient(
                 clusterId,
                 epoch,
@@ -787,7 +803,7 @@ export class ClustersClient {
             onStartup?.(id);
             try {
                 const client = await waitForClient(promise, abortSignal, id);
-                if (epoch === ClustersClient.getEpoch(clusterId)) {
+                if (epoch === ClustersClient.getEpoch(clusterId) && client.canReuse()) {
                     return client;
                 }
             } catch (error) {
@@ -817,7 +833,8 @@ export class ClustersClient {
             if (!credentials) {
                 throw new ConnectionUnavailableError('credentialsMissing');
             }
-            throw new MongoNotConnectedError(l10n.t('The connection is unavailable.'));
+            // This caller didn't run anything on a client. Don't treat this as a driver close.
+            throw new ConnectionUnavailableError('unreachable');
         }
         if (
             !allowInteractive &&
@@ -854,6 +871,9 @@ export class ClustersClient {
         const client = new ClustersClient(clusterId);
         try {
             await client.initClient(id, trigger, epoch, allowInteractive, expectedFingerprint);
+            if (client._closed) {
+                throw new MongoNotConnectedError(l10n.t('The connection is unavailable.'));
+            }
         } catch (error) {
             if (!(error instanceof UserCancelledError) && epoch === ClustersClient.getEpoch(clusterId)) {
                 ClustersClient._lastFailedStartups.set(clusterId, id);
@@ -873,6 +893,7 @@ export class ClustersClient {
                 );
             });
         } else {
+            const previous = ClustersClient._clients.get(clusterId);
             const generation = (ClustersClient._generations.get(clusterId) ?? 0) + 1;
             client._binding = Object.freeze({ clusterId, fingerprint: client._fingerprint, generation });
             client._createdAt = Date.now();
@@ -880,8 +901,56 @@ export class ClustersClient {
             ClustersClient._lastVerifiedIdentities.set(clusterId, Object.freeze({ ...client.#verifiedIdentity }));
             ClustersClient._clients.set(clusterId, client);
             ClustersClient._lastFailedStartups.delete(clusterId);
+            if (previous && !previous._closed) {
+                previous._closed = true;
+                void previous._mongoClient.close(true).catch(() => {
+                    // Closing a retired driver must not affect its replacement.
+                });
+            }
         }
         return client;
+    }
+
+    private canReuse(): boolean {
+        return !this._closed && this._replacement === undefined;
+    }
+
+    /** Reports an operation's failure against the generation that actually ran it. */
+    public static reportFailure(binding: ConnectionBinding, error: unknown): ConnectionFailure['kind'] | undefined {
+        const { clusterId, fingerprint, generation } = binding;
+        const client = ClustersClient._clients.get(clusterId);
+        if (
+            !client ||
+            client.generation !== generation ||
+            client.fingerprint !== fingerprint ||
+            ClustersClient.getLatchReason(clusterId)
+        ) {
+            return undefined;
+        }
+
+        const failure = classifyConnectionFailure(error, client.authMethod);
+        if (client._replacement === 'replaceOnRecovery') {
+            return failure.kind;
+        }
+        switch (failure.generation) {
+            case 'replaceOnNextForeground':
+                client._replacement = failure.generation;
+                break;
+            case 'replaceOnRecovery':
+                client._replacement = failure.generation;
+                // An already-started replacement must not bypass explicit recovery.
+                ClustersClient.invalidate(clusterId);
+                break;
+            case 'evict':
+                if (failure.kind === 'credentialsRejected') {
+                    ClustersClient.latch(clusterId, 'credentialsRejected');
+                }
+                void ClustersClient.deleteClient(clusterId).catch(() => {
+                    ext.outputChannel.debug('[ClustersClient] failed to close an evicted client');
+                });
+                break;
+        }
+        return failure.kind;
     }
 
     /**

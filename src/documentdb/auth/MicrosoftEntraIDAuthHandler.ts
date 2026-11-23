@@ -18,6 +18,7 @@ import {
     type AuthPhaseObserver,
 } from './authCallerPolicy';
 import { type AuthHandler, type AuthHandlerResponse, type VerifiedEntraIdentity } from './AuthHandler';
+import { AuthMethodId } from './AuthMethod';
 import { resolveInteractiveTokenResource, TokenResourceResolutionError } from './documentdbTokenResource';
 import { evaluateEntraDestinationFromSettings, getEntraCustomHostnameSuffix } from './entraDestinationSettings';
 import { classifyEntraError } from './entraErrors/classifyEntraError';
@@ -227,6 +228,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         const configuration = buildOidcClientConfiguration({
             connectionString,
             policy,
+            callbackAuthMethod: AuthMethodId.MicrosoftEntraID,
             oidcCallback: async (_params: OIDCCallbackParams): Promise<OIDCResponse> => {
                 const currentInvocation = ++invocation;
                 let observation: EntraTokenLookupObservation = { outcome: 'failed' };
@@ -263,7 +265,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                         observation = { outcome: 'noSession' };
                         throw error;
                     }
-                    if (observation.outcome === 'identityMismatch') {
+                    if (error instanceof EntraIdentityMismatchError || error instanceof EntraDestinationRejectedError) {
                         throw error;
                     }
                     recordEntraTokenFailure(clusterId, {
@@ -271,7 +273,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                         authMethod: 'interactive',
                         ruleId: classifyEntraError(error instanceof Error ? error.message : String(error))?.ruleId,
                     });
-                    throw new TokenCallbackError(error);
+                    throw error;
                 } finally {
                     traceAuthFlow(
                         'interactiveEntra.oidcCallback',
