@@ -85,14 +85,16 @@ export async function resolveAzureSubscription(
 
     context.telemetry.properties.failureStage = 'resolveSubscription';
     context.telemetry.properties.tenantSignInRequired = 'false';
-    for (let attempt = 0; attempt < 2; attempt++) {
+    let lookupAttempts = 0;
+    async function lookupSubscription(noCache = false): Promise<AzureSubscription | undefined> {
         ext.outputChannel.trace('[DeepLink] Listing subscriptions');
         report?.(vscode.l10n.t('Looking for the subscription…'));
+        context.telemetry.measurements.subscriptionLookupAttempts = ++lookupAttempts;
         const subscriptions = await measureDeepLinkPhase(context, 'subscriptionLookup', () =>
             azureSubscriptionProvider.getAvailableSubscriptions({
                 filter: false,
                 maximumTenants: Number.POSITIVE_INFINITY,
-                ...(attempt === 1 ? { noCache: true } : {}),
+                ...(noCache ? { noCache: true } : {}),
             }),
         );
         const candidates = subscriptions.filter(
@@ -103,18 +105,17 @@ export async function resolveAzureSubscription(
         );
         ext.outputChannel.trace(`[DeepLink] ${candidates.length} matching subscription(s) found`);
         context.telemetry.measurements.subscriptionAccountCount = candidates.length;
-        context.telemetry.measurements.subscriptionLookupAttempts = attempt + 1;
-        const subscription =
+        return (
             candidates.find((candidate) => !isTenantFilteredOut(candidate.tenantId, candidate.account.id)) ??
-            candidates[0];
-        if (subscription) {
-            return subscription;
-        }
+            candidates[0]
+        );
+    }
 
-        if (attempt > 0 || request.tenantId === undefined) {
-            break;
-        }
-
+    const subscription = (await lookupSubscription()) ?? (await lookupSubscription(true));
+    if (subscription) {
+        return subscription;
+    }
+    if (request.tenantId !== undefined) {
         context.telemetry.properties.tenantSignInRequired = 'true';
         const tenantId = request.tenantId;
         ext.outputChannel.trace('[DeepLink] Tenant sign-in offered');
@@ -146,6 +147,10 @@ export async function resolveAzureSubscription(
             ext.outputChannel.trace('[DeepLink] Tenant sign-in stopped');
             cancelDeepLink(context, 'AzureTenantSignIn');
             return undefined;
+        }
+        const tenantSubscription = await lookupSubscription(true);
+        if (tenantSubscription) {
+            return tenantSubscription;
         }
     }
 

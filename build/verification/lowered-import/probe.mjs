@@ -3,7 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// Built with `vite.config.ext.mjs` as a host entry, as the extension bundles azureauth's CommonJS.
-import { loadArmSubscriptions } from './azureauthLowering.cjs';
+// Match the static imports in azureauth's ESM AzureSubscriptionProviderBase.
+import { createSubscription } from '@azure/arm-resources-subscriptions/api';
+import { list as listSubscriptions } from '@azure/arm-resources-subscriptions/api/subscriptions';
+import { list as listTenants } from '@azure/arm-resources-subscriptions/api/tenants';
 
-export { loadArmSubscriptions };
+export { createSubscription, listSubscriptions, listTenants };

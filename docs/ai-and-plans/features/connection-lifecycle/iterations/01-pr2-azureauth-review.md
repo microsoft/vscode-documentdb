@@ -34,8 +34,9 @@ events. Tenant and subscription caches remain intact. Added two focused regressi
 cloud-invalidation and listener-disposal coverage. The three affected suites (55 tests), root
 type-check, and targeted formatting check passed.
 
-The other three findings remain unchanged as recommended above. Author review of those
-dispositions is pending.
+**Author sign-off (2026-11-20):** The operator accepted the recorded dispositions: keep the
+account-inventory fix, leave the existing Refresh/Retry and filter-wizard behavior unchanged,
+and keep the one-shot freshness design unless the overlap race reproduces.
 
 ## OP-2 and CP-W3
 
@@ -47,3 +48,52 @@ accepted the untested deep-link URLs; partial failures were not reproducible liv
 
 CP-W3 retains L2 (Claude Opus 5.5, 85% confidence). L1 uses the same azureauth and Azure
 Resources API versions, so stepping down does not reduce the remaining risk.
+
+## Final review handoff (2026-11-20)
+
+Case 2 verification at `4858e97d0` passed formatting, localization check, build, test
+type-check, full Vitest (9,684 passed, one skipped), and VSIX packaging. Lint initially
+reported unresolved types in the fresh worktree; it passed when rerun after the workspace
+build generated the package declarations. No source changes were needed. Automated VSIX
+activation remains unavailable on this host; the operator accepted the manual OP-2 result
+and its coverage gaps above.
+
+## Copilot review follow-up
+
+The operator approved all four follow-ups:
+
+- [R1](https://github.com/microsoft/vscode-documentdb/pull/1111#discussion_r4643940342), `8de2a67da`:
+  Azure policy and app-registration failures no longer get misclassified as sign-in problems.
+  Typed additional-verification codes still report `signInRequired`.
+- [R2](https://github.com/microsoft/vscode-documentdb/pull/1111#discussion_r4643940422), `df66e0172`:
+  A deep-link cache miss triggers a fresh listing before the extension offers tenant sign-in.
+  A successful tenant sign-in still triggers a fresh listing. Native SDK challenges are unchanged.
+- [R3](https://github.com/microsoft/vscode-documentdb/pull/1111#discussion_r4643940489), `9805b7e25`:
+  A regression test uses the same stored subscription for two ARM operations across expiry.
+  Each operation creates its own management client, as production does. With the real SDK
+  pipeline and fake transport, the second request uses the fresh token without prompting or
+  relisting. Reusing one long-lived management client can send the previous token for an
+  additional request; changing that credential adapter is outside this follow-up.
+- [R4](https://github.com/microsoft/vscode-documentdb/pull/1111#discussion_r4643940542), `490cf4376`:
+  Manage Azure Accounts fetches fresh tenants when loading its inventory. Routine Discovery
+  listing and wizard back-navigation keep their existing caching.
+
+Claude Opus 5.5 advised the dispositions (90%, 85%, 80%, and 85% confidence, respectively).
+The build and all 109 focused tests passed. The earlier full Case 2 run predates these changes.
+
+## Azure ESM bundle verification
+
+The operator approved removing the obsolete CommonJS alias and replacing its historical
+expected-failure test. In `f2b4641e6`, the production host probe verifies that the Azure ARM
+subscription and tenant exports are callable and that the bundle uses ESM modules. The probe,
+both BSON controls, all 267 verification tests, and inspection of the rebuilt VSIX passed.
+
+Two builds of the new revision had identical VSIX entry contents. Compared with the build
+before alias removal, the host chunks kept the same module membership, but some chunk bytes
+and names changed. The earlier live OP-2 result therefore does not verify this package.
+**OP-2 repeat accepted (2026-11-23):** On the PR2 CI-built VSIX, the operator confirmed
+that the Discovery roots loaded, filters and Refresh/Retry worked, signing out and back
+in worked, and New Connection and the Azure Resources nodes worked. Update Credentials,
+deep links, and partial-result handling were not tested. No separate account-switch,
+sovereign-cloud, or MFA result was reported. The operator accepted these coverage gaps
+and cleared the gate.

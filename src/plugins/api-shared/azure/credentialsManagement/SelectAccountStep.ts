@@ -151,7 +151,7 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
         try {
             // Get all tenants which include the accounts
             const tenants = await traceTenantLookup('accountManagement.getTenants', () =>
-                getUnfilteredAzureTenants(context.azureSubscriptionProvider),
+                getUnfilteredAzureTenants(context.azureSubscriptionProvider, true),
             );
 
             // Check sign-in status for all tenants with bounded parallelism
