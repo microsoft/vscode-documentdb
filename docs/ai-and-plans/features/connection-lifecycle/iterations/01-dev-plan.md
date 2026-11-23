@@ -1517,8 +1517,11 @@ behave as today.
 
 - **Host foundation:** Started PR5 from verified PR4 `d422d065b` while the independent
   packaged-worker smoke test is pending. Added the disposable, cluster-scoped registry.
-  Build and its focused test passed. Panels are not yet wired to it; next is binding
-  resolution and the startup-rejection carry-forward from the PR4 review.
+  The bound resolver permits a new generation of the same identity and refuses to start
+  or use a client for a changed identity. `runWithClient` uses that resolver and reports
+  startup credential rejection without submitting the operation (PR4 review N1). Build and
+  86 focused tests passed. Panels are not yet wired; next migrate `ClusterSession` and its
+  host callers.
 
 ---
 

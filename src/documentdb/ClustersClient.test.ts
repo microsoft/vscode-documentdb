@@ -271,6 +271,42 @@ describe('regular connection startup diagnostics', () => {
         expect(mockClose).not.toHaveBeenCalled();
     });
 
+    it('lets a surface follow a same-identity generation but does not redial while latched', async (): Promise<void> => {
+        const client = await ClustersClient.connectInteractive(clusterId);
+        await ClustersClient.deleteClient(clusterId);
+        const replacement = await ClustersClient.resolveBoundClient(client.binding);
+        expect(replacement.binding).toEqual({ ...client.binding, generation: client.generation + 1 });
+        expect(mockConnect).toHaveBeenCalledTimes(2);
+
+        ClustersClient.latch(clusterId, 'userDisconnected');
+        try {
+            await expect(ClustersClient.resolveBoundClient(client.binding)).rejects.toMatchObject({
+                reason: 'userDisconnected',
+            });
+            expect(mockConnect).toHaveBeenCalledTimes(2);
+        } finally {
+            ClustersClient.unlatch(clusterId);
+        }
+    });
+
+    it('does not open a changed connection for an old surface, even with no cached client', async (): Promise<void> => {
+        const client = await ClustersClient.connectInteractive(clusterId);
+        await ClustersClient.deleteClient(clusterId);
+        CredentialCache.setAuthCredentials(clusterId, AuthMethodId.MicrosoftEntraID, 'mongodb://different.test/');
+
+        await expect(ClustersClient.resolveBoundClient(client.binding)).rejects.toMatchObject({
+            reason: 'identityChanged',
+        });
+        expect(MongoClient).toHaveBeenCalledOnce();
+        expect(ClustersClient.getBinding(clusterId)).toBeUndefined();
+
+        const current = await ClustersClient.getClient(clusterId);
+        await expect(ClustersClient.resolveBoundClient(client.binding)).rejects.toMatchObject({
+            reason: 'identityChanged',
+        });
+        expect(ClustersClient.getBinding(clusterId)).toBe(current.binding);
+    });
+
     it('reports only the expiry of the last Entra token supplied to the driver', async (): Promise<void> => {
         const firstExpiry = 1_800_000_000;
         const renewedExpiry = firstExpiry + 3600;
@@ -676,27 +712,39 @@ describe('regular connection startup diagnostics', () => {
     it('uses the resolved binding, preserves nonterminal errors and returns terminal unavailability without replay', async () => {
         const old = await ClustersClient.connectInteractive(clusterId);
         poolEvents.emit('topologyClosed');
-        const client = await ClustersClient.getClient(clusterId);
-        const resolveClient = vi.fn(async (): Promise<ClustersClient> => client);
         const network = Object.freeze(new MongoNetworkError('tunnel refused'));
         const op = vi.fn<() => Promise<never>>().mockRejectedValueOnce(network);
-        resolveClient.mockRejectedValueOnce(new ConnectionUnavailableError('unreachable'));
-        await expect(runWithClient(old.binding, op, { resolveClient, background: true })).resolves.toEqual({
+        await expect(runWithClient(old.binding, op, { background: true })).resolves.toEqual({
             unavailable: { reason: 'unreachable' },
         });
+        expect(mockConnect).toHaveBeenCalledOnce();
         expect(op).not.toHaveBeenCalled();
 
-        await expect(runWithClient(old.binding, op, { resolveClient, background: true })).rejects.toBe(network);
-        expect(resolveClient).toHaveBeenLastCalledWith(old.binding, { background: true });
+        const client = await ClustersClient.getClient(clusterId);
+        await expect(runWithClient(old.binding, op, { background: true })).rejects.toBe(network);
         expect(op).toHaveBeenCalledExactlyOnceWith(client);
         expect(await ClustersClient.getClient(clusterId)).toBe(client);
 
         op.mockRejectedValueOnce(new EntraIdentityMismatchError());
-        await expect(runWithClient(old.binding, op, { resolveClient })).resolves.toEqual({
+        await expect(runWithClient(old.binding, op)).resolves.toEqual({
             unavailable: { reason: 'identityChanged' },
         });
         expect(ClustersClient.getBinding(clusterId)).toBeUndefined();
         expect(op).toHaveBeenCalledTimes(2);
+    });
+
+    it('reports a startup credential rejection without submitting the bound operation', async (): Promise<void> => {
+        CredentialCache.setAuthCredentials(clusterId, AuthMethodId.NativeAuth, 'mongodb://private-host:27017');
+        const client = await ClustersClient.getClient(clusterId);
+        await ClustersClient.deleteClient(clusterId);
+        mockConnect.mockRejectedValueOnce(new MongoServerError({ code: 18 }));
+        const op = vi.fn<() => Promise<void>>();
+
+        await expect(runWithClient(client.binding, op)).resolves.toEqual({
+            unavailable: { reason: 'credentialsRejected' },
+        });
+        expect(mockConnect).toHaveBeenCalledTimes(2);
+        expect(op).not.toHaveBeenCalled();
     });
 
     it('binds Entra to the original cached URI and the verified identity, even if credentials change during startup', async () => {
