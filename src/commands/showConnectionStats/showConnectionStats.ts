@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { AuthMethodId } from '../../documentdb/auth/AuthMethodId';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
 
@@ -20,6 +21,9 @@ export function showConnectionStats(_context: IActionContext): void {
                 ? `    Client: ${client.state} generation=${String(client.generation)} ageMs=${String(client.ageMs)} auth=${client.authMethod ?? 'unknown'} startup=${client.startupId ?? 'none'} socketTrace=${String(client.socketTrace)}`
                 : '    Client: none',
         );
+        if (client?.authMethod === AuthMethodId.MicrosoftEntraID) {
+            ext.outputChannel.appendLog(`    lastEntraTokenExpiresAt=${client.lastEntraTokenExpiresAt ?? 'unknown'}`);
+        }
         if (pending) {
             ext.outputChannel.appendLog(
                 `    Pending: ${pending.superseded ? 'superseded' : 'current'} startup=${pending.startupId}`,

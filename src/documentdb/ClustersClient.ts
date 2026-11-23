@@ -36,6 +36,7 @@ import {
     type InsertManyResult,
     type ListDatabasesResult,
     type MongoClientOptions,
+    type OIDCResponse,
     type WithId,
     type WithoutId,
 } from 'mongodb';
@@ -49,6 +50,7 @@ import { AuthMethodId, isSupportedAuthMethod } from './auth/AuthMethod';
 import { createAuthHandler } from './auth/createAuthHandler';
 import { EntraSignInRequiredError } from './auth/entraErrors/entraCallbackErrors';
 import { getAzureHostSuffix } from './auth/oidcAllowedHosts';
+import { readJwtTimes } from './auth/tokenExpiry';
 import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
 import { classifyConnectionFailure, type ConnectionFailure } from './connectionFailures';
 import { computeConnectionFingerprint, type ConnectionPrincipal } from './connectionFingerprint';
@@ -97,6 +99,7 @@ interface ConnectionStatsEntry {
         readonly startupId?: string;
         readonly state: 'cached' | 'closed' | 'replaceOnNextForeground' | 'replaceOnRecovery';
         readonly socketTrace: boolean;
+        readonly lastEntraTokenExpiresAt?: string;
     };
     readonly pending?: { readonly startupId: string; readonly superseded: boolean };
     readonly held?: ConnectionUnavailableReason;
@@ -350,6 +353,7 @@ export class ClustersClient {
     private _closed = false;
     private _replacement?: 'replaceOnNextForeground' | 'replaceOnRecovery';
     private _interactiveEntraStartupId?: string;
+    private _lastEntraTokenExpiresAt?: string;
     private _llmEnhancedFeatureApis: llmEnhancedFeatureApis | null = null;
     private _queryInsightsApis: QueryInsightsApis | null = null;
     private _clusterMetadataPromise: Promise<ClusterMetadata> | null = null;
@@ -397,6 +401,7 @@ export class ClustersClient {
                     startupId: client.connectionCorrelationId,
                     state: client._replacement ?? (client._closed ? 'closed' : 'cached'),
                     socketTrace: client._interactiveEntraStartupId !== undefined,
+                    lastEntraTokenExpiresAt: client._lastEntraTokenExpiresAt,
                 },
                 pending: pending && {
                     startupId: pending.id,
@@ -718,6 +723,23 @@ export class ClustersClient {
         emulatorConfiguration?: EmulatorConfiguration,
         originalConnectionString: string = connectionString,
     ): Promise<void> {
+        const authProperties = options.authMechanismProperties;
+        const callback = authProperties?.OIDC_CALLBACK;
+        if (interactiveEntra && callback) {
+            options = {
+                ...options,
+                authMechanismProperties: {
+                    ...authProperties,
+                    OIDC_CALLBACK: async (params): Promise<OIDCResponse> => {
+                        const response = await callback(params);
+                        const { expSec } = readJwtTimes(response.accessToken);
+                        this._lastEntraTokenExpiresAt =
+                            expSec === undefined ? undefined : (new Date(expSec * 1000).toJSON() ?? undefined);
+                        return response;
+                    },
+                },
+            };
+        }
         this._mongoClient = new MongoClient(connectionString, options);
         this._mongoClient.once('topologyClosed', (): void => {
             this._closed = true;

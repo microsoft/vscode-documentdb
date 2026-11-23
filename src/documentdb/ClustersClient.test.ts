@@ -253,6 +253,7 @@ describe('regular connection startup diagnostics', () => {
             startupId: client.connectionCorrelationId,
             state: 'cached',
             socketTrace: true,
+            lastEntraTokenExpiresAt: undefined,
         });
         const output = JSON.stringify(snapshot);
         for (const value of [
@@ -268,6 +269,45 @@ describe('regular connection startup diagnostics', () => {
         expect(await ClustersClient.getClient(clusterId)).toBe(client);
         expect(mockConnect).toHaveBeenCalledOnce();
         expect(mockClose).not.toHaveBeenCalled();
+    });
+
+    it('reports only the expiry of the last Entra token supplied to the driver', async (): Promise<void> => {
+        const firstExpiry = 1_800_000_000;
+        const renewedExpiry = firstExpiry + 3600;
+        const tokenAt = (exp: number): string =>
+            `test.${Buffer.from(JSON.stringify({ exp })).toString('base64url')}.signature`;
+        const first = { accessToken: tokenAt(firstExpiry) };
+        const renewed = { accessToken: tokenAt(renewedExpiry) };
+        const missingSession = new EntraSignInRequiredError('noSession');
+        const callback = vi
+            .fn<Mongodb.OIDCCallbackFunction>()
+            .mockResolvedValueOnce(first)
+            .mockRejectedValueOnce(missingSession)
+            .mockResolvedValueOnce(renewed)
+            .mockResolvedValueOnce({ accessToken: 'opaque-test-token' });
+        vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockResolvedValueOnce({
+            connectionString: 'mongodb://private-host:27017',
+            options: { authMechanismProperties: { OIDC_CALLBACK: callback } },
+            verifiedIdentity,
+        });
+        const client = await ClustersClient.connectInteractive(clusterId);
+        const driverCallback = vi.mocked(MongoClient).mock.calls[0][1]?.authMechanismProperties?.OIDC_CALLBACK;
+        const params: Mongodb.OIDCCallbackParams = { version: 1, timeoutContext: new AbortController().signal };
+        const expiry = (): string | undefined =>
+            ClustersClient.getDiagnosticsSnapshot()
+                .find(({ client: row }) => row?.startupId === client.connectionCorrelationId)
+                ?.client?.lastEntraTokenExpiresAt;
+
+        expect(expiry()).toBeUndefined();
+        await expect(driverCallback!(params)).resolves.toBe(first);
+        expect(expiry()).toBe(new Date(firstExpiry * 1000).toISOString());
+        expect(JSON.stringify(ClustersClient.getDiagnosticsSnapshot())).not.toContain(first.accessToken);
+        await expect(driverCallback!(params)).rejects.toBe(missingSession);
+        expect(expiry()).toBe(new Date(firstExpiry * 1000).toISOString());
+        await expect(driverCallback!(params)).resolves.toBe(renewed);
+        expect(expiry()).toBe(new Date(renewedExpiry * 1000).toISOString());
+        await driverCallback!(params);
+        expect(expiry()).toBeUndefined();
     });
 
     it('shows a superseded startup and a hold even without a cached client', async (): Promise<void> => {
