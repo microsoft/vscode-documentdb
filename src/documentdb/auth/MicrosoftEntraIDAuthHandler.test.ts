@@ -140,7 +140,10 @@ describe('MicrosoftEntraIDAuthHandler', () => {
             } else if (failure === 'noSession') {
                 getSessionFromVSCode.mockResolvedValue(undefined);
             } else {
-                getSessionFromVSCode.mockResolvedValue({ ...session, account: { ...account, id: 'different-account' } });
+                getSessionFromVSCode.mockResolvedValue({
+                    ...session,
+                    account: { ...account, id: 'different-account' },
+                });
             }
 
             const configuring = new MicrosoftEntraIDAuthHandler(credentials, {

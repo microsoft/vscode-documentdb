@@ -204,7 +204,9 @@ async function waitForClient(
     try {
         return await new Promise<ClustersClient>((resolve, reject) => {
             onAbort = (): void => {
-                ext.outputChannel.debug(`[ClustersClient] startup=${startupId} wait canceled by user surface=extension`);
+                ext.outputChannel.debug(
+                    `[ClustersClient] startup=${startupId} wait canceled by user surface=extension`,
+                );
                 reject(new UserCancelledError('abortConnection'));
             };
             // Observe settlement even if this caller has already left.
@@ -866,7 +868,9 @@ export class ClustersClient {
         if (epoch !== ClustersClient.getEpoch(clusterId)) {
             client._closed = true;
             void client._mongoClient.close().catch(() => {
-                ext.outputChannel.debug(`[ClustersClient] startup=${id} superseded client cleanup failed surface=extension`);
+                ext.outputChannel.debug(
+                    `[ClustersClient] startup=${id} superseded client cleanup failed surface=extension`,
+                );
             });
         } else {
             const generation = (ClustersClient._generations.get(clusterId) ?? 0) + 1;

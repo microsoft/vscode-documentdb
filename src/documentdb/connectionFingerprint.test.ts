@@ -68,7 +68,9 @@ describe('computeConnectionFingerprint', () => {
             { kind: 'managedIdentity' },
             { kind: 'none' },
         ];
-        const fingerprints = principals.map((principal) => computeConnectionFingerprint({ connectionString, principal }));
+        const fingerprints = principals.map((principal) =>
+            computeConnectionFingerprint({ connectionString, principal }),
+        );
         expect(new Set(fingerprints).size).toBe(principals.length);
     });
 

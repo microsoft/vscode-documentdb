@@ -21,7 +21,9 @@ export class ConnectionUnavailableError extends Error {
         options?: ErrorOptions,
     ) {
         super(
-            reason === 'credentialsMissing' ? l10n.t('No credentials found.') : l10n.t('The connection is unavailable.'),
+            reason === 'credentialsMissing'
+                ? l10n.t('No credentials found.')
+                : l10n.t('The connection is unavailable.'),
             options,
         );
         this.name = 'ConnectionUnavailableError';

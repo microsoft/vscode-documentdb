@@ -235,7 +235,9 @@ describe('regular connection startup diagnostics', () => {
 
     it('never hydrates unpinned Entra silently, even after a native connection', async () => {
         const expectNoSession = async (): Promise<void> => {
-            await expect(ClustersClient.getClient(clusterId, undefined, undefined, 'treeConnect')).rejects.toMatchObject({
+            await expect(
+                ClustersClient.getClient(clusterId, undefined, undefined, 'treeConnect'),
+            ).rejects.toMatchObject({
                 name: 'EntraSignInRequiredError',
                 reason: 'noSession',
             });
@@ -302,7 +304,11 @@ describe('regular connection startup diagnostics', () => {
     it('rechecks silent authorization using the credentials cloned during initialization', async () => {
         CredentialCache.setAuthCredentials(clusterId, AuthMethodId.NativeAuth, 'mongodb://private-host:27017');
         const waiter = ClustersClient.getClient(clusterId, undefined, () => {
-            CredentialCache.setAuthCredentials(clusterId, AuthMethodId.MicrosoftEntraID, 'mongodb://private-host:27017');
+            CredentialCache.setAuthCredentials(
+                clusterId,
+                AuthMethodId.MicrosoftEntraID,
+                'mongodb://private-host:27017',
+            );
         });
         await expect(waiter).rejects.toMatchObject({ name: 'EntraSignInRequiredError', reason: 'noSession' });
         expect(authHandlerFactory.createAuthHandler).not.toHaveBeenCalled();
@@ -539,7 +545,10 @@ describe('regular connection startup diagnostics', () => {
 
         const first = pauseNextConnect();
         const retried = deferred();
-        const onStartup = vi.fn().mockImplementationOnce(() => undefined).mockImplementationOnce(retried.resolve);
+        const onStartup = vi
+            .fn()
+            .mockImplementationOnce(() => undefined)
+            .mockImplementationOnce(retried.resolve);
         const waiter = ClustersClient.getClient(clusterId, undefined, onStartup);
         await first.started;
         await ClustersClient.deleteClient(clusterId);
