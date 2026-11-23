@@ -35,7 +35,7 @@ function isAzureSignInSignal(error: unknown): boolean {
     }
     const code = 'code' in error ? error.code : undefined;
     return [error.name, code].some(
-        (value) => typeof value === 'string' && (value === 'interaction_required' || /^AADSTS\d{5,9}$/.test(value)),
+        (value) => value === 'interaction_required' || value === 'AADSTS50076' || value === 'AADSTS50079',
     );
 }
 

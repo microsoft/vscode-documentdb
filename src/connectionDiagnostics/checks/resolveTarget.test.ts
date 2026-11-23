@@ -188,6 +188,17 @@ describe('resolveTarget check (review R2, option A)', (): void => {
             'target.sourceInaccessible',
             { source: 'azure', reason: 'accessDenied', errorName: 'Error', statusCode: 403 },
         ],
+        ...['AADSTS53003', 'AADSTS700016'].map(
+            (code) =>
+                [
+                    new ConnectionSourceUnavailableError(
+                        'azure',
+                        withStatus(new Error('secret authority detail'), { code, statusCode: 403 }),
+                    ),
+                    'target.sourceInaccessible',
+                    { source: 'azure', reason: 'accessDenied', errorName: 'Error', statusCode: 403 },
+                ] as const,
+        ),
         [
             new ConnectionSourceUnavailableError(
                 'kubernetes',
