@@ -26,6 +26,7 @@ created: 2026-11-19
 | 0012 | Keep the lifecycle design minimal: no state machine, one epoch, no prompts in getClient, one-step teardown | Accepted                    | Operator: approved every proposed simplification       | 2026-11-19 | —   |
 | 0013 | Correct the minimal design where it lost edits, identity or recovery: latch before save, epoch checks      | Accepted (modifies 0012)    | Operator: "update the plan" after the omissions review | 2026-11-19 | —   |
 | 0014 | Keep in-memory connection settings after a rejection for a verified Entra identity                         | Accepted                    | Operator selected A to make sign-in recovery smoother  | 2026-11-23 | Yes; WI-5 previously said to delete the entry |
+| 0015 | Use the existing latch to block startup after authentication rejection                                     | Accepted                    | Operator selected A; keep the approach simple and pragmatic | 2026-11-23 | Yes; expands the existing latch rather than adding a second hold |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -412,3 +413,14 @@ This does not retain the rejected token, write anything to persistent storage, c
 checks, or start a silent retry. Native authentication and RU key handling are unchanged. The
 explicit sign-in path still checks the epoch after prompting and never moves an open surface to a
 different identity.
+
+## 0015. Use the existing latch to block startup after authentication rejection
+
+Evicting a rejected client is not enough: a subsequent operation could immediately start a new
+one with the same settings. Set the existing in-memory latch to `credentialsRejected` before
+evicting the rejected generation. The matching explicit recovery can clear that reason only if
+the epoch still matches. It cannot clear a latch set by Disconnect, Remove or a credential change.
+
+The operator chose to reuse the existing latch rather than introduce a separate authentication
+hold, keeping one place to check for an unavailable connection. The rejection latch uses the
+existing epoch and does not add a subscription, new persistence, or a retry loop.

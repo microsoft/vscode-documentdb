@@ -83,6 +83,7 @@ See [decisions.md](./decisions.md):
 - 0012 a minimal lifecycle design: no state machine, one epoch, no prompts in `getClient`, one-step teardown;
 - 0013 corrections to 0012: latch before a credential save, epoch checks on replies, bindings carried through handoffs, an operation wrapper, folder deletion runs teardown.
 - 0014 retain in-memory settings for explicit sign-in recovery after verified Entra rejection.
+- 0015 use the existing latch to block startup after authentication rejection until explicit recovery.
 
 ## Timeline
 

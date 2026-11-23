@@ -414,6 +414,8 @@ a checkpoint changes them.
     Only the explicit Connect and Reconnect actions clear the latch, plus one internal case: an
     identity-changing credential update whose save reached nothing clears the latch it set (WI-7 step 5).
     New tasks and resource leases are refused while the latch is set.
+    A `credentialsRejected` latch blocks startup until the matching explicit recovery clears it
+    with an unchanged epoch (decision 0015). That recovery cannot clear a teardown latch.
   - **One epoch:** a per-cluster counter that `invalidate` increases **synchronously** on every latch,
     unlatch, eviction and teardown. A startup publishes only if the epoch is unchanged. Every recovery
     command (Retry, Sign in again, Reconnect) captures the epoch **before** its first `await`, and applies
@@ -1293,6 +1295,11 @@ shim (0005).
 - **CP-2 revision verified:** Removed the unproducible freshness inputs. The contract test now
   sends the exact final code 18 from the driver workflow through the classifier. Case 1 passed:
   build and 31 focused tests across classification, the driver contract, and the Entra explainer.
+- **CP-2 / OC-2, accepted:** Reuse the existing latch for `credentialsRejected` rather than
+  adding a separate hold. Eviction must not let an ordinary operation open another client with
+  rejected settings. Only the matching explicit recovery can clear the rejection, and only if
+  its epoch is current. The operator preferred the simpler option and asked to record
+  [decision 0015](../decisions.md#0015-use-the-existing-latch-to-block-startup-after-authentication-rejection).
 
 ---
 
