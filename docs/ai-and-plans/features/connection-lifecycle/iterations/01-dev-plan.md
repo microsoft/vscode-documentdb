@@ -1337,6 +1337,14 @@ shim (0005).
   the root `package.json` and corresponding root lockfile entries. Verify the version in the
   packaged manifest, and give the operator that version, the commit, and the CI artifact link.
   Do not rebuild an unchanged candidate just to label the partial run.
+- **Connection stats add-on:** Add a read-only **Show Connection Stats** command alongside
+  **Show Worker Stats**, as a separate WI-5 commit. The extension-host snapshot shows client
+  generation, age, auth method, startup correlation, pending or held state, and whether socket
+  events are traced. It contains no cluster or account identifiers and makes no service calls.
+  Leave socket counts out rather than guessing. Keep the published OP-3 candidate unchanged.
+- **Worker startup regression:** PR4's shared OIDC code imported the VS Code UI auth-method
+  module into the Node worker path. Keep the shared auth IDs independent of VS Code. Verify
+  the next packaged candidate starts both Shell and Playground; the tree OP-3 gate is unchanged.
 
 ---
 

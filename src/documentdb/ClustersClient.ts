@@ -45,7 +45,7 @@ import { meterSilentCatch } from '../utils/accumulatingTelemetry';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
 import { nonNullValue } from '../utils/nonNull';
 import { type AuthHandlerResponse, type VerifiedEntraIdentity } from './auth/AuthHandler';
-import { AuthMethodId } from './auth/AuthMethod';
+import { AuthMethodId, isSupportedAuthMethod } from './auth/AuthMethod';
 import { createAuthHandler } from './auth/createAuthHandler';
 import { EntraSignInRequiredError } from './auth/entraErrors/entraCallbackErrors';
 import { getAzureHostSuffix } from './auth/oidcAllowedHosts';
@@ -87,6 +87,20 @@ export interface ConnectionBinding {
     readonly clusterId: string;
     readonly fingerprint: string;
     readonly generation: number;
+}
+
+interface ConnectionStatsEntry {
+    readonly client?: {
+        readonly generation: number;
+        readonly ageMs: number;
+        readonly authMethod?: AuthMethodId;
+        readonly startupId?: string;
+        readonly state: 'cached' | 'closed' | 'replaceOnNextForeground' | 'replaceOnRecovery';
+        readonly socketTrace: boolean;
+    };
+    readonly pending?: { readonly startupId: string; readonly superseded: boolean };
+    readonly held?: ConnectionUnavailableReason;
+    readonly lastFailedStartupId?: string;
 }
 
 export type VerifiedIdentity = VerifiedEntraIdentity | Exclude<ConnectionPrincipal, { kind: 'entra' }>;
@@ -361,6 +375,37 @@ export class ClustersClient {
 
     public static getLastFailedStartupCorrelationId(clusterId: string): string | undefined {
         return ClustersClient._lastFailedStartups.get(clusterId);
+    }
+
+    public static getDiagnosticsSnapshot(): readonly ConnectionStatsEntry[] {
+        const now = Date.now();
+        const clusterIds = new Set([
+            ...ClustersClient._clients.keys(),
+            ...ClustersClient._pendingStartups.keys(),
+            ...ClustersClient._latches.keys(),
+            ...ClustersClient._lastFailedStartups.keys(),
+        ]);
+        return Array.from(clusterIds, (clusterId): ConnectionStatsEntry => {
+            const client = ClustersClient._clients.get(clusterId);
+            const pending = ClustersClient._pendingStartups.get(clusterId);
+            const authMethod = client?.authMethod;
+            return {
+                client: client && {
+                    generation: client.generation,
+                    ageMs: Math.max(0, now - client.createdAt),
+                    authMethod: isSupportedAuthMethod(authMethod) ? authMethod : undefined,
+                    startupId: client.connectionCorrelationId,
+                    state: client._replacement ?? (client._closed ? 'closed' : 'cached'),
+                    socketTrace: client._interactiveEntraStartupId !== undefined,
+                },
+                pending: pending && {
+                    startupId: pending.id,
+                    superseded: pending.epoch !== ClustersClient.getEpoch(clusterId),
+                },
+                held: ClustersClient.getLatchReason(clusterId),
+                lastFailedStartupId: ClustersClient.getLastFailedStartupCorrelationId(clusterId),
+            };
+        });
     }
 
     /**
@@ -1057,7 +1102,7 @@ export class ClustersClient {
     }
 
     /**
-     * Returns an existing client synchronously if it is already in the connection pool.
+     * Returns an existing client synchronously if it is already in the client cache.
      * Returns `undefined` if the client is not yet connected. This is useful for
      * accessing cached data (e.g., cached collection/database listings) without
      * triggering a connection or blocking on async operations.

@@ -239,6 +239,59 @@ describe('regular connection startup diagnostics', () => {
         expect(second.createdAt).toBeGreaterThan(first.createdAt);
     });
 
+    it('reports read-only client diagnostics without connection or identity details', async (): Promise<void> => {
+        const client = await ClustersClient.connectInteractive(clusterId);
+        vi.advanceTimersByTime(2_000);
+
+        const snapshot = ClustersClient.getDiagnosticsSnapshot();
+        const entry = snapshot.find(({ client: row }) => row?.startupId === client.connectionCorrelationId);
+
+        expect(entry?.client).toEqual({
+            generation: client.generation,
+            ageMs: 2_000,
+            authMethod: AuthMethodId.MicrosoftEntraID,
+            startupId: client.connectionCorrelationId,
+            state: 'cached',
+            socketTrace: true,
+        });
+        const output = JSON.stringify(snapshot);
+        for (const value of [
+            clusterId,
+            client.fingerprint,
+            verifiedIdentity.accountId,
+            verifiedIdentity.accountLabel,
+            verifiedIdentity.tenantId,
+            'private-host',
+        ]) {
+            expect(output).not.toContain(value);
+        }
+        expect(await ClustersClient.getClient(clusterId)).toBe(client);
+        expect(mockConnect).toHaveBeenCalledOnce();
+        expect(mockClose).not.toHaveBeenCalled();
+    });
+
+    it('shows a superseded startup and a hold even without a cached client', async (): Promise<void> => {
+        const handshake = pauseNextConnect();
+        const onStartup = vi.fn<(id: string) => void>();
+        const opening = ClustersClient.connectInteractive(clusterId, undefined, onStartup);
+        await handshake.started;
+        const startupId = onStartup.mock.calls[0][0];
+        const findPending = () =>
+            ClustersClient.getDiagnosticsSnapshot().find(({ pending }) => pending?.startupId === startupId);
+        expect(findPending()).toMatchObject({ client: undefined, pending: { superseded: false } });
+
+        ClustersClient.latch(clusterId, 'userDisconnected');
+        expect(findPending()).toMatchObject({
+            client: undefined,
+            pending: { superseded: true },
+            held: 'userDisconnected',
+        });
+
+        handshake.resolve();
+        await expect(opening).rejects.toMatchObject({ reason: 'userDisconnected' });
+        ClustersClient.unlatch(clusterId);
+    });
+
     it('never hydrates unpinned Entra silently, even after a native connection', async () => {
         const expectNoSession = async (): Promise<void> => {
             await expect(

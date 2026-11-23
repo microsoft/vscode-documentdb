@@ -936,6 +936,12 @@
         "title": "Show Schema Store Stats"
       },
       {
+        "//": "[Diagnostics] Show Connection Stats",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.showConnectionStats",
+        "title": "%diagnostics.showConnectionStats%"
+      },
+      {
         "//": "[Diagnostics] Show Worker Stats",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.showWorkerStats",
