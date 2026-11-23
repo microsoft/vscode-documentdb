@@ -907,6 +907,10 @@ shim (0005).
   The build, installed dependency tree, bundle inspection, and operator-accepted OP-2 support
   this choice. L1 uses the same azureauth and Azure Resources API versions and does not reduce
   the remaining risks. The untested OP-2 cases above remain unverified.
+- **OP-2 repeat accepted (2026-11-23):** After the alias removal changed the packaged payload,
+  the operator tested the PR2 CI-built VSIX and cleared the gate. The
+  [PR2 review record](./01-pr2-azureauth-review.md#azure-esm-bundle-verification) lists what
+  passed and what was not tested. CP-W3 still retains L2.
 
 ---
 

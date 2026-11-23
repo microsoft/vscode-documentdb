@@ -91,4 +91,9 @@ both BSON controls, all 267 verification tests, and inspection of the rebuilt VS
 Two builds of the new revision had identical VSIX entry contents. Compared with the build
 before alias removal, the host chunks kept the same module membership, but some chunk bytes
 and names changed. The earlier live OP-2 result therefore does not verify this package.
-**OP-2 repeat pending** on the VSIX built from `f2b4641e6`.
+**OP-2 repeat accepted (2026-11-23):** On the PR2 CI-built VSIX, the operator confirmed
+that the Discovery roots loaded, filters and Refresh/Retry worked, signing out and back
+in worked, and New Connection and the Azure Resources nodes worked. Update Credentials,
+deep links, and partial-result handling were not tested. No separate account-switch,
+sovereign-cloud, or MFA result was reported. The operator accepted these coverage gaps
+and cleared the gate.
