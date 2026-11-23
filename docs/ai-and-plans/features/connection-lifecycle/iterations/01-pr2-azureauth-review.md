@@ -80,3 +80,15 @@ The operator approved all four follow-ups:
 
 Claude Opus 5.5 advised the dispositions (90%, 85%, 80%, and 85% confidence, respectively).
 The build and all 109 focused tests passed. The earlier full Case 2 run predates these changes.
+
+## Azure ESM bundle verification
+
+The operator approved removing the obsolete CommonJS alias and replacing its historical
+expected-failure test. In `f2b4641e6`, the production host probe verifies that the Azure ARM
+subscription and tenant exports are callable and that the bundle uses ESM modules. The probe,
+both BSON controls, all 267 verification tests, and inspection of the rebuilt VSIX passed.
+
+Two builds of the new revision had identical VSIX entry contents. Compared with the build
+before alias removal, the host chunks kept the same module membership, but some chunk bytes
+and names changed. The earlier live OP-2 result therefore does not verify this package.
+**OP-2 repeat pending** on the VSIX built from `f2b4641e6`.
