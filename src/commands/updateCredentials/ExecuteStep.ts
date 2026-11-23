@@ -107,10 +107,10 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
 
             try {
                 await ConnectionStorageService.save(resourceType, connectionCredentials, true);
+                context.credentialsSaved = true;
                 if (context.isRecoveryCurrent?.() === false) {
                     return;
                 }
-                context.credentialsSaved = true;
             } catch (pushError) {
                 ext.outputChannel.error(l10n.t('Failed to save credentials: {0}', String(pushError)));
                 void window.showErrorMessage(l10n.t('Failed to save credentials.'));

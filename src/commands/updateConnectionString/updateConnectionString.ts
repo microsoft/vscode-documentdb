@@ -40,7 +40,8 @@ export async function updateConnectionString(context: IActionContext, node: Docu
     const clusterId = node.cluster.clusterId;
     let epoch = ClustersClient.getEpoch(clusterId);
     const recoveringRejectedCredentials = ClustersClient.getLatchReason(clusterId) === 'credentialsRejected';
-    const isCurrent = (): boolean => ClustersClient.getEpoch(clusterId) === epoch;
+    const recovering = recoveringRejectedDestination || recoveringRejectedCredentials;
+    const isRecoveryCurrent = recovering ? (): boolean => ClustersClient.getEpoch(clusterId) === epoch : undefined;
 
     // Extract the connection string but hide the username and password
 
@@ -50,7 +51,7 @@ export async function updateConnectionString(context: IActionContext, node: Docu
 
     const resourceType = resolveStorageZone(node.cluster);
     const connection = await ConnectionStorageService.get(node.storageId, resourceType);
-    if (!isCurrent()) {
+    if (isRecoveryCurrent?.() === false) {
         return;
     }
     const connectionString = connection?.secrets?.connectionString || '';
@@ -70,7 +71,7 @@ export async function updateConnectionString(context: IActionContext, node: Docu
         storageZone: resolveStorageZone(node.cluster),
         storageId: node.storageId,
         connectionStringSaved: false,
-        isRecoveryCurrent: isCurrent,
+        isRecoveryCurrent,
     };
 
     const wizard = new AzureWizard(wizardContext, {
@@ -80,19 +81,19 @@ export async function updateConnectionString(context: IActionContext, node: Docu
     });
 
     await wizard.prompt();
-    if (!isCurrent()) {
+    if (isRecoveryCurrent?.() === false) {
         return;
     }
     await wizard.execute();
-    if (!isCurrent()) {
+    if (isRecoveryCurrent?.() === false) {
         return;
     }
 
-    if ((recoveringRejectedDestination || recoveringRejectedCredentials) && wizardContext.connectionStringSaved) {
+    if (recovering && wizardContext.connectionStringSaved) {
         const closing = ClustersClient.deleteClient(clusterId);
         epoch = ClustersClient.getEpoch(clusterId);
         await closing;
-        if (!isCurrent()) {
+        if (isRecoveryCurrent?.() === false) {
             return;
         }
         CredentialCache.deleteCredentials(clusterId);

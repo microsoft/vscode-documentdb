@@ -60,7 +60,7 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     const clusterId = node.cluster.clusterId;
     let epoch = ClustersClient.getEpoch(clusterId);
     const recoveringRejection = ClustersClient.getLatchReason(clusterId) === 'credentialsRejected';
-    const isCurrent = (): boolean => ClustersClient.getEpoch(clusterId) === epoch;
+    const isRecoveryCurrent = recoveringRejection ? (): boolean => ClustersClient.getEpoch(clusterId) === epoch : undefined;
     // The failed attempt these credentials replace; the reconnect's `connect.startup` names it in
     // `previousFailedStartupCorrelationId`, so it shows whether the new credentials worked.
     const failedStartupCorrelationId = ClustersClient.getLastFailedStartupCorrelationId(node.cluster.clusterId);
@@ -76,7 +76,7 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     const resourceType = resolveStorageZone(node.cluster);
 
     const storedItem = await ConnectionStorageService.get(node.storageId, resourceType);
-    if (!isCurrent()) {
+    if (isRecoveryCurrent?.() === false) {
         return;
     }
     // Type guard ensures we have connection properties (not a folder)
@@ -122,7 +122,7 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
         storageId: node.storageId,
         isErrorState,
         reconnectAfterError: false,
-        isRecoveryCurrent: isCurrent,
+        isRecoveryCurrent,
     };
 
     const wizard = new AzureWizard(wizardContext, {
@@ -145,23 +145,24 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     });
 
     await wizard.prompt();
-    if (!isCurrent()) {
+    if (isRecoveryCurrent?.() === false) {
         return;
     }
     await wizard.execute();
-    if (!isCurrent() || (recoveringRejection && !wizardContext.credentialsSaved)) {
+    if (isRecoveryCurrent?.() === false || (recoveringRejection && !wizardContext.credentialsSaved)) {
         return;
     }
 
     const updatedStoredItem = await ConnectionStorageService.get(node.storageId, resourceType);
-    if (!isCurrent()) {
+    if (isRecoveryCurrent?.() === false) {
         return;
     }
     const updatedConnection = updatedStoredItem && isConnection(updatedStoredItem) ? updatedStoredItem : undefined;
     const closing = ClustersClient.deleteClient(clusterId);
     epoch = ClustersClient.getEpoch(clusterId);
     await closing;
-    if (!isCurrent()) {
+    // Do not publish cached credentials over a lifecycle change during close.
+    if (ClustersClient.getEpoch(clusterId) !== epoch) {
         return;
     }
     const authMethod = authMethodFromString(updatedConnection?.properties.selectedAuthMethod);

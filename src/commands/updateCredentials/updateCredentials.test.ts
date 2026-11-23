@@ -13,11 +13,15 @@ import { API } from '../../DocumentDBExperiences';
 import type * as storageModule from '../../services/connectionStorageService';
 import { ItemType } from '../../services/connectionStorageService';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
+import { ExecuteStep } from './ExecuteStep';
 import { updateCredentials } from './updateCredentials';
 import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 
 const capturedContexts: UpdateCredentialsWizardContext[] = [];
+const mockExecute = vi.fn<(context: UpdateCredentialsWizardContext) => Promise<void>>().mockResolvedValue(undefined);
 const mockGet = vi.fn();
+const mockSave = vi.fn();
+const mockGetEpoch = vi.fn(() => 0);
 const mockDeleteClient = vi.fn();
 const mockDeleteCredentials = vi.spyOn(CredentialCache, 'deleteCredentials');
 const mockShutdownEvaluator = vi.fn();
@@ -26,27 +30,30 @@ const mockGetRegisteredShellTerminals = vi.fn();
 vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
     ...(await importOriginal<{ AzureWizard: typeof AzureWizard }>()),
     AzureWizard: class {
-        constructor(context: UpdateCredentialsWizardContext) {
+        constructor(private readonly context: UpdateCredentialsWizardContext) {
             capturedContexts.push(context);
         }
         public prompt(): Promise<void> {
             return Promise.resolve();
         }
         public execute(): Promise<void> {
-            return Promise.resolve();
+            return mockExecute(this.context);
         }
     },
 }));
 
 vi.mock('../../services/connectionStorageService', async (importOriginal) => ({
     ...(await importOriginal<typeof storageModule>()),
-    ConnectionStorageService: { get: (...args: unknown[]): unknown => mockGet(...args) },
+    ConnectionStorageService: {
+        get: (...args: unknown[]): unknown => mockGet(...args),
+        save: (...args: unknown[]): unknown => mockSave(...args),
+    },
 }));
 vi.mock('../../documentdb/ClustersClient', () => ({
     ClustersClient: {
         deleteClient: (...args: unknown[]): unknown => mockDeleteClient(...args),
         getLastFailedStartupCorrelationId: (): undefined => undefined,
-        getEpoch: (): number => 0,
+        getEpoch: (): number => mockGetEpoch(),
         getLatchReason: (): undefined => undefined,
     },
 }));
@@ -57,6 +64,7 @@ vi.mock('../../documentdb/shell/ShellTerminalLinkProvider', () => ({
     getRegisteredShellTerminals: (): unknown => mockGetRegisteredShellTerminals(),
 }));
 vi.mock('../refreshView/refreshView', () => ({ refreshView: vi.fn() }));
+vi.mock('../../utils/dialogs/showConfirmation', () => ({ showConfirmationAsInSettings: vi.fn() }));
 vi.mock('../../extensionVariables', () => ({
     ext: { connectionsBranchDataProvider: { hasNodeErrorState: vi.fn(() => false) } },
 }));
@@ -64,6 +72,7 @@ vi.mock('../../extensionVariables', () => ({
 beforeEach(() => {
     CredentialCache.deleteCredentials('stable-cluster-id');
     vi.clearAllMocks();
+    mockGetEpoch.mockReturnValue(0);
     mockGetRegisteredShellTerminals.mockReturnValue([]);
     capturedContexts.length = 0;
 });
@@ -208,6 +217,30 @@ describe('updateCredentials post-wizard updates', () => {
             originalConnection.secrets.connectionString,
             originalConnection.secrets.nativeAuthConfig,
         );
+    });
+
+    it('updates runtime credentials when the epoch changes during an ordinary save', async (): Promise<void> => {
+        let storedConnection = originalConnection;
+        const newCredentials = { connectionUser: 'old-user', connectionPassword: 'new-password' };
+        mockGet.mockImplementation(async () => structuredClone(storedConnection));
+        mockExecute.mockImplementationOnce(async (wizardContext): Promise<void> => {
+            wizardContext.nativeAuthConfig = newCredentials;
+            await new ExecuteStep().execute(wizardContext);
+        });
+        mockSave.mockImplementationOnce(
+            async (_zone: storageModule.StorageZone, item: storageModule.ConnectionItem): Promise<void> => {
+                storedConnection = structuredClone(item);
+                mockGetEpoch.mockReturnValue(1);
+            },
+        );
+
+        await updateCredentials(context, node);
+
+        expect(storedConnection.secrets.nativeAuthConfig).toEqual(newCredentials);
+        expect(CredentialCache.getCredentials(node.cluster.clusterId)?.nativeAuthConfig).toEqual(newCredentials);
+        expect(capturedContexts[0].credentialsSaved).toBe(true);
+        expect(mockDeleteClient).toHaveBeenCalledExactlyOnceWith(node.cluster.clusterId);
+        expect(mockShutdownEvaluator).toHaveBeenCalledExactlyOnceWith(node.cluster.clusterId);
     });
 
     it.each<{ authMethod: AuthMethodId; secrets: Partial<storageModule.ConnectionSecrets> }>([

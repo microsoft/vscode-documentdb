@@ -290,4 +290,21 @@ describe('updateConnectionString rejected-destination recovery', () => {
         expect(item.lastConnectionOutcome).toBe('connected');
         expect(refresh).toHaveBeenCalledOnce();
     });
+
+    it('saves an ordinary edit when the epoch changes while the input is open', async (): Promise<void> => {
+        const refresh = vi.spyOn(provider, 'refresh');
+        item.lastConnectionOutcome = 'connected';
+        showInputBox.mockImplementationOnce(async (): Promise<string> => {
+            vi.mocked(ClustersClient.getEpoch).mockReturnValue(1);
+            return approvedUri;
+        });
+
+        await updateConnectionString(makeContext(), item);
+
+        expect(storedConnection.secrets.connectionString).toBe(approvedUri);
+        expect(capturedContexts[0].connectionStringSaved).toBe(true);
+        expect(ClustersClient.deleteClient).not.toHaveBeenCalled();
+        expect(deleteCredentials).not.toHaveBeenCalled();
+        expect(refresh).toHaveBeenCalledOnce();
+    });
 });
