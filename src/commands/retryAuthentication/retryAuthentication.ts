@@ -10,6 +10,7 @@ import { inferViewIdFromTreeId, Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
 import { type TreeElement } from '../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../tree/TreeElementWithContextValue';
+import { isTreeElementWithExplicitReload } from '../../tree/TreeElementWithExplicitReload';
 
 const containsDelimited = (fullContext: string | undefined, value: string): boolean => {
     if (!fullContext) {
@@ -74,6 +75,9 @@ export async function retryAuthentication(context: IActionContext, node: Retryab
             return ext.connectionsBranchDataProvider.refresh(node);
 
         case Views.DiscoveryView:
+            if (isTreeElementWithExplicitReload(node)) {
+                node.prepareExplicitReload();
+            }
             ext.discoveryBranchDataProvider.resetNodeErrorState(node.id);
             return ext.discoveryBranchDataProvider.refresh(node);
 

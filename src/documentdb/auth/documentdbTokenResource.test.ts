@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 // eslint-disable-next-line import/no-internal-modules
-import { getConfiguredAzureEnv } from '@microsoft/vscode-azext-azureauth/out/src/utils/configuredAzureEnv';
+import { getConfiguredAzureEnv } from '@microsoft/vscode-azext-azureauth';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import {

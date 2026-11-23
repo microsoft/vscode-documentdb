@@ -3,35 +3,49 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type AzureTenant, type VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
+import { type AzureTenant } from '@microsoft/vscode-azext-azureauth';
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { containsRetryNode, createRetryNode } from '../../../tree/api/retryNode';
 import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
+import { type TreeElementWithExplicitReload } from '../../../tree/TreeElementWithExplicitReload';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
 import { askToConfigureCredentials } from '../../api-shared/azure/askToConfigureCredentials';
+import {
+    getUnfilteredAzureTenants,
+    type AzureSubscriptionProviderWithFilters,
+} from '../../api-shared/azure/AzureSubscriptionProviderWithFilters';
 import { getTenantFilteredSubscriptions } from '../../api-shared/azure/subscriptionFiltering/subscriptionFilteringHelpers';
 import { AzureSubscriptionItem } from './AzureSubscriptionItem';
 
-export class AzureServiceRootItem implements TreeElement, TreeElementWithContextValue, TreeElementWithRetryChildren {
+export class AzureServiceRootItem
+    implements TreeElement, TreeElementWithContextValue, TreeElementWithExplicitReload, TreeElementWithRetryChildren
+{
     public readonly id: string;
     public contextValue: string =
         'enableRefreshCommand;enableManageCredentialsCommand;enableFilterCommand;enableLearnMoreCommand;discoveryAzureVMRootItem';
 
     constructor(
-        private readonly azureSubscriptionProvider: VSCodeAzureSubscriptionProvider,
+        private readonly azureSubscriptionProvider: AzureSubscriptionProviderWithFilters,
         public readonly parentId: string,
     ) {
         this.id = `${parentId}/azure-vm-discovery`;
+    }
+
+    public prepareExplicitReload(): void {
+        this.azureSubscriptionProvider.requestFreshListing();
     }
 
     async getChildren(): Promise<ExtTreeElementBase[]> {
         // Generate a journey correlation ID for funnel telemetry tracking
         const journeyCorrelationId = randomUUID();
 
-        const allSubscriptions = await this.azureSubscriptionProvider.getSubscriptions(true);
+        const allSubscriptions = await this.azureSubscriptionProvider.getAvailableSubscriptions({
+            filter: true,
+            maximumTenants: Number.POSITIVE_INFINITY,
+        });
         const subscriptions = getTenantFilteredSubscriptions(allSubscriptions);
 
         if (!subscriptions || subscriptions.length === 0) {
@@ -52,9 +66,7 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
         }
 
         // This information is extracted to improve the UX, that's why there are fallbacks to 'undefined'
-        // Note to future maintainers: we used to run getSubscriptions and getTenants "in parallel", however
-        // this lead to incorrect responses from getSubscriptions. We didn't investigate
-        const tenantPromise = this.azureSubscriptionProvider.getTenants().catch(() => undefined);
+        const tenantPromise = getUnfilteredAzureTenants(this.azureSubscriptionProvider).catch(() => undefined);
         const timeoutPromise = new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 5000));
         const knownTenants = await Promise.race([tenantPromise, timeoutPromise]);
 

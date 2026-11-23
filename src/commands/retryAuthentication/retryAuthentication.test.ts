@@ -98,6 +98,23 @@ describe('retryAuthentication', () => {
         expect(ext.azureResourcesRUBranchDataProvider.resetNodeErrorState).not.toHaveBeenCalled();
     });
 
+    it('marks a Discovery node for an explicit reload before resetting or refreshing it', async () => {
+        const node = {
+            id: 'discoveryView/azure',
+            getTreeItem,
+            prepareExplicitReload: vi.fn(),
+        };
+
+        await retryAuthentication(actionContext as never, node);
+
+        const { resetNodeErrorState, refresh } = ext.discoveryBranchDataProvider;
+        expect(node.prepareExplicitReload).toHaveBeenCalledTimes(1);
+        expect(node.prepareExplicitReload).toHaveBeenCalledBefore(vi.mocked(resetNodeErrorState));
+        expect(resetNodeErrorState).toHaveBeenCalledBefore(vi.mocked(refresh));
+        expect(resetNodeErrorState).toHaveBeenCalledExactlyOnceWith(node.id);
+        expect(refresh).toHaveBeenCalledExactlyOnceWith(node);
+    });
+
     it('throws for unsupported retry nodes', async () => {
         await expect(
             retryAuthentication(actionContext as never, {

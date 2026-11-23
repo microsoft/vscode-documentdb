@@ -437,10 +437,7 @@ export class ShellSessionManager implements vscode.Disposable {
                     throw error;
                 }
             } else {
-                const { getSessionFromVSCode } = await import(
-                    // eslint-disable-next-line import/no-internal-modules
-                    '@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode'
-                );
+                const { getSessionFromVSCode } = await import('@microsoft/vscode-azext-azureauth');
                 let session: vscode.AuthenticationSession | undefined;
                 try {
                     session = await traceAuthOperation(

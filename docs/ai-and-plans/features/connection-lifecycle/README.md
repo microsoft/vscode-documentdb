@@ -41,8 +41,10 @@ Evidence, telemetry and source pointers: [research-findings.md](./research-findi
 
 ## Intent
 
-- **Recover silently** from token expiry and idle drops. Prompt only on a user click, and never from
-  a token callback.
+- **Recover database connections silently** from token expiry and idle drops. For database
+  authentication, prompt only on a user click, never from a token callback. Separately, an Azure
+  Resource Manager challenge can prompt during Azure Discovery. Subscription listing keeps
+  successful results and records a sanitized diagnostic if an account or tenant cannot be listed.
 - **Keep one client per cluster.** Surfaces resolve it per operation and check its identity
   fingerprint and generation.
 - **Never change identity under an open surface.** It becomes disconnected, keeps its state, says why

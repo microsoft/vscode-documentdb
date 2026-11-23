@@ -867,6 +867,51 @@ shim (0005).
 
 **Progress:**
 
+- **Deferred, awaiting operator decisions (2026-11-20):** The L2 probe installed one copy of each
+  azext package and found no fresh versions among the 13 newly resolved packages. The partial
+  migration passed 402 focused tests; the build still has 19 diagnostics in the unconverted
+  subscription-listing paths. No draft or packaged candidate is ready.
+- **ARM challenge prompts:** The advisor (`claude-opus-5.5`) verified that each planned v6 level
+  can prompt on a challenge during passive Discovery. The SDK has no supported option to limit
+  prompts to explicit actions. Recommended for operator consideration: preserve silent
+  Discovery, accepting that its own wizard and deep-link flows would also forgo step-up. The
+  alternatives are to accept the v6 prompt behavior or widen the design to distinguish passive
+  and explicit calls.
+- **Partial subscription results:** The advisor verified that v6 can skip tenants after ARM
+  failures and return a partial list. Recommended for operator consideration: retain healthy
+  results with a sanitized output diagnostic for failed tenants. Preserving visible failure and
+  Retry instead would require a larger change to listing. Neither behavior change was adopted.
+  OP-2 and the final CP-W3 verdict remain pending.
+- **Unblocked (2026-11-20), operator decisions:** Keep successful subscription results when an
+  account or tenant cannot be listed, and record a sanitized diagnostic in the Output channel.
+  Keep the SDK's default ARM challenge behavior. The operator allowed that fallback if keeping
+  browsing silent required more than a small update. A prompt override would have to cover
+  both the SDK listing pipeline and subscription authentication, so PR2 will not add one.
+  OP-2 should include checking where prompts appear and what happens when they are dismissed.
+- **OP-2 candidate ready (2026-11-20):** [Draft PR2 #1111](https://github.com/microsoft/vscode-documentdb/pull/1111)
+  contains the L2 migration (`1869c22ab`) and local account-cache fix (`423c2e1b7`). The
+  [PR2 pre-review](./01-pr2-azureauth-review.md) records the findings and verification. The full
+  suite passed before the cache follow-up (9,682 passed, one skipped); 55 focused tests and
+  root type-check passed after it. The rebuilt VSIX passed inspection and its host graph has one
+  azureauth ESM copy, with no legacy lowered initializer call in the Azure auth chunk.
+  Automated activation did not run in this host because Electron's GUI libraries are missing.
+- **OP-2 accepted by the operator (2026-11-20):** The packaged extension activated. Discovery,
+  filters, and Refresh/Retry passed. The operator signed out and back in with the same account
+  and accepted the untested account-switch, MFA, and cloud cases. New Connection via Azure
+  service discovery and the Azure Resources RU and vCore/DocumentDB nodes worked. Deep-link URLs
+  were not tested; the operator accepted the risk. Update Credentials and workspace-provider
+  results were not reported. Partial failures could not be reproduced live; focused tests cover
+  partial results and sanitized warnings.
+- **CP-W3 (2026-11-20), advised (`claude-opus-5.5`, 85% confidence):** Retain L2:
+  azureauth `6.1.0-alpha.2`, azureutils and utils `5.1.0`, and Azure Resources API `3.1.1`.
+  The build, installed dependency tree, bundle inspection, and operator-accepted OP-2 support
+  this choice. L1 uses the same azureauth and Azure Resources API versions and does not reduce
+  the remaining risks. The untested OP-2 cases above remain unverified.
+- **OP-2 repeat accepted (2026-11-23):** After the alias removal changed the packaged payload,
+  the operator tested the PR2 CI-built VSIX and cleared the gate. The
+  [PR2 review record](./01-pr2-azureauth-review.md#azure-esm-bundle-verification) lists what
+  passed and what was not tested. CP-W3 still retains L2.
+
 ---
 
 ## WI-4: Client identity, generation and the two cache fixes (PR 3)

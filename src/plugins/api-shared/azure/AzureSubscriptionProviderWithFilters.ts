@@ -4,20 +4,63 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
+    isNotSignedInError,
     VSCodeAzureSubscriptionProvider,
+    type AzureAccount,
     type AzureSubscription,
-    type GetSubscriptionsFilter,
+    type AzureTenant,
+    type GetAccountsOptions,
+    type GetAvailableSubscriptionsOptions,
     type SubscriptionId,
+    type TenantIdAndAccount,
 } from '@microsoft/vscode-azext-azureauth';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
+
+export async function getUnfilteredAzureTenants(
+    provider: VSCodeAzureSubscriptionProvider,
+    noCache?: boolean,
+): Promise<AzureTenant[]> {
+    const options = noCache ? { filter: false, noCache: true } : { filter: false };
+    let accounts: AzureAccount[];
+    try {
+        accounts = await provider.getAccounts(options);
+    } catch (error) {
+        if (isNotSignedInError(error)) {
+            return [];
+        }
+        throw error;
+    }
+
+    const tenants: AzureTenant[] = [];
+    for (const account of accounts) {
+        try {
+            tenants.push(...(await provider.getTenantsForAccount(account, options)));
+        } catch (error) {
+            if (!isNotSignedInError(error)) {
+                throw error;
+            }
+        }
+    }
+    return tenants;
+}
 
 /**
  * Extends VSCodeAzureSubscriptionProvider to customize tenant and subscription filters
  */
 export class AzureSubscriptionProviderWithFilters extends VSCodeAzureSubscriptionProvider {
-    constructor(logger?: vscode.LogOutputChannel) {
-        super(logger);
+    private freshListingRequested = false;
+    private readonly cacheRefreshSubscription: vscode.Disposable;
+
+    constructor() {
+        super();
+        // The SDK starts its cache invalidation listeners only when subscribed.
+        this.cacheRefreshSubscription = this.onRefreshSuggested(() => undefined);
+    }
+
+    public override dispose(): void {
+        this.cacheRefreshSubscription.dispose();
+        super.dispose();
     }
 
     private getTenantAndSubscriptionFilters(): string[] {
@@ -35,15 +78,38 @@ export class AzureSubscriptionProviderWithFilters extends VSCodeAzureSubscriptio
         return fullSubscriptionIds;
     }
 
-    /**
-     * Gets subscriptions from the Azure subscription provider.
-     * Note: Callers must explicitly call getTenantFilteredSubscriptions() if tenant filtering is needed.
-     *
-     * @param filter Whether to apply subscription filtering or a custom filter
-     * @returns List of subscriptions from the base provider (without tenant filtering)
-     */
-    public override async getSubscriptions(filter?: boolean | GetSubscriptionsFilter): Promise<AzureSubscription[]> {
-        return await super.getSubscriptions(filter);
+    public requestFreshListing(): void {
+        this.freshListingRequested = true;
+    }
+
+    public override getAccounts(options?: GetAccountsOptions): Promise<AzureAccount[]> {
+        return super.getAccounts({ ...options, noCache: true });
+    }
+
+    public override async getAvailableSubscriptions(
+        options?: GetAvailableSubscriptionsOptions,
+    ): Promise<AzureSubscription[]> {
+        if (this.freshListingRequested) {
+            this.freshListingRequested = false;
+            options = { ...options, noCache: true };
+        }
+
+        try {
+            return await super.getAvailableSubscriptions(options);
+        } catch (error) {
+            if (isNotSignedInError(error)) {
+                return [];
+            }
+            throw error;
+        }
+    }
+
+    protected override errorForAccount(_account: AzureAccount, _message: string, _error: unknown): void {
+        ext.outputChannel.warn(vscode.l10n.t('Skipped an Azure account because its tenants could not be listed.'));
+    }
+
+    protected override errorForTenant(_tenant: TenantIdAndAccount, _message: string, _error: unknown): void {
+        ext.outputChannel.warn(vscode.l10n.t('Skipped an Azure tenant because its subscriptions could not be listed.'));
     }
 
     /**
