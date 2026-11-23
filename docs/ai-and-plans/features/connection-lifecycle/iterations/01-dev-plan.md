@@ -1206,11 +1206,12 @@ shim (0005).
    - Route both catch paths in `getChildren` (cached-client reuse and `listDatabases`) through
      `reportFailure`. Keep the modal-plus-actions presentation.
    - Change `createErrorRecoveryChildren` to:
-     - **Sign in again** (when the kind is `signInRequired`), or **Update credentials** (the
-       provider-owned action that exists today);
+     - **Sign in again** when the kind is `signInRequired` or `credentialsRejected` and the
+       Entra identity and settings are available, or **Update credentials** (the provider-owned
+       action that exists today);
      - then Diagnose;
      - then Open shell;
-     - then **Retry last**.
+     - then **Retry last**, except when **Sign in again** is offered in its place.
    - Check that order against the skill text, and update the skill in WI-10 if it differs.
    - Call `addEstablishedConnectionContext` on the failure events of `connect`, `getchildren` and the tree.
    - **Keep credentials on recoverable failures (F-20).** In every provider item's `authenticateAndConnect`
@@ -1306,6 +1307,9 @@ shim (0005).
   the Native discovery Retry correction and the core recovery paths. These counts overlap.
   OP-3 requires a real Entra sign-out on the dev host and a fresh-socket callback. PR4 pre-review
   and handoff checks remain; WI-6 does not start before OP-3 is cleared.
+- **OP-3 UI clarification:** The operator accepted showing **Sign in again** instead of **Retry**
+  when Entra sign-in is the next useful step. Diagnose and Open shell remain. This follows decision
+  0001's single sign-in action and preserves the original Retry behavior for transient failures.
 
 ---
 

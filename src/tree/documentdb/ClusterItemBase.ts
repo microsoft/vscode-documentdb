@@ -344,23 +344,25 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
     /**
      * Builds the FAILURE-TYPE error-recovery nodes owned by the element layer.
      *
-     * Always includes the canonical "retry" node (see {@link createRetryNode}), a diagnosis
-     * action that opens diagnostics without connecting, and an "open shell" node. `hasRetryNode`
-     * and the provider detect the error state via the retry node. The shell is offered for every
+     * Includes either "sign in again" or "retry", plus diagnosis and "open shell". `hasRetryNode`
+     * lets the provider detect the error state with either recovery action. The shell is offered for every
      * failure, including sign-in failures, so experts can investigate with the shell's own
      * connection and error output. View-specific recovery actions (e.g. "update credentials") are
      * added separately by the provider via `errorRecoveryActions`.
      *
      * Error-recovery nodes in this tree are produced by two layers:
-     * - The ELEMENT layer (this class) owns FAILURE-TYPE nodes: "retry", "diagnose" and
+     * - The ELEMENT layer (this class) owns FAILURE-TYPE nodes: "sign in again" or "retry", "diagnose" and
      *   "open shell", for any failure.
      * - The PROVIDER layer (a BranchDataProvider) owns VIEW-SPECIFIC nodes (e.g. "update
      *   credentials") via `errorRecoveryActions`, gated by the failing element's contextValue.
      */
     private createErrorRecoveryChildren(): TreeElement[] {
+        const needsSignIn =
+            (this.lastConnectionFailureKind === 'signInRequired' ||
+                this.lastConnectionFailureKind === 'credentialsRejected') &&
+            this.canSignInAgain();
         return [
-            ...((this.lastConnectionFailureKind === 'signInRequired' ||
-                this.lastConnectionFailureKind === 'credentialsRejected') && this.canSignInAgain()
+            ...(needsSignIn
                 ? [createGenericElementWithContext({
                       contextValue: 'error',
                       id: `${this.id}/sign-in-again`,
@@ -386,7 +388,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 commandId: ShellCommandIds.open,
                 commandArgs: [this],
             }),
-            createRetryNode(this.id, this),
+            ...(needsSignIn ? [] : [createRetryNode(this.id, this)]),
         ];
     }
 
@@ -580,12 +582,10 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
     }
 
     /**
-     * Checks if the given children array contains an error node.
-     * @param children The children array to check.
-     * @returns True if any child in the array is an error node, false otherwise.
+     * Detect a failed expansion even when the sign-in action replaces the Retry row.
      */
     public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
-        return containsRetryNode(children);
+        return containsRetryNode(children) || children?.some((child) => child.id === `${this.id}/sign-in-again`) === true;
     }
 
     /**

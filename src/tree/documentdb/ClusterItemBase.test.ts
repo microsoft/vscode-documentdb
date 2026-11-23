@@ -445,23 +445,39 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
         );
     });
 
-    it('renders the Entra action for an already-latched rejection without reporting a new failure', async (): Promise<void> => {
-        ClustersClientMock.getLatchReason.mockReturnValueOnce('credentialsRejected');
-        ClustersClientMock.connectInteractive.mockRejectedValueOnce(new ConnectionUnavailableError('credentialsRejected'));
-        const credentials = { authMechanism: AuthMethodId.MicrosoftEntraID } as ReturnType<typeof CredentialCache.getCredentials>;
-        vi.mocked(CredentialCache.getCredentials).mockReturnValue(credentials);
-        ClustersClientMock.getLastVerifiedIdentity.mockReturnValueOnce({
-            kind: 'entra', providerId: 'microsoft', accountLabel: 'test', accountId: 'id',
-        });
-        const item = new TestClusterItem(makeCluster(), null);
+    it.each(['signInRequired', 'credentialsRejected'] as const)(
+        'offers Sign in again instead of Retry for %s and keeps the failed-expansion marker',
+        async (reason): Promise<void> => {
+            if (reason === 'credentialsRejected') {
+                ClustersClientMock.getLatchReason.mockReturnValueOnce(reason);
+            }
+            ClustersClientMock.connectInteractive.mockRejectedValueOnce(new ConnectionUnavailableError(reason));
+            vi.mocked(CredentialCache.getCredentials).mockReturnValue({
+                clusterId: 'cluster-1',
+                connectionString: 'mongodb://example.test',
+                authMechanism: AuthMethodId.MicrosoftEntraID,
+            });
+            ClustersClientMock.getLastVerifiedIdentity.mockReturnValueOnce({
+                kind: 'entra',
+                providerId: 'microsoft',
+                accountLabel: 'test',
+                accountId: 'id',
+            });
+            const item = new TestClusterItem(makeCluster(), null);
 
-        expect((await item.getChildren()).map(({ id }) => id)).toEqual([
-            'cluster-1/sign-in-again', 'cluster-1/diagnose', 'cluster-1/open-shell', 'cluster-1/retry',
-        ]);
-        expect(ClustersClientMock.reportFailure).not.toHaveBeenCalled();
-        expect(CredentialCache.deleteCredentials).not.toHaveBeenCalled();
-        vi.mocked(CredentialCache.getCredentials).mockReset();
-    });
+            const children = await item.getChildren();
+
+            expect(children.map(({ id }) => id)).toEqual([
+                'cluster-1/sign-in-again',
+                'cluster-1/diagnose',
+                'cluster-1/open-shell',
+            ]);
+            expect(item.hasRetryNode(children)).toBe(true);
+            expect(ClustersClientMock.reportFailure).not.toHaveBeenCalled();
+            expect(CredentialCache.deleteCredentials).not.toHaveBeenCalled();
+            vi.mocked(CredentialCache.getCredentials).mockReset();
+        },
+    );
 
     it('reports the binding that executed listDatabases, not the current cache entry', async (): Promise<void> => {
         const error = new Error('deprecated generation');
