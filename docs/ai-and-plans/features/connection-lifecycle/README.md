@@ -74,7 +74,7 @@ See [decisions.md](./decisions.md):
 - 0006 delivery through a feature branch with stacked sub-PRs, shipped once;
 - 0007 the Disconnect choice is a modal, not remembered, with a setting for the default;
 - 0008 the azext stack is upgraded as high as viable, with Azure Resources as the reference;
-- 0009 Kubernetes tunnel recovery, case handling and wider network-resilience testing move to #1105;
+- 0009 Kubernetes tunnel recovery, stable tunnel fingerprints, case handling and wider network-resilience testing move to #1105;
 - 0010 rely on the server to reject expired tokens; same-identity client replacement is transparent;
 - 0011 Disconnect keeps the cached credentials and the verified identity; only Remove drops them;
 - 0012 a minimal lifecycle design: no state machine, one epoch, no prompts in `getClient`, one-step teardown;

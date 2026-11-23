@@ -949,7 +949,8 @@ shim (0005).
      - another user changes it;
      - an edited connection string changes it;
      - two managed identity client IDs differ;
-     - a tunnel's local port change keeps it.
+     - stable fingerprints across Kubernetes local-port changes are deferred to #1105
+       (operator amendment to decision 0009); automatic replacement still rejects a mismatch.
 2. **Generation.**
    - Keep a static `Map<clusterId, number>` that only ever increases and is never cleared.
    - Each `ClustersClient` instance records `generation`, `fingerprint`, `createdAt` and its credentials
@@ -1118,6 +1119,11 @@ shim (0005).
   approved. The leader checked the topology event and caller, epoch, and latch checks against
   the advised WI-4e contract. Build and 116 focused tests passed. The cancellation and stale
   retry tests now exercise a pending replacement rather than an obsolete cached `connect()` call.
+- **PR3 pre-review (2026-11-23):** The operator approved two scoped fixes: preserve the shared
+  startup when the decoded-password wait is canceled (`e751df24b`), and keep passive index counts
+  from starting a client (`db01f24a5`). Both used `gpt-6.2-sol`; build and 95 focused tests passed.
+  The operator also approved deferring stable Kubernetes tunnel fingerprints to #1105. See the
+  [review record](./01-pr3-client-identity-review.md) for advisor confidence and verification.
 
 ---
 
