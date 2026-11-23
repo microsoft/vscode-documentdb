@@ -220,7 +220,7 @@ describe('updateCredentials post-wizard updates', () => {
     });
 
     it('updates runtime credentials when the epoch changes during an ordinary save', async (): Promise<void> => {
-        let storedConnection = originalConnection;
+        let storedConnection: storageModule.ConnectionItem = originalConnection;
         const newCredentials = { connectionUser: 'old-user', connectionPassword: 'new-password' };
         mockGet.mockImplementation(async () => structuredClone(storedConnection));
         mockExecute.mockImplementationOnce(async (wizardContext): Promise<void> => {

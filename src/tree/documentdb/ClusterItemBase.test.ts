@@ -500,20 +500,25 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
         expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
     });
 
-    it.each(['diagnose', 'sign-in-again'])('does not mistake a database named %s for a recovery action', (name): void => {
-        const item = new TestClusterItem(makeCluster(), null);
-        const child = {
-            id: `cluster-1/${name}`,
-            contextValue: 'treeItem_documentdbdatabase',
-            getTreeItem: (): vscode.TreeItem => ({ label: name }),
-        };
+    it.each(['diagnose', 'sign-in-again'])(
+        'does not mistake a database named %s for a recovery action',
+        (name): void => {
+            const item = new TestClusterItem(makeCluster(), null);
+            const child = {
+                id: `cluster-1/${name}`,
+                contextValue: 'treeItem_documentdbdatabase',
+                getTreeItem: (): vscode.TreeItem => ({ label: name }),
+            };
 
-        expect(item.hasRetryNode([child])).toBe(false);
-    });
+            expect(item.hasRetryNode([child])).toBe(false);
+        },
+    );
 
     it('keeps actionable recovery children without an inert Retry for stored credentials', async (): Promise<void> => {
         ClustersClientMock.getLatchReason.mockReturnValue('credentialsRejected');
-        ClustersClientMock.connectInteractive.mockRejectedValueOnce(new ConnectionUnavailableError('credentialsRejected'));
+        ClustersClientMock.connectInteractive.mockRejectedValueOnce(
+            new ConnectionUnavailableError('credentialsRejected'),
+        );
         const item = new TestClusterItem({ ...makeCluster(), viewId: Views.ConnectionsView }, null);
         try {
             const children = await item.getChildren();

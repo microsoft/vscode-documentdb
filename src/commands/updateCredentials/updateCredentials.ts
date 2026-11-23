@@ -60,7 +60,9 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     const clusterId = node.cluster.clusterId;
     let epoch = ClustersClient.getEpoch(clusterId);
     const recoveringRejection = ClustersClient.getLatchReason(clusterId) === 'credentialsRejected';
-    const isRecoveryCurrent = recoveringRejection ? (): boolean => ClustersClient.getEpoch(clusterId) === epoch : undefined;
+    const isRecoveryCurrent = recoveringRejection
+        ? (): boolean => ClustersClient.getEpoch(clusterId) === epoch
+        : undefined;
     // The failed attempt these credentials replace; the reconnect's `connect.startup` names it in
     // `previousFailedStartupCorrelationId`, so it shows whether the new credentials worked.
     const failedStartupCorrelationId = ClustersClient.getLastFailedStartupCorrelationId(node.cluster.clusterId);

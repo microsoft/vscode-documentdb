@@ -20,6 +20,7 @@ import {
     type DatabaseItemModel,
 } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
+import { Views } from '../../documentdb/Views';
 import {
     type EntraIdAuthConfig,
     type ManagedIdentityAuthConfig,
@@ -30,7 +31,6 @@ import { isEntraDestinationRejectedError } from '../../documentdb/auth/oidcAllow
 import { classifyConnectionFailure, type ConnectionFailure } from '../../documentdb/connectionFailures';
 import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { showClusterConnectFailure } from '../../documentdb/showClusterConnectFailure';
-import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
 import { SettingsService } from '../../services/SettingsService';
 import { ErrorExplanationService } from '../../services/errorExplanationService';
@@ -369,7 +369,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 this.lastConnectionFailureKind === 'credentialsRejected') &&
             this.canSignInAgain();
         const rejectedStoredCredentials =
-            this.cluster.viewId === Views.ConnectionsView &&
+            this.cluster.viewId === String(Views.ConnectionsView) &&
             ClustersClient.getLatchReason(this.cluster.clusterId) === 'credentialsRejected';
         return [
             ...(needsSignIn
