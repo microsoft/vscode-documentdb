@@ -305,6 +305,13 @@ without starting work, show the error once, and keep a stop during initializatio
 Stopped (the default-runner case was fixed in #1068). This changes extension behaviour, so it
 ships as its own PR and must land before Phase 5.
 
+> **Done (2026-11-23), decision 0016 (Proposed),** in the stacked PR "[task engine pr3.3]" on top
+> of #1112. `Task.start()` records an initialization failure inside the telemetry callback, so it
+> ends the task as Failed without running `doWork` even when the runner swallows the error, and
+> resolves instead of rejecting. The extension runner suppresses the azext notification for
+> `taskService.taskInitialization`, so the Failed notification is the only one. Tests:
+> `taskService.test.ts`, `extension/extensionTaskOptions.test.ts`.
+
 ---
 
 ## Phase 4: Contract review with the NoSQL team
@@ -386,7 +393,8 @@ today.
 # Outcome
 
 **In progress (2026-11-05).** Phases 0, 1 and 2 landed in place on `dev/tnaum/npm-task-engine`,
-except 1.5, which landed later as a lazy client provider in a stacked PR (see its note). All steps are
+except 1.5, which landed later as a lazy client provider in the stacked PR #1112 (see its note). 3.3 landed
+in the stacked PR "[task engine pr3.3]" on top of #1112. All steps are
 behaviour-neutral for the DocumentDB path. After this round, the code that will move imports
 `vscode` or `ext` only in `UI/**` and `resourceUsageHelper.ts`, as planned. Phase 3 (open
 questions), Phase 4 (the NoSQL team's review) and Phase 5 (extraction, which waits for Phase 4)
@@ -396,7 +404,8 @@ Found while working, not changed:
 
 - `callWithTelemetryAndErrorHandling` swallows errors thrown by `onInitialize`, so a task whose
   initialization fails (for example with `SourceValidationError`) shows the error and then still
-  moves to Running and runs `doWork`. This happens today and is unchanged; scheduled as 3.3.
+  moves to Running and runs `doWork`. Unchanged in this round; fixed in pr3.3 (see 3.3, decision
+  0016).
 - `TaskProgressReportingService.detach()` destructures task-ID strings and uses only their first
   character.
 - `UI/**` and `resourceUsageHelper.ts` still call `vscode.l10n.t` and use `ext`. Under decision

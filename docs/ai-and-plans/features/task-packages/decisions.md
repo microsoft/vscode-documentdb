@@ -340,3 +340,44 @@ is not memoized, so each call happens exactly where the old `getClient` call was
   change; it still needs validation before client resolution. Kept as a separate follow-up.
 - **Make the writer lazy too, for symmetry:** changes when target failures surface; no need.
 - **Defer or drop:** the maintainer chose to address it now.
+
+## 0016 — An initialization failure ends the task and is shown once
+
+**Status:** Proposed · **Date:** 2026-11-23 · **Raised by:** agent
+
+### Decision
+
+Plan item 3.3. When `onInitialize` rejects without a stop request, the task ends as Failed with the
+original error in `status.error`, and `doWork` never runs. `Task.start()` records the failure inside
+the telemetry callback and rethrows it there, so this holds even when the telemetry runner swallows
+the error, as the extension's `callWithTelemetryAndErrorHandling` runner does. `start()` resolves
+once initialization is over and no longer rejects on an initialization failure, for any runner; the
+failure is observable through the task state. It still throws when the task is not Pending. A stop
+during initialization still ends as Stopped, whether `onInitialize` resolves or rejects.
+
+The failure is shown once, by the Failed notification from `TaskProgressReportingService`
+("{0} failed: {1}" with Show Output). The extension runner sets
+`context.errorHandling.suppressDisplay` for `taskService.taskInitialization`, as it already did for
+`taskService.taskExecution`; telemetry still records the failure because the callback still throws
+inside the runner.
+
+The operator was unavailable; the agent chose the recommended option for both questions. Pending
+operator confirmation.
+
+### Reasoning
+
+Before this change, the runner swallowed the error, so the catch in `start()` never ran: the task
+moved to Running and ran `doWork` on a half-initialized task, which usually failed again with a
+second notification. `TaskTelemetryRunner` legitimately returns `Promise<T | undefined>`, so the
+fix belongs in `Task`, not in relying on a runner that rethrows. One route for failures (the task
+state) keeps execution and initialization failures consistent: both are shown by the same
+notification with Show Output, and callers no longer need different handling per runner.
+
+### Rejected alternatives
+
+- **Keep the azext notification and skip the Failed one:** the progress service would need to know
+  in which phase a task failed, and initialization failures would lose Show Output and differ from
+  execution failures.
+- **Keep `start()` rejecting and remove the callers' displays:** `start()` would behave differently
+  per runner (the extension's runner cannot rethrow), and callers that fire and forget
+  `start()` would still need a catch for initialization failures.
