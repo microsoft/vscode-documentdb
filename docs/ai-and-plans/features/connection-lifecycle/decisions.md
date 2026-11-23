@@ -245,6 +245,11 @@ Moved to [#1105](https://github.com/microsoft/vscode-documentdb/issues/1105), to
 - Kubernetes API credential expiry (the AKS exec plugin);
 - a network-resilience test matrix beyond OT-4, including a Kubernetes acceptance test.
 
+**Amended by the operator on 2026-11-23:** Stable fingerprints across Kubernetes forwarded-port
+changes also move to #1105. Until then, keep the identity check unchanged: if a closed binding
+still exists and the forwarded port changes, automatic replacement can reject it as an identity
+change. Do not ignore port changes for ordinary connections or bypass the fingerprint check.
+
 **Stays in iteration 1:** generic idle and network-drop recovery. That means closed-client and transient
 classification, the cancelled-reuse fix, closed-client replacement and OT-4, which together are #1102's
 "recover on the next operation without a restart".

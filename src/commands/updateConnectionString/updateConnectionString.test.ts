@@ -85,7 +85,7 @@ vi.mock('../../services/connectionStorageService', async (importOriginal) => ({
     ConnectionStorageService: { get: vi.fn(), save: vi.fn() },
 }));
 vi.mock('../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: vi.fn(), deleteClient: vi.fn(), exists: vi.fn() },
+    ClustersClient: { connectInteractive: vi.fn(), deleteClient: vi.fn(), exists: vi.fn() },
 }));
 vi.mock('../../services/connectionReachabilityService', () => ({
     ConnectionReachabilityService: { ensureReachable: vi.fn() },
@@ -166,7 +166,7 @@ describe('updateConnectionString rejected-destination recovery', () => {
             items.find((entry) => entry.authMethod === AuthMethodId.NoAuth),
         );
         CredentialCache.setAuthCredentials('stable-id', AuthMethodId.ManagedIdentity, originalUri);
-        vi.mocked(ClustersClient.getClient).mockRejectedValue(
+        vi.mocked(ClustersClient.connectInteractive).mockRejectedValue(
             new EntraDestinationRejectedError({ firstHost: 'old.example.com', hostCount: 1 }),
         );
     });
@@ -205,14 +205,16 @@ describe('updateConnectionString rejected-destination recovery', () => {
             expect(deleteCredentials.mock.invocationCallOrder[0]).toBeLessThan(resetError.mock.invocationCallOrder[0]);
             expect(resetError.mock.invocationCallOrder[0]).toBeLessThan(refresh.mock.invocationCallOrder[0]);
             const client = { listDatabases: vi.fn().mockResolvedValue([]), connectionCorrelationId: 'retry' };
-            vi.mocked(ClustersClient.getClient).mockImplementation(async (clusterId): Promise<ClustersClient> => {
-                expect(clusterId).toBe('stable-id');
-                expect(CredentialCache.getCredentials(clusterId)).toMatchObject({
-                    connectionString: newUri,
-                    authMechanism: expectedMethod,
-                });
-                return client as unknown as ClustersClient;
-            });
+            vi.mocked(ClustersClient.connectInteractive).mockImplementation(
+                async (clusterId): Promise<ClustersClient> => {
+                    expect(clusterId).toBe('stable-id');
+                    expect(CredentialCache.getCredentials(clusterId)).toMatchObject({
+                        connectionString: newUri,
+                        authMechanism: expectedMethod,
+                    });
+                    return client as unknown as ClustersClient;
+                },
+            );
 
             const retriedChildren = await provider.getChildren(item);
 

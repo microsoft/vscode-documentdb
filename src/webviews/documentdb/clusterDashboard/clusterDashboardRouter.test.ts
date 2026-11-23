@@ -11,6 +11,7 @@ import { type initWebviewTrpc as InitWebviewTrpc } from '@microsoft/vscode-ext-w
 import { type Document, type MongoClient } from 'mongodb';
 import * as vscode from 'vscode';
 
+import { ClustersClient } from '../../../documentdb/ClustersClient';
 import { API } from '../../../DocumentDBExperiences';
 
 const mockResolveClusterNode = vi.fn();
@@ -128,6 +129,23 @@ describe('collectRawCommandReplies', () => {
 describe('clusterDashboardRouter create actions', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+    });
+
+    describe('clusterDashboardRouter health poll', () => {
+        it('requests a background client for the sampled cluster', async () => {
+            const unavailable = new Error('test connection unavailable');
+            vi.mocked(ClustersClient.getClient).mockRejectedValueOnce(unavailable);
+            const caller = createCallerFactory(clusterDashboardRouter)(createContext());
+
+            await expect(caller.measureRtt()).rejects.toMatchObject({ cause: unavailable });
+            expect(ClustersClient.getClient).toHaveBeenCalledExactlyOnceWith(
+                'cluster-id',
+                undefined,
+                undefined,
+                'clusterDashboardPoll',
+                { background: true },
+            );
+        });
     });
 
     it('opens the shell with the default database', async () => {

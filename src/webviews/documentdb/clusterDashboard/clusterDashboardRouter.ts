@@ -222,7 +222,9 @@ export const clusterDashboardRouter = router({
         const myCtx = ctx as WithTelemetry<RouterContext>;
         myCtx.actionContext.telemetry.suppressAll = true;
 
-        const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'clusterDashboardPoll');
+        const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'clusterDashboardPoll', {
+            background: true,
+        });
 
         return sampleClusterHealth(client.getMongoClient());
     }),

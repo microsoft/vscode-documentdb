@@ -24,6 +24,7 @@ import {
     MongoClient,
     MongoError,
     MongoNetworkError,
+    MongoNotConnectedError,
     MongoServerError,
     ObjectId,
     type ClientSession,
@@ -42,10 +43,15 @@ import { Links } from '../constants';
 import { ext } from '../extensionVariables';
 import { meterSilentCatch } from '../utils/accumulatingTelemetry';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
+import { nonNullValue } from '../utils/nonNull';
+import { type VerifiedEntraIdentity } from './auth/AuthHandler';
 import { AuthMethodId } from './auth/AuthMethod';
 import { createAuthHandler } from './auth/createAuthHandler';
+import { EntraSignInRequiredError } from './auth/entraErrors/entraCallbackErrors';
 import { getAzureHostSuffix } from './auth/oidcAllowedHosts';
 import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
+import { computeConnectionFingerprint, type ConnectionPrincipal } from './connectionFingerprint';
+import { ConnectionUnavailableError, type ConnectionUnavailableReason } from './ConnectionUnavailableError';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
 import { QueryError } from './errors/QueryError';
 import {
@@ -62,7 +68,7 @@ import { SchemaStore } from './SchemaStore';
 import { prepareDriverConnectionString } from './srv/prepareDriverConnectionString';
 import { type SrvResolutionSummary } from './srv/srvResolutionSummary';
 import { ConnectionStartupTimings } from './utils/ConnectionStartupTimings';
-import { getHostsFromConnectionString } from './utils/connectionStringHelpers';
+import { getHostsFromConnectionString, getUserNameFromConnectionString } from './utils/connectionStringHelpers';
 import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
 import { parseDocumentId } from './utils/parseDocumentId';
@@ -75,6 +81,14 @@ export interface DatabaseItemModel {
     sizeOnDisk?: number;
     empty?: boolean;
 }
+
+export interface ConnectionBinding {
+    readonly clusterId: string;
+    readonly fingerprint: string;
+    readonly generation: number;
+}
+
+export type VerifiedIdentity = VerifiedEntraIdentity | Exclude<ConnectionPrincipal, { kind: 'entra' }>;
 
 export interface CollectionItemModel {
     name: string;
@@ -161,6 +175,7 @@ type ClientStartupStage =
 
 interface ClientStartup {
     readonly id: string;
+    readonly expectedFingerprint?: string;
     readonly startedAt: number;
     readonly costTimings: ConnectionStartupTimings;
     readonly telemetry: ITelemetryContext;
@@ -169,6 +184,42 @@ interface ClientStartup {
     stageStartedAt: number;
     /** Set when no cached credentials existed, so the failure category does not depend on a localized message. */
     credentialsMissing?: boolean;
+}
+
+interface PendingStartup {
+    readonly id: string;
+    readonly epoch: number;
+    readonly promise: Promise<ClustersClient>;
+}
+
+async function waitForClient(
+    promise: Promise<ClustersClient>,
+    signal: AbortSignal | undefined,
+    startupId: string | undefined,
+): Promise<ClustersClient> {
+    if (!signal) {
+        return promise;
+    }
+    let onAbort!: () => void;
+    try {
+        return await new Promise<ClustersClient>((resolve, reject) => {
+            onAbort = (): void => {
+                ext.outputChannel.debug(
+                    `[ClustersClient] startup=${startupId} wait canceled by user surface=extension`,
+                );
+                reject(new UserCancelledError('abortConnection'));
+            };
+            // Observe settlement even if this caller has already left.
+            void promise.then(resolve, reject);
+            if (signal.aborted) {
+                onAbort();
+            } else {
+                signal.addEventListener('abort', onAbort, { once: true });
+            }
+        });
+    } finally {
+        signal.removeEventListener('abort', onAbort);
+    }
 }
 
 /**
@@ -180,6 +231,24 @@ function assertDocumentObject(value: unknown, errorCode: 'INVALID_PROJECTION' | 
         throw new QueryError(errorCode, l10n.t('Expected a document object like { field: 1 }, got: {0}', typeof value));
     }
     return value as Document;
+}
+
+function getVerifiedIdentity(
+    authMethod: AuthMethodId,
+    credentials: CachedClusterCredentials,
+    configuredUri: string,
+    verifiedIdentity: VerifiedEntraIdentity | undefined,
+): VerifiedIdentity {
+    switch (authMethod) {
+        case AuthMethodId.NativeAuth:
+            return { kind: 'native', username: getUserNameFromConnectionString(configuredUri) };
+        case AuthMethodId.ManagedIdentity:
+            return { kind: 'managedIdentity', clientId: credentials.managedIdentityConfig?.clientId };
+        case AuthMethodId.MicrosoftEntraID:
+            return nonNullValue(verifiedIdentity, 'verifiedIdentity', 'ClustersClient.ts');
+        case AuthMethodId.NoAuth:
+            return { kind: 'none' };
+    }
 }
 
 export class ClustersClient {
@@ -198,7 +267,53 @@ export class ClustersClient {
      */
     static _clients: Map<string, ClustersClient> = new Map();
 
+    private static readonly _generations = new Map<string, number>();
+    private static readonly _epochs = new Map<string, number>();
+    private static readonly _latches = new Map<string, ConnectionUnavailableReason>();
+    private static readonly _pendingStartups = new Map<string, PendingStartup>();
+    private static readonly _lastVerifiedIdentities = new Map<string, Readonly<VerifiedIdentity>>();
+
+    /** Last successfully published identity, retained when the client is evicted. */
+    public static getLastVerifiedIdentity(clusterId: string): VerifiedIdentity | undefined {
+        return ClustersClient._lastVerifiedIdentities.get(clusterId);
+    }
+
+    private static getEntraPin(clusterId: string): VerifiedEntraIdentity | undefined {
+        const identity = ClustersClient.getLastVerifiedIdentity(clusterId);
+        return identity?.kind === 'entra' ? identity : undefined;
+    }
+
+    public static getEpoch(clusterId: string): number {
+        return ClustersClient._epochs.get(clusterId) ?? 0;
+    }
+
+    public static invalidate(clusterId: string): number {
+        const epoch = ClustersClient.getEpoch(clusterId) + 1;
+        ClustersClient._epochs.set(clusterId, epoch);
+        return epoch;
+    }
+
+    public static latch(clusterId: string, reason: ConnectionUnavailableReason): void {
+        ClustersClient._latches.set(clusterId, reason);
+        ClustersClient.invalidate(clusterId);
+    }
+
+    public static unlatch(clusterId: string): void {
+        ClustersClient._latches.delete(clusterId);
+        ClustersClient.invalidate(clusterId);
+    }
+
+    public static getLatchReason(clusterId: string): ConnectionUnavailableReason | undefined {
+        return ClustersClient._latches.get(clusterId);
+    }
+
+    #startupCredentials: Readonly<CachedClusterCredentials>;
+    #verifiedIdentity: VerifiedIdentity;
+    private _fingerprint: string;
+    private _binding: ConnectionBinding;
+    private _createdAt: number;
     private _mongoClient: MongoClient;
+    private _closed = false;
     private _interactiveEntraStartupId?: string;
     private _llmEnhancedFeatureApis: llmEnhancedFeatureApis | null = null;
     private _queryInsightsApis: QueryInsightsApis | null = null;
@@ -212,7 +327,7 @@ export class ClustersClient {
 
     /**
      * This client's startup ID, also published as `startupCorrelationId`. Links `connect.startup`,
-     * `connect.staticmetadata`, `connect.getmetadata` and SRV events. Generated once per `initClient` call.
+     * `connect.staticmetadata`, `connect.getmetadata` and SRV events. Generated once per cold startup.
      */
     public connectionCorrelationId?: string;
 
@@ -236,6 +351,26 @@ export class ClustersClient {
      */
     private constructor(private readonly clusterId: string) {
         return;
+    }
+
+    public get binding(): ConnectionBinding {
+        return this._binding;
+    }
+
+    public get createdAt(): number {
+        return this._createdAt;
+    }
+
+    public get generation(): number {
+        return this.binding.generation;
+    }
+
+    public get fingerprint(): string {
+        return this.binding.fingerprint;
+    }
+
+    public get authMethod(): AuthMethodId {
+        return this.#startupCredentials.authMechanism ?? AuthMethodId.NativeAuth;
     }
 
     // TODO: add support for single databases via connection string.
@@ -271,13 +406,13 @@ export class ClustersClient {
     }
 
     private async initClient(
-        abortSignal: AbortSignal | undefined,
-        onStartup: ((id: string) => void) | undefined,
+        startupId: string,
         trigger: ClientStartupTrigger,
+        epoch: number,
+        allowInteractive: boolean,
+        expectedFingerprint?: string,
     ): Promise<void> {
-        const startupId = randomUUID();
         this.connectionCorrelationId = startupId;
-        onStartup?.(startupId);
         let originalFailure: { error: unknown } | undefined;
 
         try {
@@ -299,6 +434,7 @@ export class ClustersClient {
                 const startedAt = Date.now();
                 const startup: ClientStartup = {
                     id: startupId,
+                    expectedFingerprint,
                     startedAt,
                     costTimings: new ConnectionStartupTimings(),
                     telemetry: context.telemetry,
@@ -308,7 +444,7 @@ export class ClustersClient {
                 };
 
                 try {
-                    await this.initializeClient(startup, abortSignal);
+                    await this.initializeClient(startup, epoch, allowInteractive);
                     this.finishClientStartup(startup, 'succeeded');
                 } catch (error) {
                     const canceled = error instanceof UserCancelledError;
@@ -363,29 +499,54 @@ export class ClustersClient {
         );
     }
 
-    private async initializeClient(startup: ClientStartup, abortSignal?: AbortSignal): Promise<void> {
-        const credentials = CredentialCache.getCredentials(this.clusterId);
-        if (!credentials) {
+    private async initializeClient(startup: ClientStartup, epoch: number, allowInteractive: boolean): Promise<void> {
+        const cachedCredentials = CredentialCache.getCredentials(this.clusterId);
+        if (!cachedCredentials) {
             startup.credentialsMissing = true;
-            throw new Error(l10n.t('No credentials found for id {clusterId}', { clusterId: this.clusterId }));
+            throw new ConnectionUnavailableError('credentialsMissing');
+        }
+        const credentials = structuredClone(cachedCredentials);
+        this.#startupCredentials = credentials;
+
+        const reason = ClustersClient.getLatchReason(this.clusterId);
+        if (reason) {
+            throw new ConnectionUnavailableError(reason);
+        }
+        if (epoch !== ClustersClient.getEpoch(this.clusterId)) {
+            throw new Error(l10n.t('The connection changed while it was opening. Try again.'));
         }
 
         // default to NativeAuth if nothing is configured
-        const authMethod = credentials?.authMechanism ?? AuthMethodId.NativeAuth;
+        const authMethod = this.authMethod;
         startup.telemetry.properties.authMethod = authMethod;
 
-        // Ordinary connects may prompt (for example, Microsoft Entra ID sign-in).
-        const authHandler = createAuthHandler(authMethod, credentials, { interactive: true });
+        const pinnedEntraIdentity =
+            authMethod === AuthMethodId.MicrosoftEntraID ? ClustersClient.getEntraPin(this.clusterId) : undefined;
+        if (authMethod === AuthMethodId.MicrosoftEntraID && !pinnedEntraIdentity && !allowInteractive) {
+            throw new EntraSignInRequiredError('noSession');
+        }
+        const authHandler = createAuthHandler(authMethod, credentials, {
+            interactive: allowInteractive && !pinnedEntraIdentity,
+            ...(pinnedEntraIdentity ? { pinnedEntraIdentity } : {}),
+        });
 
         // Configure auth and get connection options
         this.advanceClientStartup(startup, 'stage02ConfiguringAuth');
-        const { connectionString, options } = await authHandler.configureAuth(startup.costTimings, {
+        const { connectionString, options, verifiedIdentity } = await authHandler.configureAuth(startup.costTimings, {
             startupCorrelationId: startup.id,
             surface: 'extension',
             startupProperties: startup.telemetry.properties,
         });
 
         this.advanceClientStartup(startup, 'stage03PreparingClient');
+        this.#verifiedIdentity = getVerifiedIdentity(authMethod, credentials, connectionString, verifiedIdentity);
+        this._fingerprint = computeConnectionFingerprint({
+            connectionString: credentials.connectionString,
+            principal: this.#verifiedIdentity,
+        });
+        if (startup.expectedFingerprint !== undefined && this._fingerprint !== startup.expectedFingerprint) {
+            throw new ConnectionUnavailableError('identityChanged');
+        }
         const hosts = getHostsFromConnectionString(connectionString);
         const userAgentString = hosts.some((host) => getAzureHostSuffix(host)) ? appendExtensionUserAgent() : undefined;
         if (userAgentString) {
@@ -416,7 +577,6 @@ export class ClustersClient {
                 startupCorrelationId: startup.id,
                 connectionCorrelationId: startup.id,
             },
-            abortSignal,
             startupTelemetry: startup.telemetry,
         });
         this._srvResolution = prepared.summary;
@@ -426,7 +586,6 @@ export class ClustersClient {
             prepared.options,
             authMethod === AuthMethodId.MicrosoftEntraID,
             credentials.emulatorConfiguration,
-            abortSignal,
             connectionString,
         );
 
@@ -477,48 +636,16 @@ export class ClustersClient {
         options: MongoClientOptions,
         interactiveEntra: boolean,
         emulatorConfiguration?: EmulatorConfiguration,
-        abortSignal?: AbortSignal,
         originalConnectionString: string = connectionString,
     ): Promise<void> {
-        // Create the client instance first so we hold a reference during connection.
-        // This allows callers to abort via abortSignal by closing the underlying client.
         this._mongoClient = new MongoClient(connectionString, options);
+        this._mongoClient.once('topologyClosed', (): void => {
+            this._closed = true;
+        });
         if (interactiveEntra) {
             this._interactiveEntraStartupId = startup.id;
             this.traceInteractiveEntraPool(startup.id);
         }
-
-        if (abortSignal?.aborted) {
-            ext.outputChannel.debug(
-                `[ClustersClient] startup=${startup.id} canceled before connecting (already aborted signal) surface=extension`,
-            );
-            await this._mongoClient.close();
-            throw new UserCancelledError('abortConnection');
-        }
-
-        // Track whether connect() has resolved so the abort handler can avoid
-        // closing an already-connected client during the micro window between
-        // connect() resolving and removeEventListener firing. This window exists
-        // because abort events are dispatched synchronously when abort() is
-        // called: if abort() fires during the synchronous continuation after
-        // connect() resolves but before the listener is removed, the handler
-        // would close the now-connected client without this guard.
-        let connected = false;
-
-        // Wire up abort: closing the client causes the pending connect() to reject
-        const onAbort = (): void => {
-            if (connected) {
-                // connect() already resolved — do not close the connected client.
-                return;
-            }
-            ext.outputChannel.debug(
-                `[ClustersClient] startup=${startup.id} abort requested; closing client to interrupt connection handshake surface=extension`,
-            );
-            void this._mongoClient.close().catch(() => {
-                // Ignore close errors during abort cleanup
-            });
-        };
-        abortSignal?.addEventListener('abort', onAbort, { once: true });
 
         try {
             this.advanceClientStartup(startup, 'stage04ConnectingAndAuthenticating');
@@ -528,24 +655,10 @@ export class ClustersClient {
             } finally {
                 stopDatabaseConnect();
             }
-            connected = true;
-
-            // Remove the abort listener immediately after connect() resolves so
-            // that a late cancellation during synchronous API init below cannot
-            // close an already-connected client while the method continues as
-            // "successful". The connected flag above serves as a belt-and-suspenders
-            // guard in case abort fires between the assignment and this removal.
-            abortSignal?.removeEventListener('abort', onAbort);
-
             this.advanceClientStartup(startup, 'stage05InitializingApis');
             this._llmEnhancedFeatureApis = new llmEnhancedFeatureApis(this._mongoClient);
             this._queryInsightsApis = new QueryInsightsApis(this._mongoClient);
         } catch (error) {
-            if (abortSignal?.aborted) {
-                ext.outputChannel.debug(`[ClustersClient] startup=${startup.id} canceled by user surface=extension`);
-                throw new UserCancelledError('abortConnection');
-            }
-
             const message = parseError(error).message;
             // Surface the friendly local-connection tips only for a genuinely local-ish connection
             // (emulator, OR a local connection that opted into the TLS exception — host-gated the
@@ -571,13 +684,6 @@ export class ClustersClient {
                 );
             }
             throw error;
-        } finally {
-            // Clean up the abort listener if we didn't already remove it in the
-            // success path (i.e., connect() failed). In the success path the
-            // listener was already removed above.
-            if (abortSignal && !connected) {
-                abortSignal.removeEventListener('abort', onAbort);
-            }
         }
     }
 
@@ -591,15 +697,16 @@ export class ClustersClient {
     }
 
     /**
-     * Retrieves an instance of `ClustersClient` based on the provided `clusterId`.
+     * Retrieves an instance of `ClustersClient` without opening sign-in UI.
      *
      * @param clusterId - A required string used to find the cached connection string to connect.
      * It is also used as a key to reuse existing clients.
-     * @param abortSignal - Optional signal to abort the connection attempt. When aborted,
-     * the in-progress connection is closed and a `UserCancelledError` is thrown.
+     * @param abortSignal - Optional signal that rejects the call with `UserCancelledError` on abort.
+     * Cancellation stops only this caller's wait, not the underlying connection.
      * @param onStartup - Called with the startup correlation ID of the attempt this call joins.
      * @param trigger - Which code path asks for the client; recorded as `startupTrigger` when this
      * call starts a new `connect.startup`. Callers that do not pass it are recorded as `other`.
+     * @param options - Background callers may reuse a client or join a startup, but never start one.
      * @returns A promise that resolves to an instance of `ClustersClient`.
      */
     public static async getClient(
@@ -607,62 +714,173 @@ export class ClustersClient {
         abortSignal?: AbortSignal,
         onStartup?: (id: string) => void,
         trigger: ClientStartupTrigger = 'other',
+        options?: { readonly background?: boolean },
     ): Promise<ClustersClient> {
-        if (ClustersClient._clients.has(clusterId)) {
-            const client = ClustersClient._clients.get(clusterId) as ClustersClient;
-            if (client.connectionCorrelationId) {
-                onStartup?.(client.connectionCorrelationId);
-            }
+        return ClustersClient.acquireClient(
+            clusterId,
+            abortSignal,
+            onStartup,
+            trigger,
+            false,
+            options?.background === true,
+        );
+    }
 
-            // Wire up abort for cached client reconnection so the cancellable
-            // progress UI can also cancel a reconnection attempt.
+    /** A deliberate connect may open sign-in only when there is no verified Entra identity. */
+    public static async connectInteractive(
+        clusterId: string,
+        abortSignal?: AbortSignal,
+        onStartup?: (id: string) => void,
+        trigger: ClientStartupTrigger = 'treeConnect',
+    ): Promise<ClustersClient> {
+        return ClustersClient.acquireClient(clusterId, abortSignal, onStartup, trigger, true, false);
+    }
+
+    private static async acquireClient(
+        clusterId: string,
+        abortSignal: AbortSignal | undefined,
+        onStartup: ((id: string) => void) | undefined,
+        trigger: ClientStartupTrigger,
+        allowInteractive: boolean,
+        background: boolean,
+    ): Promise<ClustersClient> {
+        for (let attempt = 0; ; attempt++) {
+            const reason = ClustersClient.getLatchReason(clusterId);
+            if (reason) {
+                throw new ConnectionUnavailableError(reason);
+            }
             if (abortSignal?.aborted) {
                 throw new UserCancelledError('abortConnection');
             }
+            if (attempt === 2) {
+                throw new Error(l10n.t('The connection changed while it was opening. Try again.'));
+            }
 
-            const onAbort = (): void => {
-                void client._mongoClient.close().catch(() => {
-                    // Ignore close errors when aborting during reconnect
-                });
-            };
-            abortSignal?.addEventListener('abort', onAbort, { once: true });
-
-            try {
-                // if the client is already connected, it's a NOOP.
-                // Note: connectionCorrelationId retains the value from the initial
-                // connection (set in initClient). This is by design — the correlation
-                // ID links the original connect/staticmetadata/getmetadata events.
-                // Cached reconnects don't emit new metadata events, so no new ID is needed.
-                await client._mongoClient.connect();
-            } catch (error) {
+            const epoch = ClustersClient.getEpoch(clusterId);
+            const cached = ClustersClient._clients.get(clusterId);
+            if (cached && !cached._closed) {
+                const id = cached.connectionCorrelationId;
+                if (id) {
+                    onStartup?.(id);
+                }
+                if (epoch !== ClustersClient.getEpoch(clusterId)) {
+                    continue;
+                }
                 if (abortSignal?.aborted) {
+                    ext.outputChannel.debug(`[ClustersClient] startup=${id} wait canceled by user surface=extension`);
                     throw new UserCancelledError('abortConnection');
                 }
-                throw error;
-            } finally {
-                abortSignal?.removeEventListener('abort', onAbort);
+                if (!cached._closed) {
+                    return cached;
+                }
             }
 
-            return client;
+            // Until a replacement succeeds, the closed entry still pins the connection identity.
+            const { id, promise } = ClustersClient.getOrStartClient(
+                clusterId,
+                epoch,
+                trigger,
+                allowInteractive,
+                background,
+                cached?.fingerprint,
+            );
+            onStartup?.(id);
+            try {
+                const client = await waitForClient(promise, abortSignal, id);
+                if (epoch === ClustersClient.getEpoch(clusterId)) {
+                    return client;
+                }
+            } catch (error) {
+                if (epoch === ClustersClient.getEpoch(clusterId)) {
+                    throw error;
+                }
+            }
+            // Both a stale success and a stale failure use the same retry, after checking the latch.
+        }
+    }
+
+    private static getOrStartClient(
+        clusterId: string,
+        epoch: number,
+        trigger: ClientStartupTrigger,
+        allowInteractive: boolean,
+        background: boolean,
+        expectedFingerprint?: string,
+    ): PendingStartup {
+        const existing = ClustersClient._pendingStartups.get(clusterId);
+        if (existing?.epoch === epoch) {
+            return existing;
         }
 
+        const credentials = CredentialCache.getCredentials(clusterId);
+        if (background) {
+            if (!credentials) {
+                throw new ConnectionUnavailableError('credentialsMissing');
+            }
+            throw new MongoNotConnectedError(l10n.t('The connection is unavailable.'));
+        }
+        if (
+            !allowInteractive &&
+            credentials?.authMechanism === AuthMethodId.MicrosoftEntraID &&
+            !ClustersClient.getEntraPin(clusterId)
+        ) {
+            throw new EntraSignInRequiredError('noSession');
+        }
+
+        const id = randomUUID();
+        // Register before initialization or a caller's onStartup callback can re-enter getClient.
+        const promise = Promise.resolve().then(() =>
+            ClustersClient.establishClient(clusterId, epoch, id, trigger, allowInteractive, expectedFingerprint),
+        );
+        const pending = { id, epoch, promise };
+        ClustersClient._pendingStartups.set(clusterId, pending);
+        const clear = (): void => {
+            if (ClustersClient._pendingStartups.get(clusterId) === pending) {
+                ClustersClient._pendingStartups.delete(clusterId);
+            }
+        };
+        void promise.then(clear, clear);
+        return pending;
+    }
+
+    private static async establishClient(
+        clusterId: string,
+        epoch: number,
+        id: string,
+        trigger: ClientStartupTrigger,
+        allowInteractive: boolean,
+        expectedFingerprint?: string,
+    ): Promise<ClustersClient> {
         const client = new ClustersClient(clusterId);
         try {
-            // Cluster metadata is set in initClient
-            await client.initClient(abortSignal, onStartup, trigger);
-            ClustersClient._clients.set(clusterId, client);
-            ClustersClient._lastFailedStartups.delete(clusterId);
+            await client.initClient(id, trigger, epoch, allowInteractive, expectedFingerprint);
         } catch (error) {
-            if (!(error instanceof UserCancelledError) && !abortSignal?.aborted && client.connectionCorrelationId) {
-                ClustersClient._lastFailedStartups.set(clusterId, client.connectionCorrelationId);
+            if (!(error instanceof UserCancelledError) && epoch === ClustersClient.getEpoch(clusterId)) {
+                ClustersClient._lastFailedStartups.set(clusterId, id);
             }
-            // On failure (including abort), clean up the partially-created client
+            client._closed = true;
             void client._mongoClient?.close().catch(() => {
                 // Ignore close errors during cleanup
             });
             throw error;
         }
 
+        if (epoch !== ClustersClient.getEpoch(clusterId)) {
+            client._closed = true;
+            void client._mongoClient.close().catch(() => {
+                ext.outputChannel.debug(
+                    `[ClustersClient] startup=${id} superseded client cleanup failed surface=extension`,
+                );
+            });
+        } else {
+            const generation = (ClustersClient._generations.get(clusterId) ?? 0) + 1;
+            client._binding = Object.freeze({ clusterId, fingerprint: client._fingerprint, generation });
+            client._createdAt = Date.now();
+            ClustersClient._generations.set(clusterId, generation);
+            ClustersClient._lastVerifiedIdentities.set(clusterId, Object.freeze({ ...client.#verifiedIdentity }));
+            ClustersClient._clients.set(clusterId, client);
+            ClustersClient._lastFailedStartups.delete(clusterId);
+        }
         return client;
     }
 
@@ -698,18 +916,22 @@ export class ClustersClient {
         return ClustersClient._clients.get(clusterId);
     }
 
+    public static getBinding(clusterId: string): ConnectionBinding | undefined {
+        return ClustersClient.getExistingClient(clusterId)?.binding;
+    }
+
     public static getSrvResolution(clusterId: string): SrvResolutionSummary | undefined {
         return ClustersClient._clients.get(clusterId)?._srvResolution;
     }
 
     public static async deleteClient(clusterId: string): Promise<void> {
-        if (ClustersClient._clients.has(clusterId)) {
-            const client = ClustersClient._clients.get(clusterId) as ClustersClient;
-            await client._mongoClient.close(true);
+        ClustersClient.invalidate(clusterId);
+        const client = ClustersClient._clients.get(clusterId);
+        if (client) {
             ClustersClient._clients.delete(clusterId);
-
-            // Clear cached schema data for this cluster
             SchemaStore.getInstance().clearCluster(clusterId);
+            client._closed = true;
+            await client._mongoClient.close(true);
         }
     }
 
@@ -1525,4 +1747,16 @@ export class ClustersClient {
         }
         return this._llmEnhancedFeatureApis.unhideIndex(databaseName, collectionName, indexName);
     }
+}
+
+export function addEstablishedConnectionContext(context: ITelemetryContext, cluster: string | ClustersClient): void {
+    const client = typeof cluster === 'string' ? ClustersClient.getExistingClient(cluster) : cluster;
+    if (!client || ClustersClient.getExistingClient(client.binding.clusterId) !== client) {
+        return;
+    }
+
+    context.properties.authMethod = client.authMethod;
+    context.properties.connectionCorrelationId = client.connectionCorrelationId;
+    context.measurements.connectionAgeMs = Math.max(0, Date.now() - client.createdAt);
+    context.measurements.clientGeneration = client.generation;
 }

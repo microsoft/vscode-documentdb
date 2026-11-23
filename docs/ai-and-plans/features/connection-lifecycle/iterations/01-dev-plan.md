@@ -953,7 +953,8 @@ shim (0005).
      - another user changes it;
      - an edited connection string changes it;
      - two managed identity client IDs differ;
-     - a tunnel's local port change keeps it.
+     - stable fingerprints across Kubernetes local-port changes are deferred to #1105
+       (operator amendment to decision 0009); automatic replacement still rejects a mismatch.
 2. **Generation.**
    - Keep a static `Map<clusterId, number>` that only ever increases and is never cleared.
    - Each `ClustersClient` instance records `generation`, `fingerprint`, `createdAt` and its credentials
@@ -1027,6 +1028,112 @@ shim (0005).
 - every existing `ClustersClient` test still passes unchanged, or each change is justified in Progress.
 
 **Progress:**
+
+- **Done (2026-11-20), commit `0e2a89576` (WI-4a, `gpt-6.2-sol`):** Integrated the original
+  fingerprint comparison winner onto the actual PR3 base. The blind advisor scored it 94/100
+  against 88/100 for `mai-code-2` (80% confidence). It hashes the stored URI without its password
+  and the principal, preserving all other URI bytes. The build and 13 fingerprint tests passed.
+- **Done (2026-11-20), commit `a9a8d5103` (WI-4b, `gpt-6.2-sol`):** Integrated the client
+  generation, binding, isolated cached-waiter cancellation, and telemetry context helper.
+  The blind scores were 89/100 and 74/100; the selection was provisional until the advisor
+  (`claude-opus-5.5`) approved the staged winner on the actual PR3 base at 85% confidence.
+  The build and 121 focused tests passed. Generations advance only on successful establishment;
+  cancelling one waiter no longer closes the client shared by other callers.
+- **WI-4c deferred, escalated (2026-11-20):** The plan allows one retry after a stale startup
+  and specifies the result when a latch is set. It does not specify the unlatched result when
+  that retry is also invalidated. Recommendation: use a neutral retryable error, “The connection
+  changed while it was opening. Try again.” The advisor suggested `credentialsChanged`, which
+  fits the existing enum but can imply a credential change after a plain eviction. Confirm
+  the changes to the existing cancellation tests as well: cancelling a wait must not cancel
+  or misreport the physical startup, and a real startup failure must still be logged and cleaned
+  up. Neither choice was assumed. The two worktrees are ready; no coding variants have run.
+- **WI-4c operator decision (2026-11-20):** Use the neutral retryable error “The connection
+  changed while it was opening. Try again.” if the one retry is also superseded and no latch
+  is set. Do not add a new unavailable reason or a third attempt. A latch takes precedence.
+  Cancellation assertions continue to follow the approved waiter-only behavior and retain
+  coverage of actual startup failures, telemetry and cleanup.
+- **Done (2026-11-20), commit `61e9cd4f5` (WI-4c, `gpt-6.2-astra`, High, large context):**
+  Integrated the top blind-review candidate with bounded follow-up changes. Concurrent callers
+  share a startup for the current epoch; cancellation only ends a caller's wait. A superseded
+  client cannot publish or delay a retry while closing. Added the stale-handshake failure and
+  latch regression; the build and 108 focused tests passed on the delivery branch. The operator
+  chose the neutral second-invalidation message. The advisor (`claude-opus-5.5`) approved the
+  corrected candidate for delivery at 85% confidence. Full Case 2 and localization generation
+  remain deferred to PR3 handoff.
+
+  **WI-4c blind comparison:** Same baseline (`9a4d28dfa`), accepted behavior, build and focused
+  selectors. Scores describe the original candidates, not the corrected delivery commit. The
+  ranking had 60–65% confidence. Test counts differ because candidates authored their own tests.
+  Fusion ran alone via the Copilot CLI; its AI credits are reported separately from AIU.
+
+  | Variant                                   | Candidate             |            Score |        Elapsed | Input / output tokens |   Tool calls |             Usage |
+  | ----------------------------------------- | --------------------- | ---------------: | -------------: | --------------------: | -----------: | ----------------: |
+  | `gpt-6.2-astra`, High, large context      | `89d642e66`           |               92 |          4m03s |            737k / 12k |           27 |         254.7 AIU |
+  | `gpt-6.1-sol`, High                       | `18e933d13`           |               89 |          8m16s |            1.1M / 24k |           33 |          55.8 AIU |
+  | `gpt-6.1-sol`, Extra High                 | `7a1845af5`           |               88 |          6m56s |            918k / 21k |           31 |          51.2 AIU |
+  | `gpt-6.2-sol`, default                    | `eb388ef45`           |               88 |          5m04s |            1.0M / 13k |           28 |          78.5 AIU |
+  | Copilot Fusion Standard (`gpt-6.1-terra`) | `4ac6c4765`           |               86 |          3m07s |        911.6k / 12.5k | Not reported |  13.55 AI credits |
+  | Copilot Fusion High                       | No complete candidate |       Not scored | 9m55s reported |          2.0M / 77.1k |           40 | 184.43 AI credits |
+  | `gpt-6.2-sol`, High                       | `f80f3a325`           |               84 |          4m41s |            1.1M / 15k |           28 |          79.6 AIU |
+  | `gpt-6.2-sol`, Extra High                 | `aeabaabd2`           |               84 |          7m01s |            1.1M / 18k |           33 |          87.6 AIU |
+  | `mai-code-2`, default                     | `1978a3c80`           |               74 |          8m06s |            1.6M / 21k |           41 |          17.0 AIU |
+  | `gpt-6.1-sol`, Medium                     | `2cb904a18`           | 73, fix required |          5m46s |            982k / 14k |           28 |          41.3 AIU |
+  | `claude-opus-5.5`, default, large context | `a0b581b07`           |     Disqualified |          7m53s |            2.5M / 44k |           29 |         201.1 AIU |
+
+  The medium-effort candidate could replace a cached client without closing it. The Opus
+  candidate did not honor the retry or latch on an obsolete startup failure. Astra led on
+  simplicity among the correct candidates; Sol 6.1 High had the strongest tests. This was
+  one trial per configuration, not a general model ranking.
+  Fusion High ran alone on the same baseline and hit the 10-minute limit. It left partial
+  implementation changes but no test changes. The partial result was not verified or scored
+  and does not change the delivery selection. Fusion chose Critique mode but never finished
+  the Opus 5.5 draft. The first request took 5m15s and reached its 48,000-output-token limit.
+  The draft then made further requests until the timeout; the critic and revision never ran.
+
+- **WI-4d/e deferred, escalated (2026-11-20):** The advisor reviewed the split between silent
+  reconnect and closed-client replacement. Before implementing, confirm these reconnect rules:
+  1. Reject a silent Entra startup without a verified account before asking VS Code for a
+     session. Only a deliberate first connect may prompt.
+  2. Let background callers use a healthy cached client or join an existing startup, but not
+     start or replace one.
+  3. Keep the verified account for Discovery and Azure Resources connections. Those items have
+     no Remove action, so switching accounts may require a reload until there is an explicit
+     account-switch flow.
+  4. Reject a closed-client replacement with a different identity and retain the closed entry,
+     so the next ordinary call cannot start as the new identity.
+  5. Pin account, provider, and tenant for automatic reconnect. Use changed tenant credentials
+     only after an explicit credentials change.
+
+  The initial request went unanswered, so implementation did not start at that checkpoint.
+
+- **WI-4d/e approved (2026-11-20), operator decision:** The operator accepted all five rules above.
+  For rule 1, the operator preferred requiring an explicit first connect to silently picking
+  an account. For rule 3, the operator accepted the reload limitation as an edge case. Finish
+  silent reconnect first, then closed-client replacement. PR2's pre-review was signed off
+  separately and does not block this work.
+- **Done (2026-11-20), commit `6a53cf19e` (WI-4d, `gpt-6.2-sol`):** Reconnect silently with the
+  verified provider, account and tenant. Only a deliberate first connect may prompt, and
+  background calls cannot start a client. The shared tree helper uses `connectInteractive`;
+  the positional `getClient` signature remains compatible, with an optional background flag.
+  The advisor (`claude-opus-5.5`, 85% confidence) approved the implementation. All 372 focused
+  tests across 13 files and the TypeScript check passed. WI-4e will handle closed topology.
+- **Done (2026-11-20), commit `4680b459f` (WI-4e, `gpt-6.2-sol`):** Reuse open clients without
+  calling driver `connect()` again. A foreground caller can replace a closed client; concurrent
+  callers share that replacement, including background callers that join it. Reject a different
+  fingerprint before constructing a driver and retain the closed binding, as the operator
+  approved. The leader checked the topology event and caller, epoch, and latch checks against
+  the advised WI-4e contract. Build and 116 focused tests passed. The cancellation and stale
+  retry tests now exercise a pending replacement rather than an obsolete cached `connect()` call.
+- **PR3 pre-review (2026-11-23):** The operator approved two scoped fixes: preserve the shared
+  startup when the decoded-password wait is canceled (`e751df24b`), and keep passive index counts
+  from starting a client (`db01f24a5`). Both used `gpt-6.2-sol`; build and 95 focused tests passed.
+  The operator also approved deferring stable Kubernetes tunnel fingerprints to #1105. See the
+  [review record](./01-pr3-client-identity-review.md) for advisor confidence and verification.
+- **PR3 handoff:** Case 2 passed after syncing PR2 and updating the connection-string edit
+  fixture to mock the interactive entry point without changing behavior assertions. The full
+  rerun passed 9,735 tests with one skipped. See the
+  [verification record](./01-pr3-client-identity-review.md#case-2-handoff). PR3 stays stacked
+  on PR2; WI-5 starts with the classifier and stops at CP-2 before recovery wiring.
 
 ---
 
@@ -1484,6 +1591,10 @@ behave as today.
 **Done when:** Case 1 is green, and the OT-7 flows can be reproduced on a dev build.
 
 **Progress:**
+
+- **Carry-forward from WI-4d:** An explicit Update Credentials that changes the tenant must
+  replace or clear the old verified Entra identity so the next connect can use the saved
+  tenant (decision 0011). Automatic reconnect remains pinned until that explicit update.
 
 ---
 

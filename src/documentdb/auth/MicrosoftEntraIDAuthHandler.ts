@@ -62,8 +62,8 @@ function assertEntraSignInEnvironment(expected: EntraSignInEnvironment | undefin
 /**
  * Handler for Microsoft Entra ID authentication via OIDC.
  *
- * An interactive policy may open sign-in (`createIfNone`). A non-interactive policy only looks up
- * an existing session silently and reports a missing one as {@link AuthInputUnavailableError}.
+ * An interactive policy may open sign-in (`createIfNone`) only without a pin. Pinned lookups and
+ * diagnostics are silent; only diagnostics report a missing session as {@link AuthInputUnavailableError}.
  */
 export class MicrosoftEntraIDAuthHandler implements AuthHandler {
     constructor(
@@ -81,7 +81,8 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
     ): Promise<AuthHandlerResponse> {
         const authCorrelationId = randomUUID();
         const { connectionString, clusterId } = this.clusterCredentials;
-        const tenantId = this.clusterCredentials.entraIdConfig?.tenantId;
+        const pin = this.policy.pinnedEntraIdentity;
+        const tenantId = pin ? pin.tenantId : this.clusterCredentials.entraIdConfig?.tenantId;
         const decision = evaluateEntraDestinationFromSettings(connectionString);
         traceEntraDestination(decision, authCorrelationId, traceContext);
         if (!decision.allowed) {
@@ -123,7 +124,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
 
         // Get Microsoft Entra ID token. Only an interactive caller may open sign-in; a non-interactive
         // caller looks up an existing session silently and never forces a new one.
-        const interactive = this.policy.interactive;
+        const interactive = this.policy.interactive && !pin;
         let session: vscode.AuthenticationSession | undefined;
         let signInEnvironment: EntraSignInEnvironment;
         const resource = resolved.scope;
@@ -134,11 +135,15 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                 () =>
                     withTokenAcquisitionTiming(timings, async () => {
                         const signInEnvironment = assertEntraSignInEnvironment(environmentBeforeResolution);
+                        if (pin && pin.providerId !== signInEnvironment.providerId) {
+                            throw new EntraSignInRequiredError('providerChanged');
+                        }
                         try {
                             const session = await getEntraSession({
-                                providerId: signInEnvironment.providerId,
+                                providerId: pin?.providerId ?? signInEnvironment.providerId,
                                 resource,
                                 tenantId,
+                                account: pin ? { id: pin.accountId, label: pin.accountLabel } : undefined,
                                 mode: interactive ? 'interactive' : 'silent',
                             });
                             return { session, signInEnvironment };
@@ -163,14 +168,24 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                     authCorrelationId,
                     traceContext,
                 );
+                if (pin) {
+                    throw new EntraSignInRequiredError('noSession');
+                }
                 if (!interactive) {
                     throw new AuthInputUnavailableError('entraSession');
                 }
                 throw new Error(l10n.t('Failed to obtain Entra ID token.'));
             }
+            if (pin && session.account.id !== pin.accountId) {
+                throw new EntraIdentityMismatchError();
+            }
         } catch (error) {
             // Missing input or configuration drift must not alter the next connect's failure context.
-            if (!(error instanceof AuthInputUnavailableError || error instanceof EntraSignInRequiredError)) {
+            if (
+                !(error instanceof AuthInputUnavailableError) &&
+                !(error instanceof EntraSignInRequiredError) &&
+                !(error instanceof EntraIdentityMismatchError)
+            ) {
                 if (traceContext?.startupProperties) {
                     traceContext.startupProperties.entraFailureKind = 'tokenAcquisitionFailed';
                 }

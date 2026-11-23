@@ -278,8 +278,9 @@ In [ClustersClient.ts](../../../../../src/documentdb/ClustersClient.ts):
 
   The fingerprint is derived from **what was used to connect**, not from the current `CredentialCache`.
   The helper alone returned `native:sam` for two hosts and two auth databases. Bind the logical
-  deployment plus the effective principal (including auth source); for tunnels use the provider's
-  target, not its temporary local port. Test managed identity using the actual runtime credential
+  deployment plus the effective principal (including auth source). Using a stable Kubernetes
+  provider target instead of the forwarded local port is deferred to #1105 (decision 0009).
+  Test managed identity using the actual runtime credential
   shape, a password-only change, and the same username on a different deployment or auth source.
 
 - **Fix:** cancelling a _cached_ reuse must not close the shared client.

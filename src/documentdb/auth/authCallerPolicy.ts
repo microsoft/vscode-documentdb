@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type VerifiedEntraIdentity } from './AuthHandler';
+
 /**
  * Host-only callbacks that report the authentication phases in the order they really happen.
  *
@@ -36,11 +38,11 @@ export interface AuthPhaseObserver {
 }
 
 /**
- * How the caller wants authentication to behave. Ordinary connects are interactive; connection
- * diagnostics are not, and never open sign-in UI.
+ * Whether the caller can open sign-in UI and, for Entra reconnect, which identity must be used.
  */
 export interface AuthCallerPolicy {
     readonly interactive: boolean;
+    readonly pinnedEntraIdentity?: VerifiedEntraIdentity;
     readonly observer?: AuthPhaseObserver;
 }
 
