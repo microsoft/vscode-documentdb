@@ -18,8 +18,10 @@ code:
 - [#1059](https://github.com/microsoft/vscode-documentdb/issues/1059)
 - [#566](https://github.com/microsoft/vscode-documentdb/issues/566)
 - [#990](https://github.com/microsoft/vscode-documentdb/issues/990)
-- follow-up after 1.2.0: [#1105](https://github.com/microsoft/vscode-documentdb/issues/1105) (Kubernetes tunnels, network resilience) and
-  [#1106](https://github.com/microsoft/vscode-documentdb/issues/1106) (out-of-date results)
+- follow-ups after 1.2.0: [#1105](https://github.com/microsoft/vscode-documentdb/issues/1105)
+  (Kubernetes tunnels, network resilience), [#1106](https://github.com/microsoft/vscode-documentdb/issues/1106)
+  (out-of-date results), and [#1119](https://github.com/microsoft/vscode-documentdb/issues/1119)
+  (prompt handling of Microsoft account sign-out)
 
 **Branch:** `feature/connection-lifecycle`, with stacked sub-PRs from `dev/tnaum/*`. Implementation
 does not wait for intermediate merges; the operator handles approvals and merges (decision 0006).

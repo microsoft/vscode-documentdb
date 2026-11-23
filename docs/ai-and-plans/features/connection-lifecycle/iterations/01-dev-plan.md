@@ -135,7 +135,7 @@ Every PR names the issues it may resolve, using the table below, and says for ea
   Keep it factual and short. Never include tokens, account names, cluster names or connection strings.
   Record the comment's link in the WI's Progress block.
 
-- **Work moved to a follow-up issue** (#1105, #1106): when a PR hands work over, comment on the
+- **Work moved to a follow-up issue** (#1105, #1106, #1119): when a PR hands work over, comment on the
   follow-up in the same way, so it can be planned from that comment alone.
 
 | Issue | Title (short)                                     | PRs           | Expected                                                       |
@@ -148,6 +148,7 @@ Every PR names the issues it may resolve, using the table below, and says for ea
 | #1091 | Dashboard health check: pause, back off, stop     | 6 (WI-8)      | Partial unless WI-8 also does the visibility pause and backoff |
 | #1105 | Follow-up: Kubernetes tunnels, network resilience | —             | Not resolved; comment when a PR moves work there               |
 | #1106 | Follow-up: indicate possibly out-of-date results  | —             | Not resolved; comment when a PR moves work there               |
+| #1119 | Follow-up: handle Microsoft sign-out promptly     | —             | Not in 1.2.0                                                   |
 
 ### Skills to load per work item
 
@@ -338,6 +339,12 @@ Moved to [#1105](https://github.com/microsoft/vscode-documentdb/issues/1105) on 
 Moved to [#1106](https://github.com/microsoft/vscode-documentdb/issues/1106) (decision 0010): any
 "results may be out of date" indication. That covers the return from the disconnected state, long idle,
 and writes made from another view or another client.
+
+Prompt handling of Microsoft account sign-out is deferred to
+[#1119](https://github.com/microsoft/vscode-documentdb/issues/1119), after 1.2.0. Under decisions
+0001 and 0012, signing out of VS Code does not close an established database client. The client
+can keep authenticating with a cached token while the server accepts it. When the driver requests
+a new token and the pinned session is gone, recovery remains explicit through **Sign in again**.
 
 Generic idle and network-drop recovery **stays in scope**: closed-client and transient classification,
 the cancelled-reuse fix, closed-client replacement and OT-4. It is #1102's "recover on the next
@@ -1315,6 +1322,21 @@ shim (0005).
   full test run found 32 failures in three suites whose mocks did not expose the new lifecycle
   methods. Update those fixtures without changing their assertions or runtime recovery behavior.
   OP-3 remains the live Entra sign-out and dismissal gate.
+- **OP-3 partial live run (2026-11-23):** A CI-built PR4 VSIX loaded databases and the dashboard.
+  After sign-out, idle sockets closed and fresh sockets became ready under the same client startup.
+  No post-sign-out OIDC callback appears in the supplied excerpt, and sign-in recovery and dismissal
+  were not reached. The run is inconclusive; OP-3 remains open. On resume, close the dashboard,
+  wait until the cached token is no longer accepted, and explicitly refresh the cluster node
+  without restarting the extension host. Collapse and re-expand can show cached children.
+- **Sign-out scope review (2026-11-23):** Claude Opus 5.5 recommended keeping the approved
+  1.2.0 scope (80% confidence). Prompt sign-out handling would need account-specific session
+  checks, coordination with active tasks, and separate handling for Shell and Playground
+  clients. Track it in [#1119](https://github.com/microsoft/vscode-documentdb/issues/1119).
+  OP-3 and its required evidence are unchanged.
+- **Future operator VSIX builds:** Give each new test candidate a distinct extension version in
+  the root `package.json` and corresponding root lockfile entries. Verify the version in the
+  packaged manifest, and give the operator that version, the commit, and the CI artifact link.
+  Do not rebuild an unchanged candidate just to label the partial run.
 
 ---
 
