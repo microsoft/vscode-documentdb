@@ -81,7 +81,7 @@ class TaskProgressReportingServiceImpl implements TaskProgressReportingService {
 
     public detach(): void {
         // Clean up all active progress notifications
-        for (const [taskId] of Array.from(this.activeReports.keys())) {
+        for (const taskId of Array.from(this.activeReports.keys())) {
             this.stopMonitoringTask(taskId);
         }
 
