@@ -305,7 +305,7 @@ without starting work, show the error once, and keep a stop during initializatio
 Stopped (the default-runner case was fixed in #1068). This changes extension behaviour, so it
 ships as its own PR and must land before Phase 5.
 
-> **Done (2026-11-23), decision 0016 (Proposed),** in the stacked PR "[task engine pr3.3]" on top
+> **Done (2026-11-23), decision 0016 (Accepted),** in the stacked PR "[task engine pr3.3]" on top
 > of #1112. `Task.start()` records an initialization failure inside the telemetry callback, so it
 > ends the task as Failed without running `doWork` even when the runner swallows the error, and
 > resolves instead of rejecting. The extension runner suppresses the azext notification for

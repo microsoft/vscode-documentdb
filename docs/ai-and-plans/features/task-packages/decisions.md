@@ -343,7 +343,7 @@ is not memoized, so each call happens exactly where the old `getClient` call was
 
 ## 0016 — An initialization failure ends the task and is shown once
 
-**Status:** Proposed · **Date:** 2026-11-23 · **Raised by:** agent
+**Status:** Accepted · **Date:** 2026-11-23 · **Raised by:** agent
 
 ### Decision
 
@@ -361,8 +361,7 @@ The failure is shown once, by the Failed notification from `TaskProgressReportin
 `taskService.taskExecution`; telemetry still records the failure because the callback still throws
 inside the runner.
 
-The operator was unavailable; the agent chose the recommended option for both questions. Pending
-operator confirmation.
+The operator chose the recommended option for both questions.
 
 ### Reasoning
 
