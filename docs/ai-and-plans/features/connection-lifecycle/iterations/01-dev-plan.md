@@ -1066,19 +1066,19 @@ shim (0005).
   ranking had 60–65% confidence. Test counts differ because candidates authored their own tests.
   Fusion ran alone via the Copilot CLI; its AI credits are reported separately from AIU.
 
-  | Variant | Candidate | Score | Elapsed | Input / output tokens | Tool calls | Usage |
-  | --- | --- | ---: | ---: | ---: | ---: | ---: |
-  | `gpt-6.2-astra`, High, large context | `89d642e66` | 92 | 4m03s | 737k / 12k | 27 | 254.7 AIU |
-  | `gpt-6.1-sol`, High | `18e933d13` | 89 | 8m16s | 1.1M / 24k | 33 | 55.8 AIU |
-  | `gpt-6.1-sol`, Extra High | `7a1845af5` | 88 | 6m56s | 918k / 21k | 31 | 51.2 AIU |
-  | `gpt-6.2-sol`, default | `eb388ef45` | 88 | 5m04s | 1.0M / 13k | 28 | 78.5 AIU |
-  | Copilot Fusion Standard (`gpt-6.1-terra`) | `4ac6c4765` | 86 | 3m07s | 911.6k / 12.5k | Not reported | 13.55 AI credits |
-  | Copilot Fusion High | No complete candidate | Not scored | 9m55s reported | 2.0M / 77.1k | 40 | 184.43 AI credits |
-  | `gpt-6.2-sol`, High | `f80f3a325` | 84 | 4m41s | 1.1M / 15k | 28 | 79.6 AIU |
-  | `gpt-6.2-sol`, Extra High | `aeabaabd2` | 84 | 7m01s | 1.1M / 18k | 33 | 87.6 AIU |
-  | `mai-code-2`, default | `1978a3c80` | 74 | 8m06s | 1.6M / 21k | 41 | 17.0 AIU |
-  | `gpt-6.1-sol`, Medium | `2cb904a18` | 73, fix required | 5m46s | 982k / 14k | 28 | 41.3 AIU |
-  | `claude-opus-5.5`, default, large context | `a0b581b07` | Disqualified | 7m53s | 2.5M / 44k | 29 | 201.1 AIU |
+  | Variant                                   | Candidate             |            Score |        Elapsed | Input / output tokens |   Tool calls |             Usage |
+  | ----------------------------------------- | --------------------- | ---------------: | -------------: | --------------------: | -----------: | ----------------: |
+  | `gpt-6.2-astra`, High, large context      | `89d642e66`           |               92 |          4m03s |            737k / 12k |           27 |         254.7 AIU |
+  | `gpt-6.1-sol`, High                       | `18e933d13`           |               89 |          8m16s |            1.1M / 24k |           33 |          55.8 AIU |
+  | `gpt-6.1-sol`, Extra High                 | `7a1845af5`           |               88 |          6m56s |            918k / 21k |           31 |          51.2 AIU |
+  | `gpt-6.2-sol`, default                    | `eb388ef45`           |               88 |          5m04s |            1.0M / 13k |           28 |          78.5 AIU |
+  | Copilot Fusion Standard (`gpt-6.1-terra`) | `4ac6c4765`           |               86 |          3m07s |        911.6k / 12.5k | Not reported |  13.55 AI credits |
+  | Copilot Fusion High                       | No complete candidate |       Not scored | 9m55s reported |          2.0M / 77.1k |           40 | 184.43 AI credits |
+  | `gpt-6.2-sol`, High                       | `f80f3a325`           |               84 |          4m41s |            1.1M / 15k |           28 |          79.6 AIU |
+  | `gpt-6.2-sol`, Extra High                 | `aeabaabd2`           |               84 |          7m01s |            1.1M / 18k |           33 |          87.6 AIU |
+  | `mai-code-2`, default                     | `1978a3c80`           |               74 |          8m06s |            1.6M / 21k |           41 |          17.0 AIU |
+  | `gpt-6.1-sol`, Medium                     | `2cb904a18`           | 73, fix required |          5m46s |            982k / 14k |           28 |          41.3 AIU |
+  | `claude-opus-5.5`, default, large context | `a0b581b07`           |     Disqualified |          7m53s |            2.5M / 44k |           29 |         201.1 AIU |
 
   The medium-effort candidate could replace a cached client without closing it. The Opus
   candidate did not honor the retry or latch on an obsolete startup failure. Astra led on
@@ -1105,6 +1105,7 @@ shim (0005).
      only after an explicit credentials change.
 
   The initial request went unanswered, so implementation did not start at that checkpoint.
+
 - **WI-4d/e approved (2026-11-20), operator decision:** The operator accepted all five rules above.
   For rule 1, the operator preferred requiring an explicit first connect to silently picking
   an account. For rule 3, the operator accepted the reload limitation as an edge case. Finish
@@ -1128,6 +1129,11 @@ shim (0005).
   from starting a client (`db01f24a5`). Both used `gpt-6.2-sol`; build and 95 focused tests passed.
   The operator also approved deferring stable Kubernetes tunnel fingerprints to #1105. See the
   [review record](./01-pr3-client-identity-review.md) for advisor confidence and verification.
+- **PR3 handoff:** Case 2 passed after syncing PR2 and updating the connection-string edit
+  fixture to mock the interactive entry point without changing behavior assertions. The full
+  rerun passed 9,735 tests with one skipped. See the
+  [verification record](./01-pr3-client-identity-review.md#case-2-handoff). PR3 stays stacked
+  on PR2; WI-5 starts with the classifier and stops at CP-2 before recovery wiring.
 
 ---
 

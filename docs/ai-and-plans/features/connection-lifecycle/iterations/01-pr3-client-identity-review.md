@@ -11,10 +11,10 @@ Reviewed [PR #1113](https://github.com/microsoft/vscode-documentdb/pull/1113) at
 against `96085c1dd`. GPT-6.2-Sol performed the initial review and Claude Opus 5.5 validated
 the findings. The operator approved the dispositions on 2026-11-23.
 
-| Finding | Approved disposition |
-| --- | --- |
-| Canceling the decoded-password retry could invalidate a startup shared by another caller. | Fix in PR3 (90% advisor confidence). Treat the canceled wait like the first attempt: record cancellation without showing another failure modal or evicting the shared client or credentials. |
-| The passive index-count badge could start or replace a client. | Fix in PR3 (95%). Apply the existing background restriction to the count, not to explicit Indexes expansion. |
+| Finding                                                                                                         | Approved disposition                                                                                                                                                                                                                                                                                                        |
+| --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Canceling the decoded-password retry could invalidate a startup shared by another caller.                       | Fix in PR3 (90% advisor confidence). Treat the canceled wait like the first attempt: record cancellation without showing another failure modal or evicting the shared client or credentials.                                                                                                                                |
+| The passive index-count badge could start or replace a client.                                                  | Fix in PR3 (95%). Apply the existing background restriction to the count, not to explicit Indexes expansion.                                                                                                                                                                                                                |
 | A changed Kubernetes forwarded port could cause an identity mismatch if the old closed binding is still cached. | Defer stable tunnel fingerprints to [#1105](https://github.com/microsoft/vscode-documentdb/issues/1105) (85% confidence in the finding). Keep the identity check in place, per [decision 0009](../decisions.md#0009-kubernetes-tunnel-recovery-cluster-id-case-handling-and-wider-network-resilience-testing-move-to-1105). |
 
 ## Implementation and verification
@@ -27,5 +27,18 @@ the findings. The operator approved the dispositions on 2026-11-23.
 - The operator approved keeping the fingerprint check unchanged and deferring stable tunnel
   fingerprints. The feature decisions and both plans record this limitation.
 
-Case 1: the build and 95 focused tests passed with both fixes. Full Case 2 verification is
-pending.
+Case 1: the build and 95 focused tests passed with both fixes.
+
+## Case 2 handoff
+
+After merging the verified PR2 head in `3119db4ed`, localization generation and validation,
+formatting, lint, build, strict workspace test type-check, and VSIX packaging passed. The
+first full test run found six failures in the connection-string edit suite: its mock still
+targeted `getClient` after the tree moved to `connectInteractive`. `be211c14c` updates the
+fixture without changing its assertions or production code. The repaired suite passed all
+seven tests and targeted lint; the full rerun passed **429 files, 9,735 tests, one skipped**.
+`57cd2db14` records the generated localization and formatting used in verification.
+
+PR3 remains stacked on PR2 (#1111). Repeat OP-2 was accepted on the PR2 CI-built VSIX
+with the gaps recorded in the [PR2 review](./01-pr2-azureauth-review.md). That was not a
+live test of PR3; the next planned operator test is OP-3 after WI-5.
