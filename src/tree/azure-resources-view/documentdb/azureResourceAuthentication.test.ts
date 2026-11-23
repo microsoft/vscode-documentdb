@@ -71,10 +71,21 @@ vi.mock('../../../utils/azureClients', () => ({
     createMongoClustersManagementClient: vi.fn(() => ({ mongoClusters: { get: getCluster } })),
 }));
 vi.mock('../../../documentdb/ClustersClient', () => ({
-    ClustersClient: { connectInteractive: vi.fn(), deleteClient: vi.fn() },
+    addEstablishedConnectionContext: vi.fn(),
+    ClustersClient: {
+        getEpoch: vi.fn(() => 0),
+        getLatchReason: vi.fn(),
+        connectInteractive: vi.fn(),
+        deleteClient: vi.fn(),
+    },
 }));
 vi.mock('../../../documentdb/CredentialCache', () => ({
-    CredentialCache: { hasCredentials: vi.fn(), setAuthCredentials: vi.fn(), deleteCredentials: vi.fn() },
+    CredentialCache: {
+        getCredentials: vi.fn(),
+        hasCredentials: vi.fn(),
+        setAuthCredentials: vi.fn(),
+        deleteCredentials: vi.fn(),
+    },
 }));
 vi.mock('../../../extensionVariables', () => ({
     ext: {

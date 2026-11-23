@@ -168,7 +168,10 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     const username = updatedConnection?.secrets.nativeAuthConfig?.connectionUser;
     const password = updatedConnection?.secrets.nativeAuthConfig?.connectionPassword;
     if (recoveringRejection && authMethod === AuthMethodId.MicrosoftEntraID) {
-        ClustersClient.discardEntraPinForDifferentTenant(clusterId, updatedConnection?.secrets.entraIdAuthConfig?.tenantId);
+        ClustersClient.discardEntraPinForDifferentTenant(
+            clusterId,
+            updatedConnection?.secrets.entraIdAuthConfig?.tenantId,
+        );
     }
     if (updatedConnection && authMethod && !(authMethod === AuthMethodId.NativeAuth && (!username || !password))) {
         const connectionString = new DocumentDBConnectionString(updatedConnection.secrets.connectionString);

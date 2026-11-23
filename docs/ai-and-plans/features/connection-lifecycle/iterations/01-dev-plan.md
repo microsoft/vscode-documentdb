@@ -1174,7 +1174,7 @@ shim (0005).
      | `ConnectionUnavailableError('credentialsMissing')` (F-20)                     | any        | `credentialsMissing`         | none to keep                                 | Update credentials                              |
      | code 18                                                                       | Native, RU | `credentialsRejected`        | evict; no automatic retry                    | Update credentials (RU: Retry re-reads the key) |
      | final code 18                                                                 | Entra      | `credentialsRejected`        | evict; no automatic retry                    | Sign in again with a verified Entra identity    |
-     | `MongoNotConnectedError`, `MongoTopologyClosedError`                         | any        | `clientClosed`               | new generation on the next foreground call   | none                                            |
+     | `MongoNotConnectedError`, `MongoTopologyClosedError`                          | any        | `clientClosed`               | new generation on the next foreground call   | none                                            |
      | network errors, timeouts, server selection with no auth cause                 | any        | `transient`                  | keep                                         | Retry                                           |
      | anything else                                                                 | any        | `other`                      | keep                                         | existing behavior                               |
 
@@ -1310,6 +1310,11 @@ shim (0005).
 - **OP-3 UI clarification:** The operator accepted showing **Sign in again** instead of **Retry**
   when Entra sign-in is the next useful step. Diagnose and Open shell remain. This follows decision
   0001's single sign-in action and preserves the original Retry behavior for transient failures.
+- **Draft PR4 CI follow-up:** The VSIX built, passed inspection, and activated in VS Code. Static
+  checks exposed stale localization, formatting changes, and a type-only import lint error. The
+  full test run found 32 failures in three suites whose mocks did not expose the new lifecycle
+  methods. Update those fixtures without changing their assertions or runtime recovery behavior.
+  OP-3 remains the live Entra sign-out and dismissal gate.
 
 ---
 

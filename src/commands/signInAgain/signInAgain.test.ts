@@ -12,7 +12,13 @@ import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { signInAgain } from './signInAgain';
 
-const pin = { kind: 'entra', providerId: 'microsoft', accountId: 'pinned', accountLabel: 'Pinned', tenantId: 'tenant' } as const;
+const pin = {
+    kind: 'entra',
+    providerId: 'microsoft',
+    accountId: 'pinned',
+    accountLabel: 'Pinned',
+    tenantId: 'tenant',
+} as const;
 const clusterId = 'cluster';
 
 vi.mock('../../documentdb/ClustersClient', () => ({
@@ -34,7 +40,10 @@ vi.mock('../../documentdb/auth/MicrosoftEntraIDAuthHandler', () => ({
             acquire: typeof getEntraSession,
         ): Promise<unknown> {
             const session = await acquire({
-                mode: 'forceNew', providerId: pin.providerId, resource: 'scope', tenantId: pin.tenantId,
+                mode: 'forceNew',
+                providerId: pin.providerId,
+                resource: 'scope',
+                tenantId: pin.tenantId,
                 account: { id: pin.accountId, label: pin.accountLabel },
             });
             return { verifiedIdentity: { ...pin, accountId: session?.account.id } };
@@ -51,8 +60,14 @@ function actionContext(): IActionContext {
 describe('signInAgain', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        CredentialCache.setAuthCredentials(clusterId, AuthMethodId.MicrosoftEntraID, 'mongodb://test', undefined,
-            undefined, { tenantId: pin.tenantId });
+        CredentialCache.setAuthCredentials(
+            clusterId,
+            AuthMethodId.MicrosoftEntraID,
+            'mongodb://test',
+            undefined,
+            undefined,
+            { tenantId: pin.tenantId },
+        );
     });
 
     it.each([
@@ -64,12 +79,18 @@ describe('signInAgain', () => {
 
         await signInAgain(actionContext(), { clusterId });
 
-        expect(getEntraSession).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
-            mode: 'forceNew', tenantId: pin.tenantId, providerId: pin.providerId,
-            account: { id: pin.accountId, label: pin.accountLabel },
-        }));
+        expect(getEntraSession).toHaveBeenCalledExactlyOnceWith(
+            expect.objectContaining({
+                mode: 'forceNew',
+                tenantId: pin.tenantId,
+                providerId: pin.providerId,
+                account: { id: pin.accountId, label: pin.accountLabel },
+            }),
+        );
         expect(ClustersClient.startAfterSignIn).toHaveBeenCalledExactlyOnceWith(
-            clusterId, 1, CredentialCache.getCredentials(clusterId),
+            clusterId,
+            1,
+            CredentialCache.getCredentials(clusterId),
             { verifiedIdentity: expect.objectContaining({ accountId: account.id }) },
         );
     });
@@ -97,7 +118,8 @@ describe('signInAgain', () => {
         await signInAgain(actionContext(), { clusterId });
         expect(ClustersClient.startAfterSignIn).not.toHaveBeenCalled();
         expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
-            'The connection was closed while you were signing in.', { modal: true },
+            'The connection was closed while you were signing in.',
+            { modal: true },
         );
         vi.mocked(ClustersClient.getEpoch).mockReturnValue(1);
     });

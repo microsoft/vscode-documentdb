@@ -144,7 +144,9 @@ export function classifyConnectionFailure(error: unknown, authMethod?: AuthMetho
             }
             if (agreed) {
                 mixed ||=
-                    result.kind !== agreed.kind || result.generation !== agreed.generation || result.note !== agreed.note;
+                    result.kind !== agreed.kind ||
+                    result.generation !== agreed.generation ||
+                    result.note !== agreed.note;
             } else {
                 agreed = result;
             }

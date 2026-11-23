@@ -77,7 +77,10 @@ vi.mock('../../../services/SettingsService', () => ({
 
 const mockGetClient = vi.fn();
 vi.mock('../../../documentdb/ClustersClient', () => ({
+    addEstablishedConnectionContext: vi.fn(),
     ClustersClient: {
+        getEpoch: vi.fn(() => 0),
+        getLatchReason: vi.fn(),
         exists: vi.fn().mockReturnValue(false),
         connectInteractive: (...args: unknown[]) => mockGetClient(...args),
     },

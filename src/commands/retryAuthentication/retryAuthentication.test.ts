@@ -6,12 +6,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
+import type * as vscode from 'vscode';
 import { window } from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
-import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { ext } from '../../extensionVariables';
+import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { retryAuthentication } from './retryAuthentication';
 
 vi.mock('../../extensionVariables', () => ({
@@ -53,7 +54,7 @@ vi.mock('../../documentdb/CredentialCache', () => ({
 }));
 
 vi.mock('vscode', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('vscode')>()),
+    ...(await importOriginal<typeof vscode>()),
     l10n: {
         t: vi.fn((value: string) => value),
     },
@@ -157,7 +158,9 @@ describe('retryAuthentication', () => {
         const node = ruNode();
         const nativeAuthConfig = { connectionUser: 'test', connectionPassword: 'new-key' };
         node.readReplacementKey.mockResolvedValue({
-            connectionString: 'mongodb://test', availableAuthMethods: [AuthMethodId.NativeAuth], nativeAuthConfig,
+            connectionString: 'mongodb://test',
+            availableAuthMethods: [AuthMethodId.NativeAuth],
+            nativeAuthConfig,
         });
         vi.mocked(ClustersClient.getLatchReason).mockReturnValueOnce('credentialsRejected');
         vi.mocked(ClustersClient.clearCredentialRejection).mockReturnValueOnce(true);
@@ -167,7 +170,10 @@ describe('retryAuthentication', () => {
         expect(CredentialCache.deleteCredentials).toHaveBeenCalledExactlyOnceWith('ru');
         expect(node.readReplacementKey).toHaveBeenCalledTimes(1);
         expect(CredentialCache.setAuthCredentials).toHaveBeenCalledExactlyOnceWith(
-            'ru', AuthMethodId.NativeAuth, 'mongodb://test', nativeAuthConfig,
+            'ru',
+            AuthMethodId.NativeAuth,
+            'mongodb://test',
+            nativeAuthConfig,
         );
         expect(ext.discoveryBranchDataProvider.refresh).toHaveBeenCalledExactlyOnceWith(node);
     });
@@ -220,7 +226,9 @@ describe('retryAuthentication', () => {
 
     it('does not refresh an old Retry after the client was replaced while its close was pending', async (): Promise<void> => {
         const node = {
-            id: 'connectionsView/stale', cluster: { clusterId: 'stale' }, getTreeItem,
+            id: 'connectionsView/stale',
+            cluster: { clusterId: 'stale' },
+            getTreeItem,
             lastConnectionFailureKind: 'clientClosed' as const,
         };
         vi.mocked(ClustersClient.getEpoch).mockReturnValueOnce(0).mockReturnValueOnce(1).mockReturnValueOnce(2);

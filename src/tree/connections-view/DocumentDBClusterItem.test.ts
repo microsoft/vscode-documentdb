@@ -89,10 +89,21 @@ vi.mock('../../services/connectionStorageService', async (importOriginal) => ({
 }));
 vi.mock('../../documentdb/ClustersClient', () => ({
     addEstablishedConnectionContext: vi.fn(),
-    ClustersClient: { connectInteractive: vi.fn(), deleteClient: vi.fn(), exists: vi.fn(), getEpoch: vi.fn(() => 0), getLatchReason: vi.fn() },
+    ClustersClient: {
+        connectInteractive: vi.fn(),
+        deleteClient: vi.fn(),
+        exists: vi.fn(),
+        getEpoch: vi.fn(() => 0),
+        getLatchReason: vi.fn(),
+    },
 }));
 vi.mock('../../documentdb/CredentialCache', () => ({
-    CredentialCache: { hasCredentials: vi.fn(), setAuthCredentials: vi.fn(), deleteCredentials: vi.fn(), getCredentials: vi.fn() },
+    CredentialCache: {
+        hasCredentials: vi.fn(),
+        setAuthCredentials: vi.fn(),
+        deleteCredentials: vi.fn(),
+        getCredentials: vi.fn(),
+    },
 }));
 vi.mock('../../services/connectionReachabilityService', () => ({
     ConnectionReachabilityService: { ensureReachable: vi.fn() },

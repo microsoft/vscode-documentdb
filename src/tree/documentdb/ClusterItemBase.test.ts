@@ -11,8 +11,8 @@ import {
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
-import { EntraDestinationRejectedError } from '../../documentdb/auth/oidcAllowedHosts';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import { EntraDestinationRejectedError } from '../../documentdb/auth/oidcAllowedHosts';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
 import { CredentialCache } from '../../documentdb/CredentialCache';
@@ -78,8 +78,13 @@ vi.mock('../../documentdb/CredentialCache', () => ({
 vi.mock('../../documentdb/ClustersClient', () => ({
     addEstablishedConnectionContext: vi.fn(),
     ClustersClient: {
-        connectInteractive: vi.fn(), exists: vi.fn().mockReturnValue(false), getExistingClient: vi.fn(),
-        getLatchReason: vi.fn(), getEpoch: vi.fn(() => 0), getLastVerifiedIdentity: vi.fn(), reportFailure: vi.fn(),
+        connectInteractive: vi.fn(),
+        exists: vi.fn().mockReturnValue(false),
+        getExistingClient: vi.fn(),
+        getLatchReason: vi.fn(),
+        getEpoch: vi.fn(() => 0),
+        getLastVerifiedIdentity: vi.fn(),
+        reportFailure: vi.fn(),
     },
 }));
 

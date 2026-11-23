@@ -559,11 +559,13 @@ export class ClustersClient {
 
         // Configure auth and get connection options
         this.advanceClientStartup(startup, 'stage02ConfiguringAuth');
-        const { connectionString, options, verifiedIdentity } = recoveredAuth ?? await authHandler.configureAuth(startup.costTimings, {
-            startupCorrelationId: startup.id,
-            surface: 'extension',
-            startupProperties: startup.telemetry.properties,
-        });
+        const { connectionString, options, verifiedIdentity } =
+            recoveredAuth ??
+            (await authHandler.configureAuth(startup.costTimings, {
+                startupCorrelationId: startup.id,
+                surface: 'extension',
+                startupProperties: startup.telemetry.properties,
+            }));
 
         this.advanceClientStartup(startup, 'stage03PreparingClient');
         this.#verifiedIdentity = getVerifiedIdentity(authMethod, credentials, connectionString, verifiedIdentity);
@@ -777,10 +779,12 @@ export class ClustersClient {
         auth: AuthHandlerResponse,
     ): Promise<ClustersClient | undefined> {
         const reason = ClustersClient.getLatchReason(clusterId);
-        if (epoch !== ClustersClient.getEpoch(clusterId) ||
+        if (
+            epoch !== ClustersClient.getEpoch(clusterId) ||
             CredentialCache.getCredentials(clusterId) !== credentials ||
             credentials.authMechanism !== AuthMethodId.MicrosoftEntraID ||
-            (reason && reason !== 'credentialsRejected')) {
+            (reason && reason !== 'credentialsRejected')
+        ) {
             return undefined;
         }
         if (reason && !ClustersClient.clearCredentialRejection(clusterId, epoch)) {
@@ -791,15 +795,25 @@ export class ClustersClient {
         });
         const startupEpoch = ClustersClient.getEpoch(clusterId);
         try {
-            const { promise } = ClustersClient.getOrStartClient(clusterId, startupEpoch, 'treeConnect', false, false, undefined, auth);
+            const { promise } = ClustersClient.getOrStartClient(
+                clusterId,
+                startupEpoch,
+                'treeConnect',
+                false,
+                false,
+                undefined,
+                auth,
+            );
             const client = await promise;
             return startupEpoch === ClustersClient.getEpoch(clusterId) ? client : undefined;
         } catch (error) {
             if (startupEpoch !== ClustersClient.getEpoch(clusterId)) {
                 return undefined;
             }
-            if (reason === 'credentialsRejected' ||
-                classifyConnectionFailure(error, AuthMethodId.MicrosoftEntraID).kind === 'credentialsRejected') {
+            if (
+                reason === 'credentialsRejected' ||
+                classifyConnectionFailure(error, AuthMethodId.MicrosoftEntraID).kind === 'credentialsRejected'
+            ) {
                 ClustersClient.latch(clusterId, 'credentialsRejected');
             }
             throw error;
@@ -905,7 +919,15 @@ export class ClustersClient {
         const id = randomUUID();
         // Register before initialization or a caller's onStartup callback can re-enter getClient.
         const promise = Promise.resolve().then(() =>
-            ClustersClient.establishClient(clusterId, epoch, id, trigger, allowInteractive, expectedFingerprint, recoveredAuth),
+            ClustersClient.establishClient(
+                clusterId,
+                epoch,
+                id,
+                trigger,
+                allowInteractive,
+                expectedFingerprint,
+                recoveredAuth,
+            ),
         );
         const pending = { id, epoch, promise };
         ClustersClient._pendingStartups.set(clusterId, pending);

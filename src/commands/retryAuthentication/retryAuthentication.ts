@@ -11,11 +11,11 @@ import { addEstablishedConnectionContext, ClustersClient } from '../../documentd
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { inferViewIdFromTreeId, Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
+import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
+import { ConnectionSourceUnavailableError } from '../../tree/documentdb/diagnosticCredentialRead';
 import { type TreeElement } from '../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../tree/TreeElementWithContextValue';
 import { isTreeElementWithExplicitReload } from '../../tree/TreeElementWithExplicitReload';
-import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
-import { ConnectionSourceUnavailableError } from '../../tree/documentdb/diagnosticCredentialRead';
 
 const containsDelimited = (fullContext: string | undefined, value: string): boolean => {
     if (!fullContext) {
@@ -117,12 +117,20 @@ export async function retryAuthentication(context: IActionContext, node: Retryab
                     throw error;
                 }
                 const finding = classifyResolutionFailure(new ConnectionSourceUnavailableError('azure', error));
-                const signInNeeded = finding.code === 'target.sourceInaccessible' && finding.data?.reason === 'signInRequired';
+                const signInNeeded =
+                    finding.code === 'target.sourceInaccessible' && finding.data?.reason === 'signInRequired';
                 context.telemetry.properties.azureKeyReadFailure = signInNeeded ? 'signInRequired' : 'other';
                 context.errorHandling.suppressDisplay = true;
                 void window.showErrorMessage(
-                    signInNeeded ? l10n.t('Azure sign-in needed') : l10n.t('Could not read the database key from Azure.'),
-                    { modal: true, detail: signInNeeded ? l10n.t('Sign in to Azure and try Retry again.') : l10n.t('Check access to the Azure resource and try again.') },
+                    signInNeeded
+                        ? l10n.t('Azure sign-in needed')
+                        : l10n.t('Could not read the database key from Azure.'),
+                    {
+                        modal: true,
+                        detail: signInNeeded
+                            ? l10n.t('Sign in to Azure and try Retry again.')
+                            : l10n.t('Check access to the Azure resource and try again.'),
+                    },
                 );
                 throw error;
             }
@@ -131,9 +139,16 @@ export async function retryAuthentication(context: IActionContext, node: Retryab
             }
             // One fresh ARM read per explicit click. A subsequent database rejection re-latches in
             // the tree; it cannot start another ARM read.
-            if (credentials.nativeAuthConfig?.connectionPassword &&
-                ClustersClient.clearCredentialRejection(clusterId, epoch)) {
-                CredentialCache.setAuthCredentials(clusterId, AuthMethodId.NativeAuth, credentials.connectionString, credentials.nativeAuthConfig);
+            if (
+                credentials.nativeAuthConfig?.connectionPassword &&
+                ClustersClient.clearCredentialRejection(clusterId, epoch)
+            ) {
+                CredentialCache.setAuthCredentials(
+                    clusterId,
+                    AuthMethodId.NativeAuth,
+                    credentials.connectionString,
+                    credentials.nativeAuthConfig,
+                );
             } else {
                 return;
             }

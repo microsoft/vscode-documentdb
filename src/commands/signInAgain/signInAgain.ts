@@ -9,19 +9,21 @@ import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { EntraIdentityMismatchError } from '../../documentdb/auth/entraErrors/entraCallbackErrors';
 import { getEntraSession } from '../../documentdb/auth/entraSession';
 import { MicrosoftEntraIDAuthHandler } from '../../documentdb/auth/MicrosoftEntraIDAuthHandler';
-import { classifyConnectionFailure } from '../../documentdb/connectionFailures';
 import { addEstablishedConnectionContext, ClustersClient } from '../../documentdb/ClustersClient';
+import { classifyConnectionFailure } from '../../documentdb/connectionFailures';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { showClusterConnectFailure } from '../../documentdb/showClusterConnectFailure';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { refreshAuthenticationNode } from '../retryAuthentication/retryAuthentication';
 
 function isSignInDismissal(error: unknown): boolean {
-    return error instanceof UserCancelledError ||
+    return (
+        error instanceof UserCancelledError ||
         (error instanceof Error &&
             (error.name === 'Canceled' ||
                 error.message === 'User did not consent to login.' ||
-                ('errorCode' in error && error.errorCode === 'user_cancelled')));
+                ('errorCode' in error && error.errorCode === 'user_cancelled')))
+    );
 }
 
 export async function signInAgain(
@@ -40,9 +42,11 @@ export async function signInAgain(
     }
     const identity = ClustersClient.getLastVerifiedIdentity(clusterId);
     const credentials = CredentialCache.getCredentials(clusterId);
-    if (identity?.kind !== 'entra' ||
+    if (
+        identity?.kind !== 'entra' ||
         credentials?.authMechanism !== AuthMethodId.MicrosoftEntraID ||
-        identity.tenantId !== credentials.entraIdConfig?.tenantId) {
+        identity.tenantId !== credentials.entraIdConfig?.tenantId
+    ) {
         throw new Error(vscode.l10n.t('No verified Microsoft Entra ID connection is available to sign in again.'));
     }
 
@@ -59,7 +63,10 @@ export async function signInAgain(
 
     let starting = false;
     try {
-        const handler = new MicrosoftEntraIDAuthHandler(credentials, { interactive: false, pinnedEntraIdentity: identity });
+        const handler = new MicrosoftEntraIDAuthHandler(credentials, {
+            interactive: false,
+            pinnedEntraIdentity: identity,
+        });
         const auth = await handler.configureAuth(undefined, undefined, async (request) => {
             if (!isCurrent()) {
                 throw new UserCancelledError('signInAgain');
@@ -71,8 +78,10 @@ export async function signInAgain(
             if (session.account.id !== identity.accountId) {
                 // VS Code only confirms account changes when the account *label* is different.
                 // A same-label/different-ID session is not an explicit user choice.
-                if (session.account.label === identity.accountLabel ||
-                    (identity.providerId !== 'microsoft' && identity.providerId !== 'microsoft-sovereign-cloud')) {
+                if (
+                    session.account.label === identity.accountLabel ||
+                    (identity.providerId !== 'microsoft' && identity.providerId !== 'microsoft-sovereign-cloud')
+                ) {
                     throw new EntraIdentityMismatchError();
                 }
             }
@@ -90,7 +99,11 @@ export async function signInAgain(
             reportClosed();
             return;
         }
-        if (ClustersClient.getExistingClient(clusterId) === client && !ClustersClient.getLatchReason(clusterId) && node) {
+        if (
+            ClustersClient.getExistingClient(clusterId) === client &&
+            !ClustersClient.getLatchReason(clusterId) &&
+            node
+        ) {
             refreshAuthenticationNode(node);
         }
     } catch (error) {
@@ -101,7 +114,10 @@ export async function signInAgain(
         if (isSignInDismissal(error)) {
             throw new UserCancelledError('signInAgain');
         }
-        context.telemetry.properties.connectionFailureKind = classifyConnectionFailure(error, AuthMethodId.MicrosoftEntraID).kind;
+        context.telemetry.properties.connectionFailureKind = classifyConnectionFailure(
+            error,
+            AuthMethodId.MicrosoftEntraID,
+        ).kind;
         await showClusterConnectFailure({
             clusterId,
             clusterName: node?.cluster.name ?? vscode.l10n.t('connection'),

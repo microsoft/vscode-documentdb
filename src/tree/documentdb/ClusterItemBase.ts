@@ -4,10 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    UserCancelledError,
     callWithTelemetryAndErrorHandling,
     createContextValue,
     createGenericElement,
+    UserCancelledError,
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
@@ -158,7 +158,10 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
         this.lastConnectionOutcome = undefined;
         this.lastConnectionFailureReason = undefined;
         this.lastConnectionCorrelationId = undefined;
-        if (CredentialCache.hasCredentials(this.cluster.clusterId) || ClustersClient.getLatchReason(this.cluster.clusterId)) {
+        if (
+            CredentialCache.hasCredentials(this.cluster.clusterId) ||
+            ClustersClient.getLatchReason(this.cluster.clusterId)
+        ) {
             if (!ClustersClient.getLatchReason(this.cluster.clusterId)) {
                 await this.beforeCachedClientConnect();
             }
@@ -337,8 +340,11 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
         const { clusterId } = this.cluster;
         const credentials = CredentialCache.getCredentials(clusterId);
         const identity = ClustersClient.getLastVerifiedIdentity(clusterId);
-        return credentials?.authMechanism === AuthMethodId.MicrosoftEntraID && identity?.kind === 'entra' &&
-            identity.tenantId === credentials.entraIdConfig?.tenantId;
+        return (
+            credentials?.authMechanism === AuthMethodId.MicrosoftEntraID &&
+            identity?.kind === 'entra' &&
+            identity.tenantId === credentials.entraIdConfig?.tenantId
+        );
     }
 
     /**
@@ -363,14 +369,16 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             this.canSignInAgain();
         return [
             ...(needsSignIn
-                ? [createGenericElementWithContext({
-                      contextValue: 'error',
-                      id: `${this.id}/sign-in-again`,
-                      label: vscode.l10n.t('Sign in again'),
-                      iconPath: new vscode.ThemeIcon('sign-in'),
-                      commandId: 'vscode-documentdb.command.signInAgain',
-                      commandArgs: [this],
-                  })]
+                ? [
+                      createGenericElementWithContext({
+                          contextValue: 'error',
+                          id: `${this.id}/sign-in-again`,
+                          label: vscode.l10n.t('Sign in again'),
+                          iconPath: new vscode.ThemeIcon('sign-in'),
+                          commandId: 'vscode-documentdb.command.signInAgain',
+                          commandArgs: [this],
+                      }),
+                  ]
                 : []),
             createGenericElementWithContext({
                 contextValue: 'error',
@@ -419,8 +427,12 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 }
                 this.lastConnectionFailureKind = kind;
             } else {
-                if (acquisitionEpoch !== undefined && ClustersClient.getEpoch(clusterId) !== acquisitionEpoch &&
-                    failure.note !== 'cancelled' && failure.note !== 'alreadyUnavailable') {
+                if (
+                    acquisitionEpoch !== undefined &&
+                    ClustersClient.getEpoch(clusterId) !== acquisitionEpoch &&
+                    failure.note !== 'cancelled' &&
+                    failure.note !== 'alreadyUnavailable'
+                ) {
                     return;
                 }
                 addEstablishedConnectionContext(context.telemetry, clusterId);
@@ -429,8 +441,12 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                     context.telemetry.properties.connectionCorrelationId = this.lastConnectionCorrelationId;
                 }
                 // A failed replacement startup has no published generation of its own.
-                if (failure.kind === 'credentialsRejected' && !failure.note &&
-                    (this.canSignInAgain() || this.readReplacementKey) && !ClustersClient.getLatchReason(clusterId)) {
+                if (
+                    failure.kind === 'credentialsRejected' &&
+                    !failure.note &&
+                    (this.canSignInAgain() || this.readReplacementKey) &&
+                    !ClustersClient.getLatchReason(clusterId)
+                ) {
                     ClustersClient.latch(clusterId, 'credentialsRejected');
                 }
             }
@@ -452,12 +468,17 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                     return;
                 }
                 context.telemetry.properties.explanationProviderId = explanation?.providerId ?? 'none';
-                const heading = explanation?.message ?? (phase === 'listDatabases'
-                    ? vscode.l10n.t('Failed to load databases for "{0}"', name)
-                    : vscode.l10n.t('Failed to connect to "{0}"', name));
-                const detail = failure.note === 'alreadyUnavailable' && this.lastConnectionFailureKind === 'signInRequired'
-                    ? vscode.l10n.t('Sign in again to continue using this connection.')
-                    : error instanceof Error ? error.message : String(error);
+                const heading =
+                    explanation?.message ??
+                    (phase === 'listDatabases'
+                        ? vscode.l10n.t('Failed to load databases for "{0}"', name)
+                        : vscode.l10n.t('Failed to connect to "{0}"', name));
+                const detail =
+                    failure.note === 'alreadyUnavailable' && this.lastConnectionFailureKind === 'signInRequired'
+                        ? vscode.l10n.t('Sign in again to continue using this connection.')
+                        : error instanceof Error
+                          ? error.message
+                          : String(error);
                 void vscode.window.showErrorMessage(heading, { modal: true, detail });
             }
             throw error;
@@ -505,7 +526,9 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                     await this.beforeCachedClientConnect();
                 }
                 acquisitionEpoch = ClustersClient.getEpoch(clusterId);
-                clustersClient = await this.getClientWithProgress(clusterId, (client) => { reusedClient = client; });
+                clustersClient = await this.getClientWithProgress(clusterId, (client) => {
+                    reusedClient = client;
+                });
             } catch (error) {
                 return this.renderExpansionFailure(error, 'cachedClientConnect', reusedClient, acquisitionEpoch);
             }
@@ -585,7 +608,9 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
      * Detect a failed expansion even when the sign-in action replaces the Retry row.
      */
     public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
-        return containsRetryNode(children) || children?.some((child) => child.id === `${this.id}/sign-in-again`) === true;
+        return (
+            containsRetryNode(children) || children?.some((child) => child.id === `${this.id}/sign-in-again`) === true
+        );
     }
 
     /**

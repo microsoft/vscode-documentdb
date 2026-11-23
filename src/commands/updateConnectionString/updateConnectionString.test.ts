@@ -87,8 +87,12 @@ vi.mock('../../services/connectionStorageService', async (importOriginal) => ({
 vi.mock('../../documentdb/ClustersClient', () => ({
     addEstablishedConnectionContext: vi.fn(),
     ClustersClient: {
-        connectInteractive: vi.fn(), deleteClient: vi.fn(), exists: vi.fn(),
-        getEpoch: vi.fn(() => 0), getLatchReason: vi.fn(), getExistingClient: vi.fn(),
+        connectInteractive: vi.fn(),
+        deleteClient: vi.fn(),
+        exists: vi.fn(),
+        getEpoch: vi.fn(() => 0),
+        getLatchReason: vi.fn(),
+        getExistingClient: vi.fn(),
     },
 }));
 vi.mock('../../services/connectionReachabilityService', () => ({

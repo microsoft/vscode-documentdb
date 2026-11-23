@@ -517,9 +517,11 @@ describe('regular connection startup diagnostics', () => {
         expect(CredentialCache.getCredentials(clusterId)).toBe(settings);
         expect(ClustersClient.getLastVerifiedIdentity(clusterId)).toBe(identity);
         await expect(ClustersClient.getClient(clusterId)).rejects.toMatchObject({ reason: 'credentialsRejected' });
-        await expect(ClustersClient.getClient(clusterId, undefined, undefined, 'treeChildren', {
-            background: true,
-        })).rejects.toMatchObject({ reason: 'credentialsRejected' });
+        await expect(
+            ClustersClient.getClient(clusterId, undefined, undefined, 'treeChildren', {
+                background: true,
+            }),
+        ).rejects.toMatchObject({ reason: 'credentialsRejected' });
         expect(MongoClient).toHaveBeenCalledOnce();
 
         expect(ClustersClient.clearCredentialRejection(clusterId, ClustersClient.getEpoch(clusterId))).toBe(true);
@@ -549,8 +551,11 @@ describe('regular connection startup diagnostics', () => {
             clusterId,
             ClustersClient.getEpoch(clusterId),
             CredentialCache.getCredentials(clusterId)!,
-            { connectionString: 'mongodb://private-host:27017', options: {},
-                verifiedIdentity: { ...verifiedIdentity, accountId: 'other-account' } },
+            {
+                connectionString: 'mongodb://private-host:27017',
+                options: {},
+                verifiedIdentity: { ...verifiedIdentity, accountId: 'other-account' },
+            },
         );
         await connection.started;
         ClustersClient.latch(clusterId, 'userDisconnected');
