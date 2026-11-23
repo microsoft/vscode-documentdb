@@ -20,10 +20,13 @@ export class EntraIdentityMismatchError extends Error {
     }
 }
 
-export class TokenCallbackError extends Error {
-    public readonly authMethod = AuthMethodId.MicrosoftEntraID;
+type TokenCallbackAuthMethod = AuthMethodId.MicrosoftEntraID | AuthMethodId.ManagedIdentity;
 
-    constructor(cause: unknown) {
+export class TokenCallbackError extends Error {
+    constructor(
+        cause: unknown,
+        public readonly authMethod: TokenCallbackAuthMethod = AuthMethodId.MicrosoftEntraID,
+    ) {
         super(l10n.t('Failed to obtain a Microsoft Entra ID token.'), { cause });
         this.name = 'TokenCallbackError';
     }
