@@ -11,15 +11,19 @@ const { pathToFileURL } = require('node:url');
 const repository = path.resolve(__dirname, '../..');
 
 /**
- * @param {{ input: Record<string, string>, outputPath: string, pinned: string, withoutAlias: boolean }} options
- * `pinned` is a bare specifier that `vite.config.ext.mjs` must alias; `withoutAlias` drops that alias.
+ * @param {{ input: Record<string, string>, outputPath: string, pinned?: string, withoutAlias?: boolean }} options
+ * When supplied, `pinned` must be aliased by `vite.config.ext.mjs`; `withoutAlias` drops that alias.
  */
 async function buildHostProbes({ input, outputPath, pinned, withoutAlias }) {
     const { createBuilder } = await import('vite');
     const { default: createConfig } = await import(pathToFileURL(path.join(repository, 'vite.config.ext.mjs')));
     const config = await createConfig({ mode: 'production', command: 'build' });
-    const pin = config.resolve.alias.find((alias) => alias.find instanceof RegExp && alias.find.test(pinned));
-    assert.ok(pin, `vite.config.ext.mjs no longer pins ${pinned} (resolve.alias)`);
+    let aliases = config.resolve.alias;
+    if (pinned !== undefined) {
+        const pin = aliases.find((alias) => alias.find instanceof RegExp && alias.find.test(pinned));
+        assert.ok(pin, `vite.config.ext.mjs no longer pins ${pinned} (resolve.alias)`);
+        if (withoutAlias) aliases = aliases.filter((alias) => alias !== pin);
+    }
     const host = config.environments.host;
     let chunks;
     const builder = await createBuilder({
@@ -29,7 +33,7 @@ async function buildHostProbes({ input, outputPath, pinned, withoutAlias }) {
         logLevel: 'silent',
         resolve: {
             ...config.resolve,
-            alias: config.resolve.alias.filter((alias) => !(withoutAlias && alias === pin)),
+            alias: aliases,
         },
         environments: {
             host: {
