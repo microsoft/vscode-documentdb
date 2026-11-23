@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { SchemaStore } from '../../documentdb/SchemaStore';
 import { ext } from '../../extensionVariables';
+import { getExtensionResourceUsageStrings } from '../../services/taskService/extension/extensionPresentationStrings';
 import { TaskService } from '../../services/taskService/extension/taskServiceInstance';
 import { checkCanProceedAndInformUser } from '../../services/taskService/resourceUsageHelper';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
@@ -33,6 +34,7 @@ export async function deleteDatabase(context: IActionContext, node: DatabaseItem
             databaseName: node.databaseInfo.name,
         },
         l10n.t('delete this database'),
+        getExtensionResourceUsageStrings(),
     );
 
     if (!canProceed) {

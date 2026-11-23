@@ -10,6 +10,7 @@ import { CredentialCache } from '../../documentdb/CredentialCache';
 import { SchemaStore } from '../../documentdb/SchemaStore';
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService } from '../../services/connectionStorageService';
+import { getExtensionResourceUsageStrings } from '../../services/taskService/extension/extensionPresentationStrings';
 import { TaskService } from '../../services/taskService/extension/taskServiceInstance';
 import { checkCanProceedAndInformUser } from '../../services/taskService/resourceUsageHelper';
 import {
@@ -50,6 +51,7 @@ export async function removeConnection(
                 clusterId: connection.cluster.clusterId,
             },
             l10n.t('remove this connection'),
+            getExtensionResourceUsageStrings(),
         );
 
         if (!canProceed) {

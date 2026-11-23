@@ -8,7 +8,21 @@ This folder contains optional UI services that integrate with the TaskService to
 
 Displays VS Code notification progress dialogs for running tasks. Automatically attaches to the TaskService and monitors all registered tasks. Shows progress percentage, status messages, and allows task cancellation via the notification.
 
-**Activation:** Automatically attached during extension initialization.
+**Strings and host services:** `createTaskProgressReportingService(options?)` takes
+`TaskProgressReportingOptions`:
+
+- `strings?: Partial<TaskProgressStrings>`: merged over `defaultTaskProgressStrings` (English) with
+  `mergeStrings`. Parameterized entries are functions, for example `failed(taskName, errorMessage)`.
+- `showOutput?: () => void`: when set, the Failed notification offers a button labelled
+  `strings.showOutput` and calls `showOutput` when that same label is chosen. Without it, the
+  notification has no button.
+
+The service imports `vscode` for notifications but never calls `vscode.l10n.t` and does not use
+`ext` (decision 0006), so it can move to the package's `./vscode` subpath unchanged.
+
+**Activation:** The extension's singleton (`extension/taskServiceInstance.ts`) is created with
+`getExtensionTaskProgressStrings()` and `showOutput: () => ext.outputChannel.show()`, and attached
+during extension initialization with `TaskProgressReportingService.attach(TaskService)`.
 
 ### Task lifecycle log observer
 

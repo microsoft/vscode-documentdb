@@ -3,18 +3,21 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTaskService, Task } from '../taskService';
 import { createTaskProgressReportingService } from './taskProgressReportingService';
 
-const { progressPromises } = vi.hoisted(() => ({ progressPromises: [] as Array<Promise<void>> }));
-
-vi.mock('../../../extensionVariables', () => ({ ext: {} }));
+const { progressPromises, showErrorMessage, showInformationMessage } = vi.hoisted(() => ({
+    progressPromises: [] as Array<Promise<void>>,
+    showErrorMessage: vi.fn((..._args: unknown[]): Promise<string | undefined> => Promise.resolve(undefined)),
+    showInformationMessage: vi.fn((..._args: unknown[]): Promise<string | undefined> => Promise.resolve(undefined)),
+}));
 
 vi.mock('vscode', () => ({
     ProgressLocation: { Notification: 15 },
-    l10n: { t: (key: string): string => key },
     window: {
+        showErrorMessage,
+        showInformationMessage,
         withProgress: vi.fn(
             (
                 _options: unknown,
@@ -47,7 +50,25 @@ class PendingTask extends Task {
     }
 }
 
+class FailingTask extends Task {
+    public readonly type = 'failing-test';
+    public readonly name = 'Failing Task';
+
+    constructor() {
+        super();
+    }
+
+    protected doWork(): Promise<void> {
+        return Promise.reject(new Error('boom'));
+    }
+}
+
 describe('TaskProgressReportingService', () => {
+    beforeEach(() => {
+        showErrorMessage.mockClear();
+        showInformationMessage.mockClear();
+    });
+
     it('detach() closes every active progress notification', async () => {
         const taskService = createTaskService();
         const reporting = createTaskProgressReportingService();
@@ -60,5 +81,64 @@ describe('TaskProgressReportingService', () => {
 
         expect(reporting.getActiveReports()).toEqual([]);
         await expect(Promise.all(progressPromises)).resolves.toBeDefined();
+    });
+
+    it('uses the injected strings and runs showOutput when its injected label is chosen', async () => {
+        const showOutput = vi.fn();
+        showErrorMessage.mockResolvedValueOnce('Afficher la sortie');
+        const taskService = createTaskService();
+        const reporting = createTaskProgressReportingService({
+            strings: {
+                failed: (name: string, error: string): string => `${name} a échoué : ${error}`,
+                showOutput: 'Afficher la sortie',
+            },
+            showOutput,
+        });
+        reporting.attach(taskService);
+        const task = new FailingTask();
+        taskService.registerTask(task);
+
+        await task.start();
+
+        await vi.waitFor(() => expect(showOutput).toHaveBeenCalledTimes(1));
+        expect(showErrorMessage).toHaveBeenCalledWith('Failing Task a échoué : boom', 'Afficher la sortie');
+        reporting.detach();
+    });
+
+    it('does not run showOutput when the notification is dismissed', async () => {
+        const showOutput = vi.fn();
+        const taskService = createTaskService();
+        const reporting = createTaskProgressReportingService({ showOutput });
+        reporting.attach(taskService);
+        const task = new FailingTask();
+        taskService.registerTask(task);
+
+        await task.start();
+
+        await vi.waitFor(() =>
+            expect(showErrorMessage).toHaveBeenCalledWith('Failing Task failed: boom', 'Show Output'),
+        );
+        await Promise.resolve();
+        expect(showOutput).not.toHaveBeenCalled();
+        reporting.detach();
+    });
+
+    it('defaults to English and offers no Show Output button without a showOutput callback', async () => {
+        const taskService = createTaskService();
+        const reporting = createTaskProgressReportingService();
+        reporting.attach(taskService);
+        const failing = new FailingTask();
+        const passing = new PendingTask();
+        taskService.registerTask(failing);
+        taskService.registerTask(passing);
+
+        await failing.start();
+        await passing.start();
+
+        await vi.waitFor(() => expect(showErrorMessage).toHaveBeenCalledWith('Failing Task failed: boom'));
+        await vi.waitFor(() =>
+            expect(showInformationMessage).toHaveBeenCalledWith('Pending Task completed successfully'),
+        );
+        reporting.detach();
     });
 });

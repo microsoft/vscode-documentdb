@@ -264,6 +264,20 @@ Progress is updated via `updateProgress()` which:
 2. Fires `onDidChangeStatus` event
 3. `TaskProgressReportingService` updates the VS Code progress notification
 
+The reporter and the conflict warning never call `vscode.l10n.t` or use `ext` (decision 0006).
+They receive their strings, with English defaults, and their host services:
+
+- `createTaskProgressReportingService({ strings, showOutput })` takes `Partial<TaskProgressStrings>`
+  and a `showOutput` callback. The Failed notification offers the `strings.showOutput` button only
+  when `showOutput` is set, and calls it when that same label is chosen.
+- `checkCanProceedAndInformUser(registry, resource, operationName, strings)` takes
+  `Partial<ResourceUsageStrings>` as its fourth argument; `operationName` is already localized.
+
+The extension's localized values come from `extension/extensionPresentationStrings.ts`
+(`getExtensionTaskProgressStrings()`, `getExtensionResourceUsageStrings()`). The singleton in
+`extension/taskServiceInstance.ts` creates the reporter with them and with
+`showOutput: () => ext.outputChannel.show()`, so activation only calls `attach(TaskService)`.
+
 ---
 
 ## Resource Tracking
@@ -286,7 +300,12 @@ class CopyPasteCollectionTask implements ResourceTrackingTask {
 }
 
 // Destructive commands query active task resources before proceeding.
-const canProceed = await checkCanProceedAndInformUser(TaskService, resource, 'delete collection');
+const canProceed = await checkCanProceedAndInformUser(
+  TaskService,
+  resource,
+  l10n.t('delete this collection'),
+  getExtensionResourceUsageStrings(),
+);
 ```
 
 ### Conflict Rules
@@ -300,7 +319,8 @@ const canProceed = await checkCanProceedAndInformUser(TaskService, resource, 'de
 `registerTask()` does not refuse a conflicting task (decision 0018): `ResourceDefinition` has no read or write mode, and a copy reports both its source and its target, so a registration check would refuse legitimate work such as two copies from the same source. A consumer that starts a destructive action checks first and stops if anything conflicts:
 
 ```typescript
-if (!(await checkCanProceedAndInformUser(TaskService, { clusterId, databaseName, collectionName }, 'delete collection'))) {
+const resource = { clusterId, databaseName, collectionName };
+if (!(await checkCanProceedAndInformUser(TaskService, resource, operationName, getExtensionResourceUsageStrings()))) {
   return;
 }
 ```
@@ -542,7 +562,7 @@ src/services/taskService/
 ├── taskService.test.ts                 # Task lifecycle tests
 ├── taskServiceResourceTracking.ts      # Resource conflict detection
 ├── taskServiceResourceTracking.test.ts
-├── resourceUsageHelper.ts              # Memory monitoring utilities
+├── resourceUsageHelper.ts              # Conflict warning before destructive actions
 ├── data-api/                           # Document streaming infrastructure
 │   ├── README.md                       # Data API documentation
 │   ├── types.ts                        # Public interfaces
