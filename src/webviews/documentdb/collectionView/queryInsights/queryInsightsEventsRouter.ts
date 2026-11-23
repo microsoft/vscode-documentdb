@@ -204,6 +204,8 @@ export const queryInsightsEventsRouter = router({
             };
 
             try {
+                const session = ClusterSession.getSession(sessionId);
+                const epoch = session.getEpoch();
                 ext.outputChannel.trace(
                     l10n.t('[Query Insights Stage 3 stream] Started for {db}.{collection} (requestKey: {key})', {
                         db: databaseName,
@@ -229,19 +231,22 @@ export const queryInsightsEventsRouter = router({
                 // the (now-deleted) buffered Stage 3 procedure used to build.
                 // Kept structurally identical so the dedicated completion
                 // telemetry (§7) records the same shape of inputs.
-                const session: ClusterSession = ClusterSession.getSession(sessionId);
-
                 // Record the platform on the dedicated completion event so
                 // it lines up with the buffered procedure's rpc event. Best
                 // effort — a metadata fetch failure here must not abort
                 // Stage 3 streaming (the buffered procedure has the same
                 // contract).
+                const client = await session.getClient();
                 try {
-                    const clusterMetadata = await session.getClient().getClusterMetadata();
+                    const clusterMetadata = await client.getClusterMetadata();
                     completionTelemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
                 } catch {
                     completionTelemetry.properties.platform = 'unknown';
                 }
+                if (abortController.signal.aborted) {
+                    return;
+                }
+                session.assertCurrent(epoch);
 
                 const parsedQueryParams = session.getCurrentFindQueryParamsWithObjects();
                 const queryObject: QueryObject = {

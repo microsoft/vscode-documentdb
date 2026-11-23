@@ -1520,8 +1520,12 @@ behave as today.
   The bound resolver permits a new generation of the same identity and refuses to start
   or use a client for a changed identity. `runWithClient` uses that resolver and reports
   startup credential rejection without submitting the operation (PR4 review N1). Build and
-  86 focused tests passed. Panels are not yet wired; next migrate `ClusterSession` and its
-  host callers.
+  86 focused tests passed.
+- **Collection View host slice:** `ClusterSession` holds a binding instead of a client.
+  Collection View, Query Insights, and the index advisor resolve the client per operation.
+  Check the epoch, latch, and identity before applying results to session caches. Build
+  and 193 focused tests passed. Procedure response shapes are unchanged for now; structured
+  unavailable results and the remaining panels are subsequent WI-6 slices.
 
 ---
 

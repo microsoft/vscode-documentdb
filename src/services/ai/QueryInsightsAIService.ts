@@ -9,7 +9,6 @@ import {
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { type Document } from 'mongodb';
 import {
     CommandType,
     optimizeQuery,
@@ -509,6 +508,9 @@ export class QueryInsightsAIService {
                 }),
             );
 
+            const session = ClusterSession.getSession(actualSessionId);
+            const epoch = session.getEpoch();
+
             // Ask for confirmation before creating the index
             const confirmed = await getConfirmationWithClick(
                 l10n.t('Create index?'),
@@ -529,10 +531,10 @@ export class QueryInsightsAIService {
                 };
             }
 
-            const session = ClusterSession.getSession(actualSessionId);
-            const client = session.getClient();
-
-            const result = await client.createIndex(payload.databaseName, payload.collectionName, payload.indexSpec);
+            const result = await session.runWithClient(
+                (client) => client.createIndex(payload.databaseName, payload.collectionName, payload.indexSpec),
+                epoch,
+            );
 
             if (result.ok === 1) {
                 // Provide positive feedback with additional context from result.note if available
@@ -630,6 +632,9 @@ export class QueryInsightsAIService {
                 ),
             );
 
+            const session = ClusterSession.getSession(actualSessionId);
+            const epoch = session.getEpoch();
+
             // Ask for confirmation before dropping the index (destructive action)
             const confirmed = await getConfirmationAsInSettings(
                 l10n.t('Delete index?'),
@@ -653,10 +658,10 @@ export class QueryInsightsAIService {
                 };
             }
 
-            const session = ClusterSession.getSession(actualSessionId);
-            const client = session.getClient();
-
-            const result = await client.dropIndex(payload.databaseName, payload.collectionName, payload.indexName);
+            const result = await session.runWithClient(
+                (client) => client.dropIndex(payload.databaseName, payload.collectionName, payload.indexName),
+                epoch,
+            );
 
             if (result.ok === 1) {
                 // Provide positive feedback with additional context from result.note if available
@@ -774,6 +779,9 @@ export class QueryInsightsAIService {
                 ),
             );
 
+            const session = ClusterSession.getSession(actualSessionId);
+            const epoch = session.getEpoch();
+
             // Ask for confirmation before modifying the index
             const operationText = operation === 'hideIndex' ? l10n.t('hide') : l10n.t('unhide');
             const confirmed = await getConfirmationWithClick(
@@ -797,17 +805,13 @@ export class QueryInsightsAIService {
                 };
             }
 
-            const session = ClusterSession.getSession(actualSessionId);
-            const client = session.getClient();
-
-            // Execute the operation
-            let result: Document;
-            if (operation === 'hideIndex') {
-                result = await client.hideIndex(payload.databaseName, payload.collectionName, indexName);
-            } else {
-                // unhideIndex
-                result = await client.unhideIndex(payload.databaseName, payload.collectionName, indexName);
-            }
+            const result = await session.runWithClient(
+                (client) =>
+                    operation === 'hideIndex'
+                        ? client.hideIndex(payload.databaseName, payload.collectionName, indexName)
+                        : client.unhideIndex(payload.databaseName, payload.collectionName, indexName),
+                epoch,
+            );
 
             if (result.ok === 1) {
                 // Provide positive feedback with additional context from result.note if available

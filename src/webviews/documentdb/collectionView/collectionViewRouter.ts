@@ -246,6 +246,7 @@ export const collectionsViewRouter = router({
                 input.pageNumber,
                 input.pageSize,
                 executionIntent,
+                myCtx.signal,
             );
 
             // Report execution intent for analytics
@@ -355,6 +356,8 @@ export const collectionsViewRouter = router({
         // procedure type
         .mutation(async ({ input, ctx }) => {
             const myCtx = ctx as RouterContext;
+            const session = ClusterSession.getSession(myCtx.sessionId);
+            const epoch = session.getEpoch();
 
             const confirmed = await getConfirmationAsInSettings(
                 l10n.t('Are you sure?'),
@@ -362,12 +365,11 @@ export const collectionsViewRouter = router({
                 'delete',
             );
 
-            if (!confirmed) {
+            if (!confirmed || myCtx.signal?.aborted) {
                 return false;
             }
 
-            const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
-            const acknowledged = await session.deleteDocuments(myCtx.databaseName, myCtx.collectionName, input);
+            const acknowledged = await session.deleteDocuments(myCtx.databaseName, myCtx.collectionName, input, epoch);
 
             if (acknowledged) {
                 showConfirmationAsInSettings(

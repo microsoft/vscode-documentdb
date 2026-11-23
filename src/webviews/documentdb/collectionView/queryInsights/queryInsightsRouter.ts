@@ -31,6 +31,7 @@ import { z } from 'zod';
 
 import * as l10n from '@vscode/l10n';
 import { ClusterSession } from '../../../../documentdb/ClusterSession';
+import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import {
     ExplainPlanAnalyzer,
     type ExecutionStatsAnalysis,
@@ -116,82 +117,57 @@ export const queryInsightsQueriesRouter = router({
             }),
         );
 
-        let analyzed: QueryPlannerAnalysis;
-        let executionTime: number;
+        const session = ClusterSession.getSession(sessionId);
+        const { analyzed, executionTime } = await session.runWithClient(
+            async (client, epoch): Promise<{ analyzed: QueryPlannerAnalysis; executionTime: number }> => {
+                const clusterMetadata = await client.getClusterMetadata();
+                session.assertCurrent(epoch, myCtx.signal);
+                myCtx.actionContext.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
+                if (clusterMetadata?.domainInfo_api === 'RU') {
+                    ext.outputChannel.trace(
+                        l10n.t(
+                            '[Query Insights Stage 1] Query Insights is not supported on Azure Cosmos DB for MongoDB (RU) clusters.',
+                        ),
+                    );
 
-        // Platform compatibility check:
-        // Query Insights requires the MongoDB API explain() command with specific verbosity modes
-        // (queryPlanner and executionStats). Currently, only DocumentDB supports these features.
-        //
-        // Supported platforms:
-        //   - Azure Cosmos DB for MongoDB vCore (domainInfo_api !== 'RU')
-        //   - Native MongoDB clusters
-        const session: ClusterSession = ClusterSession.getSession(sessionId);
-        const clusterMetadata = await session.getClient().getClusterMetadata();
+                    const error = new Error(
+                        l10n.t('Query Insights is not supported on Azure Cosmos DB for MongoDB (RU) clusters.'),
+                    );
+                    (error as Error & { code?: string }).code = 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU';
+                    throw error;
+                }
 
-        myCtx.actionContext.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
-        if (clusterMetadata?.domainInfo_api === 'RU') {
-            // TODO: Platform identification improvements needed
-            // 1. Create a centralized platform detection service (ClusterSession.getPlatformType())
-            // 2. Define platform capabilities enum (SupportsExplain, SupportsAggregation, etc.)
-            // 3. Check capabilities instead of platform names for better maintainability
-            // 4. Consider adding feature detection (try explain() and handle gracefully)
-            // 5. Update UI to show platform-specific feature availability
-            ext.outputChannel.trace(
-                l10n.t(
-                    '[Query Insights Stage 1] Query Insights is not supported on Azure Cosmos DB for MongoDB (RU) clusters.',
-                ),
-            );
+                const debugData = readQueryInsightsDebugFile('query-insights-stage1.json');
+                if (debugData) {
+                    ext.outputChannel.trace(l10n.t('[Query Insights Stage 1] Using debug data file'));
+                    return { analyzed: ExplainPlanAnalyzer.analyzeQueryPlanner(debugData), executionTime: 2.5 };
+                }
 
-            // Create error with code for UI-specific handling
-            const error = new Error(
-                l10n.t('Query Insights is not supported on Azure Cosmos DB for MongoDB (RU) clusters.'),
-            );
-            // Add error code as a custom property for UI pattern matching
-            (error as Error & { code?: string }).code = 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU';
-            throw error;
-        }
+                const executionTime = session.getLastExecutionTimeMs();
+                const queryParams = session.getCurrentFindQueryParamsWithObjects();
+                const queryPlannerStart = Date.now();
+                const queryPlannerResult = await session.getQueryPlannerInfo(
+                    client,
+                    epoch,
+                    databaseName,
+                    collectionName,
+                    queryParams.filterObj,
+                    {
+                        sort: queryParams.sortObj,
+                        projection: queryParams.projectionObj,
+                        // Intentionally omit skip/limit for full query insights
+                    },
+                    myCtx.signal,
+                );
+                ext.outputChannel.trace(
+                    l10n.t('[Query Insights Stage 1] explain(queryPlanner) completed in {ms}ms', {
+                        ms: (Date.now() - queryPlannerStart).toString(),
+                    }),
+                );
 
-        // Check for debug override file first
-        const debugData = readQueryInsightsDebugFile('query-insights-stage1.json');
-        if (debugData) {
-            ext.outputChannel.trace(l10n.t('[Query Insights Stage 1] Using debug data file'));
-            // Use debug data - analyze it the same way as real data
-            analyzed = ExplainPlanAnalyzer.analyzeQueryPlanner(debugData);
-            // Use a default execution time for debug mode
-            executionTime = 2.5;
-        } else {
-            // Get ClusterSession
-            const session: ClusterSession = ClusterSession.getSession(sessionId);
-
-            // Get execution time from session (tracked during last query execution)
-            executionTime = session.getLastExecutionTimeMs();
-
-            // Get query parameters from session with parsed BSON objects
-            const queryParams = session.getCurrentFindQueryParamsWithObjects();
-
-            // Get query planner info (cached or fetch) without skip/limit for full query insights
-            const queryPlannerStart = Date.now();
-            const queryPlannerResult = await session.getQueryPlannerInfo(
-                databaseName,
-                collectionName,
-                queryParams.filterObj,
-                {
-                    sort: queryParams.sortObj,
-                    projection: queryParams.projectionObj,
-                    // Intentionally omit skip/limit for full query insights
-                },
-            );
-            const queryPlannerDuration = Date.now() - queryPlannerStart;
-            ext.outputChannel.trace(
-                l10n.t('[Query Insights Stage 1] explain(queryPlanner) completed in {ms}ms', {
-                    ms: queryPlannerDuration.toString(),
-                }),
-            );
-
-            // Analyze with ExplainPlanAnalyzer
-            analyzed = ExplainPlanAnalyzer.analyzeQueryPlanner(queryPlannerResult);
-        }
+                return { analyzed: ExplainPlanAnalyzer.analyzeQueryPlanner(queryPlannerResult), executionTime };
+            },
+        );
 
         // Transform to UI format
         const transformed = transformStage1Response(analyzed, executionTime);
@@ -231,6 +207,8 @@ export const queryInsightsQueriesRouter = router({
         let analyzed: ExecutionStatsAnalysis;
         let explainResult: Document | undefined;
         let totalCollectionDocs: number | undefined;
+        const session = ClusterSession.getSession(sessionId);
+        const epoch = session.getEpoch();
 
         // Check for debug override file first
         const debugData = readQueryInsightsDebugFile('query-insights-stage2.json');
@@ -242,46 +220,47 @@ export const queryInsightsQueriesRouter = router({
             explainResult = debugData;
             // totalCollectionDocs not available in debug mode — advisories will simply not fire
         } else {
-            // Get ClusterSession
-            const session: ClusterSession = ClusterSession.getSession(sessionId);
+            ({ explainResult, queryFilter, totalCollectionDocs } = await session.runWithClient(
+                async (client) => {
+                    const clusterMetadata = await client.getClusterMetadata();
+                    session.assertCurrent(epoch, myCtx.signal);
+                    myCtx.actionContext.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
 
-            const clusterMetadata = await session.getClient().getClusterMetadata();
-            myCtx.actionContext.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
+                    const queryParams = session.getCurrentFindQueryParamsWithObjects();
+                    const executionStatsStart = Date.now();
+                    const explainResult = await session.getExecutionStats(
+                        client,
+                        epoch,
+                        databaseName,
+                        collectionName,
+                        queryParams.filterObj,
+                        {
+                            sort: queryParams.sortObj,
+                            projection: queryParams.projectionObj,
+                            // Intentionally omit skip/limit for full query insights
+                        },
+                        myCtx.signal,
+                    );
+                    ext.outputChannel.trace(
+                        l10n.t('[Query Insights Stage 2] explain completed in {ms}ms', {
+                            ms: (Date.now() - executionStatsStart).toString(),
+                        }),
+                    );
 
-            // Get query parameters from session with parsed BSON objects
-            const queryParams = session.getCurrentFindQueryParamsWithObjects();
-
-            // Get execution stats (cached or fetch) without skip/limit for full query insights
-            const executionStatsStart = Date.now();
-            const executionStatsResult = await session.getExecutionStats(
-                databaseName,
-                collectionName,
-                queryParams.filterObj,
-                {
-                    sort: queryParams.sortObj,
-                    projection: queryParams.projectionObj,
-                    // Intentionally omit skip/limit for full query insights
+                    session.assertCurrent(epoch, myCtx.signal);
+                    let totalCollectionDocs: number | undefined;
+                    try {
+                        totalCollectionDocs = await client.estimateDocumentCount(databaseName, collectionName);
+                    } catch (error) {
+                        // Non-critical — advisories and selectivity can be omitted.
+                        ClustersClient.reportFailure(client.binding, error);
+                    }
+                    return { explainResult, queryFilter: queryParams.filterObj, totalCollectionDocs };
                 },
-            );
-            const executionStatsDuration = Date.now() - executionStatsStart;
-            ext.outputChannel.trace(
-                l10n.t('[Query Insights Stage 2] explain completed in {ms}ms', {
-                    ms: executionStatsDuration.toString(),
-                }),
-            );
-
-            // Analyze with ExplainPlanAnalyzer (pass the user's actual filter for empty-query detection)
-            analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(executionStatsResult, queryParams.filterObj);
-            explainResult = executionStatsResult;
-            queryFilter = queryParams.filterObj as Document | undefined;
-
-            // Fetch total collection docs for index-strategy advisories and selectivity cell
-            try {
-                totalCollectionDocs = await session.getClient().estimateDocumentCount(databaseName, collectionName);
-            } catch {
-                // Non-critical — advisories and selectivity will simply not fire/display
-                totalCollectionDocs = undefined;
-            }
+                epoch,
+            ));
+            session.assertCurrent(epoch, myCtx.signal);
+            analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(explainResult, queryFilter);
         }
 
         // Extract extended stage info (as per design document)
@@ -322,8 +301,7 @@ export const queryInsightsQueriesRouter = router({
 
         // Cache the Stage 2 response for Stage 3's static analysis context
         if (!debugData) {
-            const session: ClusterSession = ClusterSession.getSession(sessionId);
-            session.setStage2Response(transformed, totalCollectionDocs);
+            session.setStage2Response(epoch, transformed, totalCollectionDocs, myCtx.signal);
         }
 
         // --- Stage 2 telemetry ---
