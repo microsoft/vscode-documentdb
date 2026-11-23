@@ -36,4 +36,6 @@ export interface UpdateCredentialsWizardContext extends IActionContext {
     isErrorState: boolean;
     /** Set by the reconnect prompt; when true, error state is cleared to trigger a reconnect. */
     reconnectAfterError: boolean;
+    isRecoveryCurrent?: () => boolean;
+    credentialsSaved?: boolean;
 }

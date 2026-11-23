@@ -75,6 +75,9 @@ export function classifyConnectionFailure(error: unknown, authMethod?: AuthMetho
                     return { kind: 'identityChanged', generation: 'evict' };
                 case 'credentialsMissing':
                     return { kind: 'credentialsMissing', generation: 'none' };
+                case 'credentialsRejected':
+                case 'signInRequired':
+                    return { kind: candidate.reason, generation: 'none', note: 'alreadyUnavailable' };
                 default:
                     return { ...OTHER, note: 'alreadyUnavailable' };
             }

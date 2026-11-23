@@ -12,7 +12,10 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { EntraDestinationRejectedError } from '../../documentdb/auth/oidcAllowedHosts';
+import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
+import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
+import { CredentialCache } from '../../documentdb/CredentialCache';
 import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { type Experience } from '../../DocumentDBExperiences';
 import { containsRetryNode, RETRY_NODE_ID_SUFFIX } from '../api/retryNode';
@@ -67,11 +70,17 @@ const mockGetSetting = vi.fn().mockReturnValue(false);
 vi.mock('../../documentdb/CredentialCache', () => ({
     CredentialCache: {
         hasCredentials: (...args: unknown[]) => mockHasCredentials(...args),
+        getCredentials: vi.fn(),
+        deleteCredentials: vi.fn(),
     },
 }));
 
 vi.mock('../../documentdb/ClustersClient', () => ({
-    ClustersClient: { connectInteractive: vi.fn(), exists: vi.fn().mockReturnValue(false), getExistingClient: vi.fn() },
+    addEstablishedConnectionContext: vi.fn(),
+    ClustersClient: {
+        connectInteractive: vi.fn(), exists: vi.fn().mockReturnValue(false), getExistingClient: vi.fn(),
+        getLatchReason: vi.fn(), getEpoch: vi.fn(() => 0), getLastVerifiedIdentity: vi.fn(), reportFailure: vi.fn(),
+    },
 }));
 
 vi.mock('../../extensionVariables', () => ({
@@ -434,6 +443,36 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
                 ) => unknown,
             ) => task({ report: vi.fn() }, { isCancellationRequested: false, onCancellationRequested: vi.fn() }),
         );
+    });
+
+    it('renders the Entra action for an already-latched rejection without reporting a new failure', async (): Promise<void> => {
+        ClustersClientMock.getLatchReason.mockReturnValueOnce('credentialsRejected');
+        ClustersClientMock.connectInteractive.mockRejectedValueOnce(new ConnectionUnavailableError('credentialsRejected'));
+        const credentials = { authMechanism: AuthMethodId.MicrosoftEntraID } as ReturnType<typeof CredentialCache.getCredentials>;
+        vi.mocked(CredentialCache.getCredentials).mockReturnValue(credentials);
+        ClustersClientMock.getLastVerifiedIdentity.mockReturnValueOnce({
+            kind: 'entra', providerId: 'microsoft', accountLabel: 'test', accountId: 'id',
+        });
+        const item = new TestClusterItem(makeCluster(), null);
+
+        expect((await item.getChildren()).map(({ id }) => id)).toEqual([
+            'cluster-1/sign-in-again', 'cluster-1/diagnose', 'cluster-1/open-shell', 'cluster-1/retry',
+        ]);
+        expect(ClustersClientMock.reportFailure).not.toHaveBeenCalled();
+        expect(CredentialCache.deleteCredentials).not.toHaveBeenCalled();
+        vi.mocked(CredentialCache.getCredentials).mockReset();
+    });
+
+    it('reports the binding that executed listDatabases, not the current cache entry', async (): Promise<void> => {
+        const error = new Error('deprecated generation');
+        const binding = { clusterId: 'cluster-1', fingerprint: 'old', generation: 1 };
+        const client = { ...makeClient(vi.fn().mockRejectedValue(error)), binding } as ClustersClient;
+        ClustersClientMock.connectInteractive.mockResolvedValueOnce(client);
+        ClustersClientMock.reportFailure.mockReturnValueOnce(undefined);
+
+        expect(await new TestClusterItem(makeCluster(), null).getChildren()).toEqual([]);
+        expect(ClustersClientMock.reportFailure).toHaveBeenCalledExactlyOnceWith(binding, error);
+        expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
     });
 
     it('returns a retry node when reusing the cached client fails (without listing databases)', async () => {

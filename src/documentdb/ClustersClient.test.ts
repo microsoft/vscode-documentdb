@@ -541,6 +541,27 @@ describe('regular connection startup diagnostics', () => {
         expect(MongoClient).toHaveBeenCalledOnce();
     });
 
+    it('does not publish an explicitly selected account when Disconnect wins the startup race', async (): Promise<void> => {
+        const client = await ClustersClient.connectInteractive(clusterId);
+        ClustersClient.reportFailure(client.binding, new MongoServerError({ code: 18 }));
+        const connection = pauseNextConnect();
+        const startup = ClustersClient.startAfterSignIn(
+            clusterId,
+            ClustersClient.getEpoch(clusterId),
+            CredentialCache.getCredentials(clusterId)!,
+            { connectionString: 'mongodb://private-host:27017', options: {},
+                verifiedIdentity: { ...verifiedIdentity, accountId: 'other-account' } },
+        );
+        await connection.started;
+        ClustersClient.latch(clusterId, 'userDisconnected');
+        connection.resolve();
+
+        await expect(startup).resolves.toBeUndefined();
+        expect(ClustersClient.getBinding(clusterId)).toBeUndefined();
+        expect(ClustersClient.getLastVerifiedIdentity(clusterId)).toEqual(verifiedIdentity);
+        await expect(ClustersClient.getClient(clusterId)).rejects.toMatchObject({ reason: 'userDisconnected' });
+    });
+
     it('uses the resolved binding, preserves nonterminal errors and returns terminal unavailability without replay', async () => {
         const old = await ClustersClient.connectInteractive(clusterId);
         poolEvents.emit('topologyClosed');

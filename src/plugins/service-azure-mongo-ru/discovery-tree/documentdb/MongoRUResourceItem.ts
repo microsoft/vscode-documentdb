@@ -82,12 +82,17 @@ export class MongoRUResourceItem extends ClusterItemBase<AzureClusterModel> {
         return credentials;
     }
 
+    public override readReplacementKey(context: IActionContext): Promise<EphemeralClusterCredentials> {
+        return this.readCredentials(context);
+    }
+
     /**
      * Authenticates and connects to the MongoDB cluster.
      * @returns An instance of ClustersClient if successful; otherwise, null.
      */
     protected async authenticateAndConnect(): Promise<ClustersClient | null> {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
+            const epoch = ClustersClient.getEpoch(this.cluster.clusterId);
             const connectionStartTime = Date.now();
             context.telemetry.properties.view = Views.DiscoveryView;
             context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
@@ -161,8 +166,7 @@ export class MongoRUResourceItem extends ClusterItemBase<AzureClusterModel> {
                 });
 
                 // Clean up failed connection
-                await ClustersClient.deleteClient(this.cluster.clusterId);
-                CredentialCache.deleteCredentials(this.cluster.clusterId);
+                await this.finishFailedStartup(context, error, epoch);
 
                 return null;
             }

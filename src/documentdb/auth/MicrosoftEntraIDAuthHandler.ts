@@ -79,6 +79,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
     public async configureAuth(
         timings?: ConnectionStartupTimings,
         traceContext?: AuthTraceContext,
+        acquireRecoverySession?: (request: Parameters<typeof getEntraSession>[0]) => ReturnType<typeof getEntraSession>,
     ): Promise<AuthHandlerResponse> {
         const authCorrelationId = randomUUID();
         const { connectionString, clusterId } = this.clusterCredentials;
@@ -140,12 +141,12 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                             throw new EntraSignInRequiredError('providerChanged');
                         }
                         try {
-                            const session = await getEntraSession({
+                            const session = await (acquireRecoverySession ?? getEntraSession)({
                                 providerId: pin?.providerId ?? signInEnvironment.providerId,
                                 resource,
                                 tenantId,
                                 account: pin ? { id: pin.accountId, label: pin.accountLabel } : undefined,
-                                mode: interactive ? 'interactive' : 'silent',
+                                mode: acquireRecoverySession ? 'forceNew' : interactive ? 'interactive' : 'silent',
                             });
                             return { session, signInEnvironment };
                         } finally {
@@ -177,7 +178,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                 }
                 throw new Error(l10n.t('Failed to obtain Entra ID token.'));
             }
-            if (pin && session.account.id !== pin.accountId) {
+            if (pin && !acquireRecoverySession && session.account.id !== pin.accountId) {
                 throw new EntraIdentityMismatchError();
             }
         } catch (error) {

@@ -46,6 +46,8 @@ vi.mock('../../documentdb/ClustersClient', () => ({
     ClustersClient: {
         deleteClient: (...args: unknown[]): unknown => mockDeleteClient(...args),
         getLastFailedStartupCorrelationId: (): undefined => undefined,
+        getEpoch: (): number => 0,
+        getLatchReason: (): undefined => undefined,
     },
 }));
 vi.mock('../playground/executePlaygroundCode', () => ({

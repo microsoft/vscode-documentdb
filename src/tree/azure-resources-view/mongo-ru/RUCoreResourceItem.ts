@@ -78,6 +78,10 @@ export class RUResourceItem extends ClusterItemBase<AzureClusterModel> {
         return credentials;
     }
 
+    public override readReplacementKey(context: IActionContext): Promise<EphemeralClusterCredentials> {
+        return this.readCredentials(context);
+    }
+
     /**
      * Authenticates and connects to the Azure Cosmos DB for MongoDB (RU) cluster.
      * No authentication prompt as we're accessing the cluster with the default credentials.
@@ -118,6 +122,7 @@ export class RUResourceItem extends ClusterItemBase<AzureClusterModel> {
                 }),
             );
 
+            const epoch = ClustersClient.getEpoch(this.cluster.clusterId);
             try {
                 const clustersClient = await this.getClientWithProgress(this.cluster.clusterId);
 
@@ -150,8 +155,7 @@ export class RUResourceItem extends ClusterItemBase<AzureClusterModel> {
                 });
 
                 // Clean up failed connection
-                await ClustersClient.deleteClient(this.cluster.clusterId);
-                CredentialCache.deleteCredentials(this.cluster.clusterId);
+                await this.finishFailedStartup(context, error, epoch);
 
                 return null;
             }

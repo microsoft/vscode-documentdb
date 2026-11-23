@@ -382,7 +382,10 @@ class QuickStartClusterItem extends ClusterItemBase<ConnectionClusterModel> {
         return result ?? null;
     }
 
-    protected override async getClientWithProgress(clusterId: string): Promise<ClustersClient> {
+    protected override async getClientWithProgress(
+        clusterId: string,
+        onReuse?: (client: ClustersClient | undefined) => void,
+    ): Promise<ClustersClient> {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
             context.errorHandling.rethrow = true;
             context.errorHandling.suppressDisplay = true;
@@ -391,7 +394,7 @@ class QuickStartClusterItem extends ClusterItemBase<ConnectionClusterModel> {
             if (connectionString) {
                 maskSensitiveValuesInTelemetry(context, new DocumentDBConnectionString(connectionString));
             }
-            return super.getClientWithProgress(clusterId);
+            return super.getClientWithProgress(clusterId, onReuse);
         });
         return nonNullValue(result, 'connected client', 'QuickStartClusterItem.getClientWithProgress');
     }

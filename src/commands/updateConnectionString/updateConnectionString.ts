@@ -37,6 +37,10 @@ export async function updateConnectionString(context: IActionContext, node: Docu
         throw new Error(l10n.t('No node selected.'));
     }
     const recoveringRejectedDestination = node.lastConnectionFailureReason === 'entraDestinationRejected';
+    const clusterId = node.cluster.clusterId;
+    let epoch = ClustersClient.getEpoch(clusterId);
+    const recoveringRejectedCredentials = ClustersClient.getLatchReason(clusterId) === 'credentialsRejected';
+    const isCurrent = (): boolean => ClustersClient.getEpoch(clusterId) === epoch;
 
     // Extract the connection string but hide the username and password
 
@@ -46,6 +50,9 @@ export async function updateConnectionString(context: IActionContext, node: Docu
 
     const resourceType = resolveStorageZone(node.cluster);
     const connection = await ConnectionStorageService.get(node.storageId, resourceType);
+    if (!isCurrent()) {
+        return;
+    }
     const connectionString = connection?.secrets?.connectionString || '';
 
     context.valuesToMask.push(connectionString);
@@ -63,6 +70,7 @@ export async function updateConnectionString(context: IActionContext, node: Docu
         storageZone: resolveStorageZone(node.cluster),
         storageId: node.storageId,
         connectionStringSaved: false,
+        isRecoveryCurrent: isCurrent,
     };
 
     const wizard = new AzureWizard(wizardContext, {
@@ -72,11 +80,25 @@ export async function updateConnectionString(context: IActionContext, node: Docu
     });
 
     await wizard.prompt();
+    if (!isCurrent()) {
+        return;
+    }
     await wizard.execute();
+    if (!isCurrent()) {
+        return;
+    }
 
-    if (recoveringRejectedDestination && wizardContext.connectionStringSaved) {
-        await ClustersClient.deleteClient(node.cluster.clusterId);
-        CredentialCache.deleteCredentials(node.cluster.clusterId);
+    if ((recoveringRejectedDestination || recoveringRejectedCredentials) && wizardContext.connectionStringSaved) {
+        const closing = ClustersClient.deleteClient(clusterId);
+        epoch = ClustersClient.getEpoch(clusterId);
+        await closing;
+        if (!isCurrent()) {
+            return;
+        }
+        CredentialCache.deleteCredentials(clusterId);
+        if (recoveringRejectedCredentials) {
+            ClustersClient.clearCredentialRejection(clusterId, epoch);
+        }
         ext.connectionsBranchDataProvider.resetNodeErrorState(node.id);
         node.lastConnectionFailureReason = undefined;
         node.lastConnectionOutcome = undefined;

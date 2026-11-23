@@ -108,9 +108,12 @@ vi.mock('../../../documentdb/CredentialCache', () => ({
 }));
 
 vi.mock('../../../documentdb/ClustersClient', () => ({
+    addEstablishedConnectionContext: vi.fn(),
     ClustersClient: {
         connectInteractive: vi.fn(),
         deleteClient: vi.fn(),
+        getEpoch: vi.fn(() => 0),
+        getLatchReason: vi.fn(),
     },
 }));
 

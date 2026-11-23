@@ -88,10 +88,11 @@ vi.mock('../../services/connectionStorageService', async (importOriginal) => ({
     ConnectionStorageService: { get: vi.fn(), save: vi.fn() },
 }));
 vi.mock('../../documentdb/ClustersClient', () => ({
-    ClustersClient: { connectInteractive: vi.fn(), deleteClient: vi.fn(), exists: vi.fn() },
+    addEstablishedConnectionContext: vi.fn(),
+    ClustersClient: { connectInteractive: vi.fn(), deleteClient: vi.fn(), exists: vi.fn(), getEpoch: vi.fn(() => 0), getLatchReason: vi.fn() },
 }));
 vi.mock('../../documentdb/CredentialCache', () => ({
-    CredentialCache: { hasCredentials: vi.fn(), setAuthCredentials: vi.fn(), deleteCredentials: vi.fn() },
+    CredentialCache: { hasCredentials: vi.fn(), setAuthCredentials: vi.fn(), deleteCredentials: vi.fn(), getCredentials: vi.fn() },
 }));
 vi.mock('../../services/connectionReachabilityService', () => ({
     ConnectionReachabilityService: { ensureReachable: vi.fn() },
@@ -314,6 +315,16 @@ describe('connect request telemetry', () => {
         await expect(makeItem().connect()).resolves.toMatchObject({ connectionCorrelationId: 'attempt' });
 
         expect(connectEvent()).toMatchObject({ connectionResult: 'success', connectionCorrelationId: 'attempt' });
+    });
+
+    it('does not drop startup settings for a transient connection error', async (): Promise<void> => {
+        vi.mocked(ClustersClient.connectInteractive).mockRejectedValue(
+            Object.assign(new Error('connection refused'), { code: 'ECONNREFUSED' }),
+        );
+        await expect(makeItem().connect()).resolves.toBeNull();
+        expect(ClustersClient.deleteClient).toHaveBeenCalledExactlyOnceWith('stable-id');
+        expect(CredentialCache.deleteCredentials).not.toHaveBeenCalled();
+        expect(connectEvent()).toMatchObject({ connectionFailureKind: 'transient' });
     });
 });
 

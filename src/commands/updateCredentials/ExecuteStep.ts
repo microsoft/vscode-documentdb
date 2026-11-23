@@ -27,9 +27,15 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
     public priority: number = 100;
 
     public async execute(context: UpdateCredentialsWizardContext): Promise<void> {
+        if (context.isRecoveryCurrent?.() === false) {
+            return;
+        }
         const resourceType =
             context.storageZone ?? (context.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters);
         const connectionCredentials = await ConnectionStorageService.get(context.storageId, resourceType);
+        if (context.isRecoveryCurrent?.() === false) {
+            return;
+        }
 
         if (!connectionCredentials) {
             ext.outputChannel.error(l10n.t('Failed to save credentials: connection not found in storage.'));
@@ -101,6 +107,10 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
 
             try {
                 await ConnectionStorageService.save(resourceType, connectionCredentials, true);
+                if (context.isRecoveryCurrent?.() === false) {
+                    return;
+                }
+                context.credentialsSaved = true;
             } catch (pushError) {
                 ext.outputChannel.error(l10n.t('Failed to save credentials: {0}', String(pushError)));
                 void window.showErrorMessage(l10n.t('Failed to save credentials.'));

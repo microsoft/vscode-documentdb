@@ -83,6 +83,7 @@ import { refreshView } from '../commands/refreshView/refreshView';
 import { removeConnection } from '../commands/removeConnection/removeConnection';
 import { removeDiscoveryRegistry } from '../commands/removeDiscoveryRegistry/removeDiscoveryRegistry';
 import { retryAuthentication } from '../commands/retryAuthentication/retryAuthentication';
+import { signInAgain } from '../commands/signInAgain/signInAgain';
 import { revealView } from '../commands/revealView/revealView';
 import { clearSchemaCache } from '../commands/schemaStore/clearSchemaCache';
 import { showSchemaStoreStats } from '../commands/schemaStore/showSchemaStoreStats';
@@ -1007,6 +1008,10 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.internal.retry',
                     withTreeNodeCommandCorrelation(retryAuthentication),
+                );
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.signInAgain',
+                    withTreeNodeCommandCorrelation(signInAgain),
                 );
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.internal.revealView',

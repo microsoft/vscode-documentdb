@@ -5,6 +5,7 @@
 
 import { createContextValue, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { addEstablishedConnectionContext } from '../documentdb/ClustersClient';
 import { ext } from '../extensionVariables';
 import { ErrorExplanationService } from '../services/errorExplanationService';
 import { dispose } from '../utils/vscodeUtils';
@@ -530,6 +531,12 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
             return this.failedChildrenCache.get(element.id);
         }
 
+        // Capture the established generation before expansion. A classified failure can evict it
+        // before the getChildren event is reported.
+        const clusterId = (element as { cluster?: { clusterId?: string } }).cluster?.clusterId;
+        if (clusterId) {
+            addEstablishedConnectionContext(context.telemetry, clusterId);
+        }
         // 2. Fetch the children of the current element
         const children = await this.fetchChildrenWithDiagnostics(element, context, childrenFetchFunc);
         context.telemetry.measurements.childrenCount = children?.length ?? 0;
