@@ -8,8 +8,26 @@ import { AuthMethodId } from '../../documentdb/auth/AuthMethodId';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
 
+function formatEntraExpiry(expiresAt: string | undefined, now: number): string {
+    if (expiresAt === undefined) {
+        return 'unknown';
+    }
+
+    const remainingMs = Date.parse(expiresAt) - now;
+    if (remainingMs <= 0) {
+        return `${expiresAt} (expired)`;
+    }
+
+    const seconds = Math.ceil(remainingMs / 1000);
+    const remaining = [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
+        .map((part) => String(part).padStart(2, '0'))
+        .join(':');
+    return `${expiresAt} (in ${remaining})`;
+}
+
 export function showConnectionStats(_context: IActionContext): void {
     const snapshot = ClustersClient.getDiagnosticsSnapshot();
+    const now = Date.now();
     ext.outputChannel.appendLog(`[Connection Stats] Extension-host cache entries: ${String(snapshot.length)}`);
     ext.outputChannel.appendLog(
         'Each cached client can own multiple sockets. Socket counts are not tracked here. For Shell and Playground, use Show Worker Stats.',
@@ -22,7 +40,9 @@ export function showConnectionStats(_context: IActionContext): void {
                 : '    Client: none',
         );
         if (client?.authMethod === AuthMethodId.MicrosoftEntraID) {
-            ext.outputChannel.appendLog(`    lastEntraTokenExpiresAt=${client.lastEntraTokenExpiresAt ?? 'unknown'}`);
+            ext.outputChannel.appendLog(
+                `    lastEntraTokenExpiresAt=${formatEntraExpiry(client.lastEntraTokenExpiresAt, now)}`,
+            );
         }
         if (pending) {
             ext.outputChannel.appendLog(
