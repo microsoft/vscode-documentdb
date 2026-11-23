@@ -13,9 +13,9 @@ import * as vscode from 'vscode';
 import { AzureSubscriptionProviderWithFilters } from '../plugins/api-shared/azure/AzureSubscriptionProviderWithFilters';
 import { createResourceManagementClient } from './azureClients';
 
-import type { HttpClient, PipelineResponse } from '@azure/core-rest-pipeline';
-import type { AzureSubscription, TenantIdAndAccount } from '@microsoft/vscode-azext-azureauth';
-import type { IActionContext } from '@microsoft/vscode-azext-utils';
+import { type HttpClient, type PipelineResponse } from '@azure/core-rest-pipeline';
+import { type AzureSubscription, type TenantIdAndAccount } from '@microsoft/vscode-azext-azureauth';
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
 
 const { getSession, getAccounts } = vi.hoisted(() => {
     // Keep the real Azure utilities' extension registration from sending telemetry.
