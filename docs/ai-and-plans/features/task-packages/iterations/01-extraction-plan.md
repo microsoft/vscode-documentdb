@@ -292,9 +292,20 @@ settings layering and `computeRetryDelay`. The existing writer suite passes unto
 
 Decide and implement how long terminal tasks stay registered. Open question.
 
+> **Done (2026-11-23), decision 0017 (Accepted),** in the stacked PR "[task engine pr3.1-3.2]" on
+> top of pr3.3. The registry keeps at most `maxFinishedTasks` finished tasks
+> (`DEFAULT_MAX_FINISHED_TASKS` = 20) and evicts the oldest-finished ones when a new task
+> registers, through the normal deletion path. A task becomes evictable only after its terminal
+> state change has been delivered. `deleteTask` stays public. Tests: `taskService.test.ts`.
+
 ### 3.2 Conflict check at registration
 
 Decide whether `registerTask` should refuse a task whose resources conflict. Open question.
+
+> **Done (2026-11-23), decision 0018 (Accepted), no code change,** in the stacked PR
+> "[task engine pr3.1-3.2]". `registerTask` does not refuse conflicts; the consumer checks before a
+> destructive action. The pattern is documented in the Task Service README. Access modes on
+> `ResourceDefinition` are a possible later item, after Phase 4.
 
 ### 3.3 Initialization failure ends the task
 
@@ -394,11 +405,12 @@ today.
 
 **In progress (2026-11-05).** Phases 0, 1 and 2 landed in place on `dev/tnaum/npm-task-engine`,
 except 1.5, which landed later as a lazy client provider in the stacked PR #1112 (see its note). 3.3 landed
-in the stacked PR "[task engine pr3.3]" on top of #1112. All steps are
+in the stacked PR "[task engine pr3.3]" on top of #1112, and 3.1 and 3.2 in "[task engine pr3.1-3.2]"
+on top of it. All steps are
 behaviour-neutral for the DocumentDB path. After this round, the code that will move imports
-`vscode` or `ext` only in `UI/**` and `resourceUsageHelper.ts`, as planned. Phase 3 (open
-questions), Phase 4 (the NoSQL team's review) and Phase 5 (extraction, which waits for Phase 4)
-have not started.
+`vscode` or `ext` only in `UI/**` and `resourceUsageHelper.ts`, as planned. Phase 3 is done
+(3.1 and 3.3 change behaviour; 3.2 needed no code). Phase 4 (the NoSQL team's review) and Phase 5
+(extraction, which waits for Phase 4) have not started.
 
 Found while working, not changed:
 
@@ -407,6 +419,6 @@ Found while working, not changed:
   moves to Running and runs `doWork`. Unchanged in this round; fixed in pr3.3 (see 3.3, decision
   0016).
 - `TaskProgressReportingService.detach()` destructures task-ID strings and uses only their first
-  character.
+  character. Fixed in pr3.1-3.2 (test: `UI/taskProgressReportingService.test.ts`).
 - `UI/**` and `resourceUsageHelper.ts` still call `vscode.l10n.t` and use `ext`. Under decision
   0006 they need injected strings before they move to `./vscode` in step 5.2.

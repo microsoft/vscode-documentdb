@@ -149,7 +149,15 @@ The `TaskService` interface is implemented by the private `TaskServiceImpl` clas
 - Task lifecycle event forwarding
 - Resource conflict queries used by destructive operations
 
-`registerTask()` checks for a duplicate task ID and subscribes to task events; it does not check resource conflicts. Progress notifications are handled separately by `TaskProgressReportingService`.
+`registerTask()` checks for a duplicate task ID and subscribes to task events; it does not check resource conflicts (decision 0018, see [Conflict Rules](#conflict-rules)). Progress notifications are handled separately by `TaskProgressReportingService`.
+
+**Retention of finished tasks (decision 0017):** the registry keeps at most `maxFinishedTasks` finished (`Completed`, `Failed` or `Stopped`) tasks. The default is the exported `DEFAULT_MAX_FINISHED_TASKS` (20); pass another value through `TaskServiceOptions`, as `extension/taskServiceInstance.ts` does:
+
+```typescript
+const registry = createTaskService({ strings, maxFinishedTasks: DEFAULT_MAX_FINISHED_TASKS });
+```
+
+When a new task registers, the oldest-finished tasks beyond the limit are deleted, which fires `onDidDeleteTask`. Unfinished tasks are never evicted, and a task is never evicted while its terminal state change is still being delivered, so listeners can look it up with `getTask()`. `0` evicts every finished task at the next registration. `deleteTask()` stays public for explicit removal, for example by a future task UI.
 
 ### ResourceTrackingTask (Interface)
 
@@ -288,6 +296,14 @@ const canProceed = await checkCanProceedAndInformUser(TaskService, resource, 'de
 - Same `clusterId` + `databaseName` + `collectionName` = **Conflict**
 - Operations on different collections in same database = **OK**
 - Read-only operations currently use same conflict model (conservative)
+
+`registerTask()` does not refuse a conflicting task (decision 0018): `ResourceDefinition` has no read or write mode, and a copy reports both its source and its target, so a registration check would refuse legitimate work such as two copies from the same source. A consumer that starts a destructive action checks first and stops if anything conflicts:
+
+```typescript
+if (!(await checkCanProceedAndInformUser(TaskService, { clusterId, databaseName, collectionName }, 'delete collection'))) {
+  return;
+}
+```
 
 ---
 

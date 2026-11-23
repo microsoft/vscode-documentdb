@@ -10,23 +10,26 @@ created: 2026-11-05
 > Decisions for extracting the Task Service and the document transfer engine into shareable
 > packages. All entries come from the planning discussion on 2026-11-05.
 
-| #    | Decision                                                                 | Status              | Changed from the proposal?                                             | Date       | PR  |
-| ---- | ------------------------------------------------------------------------ | ------------------- | ---------------------------------------------------------------------- | ---------- | --- |
-| 0001 | Two packages, not four                                                   | Accepted            | Merged the maintainer's four-way split into two                        | 2026-11-05 | —   |
-| 0002 | Task core and VS Code presentation ship in one package                   | Accepted            | Raised by the maintainer                                               | 2026-11-05 | —   |
-| 0003 | Name the packages as a family                                            | Accepted (modified) | Renamed from `vscode-ext-data-transfer` after maintainer review        | 2026-11-05 | —   |
-| 0004 | The tasks package is a required peer of the data transfer package        | Accepted            | Changed from an optional peer                                          | 2026-11-05 | —   |
-| 0005 | Product UX, including option pickers, stays in the extension             | Accepted            | Confirmed on the maintainer's question                                 | 2026-11-05 | —   |
-| 0006 | Packages never call `vscode.l10n.t`; the consumer injects strings        | Accepted            | Follows from how `npm run l10n` extracts strings                       | 2026-11-05 | —   |
-| 0007 | Delete `RetryOrchestrator`; keep the shipped inline retry loop           | Accepted            | Raised by the maintainer                                               | 2026-11-05 | —   |
-| 0008 | Keep every refactor behavior-neutral for the DocumentDB path             | Accepted            | —                                                                      | 2026-11-05 | —   |
-| 0009 | Make partial-write reporting pluggable through one outcome shape         | Accepted            | Requested by the maintainer; outcome shape open until the NoSQL review | 2026-11-05 | —   |
-| 0010 | Layer writer settings: package < adapter < caller                        | Accepted            | Requested by the maintainer                                            | 2026-11-05 | —   |
-| 0011 | Treat a server-suggested wait as a floor, without a cap                  | Accepted            | Simplified by the maintainer                                           | 2026-11-05 | —   |
-| 0012 | Keep task telemetry event and property names                             | Proposed            | —                                                                      | 2026-11-05 | —   |
-| 0013 | Ship 0.x until the contract review with the NoSQL team                   | Proposed            | —                                                                      | 2026-11-05 | —   |
-| 0014 | Document packages with examples, reference code and a For agents section | Accepted            | Requested by the maintainer                                            | 2026-11-05 | —   |
-| 0015 | The DocumentDB reader receives a lazy client provider                    | Accepted            | Confirmed by the maintainer                                            | 2026-11-20 | —   |
+| #    | Decision                                                                 | Status              | Changed from the proposal?                                             | Date       | PR    |
+| ---- | ------------------------------------------------------------------------ | ------------------- | ---------------------------------------------------------------------- | ---------- | ----- |
+| 0001 | Two packages, not four                                                   | Accepted            | Merged the maintainer's four-way split into two                        | 2026-11-05 | —     |
+| 0002 | Task core and VS Code presentation ship in one package                   | Accepted            | Raised by the maintainer                                               | 2026-11-05 | —     |
+| 0003 | Name the packages as a family                                            | Accepted (modified) | Renamed from `vscode-ext-data-transfer` after maintainer review        | 2026-11-05 | —     |
+| 0004 | The tasks package is a required peer of the data transfer package        | Accepted            | Changed from an optional peer                                          | 2026-11-05 | —     |
+| 0005 | Product UX, including option pickers, stays in the extension             | Accepted            | Confirmed on the maintainer's question                                 | 2026-11-05 | —     |
+| 0006 | Packages never call `vscode.l10n.t`; the consumer injects strings        | Accepted            | Follows from how `npm run l10n` extracts strings                       | 2026-11-05 | —     |
+| 0007 | Delete `RetryOrchestrator`; keep the shipped inline retry loop           | Accepted            | Raised by the maintainer                                               | 2026-11-05 | —     |
+| 0008 | Keep every refactor behavior-neutral for the DocumentDB path             | Accepted            | —                                                                      | 2026-11-05 | —     |
+| 0009 | Make partial-write reporting pluggable through one outcome shape         | Accepted            | Requested by the maintainer; outcome shape open until the NoSQL review | 2026-11-05 | —     |
+| 0010 | Layer writer settings: package < adapter < caller                        | Accepted            | Requested by the maintainer                                            | 2026-11-05 | —     |
+| 0011 | Treat a server-suggested wait as a floor, without a cap                  | Accepted            | Simplified by the maintainer                                           | 2026-11-05 | —     |
+| 0012 | Keep task telemetry event and property names                             | Proposed            | —                                                                      | 2026-11-05 | —     |
+| 0013 | Ship 0.x until the contract review with the NoSQL team                   | Proposed            | —                                                                      | 2026-11-05 | —     |
+| 0014 | Document packages with examples, reference code and a For agents section | Accepted            | Requested by the maintainer                                            | 2026-11-05 | —     |
+| 0015 | The DocumentDB reader receives a lazy client provider                    | Accepted            | Confirmed by the maintainer                                            | 2026-11-20 | —     |
+| 0016 | An initialization failure ends the task and is shown once                | Accepted            | Recommended option, chosen by the operator                             | 2026-11-23 | #1114 |
+| 0017 | Keep at most N finished tasks, evicted at registration                   | Accepted            | Operator kept `deleteTask` public and asked for a configurable N       | 2026-11-23 | —     |
+| 0018 | Conflict checks stay with the consumer; registerTask does not refuse     | Accepted            | Recommended option, chosen by the operator                             | 2026-11-23 | —     |
 
 > Entries below are semantically immutable. Append a new decision rather than rewriting an old one,
 > and record a reversal as a new entry plus a status change in the table.
@@ -380,3 +383,69 @@ notification with Show Output, and callers no longer need different handling per
 - **Keep `start()` rejecting and remove the callers' displays:** `start()` would behave differently
   per runner (the extension's runner cannot rethrow), and callers that fire and forget
   `start()` would still need a catch for initialization failures.
+
+## 0017 — Keep at most N finished tasks, evicted at registration
+
+**Status:** Accepted · **Date:** 2026-11-23 · **Raised by:** agent
+
+### Decision
+
+Plan item 3.1. The registry keeps at most `maxFinishedTasks` finished (Completed, Failed or
+Stopped) tasks. The option is part of the exported `TaskServiceOptions`; its default is the
+exported `DEFAULT_MAX_FINISHED_TASKS` (20), and the extension's singleton passes it explicitly. It
+must be an integer >= 0; 0 evicts every finished task at the next registration.
+
+Eviction runs only in `registerTask`, before the new task is added, and removes the
+oldest-finished tasks first (by the order they reached a terminal state, not the order they were
+registered). Unfinished tasks are never evicted. A task becomes evictable only after the
+synchronous delivery of its terminal state change is over, so a listener that registers a new task
+while that event is delivered cannot evict the finishing task from under the other listeners.
+Eviction uses the normal deletion path: the entry and its subscriptions are removed at once, then
+`task.delete()` runs and `onDidDeleteTask` fires; an `onDelete` failure does not break
+registration.
+
+The operator chose this option, with two additions: `deleteTask` stays public, because a future
+task UI may remove tasks explicitly, and N is easy to find and configure in code.
+
+### Reasoning
+
+Before this change no production code called `deleteTask`, so every task, with its reader, writer
+and statistics, stayed registered for the whole session. Evicting at registration keeps memory
+bounded without timers, and leaves the most recent finished tasks available for post-mortem
+inspection. Listeners such as the lifecycle log observer and the survey hook look the task up
+while its terminal event is delivered, so removal must never happen during that delivery.
+
+### Rejected alternatives
+
+- **Time-based TTL:** needs timers inside the package, and their lifetime and disposal.
+- **Remove a task right after its terminal event:** breaks listeners that look the task up and
+  removes post-mortem inspection.
+- **Never remove finished tasks:** the current leak.
+
+## 0018 — Conflict checks stay with the consumer; registerTask does not refuse conflicts
+
+**Status:** Accepted · **Date:** 2026-11-23 · **Raised by:** agent
+
+### Decision
+
+Plan item 3.2, no code change. `registerTask` does not refuse a task whose resources conflict with
+a running task. The consumer checks for conflicts before a destructive action, as the extension
+already does: `checkCanProceedAndInformUser` in `resourceUsageHelper.ts` (delete collection,
+delete database, remove connection) and `findConflictingTasks` in
+`commands/connections-view/verificationUtils.ts` (move and delete folder). The pattern is
+documented in the Task Service README.
+
+The operator chose the recommended option.
+
+### Reasoning
+
+`ResourceDefinition` has no read or write mode, and a copy reports both its source and its target.
+A registration check would therefore refuse legitimate work, such as two copies from the same
+source, or an index copy and a collection copy into the same database. Only the consumer knows
+whether an action is destructive for the resources it touches.
+
+### Rejected alternatives
+
+- **An opt-in `rejectConflicts` flag on registration:** the same false positives, only optional.
+- **Add read and write access modes now and enforce write-write conflicts:** a possible later item,
+  deferred until after the Phase 4 contract review with the NoSQL team.
