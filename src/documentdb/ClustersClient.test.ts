@@ -294,9 +294,9 @@ describe('regular connection startup diagnostics', () => {
         const driverCallback = vi.mocked(MongoClient).mock.calls[0][1]?.authMechanismProperties?.OIDC_CALLBACK;
         const params: Mongodb.OIDCCallbackParams = { version: 1, timeoutContext: new AbortController().signal };
         const expiry = (): string | undefined =>
-            ClustersClient.getDiagnosticsSnapshot()
-                .find(({ client: row }) => row?.startupId === client.connectionCorrelationId)
-                ?.client?.lastEntraTokenExpiresAt;
+            ClustersClient.getDiagnosticsSnapshot().find(
+                ({ client: row }) => row?.startupId === client.connectionCorrelationId,
+            )?.client?.lastEntraTokenExpiresAt;
 
         expect(expiry()).toBeUndefined();
         await expect(driverCallback!(params)).resolves.toBe(first);
