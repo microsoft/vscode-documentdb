@@ -1,0 +1,47 @@
+name: CI
+
+on:
+    push:
+        branches:
+            - main
+            - release/**
+
+    pull_request:
+        types: [opened, synchronize, reopened, ready_for_review]
+        branches:
+            - main
+            - release/**
+            - feature/**
+
+concurrency:
+    group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-run"
+    cancel-in-progress: true
+
+permissions:
+    contents: read
+
+jobs:
+    checks:
+        permissions:
+            contents: read
+            issues: write
+            pull-requests: write
+        uses: ./.github/workflows/ci-checks.yml
+
+    # Keep the ruleset's check name outside the reusable workflow's job-name prefix.
+    gate:
+        name: Merge gate
+        needs: [checks]
+        if: always()
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        permissions: {}
+        steps:
+            - name: Require the shared validation to pass
+              env:
+                  RESULT: ${{ needs.checks.outputs.gate-result }}
+              run: |
+                  if [[ "$RESULT" != success ]]; then
+                    echo "::error::CI validation did not pass (result: ${RESULT:-missing})."
+                    exit 1
+                  fi

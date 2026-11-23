@@ -38,7 +38,9 @@ the operator-run ADO build and the G0 manual checklist passed on 2026-10-02 (G0)
 
 | Workflow                              | Triggers                                                          | What it does                                                                                                                                                                                                                                                                                                                                                                 |
 | ------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `main.yml` ("CI")                     | PRs and pushes: `main`, `release/**`; PRs to `feature/**`; manual | In tiers (decision 0002, [CI](../../../../build/verification/README.md#ci)): static checks and unit tests on draft PRs; ready PRs and pushes add the VSIX build, inspection and activation; the npm package checks, self-tests and the webview host check when their paths change; `ci:full-requested` runs all once. Parallel jobs (decision 0014, see 3.0). One PR comment |
+| `main.yml` ("CI")                     | PRs and pushes: `main`, `release/**`; PRs to `feature/**` | Automatic entry point calling `ci-checks.yml`. Draft PRs use the fast tier; ready PRs and pushes use standard. Keeps the top-level required `Merge gate`. |
+| `ci-requested.yml` ("CI requested")   | PR labeled, with no target-branch filter; manual | Calls `ci-checks.yml` for `ci:full-requested` only, running every check once. Manual runs are full with `enforce_full_run`, fast without it. Keeps the top-level gate; unrelated labels and manual fast runs cannot satisfy the required check. |
+| `ci-checks.yml` ("CI checks")         | `workflow_call` from either CI entry point | Shared tier selection, parallel checks, artifacts, validation and one PR report comment (decision 0002, [CI](../../../../build/verification/README.md#ci), decision 0014, see 3.0). |
 | `api-extractor.yaml`                  | Push to `main` and `release/**`; PRs                              | Extracts the public API typings                                                                                                                                                                                                                                                                                                                                              |
 | `api-publish.yaml`                    | Manual                                                            | Publishes the API typings package to npm                                                                                                                                                                                                                                                                                                                                     |
 | `npm-publish-documentdb-js.yml`       | Manual; `dry_run` defaults to `true`, one checkbox per package    | Builds, type-checks package tests, tests and verifies packages, and dry-runs publication; explicit real publication to npmjs with provenance requires successful verification and environment approval                                                                                                                                                                       |
@@ -53,7 +55,7 @@ root. The version-bump workflow needs no dependency installation; it runs the re
 It needs contents and issues write access, not permission to create PRs or dispatch workflows.
 Its integration tests run in the CI unit-tests job.
 
-All checkouts in `main.yml` use `actions/checkout`'s default ref: GitHub's synthetic
+All checkouts in `ci-checks.yml` use `actions/checkout`'s default ref: GitHub's synthetic
 **merge ref for PRs**, and `github.sha` for push/manual runs. Stage 6 restores this policy
 for S1-F01 by coordinator decision, reverting Stage 1's temporary PR-head override.
 The package, L1 and L3 jobs therefore use the same merge tree as the quality checks, exercising
@@ -171,8 +173,10 @@ in a browser, and L3 installs the VSIX into a downloaded VS Code and checks that
 
 `Plan: choose checks` runs first. `Static checks`, `Unit tests`, `npm packages: verify tarballs`
 and `VSIX: build` then run in parallel; `VSIX: inspect contents` and `VSIX: activate in VS Code`
-need `VSIX: build`. `PR report` and the `Merge gate` need every job and run with
-`if: always()` (decision 0013, decision 0014). The gate is the only required check.
+need `VSIX: build`. `PR report` and `Validate expected checks` need every check job and run with
+`if: always()` (decision 0013, decision 0014). The validation result is returned to the calling
+workflow, whose top-level `Merge gate` preserves the required check name. A missing or unsuccessful
+result fails the caller's gate. The gate is the only required CI check.
 
 Each job has `timeout-minutes`, about 3 to 4 times its duration in the first standard-tier run and
 at least 5: plan, `VSIX: build`, `PR report` and the gate 5; npm packages 6; inspection and
@@ -234,9 +238,9 @@ per-graph base values are unavailable instead of showing a false reduction. With
 section says "No size data for `<base>` yet; sizes only."; if an earlier invariant prevents the L1 report, it says measurements are
 unavailable. As before, token-written comments are restricted to same-repository PRs; fork PRs
 still get artifacts and job logs. Packaging, L1 and L3 run in the standard and full tiers: ready
-PRs to any of the three target branches, pushes to `main` and `release/**`, `ci:full-requested`,
-and dispatches with `enforce_full_run`. Draft PRs and other dispatches run only the static checks
-and unit tests.
+PRs to any of the three automatic target-branch patterns, pushes to `main` and `release/**`,
+`ci:full-requested` on any PR target, and dispatches with `enforce_full_run`. Draft PRs without an
+explicit full request and other dispatches run only the static checks and unit tests.
 
 ADO's unsigned-VSIX inspection uses `--manifest-report` and enforces the L1 invariants **before
 signing** (no size gate since G8 item 22). A report-only `CopyFiles@2` step, with `condition: succeededOrFailed()`, stages

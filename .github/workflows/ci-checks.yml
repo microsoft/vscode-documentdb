@@ -1,4 +1,4 @@
-name: CI
+name: CI checks
 
 # CI runs in tiers (decision 0002 in docs/ai-and-plans/features/build-and-test-stack/decisions.md). The `plan` job
 # picks the tier and the path-scoped checks; every other job has one `if:` on its outputs.
@@ -10,7 +10,7 @@ name: CI
 #   the npm package checks when `packages/**` changes; the VSIX self-tests and the verification
 #   tool tests when `build/verification/**`, `build/vite/**` or a Vite config changes; the unbundled
 #   webview host check when `packages/vscode-ext-webview/**` changes. `package-lock.json`, this file
-#   and `.github/actions/**` count for all three. Pushes cache build sizes for PR comparisons.
+#   and `.github/actions/**` count for all three, as do the two CI entry points. Pushes cache build sizes for PR comparisons.
 # - full: the `ci:full-requested` label (one run; the plan job removes the label), and manual runs
 #   with `enforce_full_run`. Every check.
 # - skip: any other label. Nothing runs.
@@ -22,35 +22,21 @@ name: CI
 # Same-repository PRs get one `<!-- ci-report -->` comment, updated in place: the checks that ran
 # and why, code quality and build size.
 #
-# The ruleset requires `Merge gate`. That is the `gate` job: it fails unless every check the
-# tier expected passed (decisions 0013, 0015).
+# The `gate` job validates every check the tier expected. Its result is returned to the caller,
+# which posts the ruleset's exact `Merge gate` check name (decisions 0013, 0015).
 
 on:
-    workflow_dispatch:
+    workflow_call:
         inputs:
             enforce_full_run:
                 description: 'Run every check (full tier); otherwise static checks and unit tests only (fast tier)'
                 required: false
                 type: boolean
                 default: false
-
-    push:
-        branches:
-            - main
-            - release/**
-
-    pull_request:
-        types: [opened, synchronize, reopened, ready_for_review, labeled]
-        branches:
-            - main
-            - release/**
-            - feature/**
-
-# A labeled run gets its own group, so an unrelated label cannot cancel a build and a push cannot
-# cancel a requested full run.
-concurrency:
-    group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.action == 'labeled' && format('label-{0}', github.event.label.name) || 'run' }}"
-    cancel-in-progress: true
+        outputs:
+            gate-result:
+                description: Whether every check expected for the selected tier passed
+                value: ${{ jobs.gate.result }}
 
 # The default for a job without its own `permissions`; plan and report add the writes they need.
 permissions:
@@ -117,7 +103,7 @@ jobs:
                           core.warning(`Could not list the changed files, so every path-scoped check runs: ${error.message}`);
                         }
                       }
-                      const always = /^(package-lock\.json|\.github\/workflows\/main\.yml|\.github\/actions\/.+)$/;
+                      const always = /^(package-lock\.json|\.github\/workflows\/(main|ci-requested|ci-checks)\.yml|\.github\/actions\/.+)$/;
                       const touched = (pattern) =>
                         tier === 'full' || (tier === 'standard' && (files === null || files.some((file) => always.test(file) || pattern.test(file))));
                       const outputs = {
@@ -253,7 +239,7 @@ jobs:
             - name: 🧪 Run Unit Tests (Vitest)
               run: npm test
 
-            - name: Test release automation
+            - name: Test workflow automation
               run: node --test .github/scripts/*.test.cjs
 
     package-checks:
@@ -561,12 +547,8 @@ jobs:
                         }
                       }
 
-    # The ruleset's required check (decision 0013). An unrelated-label run must not post a skipped
-    # check under this name, because a skipped required check counts as passed. It runs (and passes)
-    # under the label-event name instead: a skipped job would show its raw name expression. A manual
-    # fast run checks less than a ready PR needs, so it must not post this name either (S85L-F01).
     gate:
-        name: ${{ github.event.action == 'labeled' && github.event.label.name != 'ci:full-requested' && 'Merge gate (label event, not run)' || github.event_name == 'workflow_dispatch' && !inputs.enforce_full_run && 'Merge gate (manual fast run)' || 'Merge gate' }}
+        name: Validate expected checks
         runs-on: ubuntu-latest
         timeout-minutes: 5
         needs: [plan, static-checks, unit-tests, package-checks, build-and-package, vsix-inspection, vsix-activation]
