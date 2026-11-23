@@ -30,6 +30,7 @@ import { isEntraDestinationRejectedError } from '../../documentdb/auth/oidcAllow
 import { classifyConnectionFailure, type ConnectionFailure } from '../../documentdb/connectionFailures';
 import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { showClusterConnectFailure } from '../../documentdb/showClusterConnectFailure';
+import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
 import { SettingsService } from '../../services/SettingsService';
 import { ErrorExplanationService } from '../../services/errorExplanationService';
@@ -37,7 +38,7 @@ import { settingsKeys } from '../../settingsKeys';
 import { regionToDisplayName } from '../../utils/regionToDisplayName';
 import { withDelayedProgress } from '../../utils/withProgress';
 import { type TreeElement } from '../TreeElement';
-import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
+import { isTreeElementWithContextValue, type TreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
 import { type TreeElementWithRetryChildren } from '../TreeElementWithRetryChildren';
 import { createGenericElementWithContext } from '../api/createGenericElementWithContext';
@@ -350,8 +351,8 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
     /**
      * Builds the FAILURE-TYPE error-recovery nodes owned by the element layer.
      *
-     * Includes either "sign in again" or "retry", plus diagnosis and "open shell". `hasRetryNode`
-     * lets the provider detect the error state with either recovery action. The shell is offered for every
+     * Includes diagnosis and "open shell", plus any applicable Retry action. `hasRetryNode`
+     * lets the provider detect the error state even without Retry. The shell is offered for every
      * failure, including sign-in failures, so experts can investigate with the shell's own
      * connection and error output. View-specific recovery actions (e.g. "update credentials") are
      * added separately by the provider via `errorRecoveryActions`.
@@ -367,6 +368,9 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             (this.lastConnectionFailureKind === 'signInRequired' ||
                 this.lastConnectionFailureKind === 'credentialsRejected') &&
             this.canSignInAgain();
+        const rejectedStoredCredentials =
+            this.cluster.viewId === Views.ConnectionsView &&
+            ClustersClient.getLatchReason(this.cluster.clusterId) === 'credentialsRejected';
         return [
             ...(needsSignIn
                 ? [
@@ -396,7 +400,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 commandId: ShellCommandIds.open,
                 commandArgs: [this],
             }),
-            ...(needsSignIn ? [] : [createRetryNode(this.id, this)]),
+            ...(needsSignIn || rejectedStoredCredentials ? [] : [createRetryNode(this.id, this)]),
         ];
     }
 
@@ -560,6 +564,13 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
         } catch (error) {
             return this.renderExpansionFailure(error, 'listDatabases', connectedClient);
         }
+        const binding = connectedClient.binding;
+        const isCurrentIdentity = (): boolean =>
+            !ClustersClient.getLatchReason(clusterId) &&
+            (!binding || ClustersClient.getExistingClient(clusterId)?.fingerprint === binding.fingerprint);
+        if (!isCurrentIdentity()) {
+            return [];
+        }
 
         // A deep link that opens the dashboard itself suppresses the automatic open; that is not a skip.
         if (!wasConnected && !isAutoOpenDashboardSuppressed(this.cluster.clusterId)) {
@@ -567,6 +578,9 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 await vscode.commands.executeCommand('vscode-documentdb.command.clusterDashboard.open', this, null, {
                     activationSource: 'autoOpenOnConnect',
                 });
+                if (!isCurrentIdentity()) {
+                    return [];
+                }
             } else {
                 // The counterpart of an automatic open: without it, people who turned automatic
                 // opening off in Settings, rather than from the dashboard, are invisible.
@@ -605,11 +619,17 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
     }
 
     /**
-     * Detect a failed expansion even when the sign-in action replaces the Retry row.
+     * Detect a failed expansion even when there is no Retry row.
      */
     public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
         return (
-            containsRetryNode(children) || children?.some((child) => child.id === `${this.id}/sign-in-again`) === true
+            containsRetryNode(children) ||
+            children?.some(
+                (child) =>
+                    child.id === `${this.id}/diagnose` &&
+                    isTreeElementWithContextValue(child) &&
+                    child.contextValue === 'error',
+            ) === true
         );
     }
 

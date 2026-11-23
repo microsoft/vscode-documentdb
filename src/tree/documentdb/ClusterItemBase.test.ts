@@ -17,6 +17,7 @@ import { ClustersClient, type DatabaseItemModel } from '../../documentdb/Cluster
 import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { ShellCommandIds } from '../../documentdb/shell/constants';
+import { Views } from '../../documentdb/Views';
 import { type Experience } from '../../DocumentDBExperiences';
 import { containsRetryNode, RETRY_NODE_ID_SUFFIX } from '../api/retryNode';
 import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
@@ -484,6 +485,45 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
             vi.mocked(CredentialCache.getCredentials).mockReset();
         },
     );
+
+    it('does not publish a database listing from a different identity', async (): Promise<void> => {
+        const binding = { clusterId: 'cluster-1', fingerprint: 'old', generation: 1 };
+        const client = {
+            ...makeClient(vi.fn().mockResolvedValue([{ name: 'old-database' }])),
+            binding,
+        } as ClustersClient;
+        const replacement = { ...client, fingerprint: 'new' } as ClustersClient;
+        ClustersClientMock.connectInteractive.mockResolvedValueOnce(client);
+        ClustersClientMock.getExistingClient.mockReturnValueOnce(replacement);
+
+        expect(await new TestClusterItem(makeCluster(), null).getChildren()).toEqual([]);
+        expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+    });
+
+    it.each(['diagnose', 'sign-in-again'])('does not mistake a database named %s for a recovery action', (name): void => {
+        const item = new TestClusterItem(makeCluster(), null);
+        const child = {
+            id: `cluster-1/${name}`,
+            contextValue: 'treeItem_documentdbdatabase',
+            getTreeItem: (): vscode.TreeItem => ({ label: name }),
+        };
+
+        expect(item.hasRetryNode([child])).toBe(false);
+    });
+
+    it('keeps actionable recovery children without an inert Retry for stored credentials', async (): Promise<void> => {
+        ClustersClientMock.getLatchReason.mockReturnValue('credentialsRejected');
+        ClustersClientMock.connectInteractive.mockRejectedValueOnce(new ConnectionUnavailableError('credentialsRejected'));
+        const item = new TestClusterItem({ ...makeCluster(), viewId: Views.ConnectionsView }, null);
+        try {
+            const children = await item.getChildren();
+
+            expect(children.map(({ id }) => id)).toEqual(['cluster-1/diagnose', 'cluster-1/open-shell']);
+            expect(item.hasRetryNode(children)).toBe(true);
+        } finally {
+            ClustersClientMock.getLatchReason.mockReset();
+        }
+    });
 
     it('reports the binding that executed listDatabases, not the current cache entry', async (): Promise<void> => {
         const error = new Error('deprecated generation');
