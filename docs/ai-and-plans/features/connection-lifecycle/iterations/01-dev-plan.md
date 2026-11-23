@@ -1341,10 +1341,11 @@ shim (0005).
   **Show Worker Stats**, as a separate WI-5 commit. The extension-host snapshot shows client
   generation, age, auth method, startup correlation, pending or held state, and whether socket
   events are traced. It contains no cluster or account identifiers and makes no service calls.
-  For Entra it can show the UTC expiry declared by the last token supplied to the driver, or
-  `unknown`. This local diagnostic retains no token and does not predict server acceptance or
-  force renewal.
-  Leave socket counts out rather than guessing. Keep the published OP-3 candidate unchanged.
+  For Entra it shows the UTC expiry declared by the last token supplied to the driver, with
+  the remaining time at capture (`hh:mm:ss`), `expired`, or `unknown`. This local diagnostic
+  retains no token and does not predict server acceptance or force renewal.
+  Leave socket counts out rather than guessing. The operator requested restarting OP-3 on
+  the next CI-built candidate, `1.1.1-alpha.1`, which includes the diagnostics and worker fix.
 - **Worker startup regression:** PR4's shared OIDC code imported the VS Code UI auth-method
   module into the Node worker path. Keep the shared auth IDs independent of VS Code. Verify
   the next packaged candidate starts both Shell and Playground; the tree OP-3 gate is unchanged.
