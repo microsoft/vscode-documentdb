@@ -314,6 +314,8 @@ In [ClustersClient.ts](../../../../../src/documentdb/ClustersClient.ts):
   - `signInRequired` (Entra): offer **Sign in again**.
   - `credentialsRejected` (Native code 18 after a reconnect): offer **Update credentials**, and
     **no automatic retry loop**.
+  - `credentialsRejected` (final Entra code 18): evict the client. With a verified Entra identity,
+    keep its in-memory connection settings and offer explicit **Sign in again** (decision 0014).
   - `clientClosed`: create a new generation with the same identity.
   - `transient` (network or timeout): no eviction, because the driver recovers. Offer Retry.
 

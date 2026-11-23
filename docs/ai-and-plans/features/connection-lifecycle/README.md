@@ -49,6 +49,9 @@ Evidence, telemetry and source pointers: [research-findings.md](./research-findi
   fingerprint and generation.
 - **Never change identity under an open surface.** It becomes disconnected, keeps its state, says why
   and offers one action.
+- After a database rejects a verified Entra identity, discard the client but keep its in-memory
+  connection settings for explicit **Sign in again**. Do not retain the rejected token or retry
+  silently.
 - **One teardown** serves Disconnect, Remove Connection and identity-changing credential updates.
 - Disconnect uses the existing task-conflict guard: if a copy or export is using the cluster,
   leave the task and connection running. The user can retry after the task finishes or is stopped.
@@ -79,6 +82,7 @@ See [decisions.md](./decisions.md):
 - 0011 Disconnect keeps the cached credentials and the verified identity; only Remove drops them;
 - 0012 a minimal lifecycle design: no state machine, one epoch, no prompts in `getClient`, one-step teardown;
 - 0013 corrections to 0012: latch before a credential save, epoch checks on replies, bindings carried through handoffs, an operation wrapper, folder deletion runs teardown.
+- 0014 retain in-memory settings for explicit sign-in recovery after verified Entra rejection.
 
 ## Timeline
 

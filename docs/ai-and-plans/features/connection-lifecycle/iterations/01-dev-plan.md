@@ -1171,8 +1171,8 @@ shim (0005).
      | `TokenCallbackError` (step 2)                                                 | Entra, MI  | `transient`, workflow broken | replace on the next **foreground** operation | Retry                                           |
      | `ConnectionUnavailableError('credentialsMissing')` (F-20)                     | any        | `credentialsMissing`         | none to keep                                 | Update credentials                              |
      | code 18                                                                       | Native, RU | `credentialsRejected`        | evict; no automatic retry                    | Update credentials (RU: Retry re-reads the key) |
-     | code 18 after a fresh callback                                                | Entra      | per T-5                      | evict                                        | per T-5                                         |
-     | `MongoNotConnectedError`, `topologyClosed`, "Client must be connected"        | any        | `clientClosed`               | new generation on the next foreground call   | none                                            |
+     | final code 18                                                                 | Entra      | `credentialsRejected`        | evict; no automatic retry                    | Sign in again with a verified Entra identity    |
+     | `MongoNotConnectedError`, `MongoTopologyClosedError`                         | any        | `clientClosed`               | new generation on the next foreground call   | none                                            |
      | network errors, timeouts, server selection with no auth cause                 | any        | `transient`                  | keep                                         | Retry                                           |
      | anything else                                                                 | any        | `other`                      | keep                                         | existing behavior                               |
 
@@ -1213,7 +1213,9 @@ shim (0005).
    - Call `addEstablishedConnectionContext` on the failure events of `connect`, `getchildren` and the tree.
    - **Keep credentials on recoverable failures (F-20).** In every provider item's `authenticateAndConnect`
      failure path, still call `deleteClient`, but call `CredentialCache.deleteCredentials` only when the
-     kind is `credentialsRejected`, or `other` as today. For `transient`, `clientClosed` and
+     kind is `credentialsRejected`, or `other` as today. For `credentialsRejected` with a verified
+     Entra identity, retain the in-memory settings for explicit **Sign in again** (decision 0014).
+     For `transient`, `clientClosed` and
      `signInRequired`, keep the entry: a network outage during a tree expand must not leave open surfaces
      with nothing to reconnect from, nor make the user retype a discovery password. Put the decision in
      one shared helper, not in ten copies.
@@ -1271,6 +1273,26 @@ shim (0005).
 - OT-2's tree part can be reproduced with the WI-4 hook.
 
 **Progress:**
+
+- **CP-2, advisor verdict: revise before wiring.** The classifier draft builds and 32 focused
+  tests pass. The pinned 7.2.0 workflow test shows that if a cached OIDC token receives code 18,
+  the driver calls the callback and propagates the final rejection unchanged if that token is
+  also refused. This does not prove that the callback returned newly issued token bytes.
+  Treat the final Entra authentication rejection as `credentialsRejected` and evict the client,
+  rather than adding callback-freshness fields with no reliable producer (85% advisor confidence).
+  Keep typed `noSession` distinct. Plain network failures (including the OP-1a shape and tunnel
+  refusal) and mixed per-server failures keep the client. Closed-client checks are typed only.
+  Plain callback errors do not reach the per-server descriptions through the pinned OIDC path,
+  so R5 does not require changing the Entra explainer now. Cancellation and destination handling
+  stay in place.
+- **CP-2 / OC-1, accepted (2026-11-23):** The operator chose A for smoother recovery and asked
+  to record it in [decision 0014](../decisions.md#0014-keep-in-memory-connection-settings-after-a-rejection-for-a-verified-entra-identity).
+  Evict the rejected client, but keep the in-memory settings for a verified Entra identity.
+  Explicit **Sign in again** then works when invoked with just `clusterId`. No rejected token is
+  retained, no automatic retry is started, and Native/RU rejection and persistent storage are unchanged.
+- **CP-2 revision verified:** Removed the unproducible freshness inputs. The contract test now
+  sends the exact final code 18 from the driver workflow through the classifier. Case 1 passed:
+  build and 31 focused tests across classification, the driver contract, and the Entra explainer.
 
 ---
 

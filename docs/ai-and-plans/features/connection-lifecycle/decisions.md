@@ -25,6 +25,7 @@ created: 2026-11-19
 | 0011 | Disconnect keeps the cached credentials and the verified identity; only Remove drops them                  | Accepted                    | Operator: reverses the #1059 proposal (plan Q3)        | 2026-11-19 | —   |
 | 0012 | Keep the lifecycle design minimal: no state machine, one epoch, no prompts in getClient, one-step teardown | Accepted                    | Operator: approved every proposed simplification       | 2026-11-19 | —   |
 | 0013 | Correct the minimal design where it lost edits, identity or recovery: latch before save, epoch checks      | Accepted (modifies 0012)    | Operator: "update the plan" after the omissions review | 2026-11-19 | —   |
+| 0014 | Keep in-memory connection settings after a rejection for a verified Entra identity                         | Accepted                    | Operator selected A to make sign-in recovery smoother  | 2026-11-23 | Yes; WI-5 previously said to delete the entry |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -399,3 +400,15 @@ The findings, each confirmed in the code, and the corrections now in the dev pla
   submission, no replay, no stale UI update and no claim that an unacknowledged write was not applied.
 
 None of the corrections adds a state machine or a service; 0012's other rules stand.
+
+## 0014. Keep in-memory connection settings after a rejection for a verified Entra identity
+
+A final Entra database authentication rejection still evicts the client. If the connection has a
+verified Entra identity, keep its existing in-memory connection settings so **Sign in again** can
+start from that identity, including when invoked with only `clusterId`. The operator chose this
+over deleting the settings and losing that recovery action, to keep recovery smooth.
+
+This does not retain the rejected token, write anything to persistent storage, change destination
+checks, or start a silent retry. Native authentication and RU key handling are unchanged. The
+explicit sign-in path still checks the epoch after prompting and never moves an open surface to a
+different identity.
