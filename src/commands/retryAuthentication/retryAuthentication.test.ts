@@ -41,6 +41,7 @@ vi.mock('../../documentdb/ClustersClient', () => ({
     ClustersClient: {
         getEpoch: vi.fn(() => 0),
         getLatchReason: vi.fn(),
+        hasReusableClient: vi.fn(),
         clearCredentialRejection: vi.fn(),
         deleteClient: vi.fn(),
         getLastFailedStartupCorrelationId: vi.fn((clusterId: string) =>
@@ -222,6 +223,21 @@ describe('retryAuthentication', () => {
         expect(ClustersClient.clearCredentialRejection).not.toHaveBeenCalled();
         expect(CredentialCache.setAuthCredentials).not.toHaveBeenCalled();
         expect(ext.discoveryBranchDataProvider.refresh).not.toHaveBeenCalled();
+    });
+
+    it('refreshes without closing a healthy client that replaced the one that failed', async (): Promise<void> => {
+        const node = {
+            id: 'connectionsView/stale',
+            cluster: { clusterId: 'stale' },
+            getTreeItem,
+            lastConnectionFailureKind: 'clientClosed' as const,
+        };
+        vi.mocked(ClustersClient.hasReusableClient).mockReturnValueOnce(true);
+
+        await retryAuthentication(actionContext as never, node);
+
+        expect(ClustersClient.deleteClient).not.toHaveBeenCalled();
+        expect(ext.connectionsBranchDataProvider.refresh).toHaveBeenCalledExactlyOnceWith(node);
     });
 
     it('does not refresh an old Retry after the client was replaced while its close was pending', async (): Promise<void> => {

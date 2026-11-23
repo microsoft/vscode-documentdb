@@ -1025,6 +1025,16 @@ export class ClustersClient {
         } catch (error) {
             if (!(error instanceof UserCancelledError) && epoch === ClustersClient.getEpoch(clusterId)) {
                 ClustersClient._lastFailedStartups.set(clusterId, id);
+                const previous = ClustersClient._clients.get(clusterId);
+                if (
+                    previous?.authMethod === AuthMethodId.MicrosoftEntraID &&
+                    previous.fingerprint === expectedFingerprint
+                ) {
+                    const failure = classifyConnectionFailure(error, previous.authMethod);
+                    if (failure.kind === 'credentialsRejected' && failure.generation === 'evict') {
+                        ClustersClient.reportFailure(previous.binding, error);
+                    }
+                }
             }
             client._closed = true;
             void client._mongoClient?.close().catch(() => {
@@ -1061,6 +1071,10 @@ export class ClustersClient {
 
     private canReuse(): boolean {
         return !this._closed && this._replacement === undefined;
+    }
+
+    public static hasReusableClient(clusterId: string): boolean {
+        return ClustersClient._clients.get(clusterId)?.canReuse() ?? false;
     }
 
     /** Reports an operation's failure against the generation that actually ran it. */

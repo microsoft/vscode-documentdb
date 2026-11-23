@@ -573,6 +573,19 @@ describe('regular connection startup diagnostics', () => {
         await expect(background()).resolves.toBe(replacement);
     });
 
+    it('holds a rejected Entra replacement without retrying its cached settings', async (): Promise<void> => {
+        await ClustersClient.connectInteractive(clusterId);
+        const credentials = CredentialCache.getCredentials(clusterId);
+        poolEvents.emit('topologyClosed');
+        mockConnect.mockRejectedValueOnce(new MongoServerError({ code: 18 }));
+
+        await expect(ClustersClient.getClient(clusterId)).rejects.toMatchObject({ reason: 'credentialsRejected' });
+        await expect(ClustersClient.getClient(clusterId)).rejects.toMatchObject({ reason: 'credentialsRejected' });
+        expect(ClustersClient.getBinding(clusterId)).toBeUndefined();
+        expect(CredentialCache.getCredentials(clusterId)).toBe(credentials);
+        expect(MongoClient).toHaveBeenCalledTimes(2);
+    });
+
     it('holds a sign-in miss for explicit recovery and does not let a pending replacement bypass it', async () => {
         const client = await ClustersClient.connectInteractive(clusterId);
         const pin = ClustersClient.getLastVerifiedIdentity(clusterId);

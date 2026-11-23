@@ -152,7 +152,10 @@ export async function retryAuthentication(context: IActionContext, node: Retryab
             } else {
                 return;
             }
-        } else if (kind === 'signInRequired' || kind === 'credentialsRejected' || kind === 'clientClosed') {
+        } else if (
+            (kind === 'signInRequired' || kind === 'credentialsRejected' || kind === 'clientClosed') &&
+            !ClustersClient.hasReusableClient(clusterId)
+        ) {
             const closing = ClustersClient.deleteClient(clusterId);
             epoch = ClustersClient.getEpoch(clusterId);
             await closing;
