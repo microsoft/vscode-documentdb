@@ -1213,12 +1213,12 @@ shim (0005).
    - Route both catch paths in `getChildren` (cached-client reuse and `listDatabases`) through
      `reportFailure`. Keep the modal-plus-actions presentation.
    - Change `createErrorRecoveryChildren` to:
-     - **Sign in again** when the kind is `signInRequired` or `credentialsRejected` and the
+     - **Retry sign-in** when the kind is `signInRequired` or `credentialsRejected` and the
        Entra identity and settings are available, or **Update credentials** (the provider-owned
        action that exists today);
      - then Diagnose;
      - then Open shell;
-     - then **Retry last**, except when **Sign in again** is offered in its place.
+     - then **Retry last**, except when **Retry sign-in** is offered in its place.
    - Check that order against the skill text, and update the skill in WI-10 if it differs.
    - Call `addEstablishedConnectionContext` on the failure events of `connect`, `getchildren` and the tree.
    - **Keep credentials on recoverable failures (F-20).** In every provider item's `authenticateAndConnect`
@@ -1328,6 +1328,14 @@ shim (0005).
   were not reached. The run is inconclusive; OP-3 remains open. On resume, close the dashboard,
   wait until the cached token is no longer accepted, and explicitly refresh the cluster node
   without restarting the extension host. Collapse and re-expand can show cached children.
+- **OP-3 resumed on the older VSIX (2026-11-23):** A refresh opened a new socket on the
+  same client. OIDC callback invocation 2 threw, and the database listing failed.
+  The operator confirmed that the initial failure showed an error modal, not a sign-in
+  prompt. Closing the modal revealed the recovery action. They confirmed dismissing the
+  actual Microsoft sign-in prompt as requested and that the recovery actions remained.
+  A later explicit sign-in restored the database list. **OP-3 passed** on the older CI VSIX.
+  The operator approved renaming the tree action to **Retry sign-in**, first before Diagnose
+  and Open shell, without a separate Retry row. Command ID and recovery behavior are unchanged.
 - **Sign-out scope review (2026-11-23):** Claude Opus 5.5 recommended keeping the approved
   1.2.0 scope (80% confidence). Prompt sign-out handling would need account-specific session
   checks, coordination with active tasks, and separate handling for Shell and Playground

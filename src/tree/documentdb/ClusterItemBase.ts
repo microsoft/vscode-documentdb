@@ -373,7 +373,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                       createGenericElementWithContext({
                           contextValue: 'error',
                           id: `${this.id}/sign-in-again`,
-                          label: vscode.l10n.t('Sign in again'),
+                          label: vscode.l10n.t('Retry sign-in'),
                           iconPath: new vscode.ThemeIcon('sign-in'),
                           commandId: 'vscode-documentdb.command.signInAgain',
                           commandArgs: [this],

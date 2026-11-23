@@ -52,8 +52,8 @@ Evidence, telemetry and source pointers: [research-findings.md](./research-findi
 - **Never change identity under an open surface.** It becomes disconnected, keeps its state, says why
   and offers one action.
 - After a database rejects a verified Entra identity, discard the client but keep its in-memory
-  connection settings for explicit **Sign in again**. Do not retain the rejected token or retry
-  silently. When the tree offers **Sign in again**, it does not also offer **Retry**.
+  connection settings for explicit sign-in. Do not retain the rejected token or retry silently.
+  When the tree offers **Retry sign-in**, it does not also offer **Retry**.
 - **One teardown** serves Disconnect, Remove Connection and identity-changing credential updates.
 - Disconnect uses the existing task-conflict guard: if a copy or export is using the cluster,
   leave the task and connection running. The user can retry after the task finishes or is stopped.

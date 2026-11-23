@@ -451,7 +451,7 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
     });
 
     it.each(['signInRequired', 'credentialsRejected'] as const)(
-        'offers Sign in again instead of Retry for %s and keeps the failed-expansion marker',
+        'offers Retry sign-in instead of Retry for %s and keeps the failed-expansion marker',
         async (reason): Promise<void> => {
             if (reason === 'credentialsRejected') {
                 ClustersClientMock.getLatchReason.mockReturnValueOnce(reason);
@@ -477,6 +477,7 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
                 'cluster-1/diagnose',
                 'cluster-1/open-shell',
             ]);
+            expect(children[0]).toMatchObject({ label: 'Retry sign-in' });
             expect(item.hasRetryNode(children)).toBe(true);
             expect(ClustersClientMock.reportFailure).not.toHaveBeenCalled();
             expect(CredentialCache.deleteCredentials).not.toHaveBeenCalled();
