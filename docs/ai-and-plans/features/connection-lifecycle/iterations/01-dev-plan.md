@@ -1526,6 +1526,13 @@ behave as today.
   Check the epoch, latch, and identity before applying results to session caches. Build
   and 193 focused tests passed. Procedure response shapes are unchanged for now; structured
   unavailable results and the remaining panels are subsequent WI-6 slices.
+- **Webview design review:** A fresh Claude Opus 5.5 pass recommended one warning banner
+  using the existing MessageBlock and polite Announcer. Keep the editor and results in
+  place, do not move focus when the banner appears, and offer one explicit action. The
+  shared banner and its focused tests are in place, but not yet wired to panels. Keep
+  both planned stale-reply browser scenarios; adding the small harness support they need
+  is preferable to reducing coverage. Host action selection for a view with no credential
+  repair command is pending operator agreement.
 
 ---
 
