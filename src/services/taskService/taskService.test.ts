@@ -548,18 +548,63 @@ describe('Task host options', () => {
         expect(work).not.toHaveBeenCalled();
     });
 
-    it('still fails and rejects start when initialization rejects without Stop', async () => {
+    // Mimics callWithTelemetryAndErrorHandling: records the failure, then resolves with undefined.
+    const swallowingRunner: TaskTelemetryRunner = async <T>(
+        _eventName: string,
+        callback: (context: TaskTelemetryContext) => Promise<T>,
+    ): Promise<T | undefined> => {
+        try {
+            return await callback({ telemetry: { properties: {}, measurements: {} } });
+        } catch {
+            return undefined;
+        }
+    };
+
+    it.each([
+        ['the default runner', undefined],
+        ['a runner that swallows errors', swallowingRunner],
+    ])('ends as Failed without running work when initialization rejects with %s', async (_name, telemetry) => {
         const error = new Error('Initialization failed');
+        const work = vi.fn(async (): Promise<void> => {});
         class FailingInitTask extends HostTestTask {
             protected onInitialize(): Promise<void> {
                 return Promise.reject(error);
             }
         }
-        const task = new FailingInitTask();
+        const task = new FailingInitTask({ telemetry }, work);
+        const states: TaskState[] = [];
+        task.onDidChangeState((event) => states.push(event.newState));
 
-        await expect(task.start()).rejects.toBe(error);
+        await expect(task.start()).resolves.toBeUndefined();
+        await new Promise<void>((resolve) => setImmediate(resolve));
 
+        expect(states).toEqual([TaskState.Initializing, TaskState.Failed]);
         expect(task.getStatus()).toMatchObject({ state: TaskState.Failed, error });
+        expect(work).not.toHaveBeenCalled();
+    });
+
+    it('finalizes as Stopped without starting work when initialization rejects after Stop with a swallowing runner', async () => {
+        const work = vi.fn(async (): Promise<void> => {});
+        class AbortAwareInitTask extends HostTestTask {
+            protected onInitialize(signal: AbortSignal): Promise<void> {
+                return new Promise((_resolve, reject) => {
+                    signal.addEventListener('abort', (): void => reject(new Error('Initialization aborted')), {
+                        once: true,
+                    });
+                });
+            }
+        }
+        const task = new AbortAwareInitTask({ telemetry: swallowingRunner }, work);
+        const states: TaskState[] = [];
+        task.onDidChangeState((event) => states.push(event.newState));
+
+        const start = task.start();
+        task.stop();
+        await expect(start).resolves.toBeUndefined();
+
+        expect(states).toEqual([TaskState.Initializing, TaskState.Stopping, TaskState.Stopped]);
+        expect(task.getStatus().error).toBeUndefined();
+        expect(work).not.toHaveBeenCalled();
     });
 
     it('fails when the telemetry runner throws before invoking the work callback', async () => {

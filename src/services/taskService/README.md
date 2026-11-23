@@ -207,7 +207,9 @@ await task.start();
 2. `onInitialize()` is called with AbortSignal and telemetry context
 3. Task can count documents, ensure target exists, etc.
 4. Telemetry event `taskService.taskInitialization` is recorded
-5. If `onInitialize()` rejects after `stop()`, the task ends as `Stopped` and `doWork()` never runs; any other rejection ends it as `Failed` and rejects `start()`
+5. If `onInitialize()` rejects after `stop()`, the task ends as `Stopped` and `doWork()` never runs; any other rejection ends it as `Failed`, with the original error in `status.error`, and `doWork()` never runs
+
+`start()` resolves once initialization is over, not when the task completes. It does not reject on an initialization failure, whatever telemetry runner is injected (the extension's runner swallows errors); the failure is observable only through the task state. `start()` still throws if the task is not `Pending`. In the extension, `TaskProgressReportingService` shows the `Failed` state once, with **Show Output**, and the telemetry runner suppresses the azext error notification for both task events (decision 0016).
 
 **Execution Phase:**
 

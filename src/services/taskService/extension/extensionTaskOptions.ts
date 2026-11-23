@@ -13,8 +13,9 @@ export const extensionTaskTelemetryRunner: TaskTelemetryRunner = <T>(
     callback: (context: TaskTelemetryContext) => Promise<T>,
 ): Promise<T | undefined> =>
     callWithTelemetryAndErrorHandling(eventName, async (context) => {
-        if (eventName === 'taskService.taskExecution') {
-            // Execution-phase failures are shown by TaskProgressReportingService with a "Show Output" button.
+        if (eventName === 'taskService.taskInitialization' || eventName === 'taskService.taskExecution') {
+            // Task failures end the task as Failed, and TaskProgressReportingService shows that once,
+            // with a "Show Output" button. Telemetry still records the failure.
             context.errorHandling.suppressDisplay = true;
         }
         return callback(context);

@@ -35,6 +35,8 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteIndexesWizardContex
             }
         });
 
+        // start() resolves once initialization is over; an initialization failure ends the task as
+        // Failed and is shown by TaskProgressReportingService. It only throws if the task cannot start.
         try {
             await task.start();
         } catch (error) {

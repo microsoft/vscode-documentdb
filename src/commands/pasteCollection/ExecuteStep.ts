@@ -154,7 +154,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
             }
         });
 
-        // Start the copy-paste task without waiting (it can take a long time)
+        // Start the copy-paste task without waiting (it can take a long time).
+        // An initialization failure does not reject start(): the task ends as Failed and
+        // TaskProgressReportingService shows it once. This catch only covers a task that cannot start.
         void task.start().catch((error) => {
             subscription.dispose();
             const errorMessage = error instanceof Error ? error.message : String(error);
