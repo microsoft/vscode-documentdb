@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
+    UserCancelledError,
     type AzureWizard,
     type callWithTelemetryAndErrorHandling,
     type IActionContext,
@@ -74,7 +75,10 @@ vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
         });
         try {
             return await callback(context);
-        } catch {
+        } catch (error) {
+            if (error instanceof UserCancelledError) {
+                context.telemetry.properties.result = 'Canceled';
+            }
             return undefined;
         }
     },
@@ -269,6 +273,37 @@ describe('connect request telemetry', () => {
         await expect(makeItem().connect()).resolves.toBeNull();
 
         expect(connectEvent()).toMatchObject({ connectionResult: 'failed', connectionCorrelationId: 'failed-attempt' });
+    });
+
+    it('cancels the decoded-password retry without reporting another failure or clearing shared state', async (): Promise<void> => {
+        const connection = makeConnection('mongodb://localhost:27017/', AuthMethodId.NativeAuth);
+        connection.secrets.nativeAuthConfig = { connectionUser: 'test-user', connectionPassword: 'test%40password' };
+        vi.mocked(ConnectionStorageService.get).mockResolvedValue(connection);
+        const connectInteractive = vi.mocked(ClustersClient.connectInteractive);
+        connectInteractive
+            .mockRejectedValueOnce(new Error('Authentication failed.'))
+            .mockRejectedValueOnce(new UserCancelledError());
+        showErrorMessage.mockResolvedValueOnce('Try with decoded password');
+        const item = makeItem();
+
+        await expect(item.connect()).resolves.toBeNull();
+
+        expect(connectInteractive).toHaveBeenCalledTimes(2);
+        expect(showErrorMessage).toHaveBeenCalledExactlyOnceWith(
+            expect.any(String),
+            expect.objectContaining({ modal: true }),
+            'Try with decoded password',
+        );
+        const deleteClient = vi.mocked(ClustersClient.deleteClient);
+        expect(deleteClient).toHaveBeenCalledExactlyOnceWith('stable-id');
+        expect(deleteClient.mock.invocationCallOrder[0]).toBeLessThan(connectInteractive.mock.invocationCallOrder[1]);
+        expect(CredentialCache.deleteCredentials).not.toHaveBeenCalled();
+        expect(item.lastConnectionOutcome).toBe('canceled');
+        expect(connectEvent()).toMatchObject({
+            result: 'Canceled',
+            connectionResult: 'cancelled',
+            urlDecodePasswordResult: 'cancelled',
+        });
     });
 
     it('reports a successful connection with its connection ID', async (): Promise<void> => {

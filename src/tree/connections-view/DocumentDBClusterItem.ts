@@ -308,6 +308,12 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                     try {
                         retryClient = await this.getClientWithProgress(this.cluster.clusterId);
                     } catch (retryErr: unknown) {
+                        if (retryErr instanceof UserCancelledError) {
+                            context.telemetry.properties.connectionResult = 'cancelled';
+                            context.telemetry.properties.urlDecodePasswordResult = 'cancelled';
+                            throw retryErr;
+                        }
+
                         const retryError = retryErr instanceof Error ? retryErr : new Error(String(retryErr));
                         ext.outputChannel.appendLine(l10n.t('Retry Error: {error}', { error: retryError.message }));
                         context.telemetry.properties.urlDecodePasswordResult = 'failed';
