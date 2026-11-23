@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as l10n from '@vscode/l10n';
-import { AuthMethodId } from '../AuthMethod';
+import { AuthMethodId } from '../AuthMethodId';
 
 export class EntraSignInRequiredError extends Error {
     constructor(public readonly reason: 'noSession' | 'providerChanged') {
