@@ -57,3 +57,26 @@ reported unresolved types in the fresh worktree; it passed when rerun after the 
 build generated the package declarations. No source changes were needed. Automated VSIX
 activation remains unavailable on this host; the operator accepted the manual OP-2 result
 and its coverage gaps above.
+
+## Copilot review follow-up
+
+The operator approved all four follow-ups:
+
+- [R1](https://github.com/microsoft/vscode-documentdb/pull/1111#discussion_r4643940342), `8de2a67da`:
+  Azure policy and app-registration failures no longer get misclassified as sign-in problems.
+  Typed additional-verification codes still report `signInRequired`.
+- [R2](https://github.com/microsoft/vscode-documentdb/pull/1111#discussion_r4643940422), `df66e0172`:
+  A deep-link cache miss triggers a fresh listing before the extension offers tenant sign-in.
+  A successful tenant sign-in still triggers a fresh listing. Native SDK challenges are unchanged.
+- [R3](https://github.com/microsoft/vscode-documentdb/pull/1111#discussion_r4643940489), `9805b7e25`:
+  A regression test uses the same stored subscription for two ARM operations across expiry.
+  Each operation creates its own management client, as production does. With the real SDK
+  pipeline and fake transport, the second request uses the fresh token without prompting or
+  relisting. Reusing one long-lived management client can send the previous token for an
+  additional request; changing that credential adapter is outside this follow-up.
+- [R4](https://github.com/microsoft/vscode-documentdb/pull/1111#discussion_r4643940542), `490cf4376`:
+  Manage Azure Accounts fetches fresh tenants when loading its inventory. Routine Discovery
+  listing and wizard back-navigation keep their existing caching.
+
+Claude Opus 5.5 advised the dispositions (90%, 85%, 80%, and 85% confidence, respectively).
+The build and all 109 focused tests passed. The earlier full Case 2 run predates these changes.
