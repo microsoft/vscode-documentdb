@@ -1300,6 +1300,12 @@ shim (0005).
   rejected settings. Only the matching explicit recovery can clear the rejection, and only if
   its epoch is current. The operator preferred the simpler option and asked to record
   [decision 0015](../decisions.md#0015-use-the-existing-latch-to-block-startup-after-authentication-rejection).
+- **OP-3 candidate:** Host and tree recovery, Retry and **Sign in again** are implemented
+  for [draft PR4 (#1117)](https://github.com/microsoft/vscode-documentdb/pull/1117). Case 1 passed:
+  the host batch passed 222 tests, the tree batch passed 367, and a final 127-test run covered
+  the Native discovery Retry correction and the core recovery paths. These counts overlap.
+  OP-3 requires a real Entra sign-out on the dev host and a fresh-socket callback. PR4 pre-review
+  and handoff checks remain; WI-6 does not start before OP-3 is cleared.
 
 ---
 
