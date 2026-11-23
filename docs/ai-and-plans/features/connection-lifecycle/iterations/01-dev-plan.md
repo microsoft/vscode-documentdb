@@ -1357,6 +1357,10 @@ shim (0005).
 - **Worker startup regression:** PR4's shared OIDC code imported the VS Code UI auth-method
   module into the Node worker path. Keep the shared auth IDs independent of VS Code. Verify
   the next packaged candidate starts both Shell and Playground; the tree OP-3 gate is unchanged.
+- **PR4 handoff verification:** OP-3 passed, author-approved pre-review fixes are in
+  [the review record](./01-pr4-connection-recovery-review.md), and local Case 2 passed
+  (9,796 runtime tests passed, one skipped). Keep PR4 in draft until the separate live
+  packaged Shell and Playground smoke passes. WI-6 host work may proceed on this base.
 
 ---
 
