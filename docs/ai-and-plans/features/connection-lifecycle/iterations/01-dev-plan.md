@@ -1515,6 +1515,11 @@ behave as today.
 
 **Progress:**
 
+- **Host foundation:** Started PR5 from verified PR4 `d422d065b` while the independent
+  packaged-worker smoke test is pending. Added the disposable, cluster-scoped registry.
+  Build and its focused test passed. Panels are not yet wired to it; next is binding
+  resolution and the startup-rejection carry-forward from the PR4 review.
+
 ---
 
 ## WI-7: Teardown, Disconnect, Remove and Update Credentials (PR 6)
