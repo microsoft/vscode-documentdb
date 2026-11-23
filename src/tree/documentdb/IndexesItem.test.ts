@@ -98,7 +98,7 @@ describe('compareIndexNames', () => {
 
 describe('IndexesItem - async index loading', () => {
     const cluster = {
-        treeId: 'cluster1',
+        treeId: 'folder/cluster1',
         clusterId: 'cluster1',
         dbExperience: { api: 'MongoDB' } as unknown as Experience,
     } as TreeCluster<BaseClusterModel>;
@@ -137,6 +137,9 @@ describe('IndexesItem - async index loading', () => {
         item.loadIndexCount();
         await flushAsync();
 
+        expect(ClustersClient.getClient).toHaveBeenCalledWith(cluster.clusterId, undefined, undefined, 'treeChildren', {
+            background: true,
+        });
         expect(listIndexesMock).toHaveBeenCalledTimes(1);
         expect(notifyChildrenChangedMock).toHaveBeenCalledWith(item.id);
         expect(item.getTreeItem().description).toContain('3');
@@ -158,6 +161,7 @@ describe('IndexesItem - async index loading', () => {
 
         const children = await item.getChildren();
 
+        expect(ClustersClient.getClient).toHaveBeenCalledWith(cluster.clusterId, undefined, undefined, 'treeChildren');
         expect(listIndexesMock).toHaveBeenCalledTimes(1);
         expect(children).toHaveLength(3);
         expect(item.getTreeItem().description).toContain('3');
