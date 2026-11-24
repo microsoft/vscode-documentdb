@@ -157,7 +157,10 @@ class MockStreamingWriter extends StreamingDocumentWriter<string> {
         return 'other';
     }
 
-    protected extractPartialProgress(error: unknown, _actionContext?: TaskTelemetryContext): PartialProgress | undefined {
+    protected extractPartialProgress(
+        error: unknown,
+        _actionContext?: TaskTelemetryContext,
+    ): PartialProgress | undefined {
         if (error instanceof Error && this.lastPartialProgress !== undefined) {
             const progress = this.lastPartialProgress;
             this.lastPartialProgress = undefined;

@@ -15,6 +15,7 @@ and caller settings. It validates every ID in a batch before writing, so invalid
 unreported partial inserts.
 
 <!-- example:memory-adapters -->
+
 ```typescript
 import {
     type AbortBatchResult,
@@ -109,6 +110,7 @@ export function createTunedWriter(target: Map<string, unknown>): MemoryWriter {
     });
 }
 ```
+
 <!-- endexample -->
 
 ## Run a copy task
@@ -118,6 +120,7 @@ example IDs with stable connection IDs. Supply a `CollectionIndexCopier` when `c
 true.
 
 <!-- example:copy-task -->
+
 ```typescript
 import { type TaskService, type TaskStatus, whenTerminal } from '@microsoft/vscode-ext-tasks';
 import {
@@ -149,6 +152,7 @@ export async function copyCollection(
     return task.getStatus();
 }
 ```
+
 <!-- endexample -->
 
 `start()` only waits for initialization. Inspect the terminal status for failure or cancellation.
@@ -163,6 +167,7 @@ information as an exception. In either case, calculate `remaining` from the exac
 written; the example allows successes anywhere in the batch.
 
 <!-- example:partial-writes -->
+
 ```typescript
 import {
     type AbortBatchResult,
@@ -247,6 +252,7 @@ export class ThrottleAwareWriter extends StreamingDocumentWriter<string> {
     }
 }
 ```
+
 <!-- endexample -->
 
 A returned outcome can also report `errorType: 'network'`. For a **thrown** network error the

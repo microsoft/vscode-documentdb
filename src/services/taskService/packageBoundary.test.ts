@@ -14,7 +14,10 @@ interface PackageBoundary {
 
 const packages: PackageBoundary[] = [
     { root: path.resolve(__dirname, '../../../packages/vscode-ext-tasks/src'), vscodePresentation: true },
-    { root: path.resolve(__dirname, '../../../packages/vscode-ext-tasks-data-transfer/src'), vscodePresentation: false },
+    {
+        root: path.resolve(__dirname, '../../../packages/vscode-ext-tasks-data-transfer/src'),
+        vscodePresentation: false,
+    },
 ];
 
 function packageSources(root: string): string[] {

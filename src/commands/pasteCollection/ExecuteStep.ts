@@ -175,12 +175,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
      * @param dontRefreshOnRemove - If true, prevents automatic refresh when the annotation is removed
      */
     private annotateNodeDuringTask(nodeId: string, label: string, task: Task, dontRefreshOnRemove?: boolean): void {
-        void ext.state.runWithTemporaryDescription(
-            nodeId,
-            label,
-            () => whenTerminal(task),
-            dontRefreshOnRemove,
-        );
+        void ext.state.runWithTemporaryDescription(nodeId, label, () => whenTerminal(task), dontRefreshOnRemove);
     }
 
     /**

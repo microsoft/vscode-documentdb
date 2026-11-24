@@ -4,5 +4,5 @@
  *--------------------------------------------------------------------------------------------*/
 
 export * from './tasks/copy-and-paste/copyCollectionStrings.js';
-export * from './tasks/copy-and-paste/copyPasteConfig.js';
 export * from './tasks/copy-and-paste/CopyPasteCollectionTask.js';
+export * from './tasks/copy-and-paste/copyPasteConfig.js';

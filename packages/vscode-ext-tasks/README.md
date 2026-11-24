@@ -11,6 +11,7 @@ snippets match the example files.
 Implement `doWork`, honor the abort signal, and report progress through `updateProgress`:
 
 <!-- example:basic-task -->
+
 ```typescript
 import { Task } from '@microsoft/vscode-ext-tasks';
 
@@ -36,6 +37,7 @@ export class ExampleTask extends Task {
     }
 }
 ```
+
 <!-- endexample -->
 
 ## Initialize and track resources
@@ -45,6 +47,7 @@ task uses. `onInitialize` runs before `doWork`; a failed initialization ends the
 starting its work.
 
 <!-- example:initialized-resource-task -->
+
 ```typescript
 import {
     type ResourceDefinition,
@@ -82,6 +85,7 @@ export class ResourceTask extends Task implements ResourceTrackingTask {
     }
 }
 ```
+
 <!-- endexample -->
 
 ## Registry, notifications, and conflict checks
@@ -91,6 +95,7 @@ reporter on deactivation. The operation name passed to the conflict helper shoul
 localized.
 
 <!-- example:registry -->
+
 ```typescript
 import {
     createTaskService,
@@ -131,6 +136,7 @@ export async function deleteCollection(
     return true;
 }
 ```
+
 <!-- endexample -->
 
 `start()` resolves after initialization, not after the task finishes. Initialization failures
