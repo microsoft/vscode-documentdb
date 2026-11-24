@@ -37,3 +37,17 @@ After consulting Opus, the operator approved permanently locking existing views 
 connection edits, including password-only changes, in WI-7. See [decision 0018](../decisions.md#0018-saved-connection-edits-permanently-lock-existing-views).
 That policy simplifies later recovery; it does not replace the PR5 command guards.
 OP-4 remains cleared.
+
+## Fixes and verification
+
+- **F1, N1, N2:** `5975620a2` binds Dashboard commands and wizard validation, leaves Paste in
+  the tree, and reopens the unavailable dialog instead of running blocked native row actions.
+- **F2:** `e2fe7afa4` distinguishes interrupted inventory from loaded, empty inventory.
+- **F3:** `9cc97ffd1` clears unacknowledged index creation placeholders without replay.
+- **F4:** `20df3fe4c` stops interrupted Query Insights stages and preserves completed results.
+
+Case 2: formatting and localization regeneration completed; localization check, lint, build,
+strict workspace test type-check, full Vitest (442 files, 9,863 passed, one skipped), and VSIX
+packaging passed. The final native-menu notification adjustment received an additional focused
+controller run (18 passed), lint, build, and packaging. OP-4 live evidence and the operator's
+password-only test waiver are recorded in the [delivery plan](./01-dev-plan.md).
