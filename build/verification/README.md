@@ -485,11 +485,12 @@ SHA-256 and runs:
   [`vscode-stub.cjs`](./package-checks/vscode-stub.cjs) and runs the Fluent calls under jsdom. A
   package with no calls in `calls.mjs` fails.
 
-Expected and enforced: every entry point, including `vscode-ext-webview-fluentui`, loads in plain
-Node (Fluent UI 9.75 and `@fluentui/react-icons` 2.0.345 ship Node-loadable ESM). The Vitest probe
-inlines only `vscode-ext-webview`, so Fluent is proven to work without inlining. A control run of
-the Vitest probe without inlining must fail on the host entry's bare `vscode` import. Rerun this
-after any change to a package's `package.json`, `tsconfig` or entry points.
+Expected and enforced with the extension's locked Fluent UI 9.75 and
+`@fluentui/react-icons` 2.0.345: every entry point, including `vscode-ext-webview-fluentui`, loads in
+plain Node. The Vitest probe inlines only `vscode-ext-webview`, so this combination is proven to
+work without Fluent inlining. Older supported peers may need inlining; see the package README. A
+control run of the Vitest probe without inlining must fail on the host entry's bare `vscode`
+import. Rerun this after any change to a package's `package.json`, `tsconfig` or entry points.
 
 **Archive mode (offline).** `--archives <dir-or-.tgz>` (repeatable; a directory means every `.tgz`
 in it) checks tarballs that were already packed, instead of building and packing. It never runs

@@ -59,8 +59,9 @@ const ATTW = '@arethetypeswrong/cli@0.18.5';
 const ACCEPTED_ATTW_PROBLEMS = new Set(['CJSResolvesToESM']);
 
 // Packages the Vitest probe inlines: vscode-ext-webview so the `vscode` alias reaches the
-// `import 'vscode'` in its host entry. Fluent UI (9.75+, icons 2.0.345+) loads natively in Node, so
-// vscode-ext-webview-fluentui is deliberately left to Node to prove consumers need no inlining.
+// `import 'vscode'` in its host entry. The extension's locked Fluent and icons versions load
+// natively in Node, so vscode-ext-webview-fluentui is left to Node. Older supported peers may
+// need inlining; see the package README.
 const VITEST_INLINE = ['@microsoft/vscode-ext-webview'];
 
 const here = import.meta.dirname;

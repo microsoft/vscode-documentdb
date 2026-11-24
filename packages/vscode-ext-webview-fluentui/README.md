@@ -67,12 +67,12 @@ npm install @microsoft/vscode-ext-webview-fluentui
 
 Peer dependencies, which you already have if you are using Fluent:
 
-| Peer                                        | Range     |
-| ------------------------------------------- | --------- |
-| `react`                                     | `>=19`    |
-| `@fluentui/react-components`                | `~9.75.1` |
-| `@fluentui/react-icons`                     | `~2.0`    |
-| `@fluentui/react-motion-components-preview` | `^0.15.6` |
+| Peer                                        | Range                   |
+| ------------------------------------------- | ----------------------- |
+| `react`                                     | `>=19`                  |
+| `@fluentui/react-components`                | `~9.74 \|\| ~9.75.1`    |
+| `@fluentui/react-icons`                     | `~2.0`                  |
+| `@fluentui/react-motion-components-preview` | `^0.15.6`               |
 
 `StatusListItem` disclosures use Fluent's default `Collapse` motion from the motion peer,
 including its built-in `prefers-reduced-motion` support.
@@ -234,12 +234,16 @@ runtime, and so does this package. Your webview CSP needs `style-src 'unsafe-inl
 what Fluent already required of you.
 
 **Unit tests under Node.js.** The package imports named exports from `@fluentui/react-components`
-and `@fluentui/react-icons`, as webview bundlers need for tree-shaking. When loaded via `import`,
+and `@fluentui/react-icons`, as webview bundlers need for tree-shaking. Fluent UI 9.74 resolves to a
+CommonJS build whose named exports Node.js cannot detect. With that version, let your test runner
+transform this package, for example by setting
+`test.server.deps.inline: ['@microsoft/vscode-ext-webview-fluentui']` in Vitest.
+
 Fluent UI 9.75 uses native ESM in Node.js and imports the icons' ESM build. Older icons builds,
 including 2.0.324, use extensionless imports that Node.js cannot resolve. This repository uses
-2.0.345, whose ESM imports include file extensions, and has verified Node-based tests without a
-Fluent-specific Vitest dependency optimizer. This is a tested version, not a claim that every
-earlier icons release is incompatible.
+2.0.345, whose ESM imports include file extensions, and has verified Node-based tests without
+Fluent-specific inlining. This is a tested version, not a claim that every earlier icons release is
+incompatible.
 
 ### Component guidance: Skeleton
 
