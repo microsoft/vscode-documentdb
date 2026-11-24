@@ -115,7 +115,12 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
         const client: ClustersClient = options
             ? await ClustersClient.getClient(this.cluster.clusterId, undefined, undefined, 'treeChildren', options)
             : await ClustersClient.getClient(this.cluster.clusterId, undefined, undefined, 'treeChildren');
-        const indexes = await client.listIndexes(this.databaseInfo.name, this.collectionInfo.name);
+        const indexes = await client.listIndexes(this.databaseInfo.name, this.collectionInfo.name).catch((error: unknown) => {
+            if (!options?.background) {
+                ClustersClient.reportFailure(client.binding, error);
+            }
+            throw error;
+        });
 
         // Try to get search indexes, but silently fail if not supported by the platform
         try {
