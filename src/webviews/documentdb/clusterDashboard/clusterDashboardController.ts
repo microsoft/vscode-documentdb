@@ -15,7 +15,7 @@ import { type DeepLinkTelemetry } from '../../../deepLinks/deepLinkTelemetry';
 
 import { copyNamespaceReference } from '../../../commands/copyReference/copyReference';
 import { openCollectionViewInternal } from '../../../commands/openCollectionView/openCollectionView';
-import { type ConnectionBinding } from '../../../documentdb/ClustersClient';
+import { ClustersClient, type ConnectionBinding } from '../../../documentdb/ClustersClient';
 import { registerConnectionSurface } from '../../../documentdb/connectionSurfaces';
 import {
     ConnectionUnavailableError,
