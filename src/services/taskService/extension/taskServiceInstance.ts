@@ -3,9 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import {
+    createTaskService,
+    DEFAULT_MAX_FINISHED_TASKS,
+    type TaskService as TaskServiceType,
+} from '@microsoft/vscode-ext-tasks';
+import { createTaskProgressReportingService } from '@microsoft/vscode-ext-tasks/vscode';
 import { ext } from '../../../extensionVariables';
-import { createTaskService, DEFAULT_MAX_FINISHED_TASKS, type TaskService as TaskServiceType } from '../taskService';
-import { createTaskProgressReportingService } from '../UI/taskProgressReportingService';
 import { getExtensionTaskProgressStrings } from './extensionPresentationStrings';
 import { getExtensionTaskStrings } from './extensionTaskOptions';
 

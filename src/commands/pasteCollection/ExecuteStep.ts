@@ -4,6 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
+import { isTerminalState, TaskState, whenTerminal, type Task } from '@microsoft/vscode-ext-tasks';
+import {
+    CopyPasteCollectionTask,
+    type CopyPasteConfig,
+} from '@microsoft/vscode-ext-tasks-data-transfer/copy-collection';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
@@ -12,9 +17,6 @@ import { DocumentDbStreamingWriter } from '../../services/taskService/data-api/w
 import { getExtensionCopyCollectionStrings } from '../../services/taskService/extension/extensionCopyCollectionStrings';
 import { createExtensionTaskOptions } from '../../services/taskService/extension/extensionTaskOptions';
 import { TaskService } from '../../services/taskService/extension/taskServiceInstance';
-import { CopyPasteCollectionTask } from '../../services/taskService/tasks/copy-and-paste/CopyPasteCollectionTask';
-import { type CopyPasteConfig } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
-import { isTerminalState, TaskState, type Task } from '../../services/taskService/taskService';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { nonNullValue } from '../../utils/nonNull';
 import { createCollectMetadata, createValidateSource } from './copyPasteCollectionHooks';
@@ -173,21 +175,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
      * @param dontRefreshOnRemove - If true, prevents automatic refresh when the annotation is removed
      */
     private annotateNodeDuringTask(nodeId: string, label: string, task: Task, dontRefreshOnRemove?: boolean): void {
-        void ext.state.runWithTemporaryDescription(
-            nodeId,
-            label,
-            () => {
-                return new Promise<void>((resolve) => {
-                    const subscription = task.onDidChangeState((event) => {
-                        if (isTerminalState(event.newState)) {
-                            subscription.dispose();
-                            resolve();
-                        }
-                    });
-                });
-            },
-            dontRefreshOnRemove,
-        );
+        void ext.state.runWithTemporaryDescription(nodeId, label, () => whenTerminal(task), dontRefreshOnRemove);
     }
 
     /**

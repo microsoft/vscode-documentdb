@@ -6,11 +6,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { TaskState, type TaskStateChangeEvent } from '@microsoft/vscode-ext-tasks';
+import { type CollectionIndexCopier } from '@microsoft/vscode-ext-tasks-data-transfer';
 import { ext } from '../../extensionVariables';
-import { type CollectionIndexCopier } from '../../services/taskService/data-api/indexes/CollectionIndexCopier';
 import { TaskService } from '../../services/taskService/extension/taskServiceInstance';
 import { CopyIndexesTask } from '../../services/taskService/tasks/copy-indexes/CopyIndexesTask';
-import { TaskState, type TaskStateChangeEvent } from '../../services/taskService/taskService';
 import { ExecuteStep } from './ExecuteStep';
 import { type PasteIndexesWizardContext } from './PasteIndexesWizardContext';
 
@@ -18,6 +18,7 @@ const stateListeners: Array<(event: TaskStateChangeEvent) => void> = [];
 const start = vi.fn().mockResolvedValue(undefined);
 const fakeTask = {
     start,
+    getStatus: (): { state: TaskState } => ({ state: TaskState.Pending }),
     onDidChangeState: vi.fn((listener: (event: TaskStateChangeEvent) => void) => {
         stateListeners.push(listener);
         return { dispose: vi.fn() };

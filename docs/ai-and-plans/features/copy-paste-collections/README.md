@@ -9,7 +9,7 @@ code:
     - src/commands/pasteIndexes/**
     - src/services/CopyPasteBufferService.ts
     - src/services/taskService/data-api/**
-    - src/services/taskService/tasks/copy-and-paste/**
+    - packages/vscode-ext-tasks-data-transfer/src/tasks/copy-and-paste/**
     - src/services/taskService/tasks/copy-indexes/**
 ---
 
@@ -17,9 +17,9 @@ code:
 
 **Status:** active
 
-> This feature knowledge base starts here. The implementation and its older technical documentation
-> predate this folder. The implementation documentation remains beside the Task Service code, while
-> the earlier index-copy plan and its durable decisions have been absorbed here.
+> This feature knowledge base starts here. The implementation predates this folder; the shared
+> task and transfer packages and the extension-specific adapters each have implementation guides.
+> The earlier index-copy plan and its durable decisions have been absorbed here.
 
 Copy and Paste Collections transfers documents between collections as a background task. It can
 also recreate secondary indexes before document transfer begins. The document data plane is split
@@ -32,19 +32,22 @@ existing collection without transferring documents.
 
 ## Existing documentation
 
-These documents remain where contributors historically maintained them:
+These implementation guides accompany the shared packages and the DocumentDB extension:
 
-- [Task Service architecture](../../../../src/services/taskService/README.md) — task lifecycle,
-  resource tracking, progress, cancellation, and the Copy and Paste task
-- [Data API architecture](../../../../src/services/taskService/data-api/README.md) — document reader,
-  streaming writer, batching, retry, and conflict handling
+- [Task package](../../../../packages/vscode-ext-tasks/README.md) — task lifecycle, resource
+  tracking, progress, and cancellation
+- [Transfer package](../../../../packages/vscode-ext-tasks-data-transfer/README.md) — the Copy and
+  Paste task, document readers, writers, batching, retry, and conflict handling
+- [Task Service integration](../../../../src/services/taskService/README.md) and
+  [DocumentDB API adapters](../../../../src/services/taskService/data-api/README.md) — extension
+  wiring and provider-specific code
 - [Indexes implementation README](../../../../src/services/taskService/data-api/indexes/README.md) —
   current index-copy behavior and code map
 - [Copy and Paste user guide](../../../user-manual/copy-and-paste.md) — user-visible workflow and
   behavior
 
-The Task Service and Data API READMEs describe the implementation. This feature folder records
-durable intent and rationale. Code and tests remain authoritative for current behavior.
+These guides describe the implementation. This feature folder records durable intent and
+rationale. Code and tests remain authoritative for current behavior.
 
 ## Implemented index behavior
 
@@ -94,14 +97,13 @@ durable intent and rationale. Code and tests remain authoritative for current be
 - `src/commands/pasteIndexes/**` — source classification, validation, confirmation, task registration,
   target annotation, and refresh
 - `src/services/CopyPasteBufferService.ts` — transient copied-index state and command context
-- `src/services/taskService/tasks/copy-and-paste/**` — orchestration, ordering, progress, telemetry,
-  and resource declarations
+- `packages/vscode-ext-tasks-data-transfer/src/tasks/copy-and-paste/**` — orchestration, ordering,
+  progress, telemetry, and resource declarations
 - `src/services/taskService/tasks/copy-indexes/**` — dedicated index-only progress, telemetry, and
   resource declarations
-- `src/services/taskService/data-api/readers/**` — source document abstraction and DocumentDB API
-  implementation
-- `src/services/taskService/data-api/writers/**` — target streaming abstraction, batching, retry,
-  conflict handling, and DocumentDB API implementation
+- `packages/vscode-ext-tasks-data-transfer/src/data-api/**` — source and target abstractions,
+  batching, retry, conflict handling, and the index-copy contract
+- `src/services/taskService/data-api/readers/**` and `writers/**` — DocumentDB API implementations
 - `src/services/taskService/data-api/indexes/**` — current DocumentDB API index discovery,
   comparison, naming, creation, and visibility handling
 
@@ -134,8 +136,6 @@ behavioral decisions that originally lived in the obsolete root-level index-copy
 
 ## Open gaps
 
-- The older Task Service and Data API READMEs do not yet show the index-copy phase in their diagrams
-  or file trees.
 - Cross-database document transfer needs concrete reader/writer implementations and provider-aware
   construction. Cross-database index migration is separately deferred by decision 0003.
 
@@ -144,4 +144,4 @@ behavioral decisions that originally lived in the obsolete root-level index-copy
 1. This README
 2. [design.md](./design.md)
 3. [decisions.md](./decisions.md)
-4. The existing Task Service and Data API READMEs for implementation detail
+4. The package and extension implementation guides linked above

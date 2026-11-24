@@ -67,9 +67,9 @@ const EXPECTED_NODE_LOAD_FAILURES = {
     '@microsoft/vscode-ext-webview-fluentui/components': /@fluentui[\\/]/,
 };
 
-// Packages the Vitest probe inlines: fluentui for the reason above; vscode-ext-webview so the
-// `vscode` alias reaches the `import 'vscode'` in its host entry.
-const VITEST_INLINE = ['@microsoft/vscode-ext-webview', '@microsoft/vscode-ext-webview-fluentui'];
+// Inline packages whose host entries import `vscode`, and Fluent UI for the reason above.
+const CONTROL_INLINE = ['@microsoft/vscode-ext-webview', '@microsoft/vscode-ext-webview-fluentui'];
+const VITEST_INLINE = [...CONTROL_INLINE, '@microsoft/vscode-ext-tasks', '@microsoft/vscode-ext-tasks-data-transfer'];
 
 const here = import.meta.dirname;
 const repo = path.resolve(here, '../../..');
@@ -367,7 +367,11 @@ try {
         '--reporter',
         'verbose',
     ];
-    const inline = VITEST_INLINE.filter((name) => ours.has(name));
+    const inline = VITEST_INLINE.filter(
+        (name) =>
+            ours.has(name) ||
+            (name === '@microsoft/vscode-ext-tasks' && ours.has('@microsoft/vscode-ext-tasks-data-transfer')),
+    );
     const vitest = run(process.execPath, vitestArgs, {
         cwd: vitestConsumer,
         env: { ...probeEnv, PROBE_INLINE: inline.join(','), CI: 'true' },
@@ -413,14 +417,15 @@ try {
     assert.equal(testControlFailure, 'packed-test-control: packed test files are forbidden: dist/x.test.js');
     report.packedTestControl = { status: 'expected failure', failure: testControlFailure };
 
-    // Control: without inlining, Vitest hands both packages to Node, which must fail exactly as
-    // documented (Fluent's named exports; the host entry's bare `vscode` import).
-    if (inline.length < VITEST_INLINE.length) {
-        report.vitestWithoutInline = `not applicable: needs ${VITEST_INLINE.join(' and ')}`;
+    // Control: hand only these two packages to Node, which must fail exactly as documented
+    // (Fluent's named exports; the host entry's bare `vscode` import).
+    if (!CONTROL_INLINE.every((name) => inline.includes(name))) {
+        report.vitestWithoutInline = `not applicable: needs ${CONTROL_INLINE.join(' and ')}`;
     } else {
+        const controlInline = inline.filter((name) => !CONTROL_INLINE.includes(name));
         const control = run(process.execPath, vitestArgs, {
             cwd: vitestConsumer,
-            env: { ...probeEnv, PROBE_INLINE: '', CI: 'true' },
+            env: { ...probeEnv, PROBE_INLINE: controlInline.join(','), CI: 'true' },
         });
         const controlOutput = `${control.stdout}${control.stderr}`;
         const controlFailures = {

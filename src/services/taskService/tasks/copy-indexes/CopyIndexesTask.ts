@@ -3,17 +3,20 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as vscode from 'vscode';
-import { ext } from '../../../../extensionVariables';
+import {
+    Task,
+    type ResourceDefinition,
+    type ResourceTrackingTask,
+    type TaskTelemetryContext,
+} from '@microsoft/vscode-ext-tasks';
 import {
     type CollectionEndpoint,
     type CollectionIndexCopier,
     type IndexCopyResult,
-} from '../../data-api/indexes/CollectionIndexCopier';
+} from '@microsoft/vscode-ext-tasks-data-transfer';
+import * as vscode from 'vscode';
+import { ext } from '../../../../extensionVariables';
 import { createExtensionTaskOptions } from '../../extension/extensionTaskOptions';
-import { type TaskTelemetryContext } from '../../taskHost';
-import { Task } from '../../taskService';
-import { type ResourceDefinition, type ResourceTrackingTask } from '../../taskServiceResourceTracking';
 
 export interface CopyIndexesConfig {
     readonly source: CollectionEndpoint;

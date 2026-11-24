@@ -1,0 +1,57 @@
+{
+  "name": "@microsoft/vscode-ext-tasks-data-transfer",
+  "version": "0.1.0",
+  "description": "Database-neutral document streaming and collection-copy tasks for VS Code extensions.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./copy-collection": {
+      "types": "./dist/copy-collection.d.ts",
+      "default": "./dist/copy-collection.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "copy-collection": [
+        "./dist/copy-collection.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -b && tsc -p type-tests",
+    "clean": "rimraf dist tsconfig.tsbuildinfo",
+    "pretest": "npm run build",
+    "test": "vitest run --config ../../vitest.config.ts --project vscode-ext-tasks-data-transfer",
+    "typecheck:tests": "tsc -p tsconfig.test.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/vscode-documentdb",
+    "directory": "packages/vscode-ext-tasks-data-transfer"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "denque": "~2.1.0"
+  },
+  "peerDependencies": {
+    "@microsoft/vscode-ext-tasks": "^0.1.0"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}

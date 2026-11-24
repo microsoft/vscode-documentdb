@@ -5,8 +5,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { type TaskTelemetryContext } from '../taskHost';
-import { Task, TaskState } from '../taskService';
+import { Task, TaskState, type TaskTelemetryContext } from '@microsoft/vscode-ext-tasks';
 import { extensionTaskTelemetryRunner } from './extensionTaskOptions';
 
 interface RecordedCall {

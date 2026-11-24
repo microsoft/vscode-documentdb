@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { checkCanProceedAndInformUser } from '@microsoft/vscode-ext-tasks/vscode';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { CredentialCache } from '../../documentdb/CredentialCache';
@@ -12,7 +13,6 @@ import { ext } from '../../extensionVariables';
 import { ConnectionStorageService } from '../../services/connectionStorageService';
 import { getExtensionResourceUsageStrings } from '../../services/taskService/extension/extensionPresentationStrings';
 import { TaskService } from '../../services/taskService/extension/taskServiceInstance';
-import { checkCanProceedAndInformUser } from '../../services/taskService/resourceUsageHelper';
 import {
     refreshParentInConnectionsView,
     withConnectionsViewProgress,

@@ -5,8 +5,8 @@
 
 import { beforeEach, describe, expect, it, vi, type MockedFunction } from 'vitest';
 
+import { type CollectionIndexCopier } from '@microsoft/vscode-ext-tasks-data-transfer';
 import * as vscode from 'vscode';
-import { type CollectionIndexCopier } from '../../services/taskService/data-api/indexes/CollectionIndexCopier';
 import { ConfirmPasteIndexesStep } from './ConfirmPasteIndexesStep';
 import { type PasteIndexesWizardContext } from './PasteIndexesWizardContext';
 

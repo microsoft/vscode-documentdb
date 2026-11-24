@@ -3,10 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import {
+    ConflictResolutionStrategy,
+    StreamingDocumentWriter,
+    type EnsureTargetExistsResult,
+    type ErrorType,
+} from '@microsoft/vscode-ext-tasks-data-transfer';
 import { describe, expect, it } from 'vitest';
-import { ConflictResolutionStrategy, type EnsureTargetExistsResult, type ErrorType } from '../types';
 import { documentDbSupportedConflictStrategies } from './DocumentDbStreamingWriter';
-import { StreamingDocumentWriter } from './StreamingDocumentWriter';
 
 class TestStreamingWriter extends StreamingDocumentWriter {
     constructor() {

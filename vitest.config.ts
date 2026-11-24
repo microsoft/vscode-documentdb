@@ -85,6 +85,31 @@ export default defineConfig({
                 },
             },
             {
+                resolve: {
+                    alias: [{ find: /^vscode$/, replacement: path.join(repoRoot, 'test/vitest/vscode.ts') }],
+                },
+                test: {
+                    name: 'vscode-ext-tasks',
+                    root: packageRoot('vscode-ext-tasks'),
+                    testTimeout,
+                    pool,
+                    isolate,
+                    environment: 'node',
+                    include: ['src/**/*.test.{ts,tsx}'],
+                },
+            },
+            {
+                test: {
+                    name: 'vscode-ext-tasks-data-transfer',
+                    root: packageRoot('vscode-ext-tasks-data-transfer'),
+                    testTimeout,
+                    pool,
+                    isolate,
+                    environment: 'node',
+                    include: ['src/**/*.test.{ts,tsx}'],
+                },
+            },
+            {
                 test: {
                     name: 'documentdb-js-schema-analyzer',
                     root: packageRoot('documentdb-js-schema-analyzer'),

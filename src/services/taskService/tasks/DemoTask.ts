@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { Task } from '@microsoft/vscode-ext-tasks';
 import * as vscode from 'vscode';
 import { createExtensionTaskOptions } from '../extension/extensionTaskOptions';
-import { Task } from '../taskService';
 
 /**
  * A demo task implementation that demonstrates the Task abstract class.

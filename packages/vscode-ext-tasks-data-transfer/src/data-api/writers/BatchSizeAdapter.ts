@@ -1,0 +1,220 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { type TaskLogger } from '@microsoft/vscode-ext-tasks';
+import { type DataTransferOptions, noopDataTransferLogger } from '../dataTransferHost.js';
+import { type ModeConfig } from '../types.js';
+import { type ResolvedStreamingWriterSettings, resolveStreamingWriterSettings } from './streamingWriterSettings.js';
+import { type OptimizationModeConfig } from './writerTypes.internal.js';
+
+/**
+ * Configuration for batch size adaptation behavior.
+ */
+export interface BatchSizeAdapterConfig {
+    /** Initial optimization mode (default: fast) */
+    startMode?: 'fast' | 'ru-limited';
+    /** Fast mode batch sizes and growth */
+    fast?: Partial<ModeConfig>;
+    /** RU-limited mode batch sizes and growth */
+    ruLimited?: Partial<ModeConfig>;
+    /** Buffer memory limit in MB (default: 24) */
+    bufferMemoryLimitMB?: number;
+    /** Minimum batch size (default: 1) */
+    minBatchSize?: number;
+}
+
+/**
+ * Adaptive batch size manager for dual-mode operation (fast vs. RU-limited).
+ *
+ * This class encapsulates the adaptive batching logic extracted from BaseDocumentWriter.
+ * It handles:
+ * - Dual-mode operation: Fast mode (vCore/local) vs RU-limited mode (Cosmos DB RU)
+ * - Batch size growth after successful writes
+ * - Batch size shrinking on throttle detection
+ * - Mode switching from Fast to RU-limited on first throttle
+ *
+ * The adapter maintains internal state and should be created per-writer instance.
+ *
+ * @example
+ * const adapter = new BatchSizeAdapter();
+ *
+ * // Get current batch size for buffer management
+ * const batchSize = adapter.getCurrentBatchSize();
+ *
+ * // On successful write
+ * adapter.grow();
+ *
+ * // On throttle with partial progress
+ * adapter.handleThrottle(50); // 50 docs succeeded before throttle
+ *
+ * // Check buffer constraints
+ * const constraints = adapter.getBufferConstraints();
+ */
+export class BatchSizeAdapter {
+    private readonly config: ResolvedStreamingWriterSettings['batching'];
+    private readonly modes: Record<OptimizationModeConfig['mode'], OptimizationModeConfig>;
+
+    /** Current optimization mode configuration */
+    private currentMode: OptimizationModeConfig;
+
+    /** Current batch size (adaptive, changes based on success/throttle) */
+    private currentBatchSize: number;
+
+    private readonly logger: TaskLogger;
+
+    constructor(config?: BatchSizeAdapterConfig, options?: DataTransferOptions) {
+        this.logger = options?.logger ?? noopDataTransferLogger;
+        this.config = resolveStreamingWriterSettings(undefined, { batching: config }).batching;
+        this.modes = {
+            fast: { mode: 'fast', ...this.config.fast },
+            'ru-limited': { mode: 'ru-limited', ...this.config.ruLimited },
+        };
+        this.currentMode = this.modes[this.config.startMode];
+        this.currentBatchSize = this.currentMode.initialBatchSize;
+    }
+
+    /**
+     * Gets the current batch size for buffer management.
+     */
+    getCurrentBatchSize(): number {
+        return this.currentBatchSize;
+    }
+
+    /**
+     * Gets the current optimization mode ('fast' or 'ru-limited').
+     */
+    getCurrentMode(): 'fast' | 'ru-limited' {
+        return this.currentMode.mode;
+    }
+
+    /**
+     * Gets buffer constraints for streaming document writers.
+     *
+     * @returns Optimal document count and memory limit
+     */
+    getBufferConstraints(): { optimalDocumentCount: number; maxMemoryMB: number } {
+        return {
+            optimalDocumentCount: this.currentBatchSize,
+            maxMemoryMB: this.config.bufferMemoryLimitMB,
+        };
+    }
+
+    /**
+     * Grows the batch size after a successful write operation.
+     *
+     * Default growth behavior depends on current optimization mode:
+     * - Fast mode: 20% growth per success, max 2000 documents
+     * - RU-limited mode: 10% growth per success, max 1000 documents
+     */
+    grow(): void {
+        if (this.currentBatchSize >= this.currentMode.maxBatchSize) {
+            return;
+        }
+
+        const previousBatchSize = this.currentBatchSize;
+        const growthFactor = this.currentMode.growthFactor;
+        const percentageIncrease = Math.floor(this.currentBatchSize * growthFactor);
+        const minimalIncrease = this.currentBatchSize + 1;
+
+        this.currentBatchSize = Math.min(this.currentMode.maxBatchSize, Math.max(percentageIncrease, minimalIncrease));
+
+        this.logger.trace(
+            `[BatchSizeAdapter] Success: Growing batch size ${previousBatchSize} → ${this.currentBatchSize} (mode: ${this.currentMode.mode}, growth: ${((growthFactor - 1) * 100).toFixed(1)}%)`,
+        );
+    }
+
+    /**
+     * Shrinks the batch size after encountering throttling with partial progress.
+     *
+     * Sets the batch size to the proven capacity (number of documents that
+     * were successfully written before throttling occurred).
+     *
+     * @param successfulCount Number of documents successfully written before throttling
+     */
+    shrink(successfulCount: number): void {
+        const previousBatchSize = this.currentBatchSize;
+        this.currentBatchSize = Math.max(this.config.minBatchSize, successfulCount);
+
+        this.logger.trace(
+            `[BatchSizeAdapter] Throttle: Adjusting batch size ${previousBatchSize} → ${this.currentBatchSize} (proven capacity: ${successfulCount})`,
+        );
+    }
+
+    /**
+     * Halves the batch size after throttling with no progress.
+     *
+     * Used when a throttle occurs before any documents are processed.
+     */
+    halve(): void {
+        const previousBatchSize = this.currentBatchSize;
+        this.currentBatchSize = Math.max(this.config.minBatchSize, Math.floor(this.currentBatchSize / 2) || 1);
+
+        this.logger.trace(
+            `[BatchSizeAdapter] Throttle with no progress: Halving batch size ${previousBatchSize} → ${this.currentBatchSize}`,
+        );
+    }
+
+    /**
+     * Handles throttle detection, switching to RU-limited mode if necessary.
+     *
+     * This one-way transition occurs when the first throttle error is detected,
+     * indicating the target database has throughput limits.
+     *
+     * Default mode changes:
+     * - Initial batch size: 500 → 100
+     * - Max batch size: 2000 → 1000
+     * - Growth factor: 20% → 10%
+     *
+     * @param successfulCount Number of documents successfully written before throttling
+     */
+    handleThrottle(successfulCount: number): void {
+        // Switch to RU-limited mode if still in fast mode
+        if (this.currentMode.mode === 'fast') {
+            this.switchToRuLimitedMode(successfulCount);
+        }
+
+        // Adjust batch size based on partial progress
+        if (successfulCount > 0) {
+            this.shrink(successfulCount);
+        } else {
+            this.halve();
+        }
+    }
+
+    /**
+     * Switches from Fast mode to RU-limited mode.
+     */
+    private switchToRuLimitedMode(successfulCount: number): void {
+        const previousMode = this.currentMode.mode;
+        const previousBatchSize = this.currentBatchSize;
+        const previousMaxBatchSize = this.currentMode.maxBatchSize;
+
+        // Switch to RU-limited mode
+        this.currentMode = this.modes['ru-limited'];
+
+        // Reset batch size based on proven capacity vs RU mode initial
+        if (successfulCount <= this.currentMode.initialBatchSize) {
+            // Low proven capacity: respect what actually worked
+            this.currentBatchSize = Math.max(this.config.minBatchSize, successfulCount);
+        } else {
+            // High proven capacity: start conservatively with RU initial, can grow later
+            this.currentBatchSize = Math.min(successfulCount, this.currentMode.maxBatchSize);
+        }
+
+        this.logger.info(
+            `[BatchSizeAdapter] Switched from ${previousMode} mode to ${this.currentMode.mode} mode after throttle. ` +
+                `Batch size: ${previousBatchSize} → ${this.currentBatchSize}, Max: ${previousMaxBatchSize} → ${this.currentMode.maxBatchSize}`,
+        );
+    }
+
+    /**
+     * Resets the adapter to its configured initial mode and batch size.
+     * Useful for testing or reusing the adapter.
+     */
+    reset(): void {
+        this.currentMode = this.modes[this.config.startMode];
+        this.currentBatchSize = this.currentMode.initialBatchSize;
+    }
+}
