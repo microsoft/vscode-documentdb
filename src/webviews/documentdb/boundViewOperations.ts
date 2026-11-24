@@ -97,6 +97,8 @@ export function throwIfBoundViewUnavailable(binding: ConnectionBinding, error: u
         case 'credentialsMissing':
         case 'identityChanged':
             throw new ConnectionUnavailableError(kind);
+        case 'clientClosed':
+            throw new ConnectionUnavailableError('unreachable');
     }
 }
 

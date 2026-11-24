@@ -1785,9 +1785,9 @@ one loop.
      of a failed command long enough to classify it. A terminal kind (auth, closed client) is rethrown so
      that `runWithClient` returns `unavailable`. An unsupported command, such as `serverStatus` on some
      servers, stays an ordinary partial sample with its entry in `errors`.
-2. The webview poll effect depends on the overlay state: it stops on `unavailable` or on a `disable`
-   message, and starts again after Reconnect. React's effect cleanup keeps it to one loop; no extra loop
-   token.
+2. The webview poll effect stops on `unavailable` or a `disable` message, even when the dialog is
+   dismissed to copy contents. It starts again only after Retry succeeds. React's effect cleanup
+   keeps it to one loop; no extra loop token.
 3. A ping that resolves while the overlay shows is ignored (the WI-6 webview rule), so it cannot clear the
    overlay.
 4. Visibility pause and backoff are the rest of #1091. Do them here only if they are trivial; otherwise
@@ -1803,6 +1803,12 @@ one loop.
 - an unsupported `serverStatus` still yields a partial sample and keeps polling.
 
 **Progress:**
+
+- The Dashboard polls with a background-only binding. Auth and closed-client errors from
+  inside the sampler return an unavailable result; unsupported `serverStatus` still returns a
+  partial sample. Build and 131 focused tests passed. The browser fixture showed no polls
+  during disconnect, copy mode or reveal; Retry restarted one loop. A held ping released
+  after disconnect did not clear the dialog.
 
 ---
 

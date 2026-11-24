@@ -2544,9 +2544,14 @@ const clusterDashboardScenarios = {
     default: clusterDashboardBase,
     disconnected: {
         ...clusterDashboardBase,
+        config: { ...fixtures.clusterDashboard.config, refreshIntervalMs: 2000 },
         readiness: { ...clusterDashboardBase.readiness, content: ['stage0_inventory'] },
         rpc: {
             ...clusterDashboardBase.rpc,
+            'clusterDashboard.measureRtt': {
+                ...fixtures.clusterDashboard.rpc['clusterDashboard.measureRtt'],
+                holdReply: true,
+            },
             'clusterDashboard.recoverUnavailable': {
                 type: 'mutation',
                 results: [{ recovered: { text: 'Reconnected' } }],
@@ -2575,6 +2580,7 @@ const clusterDashboardScenarios = {
                         },
                     },
                     { action: 'waitFor', name: 'disconnected overlay', selector: '.disconnectedOverlay' },
+                    { action: 'releaseReply', name: 'deliver the old health poll', path: 'clusterDashboard.measureRtt' },
                 ],
             },
             {

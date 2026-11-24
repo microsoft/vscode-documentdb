@@ -116,6 +116,7 @@ export const ClusterDashboard = (): JSX.Element => {
         createInventoryViewState(configuration.selectedDatabaseName),
     );
     const [unavailable, setUnavailable] = useState<ConnectionUnavailableDetails>();
+    const [recoveryDialogDismissed, setRecoveryDialogDismissed] = useState(false);
     const [recovering, setRecovering] = useState(false);
     const [recoveryAnnouncement, setRecoveryAnnouncement] = useState<string>();
     const unavailableRef = useRef<ConnectionUnavailableDetails | undefined>(undefined);
@@ -126,6 +127,7 @@ export const ClusterDashboard = (): JSX.Element => {
         operationRevisionRef.current += 1;
         unavailableRef.current = failure;
         setUnavailable(failure);
+        setRecoveryDialogDismissed(false);
         setRecovering(false);
         setRecoveryAnnouncement(undefined);
         setIsRefreshingStorage(false);
@@ -142,7 +144,7 @@ export const ClusterDashboard = (): JSX.Element => {
     const startOperation = useCallback((revealUnavailable = false): number | undefined => {
         if (unavailableRef.current !== undefined) {
             if (revealUnavailable) {
-                setUnavailable(unavailableRef.current);
+                setRecoveryDialogDismissed(false);
             }
             return undefined;
         }
@@ -348,7 +350,11 @@ export const ClusterDashboard = (): JSX.Element => {
 
     // Health polling loop. Failures are absorbed so a transient error does not flip the
     // header to Disconnected on the first missed sample.
+    const pollingPaused = unavailable !== undefined;
     useEffect(() => {
+        if (pollingPaused) {
+            return;
+        }
         const tick = (): void => {
             const revision = startOperation();
             if (revision === undefined || sampleInFlightRef.current || !isVisibleRef.current) {
@@ -386,6 +392,7 @@ export const ClusterDashboard = (): JSX.Element => {
     }, [
         configuration.refreshIntervalMs,
         isOperationCurrent,
+        pollingPaused,
         showUnavailable,
         startOperation,
         trpcClient,
@@ -783,8 +790,8 @@ export const ClusterDashboard = (): JSX.Element => {
 
     return (
         <DisconnectedOverlay
-            unavailable={unavailable}
-            onDismiss={() => setUnavailable(undefined)}
+            unavailable={recoveryDialogDismissed ? undefined : unavailable}
+            onDismiss={() => setRecoveryDialogDismissed(true)}
             onAction={handleUnavailableAction}
             recovering={recovering}
         >

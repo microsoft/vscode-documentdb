@@ -176,6 +176,50 @@ describe('clusterDashboardRouter create actions', () => {
                 },
             });
         });
+
+        it.each([
+            ['signInRequired', 'signInRequired'],
+            ['credentialsRejected', 'credentialsRejected'],
+            ['clientClosed', 'unreachable'],
+        ] as const)('maps a %s ping failure to an unavailable poll result', async (kind, reason) => {
+            const failure = new Error('test ping failure');
+            const command = vi.fn(async (input: Document): Promise<Document> => {
+                if (input.ping === 1) {
+                    throw failure;
+                }
+                return { uptime: 42 };
+            });
+            vi.mocked(ClustersClient.resolveBoundClient).mockResolvedValueOnce({
+                binding,
+                getMongoClient: () => ({ db: () => ({ admin: () => ({ command }) }) }),
+            } as unknown as ClustersClient);
+            vi.mocked(ClustersClient.reportFailure).mockReturnValueOnce(kind);
+
+            await expect(createCallerFactory(clusterDashboardRouter)(createContext()).measureRtt()).resolves.toMatchObject({
+                unavailable: { reason },
+            });
+            expect(ClustersClient.reportFailure).toHaveBeenCalledWith(binding, failure);
+        });
+
+        it('returns a partial sample for an unsupported serverStatus command', async () => {
+            const command = vi.fn(async (input: Document): Promise<Document> => {
+                if (input.serverStatus === 1) {
+                    throw Object.assign(new Error('unsupported serverStatus'), { code: 59 });
+                }
+                return { ok: 1 };
+            });
+            vi.mocked(ClustersClient.resolveBoundClient).mockResolvedValueOnce({
+                binding,
+                getMongoClient: () => ({ db: () => ({ admin: () => ({ command }) }) }),
+            } as unknown as ClustersClient);
+            vi.mocked(ClustersClient.reportFailure).mockReturnValueOnce('other');
+
+            await expect(createCallerFactory(clusterDashboardRouter)(createContext()).measureRtt()).resolves.toMatchObject({
+                pingLatencyMs: expect.any(Number),
+                uptimeSeconds: null,
+                errors: [expect.stringContaining('serverStatus')],
+            });
+        });
     });
 
     it('returns unavailable when a storage collector observes rejected credentials', async () => {
