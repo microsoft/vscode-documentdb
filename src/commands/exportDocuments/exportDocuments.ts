@@ -7,22 +7,36 @@ import { callWithTelemetryAndErrorHandling, type IActionContext, parseError } fr
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import * as vscode from 'vscode';
-import { ClustersClient, type FindQueryParams } from '../../documentdb/ClustersClient';
+import { type ConnectionBinding, type FindQueryParams } from '../../documentdb/ClustersClient';
+import { resolveTransferClient } from '../../documentdb/resolveTransferClient';
 import { ext } from '../../extensionVariables';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { appendToFile } from '../../utils/fs/appendToFile';
 import { getRootPath } from '../../utils/workspacUtils';
+import { rethrowBoundCommandUnavailable } from '../rethrowBoundCommandUnavailable';
 
-export async function exportEntireCollection(context: IActionContext, node?: CollectionItem) {
+export async function exportEntireCollection(
+    context: IActionContext,
+    node?: CollectionItem,
+    _nodes?: CollectionItem[],
+    options?: { readonly source?: string; readonly binding?: ConnectionBinding },
+): Promise<void> {
     context.telemetry.properties.experience = node?.experience.api;
 
-    return exportQueryResults(context, node);
+    try {
+        await exportQueryResults(context, node, options);
+    } catch (error) {
+        if (options?.binding) {
+            rethrowBoundCommandUnavailable(context, error);
+        }
+        throw error;
+    }
 }
 
 export async function exportQueryResults(
     context: IActionContext,
     node?: CollectionItem,
-    props?: { queryText?: string; queryParams?: FindQueryParams; source?: string },
+    props?: { queryText?: string; queryParams?: FindQueryParams; source?: string; binding?: ConnectionBinding },
 ): Promise<void> {
     context.telemetry.properties.experience = node?.experience.api;
 
@@ -39,7 +53,7 @@ export async function exportQueryResults(
         return;
     }
 
-    const client = await ClustersClient.getClient(node.cluster.clusterId);
+    const client = await resolveTransferClient(node.cluster.clusterId, props?.binding);
 
     const docStreamAbortController = new AbortController();
 

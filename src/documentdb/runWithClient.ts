@@ -3,16 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { AuthMethodId } from './auth/AuthMethodId';
 import { ClustersClient, type ConnectionBinding } from './ClustersClient';
 import { classifyConnectionFailure, type ConnectionFailure } from './connectionFailures';
 import { ConnectionUnavailableError, type ConnectionUnavailableReason } from './ConnectionUnavailableError';
+import { CredentialCache } from './CredentialCache';
+import { type ClientStartupTrigger } from './utils/startupFailureTelemetry';
 
-interface ResolveOptions {
+interface RunOptions {
     readonly background?: boolean;
-}
-
-interface RunOptions extends ResolveOptions {
-    resolveClient(binding: ConnectionBinding, options: ResolveOptions): Promise<ClustersClient>;
+    readonly trigger?: ClientStartupTrigger;
 }
 
 interface Unavailable {
@@ -31,21 +31,22 @@ function unavailableFor(kind: ConnectionFailure['kind'] | undefined): Unavailabl
     }
 }
 
-/** @internal The bound resolver and conversion to a surface response are supplied by WI-6. */
 export async function runWithClient<T>(
     binding: ConnectionBinding,
     op: (client: ClustersClient) => Promise<T>,
-    { resolveClient, background }: RunOptions,
+    options?: RunOptions,
 ): Promise<T | Unavailable> {
+    const credentials = CredentialCache.getCredentials(binding.clusterId);
+    const authMethod = credentials ? (credentials.authMechanism ?? AuthMethodId.NativeAuth) : undefined;
     let client: ClustersClient;
     try {
-        client = await resolveClient(binding, { background });
+        client = await ClustersClient.resolveBoundClient(binding, options);
     } catch (error) {
         // No operation ran, so there is no client generation to report against.
         const unavailable =
             error instanceof ConnectionUnavailableError
                 ? { unavailable: { reason: error.reason } }
-                : unavailableFor(classifyConnectionFailure(error).kind);
+                : unavailableFor(classifyConnectionFailure(error, authMethod).kind);
         if (unavailable) {
             return unavailable;
         }

@@ -88,8 +88,8 @@ result may continue, but say so in the message. Record the result in the Progres
 | OP-1 | WI-1, CP-0         | **Two parts.** (a) Before the handler change: does an expired token on a new socket get code 18 or a socket close? (b) After it: renewal succeeds. |
 | OP-2 | WI-3, CP-W3        | The azext workflow checks on the packaged VSIX: Azure sign-in, discovery, filters, deep links, wizards, Azure Resources view.                      |
 | OP-3 | WI-5 done          | OT-2's tree part with a real sign-out: Sign in again, a dismissal, no reprompt.                                                                    |
-| OP-4 | WI-6 done          | OT-1 (short form, with the WI-4 hook) and OT-3(a) and (b) on a dev build.                                                                          |
-| OP-5 | WI-7 done          | OT-7 on a dev build: Disconnect during a copy, export or import, during an in-flight query or save, and a folder delete with a connected child.    |
+| OP-4 | WI-6 done          | Cleared: short OT-1 and OT-3 identity-guard evidence; the original password-only recovery check was waived by the operator.                        |
+| OP-5 | WI-7 done          | OT-7, including **Keep open (disabled)** and its pushed disable message, plus OT-3's immediate lock after a saved edit (decision 0018).            |
 | OP-6 | Before PR F (CP-5) | OT-1 to OT-7 on the packaged VSIX, with at least one real wait of two hours or more (PR F step 3).                                                 |
 
 ### Per-PR workflow
@@ -405,7 +405,7 @@ a checkpoint changes them.
     new panels run as identity B while panels opened as A stay disabled.
   - `reason` is one of: `signInRequired`, `credentialsRejected`, `credentialsMissing`, `credentialsChanged`,
     `identityChanged`, `userDisconnected`, `connectionRemoved`, `unreachable`.
-  - `action` is one of: `reconnect`, `signInAgain`, `updateCredentials`, `close`.
+  - `action` is `retry` or `close`. Close view is always available.
   - Reasons are bounded enums. The webview gets the localized text and the action from the host.
   - The only push is teardown: Disconnect with Keep open calls each registered surface's `disable(reason)`
     (WI-6 host step 1).
@@ -1375,7 +1375,7 @@ webview as a structured unavailable result, not a generic query error.
 
 - Collection View (all tabs), Document View and the Cluster Dashboard resolve their client per operation
   through a binding.
-- They show an unavailable state (C-5) with a banner and one action.
+- They show an unavailable state (C-5) with a dimmed view, Close view, and a repair action when supported.
 - They keep all user state.
 - They never apply stale results.
 - They never run under another identity.
@@ -1450,17 +1450,19 @@ approved plan allows; the webview half then stacks on the host half without wait
 ### Webviews
 
 1. **Shared UI.**
-   - A `DisconnectedBanner` component: a Fluent `MessageBar` with intent `warning`, the host-provided
-     reason text and **one** action button. It uses `role="status"` and `aria-live="polite"`.
+   - A feature-local `DisconnectedOverlay` uses a controlled Fluent `Dialog` to dim the webview
+     and show the host-provided reason in the center. Show **Close view** and at most one supported
+     repair action (decision 0016). Focus stays in the dialog; Escape and backdrop clicks do not
+     dismiss it or close the view.
    - It shows when a procedure returns `unavailable`, or when the host's `disable(reason)` sends its one
      message to the panel over the existing webview channel.
    - Put it in the shared webview components folder, and run the detecting-accessibility-issues skill on
      it.
 2. **Disabling.**
-   - While the banner shows, every action that talks to the server is disabled: run query, paging,
+   - While the overlay shows, every action that talks to the server is disabled: run query, paging,
      refresh, save, delete, insert, index actions, Query Insights stages and AI calls.
-   - Editors stay **editable**. The user can keep typing.
-   - A response that arrives while the banner shows is ignored.
+   - The underlying view is inert. Editors stay mounted and retain their contents and dirty state.
+   - A response that arrives while the overlay shows is ignored.
    - **A reply never overwrites a newer edit.** The Document View applies a save or load reply to the editor
      only if the editor content has not changed since the request was sent; otherwise it keeps the edit and
      stays dirty. Today's save handler (`documentView.tsx`) replaces the content and clears `isDirty`
@@ -1471,15 +1473,13 @@ approved plan allows; the webview half then stacks on the host half without wait
    - **Document View:** the dirty editor content and `isDirty`.
    - **Dashboard:** the last data (WI-8 stops the polling).
 4. **Actions.**
-   - **Reconnect** (same fingerprint): clear the latch if one is set, and resolve again. On success,
-     remove the banner and re-enable the actions; the live region announces "Reconnected". The query is
-     not run automatically, and there is **no** "out of date" notice (decision 0010; see #1106). After a
-     Disconnect the credentials are still cached (0011), so this is silent.
-   - **Reconnect after an identity change:** an explicit rebind to the new fingerprint, then show "Now
-     connected as {label}" (OT-3).
-   - **Sign in again:** the WI-5 command.
-   - **Update credentials:** the existing command.
-   - **Close:** dispose the panel.
+   - **Retry:** resolve only the original fingerprint, silently and without clearing a latch.
+     After a same-identity repair in the tree, recovery removes the overlay without replaying the
+     failed operation. The live region announces "Reconnected"; there is no out-of-date notice
+     (decision 0010; see #1106). Sign-in and credential changes stay in the tree.
+   - **Close view:** the only action after an identity change or removal. Reopen from the tree
+     to use a different identity. A dirty Document View warns that closing discards unsaved
+     changes; do not open a second prompt (decision 0017).
 5. **L2-dev scenarios** (`scenarios.ts` and `fixtures.ts`):
    - `collectionView/disconnected-signInRequired`: query text kept, Run disabled, no host calls when
      Run is clicked;
@@ -1503,7 +1503,7 @@ behave as today.
 - `ClusterSession` no longer stores a client (a type-level or structural test);
 - a stale result is dropped before any host-side mutation, including a reply that started before a
   Disconnect and arrives after a Reconnect as the same user;
-- the webview ignores a response that arrives while the banner shows;
+- the webview ignores a response that arrives while the overlay shows;
 - one submission for a write whose reply is lost;
 - an import started from Collection View as identity A, with its file picker left open while the cluster
   moves to B, writes nothing until the user starts it again;
@@ -1516,6 +1516,64 @@ behave as today.
 - OT-1 and OT-3(a) can be reproduced with the WI-4 hook.
 
 **Progress:**
+
+- **Host foundation:** Started PR5 from verified PR4 `d422d065b` while the independent
+  packaged-worker smoke test is pending. Added the disposable, cluster-scoped registry.
+  The bound resolver permits a new generation of the same identity and refuses to start
+  or use a client for a changed identity. `runWithClient` uses that resolver and reports
+  startup credential rejection without submitting the operation (PR4 review N1). Build and
+  86 focused tests passed.
+- **Collection View host slice:** `ClusterSession` holds a binding instead of a client.
+  Collection View, Query Insights, and the index advisor resolve the client per operation.
+  Check the epoch, latch, and identity before applying results to session caches. Build
+  and 193 focused tests passed. Procedure response shapes are unchanged for now; structured
+  unavailable results and the remaining panels are subsequent WI-6 slices.
+- **Webview design decision:** After the advisor's banner draft, the operator chose the
+  full-view disabled overlay in [decision 0016](../decisions.md#0016-keep-disconnected-webviews-open-under-a-full-view-overlay).
+  It keeps the content mounted and inert, uses a polite announcement, and shows only Close
+  when there is no supported repair. The shared component builds and passed its focused
+  test; panels are not yet wired. Keep both planned stale-reply browser scenarios.
+- **Document View and Dashboard host slice:** Both capture their binding on the host.
+  Document reads and saves resolve per operation, and a stale save cannot update the tab
+  title or show confirmation. Dashboard database calls use the binding; forwarded commands
+  check it before dispatch. Build and 35 focused host and overlay tests passed together.
+- **Document View overlay:** The panel receives structured unavailable replies or a typed
+  disable message. It stays open with the draft intact and offers explicit Close and supported
+  repairs. Dismissing sign-in does not report recovery; a different account requires an explicit
+  rebind. A stale Reconnect cannot clear a Remove latch. Build and 26 focused tests passed.
+  The default, dirty-disconnect, and stale-save-after-reconnect scenarios passed in dark,
+  light, and high-contrast themes. The two recovery scenarios each sent one save and no
+  automatic replay.
+- **Dashboard overlay:** Added structured unavailable replies, registration, and explicit
+  recovery. The disabled view keeps its last inventory and filter, and does not submit
+  automatic requests while the overlay is visible. The build, 118 focused view tests, and
+  66 browser harness tests passed. Default and disconnected Dashboard scenarios passed in
+  dark, light, and high-contrast themes. Next: Collection View recovery and bound handoffs.
+- **Transfer command guard:** Import and export can receive the Collection View's host-only
+  binding. After the file picker, they resolve that identity before opening a stream or writing.
+  A bound import keeps its original client for every batch; tree-originated transfers keep their
+  existing behavior. The build and 91 focused tests passed, including an identity change while
+  the import picker is open. Collection View command forwarding and WI-7 task leases are separate.
+- **Collection View overlay:** Documents, Indexes and Query Insights share the view's connection
+  binding. The view preserves its query and applied results, returns typed unavailable responses,
+  and forwards the initiating binding to imports and exports. The sign-in and late-page browser
+  scenarios passed in all three themes before the dialog refinement. After adopting Fluent Dialog,
+  all eight dark-theme scenarios for Collection View, Document View and Dashboard passed.
+  The dialog uses **Disconnected** for an explicit disconnect, **Connection lost** for an
+  unreachable connection, and **Close view** for explicit disposal.
+- **Final recovery design:** Decision 0017 supersedes the earlier in-view repair and rebind
+  experiments. The operator approved a short status title, separate next-step text, and
+  **Retry** beside **Close view** in an interactive Collection View preview on 2026-11-24.
+  Credential repair stays in the tree; Retry keeps the original identity and never resubmits an
+  operation. The dirty Document View warning stays in the dialog, without another prompt.
+- **OP-4 partial live evidence (`1.1.1-alpha.2`):** The operator switched between Entra and invalid
+  username/password credentials rather than testing two valid Native users. They saw Dashboard
+  move from Retry/Close view to Close view only as the identity change was recognized. Collection
+  View went directly to Close view only on the next query.
+- **OP-4 cleared (`1.1.1-alpha.3`, 2026-11-24):** The operator reported that silent Entra renewal
+  passed and explicitly lifted the gate without running the same-user password-only rotation test.
+  The earlier authentication-change result is accepted as the identity-guard evidence.
+  OP-5 still covers **Keep open (disabled)** and the pushed disable notification.
 
 ---
 
@@ -1590,8 +1648,8 @@ behave as today.
         worker. **Playground:** stop the worker. The latch keeps both from respawning (F-15).
      4. Close the client (`deleteClient`). Clear the Entra failure registry and `SchemaStore.clearCluster`.
         Clear the `CredentialCache` entry and `lastVerifiedIdentity` **only** when `dropCredentials` is
-        set (Remove). Disconnect keeps both (A3, decision 0011), so Connect and a tab's Reconnect are
-        silent and pinned to the same identity.
+        set (Remove). Disconnect keeps both (A3, decision 0011), so tree Connect and then tab Retry
+        can reuse the same identity.
      5. Refresh the tree (T-2).
    - **Never touched:** VS Code auth sessions, the managed identity cache, the ARM cache.
    - **Keys:** every store keeps its current `clusterId` matching. Provider-specific equality is out of
@@ -1612,7 +1670,8 @@ behave as today.
      - Follow [settings/README.md](../../settings/README.md) for the group, `order` and the ID naming
        rules. If an existing group fits better than `connections`, use it and record the final ID in
        Progress.
-     - The same choice applies to Remove Connection and to identity-changing credential updates.
+     - The same choice applies to Remove Connection. Saved connection edits keep old views open
+       and locked without asking for a tab choice (decision 0018).
      - The setting never skips the unsaved-edits confirmation: when Close all is chosen and an editor is
        dirty, that confirmation still appears.
      - Skip the modal when no surfaces are registered.
@@ -1626,27 +1685,19 @@ behave as today.
      folder, its connections, panels, drafts and shells intact. Descendants without a client or open
      surface still get their `CredentialCache` entry and schema cleared, as Remove does.
 5. **Update Credentials and Update Connection String.**
-   - Compute the **new** fingerprint from the wizard context before saving.
-   - **Make save success explicit** (F-19): the execute step must report whether the save succeeded, for
-     example with a flag on the wizard context. Today it catches failures and returns normally.
-   - **Same fingerprint:** save. Only after a confirmed success, call `invalidate` and replace the client
-     with a new generation; surfaces continue.
-   - **Different fingerprint:**
-     1. `confirmTeardown` **before** saving.
-     2. `latchForTeardown` **before** saving. On a conflict, stop: nothing is saved. Now no import, task or
-        connect can start while the save runs.
-     3. Save.
-     4. **Storage decides, not the success flag** (F-21). Re-read the stored connection and compute its
-        fingerprint:
-        - it differs from the live binding (a full save, **or** a partial one where the secrets were
-          written): `commitTeardown` with reason `credentialsChanged` and `dropCredentials: false`, so what
-          is stored is what the next connect uses. `lastVerifiedIdentity` is replaced on the next successful
-          connect. If the save reported a failure, also tell the user the change may be incomplete and offer
-          Update Credentials;
-        - it equals the live binding (nothing reached storage): clear the latch. The old binding stays
-          usable, and the user is told the save failed.
-   - The latch and the `invalidate` call make sure a concurrent connect cannot publish the old credentials
-     after the change.
+   - Follow decision 0018: do not classify edits into same- and different-fingerprint recovery
+     flows or ask whether to close tabs. Check for task conflicts, fence new operations while
+     persisting the edit, and make the save result explicit (F-19).
+   - **Storage decides, not the success flag** (F-21). Compare the relevant before/after stored
+     connection settings in memory, including credentials; never log or persist the comparison.
+     If storage is unchanged, release the save fence without retiring the old views. Preserve
+     existing failure reporting for a failed save.
+   - If storage changed, retire the old bindings, invalidate the old client and cached settings,
+     and push `credentialsChanged` to the affected views. They keep their contents but cannot
+     Retry; new views use the saved settings. If the save reported a failure, warn that the
+     change may be incomplete. Fence concurrent startup so it cannot publish the old credentials.
+   - Keep the existing identity checks for other sources of change. Silent token renewal, a
+     same-account sign-in and reconnect with unchanged settings do not retire old bindings.
    - Add a **Disconnect** button to the D12 modal for open shells.
 6. **Telemetry.**
    - One `connection.disconnect` event with `source` (`command`, `remove`, `credentialsChanged`),
@@ -1660,7 +1711,7 @@ behave as today.
   cluster is not blocked; Disconnect succeeds once the task is done or stopped;
 - a token response that arrives after Disconnect is ignored;
 - Reconnect uses the current credentials and cloud settings;
-- after Disconnect, a tab's Reconnect and the tree's Connect succeed without the tree reloading
+- after Disconnect, tree Connect followed by tab Retry succeeds without the tree reloading
   credentials and without a prompt (native, Entra and discovery with a typed password); after Remove,
   the `CredentialCache` entry and `lastVerifiedIdentity` are gone;
 - Remove reuses the same teardown;
@@ -1673,6 +1724,8 @@ behave as today.
 - an import attempted while Update Credentials is saving is refused with the latch's reason, and nothing
   is half-applied;
 - a save that fails before any write keeps the old binding and clears the latch;
+- a cancelled or identical edit keeps old views usable; a saved password-only edit permanently
+  locks existing views with their contents kept and no tab-choice prompt;
 - a save whose metadata write fails after the secret write ends in teardown under `credentialsChanged`,
   never in a split state (old client, new stored secrets);
 - deleting a folder with a connected child that has a dirty Document View and a live shell: cancelling
@@ -1692,7 +1745,7 @@ behave as today.
 
 ## WI-8: Cluster Dashboard health polling (PR 6)
 
-**Outcome:** the poll stops when the cluster is unavailable, shows the banner, and resumes with exactly
+**Outcome:** the poll stops when the cluster is unavailable, shows the overlay, and resumes with exactly
 one loop.
 
 **Steps:**
@@ -1703,18 +1756,18 @@ one loop.
      of a failed command long enough to classify it. A terminal kind (auth, closed client) is rethrown so
      that `runWithClient` returns `unavailable`. An unsupported command, such as `serverStatus` on some
      servers, stays an ordinary partial sample with its entry in `errors`.
-2. The webview poll effect depends on the banner state: it stops on `unavailable` or on a `disable`
+2. The webview poll effect depends on the overlay state: it stops on `unavailable` or on a `disable`
    message, and starts again after Reconnect. React's effect cleanup keeps it to one loop; no extra loop
    token.
-3. A ping that resolves while the banner shows is ignored (the WI-6 webview rule), so it cannot clear the
-   banner.
+3. A ping that resolves while the overlay shows is ignored (the WI-6 webview rule), so it cannot clear the
+   overlay.
 4. Visibility pause and backoff are the rest of #1091. Do them here only if they are trivial; otherwise
    leave them to #1091.
 
 **Tests** (fake timers):
 
 - no client lookups on ticks or on reveal after Disconnect;
-- a late success does not clear the banner;
+- a late success does not clear the overlay;
 - reconnecting starts exactly one loop;
 - `signInRequired` and `credentialsRejected` stop the loop after one tick, including when they happen
   **inside** the sampler's ping with the tree untouched;

@@ -1,0 +1,30 @@
+.disconnectedOverlayBackground {
+    display: contents;
+}
+
+.disconnectedOverlay {
+    width: min(28rem, calc(100vw - 2rem));
+
+    .disconnectedOverlayTitle,
+    .disconnectedOverlayDetail {
+        text-align: center;
+        overflow-wrap: anywhere;
+    }
+
+    .disconnectedOverlayDetail {
+        p {
+            margin: 0;
+        }
+
+        p + p {
+            margin-top: 8px;
+        }
+    }
+
+    .disconnectedOverlayActions {
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: center;
+        justify-self: stretch;
+    }
+}

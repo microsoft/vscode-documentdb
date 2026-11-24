@@ -24,6 +24,8 @@ export interface RpcFixture {
     readonly results: readonly unknown[];
     readonly keepOpen?: boolean;
     readonly undefinedResult?: boolean;
+    readonly holdReply?: boolean;
+    readonly afterFirst?: { readonly results: readonly unknown[]; readonly holdReply?: boolean };
 }
 
 export type RpcFixtures = Readonly<Partial<Record<FixturePaths, RpcFixture>>>;
@@ -37,12 +39,15 @@ export type FixtureAtPath<T, P extends string> = P extends `${infer Head}.${infe
       : never;
 
 type StreamItem<T> = T extends AsyncIterable<infer Item> ? Item : T;
-// tRPC's JSON-serialized output inference represents void procedures as never. The wire protocol
-// deliberately supports explicit undefined results, so these fixtures retain the host's void type.
-type FixtureResult<T> = [T] extends [never] ? void : StreamItem<T>;
+// tRPC infers never for void outputs, but the extension host sends null for those results.
+type FixtureResult<T> = [T] extends [never] ? void | null : StreamItem<T>;
 export type TypedRpcFixtures = {
-    readonly [P in FixturePaths]?: Omit<RpcFixture, 'results'> & {
+    readonly [P in FixturePaths]?: Omit<RpcFixture, 'results' | 'afterFirst'> & {
         readonly results: readonly FixtureResult<FixtureAtPath<FixtureOutputs, P>>[];
+        readonly afterFirst?: {
+            readonly results: readonly FixtureResult<FixtureAtPath<FixtureOutputs, P>>[];
+            readonly holdReply?: boolean;
+        };
     };
 };
 

@@ -7,11 +7,20 @@ import { Button, ProgressBar, Tab, TabList } from '@fluentui/react-components';
 import { EmojiRegular } from '@fluentui/react-icons';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
-import { type JSX, useEffect, useRef, useState } from 'react';
+import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { type TableDataEntry } from '../../../documentdb/ClusterSession';
+import {
+    type ConnectionRecoveryAction,
+    type ConnectionRecoveryResponse,
+    type ConnectionUnavailableDetails,
+    type ConnectionUnavailableResponse,
+    isConnectionUnavailableMessage,
+    isConnectionUnavailableResponse,
+} from '../../_integration/connectionUnavailable';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { useViewLoadTelemetry } from '../../_integration/useViewLoadTelemetry';
 import { Announcer } from '../../components/accessibility';
+import { DisconnectedOverlay } from '../../components/DisconnectedOverlay';
 import { useSelectiveContextMenuPrevention } from '../../components/useSelectiveContextMenuPrevention';
 import { setCompletionContext } from '../../query-language-support';
 import './collectionView.scss';
@@ -32,7 +41,7 @@ import { ToolbarTableNavigation } from './components/toolbar/ToolbarTableNavigat
 import { ToolbarViewNavigation } from './components/toolbar/ToolbarViewNavigation';
 import { ViewSwitcher } from './components/toolbar/ViewSwitcher';
 import { IndexesTab } from './indexesTab/IndexesTab';
-import { stage1Failed, stage1Succeeded, startStage1Load } from './queryInsightsReducer';
+import { cancelStages12, stage1Failed, stage1Succeeded, startStage1Load } from './queryInsightsReducer';
 import { QueryInsightsMain } from './queryInsightsTab/QueryInsightsTab';
 import { extractErrorCode } from './utils/errorCodeExtractor';
 
@@ -159,11 +168,61 @@ export const CollectionView = (): JSX.Element => {
     // keep Refs updated with the current state
     const currentQueryResultsRef = useRef(currentQueryResults);
     const currentContextRef = useRef(currentContext);
+    const unavailableRef = useRef<ConnectionUnavailableDetails | undefined>(undefined);
+    const lifecycleRevisionRef = useRef(0);
+    const queryRequestRef = useRef(0);
+    const pageRequestRef = useRef(0);
+    const disposedRef = useRef(false);
+    // Dismissing the dialog clears only its render state. The ref still blocks submissions.
+    const [unavailable, setUnavailable] = useState<ConnectionUnavailableDetails>();
+    const [recovering, setRecovering] = useState(false);
+    const [recoveryAnnouncement, setRecoveryAnnouncement] = useState<string>();
+
+    const showUnavailable = useCallback((failure: ConnectionUnavailableDetails): void => {
+        lifecycleRevisionRef.current += 1;
+        unavailableRef.current = failure;
+        setUnavailable(failure);
+        setRecoveryAnnouncement(undefined);
+        setCurrentContext((prev) => ({
+            ...prev,
+            isLoading: false,
+            queryInsights: cancelStages12(prev.queryInsights),
+        }));
+    }, []);
+
+    const beginOperation = useCallback((revealUnavailable = true): number | undefined => {
+        if (unavailableRef.current) {
+            if (revealUnavailable) {
+                setUnavailable(unavailableRef.current);
+            }
+            return undefined;
+        }
+        return lifecycleRevisionRef.current;
+    }, []);
+
+    const isOperationCurrent = useCallback(
+        (revision: number): boolean =>
+            !disposedRef.current && unavailableRef.current === undefined && revision === lifecycleRevisionRef.current,
+        [],
+    );
 
     useEffect(() => {
         currentQueryResultsRef.current = currentQueryResults;
         currentContextRef.current = currentContext;
     }, [currentQueryResults, currentContext]);
+
+    useEffect(() => {
+        const handleMessage = (event: MessageEvent<unknown>): void => {
+            if (isConnectionUnavailableMessage(event.data)) {
+                showUnavailable(event.data.unavailable);
+            }
+        };
+        window.addEventListener('message', handleMessage);
+        return () => {
+            window.removeEventListener('message', handleMessage);
+            disposedRef.current = true;
+        };
+    }, [showUnavailable]);
 
     /**
      * Reset query insights when query changes (not on pagination)
@@ -198,6 +257,10 @@ export const CollectionView = (): JSX.Element => {
      * `startStage1Load` in `queryInsightsReducer.ts`.
      */
     const prefetchQueryInsights = (): void => {
+        const lifecycleRevision = beginOperation(false);
+        if (lifecycleRevision === undefined) {
+            return;
+        }
         // Claim the Stage 1 load from inside the functional updater so the
         // gate reads React's latest queued state via `prev`, never the render
         // closure or a ref. The reset effect's `queryInsights → idle` is
@@ -222,6 +285,13 @@ export const CollectionView = (): JSX.Element => {
         void trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage1
             .query()
             .then((stage1Data) => {
+                if (!isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
+                if (isConnectionUnavailableResponse(stage1Data)) {
+                    showUnavailable(stage1Data.unavailable);
+                    return;
+                }
                 // The reducer auto-chains `s1Loading → s2Loading` so the
                 // Stage 2 fetch effect in QueryInsightsTab picks up
                 // immediately when the user lands on the tab.
@@ -242,6 +312,9 @@ export const CollectionView = (): JSX.Element => {
                 console.debug('Stage 1 data prefetched:', stage1Data);
             })
             .catch((error) => {
+                if (!isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
                 const errorCode = extractErrorCode(error);
                 const message = error instanceof Error ? error.message : String(error);
                 setCurrentContext((prev) => {
@@ -278,6 +351,14 @@ export const CollectionView = (): JSX.Element => {
      */
 
     function getDataForView(selectedView: Views, onSettled?: (loaded: boolean) => void): void {
+        const lifecycleRevision = beginOperation();
+        if (lifecycleRevision === undefined) {
+            onSettled?.(false);
+            return;
+        }
+        const requestRevision = ++pageRequestRef.current;
+        const isCurrent = (): boolean =>
+            requestRevision === pageRequestRef.current && isOperationCurrent(lifecycleRevision);
         switch (selectedView) {
             case Views.TABLE: {
                 const path = currentContext.currentViewState?.currentPath ?? [];
@@ -285,6 +366,13 @@ export const CollectionView = (): JSX.Element => {
                 trpcClient.mongoClusters.collectionView.getCurrentPageAsTable
                     .query(path)
                     .then((result) => {
+                        if (!isCurrent()) {
+                            return;
+                        }
+                        if (isConnectionUnavailableResponse(result)) {
+                            showUnavailable(result.unavailable);
+                            return;
+                        }
                         let tableHeaders: string[];
 
                         /*
@@ -306,6 +394,9 @@ export const CollectionView = (): JSX.Element => {
                         onSettled?.(true);
                     })
                     .catch((error) => {
+                        if (!isCurrent()) {
+                            return;
+                        }
                         onSettled?.(false);
                         void trpcClient.common.displayErrorMessage.mutate({
                             message: l10n.t('Error while loading the data'),
@@ -319,6 +410,13 @@ export const CollectionView = (): JSX.Element => {
                 trpcClient.mongoClusters.collectionView.getCurrentPageAsTree
                     .query()
                     .then((result) => {
+                        if (!isCurrent()) {
+                            return;
+                        }
+                        if (isConnectionUnavailableResponse(result)) {
+                            showUnavailable(result.unavailable);
+                            return;
+                        }
                         setCurrentQueryResults((prev) => ({
                             ...prev,
                             treeData: result,
@@ -326,6 +424,9 @@ export const CollectionView = (): JSX.Element => {
                         onSettled?.(true);
                     })
                     .catch((error) => {
+                        if (!isCurrent()) {
+                            return;
+                        }
                         onSettled?.(false);
                         void trpcClient.common.displayErrorMessage.mutate({
                             message: l10n.t('Error while loading the data'),
@@ -338,6 +439,13 @@ export const CollectionView = (): JSX.Element => {
                 trpcClient.mongoClusters.collectionView.getCurrentPageAsJson
                     .query()
                     .then((result) => {
+                        if (!isCurrent()) {
+                            return;
+                        }
+                        if (isConnectionUnavailableResponse(result)) {
+                            showUnavailable(result.unavailable);
+                            return;
+                        }
                         setCurrentQueryResults((prev) => ({
                             ...prev,
                             jsonDocuments: result,
@@ -345,6 +453,9 @@ export const CollectionView = (): JSX.Element => {
                         onSettled?.(true);
                     })
                     .catch((error) => {
+                        if (!isCurrent()) {
+                            return;
+                        }
                         onSettled?.(false);
                         void trpcClient.common.displayErrorMessage.mutate({
                             message: l10n.t('Error while loading the data'),
@@ -359,13 +470,26 @@ export const CollectionView = (): JSX.Element => {
         }
     }
 
-    function updateAutoCompletionData(): void {
+    function updateAutoCompletionData(queryRevision: number): void {
+        const lifecycleRevision = beginOperation();
+        if (lifecycleRevision === undefined) {
+            return;
+        }
         trpcClient.mongoClusters.collectionView.getFieldCompletionData
             .query()
             .then((fields) => {
-                setCompletionContext(configuration.sessionId, { fields });
+                if (queryRevision === queryRequestRef.current && isOperationCurrent(lifecycleRevision)) {
+                    if (isConnectionUnavailableResponse(fields)) {
+                        showUnavailable(fields.unavailable);
+                        return;
+                    }
+                    setCompletionContext(configuration.sessionId, { fields });
+                }
             })
             .catch((error) => {
+                if (queryRevision !== queryRequestRef.current || !isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
                 console.debug('Failed to update field completion data:', error);
                 // Non-blocking — completion will work without fields
                 trpcClient.common.reportEvent
@@ -382,7 +506,14 @@ export const CollectionView = (): JSX.Element => {
     }
 
     useEffect(() => {
+        const lifecycleRevision = beginOperation();
+        if (lifecycleRevision === undefined) {
+            return;
+        }
+        const requestRevision = ++queryRequestRef.current;
         setCurrentContext((prev) => ({ ...prev, isLoading: true }));
+        const isCurrent = (): boolean =>
+            requestRevision === queryRequestRef.current && isOperationCurrent(lifecycleRevision);
 
         const isFirstLoad = !firstLoadClaimedRef.current;
         if (isFirstLoad) {
@@ -412,6 +543,13 @@ export const CollectionView = (): JSX.Element => {
                 executionIntent: currentContext.activeQuery.executionIntent ?? 'pagination',
             })
             .then((response) => {
+                if (!isCurrent()) {
+                    return;
+                }
+                if (isConnectionUnavailableResponse(response)) {
+                    showUnavailable(response.unavailable);
+                    return;
+                }
                 // Store document count for screen reader announcements (skip pagination)
                 if (currentContext.activeQuery.executionIntent !== 'pagination') {
                     setCurrentQueryResults((prev) => ({ ...prev, documentCount: response.documentCount }));
@@ -419,7 +557,7 @@ export const CollectionView = (): JSX.Element => {
 
                 // 2. This is the time to update the auto-completion data
                 //    Since now we do know more about the data returned from the query
-                updateAutoCompletionData();
+                updateAutoCompletionData(requestRevision);
 
                 // 3. Load the data for the current view
                 getDataForView(currentContext.currentView, (loaded) =>
@@ -440,9 +578,15 @@ export const CollectionView = (): JSX.Element => {
                 setCurrentContext((prev) => ({ ...prev, isLoading: false, isFirstTimeLoad: false }));
             })
             .catch(async (error) => {
+                if (!isCurrent()) {
+                    return;
+                }
                 settleFirstLoad('failed');
                 const cause = error instanceof Error ? error.message : String(error);
                 const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
+                if (!isCurrent()) {
+                    return;
+                }
                 void trpcClient.common.displayErrorMessage.mutate({
                     message: explained ?? l10n.t('Error while running the query'),
                     modal: true,
@@ -450,7 +594,9 @@ export const CollectionView = (): JSX.Element => {
                 });
             })
             .finally(() => {
-                setCurrentContext((prev) => ({ ...prev, isLoading: false, isFirstTimeLoad: false }));
+                if (isCurrent()) {
+                    setCurrentContext((prev) => ({ ...prev, isLoading: false, isFirstTimeLoad: false }));
+                }
             });
     }, [currentContext.activeQuery]);
 
@@ -461,6 +607,9 @@ export const CollectionView = (): JSX.Element => {
     }, [currentContext.currentViewState?.currentPath]);
 
     const handleViewChanged = (_optionValue: string) => {
+        if (beginOperation() === undefined) {
+            return;
+        }
         let selection: Views;
 
         switch (_optionValue) {
@@ -494,9 +643,20 @@ export const CollectionView = (): JSX.Element => {
     };
 
     function handleDeleteDocumentRequest(): void {
+        const lifecycleRevision = beginOperation();
+        if (lifecycleRevision === undefined) {
+            return;
+        }
         trpcClient.mongoClusters.collectionView.deleteDocumentsById
             .mutate(currentContext.dataSelection.selectedDocumentObjectIds)
             .then((acknowledged) => {
+                if (!isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
+                if (isConnectionUnavailableResponse(acknowledged)) {
+                    showUnavailable(acknowledged.unavailable);
+                    return;
+                }
                 if (!acknowledged) {
                     return;
                 }
@@ -526,6 +686,9 @@ export const CollectionView = (): JSX.Element => {
                 }));
             })
             .catch((error) => {
+                if (!isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
                 void trpcClient.common.displayErrorMessage.mutate({
                     message: l10n.t('Error deleting selected documents'),
                     modal: false,
@@ -535,9 +698,21 @@ export const CollectionView = (): JSX.Element => {
     }
 
     function handleViewDocumentRequest(): void {
+        const lifecycleRevision = beginOperation();
+        if (lifecycleRevision === undefined) {
+            return;
+        }
         trpcClient.mongoClusters.collectionView.viewDocumentById
             .mutate(currentContext.dataSelection.selectedDocumentObjectIds[0])
+            .then((response) => {
+                if (isOperationCurrent(lifecycleRevision) && isConnectionUnavailableResponse(response)) {
+                    showUnavailable(response.unavailable);
+                }
+            })
             .catch((error) => {
+                if (!isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
                 void trpcClient.common.displayErrorMessage.mutate({
                     message: l10n.t('Error opening the document view'),
                     modal: false,
@@ -547,9 +722,21 @@ export const CollectionView = (): JSX.Element => {
     }
 
     function handleEditDocumentRequest(): void {
+        const lifecycleRevision = beginOperation();
+        if (lifecycleRevision === undefined) {
+            return;
+        }
         trpcClient.mongoClusters.collectionView.editDocumentById
             .mutate(currentContext.dataSelection.selectedDocumentObjectIds[0])
+            .then((response) => {
+                if (isOperationCurrent(lifecycleRevision) && isConnectionUnavailableResponse(response)) {
+                    showUnavailable(response.unavailable);
+                }
+            })
             .catch((error) => {
+                if (!isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
                 void trpcClient.common.displayErrorMessage.mutate({
                     message: l10n.t('Error opening the document view'),
                     modal: false,
@@ -559,13 +746,27 @@ export const CollectionView = (): JSX.Element => {
     }
 
     function handleAddDocumentRequest(): void {
-        trpcClient.mongoClusters.collectionView.addDocument.mutate().catch((error) => {
-            void trpcClient.common.displayErrorMessage.mutate({
-                message: l10n.t('Error opening the document view'),
-                modal: false,
-                cause: error instanceof Error ? error.message : String(error),
+        const lifecycleRevision = beginOperation();
+        if (lifecycleRevision === undefined) {
+            return;
+        }
+        trpcClient.mongoClusters.collectionView.addDocument
+            .mutate()
+            .then((response) => {
+                if (isOperationCurrent(lifecycleRevision) && isConnectionUnavailableResponse(response)) {
+                    showUnavailable(response.unavailable);
+                }
+            })
+            .catch((error) => {
+                if (!isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
+                void trpcClient.common.displayErrorMessage.mutate({
+                    message: l10n.t('Error opening the document view'),
+                    modal: false,
+                    cause: error instanceof Error ? error.message : String(error),
+                });
             });
-        });
     }
 
     function handleStepInRequest(row: number, cell: number): void {
@@ -631,179 +832,255 @@ export const CollectionView = (): JSX.Element => {
             });
     }
 
+    const handleUnavailableAction = (action: ConnectionRecoveryAction): void => {
+        const current = unavailableRef.current;
+        if (!current || recovering) {
+            return;
+        }
+
+        const revision = ++lifecycleRevisionRef.current;
+        setRecovering(true);
+        void trpcClient.mongoClusters.collectionView.recoverUnavailable
+            .mutate({ action })
+            .then((response: ConnectionUnavailableResponse | ConnectionRecoveryResponse) => {
+                if (disposedRef.current || revision !== lifecycleRevisionRef.current || action === 'close') {
+                    return;
+                }
+                if ('unavailable' in response) {
+                    unavailableRef.current = response.unavailable;
+                    setUnavailable(response.unavailable);
+                    return;
+                }
+                lifecycleRevisionRef.current += 1;
+                unavailableRef.current = undefined;
+                setUnavailable(undefined);
+                setRecoveryAnnouncement(response.recovered.text);
+            })
+            .catch(async (error) => {
+                if (disposedRef.current || revision !== lifecycleRevisionRef.current) {
+                    return;
+                }
+                const cause = error instanceof Error ? error.message : String(error);
+                const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
+                if (!disposedRef.current && revision === lifecycleRevisionRef.current) {
+                    void trpcClient.common.displayErrorMessage.mutate({
+                        message: explained ?? l10n.t('Unable to recover the connection'),
+                        modal: false,
+                        cause,
+                    });
+                }
+            })
+            .finally(() => {
+                if (!disposedRef.current) {
+                    setRecovering(false);
+                }
+            });
+    };
+
     return (
-        <CollectionViewContext.Provider value={[currentContext, setCurrentContext]}>
-            <div className="collectionView">
-                {currentContext.isLoading && (
-                    <ProgressBar thickness="large" shape="square" className="progressBar" aria-hidden={true} />
-                )}
-
-                {/* Screen reader announcement when query completes */}
-                <Announcer
-                    when={!currentContext.isLoading && currentQueryResults?.documentCount !== undefined}
-                    politeness="assertive"
-                    message={
-                        (currentQueryResults?.documentCount ?? 0) > 0
-                            ? l10n.t('Results found')
-                            : l10n.t('No results found')
-                    }
-                />
-
-                <div className="collectionTabHeader">
-                    <TabList
-                        aria-label={l10n.t('Collection views')}
-                        className="collectionTabList"
-                        selectedValue={selectedTab}
-                        onTabSelect={(_event, data) => {
-                            const newTab = data.value as 'tab_result' | 'tab_indexes' | 'tab_queryInsights';
-
-                            // Report tab switching telemetry
-                            trpcClient.common.reportEvent
-                                .mutate({
-                                    eventName: 'tabChanged',
-                                    properties: {
-                                        previousTab: selectedTab,
-                                        newTab: newTab,
-                                    },
-                                })
-                                .catch((error) => {
-                                    console.debug('Failed to report tab change:', error);
-                                });
-
-                            setSelectedTab(newTab);
-                        }}
-                    >
-                        <Tab id="tab.results" value="tab_result" aria-controls="tabpanel.results">
-                            {l10n.t('Documents')}
-                        </Tab>
-                        <Tab id="tab.indexes" value="tab_indexes" aria-controls="tabpanel.indexes">
-                            {l10n.t('Indexes')}
-                        </Tab>
-                        <Tab id="tab.queryInsights" value="tab_queryInsights" aria-controls="tabpanel.queryInsights">
-                            <span className="queryInsightsTabLabel">{l10n.t('Query Insights')}</span>
-                        </Tab>
-                    </TabList>
-                    {configuration.feedbackPermitted === true && (
-                        <Button
-                            appearance="transparent"
-                            size="small"
-                            icon={<EmojiRegular />}
-                            onClick={() =>
-                                void trpcClient.common.openFeedback.mutate({
-                                    collectionTab: feedbackTab[selectedTab],
-                                })
-                            }
-                        >
-                            {l10n.t('Give Feedback')}
-                        </Button>
-                    )}
-                </div>
-
-                <div
-                    id={selectedTabPanelId}
-                    className="collectionTabPanel"
-                    role="tabpanel"
-                    aria-labelledby={selectedTabId}
-                >
-                    {selectedTab !== 'tab_indexes' && (
-                        <div className="primaryActionBar collectionQueryActionBar">
-                            <CollectionQueryActionBar
-                                variant={selectedTab === 'tab_result' ? 'documents' : 'queryInsights'}
-                            />
-                        </div>
+        <DisconnectedOverlay
+            unavailable={unavailable}
+            onDismiss={() => setUnavailable(undefined)}
+            onAction={handleUnavailableAction}
+            recovering={recovering}
+        >
+            <CollectionViewContext.Provider
+                value={[
+                    {
+                        ...currentContext,
+                        lifecycle: {
+                            unavailable,
+                            beginOperation,
+                            isOperationCurrent,
+                            showUnavailable,
+                        },
+                    },
+                    setCurrentContext,
+                ]}
+            >
+                <div className="collectionView">
+                    {currentContext.isLoading && (
+                        <ProgressBar thickness="large" shape="square" className="progressBar" aria-hidden={true} />
                     )}
 
-                    {selectedTab !== 'tab_indexes' && (
-                        <QueryEditor
-                            onExecuteRequest={() => {
-                                // Get all query values from the editor at once
-                                const query = currentContext.queryEditor?.getCurrentQuery() ?? {
-                                    filter: '{  }',
-                                    project: '{  }',
-                                    sort: '{  }',
-                                    skip: 0,
-                                    limit: 0,
-                                };
+                    {/* Screen reader announcement when query completes */}
+                    <Announcer
+                        when={!currentContext.isLoading && currentQueryResults?.documentCount !== undefined}
+                        politeness="assertive"
+                        message={
+                            (currentQueryResults?.documentCount ?? 0) > 0
+                                ? l10n.t('Results found')
+                                : l10n.t('No results found')
+                        }
+                    />
 
-                                setCurrentContext((prev) => ({
-                                    ...prev,
-                                    activeQuery: {
-                                        ...prev.activeQuery,
-                                        queryText: query.filter, // deprecated: kept in sync with filter
-                                        filter: query.filter,
-                                        project: query.project,
-                                        sort: query.sort,
-                                        skip: query.skip,
-                                        limit: query.limit,
-                                        pageNumber: 1,
-                                        executionIntent: 'initial',
-                                    },
-                                }));
+                    <div className="collectionTabHeader">
+                        <TabList
+                            aria-label={l10n.t('Collection views')}
+                            className="collectionTabList"
+                            selectedValue={selectedTab}
+                            onTabSelect={(_event, data) => {
+                                if (beginOperation() === undefined) {
+                                    return;
+                                }
+                                const newTab = data.value as 'tab_result' | 'tab_indexes' | 'tab_queryInsights';
 
+                                // Report tab switching telemetry
                                 trpcClient.common.reportEvent
                                     .mutate({
-                                        eventName: 'executeQuery',
+                                        eventName: 'tabChanged',
                                         properties: {
-                                            ui: 'shortcut',
-                                        },
-                                        measurements: {
-                                            queryLenth: query.filter.length,
+                                            previousTab: selectedTab,
+                                            newTab: newTab,
                                         },
                                     })
                                     .catch((error) => {
-                                        console.debug('Failed to report an event:', error);
+                                        console.debug('Failed to report tab change:', error);
                                     });
+
+                                setSelectedTab(newTab);
                             }}
-                        />
-                    )}
-
-                    {selectedTab === 'tab_result' && (
-                        <>
-                            <div className="resultsActionBar">
-                                <ToolbarViewNavigation />
-                                <ToolbarDocumentManipulation
-                                    onDeleteClick={handleDeleteDocumentRequest}
-                                    onEditClick={handleEditDocumentRequest}
-                                    onViewClick={handleViewDocumentRequest}
-                                    onAddClick={handleAddDocumentRequest}
-                                />
-                                <ViewSwitcher onViewChanged={handleViewChanged} />
-                            </div>
-
-                            <div className="resultsDisplayArea" id="resultsDisplayAreaId">
-                                {
-                                    {
-                                        'Table View': (
-                                            <DataViewPanelTable
-                                                liveHeaders={currentQueryResults?.tableHeaders ?? []}
-                                                liveData={currentQueryResults?.tableData ?? []}
-                                                handleStepIn={handleStepInRequest}
-                                            />
-                                        ),
-                                        'Tree View': (
-                                            <DataViewPanelTree liveData={currentQueryResults?.treeData ?? []} />
-                                        ),
-                                        'JSON View': (
-                                            <DataViewPanelJSON value={currentQueryResults?.jsonDocuments ?? []} />
-                                        ),
-                                        default: <div>error &apos;{currentContext.currentView}&apos;</div>,
-                                    }[currentContext.currentView] // switch-statement
+                        >
+                            <Tab id="tab.results" value="tab_result" aria-controls="tabpanel.results">
+                                {l10n.t('Documents')}
+                            </Tab>
+                            <Tab id="tab.indexes" value="tab_indexes" aria-controls="tabpanel.indexes">
+                                {l10n.t('Indexes')}
+                            </Tab>
+                            <Tab
+                                id="tab.queryInsights"
+                                value="tab_queryInsights"
+                                aria-controls="tabpanel.queryInsights"
+                            >
+                                <span className="queryInsightsTabLabel">{l10n.t('Query Insights')}</span>
+                            </Tab>
+                        </TabList>
+                        {configuration.feedbackPermitted === true && (
+                            <Button
+                                appearance="transparent"
+                                size="small"
+                                icon={<EmojiRegular />}
+                                onClick={() =>
+                                    void trpcClient.common.openFeedback.mutate({
+                                        collectionTab: feedbackTab[selectedTab],
+                                    })
                                 }
+                            >
+                                {l10n.t('Give Feedback')}
+                            </Button>
+                        )}
+                    </div>
+
+                    <div
+                        id={selectedTabPanelId}
+                        className="collectionTabPanel"
+                        role="tabpanel"
+                        aria-labelledby={selectedTabId}
+                    >
+                        {selectedTab !== 'tab_indexes' && (
+                            <div className="primaryActionBar collectionQueryActionBar">
+                                <CollectionQueryActionBar
+                                    variant={selectedTab === 'tab_result' ? 'documents' : 'queryInsights'}
+                                />
                             </div>
+                        )}
 
-                            {currentContext.currentView === Views.TABLE && (
-                                <div className="toolbarTableNavigation">
-                                    <ToolbarTableNavigation />
+                        {selectedTab !== 'tab_indexes' && (
+                            <QueryEditor
+                                onExecuteRequest={() => {
+                                    if (beginOperation() === undefined) {
+                                        return;
+                                    }
+                                    // Get all query values from the editor at once
+                                    const query = currentContext.queryEditor?.getCurrentQuery() ?? {
+                                        filter: '{  }',
+                                        project: '{  }',
+                                        sort: '{  }',
+                                        skip: 0,
+                                        limit: 0,
+                                    };
+
+                                    setCurrentContext((prev) => ({
+                                        ...prev,
+                                        activeQuery: {
+                                            ...prev.activeQuery,
+                                            queryText: query.filter, // deprecated: kept in sync with filter
+                                            filter: query.filter,
+                                            project: query.project,
+                                            sort: query.sort,
+                                            skip: query.skip,
+                                            limit: query.limit,
+                                            pageNumber: 1,
+                                            executionIntent: 'initial',
+                                        },
+                                    }));
+
+                                    trpcClient.common.reportEvent
+                                        .mutate({
+                                            eventName: 'executeQuery',
+                                            properties: {
+                                                ui: 'shortcut',
+                                            },
+                                            measurements: {
+                                                queryLenth: query.filter.length,
+                                            },
+                                        })
+                                        .catch((error) => {
+                                            console.debug('Failed to report an event:', error);
+                                        });
+                                }}
+                            />
+                        )}
+
+                        {selectedTab === 'tab_result' && (
+                            <>
+                                <div className="resultsActionBar">
+                                    <ToolbarViewNavigation />
+                                    <ToolbarDocumentManipulation
+                                        onDeleteClick={handleDeleteDocumentRequest}
+                                        onEditClick={handleEditDocumentRequest}
+                                        onViewClick={handleViewDocumentRequest}
+                                        onAddClick={handleAddDocumentRequest}
+                                    />
+                                    <ViewSwitcher onViewChanged={handleViewChanged} />
                                 </div>
-                            )}
-                        </>
-                    )}
 
-                    {selectedTab === 'tab_indexes' && <IndexesTab />}
+                                <div className="resultsDisplayArea" id="resultsDisplayAreaId">
+                                    {
+                                        {
+                                            'Table View': (
+                                                <DataViewPanelTable
+                                                    liveHeaders={currentQueryResults?.tableHeaders ?? []}
+                                                    liveData={currentQueryResults?.tableData ?? []}
+                                                    handleStepIn={handleStepInRequest}
+                                                />
+                                            ),
+                                            'Tree View': (
+                                                <DataViewPanelTree liveData={currentQueryResults?.treeData ?? []} />
+                                            ),
+                                            'JSON View': (
+                                                <DataViewPanelJSON value={currentQueryResults?.jsonDocuments ?? []} />
+                                            ),
+                                            default: <div>error &apos;{currentContext.currentView}&apos;</div>,
+                                        }[currentContext.currentView] // switch-statement
+                                    }
+                                </div>
 
-                    {selectedTab === 'tab_queryInsights' && <QueryInsightsMain />}
+                                {currentContext.currentView === Views.TABLE && (
+                                    <div className="toolbarTableNavigation">
+                                        <ToolbarTableNavigation />
+                                    </div>
+                                )}
+                            </>
+                        )}
+
+                        {selectedTab === 'tab_indexes' && <IndexesTab />}
+
+                        {selectedTab === 'tab_queryInsights' && <QueryInsightsMain />}
+                    </div>
                 </div>
-            </div>
-        </CollectionViewContext.Provider>
+            </CollectionViewContext.Provider>
+            <Announcer when={recoveryAnnouncement !== undefined} message={recoveryAnnouncement ?? ''} />
+        </DisconnectedOverlay>
     );
 };

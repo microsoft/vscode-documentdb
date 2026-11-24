@@ -9,7 +9,6 @@ import {
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { type Document } from 'mongodb';
 import {
     CommandType,
     optimizeQuery,
@@ -18,6 +17,7 @@ import {
     type QueryOptimizationContext,
 } from '../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import { ClusterSession } from '../../documentdb/ClusterSession';
+import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
 import { type IndexSpecification } from '../../documentdb/LlmEnhancedFeatureApis';
 import { ext } from '../../extensionVariables';
 import { getConfirmationAsInSettings, getConfirmationWithClick } from '../../utils/dialogs/getConfirmation';
@@ -207,6 +207,7 @@ export class QueryInsightsAIService {
         signal?: AbortSignal,
         staticAnalysisSummary?: string,
     ): Promise<AIOptimizationStreamHandle> {
+        let unavailable: ConnectionUnavailableError | undefined;
         const result = await callWithTelemetryAndErrorHandling(
             'vscode-documentdb.queryInsights.getOptimizationRecommendationsStreaming',
             async (context: IActionContext): Promise<AIOptimizationStreamHandle> => {
@@ -235,7 +236,13 @@ export class QueryInsightsAIService {
                     };
                 }
 
-                const streamHandle = await optimizeQueryStreaming(context, queryContext);
+                const streamHandle = await optimizeQueryStreaming(context, queryContext).catch((error: unknown) => {
+                    if (error instanceof ConnectionUnavailableError) {
+                        context.errorHandling.suppressDisplay = true;
+                        unavailable = error;
+                    }
+                    throw error;
+                });
 
                 // Final parse + per-action counts happen once at completion time.
                 // The dedicated Stage 3 completion event (plan §7 / WI-10) will
@@ -264,6 +271,9 @@ export class QueryInsightsAIService {
             },
         );
 
+        if (unavailable) {
+            throw unavailable;
+        }
         if (!result) {
             if (signal?.aborted) {
                 throw new UserCancelledError('AbortSignal');
@@ -375,6 +385,9 @@ export class QueryInsightsAIService {
                 educationalContent: parsedJson.educationalContent,
             };
         } catch (error) {
+            if (error instanceof ConnectionUnavailableError) {
+                throw error;
+            }
             const errorMessage = error instanceof Error ? error.message : String(error);
             throw new Error(l10n.t('Failed to parse AI optimization response. {error}', { error: errorMessage }));
         }
@@ -395,31 +408,44 @@ export class QueryInsightsAIService {
         actionId: string,
         payload: unknown,
     ): Promise<{ success: boolean; message?: string }> {
-        return await callWithTelemetryAndErrorHandling(
+        let unavailable: ConnectionUnavailableError | undefined;
+        const result = await callWithTelemetryAndErrorHandling(
             'vscode-documentdb.queryInsights.action',
             async (context: IActionContext) => {
                 // Track which action was executed
                 context.telemetry.properties.actionId = actionId;
 
                 // Route to appropriate handler based on actionId
-                switch (actionId) {
-                    case 'createIndex':
-                        return this.handleCreateIndex(context, sessionId, payload);
-                    case 'dropIndex':
-                        return this.handleDropIndex(context, sessionId, payload);
-                    case 'modifyIndex':
-                        return this.handleModifyIndex(context, sessionId, payload);
-                    case 'learnMore':
-                        return this.handleLearnMore(payload);
-                    default:
-                        context.telemetry.properties.actionError = 'unknownAction';
-                        return {
-                            success: false,
-                            message: `Unknown action: ${actionId}`,
-                        };
+                try {
+                    switch (actionId) {
+                        case 'createIndex':
+                            return await this.handleCreateIndex(context, sessionId, payload);
+                        case 'dropIndex':
+                            return await this.handleDropIndex(context, sessionId, payload);
+                        case 'modifyIndex':
+                            return await this.handleModifyIndex(context, sessionId, payload);
+                        case 'learnMore':
+                            return this.handleLearnMore(payload);
+                        default:
+                            context.telemetry.properties.actionError = 'unknownAction';
+                            return {
+                                success: false,
+                                message: `Unknown action: ${actionId}`,
+                            };
+                    }
+                } catch (error) {
+                    if (error instanceof ConnectionUnavailableError) {
+                        context.errorHandling.suppressDisplay = true;
+                        unavailable = error;
+                    }
+                    throw error;
                 }
             },
-        ).then((result) => result ?? { success: false, message: 'Unknown error' });
+        );
+        if (unavailable) {
+            throw unavailable;
+        }
+        return result ?? { success: false, message: 'Unknown error' };
     }
 
     /**
@@ -509,6 +535,9 @@ export class QueryInsightsAIService {
                 }),
             );
 
+            const session = ClusterSession.getSession(actualSessionId);
+            const epoch = session.getEpoch();
+
             // Ask for confirmation before creating the index
             const confirmed = await getConfirmationWithClick(
                 l10n.t('Create index?'),
@@ -529,10 +558,10 @@ export class QueryInsightsAIService {
                 };
             }
 
-            const session = ClusterSession.getSession(actualSessionId);
-            const client = session.getClient();
-
-            const result = await client.createIndex(payload.databaseName, payload.collectionName, payload.indexSpec);
+            const result = await session.runWithClient(
+                (client) => client.createIndex(payload.databaseName, payload.collectionName, payload.indexSpec),
+                epoch,
+            );
 
             if (result.ok === 1) {
                 // Provide positive feedback with additional context from result.note if available
@@ -561,6 +590,9 @@ export class QueryInsightsAIService {
                 };
             }
         } catch (error) {
+            if (error instanceof ConnectionUnavailableError) {
+                throw error;
+            }
             const errorMessage = error instanceof Error ? error.message : String(error);
             context.telemetry.properties.actionError = 'createIndexException';
             ext.outputChannel.error(
@@ -630,6 +662,9 @@ export class QueryInsightsAIService {
                 ),
             );
 
+            const session = ClusterSession.getSession(actualSessionId);
+            const epoch = session.getEpoch();
+
             // Ask for confirmation before dropping the index (destructive action)
             const confirmed = await getConfirmationAsInSettings(
                 l10n.t('Delete index?'),
@@ -653,10 +688,10 @@ export class QueryInsightsAIService {
                 };
             }
 
-            const session = ClusterSession.getSession(actualSessionId);
-            const client = session.getClient();
-
-            const result = await client.dropIndex(payload.databaseName, payload.collectionName, payload.indexName);
+            const result = await session.runWithClient(
+                (client) => client.dropIndex(payload.databaseName, payload.collectionName, payload.indexName),
+                epoch,
+            );
 
             if (result.ok === 1) {
                 // Provide positive feedback with additional context from result.note if available
@@ -685,6 +720,9 @@ export class QueryInsightsAIService {
                 };
             }
         } catch (error) {
+            if (error instanceof ConnectionUnavailableError) {
+                throw error;
+            }
             const errorMessage = error instanceof Error ? error.message : String(error);
             context.telemetry.properties.actionError = 'dropIndexException';
             ext.outputChannel.error(
@@ -774,6 +812,9 @@ export class QueryInsightsAIService {
                 ),
             );
 
+            const session = ClusterSession.getSession(actualSessionId);
+            const epoch = session.getEpoch();
+
             // Ask for confirmation before modifying the index
             const operationText = operation === 'hideIndex' ? l10n.t('hide') : l10n.t('unhide');
             const confirmed = await getConfirmationWithClick(
@@ -797,17 +838,13 @@ export class QueryInsightsAIService {
                 };
             }
 
-            const session = ClusterSession.getSession(actualSessionId);
-            const client = session.getClient();
-
-            // Execute the operation
-            let result: Document;
-            if (operation === 'hideIndex') {
-                result = await client.hideIndex(payload.databaseName, payload.collectionName, indexName);
-            } else {
-                // unhideIndex
-                result = await client.unhideIndex(payload.databaseName, payload.collectionName, indexName);
-            }
+            const result = await session.runWithClient(
+                (client) =>
+                    operation === 'hideIndex'
+                        ? client.hideIndex(payload.databaseName, payload.collectionName, indexName)
+                        : client.unhideIndex(payload.databaseName, payload.collectionName, indexName),
+                epoch,
+            );
 
             if (result.ok === 1) {
                 // Provide positive feedback with additional context from result.note if available
@@ -842,6 +879,9 @@ export class QueryInsightsAIService {
                 };
             }
         } catch (error) {
+            if (error instanceof ConnectionUnavailableError) {
+                throw error;
+            }
             const errorMessage = error instanceof Error ? error.message : String(error);
             context.telemetry.properties.actionError = 'modifyIndexException';
             ext.outputChannel.error(

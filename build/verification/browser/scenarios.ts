@@ -50,17 +50,24 @@ export type ScenarioStep =
           readonly role: 'button' | 'link' | 'switch' | 'menuitem' | 'radio';
           readonly name: string;
       }
-    | { readonly action: 'fill'; readonly role: 'textbox'; readonly name: string; readonly value: string };
+    | { readonly action: 'fill'; readonly role: 'textbox' | 'searchbox'; readonly name: string; readonly value: string }
+    | { readonly action: 'replaceText'; readonly role: 'textbox'; readonly name: string; readonly value: string }
+    | { readonly action: 'press'; readonly role: 'button'; readonly name: string; readonly key: string }
+    | { readonly action: 'waitFor'; readonly name: string; readonly selector: string }
+    | { readonly action: 'post'; readonly name: string; readonly message: unknown }
+    | { readonly action: 'releaseReply'; readonly name: string; readonly path: FixturePaths };
 
 type CallAssertion = {
     [P in FixturePaths]: {
         readonly kind: 'calls';
         readonly name: string;
         readonly path: P;
-        readonly input: FixtureAtPath<FixtureInputs, P>;
         readonly count: number;
         readonly steps: readonly ScenarioStep[];
-    };
+    } & (
+        | { readonly input: FixtureAtPath<FixtureInputs, P>; readonly checkInput?: true }
+        | { readonly checkInput: false }
+    );
 }[FixturePaths];
 
 /** The elements matching `selector`, in document order, contain `texts` one to one and in order. */
@@ -2422,10 +2429,349 @@ const diagnosticsScenarios = {
     ),
 } as const satisfies Readonly<Record<string, Scenario<'connectionDiagnostics'>>>;
 
+const documentViewBase = defaultScenario('documentView');
+const documentEditReadiness = { ...documentViewBase.readiness, content: ['Save'] };
+const saveDocumentPath = 'mongoClusters.documentView.saveDocument';
+const disconnectedDocument = {
+    reason: 'userDisconnected',
+    title: 'Disconnected',
+    detail: 'Connect from the connection tree, then click Retry.',
+    action: 'retry',
+} as const;
+const documentEditorName = 'Document Editor: Edit the document in JSON format';
+const firstDocumentEdit = {
+    action: 'replaceText',
+    role: 'textbox',
+    name: documentEditorName,
+    value: '{"_id":"stage0-1","name":"First pending edit"}',
+} as const;
+const saveDocumentStep = { action: 'click', role: 'button', name: 'Save to the database' } as const;
+
+const documentViewScenarios = {
+    default: documentViewBase,
+    'disconnected-dirty': {
+        ...documentViewBase,
+        readiness: documentEditReadiness,
+        rpc: {
+            ...documentViewBase.rpc,
+            [saveDocumentPath]: { type: 'mutation', results: [{ unavailable: disconnectedDocument }] },
+            'common.reportEvent': { type: 'mutation', results: [], undefinedResult: true },
+        },
+        assertions: [
+            {
+                kind: 'attribute',
+                name: 'preserves the mounted draft behind an inert overlay',
+                selector: '.disconnectedOverlayBackground',
+                attribute: 'inert',
+                expected: '',
+                steps: [
+                    firstDocumentEdit,
+                    saveDocumentStep,
+                    { action: 'waitFor', name: 'disconnected overlay', selector: '.disconnectedOverlay' },
+                ],
+            },
+            {
+                kind: 'text',
+                name: 'the rejected save does not replace the draft',
+                selector: '.monaco-editor .view-lines',
+                includes: ['First pending edit'],
+                excludes: ['Stage 0 document payload'],
+            },
+        ],
+    },
+    'stale-save-after-reconnect': {
+        ...documentViewBase,
+        readiness: documentEditReadiness,
+        rpc: {
+            ...documentViewBase.rpc,
+            [saveDocumentPath]: {
+                type: 'mutation',
+                holdReply: true,
+                results: [{ documentId: '"stage0-1"', documentStringified: '{"name":"Old save reply"}' }],
+            },
+            'mongoClusters.documentView.recoverUnavailable': {
+                type: 'mutation',
+                results: [{ recovered: { text: 'Reconnected' } }],
+            },
+            'common.reportEvent': { type: 'mutation', results: [], undefinedResult: true },
+        },
+        assertions: [
+            {
+                kind: 'attribute',
+                name: 'recovery does not discard the editor',
+                selector: '.disconnectedOverlayBackground',
+                attribute: 'inert',
+                expected: null,
+                steps: [
+                    firstDocumentEdit,
+                    saveDocumentStep,
+                    {
+                        action: 'post',
+                        name: 'disable Document View',
+                        message: { type: 'documentView.connectionUnavailable', unavailable: disconnectedDocument },
+                    },
+                    { action: 'click', role: 'button', name: 'Retry' },
+                    {
+                        action: 'waitFor',
+                        name: 'the editor to be enabled after reconnect',
+                        selector: '.disconnectedOverlayBackground:not([inert])',
+                    },
+                    {
+                        ...firstDocumentEdit,
+                        value: '{"_id":"stage0-1","name":"Newer unsaved edit"}',
+                    },
+                ],
+            },
+            {
+                kind: 'stableText',
+                name: 'the old save reply cannot overwrite the newer edit',
+                selector: '.monaco-editor .view-lines',
+                steps: [{ action: 'releaseReply', name: 'deliver the old save reply', path: saveDocumentPath }],
+            },
+            {
+                kind: 'attribute',
+                name: 'the newer edit stays dirty and can be saved',
+                selector: 'button[aria-label="Save to the database"]',
+                attribute: 'disabled',
+                expected: null,
+            },
+        ],
+    },
+} as const satisfies Readonly<Record<string, Scenario<'documentView'>>>;
+
+const clusterDashboardBase = defaultScenario('clusterDashboard');
+const clusterDashboardScenarios = {
+    default: clusterDashboardBase,
+    disconnected: {
+        ...clusterDashboardBase,
+        readiness: { ...clusterDashboardBase.readiness, content: ['stage0_inventory'] },
+        rpc: {
+            ...clusterDashboardBase.rpc,
+            'clusterDashboard.recoverUnavailable': {
+                type: 'mutation',
+                results: [{ recovered: { text: 'Reconnected' } }],
+            },
+        },
+        assertions: [
+            {
+                kind: 'attribute',
+                name: 'keeps the dashboard mounted behind the unavailable overlay',
+                selector: '.disconnectedOverlayBackground',
+                attribute: 'inert',
+                expected: '',
+                steps: [
+                    {
+                        action: 'fill',
+                        role: 'searchbox',
+                        name: 'Filter databases by name',
+                        value: 'stage0',
+                    },
+                    {
+                        action: 'post',
+                        name: 'disable Cluster Dashboard',
+                        message: {
+                            type: 'clusterDashboard.connectionUnavailable',
+                            unavailable: disconnectedDocument,
+                        },
+                    },
+                    { action: 'waitFor', name: 'disconnected overlay', selector: '.disconnectedOverlay' },
+                ],
+            },
+            {
+                kind: 'text',
+                name: 'keeps the last inventory and filter visible',
+                selector: '.inventoryPanel',
+                includes: ['stage0_inventory'],
+                excludes: [],
+            },
+            {
+                kind: 'attribute',
+                name: 'keeps the inventory filter',
+                selector: 'input[aria-label="Filter databases by name"]',
+                attribute: 'value',
+                expected: 'stage0',
+            },
+        ],
+    },
+} as const satisfies Readonly<Record<string, Scenario<'clusterDashboard'>>>;
+
+const collectionViewBase = defaultScenario('collectionView');
+const collectionQueryPath = 'mongoClusters.collectionView.runFindQuery';
+const collectionTablePath = 'mongoClusters.collectionView.getCurrentPageAsTable';
+const collectionFilterName = 'Filter: Enter the DocumentDB query filter';
+const collectionFilterSelector = `.monaco-editor:has([aria-label="${collectionFilterName}"]) .view-lines`;
+const collectionFilter = {
+    action: 'replaceText',
+    role: 'textbox',
+    name: collectionFilterName,
+    value: '{"name":"Alpha"}',
+} as const;
+const runCollectionQuery = {
+    action: 'click',
+    role: 'button',
+    name: 'Find Query: execute the current editor values',
+} as const;
+const collectionSignInRequired = {
+    reason: 'signInRequired',
+    title: 'Sign-in required',
+    detail: 'Sign in from the connection tree, then click Retry.',
+    action: 'retry',
+} as const;
+const collectionViewScenarios = {
+    default: collectionViewBase,
+    'disconnected-signInRequired': {
+        ...collectionViewBase,
+        rpc: {
+            ...collectionViewBase.rpc,
+            [collectionQueryPath]: {
+                ...fixtures.collectionView.rpc[collectionQueryPath],
+                afterFirst: { results: [{ unavailable: collectionSignInRequired }] },
+            },
+            'mongoClusters.collectionView.recoverUnavailable': {
+                type: 'mutation',
+                results: [{ recovered: { text: 'Reconnected' } }],
+            },
+            'mongoClusters.collectionView.copyQueryToClipboard': {
+                type: 'mutation',
+                results: [null],
+            },
+            'common.confirm': { type: 'mutation', results: [{ confirmed: false }] },
+            'common.reportEvent': { type: 'mutation', results: [], undefinedResult: true },
+        },
+        assertions: [
+            {
+                kind: 'attribute',
+                name: 'keeps the query and results mounted but disables their controls',
+                selector: '.disconnectedOverlayBackground',
+                attribute: 'inert',
+                expected: '',
+                steps: [
+                    collectionFilter,
+                    runCollectionQuery,
+                    { action: 'waitFor', name: 'sign-in overlay', selector: '.disconnectedOverlay' },
+                ],
+            },
+            {
+                kind: 'text',
+                name: 'retains the filter text',
+                selector: collectionFilterSelector,
+                includes: ['"name":"Alpha"'],
+                excludes: [],
+            },
+            {
+                kind: 'text',
+                name: 'offers Retry and Close view while sign-in stays in the tree',
+                selector: '.disconnectedOverlay',
+                includes: ['Sign-in required', 'Sign in from the connection tree, then click Retry.', 'Close view'],
+                excludes: ['Reconnect', 'Retry sign-in'],
+            },
+            {
+                kind: 'calls',
+                name: 'the query shortcut while disconnected does not run another query',
+                path: collectionQueryPath,
+                count: 2,
+                checkInput: false,
+                steps: [{ action: 'press', role: 'button', name: 'Retry', key: 'Control+Enter' }],
+            },
+            {
+                kind: 'attribute',
+                name: 'dismissing the dialog makes the existing view accessible',
+                selector: '.disconnectedOverlayBackground',
+                attribute: 'inert',
+                expected: null,
+                steps: [{ action: 'click', role: 'button', name: 'Dismiss dialog to copy view contents' }],
+            },
+            {
+                kind: 'text',
+                name: 'the filter can still be copied after dismissal',
+                selector: collectionFilterSelector,
+                includes: ['"name":"Alpha"'],
+                excludes: [],
+            },
+            {
+                kind: 'calls',
+                name: 'Copy Query works while the connection is unavailable',
+                path: 'mongoClusters.collectionView.copyQueryToClipboard',
+                count: 1,
+                checkInput: false,
+                steps: [{ action: 'click', role: 'button', name: 'Copy Query' }],
+            },
+            {
+                kind: 'calls',
+                name: 'Find Query after dismissal shows the dialog without submitting another query',
+                path: collectionQueryPath,
+                count: 2,
+                checkInput: false,
+                steps: [
+                    runCollectionQuery,
+                    { action: 'waitFor', name: 'sign-in overlay returns', selector: '.disconnectedOverlay' },
+                ],
+            },
+            {
+                kind: 'calls',
+                name: 'Close view requests confirmation through the host',
+                path: 'common.confirm',
+                count: 1,
+                checkInput: false,
+                steps: [{ action: 'click', role: 'button', name: 'Close view' }],
+            },
+        ],
+    },
+    'stale-page-after-disconnect': {
+        ...collectionViewBase,
+        rpc: {
+            ...collectionViewBase.rpc,
+            [collectionTablePath]: {
+                ...fixtures.collectionView.rpc[collectionTablePath],
+                afterFirst: {
+                    results: [{ path: [], headers: ['_id', 'name', 'quantity'], data: [] }],
+                    holdReply: true,
+                },
+            },
+            'common.reportEvent': { type: 'mutation', results: [], undefinedResult: true },
+        },
+        assertions: [
+            {
+                kind: 'calls',
+                name: 'the next-page query starts before disconnect',
+                path: collectionQueryPath,
+                count: 2,
+                checkInput: false,
+                steps: [collectionFilter, { action: 'click', role: 'button', name: 'Go to next page' }],
+            },
+            {
+                kind: 'stableText',
+                name: 'applied rows survive a disconnect and a late page reply',
+                selector: '.slick-viewport',
+                steps: [
+                    {
+                        action: 'post',
+                        name: 'disable Collection View',
+                        message: { type: 'collectionView.connectionUnavailable', unavailable: disconnectedDocument },
+                    },
+                    { action: 'waitFor', name: 'the disconnect overlay', selector: '.disconnectedOverlay' },
+                    {
+                        action: 'releaseReply',
+                        name: 'deliver the late collection page reply',
+                        path: collectionTablePath,
+                    },
+                ],
+            },
+            {
+                kind: 'text',
+                name: 'the late reply does not change the displayed disconnect reason',
+                selector: '.disconnectedOverlay',
+                includes: ['Disconnected', 'Retry'],
+                excludes: ['Retry sign-in'],
+            },
+        ],
+    },
+} as const satisfies Readonly<Record<string, Scenario<'collectionView'>>>;
+
 export const scenarios = {
-    collectionView: { default: defaultScenario('collectionView') },
-    documentView: { default: defaultScenario('documentView') },
-    clusterDashboard: { default: defaultScenario('clusterDashboard') },
+    collectionView: collectionViewScenarios,
+    documentView: documentViewScenarios,
+    clusterDashboard: clusterDashboardScenarios,
     atlasCredentials: { default: defaultScenario('atlasCredentials', atlasSteps) },
     connectionDiagnostics: diagnosticsScenarios,
     localQuickStart: {

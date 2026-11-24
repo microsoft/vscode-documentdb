@@ -4,9 +4,15 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { type ConnectionBinding } from '../../../documentdb/ClustersClient';
+import { registerConnectionSurface } from '../../../documentdb/connectionSurfaces';
+import { type ConnectionUnavailableReason } from '../../../documentdb/ConnectionUnavailableError';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
+import { type ConnectionUnavailableMessage } from '../../_integration/connectionUnavailable';
+import { describeUnavailableConnection } from '../../_integration/describeUnavailableConnection';
 import { type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
+import { recoverBoundView } from '../boundViewOperations';
 import { type RouterContext } from './documentsViewRouter';
 
 export type DocumentsViewWebviewConfigurationType = {
@@ -21,13 +27,14 @@ export type DocumentsViewWebviewConfigurationType = {
     viewId: string;
     databaseName: string;
     collectionName: string;
-    documentId: string;
+    documentId?: string;
 
     mode: string; // 'add', 'view', 'edit'
 };
 
 export function openDocumentWebview(
     initialData: DocumentsViewWebviewConfigurationType,
+    binding: ConnectionBinding,
 ): AppWebviewController<DocumentsViewWebviewConfigurationType> {
     let title: string = `${initialData.databaseName}/${initialData.collectionName}/*new*`;
     switch (initialData.mode) {
@@ -43,6 +50,16 @@ export function openDocumentWebview(
     // (in response to a tRPC call), well after the handle is assigned below.
     const handle: { controller?: AppWebviewController<DocumentsViewWebviewConfigurationType> } = {};
 
+    const postUnavailable = (reason: ConnectionUnavailableReason): void => {
+        const message: ConnectionUnavailableMessage = {
+            type: 'documentView.connectionUnavailable',
+            unavailable: describeUnavailableConnection(reason).unavailable,
+        };
+        if (!controller.isDisposed) {
+            void controller.panel.webview.postMessage(message);
+        }
+    };
+
     const trpcContext: RouterContext = {
         dbExperience: API.DocumentDB,
         webviewName: 'documentView',
@@ -51,14 +68,17 @@ export function openDocumentWebview(
         databaseName: initialData.databaseName,
         collectionName: initialData.collectionName,
         documentId: initialData.documentId,
+        binding,
+        describeUnavailable: describeUnavailableConnection,
+        recoverUnavailable: (request) => recoverBoundView(binding, 'documentView', () => controller.dispose(), request),
         viewPanelTitleSetter: (title: string) => {
-            if (handle.controller) {
+            if (handle.controller && !handle.controller.isDisposed) {
                 handle.controller.panel.title = title;
             }
         },
     };
 
-    const controller = openAppWebview({
+    const controller: AppWebviewController<DocumentsViewWebviewConfigurationType> = openAppWebview({
         title,
         webviewName: 'documentView',
         panelViewType: 'vscode-documentdb-document-view',
@@ -86,6 +106,16 @@ export function openDocumentWebview(
     // the controller, then return the local `const` (never the optional
     // `handle.controller`), so the return path is obviously non-nullable.
     handle.controller = controller;
+
+    const registration = registerConnectionSurface({
+        clusterId: initialData.clusterId,
+        kind: 'documentView',
+        disable: postUnavailable,
+        dispose: () => controller.dispose(),
+    });
+    controller.onDisposed((): void => {
+        registration.dispose();
+    });
 
     return controller;
 }

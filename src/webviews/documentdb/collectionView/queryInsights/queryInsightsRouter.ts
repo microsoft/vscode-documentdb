@@ -45,7 +45,8 @@ import {
 import { ext } from '../../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../../services/ai/QueryInsightsAIService';
 import { mergeRouters, publicProcedureWithTelemetry, router, type WithTelemetry } from '../../../_integration/trpc';
-import { type RouterContext } from '../collectionViewRouter';
+import { throwIfBoundViewUnavailable } from '../../boundViewOperations';
+import { runCollectionViewOperation, type RouterContext } from '../collectionViewRouter';
 import { queryInsightsEventsRouter } from './queryInsightsEventsRouter';
 
 /**
@@ -107,102 +108,79 @@ export const queryInsightsQueriesRouter = router({
      */
     getQueryInsightsStage1: publicProcedureWithTelemetry.query(async ({ ctx }) => {
         const myCtx = ctx as WithTelemetry<RouterContext>;
-        const { sessionId, databaseName, collectionName } = myCtx;
+        return runCollectionViewOperation(myCtx, async () => {
+            const { sessionId, databaseName, collectionName } = myCtx;
 
-        ext.outputChannel.trace(
-            l10n.t('[Query Insights Stage 1] Started for {db}.{collection}', {
-                db: databaseName,
-                collection: collectionName,
-            }),
-        );
-
-        let analyzed: QueryPlannerAnalysis;
-        let executionTime: number;
-
-        // Platform compatibility check:
-        // Query Insights requires the MongoDB API explain() command with specific verbosity modes
-        // (queryPlanner and executionStats). Currently, only DocumentDB supports these features.
-        //
-        // Supported platforms:
-        //   - Azure Cosmos DB for MongoDB vCore (domainInfo_api !== 'RU')
-        //   - Native MongoDB clusters
-        const session: ClusterSession = ClusterSession.getSession(sessionId);
-        const clusterMetadata = await session.getClient().getClusterMetadata();
-
-        myCtx.actionContext.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
-        if (clusterMetadata?.domainInfo_api === 'RU') {
-            // TODO: Platform identification improvements needed
-            // 1. Create a centralized platform detection service (ClusterSession.getPlatformType())
-            // 2. Define platform capabilities enum (SupportsExplain, SupportsAggregation, etc.)
-            // 3. Check capabilities instead of platform names for better maintainability
-            // 4. Consider adding feature detection (try explain() and handle gracefully)
-            // 5. Update UI to show platform-specific feature availability
             ext.outputChannel.trace(
-                l10n.t(
-                    '[Query Insights Stage 1] Query Insights is not supported on Azure Cosmos DB for MongoDB (RU) clusters.',
-                ),
-            );
-
-            // Create error with code for UI-specific handling
-            const error = new Error(
-                l10n.t('Query Insights is not supported on Azure Cosmos DB for MongoDB (RU) clusters.'),
-            );
-            // Add error code as a custom property for UI pattern matching
-            (error as Error & { code?: string }).code = 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU';
-            throw error;
-        }
-
-        // Check for debug override file first
-        const debugData = readQueryInsightsDebugFile('query-insights-stage1.json');
-        if (debugData) {
-            ext.outputChannel.trace(l10n.t('[Query Insights Stage 1] Using debug data file'));
-            // Use debug data - analyze it the same way as real data
-            analyzed = ExplainPlanAnalyzer.analyzeQueryPlanner(debugData);
-            // Use a default execution time for debug mode
-            executionTime = 2.5;
-        } else {
-            // Get ClusterSession
-            const session: ClusterSession = ClusterSession.getSession(sessionId);
-
-            // Get execution time from session (tracked during last query execution)
-            executionTime = session.getLastExecutionTimeMs();
-
-            // Get query parameters from session with parsed BSON objects
-            const queryParams = session.getCurrentFindQueryParamsWithObjects();
-
-            // Get query planner info (cached or fetch) without skip/limit for full query insights
-            const queryPlannerStart = Date.now();
-            const queryPlannerResult = await session.getQueryPlannerInfo(
-                databaseName,
-                collectionName,
-                queryParams.filterObj,
-                {
-                    sort: queryParams.sortObj,
-                    projection: queryParams.projectionObj,
-                    // Intentionally omit skip/limit for full query insights
-                },
-            );
-            const queryPlannerDuration = Date.now() - queryPlannerStart;
-            ext.outputChannel.trace(
-                l10n.t('[Query Insights Stage 1] explain(queryPlanner) completed in {ms}ms', {
-                    ms: queryPlannerDuration.toString(),
+                l10n.t('[Query Insights Stage 1] Started for {db}.{collection}', {
+                    db: databaseName,
+                    collection: collectionName,
                 }),
             );
 
-            // Analyze with ExplainPlanAnalyzer
-            analyzed = ExplainPlanAnalyzer.analyzeQueryPlanner(queryPlannerResult);
-        }
+            const session = ClusterSession.getSession(sessionId);
+            const { analyzed, executionTime } = await session.runWithClient(
+                async (client, epoch): Promise<{ analyzed: QueryPlannerAnalysis; executionTime: number }> => {
+                    const clusterMetadata = await client.getClusterMetadata();
+                    session.assertCurrent(epoch, myCtx.signal);
+                    myCtx.actionContext.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
+                    if (clusterMetadata?.domainInfo_api === 'RU') {
+                        ext.outputChannel.trace(
+                            l10n.t(
+                                '[Query Insights Stage 1] Query Insights is not supported on Azure Cosmos DB for MongoDB (RU) clusters.',
+                            ),
+                        );
 
-        // Transform to UI format
-        const transformed = transformStage1Response(analyzed, executionTime);
-        ext.outputChannel.trace(
-            l10n.t('[Query Insights Stage 1] Completed: indexes={idx}, collScan={scan}', {
-                idx: analyzed.usedIndexes.join(', ') || 'none',
-                scan: analyzed.isCollectionScan.toString(),
-            }),
-        );
+                        const error = new Error(
+                            l10n.t('Query Insights is not supported on Azure Cosmos DB for MongoDB (RU) clusters.'),
+                        );
+                        (error as Error & { code?: string }).code = 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU';
+                        throw error;
+                    }
 
-        return transformed;
+                    const debugData = readQueryInsightsDebugFile('query-insights-stage1.json');
+                    if (debugData) {
+                        ext.outputChannel.trace(l10n.t('[Query Insights Stage 1] Using debug data file'));
+                        return { analyzed: ExplainPlanAnalyzer.analyzeQueryPlanner(debugData), executionTime: 2.5 };
+                    }
+
+                    const executionTime = session.getLastExecutionTimeMs();
+                    const queryParams = session.getCurrentFindQueryParamsWithObjects();
+                    const queryPlannerStart = Date.now();
+                    const queryPlannerResult = await session.getQueryPlannerInfo(
+                        client,
+                        epoch,
+                        databaseName,
+                        collectionName,
+                        queryParams.filterObj,
+                        {
+                            sort: queryParams.sortObj,
+                            projection: queryParams.projectionObj,
+                            // Intentionally omit skip/limit for full query insights
+                        },
+                        myCtx.signal,
+                    );
+                    ext.outputChannel.trace(
+                        l10n.t('[Query Insights Stage 1] explain(queryPlanner) completed in {ms}ms', {
+                            ms: (Date.now() - queryPlannerStart).toString(),
+                        }),
+                    );
+
+                    return { analyzed: ExplainPlanAnalyzer.analyzeQueryPlanner(queryPlannerResult), executionTime };
+                },
+            );
+
+            // Transform to UI format
+            const transformed = transformStage1Response(analyzed, executionTime);
+            ext.outputChannel.trace(
+                l10n.t('[Query Insights Stage 1] Completed: indexes={idx}, collScan={scan}', {
+                    idx: analyzed.usedIndexes.join(', ') || 'none',
+                    scan: analyzed.isCollectionScan.toString(),
+                }),
+            );
+
+            return transformed;
+        });
     }),
 
     /**
@@ -219,172 +197,181 @@ export const queryInsightsQueriesRouter = router({
      */
     getQueryInsightsStage2: publicProcedureWithTelemetry.query(async ({ ctx }) => {
         const myCtx = ctx as WithTelemetry<RouterContext>;
-        const { sessionId, databaseName, collectionName } = myCtx;
+        return runCollectionViewOperation(myCtx, async () => {
+            const { sessionId, databaseName, collectionName } = myCtx;
 
-        ext.outputChannel.trace(
-            l10n.t('[Query Insights Stage 2] Started for {db}.{collection}', {
-                db: databaseName,
-                collection: collectionName,
-            }),
-        );
-
-        let analyzed: ExecutionStatsAnalysis;
-        let explainResult: Document | undefined;
-        let totalCollectionDocs: number | undefined;
-
-        // Check for debug override file first
-        const debugData = readQueryInsightsDebugFile('query-insights-stage2.json');
-        let queryFilter: Document | undefined;
-        if (debugData) {
-            ext.outputChannel.trace(l10n.t('[Query Insights Stage 2] Using debug data file'));
-            // Use debug data - analyze it the same way as real data
-            analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(debugData);
-            explainResult = debugData;
-            // totalCollectionDocs not available in debug mode — advisories will simply not fire
-        } else {
-            // Get ClusterSession
-            const session: ClusterSession = ClusterSession.getSession(sessionId);
-
-            const clusterMetadata = await session.getClient().getClusterMetadata();
-            myCtx.actionContext.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
-
-            // Get query parameters from session with parsed BSON objects
-            const queryParams = session.getCurrentFindQueryParamsWithObjects();
-
-            // Get execution stats (cached or fetch) without skip/limit for full query insights
-            const executionStatsStart = Date.now();
-            const executionStatsResult = await session.getExecutionStats(
-                databaseName,
-                collectionName,
-                queryParams.filterObj,
-                {
-                    sort: queryParams.sortObj,
-                    projection: queryParams.projectionObj,
-                    // Intentionally omit skip/limit for full query insights
-                },
-            );
-            const executionStatsDuration = Date.now() - executionStatsStart;
             ext.outputChannel.trace(
-                l10n.t('[Query Insights Stage 2] explain completed in {ms}ms', {
-                    ms: executionStatsDuration.toString(),
+                l10n.t('[Query Insights Stage 2] Started for {db}.{collection}', {
+                    db: databaseName,
+                    collection: collectionName,
                 }),
             );
 
-            // Analyze with ExplainPlanAnalyzer (pass the user's actual filter for empty-query detection)
-            analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(executionStatsResult, queryParams.filterObj);
-            explainResult = executionStatsResult;
-            queryFilter = queryParams.filterObj as Document | undefined;
+            let analyzed: ExecutionStatsAnalysis;
+            let explainResult: Document | undefined;
+            let totalCollectionDocs: number | undefined;
+            const session = ClusterSession.getSession(sessionId);
+            const epoch = session.getEpoch();
 
-            // Fetch total collection docs for index-strategy advisories and selectivity cell
-            try {
-                totalCollectionDocs = await session.getClient().estimateDocumentCount(databaseName, collectionName);
-            } catch {
-                // Non-critical — advisories and selectivity will simply not fire/display
-                totalCollectionDocs = undefined;
+            // Check for debug override file first
+            const debugData = readQueryInsightsDebugFile('query-insights-stage2.json');
+            let queryFilter: Document | undefined;
+            if (debugData) {
+                ext.outputChannel.trace(l10n.t('[Query Insights Stage 2] Using debug data file'));
+                // Use debug data - analyze it the same way as real data
+                analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(debugData);
+                explainResult = debugData;
+                // totalCollectionDocs not available in debug mode — advisories will simply not fire
+            } else {
+                ({ explainResult, queryFilter, totalCollectionDocs } = await session.runWithClient(async (client) => {
+                    const clusterMetadata = await client.getClusterMetadata();
+                    session.assertCurrent(epoch, myCtx.signal);
+                    myCtx.actionContext.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
+
+                    const queryParams = session.getCurrentFindQueryParamsWithObjects();
+                    const executionStatsStart = Date.now();
+                    const explainResult = await session.getExecutionStats(
+                        client,
+                        epoch,
+                        databaseName,
+                        collectionName,
+                        queryParams.filterObj,
+                        {
+                            sort: queryParams.sortObj,
+                            projection: queryParams.projectionObj,
+                            // Intentionally omit skip/limit for full query insights
+                        },
+                        myCtx.signal,
+                    );
+                    ext.outputChannel.trace(
+                        l10n.t('[Query Insights Stage 2] explain completed in {ms}ms', {
+                            ms: (Date.now() - executionStatsStart).toString(),
+                        }),
+                    );
+
+                    session.assertCurrent(epoch, myCtx.signal);
+                    let totalCollectionDocs: number | undefined;
+                    try {
+                        totalCollectionDocs = await client.estimateDocumentCount(databaseName, collectionName);
+                    } catch (error) {
+                        // Non-critical — advisories and selectivity can be omitted.
+                        throwIfBoundViewUnavailable(client.binding, error);
+                    }
+                    return { explainResult, queryFilter: queryParams.filterObj, totalCollectionDocs };
+                }, epoch));
+                session.assertCurrent(epoch, myCtx.signal);
+                analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(explainResult, queryFilter);
             }
-        }
 
-        // Extract extended stage info (as per design document)
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        const executionStages = explainResult?.executionStats?.executionStages as Document | undefined;
-        if (executionStages) {
-            analyzed.extendedStageInfo = StagePropertyExtractor.extractAllExtendedStageInfo(executionStages);
-
-            // Enrich with properties from queryPlanner (e.g., isBitmap is only in queryPlanner stages)
+            // Extract extended stage info (as per design document)
             // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-            const winningPlan = explainResult?.queryPlanner?.winningPlan as Document | undefined;
-            if (winningPlan) {
-                StagePropertyExtractor.enrichWithQueryPlannerInfo(analyzed.extendedStageInfo, winningPlan);
+            const executionStages = explainResult?.executionStats?.executionStages as Document | undefined;
+            if (executionStages) {
+                analyzed.extendedStageInfo = StagePropertyExtractor.extractAllExtendedStageInfo(executionStages);
+
+                // Enrich with properties from queryPlanner (e.g., isBitmap is only in queryPlanner stages)
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                const winningPlan = explainResult?.queryPlanner?.winningPlan as Document | undefined;
+                if (winningPlan) {
+                    StagePropertyExtractor.enrichWithQueryPlannerInfo(analyzed.extendedStageInfo, winningPlan);
+                }
             }
-        }
 
-        // Check for execution error and return error response if found
-        if (analyzed.executionError) {
-            ext.outputChannel.warn(
-                l10n.t('[Query Insights Stage 2] Query execution failed: {error}', {
-                    error: analyzed.executionError.errorMessage,
-                }),
-            );
-            const errorResponse = createFailedQueryResponse(analyzed, explainResult);
+            // Check for execution error and return error response if found
+            if (analyzed.executionError) {
+                ext.outputChannel.warn(
+                    l10n.t('[Query Insights Stage 2] Query execution failed: {error}', {
+                        error: analyzed.executionError.errorMessage,
+                    }),
+                );
+                const errorResponse = createFailedQueryResponse(analyzed, explainResult);
 
-            ext.outputChannel.trace(l10n.t('Query Insights Stage 2 completed with execution error'));
-            return errorResponse;
-        }
+                ext.outputChannel.trace(l10n.t('Query Insights Stage 2 completed with execution error'));
+                return errorResponse;
+            }
 
-        // Add index-strategy advisories (coverage, cardinality, multikey)
-        if (explainResult) {
-            ExplainPlanAnalyzer.addIndexStrategyAdvisories(analyzed, totalCollectionDocs, explainResult, queryFilter);
-        }
+            // Add index-strategy advisories (coverage, cardinality, multikey)
+            if (explainResult) {
+                ExplainPlanAnalyzer.addIndexStrategyAdvisories(
+                    analyzed,
+                    totalCollectionDocs,
+                    explainResult,
+                    queryFilter,
+                );
+            }
 
-        // Transform to UI format (normal successful execution path)
-        ext.outputChannel.trace(l10n.t('Transforming Stage 2 response to UI format'));
-        const transformed = transformStage2Response(analyzed, totalCollectionDocs);
+            // Transform to UI format (normal successful execution path)
+            ext.outputChannel.trace(l10n.t('Transforming Stage 2 response to UI format'));
+            const transformed = transformStage2Response(analyzed, totalCollectionDocs);
 
-        // Cache the Stage 2 response for Stage 3's static analysis context
-        if (!debugData) {
-            const session: ClusterSession = ClusterSession.getSession(sessionId);
-            session.setStage2Response(transformed, totalCollectionDocs);
-        }
+            // Cache the Stage 2 response for Stage 3's static analysis context
+            if (!debugData) {
+                session.setStage2Response(epoch, transformed, totalCollectionDocs, myCtx.signal);
+            }
 
-        // --- Stage 2 telemetry ---
-        // Performance metrics (safe to aggregate, no PII/OII)
-        myCtx.actionContext.telemetry.properties.performanceScore =
-            transformed.efficiencyAnalysis.performanceRating.score;
-        myCtx.actionContext.telemetry.properties.executionStrategy = transformed.executionStrategy;
-        myCtx.actionContext.telemetry.properties.indexUsed = transformed.indexUsed ? 'true' : 'false';
-        myCtx.actionContext.telemetry.properties.hadCollectionScan = transformed.hadCollectionScan ? 'true' : 'false';
-        myCtx.actionContext.telemetry.properties.hadInMemorySort = transformed.hadInMemorySort ? 'true' : 'false';
-        myCtx.actionContext.telemetry.properties.isCoveringQuery = transformed.isCoveringQuery ? 'true' : 'false';
-        myCtx.actionContext.telemetry.properties.fetchOverheadKind = transformed.efficiencyAnalysis.fetchOverheadKind;
-        myCtx.actionContext.telemetry.properties.isSharded = transformed.isSharded ? 'true' : 'false';
+            // --- Stage 2 telemetry ---
+            // Performance metrics (safe to aggregate, no PII/OII)
+            myCtx.actionContext.telemetry.properties.performanceScore =
+                transformed.efficiencyAnalysis.performanceRating.score;
+            myCtx.actionContext.telemetry.properties.executionStrategy = transformed.executionStrategy;
+            myCtx.actionContext.telemetry.properties.indexUsed = transformed.indexUsed ? 'true' : 'false';
+            myCtx.actionContext.telemetry.properties.hadCollectionScan = transformed.hadCollectionScan
+                ? 'true'
+                : 'false';
+            myCtx.actionContext.telemetry.properties.hadInMemorySort = transformed.hadInMemorySort ? 'true' : 'false';
+            myCtx.actionContext.telemetry.properties.isCoveringQuery = transformed.isCoveringQuery ? 'true' : 'false';
+            myCtx.actionContext.telemetry.properties.fetchOverheadKind =
+                transformed.efficiencyAnalysis.fetchOverheadKind;
+            myCtx.actionContext.telemetry.properties.isSharded = transformed.isSharded ? 'true' : 'false';
 
-        myCtx.actionContext.telemetry.measurements.executionTimeMs = transformed.executionTimeMs;
-        myCtx.actionContext.telemetry.measurements.documentsReturned = transformed.documentsReturned;
-        myCtx.actionContext.telemetry.measurements.totalDocsExamined = transformed.totalDocsExamined;
-        myCtx.actionContext.telemetry.measurements.totalKeysExamined = transformed.totalKeysExamined;
-        myCtx.actionContext.telemetry.measurements.examinedToReturnedRatio = transformed.examinedToReturnedRatio;
-        myCtx.actionContext.telemetry.measurements.diagnosticBadgeCount =
-            transformed.efficiencyAnalysis.performanceRating.diagnostics.length;
+            myCtx.actionContext.telemetry.measurements.executionTimeMs = transformed.executionTimeMs;
+            myCtx.actionContext.telemetry.measurements.documentsReturned = transformed.documentsReturned;
+            myCtx.actionContext.telemetry.measurements.totalDocsExamined = transformed.totalDocsExamined;
+            myCtx.actionContext.telemetry.measurements.totalKeysExamined = transformed.totalKeysExamined;
+            myCtx.actionContext.telemetry.measurements.examinedToReturnedRatio = transformed.examinedToReturnedRatio;
+            myCtx.actionContext.telemetry.measurements.diagnosticBadgeCount =
+                transformed.efficiencyAnalysis.performanceRating.diagnostics.length;
 
-        if (totalCollectionDocs !== undefined) {
-            myCtx.actionContext.telemetry.measurements.totalCollectionDocs = totalCollectionDocs;
-        }
+            if (totalCollectionDocs !== undefined) {
+                myCtx.actionContext.telemetry.measurements.totalCollectionDocs = totalCollectionDocs;
+            }
 
-        const selectivityPercent = transformed.efficiencyAnalysis.selectivity;
-        if (selectivityPercent !== null && selectivityPercent !== undefined) {
-            myCtx.actionContext.telemetry.measurements.selectivityPercent = selectivityPercent;
-        }
+            const selectivityPercent = transformed.efficiencyAnalysis.selectivity;
+            if (selectivityPercent !== null && selectivityPercent !== undefined) {
+                myCtx.actionContext.telemetry.measurements.selectivityPercent = selectivityPercent;
+            }
 
-        // Badge IDs (safe categorical data, no PII)
-        const diagnosticIds = transformed.efficiencyAnalysis.performanceRating.diagnostics
-            .map((d) => d.diagnosticId)
-            .join(',');
-        myCtx.actionContext.telemetry.properties.diagnosticBadgeIds = diagnosticIds;
+            // Badge IDs (safe categorical data, no PII)
+            const diagnosticIds = transformed.efficiencyAnalysis.performanceRating.diagnostics
+                .map((d) => d.diagnosticId)
+                .join(',');
+            myCtx.actionContext.telemetry.properties.diagnosticBadgeIds = diagnosticIds;
 
-        // Count badges by type
-        const badgesByType = transformed.efficiencyAnalysis.performanceRating.diagnostics.reduce(
-            (acc, d) => {
-                acc[d.type] = (acc[d.type] || 0) + 1;
-                return acc;
-            },
-            {} as Record<string, number>,
-        );
-        myCtx.actionContext.telemetry.measurements.positiveBadgeCount = badgesByType['positive'] ?? 0;
-        myCtx.actionContext.telemetry.measurements.neutralBadgeCount = badgesByType['neutral'] ?? 0;
-        myCtx.actionContext.telemetry.measurements.negativeBadgeCount = badgesByType['negative'] ?? 0;
-
-        ext.outputChannel.trace(
-            l10n.t(
-                '[Query Insights Stage 2] Completed: execTime={time}ms, returned={ret}, examined={ex}, ratio={ratio}',
-                {
-                    time: analyzed.executionTimeMillis.toString(),
-                    ret: analyzed.nReturned.toString(),
-                    ex: analyzed.totalDocsExamined.toString(),
-                    ratio: analyzed.efficiencyRatio.toFixed(2),
+            // Count badges by type
+            const badgesByType = transformed.efficiencyAnalysis.performanceRating.diagnostics.reduce(
+                (acc, d) => {
+                    acc[d.type] = (acc[d.type] || 0) + 1;
+                    return acc;
                 },
-            ),
-        );
-        return transformed;
+                {} as Record<string, number>,
+            );
+            myCtx.actionContext.telemetry.measurements.positiveBadgeCount = badgesByType['positive'] ?? 0;
+            myCtx.actionContext.telemetry.measurements.neutralBadgeCount = badgesByType['neutral'] ?? 0;
+            myCtx.actionContext.telemetry.measurements.negativeBadgeCount = badgesByType['negative'] ?? 0;
+
+            ext.outputChannel.trace(
+                l10n.t(
+                    '[Query Insights Stage 2] Completed: execTime={time}ms, returned={ret}, examined={ex}, ratio={ratio}',
+                    {
+                        time: analyzed.executionTimeMillis.toString(),
+                        ret: analyzed.nReturned.toString(),
+                        ex: analyzed.totalDocsExamined.toString(),
+                        ratio: analyzed.efficiencyRatio.toFixed(2),
+                    },
+                ),
+            );
+            return transformed;
+        });
     }),
 
     /**
@@ -409,9 +396,9 @@ export const queryInsightsQueriesRouter = router({
             const aiService = new QueryInsightsAIService();
 
             // Execute the recommendation action
-            const result = await aiService.executeQueryInsightsAction(clusterId, sessionId, actionId, payload);
-
-            return result;
+            return runCollectionViewOperation(myCtx, () =>
+                aiService.executeQueryInsightsAction(clusterId, sessionId, actionId, payload),
+            );
         }),
 });
 

@@ -8,7 +8,9 @@ import * as l10n from '@vscode/l10n';
 import { EJSON, type Document } from 'bson';
 import * as fs from 'node:fs/promises';
 import * as vscode from 'vscode';
-import { ClustersClient, isBulkWriteError } from '../../documentdb/ClustersClient';
+import { ClustersClient, isBulkWriteError, type ConnectionBinding } from '../../documentdb/ClustersClient';
+import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
+import { resolveTransferClient } from '../../documentdb/resolveTransferClient';
 import {
     AzureDomains,
     getHostsFromConnectionString,
@@ -18,11 +20,13 @@ import { ext } from '../../extensionVariables';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { BufferErrorCode, createMongoDbBuffer, type DocumentBuffer } from '../../utils/documentBuffer';
 import { getRootPath } from '../../utils/workspacUtils';
+import { rethrowBoundCommandUnavailable } from '../rethrowBoundCommandUnavailable';
 
 export async function importDocuments(
     context: IActionContext,
     selectedItem: vscode.Uri | CollectionItem | undefined,
     uris: vscode.Uri[] | undefined,
+    options?: { readonly binding?: ConnectionBinding; readonly source?: string },
 ): Promise<void> {
     if (selectedItem instanceof vscode.Uri) {
         uris ||= [selectedItem];
@@ -75,8 +79,13 @@ export async function importDocuments(
 
     try {
         await ext.state.runWithTemporaryDescription(selectedItem.id, l10n.t('Importing…'), async () => {
-            await importDocumentsWithProgress(selectedItem, uris);
+            await importDocumentsWithProgress(selectedItem, uris, options?.binding);
         });
+    } catch (error) {
+        if (options?.binding && options.source === 'webview;clusterDashboard') {
+            rethrowBoundCommandUnavailable(context, error);
+        }
+        throw error;
     } finally {
         // Always refresh at the database level (parent of the collection) so collection
         // descriptions (document counts) update correctly, even after partial failures
@@ -85,7 +94,11 @@ export async function importDocuments(
     }
 }
 
-export async function importDocumentsWithProgress(selectedItem: CollectionItem, uris: vscode.Uri[]): Promise<void> {
+export async function importDocumentsWithProgress(
+    selectedItem: CollectionItem,
+    uris: vscode.Uri[],
+    binding?: ConnectionBinding,
+): Promise<void> {
     const result = await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
@@ -145,11 +158,16 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
             const incrementDocuments = 75 / (countDocuments || 1);
             let count = 0;
             let buffer: DocumentBuffer<unknown> | undefined;
+            let boundClient: ClustersClient | undefined;
             if (selectedItem instanceof CollectionItem) {
                 // Get the connection string from the ClustersClient, not from the cluster model.
                 // For Discovery View items, the cluster model may not have connectionString populated,
                 // but the ClustersClient will have it after authentication.
-                const client = await ClustersClient.getClient(selectedItem.cluster.clusterId);
+                const client = await resolveTransferClient(selectedItem.cluster.clusterId, binding);
+                if (binding) {
+                    // A bound import must not switch clients between batches.
+                    boundClient = client;
+                }
                 const connectionString = client.getConnectionString();
 
                 // Determine if this is an Azure MongoDB RU resource
@@ -171,6 +189,16 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
             }
 
             let wasCancelled = false;
+            const insertBatch = async (document: unknown): Promise<{ count: number; errorOccurred: boolean }> => {
+                try {
+                    return await insertDocument(selectedItem, document, buffer, boundClient);
+                } catch (error) {
+                    if (error instanceof ConnectionUnavailableError) {
+                        ext.outputChannel.warn(l10n.t('Inserted {0} document(s).', count));
+                    }
+                    throw error;
+                }
+            };
 
             for (let i = 0; i < countDocuments; i++) {
                 if (cancellationToken.isCancellationRequested) {
@@ -187,7 +215,7 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
                     }),
                 });
 
-                const result = await insertDocument(selectedItem, documents[i], buffer);
+                const result = await insertBatch(documents[i]);
 
                 // 'count' in result means that the result is from the buffer
                 count += result.count;
@@ -197,7 +225,7 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
 
             // Do insertion for the last batch for bulk insertion
             if (!wasCancelled && buffer && buffer.getStats().documentCount > 0) {
-                const lastBatchFlushResult = await insertDocument(selectedItem, undefined, buffer);
+                const lastBatchFlushResult = await insertBatch(undefined);
 
                 count += lastBatchFlushResult.count;
                 hasErrors = hasErrors || lastBatchFlushResult.errorOccurred;
@@ -313,6 +341,7 @@ async function insertDocument(
     node: CollectionItem,
     document: unknown,
     buffer: DocumentBuffer<unknown> | undefined,
+    boundClient?: ClustersClient,
 ): Promise<{ count: number; errorOccurred: boolean }> {
     try {
         // Check for valid buffer
@@ -323,13 +352,16 @@ async function insertDocument(
 
         // Route to appropriate handler based on node type
         if (node instanceof CollectionItem) {
-            return await insertDocumentWithBufferIntoCluster(node, buffer, document as Document);
+            return await insertDocumentWithBufferIntoCluster(node, buffer, boundClient, document as Document);
         }
 
         // Should only reach here if node is neither CollectionItem nor CosmosDBContainerResourceItem
         ext.outputChannel.error(l10n.t('Import failed: unsupported node type.'));
         return { count: 0, errorOccurred: true };
     } catch (error) {
+        if (boundClient && error instanceof ConnectionUnavailableError) {
+            throw error;
+        }
         const errorMessage = error instanceof Error ? error.message : String(error);
         ext.outputChannel.error(l10n.t('Import failed with unexpected error: {0}', errorMessage));
         return { count: 0, errorOccurred: true };
@@ -339,6 +371,7 @@ async function insertDocument(
 async function insertDocumentWithBufferIntoCluster(
     node: CollectionItem,
     buffer: DocumentBuffer<unknown>,
+    boundClient?: ClustersClient,
     document?: Document,
     // If document is undefined, it means that we are flushing the buffer
     // It is used for the last batch, and not recommended to be used for normal batches
@@ -364,7 +397,7 @@ async function insertDocumentWithBufferIntoCluster(
 
     // Documents to process could be the current document (if too large)
     // or the contents of the buffer (if it was full)
-    const client = await ClustersClient.getClient(node.cluster.clusterId);
+    const client = boundClient ?? (await ClustersClient.getClient(node.cluster.clusterId));
     try {
         const insertResult = await client.insertDocuments(
             databaseName,
@@ -377,6 +410,19 @@ async function insertDocumentWithBufferIntoCluster(
             errorOccurred: false,
         };
     } catch (error) {
+        if (boundClient) {
+            const kind = ClustersClient.reportFailure(boundClient.binding, error);
+            switch (kind) {
+                case 'signInRequired':
+                case 'credentialsRejected':
+                case 'credentialsMissing':
+                case 'identityChanged':
+                    throw new ConnectionUnavailableError(kind);
+                case 'clientClosed':
+                case 'transient':
+                    throw new ConnectionUnavailableError('unreachable');
+            }
+        }
         if (isBulkWriteError(error)) {
             // Handle MongoDB bulk write errors
             // It could be a partial failure, so we need to check the result

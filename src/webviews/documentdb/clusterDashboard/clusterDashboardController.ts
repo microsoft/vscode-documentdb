@@ -3,16 +3,30 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
+import {
+    callWithTelemetryAndErrorHandling,
+    UserCancelledError,
+    type IActionContext,
+} from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { type DeepLinkTelemetry } from '../../../deepLinks/deepLinkTelemetry';
 
+import { copyNamespaceReference } from '../../../commands/copyReference/copyReference';
 import { openCollectionViewInternal } from '../../../commands/openCollectionView/openCollectionView';
+import { ClustersClient, type ConnectionBinding } from '../../../documentdb/ClustersClient';
+import { registerConnectionSurface } from '../../../documentdb/connectionSurfaces';
+import {
+    ConnectionUnavailableError,
+    type ConnectionUnavailableReason,
+} from '../../../documentdb/ConnectionUnavailableError';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
+import { type ConnectionUnavailableMessage } from '../../_integration/connectionUnavailable';
+import { describeUnavailableConnection } from '../../_integration/describeUnavailableConnection';
 import { openAppWebview, type AppWebviewController } from '../../_integration/openAppWebview';
+import { guardBoundViewOperation, recoverBoundView } from '../boundViewOperations';
 import {
     CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS,
     type ClusterDashboardContextMenuContext,
@@ -103,6 +117,9 @@ const openPanels = new Map<string, OpenPanel>();
 interface OpenPanel {
     readonly controller: AppWebviewController<ClusterDashboardWebviewConfigurationType>;
     readonly config: ClusterDashboardWebviewConfigurationType;
+    readonly binding: ConnectionBinding;
+    readonly postUnavailable: (reason: ConnectionUnavailableReason) => void;
+    readonly getUnavailable: () => ConnectionUnavailableMessage['unavailable'] | undefined;
 }
 
 /**
@@ -118,6 +135,7 @@ type RowAction =
     | {
           readonly kind: 'treeCommand';
           readonly commandId: string;
+          readonly requiresBinding?: boolean;
           readonly invalidatesInventory?: boolean;
           readonly reportsBusy?: boolean;
       };
@@ -141,6 +159,7 @@ const ROW_ACTIONS: Readonly<Record<string, RowAction>> = {
     [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.deleteDatabase]: {
         kind: 'treeCommand',
         commandId: 'vscode-documentdb.command.dropDatabase',
+        requiresBinding: true,
         invalidatesInventory: true,
         reportsBusy: true,
     },
@@ -148,18 +167,15 @@ const ROW_ACTIONS: Readonly<Record<string, RowAction>> = {
         kind: 'treeCommand',
         commandId: 'vscode-documentdb.command.copyCollection',
     },
-    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.pasteCollection]: {
-        kind: 'treeCommand',
-        commandId: 'vscode-documentdb.command.pasteCollection',
-        invalidatesInventory: true,
-    },
     [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.exportDocuments]: {
         kind: 'treeCommand',
         commandId: 'vscode-documentdb.command.exportDocuments',
+        requiresBinding: true,
     },
     [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.importDocuments]: {
         kind: 'treeCommand',
         commandId: 'vscode-documentdb.command.importDocuments',
+        requiresBinding: true,
         // Import awaits the whole transfer before returning, and it changes the two figures
         // the dashboard puts on screen for that collection. Export does not, so it stays out.
         invalidatesInventory: true,
@@ -167,6 +183,7 @@ const ROW_ACTIONS: Readonly<Record<string, RowAction>> = {
     [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.deleteCollection]: {
         kind: 'treeCommand',
         commandId: 'vscode-documentdb.command.dropCollection',
+        requiresBinding: true,
         invalidatesInventory: true,
         reportsBusy: true,
     },
@@ -211,7 +228,7 @@ async function postInventoryChanged(panel: OpenPanel, databaseName: string): Pro
 }
 
 async function postNamespaceBusy(
-    panel: OpenPanel,
+    panel: Pick<OpenPanel, 'controller'>,
     databaseName: string,
     collectionName: string | undefined,
     operation: NamespaceBusyMessage['operation'],
@@ -233,7 +250,7 @@ async function postNamespaceBusy(
  * The menu command already runs on the host with everything it needs, so the work happens
  * here rather than being relayed to the webview and mutated back through tRPC. The dashboard
  * reads its inventory from the server, so a row is not a tree node; the node is found again
- * from the stable `clusterId` and handed to the tree's own command unchanged.
+ * from the stable `clusterId`. Bound commands receive the panel binding separately.
  */
 async function runRowAction(
     actionContext: IActionContext,
@@ -243,8 +260,33 @@ async function runRowAction(
 ): Promise<void> {
     const databaseName = menuContext.clusterDashboardDatabase;
     const collectionName = menuContext.clusterDashboardCollection;
-
     actionContext.telemetry.properties.namespaceLevel = collectionName === undefined ? 'database' : 'collection';
+    const unavailable = panel.getUnavailable();
+    if (unavailable) {
+        if (action.kind === 'treeCommand' && action.commandId === 'vscode-documentdb.command.copyReference') {
+            // The retained row has enough information to copy without expanding the tree.
+            await copyNamespaceReference(actionContext, databaseName, collectionName);
+        } else {
+            const message: ConnectionUnavailableMessage = {
+                type: 'clusterDashboard.connectionUnavailable',
+                unavailable,
+            };
+            await panel.controller.panel.webview.postMessage(message);
+        }
+        return;
+    }
+
+    const assertBound = guardBoundViewOperation(panel.binding);
+    const assertCurrent = (): void => {
+        if (panel.getUnavailable()) {
+            throw new UserCancelledError('staleBoundViewOperation');
+        }
+        assertBound();
+    };
+    if (!ClustersClient.getBinding(panel.binding.clusterId)) {
+        throw new ConnectionUnavailableError(ClustersClient.getLatchReason(panel.binding.clusterId) ?? 'unreachable');
+    }
+    assertCurrent();
 
     if (action.kind === 'showCollections') {
         const message: ShowCollectionsMessage = { type: 'clusterDashboard.showCollections', databaseName };
@@ -271,6 +313,10 @@ async function runRowAction(
     actionContext.telemetry.properties.namespaceCommand = action.commandId;
 
     const node = await resolveNamespaceNode(panel.config.viewId, panel.config.clusterId, databaseName, collectionName);
+    if (panel.controller.isDisposed) {
+        return;
+    }
+    assertCurrent();
 
     if (!node) {
         actionContext.telemetry.properties.failureReason = 'namespaceNodeNotFound';
@@ -288,15 +334,21 @@ async function runRowAction(
     }
 
     try {
+        if (panel.controller.isDisposed) {
+            return;
+        }
+        assertCurrent();
         await vscode.commands.executeCommand(action.commandId, node, null, {
             source: 'webview;clusterDashboard',
+            ...(action.requiresBinding ? { binding: panel.binding } : {}),
         });
 
-        if (action.invalidatesInventory) {
+        if (action.invalidatesInventory && !panel.controller.isDisposed) {
+            assertCurrent();
             await postInventoryChanged(panel, databaseName);
         }
     } finally {
-        if (action.reportsBusy) {
+        if (action.reportsBusy && !panel.controller.isDisposed && !panel.getUnavailable()) {
             await postNamespaceBusy(panel, databaseName, collectionName, 'delete', false);
         }
     }
@@ -329,7 +381,18 @@ export function registerClusterDashboardContextMenuCommands(context: vscode.Exte
                         if (panel.config.journeyCorrelationId) {
                             actionContext.telemetry.properties.journeyCorrelationId = panel.config.journeyCorrelationId;
                         }
-                        await runRowAction(actionContext, action, panel, menuContext);
+                        try {
+                            await runRowAction(actionContext, action, panel, menuContext);
+                        } catch (error) {
+                            if (error instanceof ConnectionUnavailableError) {
+                                panel.postUnavailable(error.reason);
+                                return;
+                            }
+                            if (error instanceof UserCancelledError) {
+                                return;
+                            }
+                            throw error;
+                        }
                     },
                 );
             }),
@@ -339,6 +402,7 @@ export function registerClusterDashboardContextMenuCommands(context: vscode.Exte
 
 export function openClusterDashboardWebview(
     initialData: ClusterDashboardWebviewConfigurationType,
+    binding: ConnectionBinding,
     deepLink?: DeepLinkTelemetry,
 ): AppWebviewController<ClusterDashboardWebviewConfigurationType> {
     const panelKey = getPanelKey(initialData.clusterId, initialData.selectedDatabaseName);
@@ -356,18 +420,51 @@ export function openClusterDashboardWebview(
     // because `openAppWebview` needs the context. `const` is not available for that ordering.
     // eslint-disable-next-line prefer-const
     let controller: AppWebviewController<ClusterDashboardWebviewConfigurationType>;
+
+    let unavailable: ReturnType<typeof describeUnavailableConnection> | undefined;
+    const rememberUnavailable = (
+        reason: ConnectionUnavailableReason,
+    ): ReturnType<typeof describeUnavailableConnection> => {
+        unavailable = describeUnavailableConnection(reason);
+        return unavailable;
+    };
+    const postUnavailable = (reason: ConnectionUnavailableReason): void => {
+        const message: ConnectionUnavailableMessage = {
+            type: 'clusterDashboard.connectionUnavailable',
+            unavailable: rememberUnavailable(reason).unavailable,
+        };
+        if (!controller.isDisposed) {
+            void controller.panel.webview.postMessage(message);
+        }
+    };
+
     const trpcContext: RouterContext = {
         ...deepLink,
         dbExperience: API.DocumentDB,
         webviewName: 'clusterDashboard',
         clusterId: initialData.clusterId,
+        binding,
+        describeUnavailable: rememberUnavailable,
+        recoverUnavailable: async (request) => {
+            const previous = unavailable;
+            const response = await recoverBoundView(binding, 'clusterDashboard', () => controller.dispose(), request);
+            if (request.action === 'retry') {
+                if (unavailable !== previous && unavailable) {
+                    return unavailable;
+                }
+                unavailable = 'unavailable' in response ? response : undefined;
+            }
+            return response;
+        },
         clusterDisplayName: initialData.clusterDisplayName,
         viewId: initialData.viewId,
         dashboardSessionId: initialData.dashboardSessionId,
         journeyCorrelationId: initialData.journeyCorrelationId,
         selectedDatabaseName: initialData.selectedDatabaseName,
         onNamespaceBusy: async (databaseName, collectionName, busy): Promise<void> => {
-            await postNamespaceBusy({ controller, config: initialData }, databaseName, collectionName, 'create', busy);
+            if (!controller.isDisposed) {
+                await postNamespaceBusy({ controller }, databaseName, collectionName, 'create', busy);
+            }
         },
     };
 
@@ -399,10 +496,23 @@ export function openClusterDashboardWebview(
         },
     });
 
-    openPanels.set(panelKey, { controller, config: initialData });
+    openPanels.set(panelKey, {
+        controller,
+        config: initialData,
+        binding,
+        postUnavailable,
+        getUnavailable: () => unavailable?.unavailable,
+    });
     const session = initialData;
     trackDashboardLifetime(controller, (lifetime) => reportDashboardClosed(lifetime, session));
+    const registration = registerConnectionSurface({
+        clusterId: initialData.clusterId,
+        kind: 'clusterDashboard',
+        disable: postUnavailable,
+        dispose: () => controller.dispose(),
+    });
     controller.onDisposed(() => {
+        registration.dispose();
         if (openPanels.get(panelKey)?.controller === controller) {
             openPanels.delete(panelKey);
         }

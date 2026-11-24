@@ -49,12 +49,22 @@ Evidence, telemetry and source pointers: [research-findings.md](./research-findi
   successful results and records a sanitized diagnostic if an account or tenant cannot be listed.
 - **Keep one client per cluster.** Surfaces resolve it per operation and check its identity
   fingerprint and generation.
-- **Never change identity under an open surface.** It becomes disconnected, keeps its state, says why
-  and offers one action.
+- **Never change identity under an open surface.** It stays open, keeps its state, and shows a
+  shaded, disabled view with a dialog that names the problem in a short title and gives the next
+  step separately. Offer **Close view**, with **Retry** beside it when the view can safely reuse
+  the available credentials. Credential repair stays in the tree. Dismissing the dialog with
+  its **X** exposes the existing contents for copying without resuming database operations.
+  Trying another operation shows the dialog again. **Close view** asks for confirmation.
+- A pending Dashboard delete confirmation does not survive Disconnect, even when the
+  user reconnects as the same identity. Dashboard **Copy Collection** keeps a tree reference;
+  **Paste Collection** stays in the tree and uses the current connection.
 - After a database rejects a verified Entra identity, discard the client but keep its in-memory
   connection settings for explicit sign-in. Do not retain the rejected token or retry silently.
   When the tree offers **Retry sign-in**, it does not also offer **Retry**.
-- **One teardown** serves Disconnect, Remove Connection and identity-changing credential updates.
+- **Disconnect and Remove Connection** share a teardown and a tab choice. Saving a change to
+  connection details (including a password-only change) in this window keeps old tabs open and
+  copyable, but they cannot recover. Open new tabs from the tree. Unchanged settings still
+  support Retry and silent token renewal.
 - Disconnect uses the existing task-conflict guard: if a copy or export is using the cluster,
   leave the task and connection running. The user can retry after the task finishes or is stopped.
 
@@ -86,6 +96,10 @@ See [decisions.md](./decisions.md):
 - 0013 corrections to 0012: latch before a credential save, epoch checks on replies, bindings carried through handoffs, an operation wrapper, folder deletion runs teardown.
 - 0014 retain in-memory settings for explicit sign-in recovery after verified Entra rejection.
 - 0015 use the existing latch to block startup after authentication rejection until explicit recovery.
+- 0016 keep disconnected webviews open under a full-view overlay with explicit actions.
+- 0017 limit unavailable webview recovery to Retry and Close view.
+- 0018 saved connection edits permanently lock existing views.
+- 0019 require a fresh Dashboard delete after Disconnect and retain tree-only Paste.
 
 ## Timeline
 

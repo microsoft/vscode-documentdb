@@ -7,13 +7,14 @@ import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext
 import * as l10n from '@vscode/l10n';
 import { type Document, type Filter } from 'mongodb';
 import * as vscode from 'vscode';
-import { type IndexItemModel } from '../../documentdb/ClustersClient';
+import { type ClustersClient, type IndexItemModel } from '../../documentdb/ClustersClient';
 import { ClusterSession } from '../../documentdb/ClusterSession';
 import { type CollectionStats, type IndexStats } from '../../documentdb/LlmEnhancedFeatureApis';
 import { type ClusterMetadata } from '../../documentdb/utils/getClusterMetadata';
 import { ext } from '../../extensionVariables';
 import { CopilotService, type CopilotTokenUsage } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
+import { throwIfBoundViewUnavailable } from '../../webviews/documentdb/boundViewOperations';
 import { getLastPromptSource, type FilledPromptResult } from './promptTemplates';
 
 /**
@@ -469,6 +470,13 @@ async function prepareOptimizationRequest(
         throw new UserCancelledError('AbortSignal');
     }
 
+    // TODO: allow null sessionId for testing framework
+    if (!queryContext.sessionId) {
+        throw new Error(l10n.t('sessionId is required for query optimization'));
+    }
+    const session = ClusterSession.getSession(queryContext.sessionId);
+    const epoch = session.getEpoch();
+
     // Check if Copilot is available
     const copilotAvailable = await CopilotService.isAvailable();
     if (!copilotAvailable) {
@@ -479,16 +487,22 @@ async function prepareOptimizationRequest(
         );
     }
 
+    return session.runWithClient(async (client) => {
+        const prepared = await prepareBoundOptimizationRequest(context, queryContext, client);
+        session.assertCurrent(epoch, queryContext.signal);
+        return prepared;
+    }, epoch);
+}
+
+async function prepareBoundOptimizationRequest(
+    context: IActionContext,
+    queryContext: QueryOptimizationContext,
+    client: ClustersClient,
+): Promise<PreparedOptimizationRequest> {
     let explainResult: unknown;
     let collectionStats: CollectionStats | undefined;
     let indexes: IndexStats[] | undefined;
 
-    // TODO: allow null sessionId for testing framework
-    if (!queryContext.sessionId) {
-        throw new Error(l10n.t('sessionId is required for query optimization'));
-    }
-    const session = ClusterSession.getSession(queryContext.sessionId);
-    const client = session.getClient();
     const clusterInfo = await client.getClusterMetadata();
 
     // Track cluster information in telemetry
@@ -589,6 +603,7 @@ async function prepareOptimizationRequest(
                 l10n.t('Failed to gather query optimization data: {message}', {
                     message: error instanceof Error ? error.message : String(error),
                 }),
+                { cause: error },
             );
         }
     }
@@ -674,6 +689,7 @@ async function prepareOptimizationRequest(
         if (error instanceof UserCancelledError) {
             throw error;
         }
+        throwIfBoundViewUnavailable(client.binding, error);
 
         // They are not critical errors, we can continue without index stats and collection stats
         // If the API calls failed, collectionStats and indexes remain undefined (safe to continue)

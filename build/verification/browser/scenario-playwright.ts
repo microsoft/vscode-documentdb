@@ -43,9 +43,50 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
             if (await page.evaluate((): boolean => document.documentElement.dataset.ready === 'failed')) {
                 throw new Error(`Page failed before step: ${step.name}`);
             }
+            if (step.action === 'post') {
+                await page.evaluate(
+                    (message): void => window.postMessage(message, window.location.origin),
+                    step.message,
+                );
+                continue;
+            }
+            if (step.action === 'releaseReply') {
+                await wait((path) => window.__harnessReleaseReply(path), step.path, step.name);
+                // The reply is an asynchronous message. Give the app a render before reading the result.
+                await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+                continue;
+            }
+            if (step.action === 'waitFor') {
+                await wait((selector) => document.querySelector(selector) !== null, step.selector, step.name);
+                continue;
+            }
             const locator = page.getByRole(step.role, { name: step.name, exact: true });
-            if (step.action === 'click') {
+            if (step.action === 'press') {
+                await locator.press(step.key, { timeout: 60000 });
+            } else if (step.action === 'click') {
                 await locator.click({ timeout: 60000 });
+            } else if (step.action === 'replaceText') {
+                const modifier = await page.evaluate(() =>
+                    /Mac|iPhone|iPad/.test(navigator.platform) ? 'Meta' : 'Control',
+                );
+                const renderedEditor = `.monaco-editor:has([aria-label="${step.name}"]) .view-lines`;
+                await locator.press(`${modifier}+A`, { timeout: 60000 });
+                await locator.press('Backspace', { timeout: 60000 });
+                await wait(
+                    (selector) => document.querySelector(selector)?.textContent?.trim() === '',
+                    renderedEditor,
+                    'cleared editor',
+                );
+                await page.keyboard.insertText(step.value);
+                await wait(
+                    ({ selector, value }) =>
+                        document
+                            .querySelector(selector)
+                            ?.textContent?.replace(/\u00a0/g, ' ')
+                            .includes(value) === true,
+                    { selector: renderedEditor, value: step.value },
+                    'editor text to render',
+                );
             } else {
                 await locator.fill(step.value, { timeout: 60000 });
             }
@@ -92,6 +133,7 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
                                         count: calls.length,
                                         matching: calls.filter(
                                             (call): boolean =>
+                                                expected.checkInput === false ||
                                                 JSON.stringify(call.input) === JSON.stringify(expected.input),
                                         ).length,
                                     };
@@ -102,7 +144,10 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
                                 name: assertion.name,
                                 passed: actual.count === assertion.count && actual.matching === assertion.count,
                                 actual,
-                                expected: { count: assertion.count, input: assertion.input },
+                                expected:
+                                    assertion.checkInput === false
+                                        ? { count: assertion.count }
+                                        : { count: assertion.count, input: assertion.input },
                             });
                         } else if (assertion.kind === 'order') {
                             const actual = await page.evaluate(

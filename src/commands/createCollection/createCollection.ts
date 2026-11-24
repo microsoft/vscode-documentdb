@@ -5,9 +5,11 @@
 
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { type ConnectionBinding } from '../../documentdb/ClustersClient';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { nonNullValue } from '../../utils/nonNull';
+import { rethrowBoundCommandUnavailable } from '../rethrowBoundCommandUnavailable';
 import { CollectionNameStep } from './CollectionNameStep';
 import { type CreateCollectionWizardContext } from './CreateCollectionWizardContext';
 import { ExecuteStep } from './ExecuteStep';
@@ -18,6 +20,7 @@ interface CreateCollectionCommandOptions {
      * `treeEmptyPlaceholder`, `clusterDashboard:emptyState`.
      */
     readonly activationSource?: string;
+    readonly binding?: ConnectionBinding;
     readonly onNameResolved?: (collectionName: string) => Promise<void>;
 }
 
@@ -38,6 +41,7 @@ export async function createCollection(
     const wizardContext: CreateCollectionWizardContext = {
         ...context,
         credentialsId: node.cluster.clusterId,
+        binding: options?.binding,
         databaseId: node.databaseInfo.name,
         nodeId: node.id,
     };
@@ -49,16 +53,23 @@ export async function createCollection(
         showLoadingPrompt: true,
     });
 
-    await wizard.prompt();
-    const newCollectionName = nonNullValue(
-        wizardContext.newCollectionName,
-        'wizardContext.newCollectionName',
-        'createCollection.ts',
-    );
-    await options?.onNameResolved?.(newCollectionName);
-    await wizard.execute();
+    try {
+        await wizard.prompt();
+        const newCollectionName = nonNullValue(
+            wizardContext.newCollectionName,
+            'wizardContext.newCollectionName',
+            'createCollection.ts',
+        );
+        await options?.onNameResolved?.(newCollectionName);
+        await wizard.execute();
 
-    showConfirmationAsInSettings(
-        l10n.t('The "{newCollectionName}" collection has been created.', { newCollectionName }),
-    );
+        showConfirmationAsInSettings(
+            l10n.t('The "{newCollectionName}" collection has been created.', { newCollectionName }),
+        );
+    } catch (error) {
+        if (options?.binding) {
+            rethrowBoundCommandUnavailable(context, error);
+        }
+        throw error;
+    }
 }

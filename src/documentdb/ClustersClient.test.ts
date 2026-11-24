@@ -35,10 +35,12 @@ import {
     getIndexExclusionReason,
     type IndexItemModel,
 } from './ClustersClient';
+import { ClusterSession } from './ClusterSession';
 import { computeConnectionFingerprint } from './connectionFingerprint';
 import { ConnectionUnavailableError } from './ConnectionUnavailableError';
 import { CredentialCache } from './CredentialCache';
 import { runWithClient } from './runWithClient';
+import { SchemaStore } from './SchemaStore';
 import { prepareDriverConnectionString } from './srv/prepareDriverConnectionString';
 import { type SrvResolutionSummary } from './srv/srvResolutionSummary';
 import { getClusterMetadata, getDomainMetadata } from './utils/getClusterMetadata';
@@ -130,7 +132,11 @@ vi.mock('./utils/getClusterMetadata', () => ({
 }));
 
 vi.mock('./LlmEnhancedFeatureApis', () => ({ llmEnhancedFeatureApis: vi.fn() }));
-vi.mock('./client/QueryInsightsApis', () => ({ QueryInsightsApis: vi.fn() }));
+vi.mock('./client/QueryInsightsApis', () => ({
+    QueryInsightsApis: vi.fn(function () {
+        return { explainFind: vi.fn() };
+    }),
+}));
 vi.mock('./srv/prepareDriverConnectionString', () => ({ prepareDriverConnectionString: vi.fn() }));
 vi.mock('./auth/createAuthHandler', async () => {
     const actual = await vi.importActual<typeof authHandlerFactory>('./auth/createAuthHandler');
@@ -160,6 +166,9 @@ describe('regular connection startup diagnostics', () => {
     const mockConnect = vi.fn();
     const mockClose = vi.fn();
     const mockListDatabases = vi.fn<() => Promise<Mongodb.ListDatabasesResult>>();
+    const mockFind = vi.fn();
+    const mockToArray = vi.fn<() => Promise<Mongodb.WithId<Mongodb.Document & { _id: string }>[]>>();
+    const mockDeleteMany = vi.fn<() => Promise<Mongodb.DeleteResult>>();
     let poolEvents: EventEmitter;
 
     function pauseNextConnect(): { started: Promise<void>; resolve: () => void; reject: (error: Error) => void } {
@@ -193,12 +202,18 @@ describe('regular connection startup diagnostics', () => {
         });
         mockClose.mockResolvedValue(undefined);
         mockListDatabases.mockReset();
+        mockFind.mockReset().mockReturnValue({ toArray: mockToArray });
+        mockToArray.mockReset();
+        mockDeleteMany.mockReset();
         vi.mocked(MongoClient).mockImplementation(function () {
             poolEvents = new EventEmitter();
             return Object.assign(poolEvents, {
                 connect: mockConnect,
                 close: mockClose,
-                db: () => ({ admin: () => ({ listDatabases: mockListDatabases }) }),
+                db: () => ({
+                    admin: () => ({ listDatabases: mockListDatabases }),
+                    collection: () => ({ find: mockFind, deleteMany: mockDeleteMany }),
+                }),
             }) as unknown as MongoClient;
         });
         for (const handler of [
@@ -269,6 +284,146 @@ describe('regular connection startup diagnostics', () => {
         expect(await ClustersClient.getClient(clusterId)).toBe(client);
         expect(mockConnect).toHaveBeenCalledOnce();
         expect(mockClose).not.toHaveBeenCalled();
+    });
+
+    it('lets a surface follow a same-identity generation but does not redial while latched', async (): Promise<void> => {
+        const client = await ClustersClient.connectInteractive(clusterId);
+        await ClustersClient.deleteClient(clusterId);
+        const replacement = await ClustersClient.resolveBoundClient(client.binding);
+        expect(replacement.binding).toEqual({ ...client.binding, generation: client.generation + 1 });
+        expect(mockConnect).toHaveBeenCalledTimes(2);
+
+        ClustersClient.latch(clusterId, 'userDisconnected');
+        try {
+            await expect(ClustersClient.resolveBoundClient(client.binding)).rejects.toMatchObject({
+                reason: 'userDisconnected',
+            });
+            expect(mockConnect).toHaveBeenCalledTimes(2);
+        } finally {
+            ClustersClient.unlatch(clusterId);
+        }
+    });
+
+    it('does not open a changed connection for an old surface, even with no cached client', async (): Promise<void> => {
+        const client = await ClustersClient.connectInteractive(clusterId);
+        await ClustersClient.deleteClient(clusterId);
+        CredentialCache.setAuthCredentials(clusterId, AuthMethodId.MicrosoftEntraID, 'mongodb://different.test/');
+
+        await expect(ClustersClient.resolveBoundClient(client.binding)).rejects.toMatchObject({
+            reason: 'identityChanged',
+        });
+        expect(MongoClient).toHaveBeenCalledOnce();
+        expect(ClustersClient.getBinding(clusterId)).toBeUndefined();
+
+        const current = await ClustersClient.getClient(clusterId);
+        await expect(ClustersClient.resolveBoundClient(client.binding)).rejects.toMatchObject({
+            reason: 'identityChanged',
+        });
+        expect(ClustersClient.getBinding(clusterId)).toBe(current.binding);
+    });
+
+    it('keeps session paging and schema accumulation on a same-identity replacement', async (): Promise<void> => {
+        const original = await ClustersClient.connectInteractive(clusterId);
+        const session = ClusterSession.getSession(await ClusterSession.initNewSession(clusterId));
+        const query = { filter: '{}', skip: 2, limit: 3 };
+        mockToArray.mockResolvedValueOnce([{ _id: 'first', previousField: true }]);
+        await session.runFindQueryWithCache('db', 'items', query, 1, 2);
+
+        ClustersClient.reportFailure(original.binding, new MongoNotConnectedError('idle connection closed'));
+        const replacement = await session.getClient();
+        expect(replacement.generation).toBe(original.generation + 1);
+        expect(replacement.fingerprint).toBe(original.fingerprint);
+        const runFind = vi.spyOn(replacement, 'runFindQuery');
+
+        mockToArray.mockResolvedValueOnce([{ _id: 'last', nextField: true }]);
+        await expect(session.runFindQueryWithCache('db', 'items', query, 2, 2)).resolves.toBe(1);
+        expect(runFind).toHaveBeenCalledExactlyOnceWith('db', 'items', { ...query, skip: 4, limit: 1 });
+        expect(session.getCurrentPageAsJson().map((page) => JSON.parse(page) as unknown)).toEqual([
+            { _id: 'last', nextField: true },
+        ]);
+        expect(SchemaStore.getInstance().getDocumentCount(clusterId, 'db', 'items')).toBe(2);
+        await expect(session.runFindQueryWithCache('db', 'items', query, 3, 2)).resolves.toBe(0);
+        expect(session.getCurrentPageAsJson()).toEqual([]);
+        expect(runFind).toHaveBeenCalledOnce();
+    });
+
+    it('rejects a changed identity before a session can submit a write', async (): Promise<void> => {
+        await ClustersClient.connectInteractive(clusterId);
+        const session = ClusterSession.getSession(await ClusterSession.initNewSession(clusterId));
+        await ClustersClient.deleteClient(clusterId);
+        CredentialCache.setAuthCredentials(clusterId, AuthMethodId.MicrosoftEntraID, 'mongodb://different.test/');
+        await ClustersClient.getClient(clusterId);
+
+        await expect(session.getClient()).rejects.toMatchObject({ reason: 'identityChanged' });
+        await expect(session.deleteDocuments('db', 'items', ['"one"'])).rejects.toMatchObject({
+            reason: 'identityChanged',
+        });
+        expect(mockDeleteMany).not.toHaveBeenCalled();
+    });
+
+    it('drops a find completed after reconnect without changing the query, page, or schema', async (): Promise<void> => {
+        await ClustersClient.connectInteractive(clusterId);
+        const session = ClusterSession.getSession(await ClusterSession.initNewSession(clusterId));
+        const query = { filter: '{}' };
+        mockToArray.mockResolvedValueOnce([{ _id: 'current' }]);
+        await session.runFindQueryWithCache('db', 'items', query, 1, 10);
+        const page = session.getCurrentPageAsJson();
+
+        const started = deferred();
+        const finish = deferred();
+        mockToArray.mockImplementationOnce(async () => {
+            started.resolve();
+            await finish.promise;
+            return [{ _id: 'stale', staleField: true }];
+        });
+        const pending = session.runFindQueryWithCache('db', 'items', { filter: '{ staleField: true }' }, 1, 10);
+        await started.promise;
+        ClustersClient.latch(clusterId, 'userDisconnected');
+        await ClustersClient.deleteClient(clusterId);
+        ClustersClient.unlatch(clusterId);
+        await session.getClient();
+        finish.resolve();
+
+        await expect(pending).rejects.toBeInstanceOf(UserCancelledError);
+        expect(session.getCurrentFindQueryParams()).toEqual(query);
+        expect(session.getCurrentPageAsJson()).toEqual(page);
+        expect(SchemaStore.getInstance().getDocumentCount(clusterId, 'db', 'items')).toBe(0);
+    });
+
+    it('does not cache execution stats that complete while the session is latched', async (): Promise<void> => {
+        const client = await ClustersClient.connectInteractive(clusterId);
+        const session = ClusterSession.getSession(await ClusterSession.initNewSession(clusterId));
+        const started = deferred();
+        const finish = deferred();
+        vi.spyOn(client.queryInsightsApis, 'explainFind').mockImplementationOnce(async () => {
+            started.resolve();
+            await finish.promise;
+            return { executionStats: { nReturned: 1 } };
+        });
+        const pending = session.runWithClient((resolved, epoch) =>
+            session.getExecutionStats(resolved, epoch, 'db', 'items', {}),
+        );
+        await started.promise;
+        ClustersClient.latch(clusterId, 'userDisconnected');
+        finish.resolve();
+
+        await expect(pending).rejects.toBeInstanceOf(UserCancelledError);
+        expect(session.getRawExplainOutput('db', 'items')).toBeNull();
+    });
+
+    it('does not replay a failed delete or remove the cached document', async (): Promise<void> => {
+        await ClustersClient.connectInteractive(clusterId);
+        const session = ClusterSession.getSession(await ClusterSession.initNewSession(clusterId));
+        mockToArray.mockResolvedValueOnce([{ _id: 'one' }]);
+        await session.runFindQueryWithCache('db', 'items', {}, 1, 10);
+        const page = session.getCurrentPageAsJson();
+        const failure = new MongoNotConnectedError('connection closed during delete');
+        mockDeleteMany.mockRejectedValueOnce(failure);
+
+        await expect(session.deleteDocuments('db', 'items', ['"one"'])).rejects.toBe(failure);
+        expect(mockDeleteMany).toHaveBeenCalledExactlyOnceWith({ _id: { $in: ['one'] } });
+        expect(session.getCurrentPageAsJson()).toEqual(page);
+        expect(mockConnect).toHaveBeenCalledOnce();
     });
 
     it('reports only the expiry of the last Entra token supplied to the driver', async (): Promise<void> => {
@@ -676,27 +831,39 @@ describe('regular connection startup diagnostics', () => {
     it('uses the resolved binding, preserves nonterminal errors and returns terminal unavailability without replay', async () => {
         const old = await ClustersClient.connectInteractive(clusterId);
         poolEvents.emit('topologyClosed');
-        const client = await ClustersClient.getClient(clusterId);
-        const resolveClient = vi.fn(async (): Promise<ClustersClient> => client);
         const network = Object.freeze(new MongoNetworkError('tunnel refused'));
         const op = vi.fn<() => Promise<never>>().mockRejectedValueOnce(network);
-        resolveClient.mockRejectedValueOnce(new ConnectionUnavailableError('unreachable'));
-        await expect(runWithClient(old.binding, op, { resolveClient, background: true })).resolves.toEqual({
+        await expect(runWithClient(old.binding, op, { background: true })).resolves.toEqual({
             unavailable: { reason: 'unreachable' },
         });
+        expect(mockConnect).toHaveBeenCalledOnce();
         expect(op).not.toHaveBeenCalled();
 
-        await expect(runWithClient(old.binding, op, { resolveClient, background: true })).rejects.toBe(network);
-        expect(resolveClient).toHaveBeenLastCalledWith(old.binding, { background: true });
+        const client = await ClustersClient.getClient(clusterId);
+        await expect(runWithClient(old.binding, op, { background: true })).rejects.toBe(network);
         expect(op).toHaveBeenCalledExactlyOnceWith(client);
         expect(await ClustersClient.getClient(clusterId)).toBe(client);
 
         op.mockRejectedValueOnce(new EntraIdentityMismatchError());
-        await expect(runWithClient(old.binding, op, { resolveClient })).resolves.toEqual({
+        await expect(runWithClient(old.binding, op)).resolves.toEqual({
             unavailable: { reason: 'identityChanged' },
         });
         expect(ClustersClient.getBinding(clusterId)).toBeUndefined();
         expect(op).toHaveBeenCalledTimes(2);
+    });
+
+    it('reports a startup credential rejection without submitting the bound operation', async (): Promise<void> => {
+        CredentialCache.setAuthCredentials(clusterId, AuthMethodId.NativeAuth, 'mongodb://private-host:27017');
+        const client = await ClustersClient.getClient(clusterId);
+        await ClustersClient.deleteClient(clusterId);
+        mockConnect.mockRejectedValueOnce(new MongoServerError({ code: 18 }));
+        const op = vi.fn<() => Promise<void>>();
+
+        await expect(runWithClient(client.binding, op)).resolves.toEqual({
+            unavailable: { reason: 'credentialsRejected' },
+        });
+        expect(mockConnect).toHaveBeenCalledTimes(2);
+        expect(op).not.toHaveBeenCalled();
     });
 
     it('binds Entra to the original cached URI and the verified identity, even if credentials change during startup', async () => {
@@ -979,6 +1146,8 @@ describe('regular connection startup diagnostics', () => {
     });
 
     afterEach(() => {
+        ClusterSession._sessions.clear();
+        SchemaStore.getInstance().clearCluster(clusterId);
         if (ClustersClient.getLatchReason(clusterId)) {
             ClustersClient.unlatch(clusterId);
         }

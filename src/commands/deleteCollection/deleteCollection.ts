@@ -5,20 +5,28 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { ClustersClient } from '../../documentdb/ClustersClient';
+import { ClustersClient, type ConnectionBinding } from '../../documentdb/ClustersClient';
 import { SchemaStore } from '../../documentdb/SchemaStore';
 import { ext } from '../../extensionVariables';
 import { checkCanProceedAndInformUser } from '../../services/taskService/resourceUsageHelper';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
+import { rethrowBoundCommandUnavailable } from '../rethrowBoundCommandUnavailable';
+import { runBoundNamespaceCommand } from '../runBoundNamespaceCommand';
 
-export async function deleteCollection(context: IActionContext, node: CollectionItem): Promise<void> {
+export async function deleteCollection(
+    context: IActionContext,
+    node: CollectionItem,
+    _nodes?: CollectionItem[],
+    options?: { readonly binding?: ConnectionBinding },
+): Promise<void> {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
     }
 
     context.telemetry.properties.experience = node.experience.api;
+    const confirmationEpoch = options?.binding ? ClustersClient.getEpoch(node.cluster.clusterId) : undefined;
 
     // Check if any running tasks are using this collection
     const canProceed = await checkCanProceedAndInformUser(
@@ -53,11 +61,21 @@ export async function deleteCollection(context: IActionContext, node: Collection
     }
 
     try {
-        const client = await ClustersClient.getClient(node.cluster.clusterId);
+        const { clusterId } = node.cluster;
+        const drop = (client: ClustersClient): Promise<boolean> =>
+            client.dropCollection(node.databaseInfo.name, node.collectionInfo.name);
+        const binding = options?.binding;
+        let runDrop: () => Promise<boolean>;
+        if (binding) {
+            runDrop = () => runBoundNamespaceCommand(clusterId, binding, drop, confirmationEpoch);
+        } else {
+            const client = await ClustersClient.getClient(clusterId);
+            runDrop = () => drop(client);
+        }
 
         let success = false;
         await ext.state.showDeleting(node.id, async () => {
-            success = await client.dropCollection(node.databaseInfo.name, node.collectionInfo.name);
+            success = await runDrop();
         });
 
         if (success) {
@@ -68,6 +86,11 @@ export async function deleteCollection(context: IActionContext, node: Collection
             );
             showConfirmationAsInSettings(successMessage);
         }
+    } catch (error) {
+        if (options?.binding) {
+            rethrowBoundCommandUnavailable(context, error);
+        }
+        throw error;
     } finally {
         const lastSlashIndex = node.id.lastIndexOf('/');
         let parentId = node.id;

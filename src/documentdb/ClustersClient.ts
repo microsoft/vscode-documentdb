@@ -838,6 +838,22 @@ export class ClustersClient {
         return ClustersClient.acquireClient(clusterId, abortSignal, onStartup, trigger, true, false);
     }
 
+    /** A surface can follow new generations, but never start or use a client for a different identity. */
+    public static resolveBoundClient(
+        binding: ConnectionBinding,
+        options?: { readonly background?: boolean; readonly trigger?: ClientStartupTrigger },
+    ): Promise<ClustersClient> {
+        return ClustersClient.acquireClient(
+            binding.clusterId,
+            undefined,
+            undefined,
+            options?.trigger ?? 'other',
+            false,
+            options?.background === true,
+            binding.fingerprint,
+        );
+    }
+
     /** Publish only after explicit sign-in and database startup succeed. The prior pin stays intact until then. */
     public static async startAfterSignIn(
         clusterId: string,
@@ -894,6 +910,7 @@ export class ClustersClient {
         trigger: ClientStartupTrigger,
         allowInteractive: boolean,
         background: boolean,
+        boundFingerprint?: string,
     ): Promise<ClustersClient> {
         for (let attempt = 0; ; attempt++) {
             const reason = ClustersClient.getLatchReason(clusterId);
@@ -909,6 +926,9 @@ export class ClustersClient {
 
             const epoch = ClustersClient.getEpoch(clusterId);
             const cached = ClustersClient._clients.get(clusterId);
+            if (cached && boundFingerprint !== undefined && cached.fingerprint !== boundFingerprint) {
+                throw new ConnectionUnavailableError('identityChanged');
+            }
             if (cached?._replacement === 'replaceOnRecovery') {
                 throw new ConnectionUnavailableError('signInRequired');
             }
@@ -936,12 +956,15 @@ export class ClustersClient {
                 trigger,
                 allowInteractive,
                 background,
-                cached?.fingerprint,
+                boundFingerprint ?? cached?.fingerprint,
             );
             onStartup?.(id);
             try {
                 const client = await waitForClient(promise, abortSignal, id);
                 if (epoch === ClustersClient.getEpoch(clusterId) && client.canReuse()) {
+                    if (boundFingerprint !== undefined && client.fingerprint !== boundFingerprint) {
+                        throw new ConnectionUnavailableError('identityChanged');
+                    }
                     return client;
                 }
             } catch (error) {

@@ -18,7 +18,6 @@ export const CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS = {
     newPlayground: 'vscode-documentdb.command.clusterDashboard.context.newPlayground',
     deleteDatabase: 'vscode-documentdb.command.clusterDashboard.context.deleteDatabase',
     copyCollection: 'vscode-documentdb.command.clusterDashboard.context.copyCollection',
-    pasteCollection: 'vscode-documentdb.command.clusterDashboard.context.pasteCollection',
     exportDocuments: 'vscode-documentdb.command.clusterDashboard.context.exportDocuments',
     importDocuments: 'vscode-documentdb.command.clusterDashboard.context.importDocuments',
     deleteCollection: 'vscode-documentdb.command.clusterDashboard.context.deleteCollection',
