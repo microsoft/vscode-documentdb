@@ -614,7 +614,11 @@ describe('MicrosoftEntraIDAuthHandler', () => {
             timeoutContext: new AbortController().signal,
         });
         await expect(result).rejects.toBeInstanceOf(TokenCallbackError);
-        await expect(result).rejects.toMatchObject({ authMethod: AuthMethodId.MicrosoftEntraID, cause });
+        await expect(result).rejects.toMatchObject({
+            message: 'Failed to obtain a Microsoft Entra ID token.',
+            authMethod: AuthMethodId.MicrosoftEntraID,
+            cause,
+        });
         expect(onCallbackTokenObserved).toHaveBeenCalledOnce();
         const observed = onCallbackTokenObserved.mock.lastCall?.[0];
         expect(observed?.outcome).toBe('failed');

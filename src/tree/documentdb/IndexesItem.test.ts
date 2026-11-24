@@ -35,6 +35,7 @@ vi.mock('../../utils/accumulatingTelemetry', () => ({
 vi.mock('../../documentdb/ClustersClient', () => ({
     ClustersClient: {
         getClient: vi.fn(),
+        reportFailure: vi.fn(),
     },
     getIndexExclusionReason: vi.fn(() => undefined),
 }));
@@ -122,9 +123,26 @@ describe('IndexesItem - async index loading', () => {
         listSearchIndexesMock = vi.fn().mockRejectedValue(new Error('not supported'));
 
         (ClustersClient.getClient as Mock).mockResolvedValue({
+            binding: { clusterId: cluster.clusterId, fingerprint: 'identity', generation: 1 },
             listIndexes: listIndexesMock,
             listSearchIndexesForAtlas: listSearchIndexesMock,
         });
+    });
+
+    it('reports only foreground index failures and preserves the original error', async (): Promise<void> => {
+        const error = new Error('List indexes failed');
+        listIndexesMock.mockRejectedValue(error);
+        const item = new IndexesItem(cluster, databaseInfo, collectionInfo);
+        item.loadIndexCount();
+        await flushAsync();
+        expect(ClustersClient.reportFailure).not.toHaveBeenCalled();
+
+        await expect(item.getChildren()).rejects.toBe(error);
+        expect(ClustersClient.reportFailure).toHaveBeenCalledExactlyOnceWith(
+            { clusterId: cluster.clusterId, fingerprint: 'identity', generation: 1 },
+            error,
+        );
+        expect(listIndexesMock).toHaveBeenCalledTimes(2);
     });
 
     function flushAsync(): Promise<void> {

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { traceAuthFlow, type AuthTraceContext } from '../../utils/authTrace';
-import { describeManagedIdentityTenantMismatch } from './managedIdentityErrors';
+import { describeManagedIdentityTenantMismatch, ManagedIdentityGuidanceError } from './managedIdentityErrors';
 import { reportManagedIdentityFailureReason } from './managedIdentityTelemetry';
 
 /**
@@ -87,5 +87,5 @@ export function verifyManagedIdentityTenant(
         traceContext,
     );
     reportManagedIdentityFailureReason('tenantMismatch', clientId, correlationId, traceContext);
-    throw new Error(describeManagedIdentityTenantMismatch(identityTenantId, clusterTenantId));
+    throw new ManagedIdentityGuidanceError(describeManagedIdentityTenantMismatch(identityTenantId, clusterTenantId));
 }

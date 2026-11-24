@@ -76,7 +76,10 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
             undefined,
             'treeChildren',
         );
-        const collections = await client.listCollections(this.databaseInfo.name);
+        const collections = await client.listCollections(this.databaseInfo.name).catch((error: unknown) => {
+            ClustersClient.reportFailure(client.binding, error);
+            throw error;
+        });
 
         // Update the collection count from the full list we just fetched. This
         // is the exact value, so mark it authoritative: a still-running

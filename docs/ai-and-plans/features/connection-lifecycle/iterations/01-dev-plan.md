@@ -1359,8 +1359,10 @@ shim (0005).
   the next packaged candidate starts both Shell and Playground; the tree OP-3 gate is unchanged.
 - **PR4 handoff verification:** OP-3 passed, author-approved pre-review fixes are in
   [the review record](./01-pr4-connection-recovery-review.md), and local Case 2 passed
-  (9,796 runtime tests passed, one skipped). Keep PR4 in draft until the separate live
-  packaged Shell and Playground smoke passes. WI-6 host work may proceed on this base.
+  (9,796 runtime tests passed, one skipped). Full CI passed on `d422d065b`.
+  The operator confirmed both Shell and Playground on the CI-built `1.1.1-alpha.1` VSIX
+  on 2026-11-24. The worker smoke gate is cleared, and PR4 can move to operator review.
+  WI-6 continues on this base without waiting for PR4 to merge.
 
 ---
 

@@ -23,6 +23,7 @@ import {
     resetEntraTokenFailuresForTests,
 } from './entraErrors/entraTokenFailures';
 import { ManagedIdentityAuthHandler } from './ManagedIdentityAuthHandler';
+import { ManagedIdentityGuidanceError } from './managedIdentityErrors';
 import { EntraDestinationRejectedError } from './oidcAllowedHosts';
 import { expiresInSecondsFromTimestamp } from './tokenExpiry';
 
@@ -371,6 +372,24 @@ describe('ManagedIdentityAuthHandler', () => {
             ruleId: 'resourceNotInTenant',
             timestamp: expect.any(Number),
         });
+    });
+
+    it('preserves the actionable managed identity message in the typed callback wrapper', async (): Promise<void> => {
+        const message =
+            'This machine has more than one managed identity, so the right one cannot be chosen automatically. Reconnect and enter the client ID you want to use.';
+        const accessToken = 'private-access-token';
+        const cause = Object.freeze(Object.assign(new ManagedIdentityGuidanceError(message), { accessToken }));
+        getManagedIdentityAccessToken.mockRejectedValueOnce(cause);
+        const { options } = await new ManagedIdentityAuthHandler(buildCredentials()).configureAuth();
+
+        const callback = invokeOidcCallback(options);
+        await expect(callback).rejects.toMatchObject({
+            name: 'TokenCallbackError',
+            message,
+            authMethod: AuthMethodId.ManagedIdentity,
+            cause,
+        });
+        await expect(callback).rejects.not.toThrow(accessToken);
     });
 
     it('does not record token resource resolution errors as token-acquisition failures', async (): Promise<void> => {

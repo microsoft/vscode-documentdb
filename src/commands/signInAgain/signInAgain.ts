@@ -6,7 +6,10 @@
 import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
-import { EntraIdentityMismatchError } from '../../documentdb/auth/entraErrors/entraCallbackErrors';
+import {
+    EntraIdentityMismatchError,
+    EntraSignInRequiredError,
+} from '../../documentdb/auth/entraErrors/entraCallbackErrors';
 import { getEntraSession } from '../../documentdb/auth/entraSession';
 import { MicrosoftEntraIDAuthHandler } from '../../documentdb/auth/MicrosoftEntraIDAuthHandler';
 import { addEstablishedConnectionContext, ClustersClient } from '../../documentdb/ClustersClient';
@@ -118,6 +121,15 @@ export async function signInAgain(
             error,
             AuthMethodId.MicrosoftEntraID,
         ).kind;
+        if (error instanceof EntraSignInRequiredError && error.reason === 'providerChanged') {
+            await vscode.window.showErrorMessage(vscode.l10n.t('The Azure cloud or sign-in provider changed.'), {
+                modal: true,
+                detail: vscode.l10n.t(
+                    'Restore "microsoft-sovereign-cloud.environment" to the setting used when this connection was established, then choose Retry sign-in. If it used the Azure public cloud, reset the setting.',
+                ),
+            });
+            throw error;
+        }
         await showClusterConnectFailure({
             clusterId,
             clusterName: node?.cluster.name ?? vscode.l10n.t('connection'),

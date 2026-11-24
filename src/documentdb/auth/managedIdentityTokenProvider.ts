@@ -6,7 +6,11 @@
 import { type TokenCredential } from '@azure/identity';
 import { randomUUID } from 'crypto';
 import { traceAuthFlow, traceAuthOperation, type AuthTraceContext } from '../../utils/authTrace';
-import { classifyManagedIdentityError, describeManagedIdentityError } from './managedIdentityErrors';
+import {
+    classifyManagedIdentityError,
+    describeManagedIdentityError,
+    ManagedIdentityGuidanceError,
+} from './managedIdentityErrors';
 import { reportManagedIdentityTokenFailure } from './managedIdentityTelemetry';
 import { verifyManagedIdentityTenant } from './managedIdentityTenant';
 
@@ -50,14 +54,11 @@ export async function getManagedIdentityAccessToken(
                     traceContext,
                 );
             } catch (error) {
-                traceAuthFlow(
-                    'managedIdentity.tokenFailure',
-                    { reason: classifyManagedIdentityError(error) },
-                    tokenCorrelationId,
-                    traceContext,
-                );
+                const reason = classifyManagedIdentityError(error);
+                traceAuthFlow('managedIdentity.tokenFailure', { reason }, tokenCorrelationId, traceContext);
                 reportManagedIdentityTokenFailure(error, clientId, tokenCorrelationId, traceContext);
-                throw new Error(describeManagedIdentityError(error, clientId));
+                const message = describeManagedIdentityError(error, clientId);
+                throw reason === 'other' ? new Error(message) : new ManagedIdentityGuidanceError(message);
             }
 
             if (!token) {

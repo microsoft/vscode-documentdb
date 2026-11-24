@@ -7,9 +7,11 @@ import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import { EntraSignInRequiredError } from '../../documentdb/auth/entraErrors/entraCallbackErrors';
 import { getEntraSession } from '../../documentdb/auth/entraSession';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
+import { showClusterConnectFailure } from '../../documentdb/showClusterConnectFailure';
 import { signInAgain } from './signInAgain';
 
 const pin = {
@@ -20,6 +22,7 @@ const pin = {
     tenantId: 'tenant',
 } as const;
 const clusterId = 'cluster';
+const mocks = vi.hoisted(() => ({ configureAuth: vi.fn() }));
 
 vi.mock('../../documentdb/ClustersClient', () => ({
     addEstablishedConnectionContext: vi.fn(),
@@ -39,14 +42,7 @@ vi.mock('../../documentdb/auth/MicrosoftEntraIDAuthHandler', () => ({
             _trace: undefined,
             acquire: typeof getEntraSession,
         ): Promise<unknown> {
-            const session = await acquire({
-                mode: 'forceNew',
-                providerId: pin.providerId,
-                resource: 'scope',
-                tenantId: pin.tenantId,
-                account: { id: pin.accountId, label: pin.accountLabel },
-            });
-            return { verifiedIdentity: { ...pin, accountId: session?.account.id } };
+            return await mocks.configureAuth(_timings, _trace, acquire);
         }
     },
 }));
@@ -60,6 +56,18 @@ function actionContext(): IActionContext {
 describe('signInAgain', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        mocks.configureAuth.mockImplementation(
+            async (_timings: undefined, _trace: undefined, acquire: typeof getEntraSession): Promise<unknown> => {
+                const session = await acquire({
+                    mode: 'forceNew',
+                    providerId: pin.providerId,
+                    resource: 'scope',
+                    tenantId: pin.tenantId,
+                    account: { id: pin.accountId, label: pin.accountLabel },
+                });
+                return { verifiedIdentity: { ...pin, accountId: session?.account.id } };
+            },
+        );
         CredentialCache.setAuthCredentials(
             clusterId,
             AuthMethodId.MicrosoftEntraID,
@@ -122,5 +130,23 @@ describe('signInAgain', () => {
             { modal: true },
         );
         vi.mocked(ClustersClient.getEpoch).mockReturnValue(1);
+    });
+
+    it('explains how to restore the pinned provider before opening an authorization prompt', async (): Promise<void> => {
+        const error = new EntraSignInRequiredError('providerChanged');
+        mocks.configureAuth.mockRejectedValueOnce(error);
+
+        await expect(signInAgain(actionContext(), { clusterId })).rejects.toBe(error);
+
+        expect(getEntraSession).not.toHaveBeenCalled();
+        expect(ClustersClient.startAfterSignIn).not.toHaveBeenCalled();
+        expect(showClusterConnectFailure).not.toHaveBeenCalled();
+        expect(vscode.window.showErrorMessage).toHaveBeenCalledExactlyOnceWith(
+            'The Azure cloud or sign-in provider changed.',
+            {
+                modal: true,
+                detail: 'Restore "microsoft-sovereign-cloud.environment" to the setting used when this connection was established, then choose Retry sign-in. If it used the Azure public cloud, reset the setting.',
+            },
+        );
     });
 });

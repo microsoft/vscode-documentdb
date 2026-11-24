@@ -8,6 +8,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { Links } from '../constants';
 import { ErrorExplanationService } from '../services/errorExplanationService';
+import { AuthMethodId } from './auth/AuthMethod';
+import { TokenCallbackError } from './auth/entraErrors/entraCallbackErrors';
+import { ManagedIdentityGuidanceError } from './auth/managedIdentityErrors';
 import { EntraDestinationRejectedError, evaluateEntraDestination } from './auth/oidcAllowedHosts';
 import { showClusterConnectFailure } from './showClusterConnectFailure';
 
@@ -185,6 +188,35 @@ describe('showClusterConnectFailure', () => {
         expect(showErrorMessage).toHaveBeenCalledWith('Failed to connect to VM "Test Cluster"', {
             modal: true,
             detail: 'Revisit connection details and try again.\n\nError: raw driver error',
+        });
+    });
+
+    it('shows an actionable managed identity wrapper message without displaying SDK fields', async () => {
+        const context = createMockContext();
+        const message =
+            'This machine has more than one managed identity, so the right one cannot be chosen automatically. Reconnect and enter the client ID you want to use.';
+        const accessToken = 'private-access-token';
+        const cause = Object.assign(new ManagedIdentityGuidanceError(message), { accessToken });
+        const error = new TokenCallbackError(cause, AuthMethodId.ManagedIdentity);
+        vi.mocked(ErrorExplanationService.explain).mockResolvedValue(undefined);
+
+        await showClusterConnectFailure({
+            clusterId: 'stable-id',
+            clusterName: 'Test Cluster',
+            error,
+            context,
+        });
+
+        expect(showErrorMessage).toHaveBeenCalledWith('Failed to connect to "Test Cluster"', {
+            modal: true,
+            detail: `Revisit connection details and try again.\n\nError: ${message}`,
+        });
+        expect(JSON.stringify(showErrorMessage.mock.calls)).not.toContain(accessToken);
+        expect(error).toMatchObject({
+            name: 'TokenCallbackError',
+            message,
+            authMethod: AuthMethodId.ManagedIdentity,
+            cause,
         });
     });
 

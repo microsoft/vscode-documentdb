@@ -348,6 +348,26 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
         );
     }
 
+    private hasStoredCredentialEditor(): boolean {
+        return (
+            this.cluster.viewId === String(Views.ConnectionsView) &&
+            this.contextValue.split(';').includes(CLUSTER_ITEM_CONTEXT_VALUE)
+        );
+    }
+
+    private describeCredentialRejection(): string {
+        if (this.canSignInAgain()) {
+            return vscode.l10n.t('The database rejected the credentials. Choose Retry sign-in to continue.');
+        }
+        if (this.readReplacementKey) {
+            return vscode.l10n.t('The database rejected the key. Choose Retry to read the key from Azure again.');
+        }
+        if (this.hasStoredCredentialEditor()) {
+            return vscode.l10n.t('The database rejected the credentials. Choose Update credentials to continue.');
+        }
+        return vscode.l10n.t('The database rejected the credentials. Choose Retry to reload them.');
+    }
+
     /**
      * Builds the FAILURE-TYPE error-recovery nodes owned by the element layer.
      *
@@ -369,7 +389,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 this.lastConnectionFailureKind === 'credentialsRejected') &&
             this.canSignInAgain();
         const rejectedStoredCredentials =
-            this.cluster.viewId === String(Views.ConnectionsView) &&
+            this.hasStoredCredentialEditor() &&
             ClustersClient.getLatchReason(this.cluster.clusterId) === 'credentialsRejected';
         return [
             ...(needsSignIn
@@ -477,12 +497,14 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                     (phase === 'listDatabases'
                         ? vscode.l10n.t('Failed to load databases for "{0}"', name)
                         : vscode.l10n.t('Failed to connect to "{0}"', name));
-                const detail =
-                    failure.note === 'alreadyUnavailable' && this.lastConnectionFailureKind === 'signInRequired'
-                        ? vscode.l10n.t('Sign in again to continue using this connection.')
-                        : error instanceof Error
-                          ? error.message
-                          : String(error);
+                let detail = error instanceof Error ? error.message : String(error);
+                if (failure.note === 'alreadyUnavailable') {
+                    if (failure.kind === 'signInRequired') {
+                        detail = vscode.l10n.t('Sign in again to continue using this connection.');
+                    } else if (failure.kind === 'credentialsRejected') {
+                        detail = this.describeCredentialRejection();
+                    }
+                }
                 void vscode.window.showErrorMessage(heading, { modal: true, detail });
             }
             throw error;
