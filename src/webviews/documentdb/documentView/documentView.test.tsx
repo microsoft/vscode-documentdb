@@ -174,36 +174,39 @@ afterEach(async (): Promise<void> => {
     host.remove();
 });
 
-it.each([undefined, 'explicit-id'])('keeps a newer edit and reuses the acknowledged ID (%s)', async (explicitId): Promise<void> => {
-    const firstSave = deferred<{ documentId: string; documentStringified: string }>();
-    mocks.saveDocument.mockReturnValueOnce(firstSave.promise);
-    mocks.saveDocument.mockResolvedValueOnce({
-        documentId: '{"$oid":"000000000000000000000002"}',
-        documentStringified: '{"field":"third"}',
-    });
-    await render(config('add'));
-    await edit(JSON.stringify({ _id: explicitId, field: 'first' }));
-    await save();
-    await edit('{"field":"second"}');
-    const firstIdentity = mocks.saveDocument.mock.calls[0][0].documentId;
-    expect(firstIdentity).toMatch(/^\{"\$oid":"[a-f0-9]{24}"\}$/);
-    const savedIdentity = explicitId === undefined ? firstIdentity : JSON.stringify(explicitId);
+it.each([undefined, 'explicit-id'])(
+    'keeps a newer edit and reuses the acknowledged ID (%s)',
+    async (explicitId): Promise<void> => {
+        const firstSave = deferred<{ documentId: string; documentStringified: string }>();
+        mocks.saveDocument.mockReturnValueOnce(firstSave.promise);
+        mocks.saveDocument.mockResolvedValueOnce({
+            documentId: '{"$oid":"000000000000000000000002"}',
+            documentStringified: '{"field":"third"}',
+        });
+        await render(config('add'));
+        await edit(JSON.stringify({ _id: explicitId, field: 'first' }));
+        await save();
+        await edit('{"field":"second"}');
+        const firstIdentity = mocks.saveDocument.mock.calls[0][0].documentId;
+        expect(firstIdentity).toMatch(/^\{"\$oid":"[a-f0-9]{24}"\}$/);
+        const savedIdentity = explicitId === undefined ? firstIdentity : JSON.stringify(explicitId);
 
-    await act(async () =>
-        firstSave.resolve({
-            documentId: savedIdentity,
-            documentStringified: '{"field":"first"}',
-        }),
-    );
-    expect(host.querySelector('textarea')?.value).toBe('{"field":"second"}');
-    expect(
-        [...host.querySelectorAll('button')].some((button) => button.textContent === 'Save' && !button.disabled),
-    ).toBe(true);
+        await act(async () =>
+            firstSave.resolve({
+                documentId: savedIdentity,
+                documentStringified: '{"field":"first"}',
+            }),
+        );
+        expect(host.querySelector('textarea')?.value).toBe('{"field":"second"}');
+        expect(
+            [...host.querySelectorAll('button')].some((button) => button.textContent === 'Save' && !button.disabled),
+        ).toBe(true);
 
-    await save();
-    expect(mocks.saveDocument).toHaveBeenCalledTimes(2);
-    expect(mocks.saveDocument.mock.calls[1][0].documentId).toBe(savedIdentity);
-});
+        await save();
+        expect(mocks.saveDocument).toHaveBeenCalledTimes(2);
+        expect(mocks.saveDocument.mock.calls[1][0].documentId).toBe(savedIdentity);
+    },
+);
 
 it('ignores a load reply after disable and leaves an edit-mode placeholder unsavable', async (): Promise<void> => {
     const load = deferred<string>();

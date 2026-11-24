@@ -55,6 +55,9 @@ Evidence, telemetry and source pointers: [research-findings.md](./research-findi
   the available credentials. Credential repair stays in the tree. Dismissing the dialog with
   its **X** exposes the existing contents for copying without resuming database operations.
   Trying another operation shows the dialog again. **Close view** asks for confirmation.
+- A pending Dashboard delete confirmation does not survive Disconnect, even when the
+  user reconnects as the same identity. Dashboard **Copy Collection** keeps a tree reference;
+  **Paste Collection** stays in the tree and uses the current connection.
 - After a database rejects a verified Entra identity, discard the client but keep its in-memory
   connection settings for explicit sign-in. Do not retain the rejected token or retry silently.
   When the tree offers **Retry sign-in**, it does not also offer **Retry**.
@@ -96,6 +99,7 @@ See [decisions.md](./decisions.md):
 - 0016 keep disconnected webviews open under a full-view overlay with explicit actions.
 - 0017 limit unavailable webview recovery to Retry and Close view.
 - 0018 saved connection edits permanently lock existing views.
+- 0019 require a fresh Dashboard delete after Disconnect and retain tree-only Paste.
 
 ## Timeline
 

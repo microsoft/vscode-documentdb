@@ -473,3 +473,17 @@ views. If a failed save partially changed storage, retire the old views and tell
 change may be incomplete. No cross-window watcher is added. The identity guard still checks
 changes from other sources, and commands still check their originating binding after pickers
 and confirmations.
+
+## 0019. Require a new Dashboard delete after Disconnect
+
+The operator chose to cancel any pending Dashboard delete confirmation when the
+connection lifecycle changes, even if the user reconnects as the same identity.
+The user must start a fresh delete. This check is limited to Dashboard deletes:
+ordinary same-identity replacement remains transparent, and tree commands keep
+their existing behavior.
+
+The operator also kept **Copy Collection** in the Dashboard and **Paste Collection**
+in the tree only. Copy stores a tree reference, not a snapshot of the data or
+credentials. The later tree Paste uses the current connection; it does not resume
+a Dashboard operation. Binding the whole clipboard and index-copy flow was not
+part of this change.

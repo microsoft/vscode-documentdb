@@ -51,3 +51,23 @@ strict workspace test type-check, full Vitest (442 files, 9,863 passed, one skip
 packaging passed. The final native-menu notification adjustment received an additional focused
 controller run (18 passed), lint, build, and packaging. OP-4 live evidence and the operator's
 password-only test waiver are recorded in the [delivery plan](./01-dev-plan.md).
+
+## Copilot inline review follow-up
+
+Claude Opus 5.5 validated the 21 original threads at `c19d0c1d5`. The operator asked
+for the smallest safe fixes and to skip low-priority work unless the fix is
+straightforward. The operator approved [decision 0019](../decisions.md#0019-require-a-new-dashboard-delete-after-disconnect)
+for pending Dashboard deletes and keeping Dashboard Copy with tree-only Paste.
+
+- **Fixed:** R1 (pending Delete), R4 (acknowledged document ID), R5 (drop errors),
+  R7–R9 (bound imports, optional stats and transfer startup), R11 (duplicate
+  notification), and R13–R20 (Dashboard recovery, interrupted reads, and Collection
+  View and Query Insights guards). Each has a dedicated commit and an inline reply.
+- **No code change:** R2 (rare new-tab handoff), R3 (approved tree-reference copy),
+  R6 (export stream fallback), R10 (unchanged Native rejection policy),
+  R12 (transparent same-identity replacement), R21 (Stage 1 plan presentation).
+  These decisions do not change the PR6 saved-edit lock.
+
+Follow-up verification: Case 1 build passed and 307 focused tests passed across
+25 files. The full Case 2 suite above was run for the earlier review handoff, not
+repeated for this follow-up.

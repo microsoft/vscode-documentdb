@@ -70,9 +70,9 @@ it('does not import using a different identity selected while the file picker wa
         );
         return [vscode.Uri.file('/fixture/documents.json')];
     });
-    await expect(importDocuments(prepareImport(showOpenDialog), createSource(), undefined, { binding })).rejects.toMatchObject({
-        reason: 'credentialsChanged',
-    });
+    await expect(
+        importDocuments(prepareImport(showOpenDialog), createSource(), undefined, { binding }),
+    ).rejects.toMatchObject({ reason: 'credentialsChanged' });
     expect(showOpenDialog).toHaveBeenCalledOnce();
     expect(ClustersClient.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(binding, undefined);
     expect(ClustersClient.getClient).not.toHaveBeenCalled();
@@ -97,5 +97,5 @@ it('stops a bound import after rejection and reports only confirmed inserts', as
     });
     expect(insertDocuments).toHaveBeenCalledTimes(2);
     expect(ClustersClient.reportFailure).toHaveBeenCalledExactlyOnceWith(client.binding, failure);
-    expect(ext.outputChannel.warn).toHaveBeenCalledWith('Import interrupted. Confirmed inserts: 1.');
+    expect(ext.outputChannel.warn).toHaveBeenCalledWith('Inserted 1 document(s).');
 });

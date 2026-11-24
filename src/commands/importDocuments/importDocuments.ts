@@ -194,7 +194,7 @@ export async function importDocumentsWithProgress(
                     return await insertDocument(selectedItem, document, buffer, boundClient);
                 } catch (error) {
                     if (error instanceof ConnectionUnavailableError) {
-                        ext.outputChannel.warn(l10n.t('Import interrupted. Confirmed inserts: {0}.', count));
+                        ext.outputChannel.warn(l10n.t('Inserted {0} document(s).', count));
                     }
                     throw error;
                 }
