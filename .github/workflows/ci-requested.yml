@@ -1,0 +1,49 @@
+name: CI requested
+
+on:
+    pull_request:
+        types: [labeled]
+
+    workflow_dispatch:
+        inputs:
+            enforce_full_run:
+                description: 'Run every check (full tier); otherwise static checks and unit tests only (fast tier)'
+                required: false
+                type: boolean
+                default: false
+
+concurrency:
+    group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.action == 'labeled' && format('label-{0}', github.event.label.name) || 'run' }}"
+    cancel-in-progress: true
+
+permissions:
+    contents: read
+
+jobs:
+    checks:
+        if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'ci:full-requested'
+        permissions:
+            contents: read
+            issues: write
+            pull-requests: write
+        uses: ./.github/workflows/ci-checks.yml
+        with:
+            enforce_full_run: ${{ inputs.enforce_full_run || false }}
+
+    # Unrelated labels and manual fast runs must not satisfy the required check.
+    gate:
+        name: ${{ github.event.action == 'labeled' && github.event.label.name != 'ci:full-requested' && 'Merge gate (label event, not run)' || github.event_name == 'workflow_dispatch' && !inputs.enforce_full_run && 'Merge gate (manual fast run)' || 'Merge gate' }}
+        needs: [checks]
+        if: always() && (github.event_name == 'workflow_dispatch' || github.event.label.name == 'ci:full-requested')
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        permissions: {}
+        steps:
+            - name: Require the shared validation to pass
+              env:
+                  RESULT: ${{ needs.checks.outputs.gate-result }}
+              run: |
+                  if [[ "$RESULT" != success ]]; then
+                    echo "::error::CI validation did not pass (result: ${RESULT:-missing})."
+                    exit 1
+                  fi
