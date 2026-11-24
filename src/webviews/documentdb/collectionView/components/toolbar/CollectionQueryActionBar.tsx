@@ -249,12 +249,18 @@ const QuerySecondaryActions = ({ variant }: CollectionQueryActionBarProps): JSX.
     };
 
     const handleImportFromJson = (): void => {
+        if (beginOperation() === undefined) {
+            return;
+        }
         void trpcClient.mongoClusters.collectionView.importDocuments.query().catch(() => {
             // The extension host already displayed the failure and recorded telemetry.
         });
     };
 
     const handleExportEntireCollection = (): void => {
+        if (beginOperation() === undefined) {
+            return;
+        }
         void trpcClient.mongoClusters.collectionView.exportDocuments
             .query({
                 filter: '{}',
@@ -269,6 +275,9 @@ const QuerySecondaryActions = ({ variant }: CollectionQueryActionBarProps): JSX.
     };
 
     const handleExportQueryResults = (): void => {
+        if (beginOperation() === undefined) {
+            return;
+        }
         void trpcClient.mongoClusters.collectionView.exportDocuments
             .query({
                 filter: currentContext.activeQuery.filter,
