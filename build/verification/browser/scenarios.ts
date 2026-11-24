@@ -50,7 +50,9 @@ export type ScenarioStep =
           readonly role: 'button' | 'link' | 'switch' | 'menuitem' | 'radio';
           readonly name: string;
       }
-    | { readonly action: 'fill'; readonly role: 'textbox'; readonly name: string; readonly value: string };
+    | { readonly action: 'fill'; readonly role: 'textbox'; readonly name: string; readonly value: string }
+    | { readonly action: 'post'; readonly name: string; readonly message: unknown }
+    | { readonly action: 'releaseReply'; readonly name: string; readonly path: FixturePaths };
 
 type CallAssertion = {
     [P in FixturePaths]: {

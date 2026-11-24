@@ -43,6 +43,14 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
             if (await page.evaluate((): boolean => document.documentElement.dataset.ready === 'failed')) {
                 throw new Error(`Page failed before step: ${step.name}`);
             }
+            if (step.action === 'post') {
+                await page.evaluate((message): void => window.postMessage(message, window.location.origin), step.message);
+                continue;
+            }
+            if (step.action === 'releaseReply') {
+                await wait((path) => window.__harnessReleaseReply(path), step.path, step.name);
+                continue;
+            }
             const locator = page.getByRole(step.role, { name: step.name, exact: true });
             if (step.action === 'click') {
                 await locator.click({ timeout: 60000 });

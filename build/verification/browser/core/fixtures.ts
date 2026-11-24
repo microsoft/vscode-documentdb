@@ -24,6 +24,7 @@ export interface RpcFixture {
     readonly results: readonly unknown[];
     readonly keepOpen?: boolean;
     readonly undefinedResult?: boolean;
+    readonly holdReply?: boolean;
 }
 
 export type RpcFixtures = Readonly<Partial<Record<FixturePaths, RpcFixture>>>;

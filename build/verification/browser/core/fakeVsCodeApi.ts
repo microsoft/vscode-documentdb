@@ -19,6 +19,7 @@ export interface HarnessCall {
 declare global {
     interface Window {
         __harnessCalls: HarnessCall[];
+        __harnessReleaseReply: (path: FixturePaths) => boolean;
     }
 }
 
@@ -38,6 +39,17 @@ export function fakeVsCodeApi(rpc: RpcFixtures, errors: string[]): typeof window
     const calls: HarnessCall[] = [];
     window.__harnessCalls = calls;
     const subscriptions = new Set<string>();
+    const heldReplies = new Map<string, { readonly path: string; readonly sendReply: () => void }>();
+    window.__harnessReleaseReply = (path): boolean => {
+        for (const [id, reply] of heldReplies) {
+            if (reply.path === path) {
+                heldReplies.delete(id);
+                reply.sendReply();
+                return true;
+            }
+        }
+        return false;
+    };
     let acquired = false;
 
     function send(message: VsCodeLinkResponseMessage): void {
@@ -52,6 +64,7 @@ export function fakeVsCodeApi(rpc: RpcFixtures, errors: string[]): typeof window
         const { id, op } = value;
         if (op.type === 'subscription.stop' || op.type === 'abort') {
             subscriptions.delete(id);
+            heldReplies.delete(id);
             return;
         }
         calls.push({ path: op.path, type: op.type, input: op.input });
@@ -65,7 +78,7 @@ export function fakeVsCodeApi(rpc: RpcFixtures, errors: string[]): typeof window
         if (response.keepOpen) {
             subscriptions.add(id);
         }
-        queueMicrotask((): void => {
+        const sendReply = (): void => {
             if (response.keepOpen && !subscriptions.has(id)) {
                 return;
             }
@@ -78,7 +91,12 @@ export function fakeVsCodeApi(rpc: RpcFixtures, errors: string[]): typeof window
             if (!response.keepOpen) {
                 send({ id, complete: true });
             }
-        });
+        };
+        if (response.holdReply) {
+            heldReplies.set(id, { path: op.path, sendReply });
+        } else {
+            queueMicrotask(sendReply);
+        }
     }
 
     return <StateType = unknown>(): WebviewApi<StateType> => {
