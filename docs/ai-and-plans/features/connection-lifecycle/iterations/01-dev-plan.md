@@ -1581,8 +1581,9 @@ behave as today.
 
 **Outcome:**
 
-- One teardown serves Disconnect, Remove and identity-changing credential updates.
-- It is guarded by task conflicts and dirty editors.
+- Disconnect and Remove share teardown. Saved edits share the task fence and resource cleanup,
+  but keep old views locked without asking to close them (decision 0018).
+- Task conflicts block teardown or saving an edit. Dirty editors are checked before Close all.
 - It covers every per-cluster resource.
 - **What it guarantees** (F-22: closing a client cancels nothing already sent):
   - no **new** submission under the old binding after the latch is set;
@@ -1636,9 +1637,8 @@ behave as today.
         the teardown.
    - **`latchForTeardown(clusterId, reason)`**, synchronous: recheck conflicts with `getConflictingTasks`,
      because a copy, export or import may have started while a prompt was open; on a conflict return
-     `false` and change nothing. Otherwise set the latch (C-6) and call `ClustersClient.invalidate`, which
-     increases the epoch, with no `await` in between, and return `true`. From here on no new task, lease or
-     client can start.
+     `false` and change nothing. Otherwise set the latch (C-6), which already increases the epoch,
+     with no `await` in between, and return `true`. From here on no new task, lease or client can start.
    - **`commitTeardown(clusterId, { reason, choice, dropCredentials })`**, which has no prompts:
      1. Call `latchForTeardown` unless the caller already did (step 5). On a conflict, stop and inform the
         user; nothing has changed.
@@ -1675,7 +1675,9 @@ behave as today.
      - The setting never skips the unsaved-edits confirmation: when Close all is chosen and an editor is
        dirty, that confirmation still appears.
      - Skip the modal when no surfaces are registered.
-   - Add a disconnected cluster node child action, "Connect" (T-2). It clears the latch and connects.
+   - Add a disconnected cluster node child action, "Connect" (T-2). Check the `userDisconnected`
+     latch before reusing cached credentials when building the children. The action clears only
+     that latch and refreshes the node without changing its ID; normal expansion connects.
 4. **Remove Connection and folder deletion.**
    - Remove Connection: teardown with reason `connectionRemoved` and `dropCredentials: true`, then delete
      the stored connection and clear the schema, as today. Keep the existing confirmation.
@@ -1737,6 +1739,15 @@ behave as today.
 
 **Progress:**
 
+- **CP-4 verdict:** Opus 5.5 approved the teardown order, T-2 and A5 at about 85% confidence.
+  Register tasks and acquire export/import leases synchronously against the latch. Take a lease
+  before client resolution, release it in `finally`, and include it in folder-delete conflict
+  queries. Recheck conflicts immediately before latching; use the epoch bump already in
+  `ClustersClient.latch`. For saved edits, keep the fence through persistence and retirement,
+  then restore only the applicable prior hold. Enforce retirement on the host as well as in the
+  dialog: a password-only edit does not change the fingerprint. The proposed per-cluster
+  generation watermark is an implementation candidate to validate in the saved-edit slice,
+  not a new public contract. No operator decision is needed for the lease slice.
 - **Carry-forward from WI-4d:** An explicit Update Credentials that changes the tenant must
   replace or clear the old verified Entra identity so the next connect can use the saved
   tenant (decision 0011). Automatic reconnect remains pinned until that explicit update.
