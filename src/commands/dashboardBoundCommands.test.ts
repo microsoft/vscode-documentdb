@@ -4,11 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type AzExtInputBoxOptions, type IActionContext } from '@microsoft/vscode-azext-utils';
-import { MongoNetworkError } from 'mongodb';
+import { MongoNetworkError, MongoServerError } from 'mongodb';
 import { beforeEach, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import { AuthMethodId } from '../documentdb/auth/AuthMethodId';
 import { ClustersClient, type ConnectionBinding } from '../documentdb/ClustersClient';
 import { ConnectionUnavailableError } from '../documentdb/ConnectionUnavailableError';
+import { CredentialCache } from '../documentdb/CredentialCache';
 import { DocumentDBExperience } from '../DocumentDBExperiences';
 import { type ClusterItemBase } from '../tree/documentdb/ClusterItemBase';
 import { type CollectionItem } from '../tree/documentdb/CollectionItem';
@@ -115,7 +117,7 @@ it.each([
 
     await expect(drop(context)).rejects.toMatchObject({ reason: 'credentialsChanged' });
 
-    expect(ClustersClient.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(binding);
+    expect(ClustersClient.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(binding, undefined);
     expect(context.errorHandling).toMatchObject({ rethrow: true, suppressDisplay: true });
     expect(ClustersClient.getClient).not.toHaveBeenCalled();
     expect(replacement.dropDatabase).not.toHaveBeenCalled();
@@ -133,9 +135,27 @@ it('does not export with a different connection after the save dialog', async ()
         reason: 'credentialsChanged',
     });
 
-    expect(ClustersClient.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(binding);
+    expect(ClustersClient.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(binding, undefined);
     expect(context.errorHandling).toMatchObject({ rethrow: true, suppressDisplay: true });
     expect(ClustersClient.getClient).not.toHaveBeenCalled();
+    expect(replacement.streamDocumentsWithQuery).not.toHaveBeenCalled();
+});
+
+it('reports a rejected export startup as unavailable', async () => {
+    vi.mocked(CredentialCache.getCredentials).mockReturnValueOnce({
+        clusterId: binding.clusterId,
+        authMechanism: AuthMethodId.NativeAuth,
+        connectionString: 'mongodb://localhost/',
+        connectionStringWithPassword: 'mongodb://localhost/',
+    });
+    vi.mocked(vscode.window.showSaveDialog).mockResolvedValue(vscode.Uri.file('/fixture/export.json'));
+    vi.mocked(ClustersClient.resolveBoundClient).mockRejectedValue(
+        new MongoServerError({ code: 18, errmsg: 'Authentication failed' }),
+    );
+
+    await expect(exportEntireCollection(createContext(), collection, undefined, { binding })).rejects.toMatchObject({
+        reason: 'credentialsRejected',
+    });
     expect(replacement.streamDocumentsWithQuery).not.toHaveBeenCalled();
 });
 

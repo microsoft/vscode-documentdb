@@ -67,7 +67,7 @@ it('does not import using a different identity selected while the file picker wa
         reason: 'credentialsChanged',
     });
     expect(showOpenDialog).toHaveBeenCalledOnce();
-    expect(ClustersClient.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(binding);
+    expect(ClustersClient.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(binding, undefined);
     expect(ClustersClient.getClient).not.toHaveBeenCalled();
     expect(insertDocuments).not.toHaveBeenCalled();
 });
