@@ -425,6 +425,7 @@ export class QueryInsightsAIService {
                     }
                 } catch (error) {
                     if (error instanceof ConnectionUnavailableError) {
+                        context.errorHandling.suppressDisplay = true;
                         unavailable = error;
                     }
                     throw error;
