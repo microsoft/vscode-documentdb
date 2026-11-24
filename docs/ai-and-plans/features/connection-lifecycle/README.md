@@ -52,7 +52,9 @@ Evidence, telemetry and source pointers: [research-findings.md](./research-findi
 - **Never change identity under an open surface.** It stays open, keeps its state, and shows a
   shaded, disabled view with a dialog that names the problem in a short title and gives the next
   step separately. Offer **Close view**, with **Retry** beside it when the view can safely reuse
-  the available credentials. Credential repair stays in the tree.
+  the available credentials. Credential repair stays in the tree. Dismissing the dialog with
+  its **X** exposes the existing contents for copying without resuming database operations.
+  Trying another operation shows the dialog again. **Close view** asks for confirmation.
 - After a database rejects a verified Entra identity, discard the client but keep its in-memory
   connection settings for explicit sign-in. Do not retain the rejected token or retry silently.
   When the tree offers **Retry sign-in**, it does not also offer **Retry**.

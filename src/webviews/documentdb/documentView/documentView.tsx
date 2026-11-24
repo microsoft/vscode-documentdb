@@ -117,6 +117,7 @@ export const DocumentView = (): JSX.Element => {
         unavailableRef.current === undefined;
     const startOperation = (): number | undefined => {
         if (unavailableRef.current) {
+            setUnavailable(unavailableRef.current);
             return undefined;
         }
         operationRevisionRef.current += 1;
@@ -282,7 +283,7 @@ export const DocumentView = (): JSX.Element => {
     // }
 
     function handleOnRefreshRequest(): void {
-        if (configuration.documentId === undefined || unavailableRef.current) {
+        if (configuration.documentId === undefined) {
             return;
         }
 
@@ -350,7 +351,7 @@ export const DocumentView = (): JSX.Element => {
     function handleOnSaveRequest(): void {
         const editorContent = getCurrentContent();
 
-        if (editorContent === undefined || unavailableRef.current || !documentLoaded || isLoading) {
+        if (editorContent === undefined || !documentLoaded || isLoading) {
             return;
         }
 
@@ -475,6 +476,7 @@ export const DocumentView = (): JSX.Element => {
         <DisconnectedOverlay
             warnOnClose={isDirty}
             unavailable={unavailable}
+            onDismiss={() => setUnavailable(undefined)}
             onAction={handleUnavailableAction}
             recovering={recovering}
         >

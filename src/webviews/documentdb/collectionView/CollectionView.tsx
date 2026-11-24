@@ -173,6 +173,7 @@ export const CollectionView = (): JSX.Element => {
     const queryRequestRef = useRef(0);
     const pageRequestRef = useRef(0);
     const disposedRef = useRef(false);
+    // Dismissing the dialog clears only its render state. The ref still blocks submissions.
     const [unavailable, setUnavailable] = useState<ConnectionUnavailableDetails>();
     const [recovering, setRecovering] = useState(false);
     const [recoveryAnnouncement, setRecoveryAnnouncement] = useState<string>();
@@ -185,8 +186,11 @@ export const CollectionView = (): JSX.Element => {
         setCurrentContext((prev) => ({ ...prev, isLoading: false }));
     }, []);
 
-    const beginOperation = useCallback((): number | undefined => {
+    const beginOperation = useCallback((revealUnavailable = true): number | undefined => {
         if (unavailableRef.current) {
+            if (revealUnavailable) {
+                setUnavailable(unavailableRef.current);
+            }
             return undefined;
         }
         return lifecycleRevisionRef.current;
@@ -251,7 +255,7 @@ export const CollectionView = (): JSX.Element => {
      * `startStage1Load` in `queryInsightsReducer.ts`.
      */
     const prefetchQueryInsights = (): void => {
-        const lifecycleRevision = beginOperation();
+        const lifecycleRevision = beginOperation(false);
         if (lifecycleRevision === undefined) {
             return;
         }
@@ -601,7 +605,7 @@ export const CollectionView = (): JSX.Element => {
     }, [currentContext.currentViewState?.currentPath]);
 
     const handleViewChanged = (_optionValue: string) => {
-        if (unavailableRef.current) {
+        if (beginOperation() === undefined) {
             return;
         }
         let selection: Views;
@@ -872,7 +876,12 @@ export const CollectionView = (): JSX.Element => {
     };
 
     return (
-        <DisconnectedOverlay unavailable={unavailable} onAction={handleUnavailableAction} recovering={recovering}>
+        <DisconnectedOverlay
+            unavailable={unavailable}
+            onDismiss={() => setUnavailable(undefined)}
+            onAction={handleUnavailableAction}
+            recovering={recovering}
+        >
             <CollectionViewContext.Provider
                 value={[
                     {
@@ -909,7 +918,7 @@ export const CollectionView = (): JSX.Element => {
                         className="collectionTabList"
                         selectedValue={selectedTab}
                         onTabSelect={(_event, data) => {
-                            if (unavailableRef.current) {
+                            if (beginOperation() === undefined) {
                                 return;
                             }
                             const newTab = data.value as 'tab_result' | 'tab_indexes' | 'tab_queryInsights';
@@ -973,7 +982,7 @@ export const CollectionView = (): JSX.Element => {
                     {selectedTab !== 'tab_indexes' && (
                         <QueryEditor
                             onExecuteRequest={() => {
-                            if (unavailableRef.current) {
+                            if (beginOperation() === undefined) {
                                 return;
                             }
                                 // Get all query values from the editor at once

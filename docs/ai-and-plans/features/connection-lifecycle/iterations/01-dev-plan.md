@@ -1566,6 +1566,11 @@ behave as today.
   **Retry** beside **Close view** in an interactive Collection View preview on 2026-11-24.
   Credential repair stays in the tree; Retry keeps the original identity and never resubmits an
   operation. The dirty Document View warning stays in the dialog, without another prompt.
+- **OP-4 partial live evidence (`1.1.1-alpha.2`):** The operator switched between Entra and invalid
+  username/password credentials rather than testing two valid Native users. They saw Dashboard
+  move from Retry/Close view to Close view only as the identity change was recognized. Collection
+  View went directly to Close view only on the next query. Silent renewal after expiry and
+  password-only rotation for the same user were not reported.
 
 ---
 

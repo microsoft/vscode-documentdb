@@ -39,9 +39,8 @@ export type FixtureAtPath<T, P extends string> = P extends `${infer Head}.${infe
       : never;
 
 type StreamItem<T> = T extends AsyncIterable<infer Item> ? Item : T;
-// tRPC's JSON-serialized output inference represents void procedures as never. The wire protocol
-// deliberately supports explicit undefined results, so these fixtures retain the host's void type.
-type FixtureResult<T> = [T] extends [never] ? void : StreamItem<T>;
+// tRPC infers never for void outputs, but the extension host sends null for those results.
+type FixtureResult<T> = [T] extends [never] ? void | null : StreamItem<T>;
 export type TypedRpcFixtures = {
     readonly [P in FixturePaths]?: Omit<RpcFixture, 'results' | 'afterFirst'> & {
         readonly results: readonly FixtureResult<FixtureAtPath<FixtureOutputs, P>>[];

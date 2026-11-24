@@ -141,8 +141,11 @@ export const ClusterDashboard = (): JSX.Element => {
             unavailableRef.current === undefined,
         [],
     );
-    const startOperation = useCallback((): number | undefined => {
+    const startOperation = useCallback((revealUnavailable = false): number | undefined => {
         if (unavailableRef.current !== undefined) {
+            if (revealUnavailable) {
+                setUnavailable(unavailableRef.current);
+            }
             return undefined;
         }
         return operationRevisionRef.current;
@@ -200,7 +203,7 @@ export const ClusterDashboard = (): JSX.Element => {
         async (
             source: 'background' | 'manual' | 'reconcile' = 'background',
         ): Promise<ViewFirstDataOutcome | undefined> => {
-            const revision = startOperation();
+            const revision = startOperation(source === 'manual');
             if (revision === undefined || storageInFlightRef.current) {
                 return undefined;
             }
@@ -392,7 +395,7 @@ export const ClusterDashboard = (): JSX.Element => {
     ]);
 
     const exportDiagnostics = useCallback(async (): Promise<void> => {
-        const revision = startOperation();
+        const revision = startOperation(true);
         if (revision === undefined) {
             return;
         }
@@ -420,7 +423,7 @@ export const ClusterDashboard = (): JSX.Element => {
     }, [isOperationCurrent, showUnavailable, startOperation, trpcClient]);
 
     const openShell = useCallback(async (): Promise<void> => {
-        const revision = startOperation();
+        const revision = startOperation(true);
         if (revision === undefined) {
             return;
         }
@@ -443,7 +446,7 @@ export const ClusterDashboard = (): JSX.Element => {
     }, [inventoryViewState.currentDatabase, isOperationCurrent, showUnavailable, startOperation, trpcClient]);
 
     const copyConnectionString = useCallback(async (): Promise<void> => {
-        const revision = startOperation();
+        const revision = startOperation(true);
         if (revision === undefined) {
             return;
         }
@@ -464,7 +467,7 @@ export const ClusterDashboard = (): JSX.Element => {
     }, [isOperationCurrent, showUnavailable, startOperation, trpcClient]);
 
     const openDataMigration = useCallback(async (): Promise<void> => {
-        const revision = startOperation();
+        const revision = startOperation(true);
         if (revision === undefined) {
             return;
         }
@@ -615,14 +618,14 @@ export const ClusterDashboard = (): JSX.Element => {
     ]);
 
     const refreshData = useCallback((): void => {
-        if (isSubmissionBlocked()) {
+        if (startOperation(true) === undefined) {
             return;
         }
         void loadStorageStats('manual');
         if (inventoryViewState.currentDatabase !== null) {
             reloadCollections('manual');
         }
-    }, [inventoryViewState.currentDatabase, isSubmissionBlocked, loadStorageStats, reloadCollections]);
+    }, [inventoryViewState.currentDatabase, loadStorageStats, reloadCollections, startOperation]);
 
     const settleCreatedNamespace = useCallback((databaseName: string | null): void => {
         setBusyNamespaces((current) =>
@@ -639,7 +642,7 @@ export const ClusterDashboard = (): JSX.Element => {
 
     const createNamespace = useCallback(
         async (control: 'inventoryToolbar' | 'emptyState'): Promise<void> => {
-            const revision = startOperation();
+            const revision = startOperation(true);
             if (revision === undefined) {
                 return;
             }
@@ -781,7 +784,12 @@ export const ClusterDashboard = (): JSX.Element => {
         isCreatingNamespace;
 
     return (
-        <DisconnectedOverlay unavailable={unavailable} onAction={handleUnavailableAction} recovering={recovering}>
+        <DisconnectedOverlay
+            unavailable={unavailable}
+            onDismiss={() => setUnavailable(undefined)}
+            onAction={handleUnavailableAction}
+            recovering={recovering}
+        >
             <div className="clusterDashboard">
             {isBusy && <ProgressBar thickness="large" shape="square" className="progressBar" aria-hidden={true} />}
 

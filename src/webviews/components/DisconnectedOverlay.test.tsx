@@ -13,7 +13,12 @@ import { DisconnectedOverlay } from './DisconnectedOverlay';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-it('keeps content mounted but inert, and only closes or retries on explicit clicks', async (): Promise<void> => {
+const confirm = vi.hoisted(() => vi.fn());
+vi.mock('../_integration/useTrpcClient', () => ({
+    useTrpcClient: () => ({ common: { confirm: { mutate: confirm } } }),
+}));
+
+it('dismisses without closing, and only closes a dirty view after confirmation', async (): Promise<void> => {
     const unavailable: ConnectionUnavailableDetails = {
         reason: 'signInRequired',
         title: 'Sign-in required',
@@ -21,6 +26,8 @@ it('keeps content mounted but inert, and only closes or retries on explicit clic
         action: 'retry',
     };
     const onAction = vi.fn();
+    const onDismiss = vi.fn();
+    confirm.mockResolvedValueOnce({ confirmed: false }).mockResolvedValueOnce({ confirmed: true });
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
@@ -28,7 +35,13 @@ it('keeps content mounted but inert, and only closes or retries on explicit clic
         const render = async (failure?: ConnectionUnavailableDetails, recovering?: boolean): Promise<void> => {
             await act(async () =>
                 root.render(
-                    <DisconnectedOverlay unavailable={failure} onAction={onAction} recovering={recovering} warnOnClose>
+                    <DisconnectedOverlay
+                        unavailable={failure}
+                        onAction={onAction}
+                        onDismiss={onDismiss}
+                        recovering={recovering}
+                        warnOnClose
+                    >
                         <textarea aria-label="Document" defaultValue="unsaved edit" />
                     </DisconnectedOverlay>,
                 ),
@@ -43,12 +56,28 @@ it('keeps content mounted but inert, and only closes or retries on explicit clic
             action: 'close',
         });
         const dialog = (): HTMLElement | null => document.querySelector('.disconnectedOverlay[aria-modal="true"]');
-        const buttons = (): HTMLButtonElement[] => [...(dialog()?.querySelectorAll('button') ?? [])];
+        const buttons = (): HTMLButtonElement[] =>
+            [...(dialog()?.querySelectorAll<HTMLButtonElement>('.disconnectedOverlayActions button') ?? [])];
         expect(host.querySelector('[inert] textarea')).toBe(draft);
         expect(draft?.value).toBe('unsaved edit');
         expect(dialog()?.getAttribute('role')).toBe('dialog');
         expect(buttons().map((button) => button.textContent)).toEqual(['Close view']);
         await act(async () => buttons()[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+        expect(onAction).not.toHaveBeenCalled();
+        expect(dialog()).not.toBeNull();
+        await act(async () => dialog()?.querySelector<HTMLButtonElement>('button[aria-label^="Dismiss dialog"]')?.click());
+        expect(onDismiss).toHaveBeenCalledOnce();
+        expect(confirm).not.toHaveBeenCalled();
+        expect(onAction).not.toHaveBeenCalled();
+        await render();
+        expect(host.querySelector('[inert]')).toBeNull();
+        expect(host.querySelector('textarea')).toBe(draft);
+
+        await render({ ...unavailable, action: 'close' });
+        await act(async () => buttons()[0]?.click());
+        expect(confirm).toHaveBeenCalledWith(
+            expect.objectContaining({ detail: 'Closing this view discards unsaved changes.', confirmLabel: 'Close view' }),
+        );
         expect(onAction).not.toHaveBeenCalled();
         expect(dialog()).not.toBeNull();
         await act(async () => buttons()[0]?.click());
