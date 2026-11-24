@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling, UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { getPlaygroundEvaluators, stopPlaygroundEvaluator } from '../commands/playground/executePlaygroundCode';
 import { SettingsService } from '../services/SettingsService';
@@ -160,11 +160,87 @@ export async function commitTeardown(
     return 'committed';
 }
 
-/** The single-cluster confirm/commit path, with one event covering both phases. */
-export async function teardownConnection(
-    clusterId: string,
+export async function withConnectionRemoval(
+    ids: readonly string[],
+    remove: (removeConnection: (clusterId: string, deleteStored: () => Promise<void>) => Promise<void>) => Promise<void>,
+): Promise<void> {
+    await reportTeardown(ids, 'connectionRemoved', async ({ telemetry }) => {
+        await removeConnections(ids, remove, telemetry.properties);
+    });
+}
+
+async function removeConnections(
+    ids: readonly string[],
+    remove: (removeConnection: (clusterId: string, deleteStored: () => Promise<void>) => Promise<void>) => Promise<void>,
+    properties: IActionContext['telemetry']['properties'],
+): Promise<void> {
+    const confirmed = await confirmTeardown(ids, 'connectionRemoved');
+    if (confirmed.outcome !== 'confirmed') {
+        properties.blockedByTask = confirmed.outcome === 'blockedByTask' ? 'true' : 'false';
+        throw new UserCancelledError();
+    }
+    properties.surfacesChoice = confirmed.choice;
+
+    const targets = new Map(
+        clusterIds(ids).map((id) => [id, { previous: ClustersClient.getLatchReason(id), epoch: 0, started: false }]),
+    );
+    if ([...targets.values()].some(({ previous }) => previous === 'credentialsChanged' || previous === 'connectionRemoved')) {
+        throw new Error(vscode.l10n.t('A connection is already being updated or removed. Try again when it finishes.'));
+    }
+    if (!latchForTeardown(ids, 'connectionRemoved')) {
+        properties.blockedByTask = 'true';
+        for (const id of targets.keys()) {
+            if (!(await checkCanProceedAndInformUser({ clusterId: id }, operationName('connectionRemoved')))) {
+                break;
+            }
+        }
+        throw new UserCancelledError();
+    }
+    for (const [id, target] of targets) {
+        target.epoch = ClustersClient.getEpoch(id);
+    }
+
+    try {
+        await remove(async (id, deleteStored) => {
+            const target = targets.get(id);
+            if (!target || target.started || ClustersClient.getEpoch(id) !== target.epoch) {
+                throw new Error(vscode.l10n.t('The connections to remove changed. Refresh the tree and try again.'));
+            }
+            target.started = true;
+            const result = await commitTeardown(id, {
+                reason: 'connectionRemoved',
+                choice: confirmed.choice,
+                dropCredentials: true,
+                alreadyLatched: true,
+                refreshTree: () => {},
+            });
+            if (result !== 'committed' || ClustersClient.getEpoch(id) !== target.epoch) {
+                throw new Error(vscode.l10n.t('The connections to remove changed. Refresh the tree and try again.'));
+            }
+            await deleteStored();
+            targets.delete(id);
+        });
+    } finally {
+        for (const [id, target] of targets) {
+            if (ClustersClient.getEpoch(id) !== target.epoch || ClustersClient.getLatchReason(id) !== 'connectionRemoved') {
+                continue;
+            }
+            if (target.started) {
+                // A failed storage delete must not leave the surviving connection locked as removed.
+                ClustersClient.latch(id, 'userDisconnected');
+            } else if (target.previous) {
+                ClustersClient.latch(id, target.previous);
+            } else {
+                ClustersClient.unlatch(id);
+            }
+        }
+    }
+}
+
+async function reportTeardown(
+    ids: readonly string[],
     reason: TeardownReason,
-    refreshTree: () => void,
+    operation: (context: IActionContext) => Promise<void>,
 ): Promise<void> {
     await callWithTelemetryAndErrorHandling('connection.disconnect', async (context) => {
         context.errorHandling.suppressDisplay = true;
@@ -177,12 +253,27 @@ export async function teardownConnection(
         }[reason];
         context.telemetry.properties.surfacesChoice = 'none';
         context.telemetry.properties.blockedByTask = 'false';
-        context.telemetry.measurements.surfaceCount = getConnectionSurfaces(clusterId).length;
+        const targets = new Set(ids);
+        context.telemetry.measurements.surfaceCount = [...targets].reduce(
+            (total, id) => total + getConnectionSurfaces(id).length,
+            0,
+        );
         context.telemetry.measurements.shellCount = getRegisteredShellTerminals().filter(
-            (shell) => shell.info.clusterId === clusterId,
+            (shell) => targets.has(shell.info.clusterId),
         ).length;
-        context.telemetry.measurements.playgroundCount = getPlaygroundEvaluators().has(clusterId) ? 1 : 0;
+        const playgrounds = getPlaygroundEvaluators();
+        context.telemetry.measurements.playgroundCount = [...targets].filter((id) => playgrounds.has(id)).length;
+        await operation(context);
+    });
+}
 
+/** The single-cluster confirm/commit path, with one event covering both phases. */
+export async function teardownConnection(
+    clusterId: string,
+    reason: TeardownReason,
+    refreshTree: () => void,
+): Promise<void> {
+    await reportTeardown([clusterId], reason, async (context) => {
         const confirmed = await confirmTeardown(clusterId, reason);
         if (confirmed.outcome !== 'confirmed') {
             context.telemetry.properties.blockedByTask = confirmed.outcome === 'blockedByTask' ? 'true' : 'false';

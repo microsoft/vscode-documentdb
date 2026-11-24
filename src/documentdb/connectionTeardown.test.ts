@@ -8,13 +8,15 @@ import * as l10n from '@vscode/l10n';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { registerConnectionSurface, type ConnectionSurface } from './connectionSurfaces';
-import { commitTeardown, confirmTeardown, latchForTeardown, teardownConnection } from './connectionTeardown';
+import { commitTeardown, confirmTeardown, latchForTeardown, teardownConnection, withConnectionRemoval } from './connectionTeardown';
 
 const mocks = vi.hoisted(() => ({
     getSetting: vi.fn(),
     getConflictingTasks: vi.fn(),
     getLatchReason: vi.fn(),
+    getEpoch: vi.fn(),
     latch: vi.fn(),
+    unlatch: vi.fn(),
     deleteClient: vi.fn(),
     clearLastVerifiedIdentity: vi.fn(),
     deleteCredentials: vi.fn(),
@@ -77,6 +79,47 @@ describe('connection teardown', () => {
             registration.dispose();
         }
         vi.restoreAllMocks();
+    });
+
+    it('does not close views or delete stored connections when the combined tab choice is cancelled', async () => {
+        const draft = register('documentView', true);
+        const deleteStored = vi.fn<() => Promise<void>>();
+
+        await expect(
+            withConnectionRemoval([clusterId, otherId], async (remove) => remove(clusterId, deleteStored)),
+        ).rejects.toBeInstanceOf(UserCancelledError);
+
+        expect(showWarning).toHaveBeenCalledOnce();
+        expect(mocks.latch).not.toHaveBeenCalled();
+        expect(draft.dispose).not.toHaveBeenCalled();
+        expect(draft.disable).not.toHaveBeenCalled();
+        expect(deleteStored).not.toHaveBeenCalled();
+    });
+
+    it('fences the whole batch before removal and leaves a surviving connection reconnectable', async () => {
+        const latches = new Map<string, string>();
+        const epochs = new Map<string, number>();
+        mocks.getLatchReason.mockImplementation((id: string) => latches.get(id));
+        mocks.getEpoch.mockImplementation((id: string) => epochs.get(id) ?? 0);
+        mocks.latch.mockImplementation((id: string, reason: string) => {
+            latches.set(id, reason);
+            epochs.set(id, (epochs.get(id) ?? 0) + 1);
+        });
+        mocks.unlatch.mockImplementation((id: string) => { latches.delete(id); });
+        mocks.getSetting.mockReturnValue('keepOpenDisabled');
+        const draft = register('documentView', true);
+        const failedDelete = new Error('Storage write failed');
+
+        await expect(withConnectionRemoval([clusterId, otherId], async (remove) => {
+            await remove(clusterId, async () => {
+                expect(latches.get(otherId)).toBe('connectionRemoved');
+                expect(draft.disable).toHaveBeenCalledExactlyOnceWith('connectionRemoved');
+                throw failedDelete;
+            });
+        })).rejects.toBe(failedDelete);
+
+        expect(latches.get(clusterId)).toBe('userDisconnected');
+        expect(latches.has(otherId)).toBe(false);
     });
 
     it('skips the choice modal when there are no surfaces and leaves preflight read-only', async () => {

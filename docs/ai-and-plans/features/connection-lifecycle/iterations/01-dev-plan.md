@@ -1757,6 +1757,10 @@ behave as today.
   keeps credentials and the verified identity, and refreshes the same tree node with one
   **Connect** action. The integrated build and 225 focused tests passed. Remove and saved edits
   are not wired into teardown yet.
+- **WI-7 S2b:** Remove and folder deletion keep their existing deletion confirmation and share
+  one tab choice for the affected connections. The batch rechecks and fences the entire set
+  before disposal or deletion. A failed storage delete leaves the surviving connection
+  disconnected rather than stuck in the removed state. Build and 30 focused tests passed.
 - **Carry-forward from WI-4d:** An explicit Update Credentials that changes the tenant must
   replace or clear the old verified Entra identity so the next connect can use the saved
   tenant (decision 0011). Automatic reconnect remains pinned until that explicit update.
