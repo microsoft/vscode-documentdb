@@ -237,13 +237,11 @@ export const queryInsightsEventsRouter = router({
                 // effort — a metadata fetch failure here must not abort
                 // Stage 3 streaming (the buffered procedure has the same
                 // contract).
-                const client = await session.getClient();
-                try {
-                    const clusterMetadata = await client.getClusterMetadata();
-                    completionTelemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
-                } catch {
-                    completionTelemetry.properties.platform = 'unknown';
-                }
+                const clusterMetadata = await session.runWithClient(
+                    (client) => client.getClusterMetadata().catch(() => undefined),
+                    epoch,
+                );
+                completionTelemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
                 if (abortController.signal.aborted) {
                     return;
                 }
