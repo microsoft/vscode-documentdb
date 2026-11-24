@@ -67,12 +67,12 @@ npm install @microsoft/vscode-ext-webview-fluentui
 
 Peer dependencies, which you already have if you are using Fluent:
 
-| Peer                                        | Range                   |
-| ------------------------------------------- | ----------------------- |
-| `react`                                     | `>=19`                  |
-| `@fluentui/react-components`                | `~9.74 \|\| ~9.75.1`    |
-| `@fluentui/react-icons`                     | `~2.0`                  |
-| `@fluentui/react-motion-components-preview` | `^0.15.6`               |
+| Peer                                        | Range                |
+| ------------------------------------------- | -------------------- |
+| `react`                                     | `>=19`               |
+| `@fluentui/react-components`                | `~9.74 \|\| ~9.75.1` |
+| `@fluentui/react-icons`                     | `~2.0`               |
+| `@fluentui/react-motion-components-preview` | `^0.15.6`            |
 
 `StatusListItem` disclosures use Fluent's default `Collapse` motion from the motion peer,
 including its built-in `prefers-reduced-motion` support.

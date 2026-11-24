@@ -199,12 +199,12 @@ This is the first real divergence from the sibling package, whose entire build i
 
 `peerDependencies`, chosen so consumers can upgrade Fluent independently:
 
-| Peer                                        | Range                   | This extension        |
-| ------------------------------------------- | ----------------------- | --------------------- |
-| `react`                                     | `>=19`                  | `~19.2.4`             |
-| `@fluentui/react-components`                | `~9.74 \|\| ~9.75.1`    | `~9.75.1`             |
-| `@fluentui/react-icons`                     | `~2.0`                  | `~2.0.345`            |
-| `@fluentui/react-motion-components-preview` | `^0.15.6`               | installed as a peer   |
+| Peer                                        | Range                | This extension      |
+| ------------------------------------------- | -------------------- | ------------------- |
+| `react`                                     | `>=19`               | `~19.2.4`           |
+| `@fluentui/react-components`                | `~9.74 \|\| ~9.75.1` | `~9.75.1`           |
+| `@fluentui/react-icons`                     | `~2.0`               | `~2.0.345`          |
+| `@fluentui/react-motion-components-preview` | `^0.15.6`            | installed as a peer |
 
 `devDependencies`: `sass` (the style build), `@fluentui/react-progress` - the latter because
 `fluentOverrides.test.ts` does `require.resolve('@fluentui/react-progress')` and currently works only
