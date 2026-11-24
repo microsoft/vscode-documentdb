@@ -31,8 +31,13 @@ import {
     diagnosticsSrvTargets,
     diagnosticsStartedAt,
     fixtures,
+    wishAnsweredOutcome,
     wishFortuneOutcome,
+    wishKeywordConfig,
+    wishKeywordExamples,
+    wishKeywordOutcome,
     wishPlaygroundOutcome,
+    wishRefusedOutcome,
     type DiagnosticsCard,
     type DiagnosticsFinding,
     type DiagnosticsRow,
@@ -226,6 +231,7 @@ function defaultScenario<V extends WebviewName>(view: V, steps: readonly Scenari
 }
 
 const base = fixtures.localQuickStart;
+const wishingWell = fixtures.wishingWell;
 const readyDocker = base.rpc['localQuickStart.getDockerStatus'].results[0];
 const completedStages = [
     { stage: 'checking', status: 'done', dockerReadiness: readyDocker.readiness },
@@ -2436,9 +2442,15 @@ export const scenarios = {
             ...defaultScenario('wishingWell', [
                 { action: 'fill', role: 'textbox', name: 'Your wish', value: 'Add 20 sample customers' },
                 { action: 'click', role: 'button', name: 'Make a wish' },
+                { action: 'click', role: 'button', name: 'Open in a playground' },
             ]),
             readiness: {
-                content: [wishPlaygroundOutcome.title, 'Read by Copilot', 'Open in a playground'],
+                content: [
+                    wishPlaygroundOutcome.title,
+                    'Read by Copilot',
+                    'You wished: Add 20 sample customers',
+                    'Opened',
+                ],
                 noProgressbar: true,
             },
             assertions: [
@@ -2456,7 +2468,14 @@ export const scenarios = {
                     path: 'wishingWell.grant',
                     input: { id: wishPlaygroundOutcome.id },
                     count: 1,
-                    steps: [{ action: 'click', role: 'button', name: 'Open in a playground' }],
+                    steps: [],
+                },
+                {
+                    kind: 'text',
+                    name: 'a granted card shows its receipt instead of the button and hint',
+                    selector: '.ww-results',
+                    includes: ['Opened'],
+                    excludes: ['Nothing runs until you run it in the playground', 'Open in a playground'],
                 },
             ],
         },
@@ -2464,6 +2483,104 @@ export const scenarios = {
             ...defaultScenario('wishingWell', [{ action: 'click', role: 'button', name: "I'm feeling lucky" }]),
             readiness: { content: [wishFortuneOutcome.title, wishFortuneOutcome.message], noProgressbar: true },
             assertions: [],
+        },
+        keywords: {
+            config: wishKeywordConfig,
+            rpc: {
+                ...wishingWell.rpc,
+                'wishingWell.status': {
+                    type: 'query',
+                    results: [{ copilotAvailable: false, examples: wishKeywordExamples }],
+                },
+                'wishingWell.makeWish': { type: 'mutation', results: [wishKeywordOutcome] },
+            } as const satisfies TypedRpcFixtures,
+            steps: [
+                { action: 'click', role: 'button', name: 'Show the documents in orders' },
+                { action: 'click', role: 'button', name: 'Make a wish' },
+            ],
+            readiness: {
+                content: [
+                    'Keywords',
+                    'Copilot is not available, so the well understands simple wishes only.',
+                    'Try:',
+                    ...wishKeywordExamples,
+                    wishKeywordOutcome.title,
+                    'You wished: Show the documents in orders',
+                    'From the well',
+                ],
+                noProgressbar: true,
+            },
+            assertions: [
+                {
+                    kind: 'calls',
+                    name: 'an example fills the box, and making the wish sends it',
+                    path: 'wishingWell.makeWish',
+                    input: { wish: 'Show the documents in orders' },
+                    count: 1,
+                    steps: [],
+                },
+            ],
+        },
+        answered: {
+            config: wishingWell.config,
+            rpc: {
+                ...wishingWell.rpc,
+                'wishingWell.makeWish': { type: 'mutation', results: [wishAnsweredOutcome] },
+            } as const satisfies TypedRpcFixtures,
+            steps: [
+                { action: 'fill', role: 'textbox', name: 'Your wish', value: 'orders over 300' },
+                { action: 'click', role: 'button', name: 'Make a wish' },
+            ],
+            readiness: {
+                content: [
+                    wishAnsweredOutcome.title,
+                    'You wished: orders over 300',
+                    wishAnsweredOutcome.message,
+                    'Read-only result: nothing was changed.',
+                    'Too long to show in full, so only the first documents are shown.',
+                    'Open in collection view',
+                ],
+                noProgressbar: true,
+            },
+            assertions: [
+                {
+                    kind: 'attribute',
+                    name: 'the results landmark names the latest wish',
+                    selector: '.ww-results',
+                    attribute: 'aria-label',
+                    expected: 'Latest wish',
+                },
+            ],
+        },
+        refused: {
+            config: wishingWell.config,
+            rpc: {
+                ...wishingWell.rpc,
+                'wishingWell.makeWish': { type: 'mutation', results: [wishRefusedOutcome] },
+            } as const satisfies TypedRpcFixtures,
+            steps: [
+                {
+                    action: 'fill',
+                    role: 'textbox',
+                    name: 'Your wish',
+                    value: 'copy the orders to an archive collection',
+                },
+                { action: 'click', role: 'button', name: 'Make a wish' },
+            ],
+            readiness: {
+                content: [wishRefusedOutcome.title, wishRefusedOutcome.message],
+                selectors: ['.ww-card--refused'],
+                noProgressbar: true,
+            },
+            assertions: [
+                {
+                    kind: 'attribute',
+                    name: 'a refused card offers nothing to grant',
+                    selector: '.ww-card--refused button',
+                    attribute: 'type',
+                    expected: null,
+                },
+            ],
         },
     },
     localQuickStart: {

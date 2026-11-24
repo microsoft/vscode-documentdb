@@ -85,11 +85,33 @@ export interface ScopeRequest {
     readonly collection?: string;
 }
 
+/** A non-interactive caller named a connection this session has not signed in to. */
+export class NeedsSignInError extends Error {
+    constructor(
+        public readonly connectionId: string,
+        public readonly connectionName: string,
+    ) {
+        super(
+            l10n.t(
+                'Connection "{0}" (id: {1}) is not connected. Ask the user to sign in to it from the DocumentDB side bar in VS Code, then retry.',
+                connectionName,
+                connectionId,
+            ),
+        );
+        this.name = 'NeedsSignInError';
+    }
+}
+
 /**
- * Turns an agent's connection name into a scope, signing in the same way expanding the tree does
- * when this session has not connected yet. That may ask the user for a password in VS Code.
+ * Turns an agent's connection name into a scope. Interactive callers sign in the same way
+ * expanding the tree does, which may ask the user for a password in VS Code; others get a
+ * {@link NeedsSignInError} instead, so a headless agent never waits on a prompt it cannot see.
  */
-export async function resolveScope(request: ScopeRequest, context: IActionContext): Promise<WishScope> {
+export async function resolveScope(
+    request: ScopeRequest,
+    context: IActionContext,
+    options: { readonly interactive?: boolean } = {},
+): Promise<WishScope> {
     if (!request.connection) {
         if (request.database || request.collection) {
             throw new Error(
@@ -111,6 +133,10 @@ export async function resolveScope(request: ScopeRequest, context: IActionContex
         );
     }
 
+    // Only a live client is safe without a person watching: starting one may open an Entra ID sign-in.
+    if (options.interactive === false && !connection.connected) {
+        throw new NeedsSignInError(connection.id, connection.name);
+    }
     if (!CredentialCache.hasCredentials(connection.id)) {
         await revealInConnectionsView(context, connection.id, connection.isEmulator, request.database);
     }

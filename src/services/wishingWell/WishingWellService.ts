@@ -9,32 +9,54 @@ import { randomUUID } from 'crypto';
 import { type WishOutcome } from '../../webviews/documentdb/wishingWell/wishingWellTypes';
 import {
     buildWishPrompt,
+    cannotGrantSpell,
     fortunes,
     agentSpell as handToAgent,
     installCopilotSpell,
     LUCKY_TIPS,
-    luckySearchSpell,
     matchWishByKeyword,
     parseSpell,
     pickLuckyKind,
     pickOne,
     spellToOutcome,
-    WishScopeError,
     type Spell,
 } from './wishEngine';
 import { type WishPowers } from './wishPowers';
 import { type WishScope } from './wishScope';
 
-/** Where a wish came from. Telemetry only; every source gets the same well. */
+/** Where a wish came from. Every source gets the same well; only an outside agent's grant asks first. */
 export type WishSource = 'webview' | 'shell' | 'copilotTool' | 'mcp';
+
+/** `declined`: the user said no in VS Code; the wish stays pending. */
+export type GrantResult = 'granted' | 'unknown' | 'declined';
+
+/** What a pending grant will do, resolved by the host so a confirmation never relies on agent prose. */
+export interface GrantDescription {
+    readonly title: string;
+    readonly message: string;
+    readonly actionLabel?: string;
+    readonly actionHint?: string;
+    /** The query, script, prompt or filter the grant opens. */
+    readonly detail?: string;
+}
 
 interface PendingGrant {
     readonly spell: Spell;
     readonly scope: WishScope;
+    readonly description: GrantDescription;
 }
 
 /** Keeps the pending grants bounded in a long session. */
 const MAX_PENDING_GRANTS = 200;
+
+/** Spells that reach past the extension: an outside agent needs the user's yes in VS Code first. */
+function leavesTheExtension(spell: Spell): boolean {
+    return (
+        spell.kind === 'link' ||
+        spell.kind === 'agent' ||
+        (spell.kind === 'command' && !spell.commandId.startsWith('vscode-documentdb.'))
+    );
+}
 
 /**
  * The Wishing Well itself. The tab, the shell's `wish` command, Copilot's agent tools and the MCP
@@ -69,21 +91,32 @@ export class WishingWellService {
         context.telemetry.measurements.wishLength = wish.length;
 
         const promptScope = agentSpell ? {} : await this.powers.describeScope(scope).catch(() => ({}));
-        const fromCopilot = agentSpell
-            ? undefined
-            : await this.interpretWithCopilot(wish, promptScope, context, signal);
+        const copilotAvailable = agentSpell ? false : await this.isCopilotAvailable();
+        if (!agentSpell && !copilotAvailable) {
+            context.telemetry.properties.copilot = 'unavailable';
+        }
+        const fromCopilot = copilotAvailable
+            ? await this.interpretWithCopilot(wish, promptScope, context, signal)
+            : undefined;
         let spell = agentSpell ?? fromCopilot ?? matchWishByKeyword(wish, promptScope);
         if (!spell) {
-            spell = (await this.powers.isChatAvailable().catch(() => false))
-                ? handToAgent(wish)
-                : luckySearchSpell(wish);
+            // Agent mode without Copilot would only end in a sign-in error, so say what the well can do.
+            spell =
+                copilotAvailable && (await this.isChatAvailable())
+                    ? handToAgent(wish)
+                    : cannotGrantSpell(copilotAvailable);
         }
-        if (spell.kind === 'agent' && !(await this.powers.isChatAvailable().catch(() => false))) {
+        if (spell.kind === 'agent' && !(await this.isChatAvailable())) {
             spell = installCopilotSpell();
         }
         context.telemetry.properties.spell = spell.kind;
 
-        const outcome = spellToOutcome(spell, randomUUID(), agentSpell ? 'agent' : fromCopilot ? 'copilot' : 'well');
+        const outcome = spellToOutcome(
+            spell,
+            randomUUID(),
+            agentSpell ? 'agent' : fromCopilot ? 'copilot' : 'well',
+            wish,
+        );
         if (spell.kind === 'find' || spell.kind === 'aggregate') {
             return this.remember(spell, scope, await this.read(spell, scope, outcome, signal));
         }
@@ -118,29 +151,60 @@ export class WishingWellService {
             kind: 'fortune',
             title: l10n.t('Your fortune'),
             message: pickOne(fortunes(), this.random),
+            status: 'info',
             interpretedBy: 'well',
         };
     }
 
-    /** Carries out a pending wish. `false` when the id is unknown or already granted. */
-    public async grant(id: string, context: IActionContext, source: WishSource): Promise<boolean> {
+    /** Carries out a pending wish. `unknown` when the id is unknown or already granted. */
+    public async grant(id: string, context: IActionContext, source: WishSource): Promise<GrantResult> {
         context.telemetry.properties.wishSource = source;
         const pending = this.grants.get(id);
         if (!pending) {
             context.telemetry.properties.granted = 'unknown';
-            return false;
+            return 'unknown';
         }
         context.telemetry.properties.spell = pending.spell.kind;
-        await this.powers.cast(pending.spell, pending.scope, context);
+        // Taken out while the user decides or the grant runs, so a second call cannot cast it twice.
         this.grants.delete(id);
+        try {
+            if (
+                source === 'mcp' &&
+                leavesTheExtension(pending.spell) &&
+                !(await this.powers.confirmGrant(pending.spell))
+            ) {
+                this.keep(id, pending);
+                context.telemetry.properties.granted = 'declined';
+                return 'declined';
+            }
+            await this.powers.cast(pending.spell, pending.scope, context);
+        } catch (error) {
+            // A grant that failed (say, a tree node to expand first) can be tried again.
+            this.keep(id, pending);
+            throw error;
+        }
         context.telemetry.properties.granted = 'true';
-        return true;
+        return 'granted';
     }
 
-    /** The pending spell's card text, for a confirmation before an agent grants it. */
-    public describeGrant(id: string): { readonly title: string; readonly message: string } | undefined {
-        const pending = this.grants.get(id);
-        return pending ? { title: pending.spell.title, message: pending.spell.message } : undefined;
+    /** What granting will do, for a confirmation before an agent grants it. */
+    public describeGrant(id: string): GrantDescription | undefined {
+        return this.grants.get(id)?.description;
+    }
+
+    /** One level down from the scope: a cluster's databases, or a database's collections. */
+    public async describeConnection(scope: WishScope): Promise<{ databases?: string[]; collections?: string[] }> {
+        if (!scope.cluster) {
+            return {};
+        }
+        if (scope.databaseName) {
+            return { collections: await this.powers.listCollections(scope.cluster, scope.databaseName) };
+        }
+        return { databases: await this.powers.listDatabases(scope.cluster) };
+    }
+
+    private async isChatAvailable(): Promise<boolean> {
+        return this.powers.isChatAvailable().catch(() => false);
     }
 
     private async interpretWithCopilot(
@@ -149,10 +213,6 @@ export class WishingWellService {
         context: IActionContext,
         signal?: AbortSignal,
     ): Promise<Spell | undefined> {
-        if (!(await this.isCopilotAvailable())) {
-            context.telemetry.properties.copilot = 'unavailable';
-            return undefined;
-        }
         try {
             const spell = parseSpell(await this.powers.askCopilot(buildWishPrompt(wish, promptScope), signal));
             context.telemetry.properties.copilot = spell ? 'granted' : 'unparsable';
@@ -166,7 +226,7 @@ export class WishingWellService {
         }
     }
 
-    /** Runs a read-only spell. A failed read is still an outcome: the user sees why and can open it. */
+    /** Runs a read-only spell. A read that fails is refused: the card says why and offers nothing to open. */
     private async read(
         spell: Extract<Spell, { kind: 'find' | 'aggregate' }>,
         scope: WishScope,
@@ -175,13 +235,13 @@ export class WishingWellService {
     ): Promise<WishOutcome> {
         try {
             const result = await this.powers.read(spell, scope, signal);
-            const summary =
-                result.count === 0 ? l10n.t('No documents matched.') : l10n.t('{0} documents.', result.count);
             return {
                 ...outcome,
-                message: `${outcome.message} ${summary}`.trim(),
+                status: 'answered',
+                message: readReceipt(spell, spell.collection ?? scope.collectionName ?? '', result.count),
                 detail: result.count === 0 ? outcome.detail : result.text,
                 resultCount: result.count,
+                truncated: result.truncated,
             };
         } catch (error) {
             if (signal?.aborted) {
@@ -190,23 +250,58 @@ export class WishingWellService {
             const reason = error instanceof Error ? error.message : String(error);
             return {
                 ...outcome,
+                status: 'refused',
                 message: l10n.t('The well could not read this: {0}', reason),
-                ...(error instanceof WishScopeError ? { actionLabel: undefined, actionHint: undefined } : {}),
+                actionLabel: undefined,
+                actionHint: undefined,
             };
         }
     }
 
     private remember(spell: Spell, scope: WishScope, outcome: WishOutcome): WishOutcome {
         if (outcome.actionLabel) {
-            this.grants.set(outcome.id, { spell, scope });
-            while (this.grants.size > MAX_PENDING_GRANTS) {
-                const [oldest] = this.grants.keys();
-                if (oldest === undefined) {
-                    break;
-                }
-                this.grants.delete(oldest);
-            }
+            this.keep(outcome.id, {
+                spell,
+                scope,
+                description: {
+                    title: outcome.title,
+                    message: spell.message,
+                    actionLabel: outcome.actionLabel,
+                    actionHint: outcome.actionHint,
+                    // What the grant opens, not the rows a read already showed.
+                    detail: spellToOutcome(spell, outcome.id, outcome.interpretedBy).detail,
+                },
+            });
         }
         return outcome;
     }
+
+    private keep(id: string, pending: PendingGrant): void {
+        this.grants.set(id, pending);
+        while (this.grants.size > MAX_PENDING_GRANTS) {
+            const [oldest] = this.grants.keys();
+            if (oldest === undefined) {
+                break;
+            }
+            this.grants.delete(oldest);
+        }
+    }
+}
+
+/** "Found 3 documents in orders." or "Aggregation on orders: 3 result rows." */
+function readReceipt(spell: Spell, collection: string, count: number): string {
+    if (spell.kind === 'aggregate') {
+        if (count === 0) {
+            return l10n.t('Aggregation on {0}: no result rows.', collection);
+        }
+        return count === 1
+            ? l10n.t('Aggregation on {0}: 1 result row.', collection)
+            : l10n.t('Aggregation on {0}: {1} result rows.', collection, count);
+    }
+    if (count === 0) {
+        return l10n.t('No documents in {0} matched.', collection);
+    }
+    return count === 1
+        ? l10n.t('Found 1 document in {0}.', collection)
+        : l10n.t('Found {0} documents in {1}.', count, collection);
 }

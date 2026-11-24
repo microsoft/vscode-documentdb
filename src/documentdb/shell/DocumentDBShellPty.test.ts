@@ -8,7 +8,9 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockIn
 import { type UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
+import { currentWishingWell } from '../../services/wishingWell/wishingWellRegistry';
 import { accumulateTelemetry } from '../../utils/accumulatingTelemetry';
+import { type WishOutcome } from '../../webviews/documentdb/wishingWell/wishingWellTypes';
 import { AuthMethodId } from '../auth/AuthMethod';
 import { ClustersClient } from '../ClustersClient';
 import { CredentialCache } from '../CredentialCache';
@@ -74,6 +76,8 @@ vi.mock('../../utils/accumulatingTelemetry', () => ({
         },
     ),
 }));
+
+vi.mock('../../services/wishingWell/wishingWellRegistry', () => ({ currentWishingWell: vi.fn() }));
 
 // Mock ShellSessionManager
 const mockInitialize = vi.fn().mockResolvedValue({
@@ -1714,6 +1718,139 @@ describe('DocumentDBShellPty', () => {
             expect(showQuickPickSpy).toHaveBeenCalledTimes(1);
 
             showQuickPickSpy.mockRestore();
+        });
+    });
+
+    describe('wish', () => {
+        const makeWish = vi.fn();
+        const feelingLucky = vi.fn();
+        const grant = vi.fn();
+
+        const card = (overrides: Partial<WishOutcome>): WishOutcome => ({
+            id: 'card-1',
+            kind: 'view',
+            title: 'A card',
+            message: 'What the well found.',
+            status: 'proposed',
+            interpretedBy: 'well',
+            ...overrides,
+        });
+
+        const typeLine = async (line: string): Promise<void> => {
+            pty.handleInput(line);
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        };
+
+        beforeEach(async () => {
+            vi.mocked(currentWishingWell).mockReturnValue({ makeWish, feelingLucky, grant });
+            grant.mockResolvedValue('granted');
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            written = '';
+        });
+
+        it('prints a lucky draw and opens nothing until "wish open"', async () => {
+            feelingLucky.mockResolvedValue(
+                card({
+                    id: 'lucky-1',
+                    kind: 'document',
+                    title: 'A document from orders',
+                    detail: '{ _id: 1 }',
+                    actionLabel: 'Open in collection view',
+                }),
+            );
+
+            await typeLine('wish me luck');
+
+            expect(grant).not.toHaveBeenCalled();
+            expect(written).toContain('{ _id: 1 }');
+            expect(written).toContain('Type "wish open" to open in collection view.');
+
+            await typeLine('wish open');
+
+            expect(grant).toHaveBeenCalledTimes(1);
+            expect(grant).toHaveBeenCalledWith('lucky-1', expect.anything(), 'shell');
+            expect(written).toContain('Granted: Open in collection view');
+
+            await typeLine('wish open');
+            expect(grant).toHaveBeenCalledTimes(1);
+            expect(written).toContain('Nothing to open.');
+        });
+
+        it('does not run a wished command until "wish open", and says when it expired', async () => {
+            makeWish.mockResolvedValue(
+                card({ id: 'cmd-1', kind: 'command', actionLabel: 'Grant wish', actionHint: 'Runs "Zoom in".' }),
+            );
+            grant.mockResolvedValue('unknown');
+
+            await typeLine('wish zoom in');
+
+            expect(makeWish).toHaveBeenCalledWith('zoom in', expect.anything(), expect.anything(), 'shell');
+            expect(grant).not.toHaveBeenCalled();
+            expect(written).toContain('Type "wish open" to grant wish. Runs "Zoom in".');
+
+            await typeLine('wish open');
+
+            expect(grant).toHaveBeenCalledWith('cmd-1', expect.anything(), 'shell');
+            expect(written).toContain('That wish has expired.');
+        });
+
+        it('keeps the card openable after a decline', async () => {
+            makeWish.mockResolvedValue(card({ id: 'link-1', kind: 'link', actionLabel: 'Open link' }));
+            grant.mockResolvedValueOnce('declined');
+
+            await typeLine('wish read the docs');
+            await typeLine('wish open');
+            expect(written).toContain('Not granted.');
+
+            await typeLine('wish open');
+            expect(grant).toHaveBeenCalledTimes(2);
+            expect(written).toContain('Granted: Open link');
+        });
+
+        it('forgets the last card once a newer wish prints one without an action', async () => {
+            makeWish.mockResolvedValueOnce(card({ actionLabel: 'Open the dashboard' }));
+            feelingLucky.mockResolvedValueOnce(card({ id: 'fortune-1', kind: 'fortune', status: 'info' }));
+
+            await typeLine('wish show the dashboard');
+            await typeLine('wish me luck');
+            await typeLine('wish open');
+
+            expect(grant).not.toHaveBeenCalled();
+            expect(written).toContain('Nothing to open.');
+        });
+
+        it('types a wished shell command in without offering to open another shell', async () => {
+            makeWish.mockResolvedValue(
+                card({ kind: 'shell', detail: 'db.orders.countDocuments()', actionLabel: 'Open the shell' }),
+            );
+
+            await typeLine('wish count orders');
+
+            expect(written).toContain('Press Enter to run it.');
+            expect(written).toContain('db.orders.countDocuments()');
+            expect(written).not.toContain('wish open');
+            expect(grant).not.toHaveBeenCalled();
+        });
+
+        it("asks the well in the shell's own tree view", async () => {
+            pty.close();
+            pty = new DocumentDBShellPty({
+                connectionInfo: { ...defaultOptions.connectionInfo, viewId: 'discoveryView' },
+            });
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            makeWish.mockResolvedValue(card({ kind: 'answer', status: 'info' }));
+
+            await typeLine('wish what is an index');
+
+            expect(makeWish).toHaveBeenCalledWith(
+                'what is an index',
+                { cluster: expect.objectContaining({ viewId: 'discoveryView' }), databaseName: 'testdb' },
+                expect.anything(),
+                'shell',
+            );
         });
     });
 });

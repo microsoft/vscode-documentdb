@@ -14,6 +14,12 @@ describe('parseShellWish', () => {
         ['wish me luck', { kind: 'lucky' }],
         ["wish I'm feeling lucky!", { kind: 'lucky' }],
         ['wish', { kind: 'usage' }],
+        ['wish open', { kind: 'open' }],
+        ['  wish   open  ', { kind: 'open' }],
+        ['wish Open', { kind: 'open' }],
+        ['wish open please', { kind: 'wish', text: 'open please' }],
+        ['wish opened orders', { kind: 'wish', text: 'opened orders' }],
+        ['wish "open"', { kind: 'wish', text: 'open' }],
     ])('reads %j', (line, expected) => {
         expect(parseShellWish(line)).toEqual(expected);
     });

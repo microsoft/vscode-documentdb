@@ -2328,10 +2328,19 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(database)",
         "userDescription": "List the DocumentDB connections saved in VS Code",
-        "modelDescription": "Lists the DocumentDB and MongoDB API connections saved in the VS Code DocumentDB extension, and whether each is connected. No secrets.",
+        "modelDescription": "Lists the DocumentDB and MongoDB API connections saved in the VS Code DocumentDB extension and whether each is connected. No secrets. Pass a connected connection to list its databases, and a database too to list its collections. Never signs in: for a connection that is not connected, ask the user to sign in from the DocumentDB side bar.",
         "inputSchema": {
           "type": "object",
-          "properties": {}
+          "properties": {
+            "connection": {
+              "type": "string",
+              "description": "Optional. Name or id of a saved connection, to list its databases."
+            },
+            "database": {
+              "type": "string",
+              "description": "Optional. A database of \"connection\", to list its collections."
+            }
+          }
         }
       },
       {
@@ -2341,7 +2350,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(sparkle)",
         "userDescription": "Make a wish at the DocumentDB Wishing Well",
-        "modelDescription": "Make a wish at the DocumentDB Wishing Well. Describe what you want in plain words; the well answers questions about the data by running read-only queries, drafts scripts for changes, and opens the extension tools (collection view with a query, interactive shell, query playground, cluster dashboard, index advice, import and export, connection diagnostics, DocumentDB Local). Nothing changes data: writes come back as a playground script for the user to run. When the reply has a wishId and an action, call documentdb_grant_wish to make it happen.",
+        "modelDescription": "Make a wish at the DocumentDB Wishing Well in VS Code. Describe what you want in plain words; the well answers questions about the data by running read-only queries, drafts scripts for changes, and opens the extension's own tools (collection view with a query, interactive shell, query playground, cluster dashboard, index advice, import and export, connection diagnostics, DocumentDB Local). Nothing changes data: writes come back as a playground script for the user to run. A read comes back answered with its rows. A reply that proposes an action has a wishId: call documentdb_grant_wish only when the user wants that to happen in VS Code.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2351,7 +2360,7 @@
             },
             "spell": {
               "type": "object",
-              "description": "Optional. When you already know exactly what to do, pass one spell, e.g. {\"spell\":\"aggregate\",\"collection\":\"orders\",\"pipeline\":[{\"$count\":\"n\"}]}. Spells: answer, find, aggregate, collectionView, shell, playground, dashboard, newDocument, tool, command, agent, link. Read-only queries run; everything else waits for documentdb_grant_wish."
+              "description": "Optional. Pass one spell when you know exactly what to do; the well checks it like any wish. find and aggregate run read-only at once; every other spell waits for documentdb_grant_wish. Spells (\"?\" marks an optional field; collection and database default to this tool's own arguments; filter, project, sort and pipeline are JSON): answer {message} replies in words; find {collection?, database?, filter?, project?, sort?, limit?}; aggregate {collection?, database?, pipeline}, never $out or $merge; collectionView {collection?, database?, filter?, project?, sort?, tab?: documents|indexes|insights}, where insights explains a slow query; shell {command?} types one command into the interactive shell; playground {script} for anything that changes data; dashboard {}; newDocument {collection?, database?}; tool {tool: import|export|diagnose|createCollection|createDatabase, collection?, database?}; command {commandId, argument?} with commandId one of vscode-documentdb.command.localQuickStart.open, vscode-documentdb.command.connectionsView.newConnection, vscode-documentdb.command.discoveryView.addRegistry, workbench.view.extension.documentDB, workbench.action.selectTheme, workbench.action.toggleZenMode, workbench.action.zoomIn, workbench.action.zoomOut, workbench.action.terminal.new, workbench.action.openSettings, workbench.action.openGlobalKeybindings, workbench.extensions.search, workbench.action.quickOpen, workbench.action.showCommands; \"argument\" is search text, only for workbench.action.openSettings, workbench.action.openGlobalKeybindings, workbench.extensions.search, workbench.action.quickOpen; agent {prompt} hands work outside the database to Copilot agent mode; link {url}, https only. Every spell also takes \"title\" and \"message\". Example: {\"spell\":\"aggregate\",\"collection\":\"orders\",\"pipeline\":[{\"$count\":\"n\"}]}"
             },
             "connection": {
               "type": "string",
@@ -2359,11 +2368,11 @@
             },
             "database": {
               "type": "string",
-              "description": "Database to wish on. Needs connection."
+              "description": "Database to wish on. Needs \"connection\"."
             },
             "collection": {
               "type": "string",
-              "description": "Collection to wish on. Needs database."
+              "description": "Collection to wish on. Needs \"database\"."
             }
           },
           "required": [
@@ -2378,7 +2387,7 @@
         "canBeReferencedInPrompt": false,
         "icon": "$(sparkle-filled)",
         "userDescription": "Carry out a wish the Wishing Well proposed",
-        "modelDescription": "Carries out a wish that documentdb_make_wish proposed, in VS Code: opens the view, playground, shell or command it named. Never runs a write.",
+        "modelDescription": "Carries out a wish that documentdb_make_wish proposed, in the user’s VS Code window: opens the view, playground, shell, command, link or Copilot Chat it named. Links, Copilot hand-offs and non-DocumentDB commands ask the user first. Never runs a write.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2409,7 +2418,7 @@
             },
             "database": {
               "type": "string",
-              "description": "Database to wish on. Needs connection."
+              "description": "Database to wish on. Needs \"connection\"."
             }
           }
         }

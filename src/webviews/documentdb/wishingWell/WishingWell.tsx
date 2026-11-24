@@ -29,6 +29,7 @@ import {
     SparkleRegular,
     StarRegular,
     TableSearchRegular,
+    WarningRegular,
     WindowConsoleRegular,
     WindowRegular,
     WrenchRegular,
@@ -36,7 +37,7 @@ import {
 import { ContainerHeader } from '@microsoft/vscode-ext-webview-fluentui/components';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
-import { type FormEvent, type JSX, type KeyboardEvent, useCallback, useEffect, useState } from 'react';
+import { type FormEvent, type JSX, type KeyboardEvent, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility/Announcer';
 import './wishingWell.scss';
@@ -65,22 +66,29 @@ const KIND_ICONS: Record<WishKind, JSX.Element> = {
 
 const MAX_HISTORY = 10;
 
-function examples(connected: boolean): string[] {
-    return connected
-        ? [
-              l10n.t('How many documents are in each collection?'),
-              l10n.t('Show the 5 newest documents'),
-              l10n.t('Add 20 sample customers'),
-              l10n.t('Open the shell'),
-              l10n.t('Why is my query slow?'),
-          ]
-        : [
-              l10n.t('Run DocumentDB on my laptop'),
-              l10n.t('Add 20 sample customers'),
-              l10n.t('Switch to a dark theme'),
-              l10n.t('Write a README for this project'),
-              l10n.t('Explain what an index does'),
-          ];
+/** What a grant did, in words that fit where the wish went. */
+function receipt(kind: WishKind): string {
+    switch (kind) {
+        case 'agent':
+            return l10n.t('Sent to Copilot Chat');
+        case 'link':
+            return l10n.t('Opened in your browser');
+        case 'command':
+            return l10n.t('Done');
+        default:
+            return l10n.t('Opened');
+    }
+}
+
+function announcement(outcome: WishOutcome): string {
+    switch (outcome.status) {
+        case 'refused':
+            return l10n.t('The well could not grant this wish. {0}', outcome.message);
+        case 'proposed':
+            return l10n.t('{0}. {1} Use "{2}" to grant it.', outcome.title, outcome.message, outcome.actionLabel ?? '');
+        default:
+            return `${outcome.title}. ${outcome.message}`;
+    }
 }
 
 interface OutcomeCardProps {
@@ -91,48 +99,62 @@ interface OutcomeCardProps {
     readonly onGrant: (outcome: WishOutcome) => void;
 }
 
-const OutcomeCard = ({ outcome, latest, granted, granting, onGrant }: OutcomeCardProps): JSX.Element => (
-    <Card className={latest ? 'ww-card ww-card--latest' : 'ww-card'} data-kind={outcome.kind}>
-        <CardHeader
-            image={<span className="ww-card__icon">{KIND_ICONS[outcome.kind]}</span>}
-            header={<Body1Strong>{outcome.title}</Body1Strong>}
-            description={
+const OutcomeCard = ({ outcome, latest, granted, granting, onGrant }: OutcomeCardProps): JSX.Element => {
+    const refused = outcome.status === 'refused';
+    const className = ['ww-card', latest && 'ww-card--latest', refused && 'ww-card--refused'].filter(Boolean).join(' ');
+    return (
+        <Card className={className} data-kind={outcome.kind} data-status={outcome.status}>
+            <CardHeader
+                image={<span className="ww-card__icon">{refused ? <WarningRegular /> : KIND_ICONS[outcome.kind]}</span>}
+                header={<Body1Strong>{outcome.title}</Body1Strong>}
+                description={
+                    <Caption1 className="ww-muted">
+                        {outcome.interpretedBy === 'copilot'
+                            ? l10n.t('Read by Copilot')
+                            : outcome.interpretedBy === 'agent'
+                              ? l10n.t('Cast by your agent')
+                              : l10n.t('From the well')}
+                    </Caption1>
+                }
+            />
+            {outcome.wish && <Caption1 className="ww-card__wish">{l10n.t('You wished: {0}', outcome.wish)}</Caption1>}
+            <Body1 className="ww-card__message">{outcome.message}</Body1>
+            {outcome.status === 'answered' && (
+                <Caption1 className="ww-muted">{l10n.t('Read-only result: nothing was changed.')}</Caption1>
+            )}
+            {outcome.status === 'answered' && outcome.truncated && (
                 <Caption1 className="ww-muted">
-                    {outcome.interpretedBy === 'copilot'
-                        ? l10n.t('Read by Copilot')
-                        : outcome.interpretedBy === 'agent'
-                          ? l10n.t('Cast by your agent')
-                          : l10n.t('From the well')}
+                    {l10n.t('Too long to show in full, so only the first documents are shown.')}
                 </Caption1>
-            }
-        />
-        <Body1 className="ww-card__message">{outcome.message}</Body1>
-        {outcome.resultCount !== undefined && outcome.resultCount > 0 && (
-            <Caption1 className="ww-muted">{l10n.t('Read-only result, at most 50 documents')}</Caption1>
-        )}
-        {outcome.detail && <pre className="ww-card__detail">{outcome.detail}</pre>}
-        {outcome.actionLabel && (
-            <div className="ww-card__actions">
-                {granted ? (
-                    <span className="ww-granted">
-                        <CheckmarkCircleFilled aria-hidden />
-                        {l10n.t('Granted')}
-                    </span>
-                ) : (
-                    <Button
-                        appearance={latest ? 'primary' : 'secondary'}
-                        icon={granting ? <Spinner size="tiny" /> : <SparkleRegular />}
-                        disabled={granting}
-                        onClick={() => onGrant(outcome)}
-                    >
-                        {outcome.actionLabel}
-                    </Button>
-                )}
-                {outcome.actionHint && <Caption1 className="ww-muted ww-card__hint">{outcome.actionHint}</Caption1>}
-            </div>
-        )}
-    </Card>
-);
+            )}
+            {outcome.detail && <pre className="ww-card__detail">{outcome.detail}</pre>}
+            {outcome.actionLabel && !refused && (
+                <div className="ww-card__actions">
+                    {granted ? (
+                        <span className="ww-granted">
+                            <CheckmarkCircleFilled aria-hidden />
+                            {receipt(outcome.kind)}
+                        </span>
+                    ) : (
+                        <>
+                            <Button
+                                appearance={latest ? 'primary' : 'secondary'}
+                                icon={granting ? <Spinner size="tiny" /> : <SparkleRegular />}
+                                disabled={granting}
+                                onClick={() => onGrant(outcome)}
+                            >
+                                {outcome.actionLabel}
+                            </Button>
+                            {outcome.actionHint && (
+                                <Caption1 className="ww-muted ww-card__hint">{outcome.actionHint}</Caption1>
+                            )}
+                        </>
+                    )}
+                </div>
+            )}
+        </Card>
+    );
+};
 
 export const WishingWell = (): JSX.Element => {
     const configuration = useConfiguration<WishingWellWebviewConfig>();
@@ -143,16 +165,36 @@ export const WishingWell = (): JSX.Element => {
     const [status, setStatus] = useState<WishingWellStatus | undefined>();
     const [outcomes, setOutcomes] = useState<WishOutcome[]>([]);
     const [granted, setGranted] = useState<ReadonlySet<string>>(new Set());
+    const [lastGranted, setLastGranted] = useState<WishOutcome | undefined>();
     const [granting, setGranting] = useState<string | undefined>();
     const [splash, setSplash] = useState(0);
     const [error, setError] = useState<string | undefined>();
 
-    useEffect(() => {
+    const inputRef = useRef<HTMLTextAreaElement>(null);
+    const examplesLabelId = useId();
+
+    const refreshStatus = useCallback((): void => {
         trpcClient.wishingWell.status
             .query()
             .then(setStatus)
-            .catch(() => setStatus({ copilotAvailable: false }));
+            .catch(() => setStatus((previous) => previous ?? { copilotAvailable: false, examples: [] }));
     }, [trpcClient]);
+
+    // Copilot sign-in can change while the tab is open, so look again whenever it comes back into view.
+    useEffect(() => {
+        refreshStatus();
+        const onVisibilityChange = (): void => {
+            if (document.visibilityState === 'visible') {
+                refreshStatus();
+            }
+        };
+        window.addEventListener('focus', refreshStatus);
+        document.addEventListener('visibilitychange', onVisibilityChange);
+        return () => {
+            window.removeEventListener('focus', refreshStatus);
+            document.removeEventListener('visibilitychange', onVisibilityChange);
+        };
+    }, [refreshStatus]);
 
     const toss = useCallback(
         async (kind: 'wish' | 'lucky'): Promise<void> => {
@@ -189,6 +231,7 @@ export const WishingWell = (): JSX.Element => {
                 const result = await trpcClient.wishingWell.grant.mutate({ id: outcome.id });
                 if (result.granted) {
                     setGranted((previous) => new Set(previous).add(outcome.id));
+                    setLastGranted(outcome);
                 } else {
                     setError(l10n.t('This wish has expired. Make it again.'));
                 }
@@ -249,6 +292,7 @@ export const WishingWell = (): JSX.Element => {
 
                 <form className="ww-form" onSubmit={onSubmit}>
                     <Textarea
+                        ref={inputRef}
                         className="ww-input"
                         aria-label={l10n.t('Your wish')}
                         placeholder={l10n.t('I wish…')}
@@ -285,19 +329,29 @@ export const WishingWell = (): JSX.Element => {
                         </Badge>
                         <Caption1 className="ww-muted">{statusText}</Caption1>
                     </div>
-                    <div className="ww-examples" aria-label={l10n.t('Example wishes')}>
-                        {examples(configuration.clusterDisplayName !== undefined).map((example) => (
-                            <Button
-                                key={example}
-                                size="small"
-                                appearance="subtle"
-                                disabled={busy !== undefined}
-                                onClick={() => setWish(example)}
-                            >
-                                {example}
-                            </Button>
-                        ))}
-                    </div>
+                    {status && status.examples.length > 0 && (
+                        <div className="ww-examples" role="group" aria-labelledby={examplesLabelId}>
+                            <Caption1 id={examplesLabelId} className="ww-muted">
+                                {l10n.t('Try:')}
+                            </Caption1>
+                            {status.examples.map((example) => (
+                                <Button
+                                    key={example}
+                                    className="ww-chip"
+                                    size="small"
+                                    shape="circular"
+                                    appearance="outline"
+                                    disabled={busy !== undefined}
+                                    onClick={() => {
+                                        setWish(example);
+                                        inputRef.current?.focus();
+                                    }}
+                                >
+                                    {example}
+                                </Button>
+                            ))}
+                        </div>
+                    )}
                 </form>
             </section>
 
@@ -308,7 +362,7 @@ export const WishingWell = (): JSX.Element => {
             )}
 
             {latest && (
-                <section className="ww-results" aria-label={l10n.t('Granted wish')}>
+                <section className="ww-results" aria-label={l10n.t('Latest wish')}>
                     <OutcomeCard
                         outcome={latest}
                         latest
@@ -335,7 +389,15 @@ export const WishingWell = (): JSX.Element => {
                 </section>
             )}
 
-            <Announcer when={latest !== undefined} message={latest ? `${latest.title}. ${latest.message}` : ''} />
+            {/* Keyed so every new card and grant is announced, not only the first. */}
+            {latest && <Announcer key={latest.id} when message={announcement(latest)} />}
+            {lastGranted && (
+                <Announcer
+                    key={`granted-${lastGranted.id}`}
+                    when
+                    message={`${lastGranted.title}: ${receipt(lastGranted.kind)}`}
+                />
+            )}
         </main>
     );
 };

@@ -30,6 +30,7 @@ import {
     MAX_RESULT_DOCUMENTS,
     pickOne,
     pipelineWrites,
+    WISH_COMMANDS,
     WishScopeError,
     type CollectionTab,
     type Spell,
@@ -47,9 +48,13 @@ export interface LuckyCard {
 }
 
 export interface ReadResult {
+    /** Documents or result rows the read returned, at most {@link MAX_RESULT_DOCUMENTS}. */
     readonly count: number;
+    /** A JSON array of whole documents, as many as fit the size cap. */
     readonly text: string;
     readonly documents: readonly Document[];
+    /** `text` leaves out some returned documents, or the aggregation had more rows than the cap. */
+    readonly truncated: boolean;
 }
 
 /**
@@ -69,6 +74,12 @@ export interface WishPowers {
         signal?: AbortSignal,
     ): Promise<ReadResult>;
     drawFromCluster(kind: LuckyCard['kind'], scope: WishScope, random: () => number): Promise<LuckyCard | undefined>;
+    /** Database names, without the system ones. */
+    listDatabases(cluster: WishCluster): Promise<string[]>;
+    /** Collection names, without system collections and views. */
+    listCollections(cluster: WishCluster, databaseName: string): Promise<string[]>;
+    /** Asks the user before an outside agent's grant leaves the extension; `true` only on yes. */
+    confirmGrant(spell: Spell): Promise<boolean>;
     cast(spell: Spell, scope: WishScope, context: IActionContext): Promise<void>;
 }
 
@@ -104,24 +115,78 @@ function requireCluster(scope: WishScope): WishCluster {
     return scope.cluster;
 }
 
+/** The spell's own namespace wins, so a card drawn from another database opens there. */
 function requireNamespace(
     scope: WishScope,
-    collection: string | undefined,
+    spell: { readonly database?: string; readonly collection?: string },
 ): { cluster: WishCluster; databaseName: string; collectionName: string } {
     const cluster = requireCluster(scope);
-    const collectionName = collection ?? scope.collectionName;
-    if (!scope.databaseName) {
+    const databaseName = spell.database ?? scope.databaseName;
+    const collectionName = spell.collection ?? scope.collectionName;
+    if (!databaseName) {
         throw new WishScopeError(l10n.t('This wish needs a database. Wish from a database, or name one.'));
     }
     if (!collectionName) {
         throw new WishScopeError(l10n.t('This wish needs a collection. Name one in your wish.'));
     }
-    return { cluster, databaseName: scope.databaseName, collectionName };
+    return { cluster, databaseName, collectionName };
 }
 
-function stringify(documents: readonly Document[]): string {
-    const json = EJSON.stringify(documents, undefined, 2, { relaxed: true });
-    return json.length > MAX_DETAIL ? `${json.slice(0, MAX_DETAIL - 1)}…` : json;
+/**
+ * The documents as a JSON array, formatted like `EJSON.stringify(documents, undefined, 2)`, cut on a
+ * document boundary so the text always parses. `shown` says how many made it in.
+ */
+export function documentsText(
+    documents: readonly Document[],
+    maxLength: number = MAX_DETAIL,
+): { text: string; shown: number } {
+    const parts: string[] = [];
+    // "[\n" and "\n]"
+    let length = 4;
+    for (const document of documents) {
+        const part = `  ${EJSON.stringify(document, undefined, 2, { relaxed: true }).replace(/\n/g, '\n  ')}`;
+        const next = length + part.length + (parts.length > 0 ? 2 : 0);
+        if (next > maxLength) {
+            break;
+        }
+        parts.push(part);
+        length = next;
+    }
+    return { text: parts.length > 0 ? `[\n${parts.join(',\n')}\n]` : '[]', shown: parts.length };
+}
+
+/** What the modal says before an outside agent's grant leaves the extension. Names the effect, not the agent's prose. */
+export function grantConfirmation(spell: Spell): { message: string; detail: string; label: string } {
+    switch (spell.kind) {
+        case 'link':
+            return {
+                message: l10n.t('An agent wants to open a web page in your browser: {0}', spell.url),
+                detail: l10n.t('The agent says: {0}', spell.message),
+                label: l10n.t('Open link'),
+            };
+        case 'agent':
+            return {
+                message: l10n.t('An agent wants to hand this request to Copilot agent mode.'),
+                detail: spell.prompt,
+                label: l10n.t('Hand to Copilot'),
+            };
+        case 'command': {
+            const name = WISH_COMMANDS.find((command) => command.id === spell.commandId)?.label() ?? spell.commandId;
+            return {
+                message: spell.argument
+                    ? l10n.t('An agent wants to run "{0}" with "{1}" in VS Code.', name, spell.argument)
+                    : l10n.t('An agent wants to run "{0}" in VS Code.', name),
+                detail: l10n.t('The agent says: {0}', spell.message),
+                label: l10n.t('Run'),
+            };
+        }
+        default:
+            return {
+                message: l10n.t('An agent wants to grant this wish: {0}', spell.title),
+                detail: spell.message,
+                label: l10n.t('Grant'),
+            };
+    }
 }
 
 /** A filter that finds exactly this document again, in the syntax the collection view accepts. */
@@ -204,6 +269,7 @@ export function createWishPowers(): WishPowers {
                 detail: json.length > MAX_DETAIL ? `${json.slice(0, MAX_DETAIL - 1)}…` : json,
                 spell: {
                     kind: 'collectionView',
+                    database: databaseName,
                     collection: collectionName,
                     filter: filterForId(document._id),
                     title: l10n.t('Fished out of {0}', collectionName),
@@ -258,6 +324,7 @@ export function createWishPowers(): WishPowers {
             kind: 'trivia',
             spell: {
                 kind: 'collectionView',
+                database: biggest.databaseName,
                 collection: biggest.collectionName,
                 title: l10n.t('Cluster trivia'),
                 message,
@@ -265,12 +332,17 @@ export function createWishPowers(): WishPowers {
         };
     }
 
-    async function openPlayground(context: IActionContext, scope: WishScope, script: string): Promise<void> {
-        if (scope.cluster && scope.databaseName) {
+    async function openPlayground(
+        context: IActionContext,
+        scope: WishScope,
+        script: string,
+        databaseName: string | undefined = scope.databaseName,
+    ): Promise<void> {
+        if (scope.cluster && databaseName) {
             await newPlaygroundWithContent(context, {
                 clusterId: scope.cluster.clusterId,
                 clusterDisplayName: scope.cluster.clusterDisplayName,
-                databaseName: scope.databaseName,
+                databaseName,
                 viewId: scope.cluster.viewId,
                 content: script,
             });
@@ -291,13 +363,13 @@ export function createWishPowers(): WishPowers {
     async function treeNode(
         context: IActionContext,
         scope: WishScope,
-        tool: WishTool,
-        collection: string | undefined,
+        spell: Extract<Spell, { kind: 'tool' }>,
     ): Promise<unknown> {
-        const { level } = TOOL_COMMANDS[tool];
+        const { level } = TOOL_COMMANDS[spell.tool];
         const cluster = requireCluster(scope);
-        const collectionName = collection ?? scope.collectionName;
-        if (level !== 'cluster' && !scope.databaseName) {
+        const databaseName = spell.database ?? scope.databaseName;
+        const collectionName = spell.collection ?? scope.collectionName;
+        if (level !== 'cluster' && !databaseName) {
             throw new WishScopeError(l10n.t('This wish needs a database.'));
         }
         if (level === 'collection' && !collectionName) {
@@ -310,17 +382,21 @@ export function createWishPowers(): WishPowers {
                 : resolveNamespaceNode(
                       cluster.viewId,
                       cluster.clusterId,
-                      scope.databaseName ?? '',
+                      databaseName ?? '',
                       level === 'collection' ? collectionName : undefined,
                   );
 
         let node = await find();
-        if (!node && cluster.viewId === (Views.ConnectionsView as string)) {
+        // The scope does not say whether the connection is saved as local, so try both places.
+        for (const isEmulator of [false, true]) {
+            if (node || cluster.viewId !== (Views.ConnectionsView as string)) {
+                break;
+            }
             await revealInConnectionsView(
                 context,
                 cluster.clusterId,
-                false,
-                level === 'cluster' ? undefined : scope.databaseName,
+                isEmulator,
+                level === 'cluster' ? undefined : databaseName,
                 level === 'collection' ? collectionName : undefined,
             );
             node = await find();
@@ -381,10 +457,11 @@ export function createWishPowers(): WishPowers {
         },
 
         async read(spell, scope, signal): Promise<ReadResult> {
-            const { cluster, databaseName, collectionName } = requireNamespace(scope, spell.collection);
+            const { cluster, databaseName, collectionName } = requireNamespace(scope, spell);
             const readClient = await client(cluster);
 
             let documents: Document[];
+            let moreRows = false;
             if (spell.kind === 'find') {
                 documents = await readClient.runFindQuery(databaseName, collectionName, {
                     filter: spell.filter,
@@ -411,17 +488,30 @@ export function createWishPowers(): WishPowers {
                 if (pipelineWrites(pipeline)) {
                     throw new Error(l10n.t('The well only reads. $out and $merge write, so it will not run them.'));
                 }
-                documents = await readClient
+                // One row past the cap says whether the cap cut the result.
+                const rows = await readClient
                     .getMongoClient()
                     .db(databaseName)
                     .collection(collectionName)
-                    .aggregate([...(pipeline as Document[]), { $limit: MAX_RESULT_DOCUMENTS }], {
+                    .aggregate([...(pipeline as Document[]), { $limit: MAX_RESULT_DOCUMENTS + 1 }], {
                         maxTimeMS: READ_TIMEOUT_MS,
                         signal,
                     })
                     .toArray();
+                moreRows = rows.length > MAX_RESULT_DOCUMENTS;
+                documents = rows.slice(0, MAX_RESULT_DOCUMENTS);
             }
-            return { count: documents.length, text: stringify(documents), documents };
+            const { text, shown } = documentsText(documents);
+            return { count: documents.length, text, documents, truncated: moreRows || shown < documents.length };
+        },
+
+        listDatabases: (cluster) => databases(cluster, {}),
+
+        listCollections: (cluster, databaseName) => collections(cluster, databaseName),
+
+        async confirmGrant(spell: Spell): Promise<boolean> {
+            const { message, detail, label } = grantConfirmation(spell);
+            return (await vscode.window.showWarningMessage(message, { modal: true, detail }, label)) === label;
         },
 
         async drawFromCluster(kind, scope, random): Promise<LuckyCard | undefined> {
@@ -437,7 +527,9 @@ export function createWishPowers(): WishPowers {
                     return;
                 case 'find':
                 case 'collectionView': {
-                    const { cluster, databaseName, collectionName } = requireNamespace(scope, spell.collection);
+                    const { cluster, databaseName, collectionName } = requireNamespace(scope, spell);
+                    // The limit too, so the view opens on the rows the card showed.
+                    const limit = spell.kind === 'find' ? spell.limit : undefined;
                     await openCollectionViewInternal(context, {
                         clusterId: cluster.clusterId,
                         clusterDisplayName: cluster.clusterDisplayName,
@@ -445,8 +537,8 @@ export function createWishPowers(): WishPowers {
                         databaseName,
                         collectionName,
                         initialQuery:
-                            spell.filter || spell.project || spell.sort
-                                ? { filter: spell.filter, project: spell.project, sort: spell.sort }
+                            spell.filter || spell.project || spell.sort || limit
+                                ? { filter: spell.filter, project: spell.project, sort: spell.sort, limit }
                                 : undefined,
                         initialTab: spell.kind === 'collectionView' && spell.tab ? TABS[spell.tab] : undefined,
                     });
@@ -458,6 +550,7 @@ export function createWishPowers(): WishPowers {
                         context,
                         scope,
                         `db.getCollection(${quoteJs(collection)}).aggregate(${spell.pipeline})`,
+                        spell.database ?? scope.databaseName,
                     );
                     return;
                 }
@@ -468,6 +561,7 @@ export function createWishPowers(): WishPowers {
                         clusterDisplayName: cluster.clusterDisplayName,
                         databaseName: scope.databaseName ?? 'test',
                         initialInput: spell.command,
+                        viewId: cluster.viewId,
                     });
                     return;
                 }
@@ -488,7 +582,7 @@ export function createWishPowers(): WishPowers {
                     return;
                 }
                 case 'newDocument': {
-                    const { cluster, databaseName, collectionName } = requireNamespace(scope, spell.collection);
+                    const { cluster, databaseName, collectionName } = requireNamespace(scope, spell);
                     await vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {
                         clusterId: cluster.clusterId,
                         viewId: cluster.viewId,
@@ -499,7 +593,7 @@ export function createWishPowers(): WishPowers {
                     return;
                 }
                 case 'tool': {
-                    const node = await treeNode(context, scope, spell.tool, spell.collection);
+                    const node = await treeNode(context, scope, spell);
                     await vscode.commands.executeCommand(TOOL_COMMANDS[spell.tool].commandId, node);
                     return;
                 }

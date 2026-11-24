@@ -122,6 +122,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private _initialInput: string | undefined;
     /** A shell command a wish wrote, typed in at the next prompt. */
     private _wishedInput: string | undefined;
+    /** The last wish card with an action; `wish open` grants it. */
+    private _openableWish: { readonly id: string; readonly actionLabel: string } | undefined;
 
     // ─── Telemetry tracking ──────────────────────────────────────────────────
 
@@ -730,8 +732,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     }
 
     /**
-     * `wish <words>` goes to the Wishing Well with this shell's cluster and current database. A
-     * wished shell command is typed in for the user; other actions open as they would from the tab.
+     * `wish <words>` goes to the Wishing Well with this shell's cluster and current database. The card
+     * prints here and nothing opens until the user types `wish open`; a wished shell command is typed
+     * in for the user to run.
      */
     private async handleWish(wish: ShellWish): Promise<void> {
         const well = currentWishingWell();
@@ -742,11 +745,15 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 this._outputFormatter.formatSystemMessage(
                     well
                         ? l10n.t(
-                              'Usage: wish <anything>, for example: wish how many orders shipped last week. Or: wish me luck',
+                              'Usage: wish <anything>, for example: wish show the cluster dashboard. Or: wish me luck',
                           )
                         : l10n.t('The Wishing Well is not available.'),
                 ),
             );
+            return;
+        }
+        if (wish.kind === 'open') {
+            await this.openWish(well);
             return;
         }
 
@@ -759,10 +766,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 cluster: {
                     clusterId: this._connectionInfo.clusterId,
                     clusterDisplayName: this._connectionInfo.clusterDisplayName,
-                    viewId: Views.ConnectionsView as string,
+                    viewId: this._connectionInfo.viewId ?? (Views.ConnectionsView as string),
                 },
                 databaseName: this._currentDatabase,
             };
+            // `wish open` only ever reaches the card printed last.
+            this._openableWish = undefined;
             const outcome =
                 wish.kind === 'lucky'
                     ? await well.feelingLucky(scope, context, 'shell')
@@ -789,11 +798,54 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             if (outcome.detail) {
                 this.writeLine(outcome.detail);
             }
-            // The user asked for it at their own prompt, so what the card would offer happens now.
-            if (outcome.actionLabel && outcome.kind !== 'query') {
-                await well.grant(outcome.id, context, 'shell');
-                this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Granted: {0}', outcome.actionLabel)));
+            if (outcome.truncated) {
+                this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Only the first results are shown.')));
             }
+            // Opening another shell from this one is never what the user wanted.
+            if (outcome.actionLabel && outcome.kind !== 'shell') {
+                this._openableWish = { id: outcome.id, actionLabel: outcome.actionLabel };
+                const offer = l10n.t('Type "wish open" to {0}.', lowerFirstLetter(outcome.actionLabel));
+                this.writeLine(
+                    this._outputFormatter.formatSystemMessage(
+                        outcome.actionHint ? `${offer} ${outcome.actionHint}` : offer,
+                    ),
+                );
+            }
+        });
+    }
+
+    /** Grants the last card's action. The only way a shell wish opens a tab, a link or Chat. */
+    private async openWish(well: NonNullable<ReturnType<typeof currentWishingWell>>): Promise<void> {
+        const openable = this._openableWish;
+        if (!openable) {
+            this._spinner?.stop();
+            this._spinner = undefined;
+            this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Nothing to open. Make a wish first.')));
+            return;
+        }
+
+        await callWithTelemetryAndErrorHandling('shell.wishOpen', async (context) => {
+            context.errorHandling.suppressDisplay = true;
+            context.errorHandling.rethrow = true;
+            context.telemetry.properties.shellSessionId = this._shellSessionId;
+
+            const result = await well.grant(openable.id, context, 'shell');
+            // A decline leaves the card openable for another try.
+            if (result !== 'declined') {
+                this._openableWish = undefined;
+            }
+
+            this._spinner?.stop();
+            this._spinner = undefined;
+            if (this._interrupted) {
+                return;
+            }
+            const messages: Record<typeof result, string> = {
+                granted: l10n.t('Granted: {0}', openable.actionLabel),
+                declined: l10n.t('Not granted.'),
+                unknown: l10n.t('That wish has expired. Make it again.'),
+            };
+            this.writeLine(this._outputFormatter.formatSystemMessage(messages[result]));
         });
     }
 
@@ -1762,4 +1814,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             sample.measurements[`accepted_${category}`] = 1;
         });
     }
+}
+
+/** "Open link" reads as "open link" mid-sentence; a leading acronym keeps its case. */
+function lowerFirstLetter(label: string): string {
+    return /^\p{Lu}\p{Ll}/u.test(label) ? label.charAt(0).toLocaleLowerCase() + label.slice(1) : label;
 }

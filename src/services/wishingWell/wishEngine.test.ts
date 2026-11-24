@@ -13,13 +13,19 @@ vi.mock('@vscode/l10n', () => ({
 
 import {
     buildWishPrompt,
-    luckySearchSpell,
+    cannotGrantSpell,
     matchWishByKeyword,
+    parseAgentSpell,
     parseSpell,
+    parseSpellResult,
     pickLuckyKind,
     pipelineWrites,
     spellToOutcome,
     WISH_COMMANDS,
+    wishExamples,
+    type Spell,
+    type WishExampleScope,
+    type WishPromptScope,
 } from './wishEngine';
 
 describe('parseSpell', () => {
@@ -47,6 +53,12 @@ describe('parseSpell', () => {
             sort: '{"total":-1}',
             limit: 50,
         });
+    });
+
+    it('keeps the database a spell names, so a cluster-wide wish can read', () => {
+        expect(
+            parseSpell('{"spell":"find","database":" shop ","collection":"orders","title":"t","message":"m"}'),
+        ).toMatchObject({ database: 'shop', collection: 'orders' });
     });
 
     it('drops an empty filter so the view opens unfiltered', () => {
@@ -108,6 +120,104 @@ describe('parseSpell', () => {
     );
 });
 
+describe('parseSpellResult', () => {
+    const aggregate = (pipeline: unknown): string =>
+        JSON.stringify({ spell: 'aggregate', collection: 'orders', pipeline, title: 't', message: 'm' });
+
+    it.each([
+        [[{ $match: {} }, { $out: 'copy' }], '$out'],
+        [[{ $merge: { into: 'x' } }], '$merge'],
+        [[{ $facet: { a: [{ $out: 'x' }] } }], '$out'],
+        [[{ $lookup: { from: 'b', pipeline: [{ $merge: 'x' }], as: 'y' } }], '$merge'],
+        ['[{"$match":{}},{"$out":"copy"}]', '$out'],
+        ['[{"\\u0024merge":{"into":"x"}}]', '$merge'],
+    ])('refuses a pipeline that writes: %j', (pipeline, stage) => {
+        expect(parseSpellResult(aggregate(pipeline))).toEqual({
+            reason: `aggregate pipeline uses ${stage}, which writes`,
+        });
+    });
+
+    it('keeps a pipeline that only mentions $out as a value', () => {
+        expect(parseSpellResult(aggregate([{ $match: { note: '$out' } }])).spell).toMatchObject({
+            kind: 'aggregate',
+            pipeline: '[{"$match":{"note":"$out"}}]',
+        });
+    });
+
+    it.each([
+        [aggregate('[{ $out: "x" }]'), '"pipeline" is not valid JSON'],
+        [aggregate({ $match: {} }), '"pipeline" must be a list of stages'],
+        ['{"spell":"aggregate","collection":"c","title":"t","message":"m"}', '"pipeline" is required for aggregate'],
+        ['{"spell":"collectionView","tab":"queryInsights","title":"t","message":"m"}', '"tab"'],
+        ['{"spell":"teleport","title":"t","message":"m"}', '"spell"'],
+        ['{"spell":"answer","title":"t"}', '"message"'],
+        [
+            '{"spell":"command","commandId":"workbench.action.terminal.sendSequence","title":"t","message":"m"}',
+            'commandId',
+        ],
+        ['{"spell":"link","url":"http://example.com","title":"t","message":"m"}', '"url" must be an https:// link'],
+        ['no json here', 'no JSON object'],
+        ['{broken}', 'not valid JSON'],
+    ])('names what failed: %s', (reply, reason) => {
+        const result = parseSpellResult(reply);
+        expect(result.spell).toBeUndefined();
+        expect(result.reason).toContain(reason);
+    });
+
+    it('agrees with parseSpell on a valid reply', () => {
+        const reply = '{"spell":"dashboard","title":"t","message":"m"}';
+        expect(parseSpellResult(reply)).toEqual({ spell: parseSpell(reply) });
+    });
+});
+
+describe('parseAgentSpell', () => {
+    it('builds the card text from the spell, never by repeating the wish', () => {
+        const wish = 'top 3 customers by order total';
+        const result = parseAgentSpell({ spell: 'aggregate', collection: 'orders', pipeline: [{ $limit: 3 }] }, wish);
+        expect(result.spell).toMatchObject({
+            kind: 'aggregate',
+            title: 'Aggregation on orders',
+            message: 'Runs a read-only aggregation on orders.',
+        });
+        expect(result.spell?.title).not.toContain(wish);
+        expect(result.spell?.message).not.toContain(wish);
+    });
+
+    it('names the destination and the database when the spell has them', () => {
+        expect(
+            parseAgentSpell({ spell: 'collectionView', database: 'shop', collection: 'orders', tab: 'insights' }, 'w')
+                .spell,
+        ).toMatchObject({ title: 'Query Insights for shop.orders', message: 'Opens Query Insights for shop.orders.' });
+    });
+
+    it("keeps the agent's own title and message", () => {
+        expect(
+            parseAgentSpell({ spell: 'dashboard', title: 'Health', message: 'See how the cluster is doing.' }, 'w')
+                .spell,
+        ).toMatchObject({ title: 'Health', message: 'See how the cluster is doing.' });
+    });
+
+    it('needs the answer itself for an answer spell', () => {
+        expect(parseAgentSpell({ spell: 'answer', title: 'Indexes' }, 'what is an index')).toEqual({
+            reason: '"message" is required for an answer: it holds the answer',
+        });
+    });
+
+    it('hands the wish to Copilot when an agent spell has no prompt of its own', () => {
+        expect(parseAgentSpell({ spell: 'agent' }, 'write a README').spell).toMatchObject({
+            kind: 'agent',
+            prompt: 'write a README',
+            title: 'A job for Copilot',
+        });
+    });
+
+    it('refuses a pipeline that writes, with the reason', () => {
+        expect(
+            parseAgentSpell({ spell: 'aggregate', collection: 'orders', pipeline: [{ $out: 'copy' }] }, 'copy orders'),
+        ).toEqual({ reason: 'aggregate pipeline uses $out, which writes' });
+    });
+});
+
 describe('pipelineWrites', () => {
     it.each([
         [[{ $match: {} }, { $out: 'copy' }], true],
@@ -135,11 +245,73 @@ describe('matchWishByKeyword', () => {
             kind: 'collectionView',
             collection: 'orders',
             tab: 'insights',
+            title: 'Query Insights for orders',
+        });
+        expect(matchWishByKeyword('manage the indexes of orders', connected)).toMatchObject({
+            tab: 'indexes',
+            title: 'Indexes of orders',
         });
         expect(matchWishByKeyword('show the latest orders', connected)).toMatchObject({
             kind: 'collectionView',
             collection: 'orders',
         });
+    });
+
+    it.each([
+        ['How many documents are in each collection?'],
+        ['How big is each database?'],
+        ['show the documents per collection'],
+        ['list the collections'],
+        ['which collection sizes are largest'],
+    ])('sends a question the dashboard answers to the dashboard: %s', (wish) => {
+        expect(matchWishByKeyword(wish, connected)).toMatchObject({ kind: 'dashboard' });
+        expect(matchWishByKeyword(wish, {})?.kind).not.toBe('dashboard');
+    });
+
+    it.each([
+        [
+            'count the orders over 300',
+            'Without Copilot I can open orders, but I did not apply the filter or run the count.',
+        ],
+        [
+            'Show the 5 newest documents in orders',
+            'Without Copilot I can open orders, but I did not apply the sort order or the limit.',
+        ],
+        ['show the latest orders', 'Without Copilot I can open orders, but I did not apply the sort order.'],
+        ['show me orders from last week', 'Without Copilot I can open orders, but I did not apply the filter.'],
+        ['export the orders with status open', 'Without Copilot I can export orders, but I did not apply the filter.'],
+    ])('says what it left out of "%s"', (wish, message) => {
+        expect(matchWishByKeyword(wish, connected)?.message).toBe(message);
+    });
+
+    it('promises nothing it skipped when it kept the whole wish', () => {
+        expect(matchWishByKeyword('show the documents in orders', connected)?.message).not.toContain('did not');
+    });
+
+    const scriptOf = (spell: Spell | undefined): string => (spell?.kind === 'playground' ? spell.script : '');
+
+    it.each([
+        ['Add 20 sample customers', '.insertMany(['],
+        ['seed some customers', '.insertMany(['],
+        ['generate fake customers', '.insertMany(['],
+        ['update the customers', '.updateMany('],
+        ['set the status of orders', '$set'],
+        ['rename a field in customers', '$rename'],
+        ['remove the email field from customers', '$unset'],
+        ['delete the cancelled orders', '.deleteMany('],
+        ['create an index on customers', '.createIndex('],
+        ['drop the index on customers', '.dropIndex('],
+    ])('drafts a playground call that matches the verb: %s', (wish, call) => {
+        const script = scriptOf(matchWishByKeyword(wish, { collectionNames: ['customers', 'orders'] }));
+        expect(script).toContain(call);
+        expect(script.split('\n')[0]).toBe(`// Wish: ${wish}`);
+    });
+
+    it('warns before a delete and never drafts an empty delete filter', () => {
+        const script = scriptOf(matchWishByKeyword('delete the cancelled orders', connected));
+        expect(script).toContain("db.getCollection('orders').deleteMany({ field: 'value' });");
+        expect(script).toMatch(/^\/\/ Careful: deleteMany removes every document/m);
+        expect(script).not.toContain('deleteMany({})');
     });
 
     it('turns a change into a playground draft that names a real collection', () => {
@@ -148,14 +320,13 @@ describe('matchWishByKeyword', () => {
             collectionNames: ["o'rders", 'customers'],
         });
         expect(spell?.kind).toBe('playground');
-        expect(spell && 'script' in spell ? spell.script : '').toContain("db.getCollection('customers')");
+        expect(scriptOf(spell)).toContain("db.getCollection('customers')");
     });
 
     it('keeps a multi-line wish inside its comment', () => {
-        const spell = matchWishByKeyword('insert users\ndb.dropDatabase()\u2028more', {});
-        const script = spell && 'script' in spell ? spell.script : '';
-        expect(script.split('\n')).toHaveLength(2);
-        expect(script.split('\n')[0]).toMatch(/^\/\/ Wish: /);
+        const lines = scriptOf(matchWishByKeyword('insert users\ndb.dropDatabase() more', {})).split('\n');
+        expect(lines[0]).toMatch(/^\/\/ Wish: /);
+        expect(lines.filter((line) => line.includes('dropDatabase'))).toEqual([lines[0]]);
     });
 
     it('does not offer cluster tools without a connection', () => {
@@ -175,6 +346,57 @@ describe('matchWishByKeyword', () => {
 
     it('returns undefined for a wish it does not know', () => {
         expect(matchWishByKeyword('a pony', {})).toBeUndefined();
+    });
+});
+
+describe('wishExamples', () => {
+    const scopes: [string, WishExampleScope][] = [
+        ['no connection', { connected: false }],
+        ['a cluster', { connected: true }],
+        ['a database', { connected: true, databaseName: 'shop', collectionNames: ['orders', 'customers'] }],
+        ['an empty database', { connected: true, databaseName: 'shop', collectionNames: [] }],
+        ['a database with odd names', { connected: true, databaseName: 'shop', collectionNames: ['$weird', 'a.b'] }],
+        ['a collection', { connected: true, databaseName: 'shop', collectionName: 'orders' }],
+    ];
+
+    const promptScope = (scope: WishExampleScope): WishPromptScope =>
+        scope.connected
+            ? {
+                  connectionName: 'prod',
+                  databaseName: scope.databaseName,
+                  collectionName: scope.collectionName,
+                  collectionNames: scope.collectionNames,
+              }
+            : {};
+
+    it.each(scopes)('offers five keyword examples on %s, and the fallback grants every one', (_name, scope) => {
+        const examples = wishExamples(scope, false);
+        expect(examples).toHaveLength(5);
+        for (const example of examples) {
+            expect(matchWishByKeyword(example, promptScope(scope)), example).toBeDefined();
+        }
+    });
+
+    it('names a real collection and opens that one', () => {
+        const scope: WishExampleScope = { connected: true, databaseName: 'shop', collectionNames: ['orders'] };
+        const examples = wishExamples(scope, false);
+        expect(examples).toContain('Show the documents in orders');
+        expect(matchWishByKeyword('Show the documents in orders', promptScope(scope))).toMatchObject({
+            kind: 'collectionView',
+            collection: 'orders',
+        });
+        expect(examples).toContain('How many documents are in each collection?');
+    });
+
+    it('never names a collection the keywords cannot find again', () => {
+        const examples = wishExamples(scopes[4][1], false);
+        expect(examples.join(' ')).not.toContain('$weird');
+    });
+
+    it('suggests richer wishes when Copilot reads them', () => {
+        const examples = wishExamples({ connected: true, databaseName: 'shop', collectionName: 'orders' }, true);
+        expect(examples).toHaveLength(5);
+        expect(examples).toContain('Count the documents in orders');
     });
 });
 
@@ -203,6 +425,7 @@ describe('buildWishPrompt', () => {
         ]) {
             expect(prompt).toContain(`"spell":"${spell}"`);
         }
+        expect(prompt).toContain('"database"');
         expect(prompt).toContain('"orders"');
         expect(prompt).toContain('total: double');
         expect(prompt).toContain('make it pretty');
@@ -223,10 +446,20 @@ describe('lucky draws', () => {
         }
         expect([...kinds].sort()).toEqual(['document', 'fortune', 'tip', 'trivia']);
     });
+});
 
-    it('builds a lucky web search that keeps the wish in the query', () => {
-        const spell = luckySearchSpell('a pony & a castle');
-        expect(spell.kind === 'link' && new URL(spell.url).searchParams.get('q')).toBe('! a pony & a castle');
+describe('cannotGrantSpell', () => {
+    it.each([false, true])('says honestly that it could not grant, with nothing to click (Copilot: %s)', (copilot) => {
+        const spell = cannotGrantSpell(copilot);
+        expect(spell.kind).toBe('answer');
+        const outcome = spellToOutcome(spell, 'id', 'well', 'a pony');
+        expect(outcome).toMatchObject({ status: 'info', wish: 'a pony' });
+        expect(outcome.actionLabel).toBeUndefined();
+    });
+
+    it('lists what the keyword well can do', () => {
+        expect(cannotGrantSpell(false).message).toContain('Without Copilot');
+        expect(cannotGrantSpell(true).message).not.toContain('Without Copilot');
     });
 });
 
@@ -243,7 +476,12 @@ describe('spellToOutcome', () => {
             'id-1',
             'copilot',
         );
-        expect(outcome).toMatchObject({ kind: 'command', actionLabel: 'Grant wish', interpretedBy: 'copilot' });
+        expect(outcome).toMatchObject({
+            kind: 'command',
+            actionLabel: 'Grant wish',
+            interpretedBy: 'copilot',
+            status: 'proposed',
+        });
         expect(outcome.actionHint).toBe('Runs "Search extensions" with "Prettier".');
     });
 
@@ -257,12 +495,39 @@ describe('spellToOutcome', () => {
             kind: 'query',
             detail: 'filter: {"a":1}\nsort: {"b":-1}',
             actionLabel: 'Open in collection view',
+            actionHint: 'Opens orders in the collection view with this query.',
         });
     });
 
-    it('needs no click for an answer', () => {
-        expect(
-            spellToOutcome({ kind: 'answer', title: 't', message: 'm' }, 'id', 'copilot').actionLabel,
-        ).toBeUndefined();
+    it.each<[Spell, string, string]>([
+        [
+            { kind: 'collectionView', collection: 'orders', tab: 'insights', title: 't', message: 'm' },
+            'Open Query Insights',
+            'Opens Query Insights for orders.',
+        ],
+        [
+            { kind: 'collectionView', collection: 'orders', tab: 'indexes', title: 't', message: 'm' },
+            'Open the indexes',
+            'Opens the indexes of orders.',
+        ],
+        [
+            { kind: 'collectionView', database: 'shop', collection: 'orders', title: 't', message: 'm' },
+            'Open in collection view',
+            'Opens shop.orders in the collection view.',
+        ],
+        [
+            { kind: 'find', collection: 'orders', limit: 20, title: 't', message: 'm' },
+            'Open in collection view',
+            'Opens orders in the collection view.',
+        ],
+    ])('names the destination and mentions a query only when there is one: %j', (spell, label, hint) => {
+        expect(spellToOutcome(spell, 'id', 'well')).toMatchObject({ actionLabel: label, actionHint: hint });
+    });
+
+    it('echoes the wish and needs no click for an answer', () => {
+        const outcome = spellToOutcome({ kind: 'answer', title: 't', message: 'm' }, 'id', 'copilot', 'what is it');
+        expect(outcome).toMatchObject({ status: 'info', wish: 'what is it' });
+        expect(outcome.actionLabel).toBeUndefined();
+        expect(spellToOutcome({ kind: 'answer', title: 't', message: 'm' }, 'id', 'well').wish).toBeUndefined();
     });
 });

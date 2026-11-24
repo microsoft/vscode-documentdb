@@ -145,7 +145,11 @@
 }
 
 .ww-examples {
-    gap: 4px;
+    gap: 6px;
+}
+
+.ww-chip {
+    font-weight: normal;
 }
 
 .ww-error {
@@ -166,6 +170,12 @@
         color: var(--vscode-textLink-foreground);
     }
 
+    &__wish {
+        font-style: italic;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+
     &__message {
         white-space: pre-wrap;
     }
@@ -179,6 +189,8 @@
         font-family: var(--vscode-editor-font-family);
         font-size: var(--vscode-editor-font-size);
         background: var(--vscode-textCodeBlock-background);
+        /* High contrast paints the block the same black as the card; the border keeps it apart. */
+        border: 1px solid var(--vscode-widget-border, transparent);
         white-space: pre-wrap;
         word-break: break-word;
     }
@@ -196,6 +208,14 @@
 
     &--latest {
         animation: ww-rise 0.35s ease-out;
+    }
+
+    &--refused {
+        border-left: 3px solid var(--colorStatusWarningBorderActive);
+    }
+
+    &--refused &__icon {
+        color: var(--colorStatusWarningForeground1);
     }
 }
 

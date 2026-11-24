@@ -6,11 +6,13 @@
 export type ShellWish =
     | { readonly kind: 'wish'; readonly text: string }
     | { readonly kind: 'lucky' }
+    | { readonly kind: 'open' }
     | { readonly kind: 'usage' };
 
 /**
- * Reads `wish <words>` typed at the shell prompt. Anything that is valid JavaScript about a
- * variable named `wish` (`wish = 1`, `wish(...)`, `wish.x`, `wish[0]`, `wish;`) stays JavaScript.
+ * Reads `wish <words>` typed at the shell prompt; `wish open` grants the card the last wish printed.
+ * Anything that is valid JavaScript about a variable named `wish` (`wish = 1`, `wish(...)`, `wish.x`,
+ * `wish[0]`, `wish;`) stays JavaScript.
  */
 export function parseShellWish(line: string): ShellWish | undefined {
     const match = /^wish(?:\s+([\s\S]*))?$/.exec(line.trim());
@@ -23,6 +25,10 @@ export function parseShellWish(line: string): ShellWish | undefined {
     }
     if (/^(=(?!=)|[=!]==?|[.([;,?:+\-*/%&|^<>]|instanceof\b|in\b)/.test(text)) {
         return undefined;
+    }
+    // Only the bare word: "wish open the dashboard" is still a wish.
+    if (/^open$/i.test(text)) {
+        return { kind: 'open' };
     }
     if (/^(me\s+luck|lucky|i'?m\s+feeling\s+lucky)[.!]*$/i.test(text)) {
         return { kind: 'lucky' };

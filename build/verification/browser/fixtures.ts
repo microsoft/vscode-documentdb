@@ -100,10 +100,12 @@ export const wishPlaygroundOutcome: WishOutcome = {
     id: 'stage0-wish',
     kind: 'playground',
     title: 'Twenty sample customers',
-    message: 'This script inserts 20 customers with names, emails and sign-up dates.',
+    message: 'This script inserts 20 customers, named Customer 1 to Customer 20.',
     detail: "db.getCollection('customers').insertMany(\n  Array.from({ length: 20 }, (_, i) => ({ name: `Customer ${i + 1}` }))\n)",
     actionLabel: 'Open in a playground',
     actionHint: 'Nothing runs until you run it in the playground.',
+    wish: 'Add 20 sample customers',
+    status: 'proposed',
     interpretedBy: 'copilot',
 };
 export const wishFortuneOutcome: WishOutcome = {
@@ -111,7 +113,62 @@ export const wishFortuneOutcome: WishOutcome = {
     kind: 'fortune',
     title: 'Your fortune',
     message: 'Your next query returns in under ten milliseconds.',
+    status: 'info',
     interpretedBy: 'well',
+};
+// What wishExamples returns with Copilot and no connection.
+export const wishCopilotExamples = [
+    'Run DocumentDB on my laptop',
+    'Explain what an index does',
+    'Draft a script to insert 20 sample customers',
+    'Add a connection from a connection string',
+    'Write a README for this project',
+];
+export const wishKeywordConfig: WishingWellWebviewConfig = {
+    clusterDisplayName: 'Stage 0 fixture cluster',
+    databaseName: 'shop',
+};
+// What wishExamples returns without Copilot on a database whose only collection is orders.
+export const wishKeywordExamples = [
+    'Show the documents in orders',
+    'How many documents are in each collection?',
+    'Add sample documents to orders',
+    'Show the indexes of orders',
+    'Open the shell',
+];
+export const wishKeywordOutcome: WishOutcome = {
+    id: 'stage0-keyword',
+    kind: 'view',
+    title: 'Documents in orders',
+    message: 'Copilot is not available, so the well matched your words to a tool.',
+    actionLabel: 'Open in collection view',
+    actionHint: 'Opens orders in the collection view.',
+    wish: 'Show the documents in orders',
+    status: 'proposed',
+    interpretedBy: 'well',
+};
+export const wishAnsweredOutcome: WishOutcome = {
+    id: 'stage0-answered',
+    kind: 'query',
+    title: 'Orders over 300',
+    message: 'Found 2 documents in orders.',
+    detail: '[\n  { "_id": 1, "total": 320 },\n  { "_id": 2, "total": 415 }\n]',
+    resultCount: 2,
+    truncated: true,
+    actionLabel: 'Open in collection view',
+    actionHint: 'Opens orders in the collection view with this query.',
+    wish: 'orders over 300',
+    status: 'answered',
+    interpretedBy: 'copilot',
+};
+export const wishRefusedOutcome: WishOutcome = {
+    id: 'stage0-refused',
+    kind: 'query',
+    title: 'Copy orders to an archive',
+    message: 'The well only reads: this pipeline uses $out, which writes.',
+    wish: 'copy the orders to an archive collection',
+    status: 'refused',
+    interpretedBy: 'copilot',
 };
 const diagnosticsConfig: ConnectionDiagnosticsConfiguration = {
     connectionName: 'Stage 0 fixture connection',
@@ -675,11 +732,19 @@ export const fixtures = {
     wishingWell: {
         config: wishingWellConfig,
         monaco: false,
-        content: ['Wishing Well', 'Copilot reads your wishes, so almost anything goes.'],
+        content: [
+            'Wishing Well',
+            'Copilot reads your wishes, so almost anything goes.',
+            'Try:',
+            ...wishCopilotExamples,
+        ],
         styles: [{ selector: '.wishing-well', property: 'display', expected: 'flex' }],
         rpc: {
             ...common,
-            'wishingWell.status': reply<Outputs['wishingWell']['status']>('query', { copilotAvailable: true }),
+            'wishingWell.status': reply<Outputs['wishingWell']['status']>('query', {
+                copilotAvailable: true,
+                examples: wishCopilotExamples,
+            }),
             'wishingWell.makeWish': reply<Outputs['wishingWell']['makeWish']>('mutation', wishPlaygroundOutcome),
             'wishingWell.feelingLucky': reply<Outputs['wishingWell']['feelingLucky']>('mutation', wishFortuneOutcome),
             'wishingWell.grant': reply<Outputs['wishingWell']['grant']>('mutation', { granted: true }),
