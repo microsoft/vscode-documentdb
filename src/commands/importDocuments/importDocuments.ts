@@ -9,6 +9,7 @@ import { EJSON, type Document } from 'bson';
 import * as fs from 'node:fs/promises';
 import * as vscode from 'vscode';
 import { ClustersClient, isBulkWriteError, type ConnectionBinding } from '../../documentdb/ClustersClient';
+import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
 import { resolveTransferClient } from '../../documentdb/resolveTransferClient';
 import {
     AzureDomains,
@@ -188,6 +189,16 @@ export async function importDocumentsWithProgress(
             }
 
             let wasCancelled = false;
+            const insertBatch = async (document: unknown): Promise<{ count: number; errorOccurred: boolean }> => {
+                try {
+                    return await insertDocument(selectedItem, document, buffer, boundClient);
+                } catch (error) {
+                    if (error instanceof ConnectionUnavailableError) {
+                        ext.outputChannel.warn(l10n.t('Import interrupted. Confirmed inserts: {0}.', count));
+                    }
+                    throw error;
+                }
+            };
 
             for (let i = 0; i < countDocuments; i++) {
                 if (cancellationToken.isCancellationRequested) {
@@ -204,7 +215,7 @@ export async function importDocumentsWithProgress(
                     }),
                 });
 
-                const result = await insertDocument(selectedItem, documents[i], buffer, boundClient);
+                const result = await insertBatch(documents[i]);
 
                 // 'count' in result means that the result is from the buffer
                 count += result.count;
@@ -214,7 +225,7 @@ export async function importDocumentsWithProgress(
 
             // Do insertion for the last batch for bulk insertion
             if (!wasCancelled && buffer && buffer.getStats().documentCount > 0) {
-                const lastBatchFlushResult = await insertDocument(selectedItem, undefined, buffer, boundClient);
+                const lastBatchFlushResult = await insertBatch(undefined);
 
                 count += lastBatchFlushResult.count;
                 hasErrors = hasErrors || lastBatchFlushResult.errorOccurred;
@@ -348,6 +359,9 @@ async function insertDocument(
         ext.outputChannel.error(l10n.t('Import failed: unsupported node type.'));
         return { count: 0, errorOccurred: true };
     } catch (error) {
+        if (boundClient && error instanceof ConnectionUnavailableError) {
+            throw error;
+        }
         const errorMessage = error instanceof Error ? error.message : String(error);
         ext.outputChannel.error(l10n.t('Import failed with unexpected error: {0}', errorMessage));
         return { count: 0, errorOccurred: true };
@@ -396,6 +410,19 @@ async function insertDocumentWithBufferIntoCluster(
             errorOccurred: false,
         };
     } catch (error) {
+        if (boundClient) {
+            const kind = ClustersClient.reportFailure(boundClient.binding, error);
+            switch (kind) {
+                case 'signInRequired':
+                case 'credentialsRejected':
+                case 'credentialsMissing':
+                case 'identityChanged':
+                    throw new ConnectionUnavailableError(kind);
+                case 'clientClosed':
+                case 'transient':
+                    throw new ConnectionUnavailableError('unreachable');
+            }
+        }
         if (isBulkWriteError(error)) {
             // Handle MongoDB bulk write errors
             // It could be a partial failure, so we need to check the result
