@@ -301,9 +301,11 @@ step because that branch was not allowed to deploy).
 
 Before a real dispatch, check the package versions are not already published and confirm each
 package's npm Trusted Publisher configuration matches this repository, workflow and environment.
-Dry-run success cannot validate OIDC authentication or npm-side publisher settings. Nothing in
-this change modifies those settings or environment policy. This closes PR-F02's missing
-verification gate for this GitHub publish path, **not** the ADO `@microsoft/*` path or general PR CI.
+The workflow automation test exercises the publish script offline with fixture tarballs; a workflow
+dry run does not execute the publish job or validate OIDC authentication or npm-side publisher
+settings. Nothing in this change modifies those settings or environment policy. This closes PR-F02's
+missing verification gate for this GitHub publish path, **not** the ADO `@microsoft/*` path or
+general PR CI.
 
 **SRV resolver:** select `publish_srv_resolver` in this GitHub workflow, first with
 `dry_run=true`, then with `dry_run=false` for the approved release. The selector is wired through

@@ -261,7 +261,7 @@ jobs:
                           echo "::error::${tarballs[0]} contains $packed_name, expected $name."
                           exit 1
                       fi
-                      npm publish "${tarballs[0]}" --provenance --access public --ignore-scripts
+                      npm publish "./${tarballs[0]}" --provenance --access public --ignore-scripts
                   }
 
                   if [[ "$PUBLISH_OPERATOR_REGISTRY" == 'true' ]]; then publish_package '@documentdb-js/operator-registry'; fi
