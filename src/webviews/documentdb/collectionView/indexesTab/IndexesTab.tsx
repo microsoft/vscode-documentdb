@@ -141,7 +141,7 @@ type ModalState = { kind: 'none' } | { kind: 'create' };
 export const IndexesTab = (): JSX.Element => {
     const trpcClient = useTrpcClient();
     const [currentContext] = useContext(CollectionViewContext);
-    const { beginOperation, isOperationCurrent, showUnavailable } = currentContext.lifecycle;
+    const { beginOperation, isOperationCurrent, showUnavailable, unavailable } = currentContext.lifecycle;
 
     // Whether the index list's filter box and Hidden / Unused toggles are used, and on how many indexes.
     const [listState, setListState] = useState<IndexListState | undefined>(undefined);
@@ -193,6 +193,16 @@ export const IndexesTab = (): JSX.Element => {
     // dropped once the real index appears in a later fetch. Merged into the
     // displayed list below.
     const [pendingCreates, setPendingCreates] = useState<ReadonlyArray<PendingCreate>>([]);
+
+    const retirePendingCreate = useCallback((pending: PendingCreate): void => {
+        setPendingCreates((previous) => previous.filter((candidate) => candidate !== pending));
+    }, []);
+
+    useEffect(() => {
+        if (unavailable !== undefined) {
+            setPendingCreates([]);
+        }
+    }, [unavailable]);
 
     // Bumped after a successful create to clear the drawer's form. A failed
     // create leaves it untouched so re-opening the drawer pre-populates it.
@@ -484,9 +494,11 @@ export const IndexesTab = (): JSX.Element => {
             void mutation.then(
                 (result) => {
                     if (!isOperationCurrent(lifecycleRevision)) {
+                        retirePendingCreate(pending);
                         return;
                     }
                     if (isConnectionUnavailableResponse(result)) {
+                        retirePendingCreate(pending);
                         showUnavailable(result.unavailable);
                         return;
                     }
@@ -510,6 +522,7 @@ export const IndexesTab = (): JSX.Element => {
                 },
                 (error) => {
                     if (!isOperationCurrent(lifecycleRevision)) {
+                        retirePendingCreate(pending);
                         return;
                     }
                     // Drop the optimistic row and surface the failure in a modal.
@@ -519,8 +532,7 @@ export const IndexesTab = (): JSX.Element => {
                     // otherwise invisible (the user would have to guess that clicking
                     // "Create Index" again restores their work).
                     preserveFormRef.current = true;
-                    setPendingCreates((prev) => prev.filter((p) => p.name !== pending.name));
-                    void refresh();
+                    retirePendingCreate(pending);
                     const cause = error instanceof Error ? error.message : String(error);
                     const editAndRetry = l10n.t('Edit and retry');
                     void trpcClient.common.displayErrorMessage
@@ -545,12 +557,12 @@ export const IndexesTab = (): JSX.Element => {
         },
         [
             trpcClient,
-            refresh,
             openCreateDialog,
             showOperationSummary,
             beginOperation,
             isOperationCurrent,
             showUnavailable,
+            retirePendingCreate,
         ],
     );
 
