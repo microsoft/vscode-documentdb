@@ -13,6 +13,8 @@ code:
   - build/verification/**
   - test/vitest/**
   - .github/workflows/main.yml
+  - .github/workflows/ci-requested.yml
+  - .github/workflows/ci-checks.yml
 ---
 
 # Build and test stack
@@ -39,7 +41,9 @@ or test loading.
 | [`build/verification/`](../../../../build/verification/README.md)                      | Packaged-artifact inspection, activation, browser fixtures, package checks, runtime probes, negative controls, and CI report formatting.                                          |
 | [`build/verification/browser/`](../../../../build/verification/browser/)               | Typed L2 fixtures, the packaged browser harness, and L2-dev scenarios.                                                                                                            |
 | [`build/verification/package-checks/`](../../../../build/verification/package-checks/) | Packed workspace-package validation and the unbundled `/host` probe.                                                                                                              |
-| [`.github/workflows/main.yml`](../../../../.github/workflows/main.yml)                 | Selects the CI tier, path-scoped checks, artifacts, and the combined PR report.                                                                                                   |
+| [`.github/workflows/main.yml`](../../../../.github/workflows/main.yml)                 | Automatic PR/push triggers, restricted to the existing main, release and feature targets.                                                                                         |
+| [`.github/workflows/ci-requested.yml`](../../../../.github/workflows/ci-requested.yml) | Label requests on any PR target branch, plus manual dispatch.                                                                                                                     |
+| [`.github/workflows/ci-checks.yml`](../../../../.github/workflows/ci-checks.yml)       | Shared reusable pipeline: CI tier, path-scoped checks, artifacts, combined PR report and validation.                                                                              |
 | [`.github/actions/setup/`](../../../../.github/actions/setup/action.yml)               | Node from `.nvmrc` and `node_modules` from the Actions cache, with `npm ci` on a miss.                                                                                            |
 
 ## Verification layers
@@ -64,8 +68,11 @@ The CI names and the PR report rows carry no L-numbers ([decision 0014](./decisi
 the L-numbers remain the docs' vocabulary.
 
 A ready PR and a push to `main` or `release/**` use the standard tier. The one-shot
-`ci:full-requested` label requests the full tier for a PR commit. The workflow report lists every
-layer and why it ran or was skipped.
+`ci:full-requested` label requests the full tier for a PR commit on any target branch, including
+`dev/**`. Automatic and requested runs call the same reusable pipeline; only the automatic entry
+point filters target branches. Each caller retains a top-level `Merge gate` job so extracting the
+pipeline does not change the ruleset's required check name. The workflow report lists every layer
+and why it ran or was skipped.
 
 L2-dev is a development tool, not a CI layer. `npm run watch:views` serves typed source scenarios at
 `http://localhost:18080/scenarios/`; browser tools drive `/scenarios/run-all.js`. Screenshots are
