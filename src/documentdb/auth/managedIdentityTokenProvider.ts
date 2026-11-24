@@ -55,12 +55,7 @@ export async function getManagedIdentityAccessToken(
                 );
             } catch (error) {
                 const reason = classifyManagedIdentityError(error);
-                traceAuthFlow(
-                    'managedIdentity.tokenFailure',
-                    { reason },
-                    tokenCorrelationId,
-                    traceContext,
-                );
+                traceAuthFlow('managedIdentity.tokenFailure', { reason }, tokenCorrelationId, traceContext);
                 reportManagedIdentityTokenFailure(error, clientId, tokenCorrelationId, traceContext);
                 const message = describeManagedIdentityError(error, clientId);
                 throw reason === 'other' ? new Error(message) : new ManagedIdentityGuidanceError(message);

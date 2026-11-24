@@ -543,7 +543,9 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
 
     it('keeps Retry for a synthetic Connections view item without a credential editor', async (): Promise<void> => {
         ClustersClientMock.getLatchReason.mockReturnValue('credentialsRejected');
-        ClustersClientMock.connectInteractive.mockRejectedValueOnce(new ConnectionUnavailableError('credentialsRejected'));
+        ClustersClientMock.connectInteractive.mockRejectedValueOnce(
+            new ConnectionUnavailableError('credentialsRejected'),
+        );
         const item = new TestClusterItem({ ...makeCluster(), viewId: Views.ConnectionsView }, null);
         item.contextValue = 'treeItem_quickStartInstance';
         try {
@@ -563,7 +565,9 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
 
     it('explains how to reload a rejected Azure key', async (): Promise<void> => {
         ClustersClientMock.getLatchReason.mockReturnValue('credentialsRejected');
-        ClustersClientMock.connectInteractive.mockRejectedValueOnce(new ConnectionUnavailableError('credentialsRejected'));
+        ClustersClientMock.connectInteractive.mockRejectedValueOnce(
+            new ConnectionUnavailableError('credentialsRejected'),
+        );
         const item = new TestClusterItem({ ...makeCluster(), viewId: Views.AzureResourcesView }, null);
         item.readReplacementKey = vi.fn();
         try {

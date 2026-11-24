@@ -96,10 +96,7 @@ export async function retryAuthentication(context: IActionContext, node: Retryab
                     (view === Views.DiscoveryView || view === Views.AzureResourcesView) &&
                     credentials !== undefined &&
                     (credentials.authMechanism ?? AuthMethodId.NativeAuth) === AuthMethodId.NativeAuth;
-                if (
-                    (!quickStart && !nativeDiscovery) ||
-                    !ClustersClient.clearCredentialRejection(clusterId, epoch)
-                ) {
+                if ((!quickStart && !nativeDiscovery) || !ClustersClient.clearCredentialRejection(clusterId, epoch)) {
                     return;
                 }
                 CredentialCache.deleteCredentials(clusterId);

@@ -12,7 +12,7 @@ import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { ext } from '../../extensionVariables';
-import { clusterId as quickStartClusterId, DEFAULT_ALIAS } from '../../services/localQuickStart/quickStartTypes';
+import { DEFAULT_ALIAS, clusterId as quickStartClusterId } from '../../services/localQuickStart/quickStartTypes';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { retryAuthentication } from './retryAuthentication';
 
@@ -215,25 +215,28 @@ describe('retryAuthentication', () => {
         },
     );
 
-    it.each([true, false])('reloads Quick Start with an empty cache only if the rejection can be cleared (%s)', async (cleared): Promise<void> => {
-        const clusterId = quickStartClusterId(DEFAULT_ALIAS);
-        const node = { id: 'connectionsView/localQuickStart/instance', cluster: { clusterId }, getTreeItem };
-        vi.mocked(ClustersClient.getEpoch).mockReturnValueOnce(7);
-        vi.mocked(ClustersClient.getLatchReason).mockReturnValueOnce('credentialsRejected');
-        vi.mocked(CredentialCache.getCredentials).mockReturnValueOnce(undefined);
-        vi.mocked(ClustersClient.clearCredentialRejection).mockReturnValueOnce(cleared);
+    it.each([true, false])(
+        'reloads Quick Start with an empty cache only if the rejection can be cleared (%s)',
+        async (cleared): Promise<void> => {
+            const clusterId = quickStartClusterId(DEFAULT_ALIAS);
+            const node = { id: 'connectionsView/localQuickStart/instance', cluster: { clusterId }, getTreeItem };
+            vi.mocked(ClustersClient.getEpoch).mockReturnValueOnce(7);
+            vi.mocked(ClustersClient.getLatchReason).mockReturnValueOnce('credentialsRejected');
+            vi.mocked(CredentialCache.getCredentials).mockReturnValueOnce(undefined);
+            vi.mocked(ClustersClient.clearCredentialRejection).mockReturnValueOnce(cleared);
 
-        await retryAuthentication(actionContext as never, node);
+            await retryAuthentication(actionContext as never, node);
 
-        expect(ClustersClient.clearCredentialRejection).toHaveBeenCalledExactlyOnceWith(clusterId, 7);
-        if (cleared) {
-            expect(CredentialCache.deleteCredentials).toHaveBeenCalledExactlyOnceWith(clusterId);
-            expect(ext.connectionsBranchDataProvider.refresh).toHaveBeenCalledExactlyOnceWith(node);
-        } else {
-            expect(CredentialCache.deleteCredentials).not.toHaveBeenCalled();
-            expect(ext.connectionsBranchDataProvider.refresh).not.toHaveBeenCalled();
-        }
-    });
+            expect(ClustersClient.clearCredentialRejection).toHaveBeenCalledExactlyOnceWith(clusterId, 7);
+            if (cleared) {
+                expect(CredentialCache.deleteCredentials).toHaveBeenCalledExactlyOnceWith(clusterId);
+                expect(ext.connectionsBranchDataProvider.refresh).toHaveBeenCalledExactlyOnceWith(node);
+            } else {
+                expect(CredentialCache.deleteCredentials).not.toHaveBeenCalled();
+                expect(ext.connectionsBranchDataProvider.refresh).not.toHaveBeenCalled();
+            }
+        },
+    );
 
     it('abandons a successful key read if the epoch changed', async (): Promise<void> => {
         const node = ruNode();

@@ -57,11 +57,7 @@ describe('signInAgain', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mocks.configureAuth.mockImplementation(
-            async (
-                _timings: undefined,
-                _trace: undefined,
-                acquire: typeof getEntraSession,
-            ): Promise<unknown> => {
+            async (_timings: undefined, _trace: undefined, acquire: typeof getEntraSession): Promise<unknown> => {
                 const session = await acquire({
                     mode: 'forceNew',
                     providerId: pin.providerId,
@@ -149,8 +145,7 @@ describe('signInAgain', () => {
             'The Azure cloud or sign-in provider changed.',
             {
                 modal: true,
-                detail:
-                    'Restore "microsoft-sovereign-cloud.environment" to the setting used when this connection was established, then choose Retry sign-in. If it used the Azure public cloud, reset the setting.',
+                detail: 'Restore "microsoft-sovereign-cloud.environment" to the setting used when this connection was established, then choose Retry sign-in. If it used the Azure public cloud, reset the setting.',
             },
         );
     });

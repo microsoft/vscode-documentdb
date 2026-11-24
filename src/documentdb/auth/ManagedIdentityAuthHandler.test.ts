@@ -16,7 +16,6 @@ import { buildAuthConnectionTarget } from './authConnectionTarget';
 import { AuthMethodId } from './AuthMethod';
 import * as tokenResources from './documentdbTokenResource';
 import { TokenCallbackError } from './entraErrors/entraCallbackErrors';
-import { ManagedIdentityGuidanceError } from './managedIdentityErrors';
 import { EntraErrorExplainer } from './entraErrors/EntraErrorExplainer';
 import {
     getRecentEntraTokenFailure,
@@ -24,6 +23,7 @@ import {
     resetEntraTokenFailuresForTests,
 } from './entraErrors/entraTokenFailures';
 import { ManagedIdentityAuthHandler } from './ManagedIdentityAuthHandler';
+import { ManagedIdentityGuidanceError } from './managedIdentityErrors';
 import { EntraDestinationRejectedError } from './oidcAllowedHosts';
 import { expiresInSecondsFromTimestamp } from './tokenExpiry';
 
