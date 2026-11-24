@@ -4,12 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type TaskTelemetryContext } from '@microsoft/vscode-ext-tasks';
+import { SourceValidationError, type CopyPasteConfig } from '@microsoft/vscode-ext-tasks-data-transfer/copy-collection';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { ext } from '../../extensionVariables';
-import { SourceValidationError } from '../../services/taskService/tasks/copy-and-paste/CopyPasteCollectionTask';
-import { type CopyPasteConfig } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
 
 export function createValidateSource(
     config: CopyPasteConfig,

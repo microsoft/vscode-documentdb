@@ -84,6 +84,51 @@ export const allChecks = {
         return 'progress, conflict and lifecycle helpers exported';
     },
 
+    '@microsoft/vscode-ext-tasks-data-transfer': async (load) => {
+        const { BaseDocumentReader, ConflictResolutionStrategy, StreamingDocumentWriter } = await load(
+            '@microsoft/vscode-ext-tasks-data-transfer',
+        );
+        class Reader extends BaseDocumentReader {
+            async *streamDocumentsFromDatabase() {
+                yield { id: '1', documentContent: { value: 1 } };
+            }
+            async countDocumentsInDatabase() {
+                return 1;
+            }
+        }
+        class Writer extends StreamingDocumentWriter {
+            async ensureTargetExists() {
+                return { targetWasCreated: false };
+            }
+            async writeBatch(documents) {
+                return { processedCount: documents.length, insertedCount: documents.length, abortedCount: 0 };
+            }
+            classifyError() {
+                return 'other';
+            }
+            extractPartialProgress() {
+                return undefined;
+            }
+        }
+        const reader = new Reader('source', 'items');
+        const writer = new Writer('target', 'items');
+        const result = await writer.streamDocuments(reader.streamDocuments(), {
+            conflictResolutionStrategy: ConflictResolutionStrategy.Abort,
+        });
+        assert.equal(result.totalProcessed, 1);
+        return 'reader and writer transferred one document';
+    },
+
+    '@microsoft/vscode-ext-tasks-data-transfer/copy-collection': async (load) => {
+        const copy = await load('@microsoft/vscode-ext-tasks-data-transfer/copy-collection');
+        const engine = await load('@microsoft/vscode-ext-tasks-data-transfer');
+        const tasks = await load('@microsoft/vscode-ext-tasks');
+        assert.equal(typeof copy.CopyPasteCollectionTask, 'function');
+        assert.equal(copy.ConflictResolutionStrategy, engine.ConflictResolutionStrategy);
+        assert.ok(copy.CopyPasteCollectionTask.prototype instanceof tasks.Task);
+        return 'copy task shares the task peer and conflict strategy';
+    },
+
     '@documentdb-js/operator-registry': async (load) => {
         const m = await load('@documentdb-js/operator-registry');
         const all = m.getAllCompletions();

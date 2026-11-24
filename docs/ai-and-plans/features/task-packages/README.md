@@ -4,6 +4,8 @@ kind: notes
 status: active
 created: 2026-11-05
 code:
+    - packages/vscode-ext-tasks/**
+    - packages/vscode-ext-tasks-data-transfer/**
     - src/services/taskService/**
     - src/commands/pasteCollection/**
     - src/commands/pasteIndexes/**
@@ -35,9 +37,10 @@ That has already happened once: the webview theming layer existed as a near-iden
 converged it. A code search of `vscode-cosmosdb` on 2026-11-05 found no copy of the Task Service,
 so this time the second consumer is planned rather than an existing fork.
 
-The current code cannot be published as is. Every file imports `vscode`, the extension's `ext`
-globals, or `@microsoft/vscode-azext-utils` telemetry, and the engine's throttle recovery assumes
-ordered, MongoDB-style partial writes. Extraction therefore starts with in-place refactors.
+Extraction started with in-place refactors because the original code depended on `vscode`, the
+extension's `ext` globals, or `@microsoft/vscode-azext-utils` telemetry, and throttle recovery
+assumed ordered, MongoDB-style partial writes. The extracted packages remain unpublished pending
+the NoSQL contract review and a publishing approach.
 
 ## Target shape
 
@@ -55,17 +58,21 @@ product glue stay in this extension. See [design.md](./design.md) for the full b
 ## Code map (today)
 
 - `packages/vscode-ext-tasks/src/**`: task core and VS Code presentation
-- `src/services/taskService/data-api/**`: the engine and the DocumentDB API adapters
-- `src/services/taskService/tasks/**`: Copy and Paste Collection, Copy Indexes, a demo task
+- `packages/vscode-ext-tasks-data-transfer/src/**`: transfer engine and Copy and Paste Collection task
+- `src/services/taskService/data-api/**`: DocumentDB API adapters
+- `src/services/taskService/tasks/**`: Copy Indexes and a demo task
 - `src/commands/pasteCollection/**`, `src/commands/pasteIndexes/**`: wizards and task assembly
 - `src/documentdb/ClustersExtension.ts`: attaches progress reporting, lifecycle logging, and the
   product-specific survey completion subscriber at activation
 
 ## Related documentation
 
-- [Task Service README](../../../../src/services/taskService/README.md) and
-  [Data API README](../../../../src/services/taskService/data-api/README.md): implementation
-  detail, partly outdated (see [design.md §2](./design.md#2-findings-that-affect-extraction))
+- [Task package README](../../../../packages/vscode-ext-tasks/README.md) and
+  [transfer package README](../../../../packages/vscode-ext-tasks-data-transfer/README.md):
+  public contracts, consumer examples, and adapter guidance
+- [Task Service integration](../../../../src/services/taskService/README.md) and
+  [DocumentDB API adapters](../../../../src/services/taskService/data-api/README.md):
+  extension-specific implementation
 - [copy-paste-collections](../copy-paste-collections/README.md): the feature this engine serves
 - [webview-ext-package](../webview-ext-package/README.md) and
   [webview-fluentui-package](../webview-fluentui-package/README.md): the package precedents this

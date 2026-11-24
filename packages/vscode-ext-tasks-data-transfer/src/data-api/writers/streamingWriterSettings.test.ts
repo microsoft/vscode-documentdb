@@ -4,9 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
-import { type DocumentDetails, type StreamingWriterSettings } from '../types';
-import { BatchSizeAdapter } from './BatchSizeAdapter';
-import { computeRetryDelay, resolveStreamingWriterSettings } from './streamingWriterSettings';
+import { type DocumentDetails, type StreamingWriterSettings } from '../types.js';
+import { BatchSizeAdapter } from './BatchSizeAdapter.js';
+import { computeRetryDelay, resolveStreamingWriterSettings } from './streamingWriterSettings.js';
 
 describe('resolveStreamingWriterSettings', () => {
     it('preserves the shipped batching, retry and document size defaults', () => {

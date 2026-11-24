@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { type CopyCollectionStrings } from '../tasks/copy-and-paste/copyCollectionStrings';
+import { type CopyCollectionStrings } from '@microsoft/vscode-ext-tasks-data-transfer/copy-collection';
 
 export function getExtensionCopyCollectionStrings(): CopyCollectionStrings {
     return {

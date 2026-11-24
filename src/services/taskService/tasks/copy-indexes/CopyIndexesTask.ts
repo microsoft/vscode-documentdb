@@ -15,7 +15,7 @@ import {
     type CollectionEndpoint,
     type CollectionIndexCopier,
     type IndexCopyResult,
-} from '../../data-api/indexes/CollectionIndexCopier';
+} from '@microsoft/vscode-ext-tasks-data-transfer';
 import { createExtensionTaskOptions } from '../../extension/extensionTaskOptions';
 
 export interface CopyIndexesConfig {

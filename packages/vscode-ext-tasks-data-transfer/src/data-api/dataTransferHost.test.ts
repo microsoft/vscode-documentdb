@@ -5,8 +5,8 @@
 
 import { type TaskLogger } from '@microsoft/vscode-ext-tasks';
 import { describe, expect, it, vi } from 'vitest';
-import { type DataTransferOptions } from './dataTransferHost';
-import { BaseDocumentReader } from './readers/BaseDocumentReader';
+import { type DataTransferOptions } from './dataTransferHost.js';
+import { BaseDocumentReader } from './readers/BaseDocumentReader.js';
 import {
     ConflictResolutionStrategy,
     type DocumentDetails,
@@ -14,8 +14,8 @@ import {
     type ErrorType,
     type PartialProgress,
     type StrategyBatchResult,
-} from './types';
-import { StreamingDocumentWriter } from './writers/StreamingDocumentWriter';
+} from './types.js';
+import { StreamingDocumentWriter } from './writers/StreamingDocumentWriter.js';
 
 const document: DocumentDetails = { id: '1', documentContent: { _id: '1' } };
 const config = { conflictResolutionStrategy: ConflictResolutionStrategy.Abort };

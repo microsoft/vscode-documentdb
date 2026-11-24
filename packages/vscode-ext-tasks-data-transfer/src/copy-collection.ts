@@ -3,11 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ModeConfig } from '../types';
-
-/**
- * Optimization mode configuration for dual-mode adaptive writer.
- */
-export interface OptimizationModeConfig extends ModeConfig {
-    mode: 'fast' | 'ru-limited';
-}
+export * from './tasks/copy-and-paste/copyCollectionStrings.js';
+export * from './tasks/copy-and-paste/copyPasteConfig.js';
+export * from './tasks/copy-and-paste/CopyPasteCollectionTask.js';

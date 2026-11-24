@@ -5,39 +5,9 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { type DocumentDetails, type DocumentReaderOptions } from '../types';
-import { BaseDocumentReader } from './BaseDocumentReader';
-
-// Mock extensionVariables (ext) module
-vi.mock('../../../../extensionVariables', () => ({
-    ext: {
-        outputChannel: {
-            appendLine: vi.fn(),
-            error: vi.fn(),
-            warn: vi.fn(),
-            debug: vi.fn(),
-            trace: vi.fn(),
-            appendLog: vi.fn(),
-            show: vi.fn(),
-            info: vi.fn(),
-        },
-    },
-}));
-
-// Mock vscode module
-vi.mock('vscode', () => ({
-    l10n: {
-        t: (key: string, ...args: unknown[]): string => {
-            // Simple replacement: replace {0}, {1}, etc. with the arguments
-            let result = key;
-            args.forEach((arg, index) => {
-                result = result.replace(`{${index}}`, String(arg));
-            });
-            return result;
-        },
-    },
-}));
+import { type TaskTelemetryContext } from '@microsoft/vscode-ext-tasks';
+import { type DocumentDetails, type DocumentReaderOptions } from '../types.js';
+import { BaseDocumentReader } from './BaseDocumentReader.js';
 
 /**
  * Mock DocumentReader for testing BaseDocumentReader.
@@ -97,7 +67,7 @@ class MockDocumentReader extends BaseDocumentReader {
 
     protected async *streamDocumentsFromDatabase(
         signal?: AbortSignal,
-        _actionContext?: IActionContext,
+        _actionContext?: TaskTelemetryContext,
     ): AsyncIterable<DocumentDetails> {
         for (let i = 0; i < this.documents.length; i++) {
             // Check abort signal
@@ -122,7 +92,10 @@ class MockDocumentReader extends BaseDocumentReader {
         }
     }
 
-    protected async countDocumentsInDatabase(_signal?: AbortSignal, _actionContext?: IActionContext): Promise<number> {
+    protected async countDocumentsInDatabase(
+        _signal?: AbortSignal,
+        _actionContext?: TaskTelemetryContext,
+    ): Promise<number> {
         return this.estimatedCount ?? this.documents.length;
     }
 }
@@ -136,19 +109,13 @@ function createDocuments(count: number, startId: number = 1): DocumentDetails[] 
 }
 
 // Helper to create mock action context
-function createMockActionContext(): IActionContext {
+function createMockActionContext(): TaskTelemetryContext {
     return {
         telemetry: {
             properties: {},
             measurements: {},
         },
-        errorHandling: {
-            forceIncludeInTelemetry: false,
-            issueProperties: {},
-        },
-        valuesToMask: [],
-        ui: {} as IActionContext['ui'],
-    } as IActionContext;
+    };
 }
 
 describe('BaseDocumentReader', () => {

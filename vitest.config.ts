@@ -100,6 +100,17 @@ export default defineConfig({
             },
             {
                 test: {
+                    name: 'vscode-ext-tasks-data-transfer',
+                    root: packageRoot('vscode-ext-tasks-data-transfer'),
+                    testTimeout,
+                    pool,
+                    isolate,
+                    environment: 'node',
+                    include: ['src/**/*.test.{ts,tsx}'],
+                },
+            },
+            {
+                test: {
                     name: 'documentdb-js-schema-analyzer',
                     root: packageRoot('documentdb-js-schema-analyzer'),
                     testTimeout,

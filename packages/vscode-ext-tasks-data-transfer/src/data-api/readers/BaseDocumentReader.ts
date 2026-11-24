@@ -9,9 +9,9 @@ import {
     type DataTransferStrings,
     defaultDataTransferStrings,
     noopDataTransferLogger,
-} from '../dataTransferHost';
-import { type DocumentDetails, type DocumentReader, type DocumentReaderOptions } from '../types';
-import { KeepAliveOrchestrator } from './KeepAliveOrchestrator';
+} from '../dataTransferHost.js';
+import { type DocumentDetails, type DocumentReader, type DocumentReaderOptions } from '../types.js';
+import { KeepAliveOrchestrator } from './KeepAliveOrchestrator.js';
 
 /**
  * Abstract base class for DocumentReader implementations.

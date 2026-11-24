@@ -4,11 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type TaskTelemetryContext } from '@microsoft/vscode-ext-tasks';
+import { BaseDocumentReader, type DocumentDetails } from '@microsoft/vscode-ext-tasks-data-transfer';
 import { type Document, type WithId } from 'mongodb';
 import { type ClustersClient } from '../../../../documentdb/ClustersClient';
 import { createExtensionDataTransferOptions } from '../../extension/extensionDataTransferOptions';
-import { type DocumentDetails } from '../types';
-import { BaseDocumentReader } from './BaseDocumentReader';
 
 /**
  * Resolves the client used to read the source collection.

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type CollectionIndexCopier } from '../../services/taskService/data-api/indexes/CollectionIndexCopier';
+import { type CollectionIndexCopier } from '@microsoft/vscode-ext-tasks-data-transfer';
 import { createIndexCopier as createEndpointIndexCopier } from '../../services/taskService/data-api/indexes/createIndexCopier';
 import { nonNullValue } from '../../utils/nonNull';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';

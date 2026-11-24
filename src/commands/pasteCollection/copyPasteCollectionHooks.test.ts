@@ -6,13 +6,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type TaskTelemetryContext } from '@microsoft/vscode-ext-tasks';
+import { ConflictResolutionStrategy } from '@microsoft/vscode-ext-tasks-data-transfer';
+import { SourceValidationError, type CopyPasteConfig } from '@microsoft/vscode-ext-tasks-data-transfer/copy-collection';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { ext } from '../../extensionVariables';
-import { ConflictResolutionStrategy } from '../../services/taskService/data-api/types';
-import { SourceValidationError } from '../../services/taskService/tasks/copy-and-paste/CopyPasteCollectionTask';
-import { type CopyPasteConfig } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
 import { createCollectMetadata, createValidateSource } from './copyPasteCollectionHooks';
 
 vi.mock('../../documentdb/ClustersClient', () => ({

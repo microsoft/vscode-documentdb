@@ -10,8 +10,8 @@ import {
     type DataTransferStrings,
     defaultDataTransferStrings,
     noopDataTransferLogger,
-} from '../dataTransferHost';
-import { type DocumentDetails } from '../types';
+} from '../dataTransferHost.js';
+import { type DocumentDetails } from '../types.js';
 
 /**
  * Configuration for keep-alive behavior.

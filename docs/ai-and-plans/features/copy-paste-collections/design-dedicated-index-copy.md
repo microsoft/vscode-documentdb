@@ -11,7 +11,7 @@ code:
     - src/documentdb/ClustersClient.ts
     - src/services/CopyPasteBufferService.ts
     - src/services/taskService/data-api/indexes/**
-    - src/services/taskService/tasks/copy-and-paste/**
+    - packages/vscode-ext-tasks-data-transfer/src/tasks/copy-and-paste/**
     - src/services/taskService/tasks/copy-indexes/**
     - src/tree/documentdb/IndexItem.ts
     - src/tree/documentdb/IndexesItem.ts

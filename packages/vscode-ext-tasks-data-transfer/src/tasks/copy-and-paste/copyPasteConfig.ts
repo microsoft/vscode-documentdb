@@ -3,10 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ConflictResolutionStrategy } from '../../data-api/types';
+import { type ConflictResolutionStrategy } from '../../data-api/types.js';
 
 // Re-export for backward compatibility
-export { ConflictResolutionStrategy } from '../../data-api/types';
+export { ConflictResolutionStrategy } from '../../data-api/types.js';
 
 /**
  * Configuration for copy-paste operations

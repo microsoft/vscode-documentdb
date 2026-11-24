@@ -9,7 +9,7 @@ code:
     - src/commands/pasteIndexes/**
     - src/services/CopyPasteBufferService.ts
     - src/services/taskService/data-api/**
-    - src/services/taskService/tasks/copy-and-paste/**
+    - packages/vscode-ext-tasks-data-transfer/src/tasks/copy-and-paste/**
     - src/services/taskService/tasks/copy-indexes/**
 ---
 
@@ -17,10 +17,10 @@ code:
 
 ## Scope
 
-This document records the intended component boundaries for collection copy/paste. It begins after
-the feature and most of its technical documentation already existed. It therefore links to, rather
-than replaces, the implementation-oriented [Task Service](../../../../src/services/taskService/README.md)
-and [Data API](../../../../src/services/taskService/data-api/README.md) READMEs.
+This document records the intended component boundaries for collection copy/paste. It complements
+the implementation-oriented [task package](../../../../packages/vscode-ext-tasks/README.md),
+[transfer package](../../../../packages/vscode-ext-tasks-data-transfer/README.md), and
+[DocumentDB API adapter](../../../../src/services/taskService/data-api/README.md) guides.
 
 Code and tests are authoritative for current behavior. This document records the implemented
 component boundary and the reason its scope is deliberately narrower than cross-database index

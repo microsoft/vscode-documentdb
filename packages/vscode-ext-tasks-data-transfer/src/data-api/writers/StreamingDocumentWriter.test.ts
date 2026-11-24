@@ -5,7 +5,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { type TaskTelemetryContext } from '@microsoft/vscode-ext-tasks';
 import {
     type AbortBatchResult,
     ConflictResolutionStrategy,
@@ -18,33 +18,8 @@ import {
     type PreFilterResult,
     type SkipBatchResult,
     type StrategyBatchResult,
-} from '../types';
-import { StreamingDocumentWriter, StreamingWriterError } from './StreamingDocumentWriter';
-
-// Mock extensionVariables (ext) module
-vi.mock('../../../../extensionVariables', () => ({
-    ext: {
-        outputChannel: {
-            appendLine: vi.fn(),
-            error: vi.fn(),
-            warn: vi.fn(),
-            debug: vi.fn(),
-            trace: vi.fn(),
-            appendLog: vi.fn(),
-            show: vi.fn(),
-            info: vi.fn(),
-        },
-    },
-}));
-
-// Mock vscode module
-vi.mock('vscode', () => ({
-    l10n: {
-        t: (key: string, ...args: string[]): string => {
-            return args.length > 0 ? `${key} ${args.join(' ')}` : key;
-        },
-    },
-}));
+} from '../types.js';
+import { StreamingDocumentWriter, StreamingWriterError } from './StreamingDocumentWriter.js';
 
 /**
  * Mock StreamingDocumentWriter for testing.
@@ -147,7 +122,7 @@ class MockStreamingWriter extends StreamingDocumentWriter<string> {
     protected async writeBatch(
         documents: DocumentDetails[],
         strategy: ConflictResolutionStrategy,
-        _actionContext?: IActionContext,
+        _actionContext?: TaskTelemetryContext,
     ): Promise<StrategyBatchResult<string>> {
         this.checkAndThrowErrorWithPartialWrite(documents, strategy);
 
@@ -167,7 +142,7 @@ class MockStreamingWriter extends StreamingDocumentWriter<string> {
         }
     }
 
-    protected classifyError(error: unknown, _actionContext?: IActionContext): ErrorType {
+    protected classifyError(error: unknown, _actionContext?: TaskTelemetryContext): ErrorType {
         if (error instanceof Error) {
             if (error.message.includes('THROTTLE')) {
                 return 'throttle';
@@ -182,7 +157,7 @@ class MockStreamingWriter extends StreamingDocumentWriter<string> {
         return 'other';
     }
 
-    protected extractPartialProgress(error: unknown, _actionContext?: IActionContext): PartialProgress | undefined {
+    protected extractPartialProgress(error: unknown, _actionContext?: TaskTelemetryContext): PartialProgress | undefined {
         if (error instanceof Error && this.lastPartialProgress !== undefined) {
             const progress = this.lastPartialProgress;
             this.lastPartialProgress = undefined;
@@ -201,7 +176,7 @@ class MockStreamingWriter extends StreamingDocumentWriter<string> {
      */
     protected override async preFilterForSkipStrategy(
         documents: DocumentDetails[],
-        _actionContext?: IActionContext,
+        _actionContext?: TaskTelemetryContext,
     ): Promise<PreFilterResult<string> | undefined> {
         if (!this.preFilterEnabled) {
             return undefined;
@@ -523,9 +498,9 @@ describe('StreamingDocumentWriter', () => {
         it('should record telemetry when actionContext provided', async () => {
             const documents = createDocuments(100);
             const stream = createDocumentStream(documents);
-            const mockContext: IActionContext = {
+            const mockContext: TaskTelemetryContext = {
                 telemetry: { properties: {}, measurements: {} },
-            } as IActionContext;
+            };
 
             await writer.streamDocuments(
                 stream,
