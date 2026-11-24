@@ -501,6 +501,31 @@ describe('TaskService retention of finished tasks', () => {
         expect(service.getTask(task.id)).toBeUndefined();
     });
 
+    it('keeps finish order when a terminal-state listener synchronously finishes another task', async () => {
+        class SyncFinishTask extends TestTask {
+            public finishNow(): void {
+                this.updateStatus(TaskState.Completed);
+            }
+        }
+        const service = createTaskService({ maxFinishedTasks: 1 });
+        const first = new SyncFinishTask('first');
+        const second = new SyncFinishTask('second');
+        service.registerTask(first);
+        service.registerTask(second);
+        service.onDidChangeTaskState((e) => {
+            if (e.taskId === first.id && isTerminalState(e.newState)) {
+                second.finishNow();
+            }
+        });
+
+        first.finishNow();
+        await flush();
+        service.registerTask(new TestTask('next'));
+
+        expect(service.getTask(first.id)).toBeUndefined();
+        expect(service.getTask(second.id)).toBe(second);
+    });
+
     it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])('rejects maxFinishedTasks = %s', (value) => {
         expect(() => createTaskService({ maxFinishedTasks: value })).toThrow(RangeError);
     });

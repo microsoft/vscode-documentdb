@@ -670,10 +670,12 @@ class TaskServiceImpl implements TaskService {
                 this._onDidChangeTaskStatus.fire({ taskId: task.id, status });
             }),
             task.onDidChangeState((e) => {
-                this._onDidChangeTaskState.fire(e);
+                // Schedule before forwarding: a listener may synchronously finish another task, whose
+                // bookkeeping must queue after this one to keep the finish order.
                 if (isTerminalState(e.newState)) {
                     this.markFinished(task);
                 }
+                this._onDidChangeTaskState.fire(e);
             }),
         ];
 
