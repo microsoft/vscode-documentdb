@@ -269,6 +269,7 @@ export const clusterDashboardRouter = router({
                 clusterId: myCtx.clusterId,
                 clusterDisplayName: myCtx.clusterDisplayName,
                 databaseName: input.databaseName,
+                viewId: myCtx.viewId,
             });
         }),
 

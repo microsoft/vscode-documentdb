@@ -50,11 +50,13 @@ export interface LuckyCard {
 export interface ReadResult {
     /** Documents or result rows the read returned, at most {@link MAX_RESULT_DOCUMENTS}. */
     readonly count: number;
-    /** A JSON array of whole documents, as many as fit the size cap. */
+    /** A JSON array of whole documents: the first one always, then as many as fit the size cap. */
     readonly text: string;
     readonly documents: readonly Document[];
-    /** `text` leaves out some returned documents, or the aggregation had more rows than the cap. */
+    /** `text` leaves out some of the returned documents. */
     readonly truncated: boolean;
+    /** The read hit its row cap, so more rows exist than it returned. */
+    readonly capped: boolean;
 }
 
 /**
@@ -80,11 +82,15 @@ export interface WishPowers {
     listCollections(cluster: WishCluster, databaseName: string): Promise<string[]>;
     /** Asks the user before an outside agent's grant leaves the extension; `true` only on yes. */
     confirmGrant(spell: Spell): Promise<boolean>;
+    /** A grant the user allowed after its caller stopped waiting failed; nobody else will say so. */
+    reportLateFailure?(title: string, error: unknown): void;
     cast(spell: Spell, scope: WishScope, context: IActionContext): Promise<void>;
 }
 
 const SYSTEM_DATABASES = new Set(['admin', 'config', 'local']);
 const MAX_DETAIL = 6000;
+/** Rows a find reads when the wish names no limit. */
+const DEFAULT_FIND_LIMIT = 20;
 const READ_TIMEOUT_MS = 20_000;
 /** Bounds the trivia scan on large clusters: it runs one count per collection. */
 const TRIVIA_DATABASES = 10;
@@ -132,27 +138,71 @@ function requireNamespace(
     return { cluster, databaseName, collectionName };
 }
 
+/** Longest top-level value an oversized document keeps whole; longer ones are summarized. */
+const MAX_FIELD_TEXT = 300;
+
+/** The key that says what a summarized document left out; it cannot clash with a real field. */
+const OMITTED_KEY = '…';
+
+/**
+ * One document, as every card shows it. A document over `maxLength` is summarized so the text stays
+ * valid JSON and a multi-MB or very wide document never reaches a webview, terminal or agent: long
+ * values become a note, and fields past the size are dropped with a count.
+ */
+function documentText(document: Document, maxLength: number = MAX_DETAIL): { text: string; summarized: boolean } {
+    const whole = EJSON.stringify(document, undefined, 2, { relaxed: true });
+    if (whole.length <= maxLength) {
+        return { text: whole, summarized: false };
+    }
+    const entries = Object.entries(EJSON.serialize(document, { relaxed: true }) as Record<string, unknown>);
+    const summary: Record<string, unknown> = {};
+    let length = 4;
+    let kept = 0;
+    for (const [key, value] of entries) {
+        const text = JSON.stringify(value) ?? '';
+        const shown =
+            text.length <= MAX_FIELD_TEXT
+                ? value
+                : l10n.t('({0} characters not shown)', typeof value === 'string' ? value.length : text.length);
+        const size = key.length + (JSON.stringify(shown) ?? '').length + 8;
+        if (length + size > maxLength && kept > 0) {
+            break;
+        }
+        summary[key] = shown;
+        length += size;
+        kept++;
+    }
+    if (kept < entries.length) {
+        summary[OMITTED_KEY] = l10n.t('{0} more fields not shown', entries.length - kept);
+    }
+    return { text: JSON.stringify(summary, undefined, 2), summarized: true };
+}
+
 /**
  * The documents as a JSON array, formatted like `EJSON.stringify(documents, undefined, 2)`, cut on a
- * document boundary so the text always parses. `shown` says how many made it in.
+ * document boundary so the text always parses. The first document is always in, even over the cap.
+ * `shown` says how many made it in.
  */
 export function documentsText(
     documents: readonly Document[],
     maxLength: number = MAX_DETAIL,
-): { text: string; shown: number } {
+): { text: string; shown: number; summarized: boolean } {
     const parts: string[] = [];
+    let summarized = false;
     // "[\n" and "\n]"
     let length = 4;
     for (const document of documents) {
-        const part = `  ${EJSON.stringify(document, undefined, 2, { relaxed: true }).replace(/\n/g, '\n  ')}`;
+        const formatted = documentText(document);
+        const part = `  ${formatted.text.replace(/\n/g, '\n  ')}`;
         const next = length + part.length + (parts.length > 0 ? 2 : 0);
-        if (next > maxLength) {
+        if (next > maxLength && parts.length > 0) {
             break;
         }
         parts.push(part);
+        summarized ||= formatted.summarized;
         length = next;
     }
-    return { text: parts.length > 0 ? `[\n${parts.join(',\n')}\n]` : '[]', shown: parts.length };
+    return { text: parts.length > 0 ? `[\n${parts.join(',\n')}\n]` : '[]', shown: parts.length, summarized };
 }
 
 /** What the modal says before an outside agent's grant leaves the extension. Names the effect, not the agent's prose. */
@@ -206,7 +256,8 @@ function filterForId(id: unknown): string | undefined {
 }
 
 function quoteJs(name: string): string {
-    return `'${name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+    // JSON escaping covers backslashes and newlines; only the quote style changes.
+    return `'${JSON.stringify(name).slice(1, -1).replace(/\\"/g, '"').replace(/'/g, "\\'")}'`;
 }
 
 export function createWishPowers(): WishPowers {
@@ -263,10 +314,9 @@ export function createWishPowers(): WishPowers {
             if (!document) {
                 continue;
             }
-            const json = EJSON.stringify(document, undefined, 2, { relaxed: true });
             return {
                 kind: 'document',
-                detail: json.length > MAX_DETAIL ? `${json.slice(0, MAX_DETAIL - 1)}…` : json,
+                detail: documentText(document).text,
                 spell: {
                     kind: 'collectionView',
                     database: databaseName,
@@ -461,15 +511,21 @@ export function createWishPowers(): WishPowers {
             const readClient = await client(cluster);
 
             let documents: Document[];
-            let moreRows = false;
+            let capped: boolean;
             if (spell.kind === 'find') {
-                documents = await readClient.runFindQuery(databaseName, collectionName, {
+                const limit = Math.min(spell.limit ?? DEFAULT_FIND_LIMIT, MAX_RESULT_DOCUMENTS);
+                // A limit the wish asked for is its answer; only the well's own cap leaves rows out.
+                // A limit the wish asked for is its answer, unless the cap cut it down.
+                const ownCap = spell.limit === undefined || spell.limit > MAX_RESULT_DOCUMENTS;
+                const rows = await readClient.runFindQuery(databaseName, collectionName, {
                     filter: spell.filter,
                     project: spell.project,
                     sort: spell.sort,
                     skip: 0,
-                    limit: Math.min(spell.limit ?? 20, MAX_RESULT_DOCUMENTS),
+                    limit: ownCap ? limit + 1 : limit,
                 });
+                capped = rows.length > limit;
+                documents = rows.slice(0, limit);
             } else {
                 let pipeline: unknown;
                 try {
@@ -498,16 +554,28 @@ export function createWishPowers(): WishPowers {
                         signal,
                     })
                     .toArray();
-                moreRows = rows.length > MAX_RESULT_DOCUMENTS;
+                capped = rows.length > MAX_RESULT_DOCUMENTS;
                 documents = rows.slice(0, MAX_RESULT_DOCUMENTS);
             }
-            const { text, shown } = documentsText(documents);
-            return { count: documents.length, text, documents, truncated: moreRows || shown < documents.length };
+            const { text, shown, summarized } = documentsText(documents);
+            // A summarized document is cut too: the agent and the card must not read the note as data.
+            return {
+                count: documents.length,
+                text,
+                documents,
+                truncated: shown < documents.length || summarized,
+                capped,
+            };
         },
 
         listDatabases: (cluster) => databases(cluster, {}),
 
         listCollections: (cluster, databaseName) => collections(cluster, databaseName),
+
+        reportLateFailure(title: string, error: unknown): void {
+            const reason = error instanceof Error ? error.message : String(error);
+            void vscode.window.showErrorMessage(l10n.t('The wish "{0}" could not be granted: {1}', title, reason));
+        },
 
         async confirmGrant(spell: Spell): Promise<boolean> {
             const { message, detail, label } = grantConfirmation(spell);
@@ -528,7 +596,7 @@ export function createWishPowers(): WishPowers {
                 case 'find':
                 case 'collectionView': {
                     const { cluster, databaseName, collectionName } = requireNamespace(scope, spell);
-                    // The limit too, so the view opens on the rows the card showed.
+                    // Only a limit the wish named; without one the view pages as it always does.
                     const limit = spell.kind === 'find' ? spell.limit : undefined;
                     await openCollectionViewInternal(context, {
                         clusterId: cluster.clusterId,

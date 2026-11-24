@@ -19,16 +19,20 @@ import {
     pickLuckyKind,
     pickOne,
     spellToOutcome,
+    writeAggregateToPlayground,
     type Spell,
 } from './wishEngine';
-import { type WishPowers } from './wishPowers';
+import { type ReadResult, type WishPowers } from './wishPowers';
 import { type WishScope } from './wishScope';
 
 /** Where a wish came from. Every source gets the same well; only an outside agent's grant asks first. */
 export type WishSource = 'webview' | 'shell' | 'copilotTool' | 'mcp';
 
-/** `declined`: the user said no in VS Code; the wish stays pending. */
-export type GrantResult = 'granted' | 'unknown' | 'declined';
+/**
+ * `declined`: the user said no in VS Code; the wish stays pending. `waiting`: the user has not
+ * answered yet, or the caller gave up; it is still granted if the user allows it.
+ */
+export type GrantResult = 'granted' | 'unknown' | 'declined' | 'waiting';
 
 /** What a pending grant will do, resolved by the host so a confirmation never relies on agent prose. */
 export interface GrantDescription {
@@ -48,6 +52,8 @@ interface PendingGrant {
 
 /** Keeps the pending grants bounded in a long session. */
 const MAX_PENDING_GRANTS = 200;
+/** How long an outside agent's grant waits on the user's answer before it hears `waiting`. */
+const CONFIRM_PATIENCE_MS = 60_000;
 
 /** Spells that reach past the extension: an outside agent needs the user's yes in VS Code first. */
 function leavesTheExtension(spell: Spell): boolean {
@@ -67,6 +73,14 @@ function leavesTheExtension(spell: Spell): boolean {
  */
 export class WishingWellService {
     private readonly grants = new Map<string, PendingGrant>();
+    /** Grants the user is being asked about, so a second call waits on the same answer. */
+    private readonly asking = new Map<string, Promise<GrantResult>>();
+    /** Grants whose every caller already got `waiting`. */
+    private readonly abandoned = new Set<string>();
+    /** Casts in flight, so a second grant of the same wish waits for the first. */
+    private readonly running = new Map<string, Promise<GrantResult>>();
+    /** One-shot wishes (agent hand-offs, links) already granted; asking again is not an error. */
+    private readonly done = new Set<string>();
 
     constructor(
         private readonly powers: WishPowers,
@@ -99,12 +113,11 @@ export class WishingWellService {
             ? await this.interpretWithCopilot(wish, promptScope, context, signal)
             : undefined;
         let spell = agentSpell ?? fromCopilot ?? matchWishByKeyword(wish, promptScope);
+        let cannotGrant = false;
         if (!spell) {
             // Agent mode without Copilot would only end in a sign-in error, so say what the well can do.
-            spell =
-                copilotAvailable && (await this.isChatAvailable())
-                    ? handToAgent(wish)
-                    : cannotGrantSpell(copilotAvailable);
+            cannotGrant = !(copilotAvailable && (await this.isChatAvailable()));
+            spell = cannotGrant ? cannotGrantSpell(copilotAvailable) : handToAgent(wish);
         }
         if (spell.kind === 'agent' && !(await this.isChatAvailable())) {
             spell = installCopilotSpell();
@@ -117,6 +130,9 @@ export class WishingWellService {
             agentSpell ? 'agent' : fromCopilot ? 'copilot' : 'well',
             wish,
         );
+        if (cannotGrant) {
+            return { ...outcome, status: 'refused' };
+        }
         if (spell.kind === 'find' || spell.kind === 'aggregate') {
             return this.remember(spell, scope, await this.read(spell, scope, outcome, signal));
         }
@@ -136,12 +152,18 @@ export class WishingWellService {
                     ...spellToOutcome(card.spell, id, 'well'),
                     kind: card.kind,
                     detail: card.detail,
+                    ...(card.kind === 'document' ? documentHint(card.spell) : {}),
                 });
             }
         }
 
         if (kind === 'tip') {
-            const tips = LUCKY_TIPS.filter((tip) => scope.cluster !== undefined || tip.needsCluster !== true);
+            const tips = LUCKY_TIPS.filter(
+                (tip) =>
+                    (scope.cluster !== undefined || tip.needsCluster !== true) &&
+                    // The shell is already open there.
+                    (source !== 'shell' || tip.spell().kind !== 'shell'),
+            );
             const spell = pickOne(tips, this.random).spell();
             return this.remember(spell, scope, { ...spellToOutcome(spell, id, 'well'), kind: 'tip' });
         }
@@ -156,35 +178,58 @@ export class WishingWellService {
         };
     }
 
-    /** Carries out a pending wish. `unknown` when the id is unknown or already granted. */
-    public async grant(id: string, context: IActionContext, source: WishSource): Promise<GrantResult> {
+    /**
+     * Carries out a pending wish. `unknown` when the id is unknown, a one-shot grant was used, or
+     * the grant is being cast right now. An outside agent waits at most a minute on the user's
+     * answer, then hears `waiting`; the grant still happens if the user allows it later.
+     */
+    public async grant(
+        id: string,
+        context: IActionContext,
+        source: WishSource,
+        signal?: AbortSignal,
+    ): Promise<GrantResult> {
         context.telemetry.properties.wishSource = source;
+        const asking = this.asking.get(id);
+        if (asking) {
+            // A caller is listening again, so a late failure reaches it instead of a second notice.
+            this.abandoned.delete(id);
+            return this.awaitAnswer(id, asking, context, signal);
+        }
+        // A one-shot wish the user already allowed stays granted for the agent that asks again.
+        if (this.done.has(id)) {
+            context.telemetry.properties.granted = 'again';
+            return 'granted';
+        }
+        const running = this.running.get(id);
+        if (running) {
+            return running;
+        }
         const pending = this.grants.get(id);
         if (!pending) {
             context.telemetry.properties.granted = 'unknown';
             return 'unknown';
         }
         context.telemetry.properties.spell = pending.spell.kind;
-        // Taken out while the user decides or the grant runs, so a second call cannot cast it twice.
-        this.grants.delete(id);
-        try {
-            if (
-                source === 'mcp' &&
-                leavesTheExtension(pending.spell) &&
-                !(await this.powers.confirmGrant(pending.spell))
-            ) {
-                this.keep(id, pending);
-                context.telemetry.properties.granted = 'declined';
-                return 'declined';
-            }
-            await this.powers.cast(pending.spell, pending.scope, context);
-        } catch (error) {
-            // A grant that failed (say, a tree node to expand first) can be tried again.
-            this.keep(id, pending);
-            throw error;
+        if (source !== 'mcp' || !leavesTheExtension(pending.spell)) {
+            // Two grants of the same wish at once share one cast.
+            const run = this.cast(id, pending, context).finally(() => this.running.delete(id));
+            this.running.set(id, run);
+            return run;
         }
-        context.telemetry.properties.granted = 'true';
-        return 'granted';
+
+        const answer = this.confirmThenCast(id, pending, context).finally(() => this.asking.delete(id));
+        // Once every caller got `waiting`, a failed cast has nobody to tell but the user.
+        answer.then(
+            () => this.abandoned.delete(id),
+            (error: unknown) => {
+                if (this.abandoned.delete(id)) {
+                    this.powers.reportLateFailure?.(pending.spell.title, error);
+                }
+            },
+        );
+        this.asking.set(id, answer);
+        return this.awaitAnswer(id, answer, context, signal);
     }
 
     /** What granting will do, for a confirmation before an agent grants it. */
@@ -207,6 +252,59 @@ export class WishingWellService {
         return this.powers.isChatAvailable().catch(() => false);
     }
 
+    private async confirmThenCast(id: string, pending: PendingGrant, context: IActionContext): Promise<GrantResult> {
+        if (!(await this.powers.confirmGrant(pending.spell))) {
+            return 'declined';
+        }
+        return this.cast(id, pending, context);
+    }
+
+    /** A grant that fails (say, a tree node to expand first) stays pending, so it can be tried again. */
+    private async cast(id: string, pending: PendingGrant, context: IActionContext): Promise<GrantResult> {
+        await this.powers.cast(pending.spell, pending.scope, context);
+        // A Chat request or a web page opened twice is a mistake; anything else can be opened again.
+        if (pending.spell.kind === 'agent' || pending.spell.kind === 'link') {
+            this.grants.delete(id);
+            this.done.add(id);
+            if (this.done.size > MAX_PENDING_GRANTS) {
+                const [oldest] = this.done;
+                this.done.delete(oldest);
+            }
+        }
+        context.telemetry.properties.granted = 'true';
+        return 'granted';
+    }
+
+    /** The user's answer, or `waiting` when the caller gives up or the user takes too long. */
+    private async awaitAnswer(
+        id: string,
+        answer: Promise<GrantResult>,
+        context: IActionContext,
+        signal: AbortSignal | undefined,
+    ): Promise<GrantResult> {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        let stopWaiting: () => void = () => undefined;
+        const gaveUp = new Promise<GrantResult>((resolve) => {
+            stopWaiting = () => resolve('waiting');
+            timer = setTimeout(stopWaiting, CONFIRM_PATIENCE_MS);
+            if (signal?.aborted) {
+                stopWaiting();
+            }
+            signal?.addEventListener('abort', stopWaiting, { once: true });
+        });
+        try {
+            const result = await Promise.race([answer, gaveUp]);
+            if (result === 'waiting') {
+                this.abandoned.add(id);
+            }
+            context.telemetry.properties.granted = result === 'granted' ? 'true' : result;
+            return result;
+        } finally {
+            clearTimeout(timer);
+            signal?.removeEventListener('abort', stopWaiting);
+        }
+    }
+
     private async interpretWithCopilot(
         wish: string,
         promptScope: Parameters<typeof buildWishPrompt>[1],
@@ -214,9 +312,16 @@ export class WishingWellService {
         signal?: AbortSignal,
     ): Promise<Spell | undefined> {
         try {
-            const spell = parseSpell(await this.powers.askCopilot(buildWishPrompt(wish, promptScope), signal));
-            context.telemetry.properties.copilot = spell ? 'granted' : 'unparsable';
-            return spell;
+            const reply = await this.powers.askCopilot(buildWishPrompt(wish, promptScope), signal);
+            const spell = parseSpell(reply);
+            if (spell) {
+                context.telemetry.properties.copilot = 'granted';
+                return spell;
+            }
+            // A pipeline that writes never runs here, but it makes a fine playground script.
+            const playground = writeAggregateToPlayground(reply, promptScope.collectionName);
+            context.telemetry.properties.copilot = playground ? 'writeToPlayground' : 'unparsable';
+            return playground;
         } catch (error) {
             if (signal?.aborted) {
                 throw error;
@@ -238,10 +343,11 @@ export class WishingWellService {
             return {
                 ...outcome,
                 status: 'answered',
-                message: readReceipt(spell, spell.collection ?? scope.collectionName ?? '', result.count),
+                message: readReceipt(spell, spell.collection ?? scope.collectionName ?? '', result),
                 detail: result.count === 0 ? outcome.detail : result.text,
                 resultCount: result.count,
                 truncated: result.truncated,
+                capped: result.capped,
             };
         } catch (error) {
             if (signal?.aborted) {
@@ -288,11 +394,44 @@ export class WishingWellService {
     }
 }
 
-/** "Found 3 documents in orders." or "Aggregation on orders: 3 result rows." */
-function readReceipt(spell: Spell, collection: string, count: number): string {
+/** The fished document's own filter opens it, not a query the user wrote. */
+function documentHint(spell: Spell): { actionHint?: string } {
+    if (spell.kind !== 'collectionView' || !spell.filter || !spell.collection) {
+        return {};
+    }
+    const where = spell.database ? `${spell.database}.${spell.collection}` : spell.collection;
+    return { actionHint: l10n.t('Opens {0} filtered to this document.', where) };
+}
+
+/** How many whole rows a read's text shows. It is always a JSON array. */
+export function rowsShown(text: string): number | undefined {
+    try {
+        const rows: unknown = JSON.parse(text);
+        return Array.isArray(rows) ? rows.length : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+/** "Found 3 documents in orders.", plus whether more exist and whether all of them fit. */
+function readReceipt(spell: Spell, collection: string, result: ReadResult): string {
+    const receipt = countReceipt(spell, collection, result.count, result.capped);
+    const shown = result.truncated ? rowsShown(result.text) : undefined;
+    if (shown === undefined || shown >= result.count) {
+        return receipt;
+    }
+    return shown === 1
+        ? l10n.t('{0} Only the first one is shown; the rest did not fit.', receipt)
+        : l10n.t('{0} Only the first {1} are shown; the rest did not fit.', receipt, shown);
+}
+
+function countReceipt(spell: Spell, collection: string, count: number, capped: boolean): string {
     if (spell.kind === 'aggregate') {
         if (count === 0) {
             return l10n.t('Aggregation on {0}: no result rows.', collection);
+        }
+        if (capped) {
+            return l10n.t('Aggregation on {0}: the first {1} result rows; there are more.', collection, count);
         }
         return count === 1
             ? l10n.t('Aggregation on {0}: 1 result row.', collection)
@@ -300,6 +439,9 @@ function readReceipt(spell: Spell, collection: string, count: number): string {
     }
     if (count === 0) {
         return l10n.t('No documents in {0} matched.', collection);
+    }
+    if (capped) {
+        return l10n.t('The first {0} documents in {1}; there are more.', count, collection);
     }
     return count === 1
         ? l10n.t('Found 1 document in {0}.', collection)

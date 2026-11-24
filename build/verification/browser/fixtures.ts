@@ -9,6 +9,7 @@ import {
     type DockerStatusResult,
     type InstanceStatusUpdate,
 } from '../../../src/services/localQuickStart/quickStartTypes';
+import { type WishExampleScope } from '../../../src/services/wishingWell/wishEngine';
 import { type CellValue } from '../../../src/utils/slickgrid/CellValue';
 import { type WebviewName } from '../../../src/webviews/_integration/WebviewRegistry';
 import { type AtlasCredentialsWebviewConfig } from '../../../src/webviews/documentdb/atlasCredentials/atlasCredentialsController';
@@ -116,7 +117,8 @@ export const wishFortuneOutcome: WishOutcome = {
     status: 'info',
     interpretedBy: 'well',
 };
-// What wishExamples returns with Copilot and no connection.
+export const wishCopilotScope: WishExampleScope = { connected: false };
+// What wishExamples returns for wishCopilotScope with Copilot; scenarios.test.ts checks it.
 export const wishCopilotExamples = [
     'Run DocumentDB on my laptop',
     'Explain what an index does',
@@ -128,7 +130,13 @@ export const wishKeywordConfig: WishingWellWebviewConfig = {
     clusterDisplayName: 'Stage 0 fixture cluster',
     databaseName: 'shop',
 };
-// What wishExamples returns without Copilot on a database whose only collection is orders.
+// A database whose only collection is orders.
+export const wishKeywordScope: WishExampleScope = {
+    connected: true,
+    databaseName: wishKeywordConfig.databaseName,
+    collectionNames: ['orders'],
+};
+// What wishExamples returns for wishKeywordScope without Copilot; scenarios.test.ts checks it.
 export const wishKeywordExamples = [
     'Show the documents in orders',
     'How many documents are in each collection?',
@@ -147,18 +155,77 @@ export const wishKeywordOutcome: WishOutcome = {
     status: 'proposed',
     interpretedBy: 'well',
 };
+// The third document did not fit the card: the detail holds two of the three the read returned.
 export const wishAnsweredOutcome: WishOutcome = {
     id: 'stage0-answered',
     kind: 'query',
     title: 'Orders over 300',
-    message: 'Found 2 documents in orders.',
+    message: 'Found 3 documents in orders. Only the first 2 are shown; the rest did not fit.',
     detail: '[\n  { "_id": 1, "total": 320 },\n  { "_id": 2, "total": 415 }\n]',
-    resultCount: 2,
+    resultCount: 3,
     truncated: true,
+    capped: false,
     actionLabel: 'Open in collection view',
     actionHint: 'Opens orders in the collection view with this query.',
     wish: 'orders over 300',
     status: 'answered',
+    interpretedBy: 'copilot',
+};
+// The read hit its 50-row cap, and all 50 rows fit the card.
+export const wishCappedOutcome: WishOutcome = {
+    ...wishAnsweredOutcome,
+    id: 'stage0-capped',
+    title: 'Every order',
+    message: 'The first 50 documents in orders; there are more.',
+    detail: JSON.stringify(
+        Array.from({ length: 50 }, (_, index) => ({ _id: index + 1 })),
+        undefined,
+        2,
+    ),
+    resultCount: 50,
+    truncated: false,
+    capped: true,
+    wish: 'every order',
+};
+// The read hit its cap, and only two of those 50 rows fit the card.
+export const wishCappedCutOutcome: WishOutcome = {
+    ...wishCappedOutcome,
+    id: 'stage0-capped-cut',
+    message: 'The first 50 documents in orders; there are more. Only the first 2 are shown; the rest did not fit.',
+    detail: wishAnsweredOutcome.detail,
+    truncated: true,
+};
+// What the well says when it cannot match a wish without Copilot.
+export const wishCannotGrantOutcome: WishOutcome = {
+    id: 'stage0-cannot-grant',
+    kind: 'answer',
+    title: 'The well could not grant this',
+    message: 'Without Copilot the well understands simple wishes only, and it could not match this one.',
+    wish: 'paint my house blue',
+    status: 'refused',
+    interpretedBy: 'well',
+};
+export const wishAgentOutcome: WishOutcome = {
+    id: 'stage0-agent',
+    kind: 'agent',
+    title: 'A job for Copilot',
+    message: 'Copilot agent mode can do this. It opens in Chat with your wish, ready to run.',
+    detail: 'Set up a nightly backup of the shop database',
+    actionLabel: 'Hand to Copilot',
+    actionHint: 'Opens Copilot Chat in agent mode with this request.',
+    wish: 'Set up a nightly backup of the shop database',
+    status: 'proposed',
+    interpretedBy: 'copilot',
+};
+export const wishCommandOutcome: WishOutcome = {
+    id: 'stage0-command',
+    kind: 'command',
+    title: 'Zoom in',
+    message: 'VS Code can make everything bigger.',
+    actionLabel: 'Zoom in',
+    actionHint: 'Runs "Zoom in".',
+    wish: 'make the text bigger',
+    status: 'proposed',
     interpretedBy: 'copilot',
 };
 export const wishRefusedOutcome: WishOutcome = {
@@ -747,7 +814,11 @@ export const fixtures = {
             }),
             'wishingWell.makeWish': reply<Outputs['wishingWell']['makeWish']>('mutation', wishPlaygroundOutcome),
             'wishingWell.feelingLucky': reply<Outputs['wishingWell']['feelingLucky']>('mutation', wishFortuneOutcome),
-            'wishingWell.grant': reply<Outputs['wishingWell']['grant']>('mutation', { granted: true }),
+            'wishingWell.grant': reply<Outputs['wishingWell']['grant']>('mutation', {
+                granted: true,
+                waiting: false,
+                declined: false,
+            }),
         },
     },
 } satisfies Record<WebviewName, ViewFixture>;

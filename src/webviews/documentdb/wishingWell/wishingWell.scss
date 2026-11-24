@@ -219,11 +219,19 @@
     }
 }
 
-.ww-granted {
+.ww-granted,
+.ww-waiting {
     display: inline-flex;
     align-items: center;
     gap: 6px;
+}
+
+.ww-granted {
     color: var(--colorPaletteGreenForeground1);
+}
+
+.ww-waiting {
+    color: var(--vscode-descriptionForeground);
 }
 
 @keyframes ww-rise {

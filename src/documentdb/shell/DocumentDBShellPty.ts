@@ -17,6 +17,7 @@ import { settingsKeys } from '../../settingsKeys';
 import { COMPLETION_OFFERED_EVENT, type CompletionCategory } from '../../telemetry/completionCategories';
 import { accumulateTelemetry } from '../../utils/accumulatingTelemetry';
 import { classifyCommand, extractRunCommandName } from '../../utils/classifyCommand';
+import { type WishKind } from '../../webviews/documentdb/wishingWell/wishingWellTypes';
 import { ClustersClient } from '../ClustersClient';
 import { CredentialCache } from '../CredentialCache';
 import { deserializeResultForSchema, feedResultToSchemaStore } from '../feedResultToSchemaStore';
@@ -123,7 +124,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     /** A shell command a wish wrote, typed in at the next prompt. */
     private _wishedInput: string | undefined;
     /** The last wish card with an action; `wish open` grants it. */
-    private _openableWish: { readonly id: string; readonly actionLabel: string } | undefined;
+    private _openableWish: { readonly id: string; readonly kind: WishKind } | undefined;
 
     // ─── Telemetry tracking ──────────────────────────────────────────────────
 
@@ -798,12 +799,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             if (outcome.detail) {
                 this.writeLine(outcome.detail);
             }
-            if (outcome.truncated) {
-                this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Only the first results are shown.')));
-            }
             // Opening another shell from this one is never what the user wanted.
             if (outcome.actionLabel && outcome.kind !== 'shell') {
-                this._openableWish = { id: outcome.id, actionLabel: outcome.actionLabel };
+                this._openableWish = { id: outcome.id, kind: outcome.kind };
                 const offer = l10n.t('Type "wish open" to {0}.', lowerFirstLetter(outcome.actionLabel));
                 this.writeLine(
                     this._outputFormatter.formatSystemMessage(
@@ -830,8 +828,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             context.telemetry.properties.shellSessionId = this._shellSessionId;
 
             const result = await well.grant(openable.id, context, 'shell');
-            // A decline leaves the card openable for another try.
-            if (result !== 'declined') {
+            // The well keeps a granted wish to open again, except a hand-off or link, which go out once.
+            if (result === 'unknown' || (result === 'granted' && isOneShot(openable.kind))) {
                 this._openableWish = undefined;
             }
 
@@ -841,8 +839,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 return;
             }
             const messages: Record<typeof result, string> = {
-                granted: l10n.t('Granted: {0}', openable.actionLabel),
+                granted: grantReceipt(openable.kind),
                 declined: l10n.t('Not granted.'),
+                waiting: l10n.t('Waiting for your answer in VS Code. If you allow it, the wish is granted.'),
                 unknown: l10n.t('That wish has expired. Make it again.'),
             };
             this.writeLine(this._outputFormatter.formatSystemMessage(messages[result]));
@@ -1813,6 +1812,25 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         accumulateTelemetry('shell.completionGhost', (sample) => {
             sample.measurements[`accepted_${category}`] = 1;
         });
+    }
+}
+
+/** A hand-off to Chat or a link leaves VS Code, so the well forgets it once granted. */
+function isOneShot(kind: WishKind): boolean {
+    return kind === 'agent' || kind === 'link';
+}
+
+/** What a grant did, in the Wishing Well tab's words for where the wish went. */
+function grantReceipt(kind: WishKind): string {
+    switch (kind) {
+        case 'agent':
+            return l10n.t('Sent to Copilot Chat');
+        case 'link':
+            return l10n.t('Opened in your browser');
+        case 'command':
+            return l10n.t('Done');
+        default:
+            return l10n.t('Opened');
     }
 }
 

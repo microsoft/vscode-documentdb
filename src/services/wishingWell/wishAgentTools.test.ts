@@ -135,17 +135,81 @@ describe('callWishTool', () => {
             expect(result.structured).toMatchObject({ connectionId: 'c1', databases: ['shop', 'blog'] });
         });
 
+        function withDatabases(target: FakeWell): FakeWell {
+            target.describeConnection.mockImplementation(async (scope: { databaseName?: string }) =>
+                scope.databaseName ? { collections: ['orders'] } : { databases: ['shop', 'blog'] },
+            );
+            return target;
+        }
+
         it("lists a database's collections", async () => {
-            const target = well();
-            target.describeConnection.mockResolvedValue({ collections: ['orders'] });
             const result = await callWishTool(
-                target,
+                withDatabases(well()),
                 'documentdb_list_connections',
                 { connection: 'shop', database: 'shop' },
                 'mcp',
             );
             expect(result.text).toBe('Collections in database "shop" on "shop":\n- orders');
             expect(result.structured).toMatchObject({ database: 'shop', collections: ['orders'] });
+        });
+
+        it.each(['admin', 'local'])('lists the collections of the system database %s', async (database) => {
+            const result = await callWishTool(
+                withDatabases(well()),
+                'documentdb_list_connections',
+                { connection: 'shop', database },
+                'mcp',
+            );
+            expect(result.isError).not.toBe(true);
+        });
+
+        it('does not call a database empty when it could not check that it exists', async () => {
+            const target = well();
+            target.describeConnection.mockImplementation(async (scope: { databaseName?: string }) => {
+                if (!scope.databaseName) {
+                    throw new Error('not authorized to list databases');
+                }
+                return { collections: [] };
+            });
+            const result = await callWishTool(
+                target,
+                'documentdb_list_connections',
+                { connection: 'shop', database: 'shpo' },
+                'mcp',
+            );
+            expect(result.text).toContain('It may not exist');
+        });
+
+        it('skips the existence check when databases cannot be listed', async () => {
+            const target = well();
+            target.describeConnection.mockImplementation(async (scope: { databaseName?: string }) => {
+                if (!scope.databaseName) {
+                    throw new Error('not authorized to list databases');
+                }
+                return { collections: ['orders'] };
+            });
+            const result = await callWishTool(
+                target,
+                'documentdb_list_connections',
+                { connection: 'shop', database: 'shop' },
+                'mcp',
+            );
+            expect(result.text).toContain('- orders');
+        });
+
+        it('says a database does not exist instead of calling it empty', async () => {
+            resolveScope.mockResolvedValue({ ...connectedScope, databaseName: 'shp' });
+            const result = await callWishTool(
+                withDatabases(well()),
+                'documentdb_list_connections',
+                { connection: 'shop', database: 'shp' },
+                'mcp',
+            );
+            expect(result).toMatchObject({
+                isError: true,
+                text: 'No database "shp" on "shop". Its databases:\n- shop\n- blog',
+                structured: { database: 'shp', exists: false, databases: ['shop', 'blog'] },
+            });
         });
 
         it('says a connection is not signed in instead of prompting', async () => {
@@ -155,7 +219,7 @@ describe('callWishTool', () => {
             expect(result).toMatchObject({
                 isError: true,
                 text: expect.stringContaining('Ask the user to sign in'),
-                structured: { needsSignIn: true, connectionId: 'c9', connection: 'prod' },
+                structured: { status: 'refused', needsSignIn: true, connectionId: 'c9', connection: 'prod' },
             });
             expect(target.describeConnection).not.toHaveBeenCalled();
         });
@@ -200,7 +264,11 @@ describe('callWishTool', () => {
             const target = well();
             resolveScope.mockRejectedValue(new NeedsSignInError('c9', 'prod'));
             const result = await callWishTool(target, 'documentdb_make_wish', { wish: 'w', connection: 'prod' }, 'mcp');
-            expect(result).toMatchObject({ isError: true, text: expect.stringContaining('(id: c9)') });
+            expect(result).toMatchObject({
+                isError: true,
+                text: expect.stringContaining('(id: c9)'),
+                structured: { status: 'refused', needsSignIn: true, connectionId: 'c9' },
+            });
             expect(target.makeWish).not.toHaveBeenCalled();
         });
 
@@ -246,6 +314,18 @@ describe('callWishTool', () => {
             expect(showInformationMessage).not.toHaveBeenCalled();
         });
 
+        it("passes the call's abort signal on and says when the user has not answered yet", async () => {
+            const target = well();
+            target.grant.mockResolvedValue('waiting');
+            const signal = new AbortController().signal;
+            const result = await callWishTool(target, 'documentdb_grant_wish', { wishId: 'w1' }, 'mcp', signal);
+            expect(target.grant).toHaveBeenCalledWith('w1', expect.anything(), 'mcp', signal);
+            expect(result.isError).not.toBe(true);
+            expect(result.text).toBe('The user has not answered in VS Code yet. If they allow "Orders", it will open.');
+            expect(result.structured).toMatchObject({ granted: false, result: 'waiting' });
+            expect(showInformationMessage).not.toHaveBeenCalled();
+        });
+
         it('reports an expired grant as an error the agent can read', async () => {
             const target = well();
             target.grant.mockResolvedValue('unknown');
@@ -256,7 +336,7 @@ describe('callWishTool', () => {
 });
 
 describe('outcomeForAgent', () => {
-    it('reads an answer back with an optional open, and says when rows were cut', () => {
+    it('reads an answer back with an optional open, and says how many rows were cut', () => {
         const result = outcomeForAgent(
             outcome({
                 status: 'answered',
@@ -268,9 +348,26 @@ describe('outcomeForAgent', () => {
             }),
         );
         expect(result.text).toContain('Found 3 documents in orders.\n\n[{"a":1}]');
-        expect(result.text).toContain('Cut to fit: fewer than the 3 rows are shown.');
+        expect(result.text).toContain('project fewer fields to see more');
+        expect(result.text).not.toContain('at most 50 rows');
+        expect(result.text).not.toContain('there are more');
         expect(result.text).toContain('Optional: call documentdb_grant_wish with wishId "w1"');
         expect(result.structured).toMatchObject({ status: 'answered', truncated: true, wishId: 'w1' });
+    });
+
+    it('says more rows exist past the cap without claiming any were cut', () => {
+        const result = outcomeForAgent(
+            outcome({
+                status: 'answered',
+                detail: '[{"a":1},{"a":2}]',
+                resultCount: 2,
+                capped: true,
+                truncated: false,
+            }),
+        );
+        expect(result.text).toContain('Reads return at most 50 rows');
+        expect(result.text).not.toContain('summarized to fit');
+        expect(result.structured).toMatchObject({ capped: true, truncated: false });
     });
 
     it('says what a proposal will do, in the host’s words, and when to grant it', () => {
@@ -295,10 +392,8 @@ describe('outcomeForAgent', () => {
     });
 
     it('returns information as plain text', () => {
-        const result = outcomeForAgent(
-            outcome({ kind: 'answer', status: 'info', message: 'The well cannot do that.' }),
-        );
-        expect(result.text).toBe('Orders\nThe well cannot do that.');
+        const result = outcomeForAgent(outcome({ kind: 'fortune', status: 'info', message: 'An index awaits.' }));
+        expect(result.text).toBe('Orders\nAn index awaits.');
         expect(result.isError).not.toBe(true);
         expect(result.structured).not.toHaveProperty('wishId');
     });

@@ -48,6 +48,8 @@ export interface RunningMcpServer {
 
 const SUPPORTED_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const MAX_BODY_BYTES = 1024 * 1024;
+const UNAUTHORIZED_MESSAGE =
+    'The bearer token is missing or wrong. In VS Code, run "DocumentDB: Connect an Agent to the Wishing Well" to get a fresh config.';
 
 interface JsonRpcRequest {
     readonly jsonrpc: '2.0';
@@ -190,7 +192,12 @@ export async function startMcpHttpServer(options: McpServerOptions, preferredPor
             }
             if (!tokenMatches(request.headers.authorization, options.token)) {
                 response.setHeader('WWW-Authenticate', 'Bearer');
-                send(response, 401);
+                // A bare 401 leaves the user guessing; the usual cause is a token reissued in VS Code.
+                send(response, 401, {
+                    jsonrpc: '2.0',
+                    id: null,
+                    error: { code: -32001, message: UNAUTHORIZED_MESSAGE },
+                });
                 return;
             }
             if (request.method !== 'POST') {

@@ -2350,7 +2350,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(sparkle)",
         "userDescription": "Make a wish at the DocumentDB Wishing Well",
-        "modelDescription": "Make a wish at the DocumentDB Wishing Well in VS Code. Describe what you want in plain words; the well answers questions about the data by running read-only queries, drafts scripts for changes, and opens the extension's own tools (collection view with a query, interactive shell, query playground, cluster dashboard, index advice, import and export, connection diagnostics, DocumentDB Local). Nothing changes data: writes come back as a playground script for the user to run. A read comes back answered with its rows. A reply that proposes an action has a wishId: call documentdb_grant_wish only when the user wants that to happen in VS Code.",
+        "modelDescription": "Make a wish at the DocumentDB Wishing Well in VS Code. Describe what you want in plain words; the well answers questions about the data by running read-only queries, drafts scripts for changes, and opens the extension's own tools (collection view with a query, interactive shell, query playground, cluster dashboard, index advice, import and export, connection diagnostics, DocumentDB Local). Nothing changes data: writes come back as a playground script for the user to run. A read comes back answered with its rows, at most 50 of them. A reply that proposes an action has a wishId: call documentdb_grant_wish only when the user wants that to happen in VS Code.",
         "inputSchema": {
           "type": "object",
           "properties": {

@@ -31,7 +31,12 @@ import {
     diagnosticsSrvTargets,
     diagnosticsStartedAt,
     fixtures,
+    wishAgentOutcome,
     wishAnsweredOutcome,
+    wishCannotGrantOutcome,
+    wishCappedCutOutcome,
+    wishCappedOutcome,
+    wishCommandOutcome,
     wishFortuneOutcome,
     wishKeywordConfig,
     wishKeywordExamples,
@@ -232,6 +237,12 @@ function defaultScenario<V extends WebviewName>(view: V, steps: readonly Scenari
 
 const base = fixtures.localQuickStart;
 const wishingWell = fixtures.wishingWell;
+// The warning edge a refused card draws.
+const wishRefusedStyle: StyleExpectation = {
+    selector: '.ww-card--refused',
+    property: 'border-left-width',
+    expected: '3px',
+};
 const readyDocker = base.rpc['localQuickStart.getDockerStatus'].results[0];
 const completedStages = [
     { stage: 'checking', status: 'done', dockerReadiness: readyDocker.readiness },
@@ -2450,6 +2461,7 @@ export const scenarios = {
                     'Read by Copilot',
                     'You wished: Add 20 sample customers',
                     'Opened',
+                    'Open again',
                 ],
                 noProgressbar: true,
             },
@@ -2472,10 +2484,99 @@ export const scenarios = {
                 },
                 {
                     kind: 'text',
-                    name: 'a granted card shows its receipt instead of the button and hint',
+                    name: 'a granted card shows its receipt and Open again instead of the button and hint',
                     selector: '.ww-results',
-                    includes: ['Opened'],
+                    includes: ['Opened', 'Open again'],
                     excludes: ['Nothing runs until you run it in the playground', 'Open in a playground'],
+                },
+                {
+                    kind: 'calls',
+                    name: 'Open again grants the same wish again',
+                    path: 'wishingWell.grant',
+                    input: { id: wishPlaygroundOutcome.id },
+                    count: 2,
+                    steps: [{ action: 'click', role: 'button', name: 'Open again' }],
+                },
+            ],
+        },
+        'command-granted': {
+            config: wishingWell.config,
+            rpc: {
+                ...wishingWell.rpc,
+                'wishingWell.makeWish': { type: 'mutation', results: [wishCommandOutcome] },
+            } as const satisfies TypedRpcFixtures,
+            steps: [
+                { action: 'fill', role: 'textbox', name: 'Your wish', value: 'make the text bigger' },
+                { action: 'click', role: 'button', name: 'Make a wish' },
+                { action: 'click', role: 'button', name: 'Zoom in' },
+            ],
+            readiness: { content: [wishCommandOutcome.title, 'Done', 'Do it again'], noProgressbar: true },
+            assertions: [
+                {
+                    kind: 'text',
+                    name: 'a command that ran offers to run it again, not to open it',
+                    selector: '.ww-results',
+                    includes: ['Done', 'Do it again'],
+                    excludes: ['Open again'],
+                },
+            ],
+        },
+        'handed-off': {
+            config: wishingWell.config,
+            rpc: {
+                ...wishingWell.rpc,
+                'wishingWell.makeWish': { type: 'mutation', results: [wishAgentOutcome] },
+            } as const satisfies TypedRpcFixtures,
+            steps: [
+                {
+                    action: 'fill',
+                    role: 'textbox',
+                    name: 'Your wish',
+                    value: 'Set up a nightly backup of the shop database',
+                },
+                { action: 'click', role: 'button', name: 'Make a wish' },
+                { action: 'click', role: 'button', name: 'Hand to Copilot' },
+            ],
+            readiness: { content: [wishAgentOutcome.title, 'Sent to Copilot Chat'], noProgressbar: true },
+            assertions: [
+                {
+                    kind: 'attribute',
+                    name: 'a card handed to Copilot cannot be granted again',
+                    selector: '.ww-results button',
+                    attribute: 'type',
+                    expected: null,
+                },
+            ],
+        },
+        waiting: {
+            config: wishingWell.config,
+            rpc: {
+                ...wishingWell.rpc,
+                'wishingWell.grant': {
+                    type: 'mutation',
+                    results: [{ granted: false, waiting: true, declined: false }],
+                },
+            } as const satisfies TypedRpcFixtures,
+            steps: [
+                { action: 'fill', role: 'textbox', name: 'Your wish', value: 'Add 20 sample customers' },
+                { action: 'click', role: 'button', name: 'Make a wish' },
+                { action: 'click', role: 'button', name: 'Open in a playground' },
+            ],
+            readiness: { content: [wishPlaygroundOutcome.title, 'Waiting for you in VS Code'], noProgressbar: true },
+            assertions: [
+                {
+                    kind: 'text',
+                    name: 'a grant waiting for a confirmation says so, not that it opened or expired',
+                    selector: 'main',
+                    includes: ['Waiting for you in VS Code'],
+                    excludes: ['Opened', 'expired'],
+                },
+                {
+                    kind: 'attribute',
+                    name: 'a waiting card offers nothing to click until the user answers',
+                    selector: '.ww-results button',
+                    attribute: 'type',
+                    expected: null,
                 },
             ],
         },
@@ -2537,7 +2638,6 @@ export const scenarios = {
                     'You wished: orders over 300',
                     wishAnsweredOutcome.message,
                     'Read-only result: nothing was changed.',
-                    'Too long to show in full, so only the first documents are shown.',
                     'Open in collection view',
                 ],
                 noProgressbar: true,
@@ -2550,7 +2650,54 @@ export const scenarios = {
                     attribute: 'aria-label',
                     expected: 'Latest wish',
                 },
+                {
+                    kind: 'text',
+                    name: 'a result cut to fit says so once and does not claim there are more rows',
+                    selector: '.ww-results',
+                    includes: ['Only the first 2 are shown'],
+                    excludes: ['there are more', 'Too long'],
+                },
             ],
+        },
+        capped: {
+            config: wishingWell.config,
+            rpc: {
+                ...wishingWell.rpc,
+                'wishingWell.makeWish': { type: 'mutation', results: [wishCappedOutcome] },
+            } as const satisfies TypedRpcFixtures,
+            steps: [
+                { action: 'fill', role: 'textbox', name: 'Your wish', value: 'every order' },
+                { action: 'click', role: 'button', name: 'Make a wish' },
+            ],
+            readiness: {
+                content: [wishCappedOutcome.title, wishCappedOutcome.message],
+                noProgressbar: true,
+            },
+            assertions: [
+                {
+                    kind: 'text',
+                    name: 'a capped result that fits does not claim it was cut',
+                    selector: '.ww-results',
+                    includes: ['there are more'],
+                    excludes: ['did not fit'],
+                },
+            ],
+        },
+        'capped-cut': {
+            config: wishingWell.config,
+            rpc: {
+                ...wishingWell.rpc,
+                'wishingWell.makeWish': { type: 'mutation', results: [wishCappedCutOutcome] },
+            } as const satisfies TypedRpcFixtures,
+            steps: [
+                { action: 'fill', role: 'textbox', name: 'Your wish', value: 'every order' },
+                { action: 'click', role: 'button', name: 'Make a wish' },
+            ],
+            readiness: {
+                content: [wishCappedCutOutcome.title, wishCappedCutOutcome.message],
+                noProgressbar: true,
+            },
+            assertions: [],
         },
         refused: {
             config: wishingWell.config,
@@ -2580,6 +2727,37 @@ export const scenarios = {
                     attribute: 'type',
                     expected: null,
                 },
+                { kind: 'style', ...wishRefusedStyle },
+            ],
+        },
+        'cannot-grant': {
+            config: wishKeywordConfig,
+            rpc: {
+                ...wishingWell.rpc,
+                'wishingWell.status': {
+                    type: 'query',
+                    results: [{ copilotAvailable: false, examples: wishKeywordExamples }],
+                },
+                'wishingWell.makeWish': { type: 'mutation', results: [wishCannotGrantOutcome] },
+            } as const satisfies TypedRpcFixtures,
+            steps: [
+                { action: 'fill', role: 'textbox', name: 'Your wish', value: 'paint my house blue' },
+                { action: 'click', role: 'button', name: 'Make a wish' },
+            ],
+            readiness: {
+                content: [wishCannotGrantOutcome.title, wishCannotGrantOutcome.message],
+                selectors: ['.ww-card--refused'],
+                noProgressbar: true,
+            },
+            assertions: [
+                {
+                    kind: 'attribute',
+                    name: 'the cannot-grant card offers nothing to grant',
+                    selector: '.ww-results button',
+                    attribute: 'type',
+                    expected: null,
+                },
+                { kind: 'style', ...wishRefusedStyle },
             ],
         },
     },

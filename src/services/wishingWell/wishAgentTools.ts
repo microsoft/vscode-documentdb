@@ -42,11 +42,12 @@ export function outcomeForAgent(outcome: WishOutcome): McpToolResult {
     if (outcome.detail) {
         lines.push('', outcome.detail);
     }
+    // The message already says how many rows there are and how many fit; only the remedy is new.
+    if (outcome.capped) {
+        lines.push('', 'Reads return at most 50 rows: narrow the filter, or sort and ask for the rows you need.');
+    }
     if (outcome.truncated) {
-        lines.push(
-            '',
-            `Cut to fit: fewer than the ${outcome.resultCount ?? 0} rows are shown. Narrow the query or project fewer fields to see the rest.`,
-        );
+        lines.push('', 'Long values or documents were summarized to fit: project fewer fields to see more.');
     }
     const grantable =
         outcome.actionLabel !== undefined && (outcome.status === 'answered' || outcome.status === 'proposed');
@@ -72,6 +73,7 @@ export function outcomeForAgent(outcome: WishOutcome): McpToolResult {
             detail: outcome.detail,
             resultCount: outcome.resultCount,
             truncated: outcome.truncated,
+            capped: outcome.capped,
             action: grantable ? outcome.actionLabel : undefined,
             actionHint: grantable ? outcome.actionHint : undefined,
             interpretedBy: outcome.interpretedBy,
@@ -93,6 +95,19 @@ function connectionsForAgent(connections: readonly ConnectionSummary[]): McpTool
     return { text: ['Saved DocumentDB connections:', ...lines].join('\n'), structured: { connections } };
 }
 
+const SYSTEM_DATABASES = ['admin', 'config', 'local'];
+
+/** An empty list means different things: system collections are hidden, and an unchecked name may be a typo. */
+function noCollections(database: string, connection: string, existenceChecked: boolean): string {
+    if (SYSTEM_DATABASES.includes(database)) {
+        return `Database "${database}" on "${connection}" has no collections the well can open; system collections are hidden.`;
+    }
+    if (!existenceChecked) {
+        return `No collections found in "${database}" on "${connection}". It may not exist, or you may not be allowed to list it.`;
+    }
+    return `Database "${database}" on "${connection}" has no collections.`;
+}
+
 /** One level down from a connected connection: its databases, or a database's collections. */
 async function contentsForAgent(
     well: WishingWellService,
@@ -101,18 +116,36 @@ async function contentsForAgent(
 ): Promise<McpToolResult> {
     const name = scope.cluster?.clusterDisplayName ?? '';
     const connection = { connectionId: scope.cluster?.clusterId, connection: name };
-    const { databases, collections } = await well.describeConnection(scope);
     if (database !== undefined) {
-        const names = collections ?? [];
+        // Listing a missing database's collections finds none, which reads as an empty database.
+        // System databases are hidden from the list but exist; a user who cannot list databases skips the check.
+        const known = await well
+            .describeConnection({ cluster: scope.cluster })
+            .then((contents) => contents.databases)
+            .catch(() => undefined);
+        if (known && !SYSTEM_DATABASES.includes(database) && !known.includes(database)) {
+            return {
+                text:
+                    known.length === 0
+                        ? `No database "${database}" on "${name}"; it has no databases yet.`
+                        : [
+                              `No database "${database}" on "${name}". Its databases:`,
+                              ...known.map((n) => `- ${n}`),
+                          ].join('\n'),
+                isError: true,
+                structured: { ...connection, database, exists: false, databases: known },
+            };
+        }
+        const names = (await well.describeConnection(scope)).collections ?? [];
         return {
             text:
                 names.length === 0
-                    ? `Database "${database}" on "${name}" has no collections.`
+                    ? noCollections(database, name, known !== undefined)
                     : [`Collections in database "${database}" on "${name}":`, ...names.map((n) => `- ${n}`)].join('\n'),
             structured: { ...connection, database, collections: names },
         };
     }
-    const names = databases ?? [];
+    const names = (await well.describeConnection(scope)).databases ?? [];
     return {
         text:
             names.length === 0
@@ -172,7 +205,12 @@ async function withScope(
             return {
                 text: error.message,
                 isError: true,
-                structured: { needsSignIn: true, connectionId: error.connectionId, connection: error.connectionName },
+                structured: {
+                    status: 'refused',
+                    needsSignIn: true,
+                    connectionId: error.connectionId,
+                    connection: error.connectionName,
+                },
             };
         }
         return run(scope, context);
@@ -237,7 +275,7 @@ export async function callWishTool(
             const input = grantWishInput.parse(args);
             const title = well.describeGrant(input.wishId)?.title ?? input.wishId;
             return withContext('grantWish', async (context): Promise<McpToolResult> => {
-                const result = await well.grant(input.wishId, context, source);
+                const result = await well.grant(input.wishId, context, source, signal);
                 switch (result) {
                     case 'unknown':
                         return {
@@ -248,6 +286,11 @@ export async function callWishTool(
                     case 'declined':
                         return {
                             text: `The user declined "${title}" in VS Code, so nothing happened. Do not grant it again unless the user asks.`,
+                            structured: { granted: false, result },
+                        };
+                    case 'waiting':
+                        return {
+                            text: `The user has not answered in VS Code yet. If they allow "${title}", it will open.`,
                             structured: { granted: false, result },
                         };
                     case 'granted':

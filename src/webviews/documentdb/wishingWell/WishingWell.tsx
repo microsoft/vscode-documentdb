@@ -16,10 +16,12 @@ import {
     Textarea,
 } from '@fluentui/react-components';
 import {
+    ArrowClockwiseRegular,
     ArrowShuffleRegular,
     BotRegular,
     ChatRegular,
     CheckmarkCircleFilled,
+    ClockRegular,
     CodeRegular,
     DataBarVerticalRegular,
     DocumentRegular,
@@ -66,8 +68,48 @@ const KIND_ICONS: Record<WishKind, JSX.Element> = {
 
 const MAX_HISTORY = 10;
 
+/** Granted, or still waiting for the user to answer a confirmation in VS Code. */
+type GrantState = 'granted' | 'waiting';
+
+/** Most grants finish at once; a spinner that flashes for one frame only distracts. */
+const SPINNER_DELAY_MS = 300;
+
+function useDelayed(flag: boolean, delayMs: number): boolean {
+    const [late, setLate] = useState(false);
+    useEffect(() => {
+        if (!flag) {
+            return undefined;
+        }
+        const timer = setTimeout(() => setLate(true), delayMs);
+        return () => {
+            clearTimeout(timer);
+            setLate(false);
+        };
+    }, [flag, delayMs]);
+    return flag && late;
+}
+
+function grantStateOf(result: { granted: boolean; waiting: boolean }): GrantState | undefined {
+    if (result.granted) {
+        return 'granted';
+    }
+    return result.waiting ? 'waiting' : undefined;
+}
+
+function copilotStatusText(status: WishingWellStatus | undefined): string {
+    if (status === undefined) {
+        return l10n.t('Checking for Copilot…');
+    }
+    return status.copilotAvailable
+        ? l10n.t('Copilot reads your wishes, so almost anything goes.')
+        : l10n.t('Copilot is not available, so the well understands simple wishes only.');
+}
+
 /** What a grant did, in words that fit where the wish went. */
-function receipt(kind: WishKind): string {
+function receipt(kind: WishKind, state: GrantState): string {
+    if (state === 'waiting') {
+        return l10n.t('Waiting for you in VS Code');
+    }
     switch (kind) {
         case 'agent':
             return l10n.t('Sent to Copilot Chat');
@@ -77,6 +119,19 @@ function receipt(kind: WishKind): string {
             return l10n.t('Done');
         default:
             return l10n.t('Opened');
+    }
+}
+
+/** Label for granting a card again, or undefined for the one-shot kinds the host forgets once granted. */
+function againLabel(kind: WishKind): string | undefined {
+    switch (kind) {
+        case 'agent':
+        case 'link':
+            return undefined;
+        case 'command':
+            return l10n.t('Do it again');
+        default:
+            return l10n.t('Open again');
     }
 }
 
@@ -94,13 +149,15 @@ function announcement(outcome: WishOutcome): string {
 interface OutcomeCardProps {
     readonly outcome: WishOutcome;
     readonly latest: boolean;
-    readonly granted: boolean;
+    readonly grantState: GrantState | undefined;
     readonly granting: boolean;
     readonly onGrant: (outcome: WishOutcome) => void;
 }
 
-const OutcomeCard = ({ outcome, latest, granted, granting, onGrant }: OutcomeCardProps): JSX.Element => {
+const OutcomeCard = ({ outcome, latest, grantState, granting, onGrant }: OutcomeCardProps): JSX.Element => {
+    const slowGrant = useDelayed(granting, SPINNER_DELAY_MS);
     const refused = outcome.status === 'refused';
+    const again = grantState === 'granted' ? againLabel(outcome.kind) : undefined;
     const className = ['ww-card', latest && 'ww-card--latest', refused && 'ww-card--refused'].filter(Boolean).join(' ');
     return (
         <Card className={className} data-kind={outcome.kind} data-status={outcome.status}>
@@ -122,24 +179,34 @@ const OutcomeCard = ({ outcome, latest, granted, granting, onGrant }: OutcomeCar
             {outcome.status === 'answered' && (
                 <Caption1 className="ww-muted">{l10n.t('Read-only result: nothing was changed.')}</Caption1>
             )}
-            {outcome.status === 'answered' && outcome.truncated && (
-                <Caption1 className="ww-muted">
-                    {l10n.t('Too long to show in full, so only the first documents are shown.')}
-                </Caption1>
-            )}
             {outcome.detail && <pre className="ww-card__detail">{outcome.detail}</pre>}
             {outcome.actionLabel && !refused && (
                 <div className="ww-card__actions">
-                    {granted ? (
-                        <span className="ww-granted">
-                            <CheckmarkCircleFilled aria-hidden />
-                            {receipt(outcome.kind)}
-                        </span>
+                    {grantState ? (
+                        <>
+                            <span className={grantState === 'waiting' ? 'ww-waiting' : 'ww-granted'}>
+                                {grantState === 'waiting' ? (
+                                    <ClockRegular aria-hidden />
+                                ) : (
+                                    <CheckmarkCircleFilled aria-hidden />
+                                )}
+                                {receipt(outcome.kind, grantState)}
+                            </span>
+                            {again && (
+                                <Button
+                                    icon={slowGrant ? <Spinner size="tiny" /> : <ArrowClockwiseRegular />}
+                                    disabled={granting}
+                                    onClick={() => onGrant(outcome)}
+                                >
+                                    {again}
+                                </Button>
+                            )}
+                        </>
                     ) : (
                         <>
                             <Button
                                 appearance={latest ? 'primary' : 'secondary'}
-                                icon={granting ? <Spinner size="tiny" /> : <SparkleRegular />}
+                                icon={slowGrant ? <Spinner size="tiny" /> : <SparkleRegular />}
                                 disabled={granting}
                                 onClick={() => onGrant(outcome)}
                             >
@@ -164,8 +231,9 @@ export const WishingWell = (): JSX.Element => {
     const [busy, setBusy] = useState<'wish' | 'lucky' | undefined>();
     const [status, setStatus] = useState<WishingWellStatus | undefined>();
     const [outcomes, setOutcomes] = useState<WishOutcome[]>([]);
-    const [granted, setGranted] = useState<ReadonlySet<string>>(new Set());
-    const [lastGranted, setLastGranted] = useState<WishOutcome | undefined>();
+    const [grantStates, setGrantStates] = useState<ReadonlyMap<string, GrantState>>(new Map());
+    // Counted, so granting the same card again is announced again.
+    const [grantNotice, setGrantNotice] = useState<{ readonly count: number; readonly message: string }>();
     const [granting, setGranting] = useState<string | undefined>();
     const [splash, setSplash] = useState(0);
     const [error, setError] = useState<string | undefined>();
@@ -229,9 +297,15 @@ export const WishingWell = (): JSX.Element => {
             setError(undefined);
             try {
                 const result = await trpcClient.wishingWell.grant.mutate({ id: outcome.id });
-                if (result.granted) {
-                    setGranted((previous) => new Set(previous).add(outcome.id));
-                    setLastGranted(outcome);
+                const state = grantStateOf(result);
+                if (state) {
+                    setGrantStates((previous) => new Map(previous).set(outcome.id, state));
+                    setGrantNotice((previous) => ({
+                        count: (previous?.count ?? 0) + 1,
+                        message: `${outcome.title}: ${receipt(outcome.kind, state)}`,
+                    }));
+                } else if (result.declined) {
+                    setError(l10n.t('Not granted: the request was declined in VS Code.'));
                 } else {
                     setError(l10n.t('This wish has expired. Make it again.'));
                 }
@@ -264,12 +338,7 @@ export const WishingWell = (): JSX.Element => {
         ? l10n.t('Wishing on {0}. Ask about the data, or for anything else.', place)
         : l10n.t('Make a wish. The well grants it, or finds someone who can.');
 
-    const statusText =
-        status === undefined
-            ? l10n.t('Checking for Copilot…')
-            : status.copilotAvailable
-              ? l10n.t('Copilot reads your wishes, so almost anything goes.')
-              : l10n.t('Copilot is not available, so the well understands simple wishes only.');
+    const statusText = copilotStatusText(status);
 
     const [latest, ...earlier] = outcomes;
 
@@ -366,7 +435,7 @@ export const WishingWell = (): JSX.Element => {
                     <OutcomeCard
                         outcome={latest}
                         latest
-                        granted={granted.has(latest.id)}
+                        grantState={grantStates.get(latest.id)}
                         granting={granting === latest.id}
                         onGrant={(outcome) => void grant(outcome)}
                     />
@@ -381,7 +450,7 @@ export const WishingWell = (): JSX.Element => {
                             key={outcome.id}
                             outcome={outcome}
                             latest={false}
-                            granted={granted.has(outcome.id)}
+                            grantState={grantStates.get(outcome.id)}
                             granting={granting === outcome.id}
                             onGrant={(item) => void grant(item)}
                         />
@@ -391,13 +460,7 @@ export const WishingWell = (): JSX.Element => {
 
             {/* Keyed so every new card and grant is announced, not only the first. */}
             {latest && <Announcer key={latest.id} when message={announcement(latest)} />}
-            {lastGranted && (
-                <Announcer
-                    key={`granted-${lastGranted.id}`}
-                    when
-                    message={`${lastGranted.title}: ${receipt(lastGranted.kind)}`}
-                />
-            )}
+            {grantNotice && <Announcer key={`granted-${grantNotice.count}`} when message={grantNotice.message} />}
         </main>
     );
 };

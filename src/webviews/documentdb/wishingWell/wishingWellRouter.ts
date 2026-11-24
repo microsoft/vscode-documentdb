@@ -20,23 +20,42 @@ export type RouterContext = BaseRouterContext & {
     >;
 };
 
+/** Focus re-checks Copilot every time, but lists the collections behind the examples at most this often. */
+const DESCRIBE_TTL_MS = 60_000;
+
+// Keyed by the tab's scope: tRPC copies the context for every call, but the scope object inside it is shared.
+const described = new WeakMap<WishScope, { readonly at: number; readonly names: Promise<string[] | undefined> }>();
+
+/** Collection names let a database-scoped well suggest wishes about a real collection. */
+function collectionNames(scope: WishScope, well: RouterContext['well']): Promise<string[] | undefined> {
+    if (!scope.cluster || !scope.databaseName || scope.collectionName) {
+        return Promise.resolve(undefined);
+    }
+    const cached = described.get(scope);
+    if (cached && Date.now() - cached.at < DESCRIBE_TTL_MS) {
+        return cached.names;
+    }
+    // Sorted, so a server that lists in a different order does not change the examples.
+    const names = well.describeConnection(scope).then(
+        ({ collections }) => collections?.slice().sort(),
+        () => undefined,
+    );
+    described.set(scope, { at: Date.now(), names });
+    return names;
+}
+
 export const wishingWellRouter = router({
     status: publicProcedureWithTelemetry.query(async ({ ctx }): Promise<WishingWellStatus> => {
         const myCtx = ctx as WithTelemetry<RouterContext>;
         const { scope, well } = myCtx;
         const copilotAvailable = await well.isCopilotAvailable();
         myCtx.actionContext.telemetry.properties.copilotAvailable = String(copilotAvailable);
-        // Collection names let a database-scoped well suggest wishes about a real collection.
-        const collectionNames =
-            scope.cluster && scope.databaseName && !scope.collectionName
-                ? (await well.describeConnection(scope).catch(() => ({ collections: undefined }))).collections
-                : undefined;
         const examples = wishExamples(
             {
                 connected: scope.cluster !== undefined,
                 databaseName: scope.databaseName,
                 collectionName: scope.collectionName,
-                collectionNames,
+                collectionNames: await collectionNames(scope, well),
             },
             copilotAvailable,
         );
@@ -57,9 +76,9 @@ export const wishingWellRouter = router({
 
     grant: publicProcedureWithTelemetry
         .input(z.object({ id: z.string().min(1) }))
-        .mutation(async ({ input, ctx }): Promise<{ granted: boolean }> => {
+        .mutation(async ({ input, ctx }): Promise<{ granted: boolean; waiting: boolean; declined: boolean }> => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
             const result = await myCtx.well.grant(input.id, myCtx.actionContext, 'webview');
-            return { granted: result === 'granted' };
+            return { granted: result === 'granted', waiting: result === 'waiting', declined: result === 'declined' };
         }),
 });

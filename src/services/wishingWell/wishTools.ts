@@ -92,7 +92,7 @@ export const WISH_TOOLS: readonly McpTool[] = [
             "and opens the extension's own tools (collection view with a query, interactive shell, query playground,",
             'cluster dashboard, index advice, import and export, connection diagnostics, DocumentDB Local).',
             'Nothing changes data: writes come back as a playground script for the user to run.',
-            'A read comes back answered with its rows. A reply that proposes an action has a wishId:',
+            'A read comes back answered with its rows, at most 50 of them. A reply that proposes an action has a wishId:',
             'call documentdb_grant_wish only when the user wants that to happen in VS Code.',
         ].join(' '),
         inputSchema: {

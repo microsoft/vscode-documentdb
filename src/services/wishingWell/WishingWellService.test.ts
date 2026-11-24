@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@vscode/l10n', () => ({
     t: vi.fn((message: string, ...args: unknown[]) =>
@@ -12,7 +12,7 @@ vi.mock('@vscode/l10n', () => ({
     ),
 }));
 
-import { WishScopeError } from './wishEngine';
+import { LUCKY_TIPS, WishScopeError } from './wishEngine';
 import { WishingWellService } from './WishingWellService';
 import { type WishPowers } from './wishPowers';
 import { type WishScope } from './wishScope';
@@ -37,6 +37,7 @@ function powers(overrides: Partial<WishPowers> = {}): WishPowers {
             text: '[{"a":1},{"a":2}]',
             documents: [{ a: 1 }, { a: 2 }],
             truncated: false,
+            capped: false,
         })),
         drawFromCluster: vi.fn(async () => undefined),
         cast: vi.fn(async () => undefined),
@@ -90,28 +91,66 @@ describe('WishingWellService', () => {
 
         await expect(well.grant(outcome.id, ctx, 'webview')).resolves.toBe('granted');
         expect(wishPowers.cast).toHaveBeenCalledWith(expect.objectContaining({ kind: 'find' }), shop, ctx);
-        // One grant per wish.
-        await expect(well.grant(outcome.id, ctx, 'webview')).resolves.toBe('unknown');
+        // The card can open its query again.
+        await expect(well.grant(outcome.id, ctx, 'webview')).resolves.toBe('granted');
+        expect(wishPowers.cast).toHaveBeenCalledTimes(2);
     });
 
-    it('writes a receipt for an aggregation and passes truncation on', async () => {
+    const aggregate = {
+        kind: 'aggregate',
+        collection: 'orders',
+        pipeline: '[{"$count":"n"}]',
+        title: 't',
+        message: 'm',
+    } as const;
+    const find = { kind: 'find', collection: 'orders', title: 't', message: 'm' } as const;
+
+    it.each([
+        ['an aggregation that fits', aggregate, 3, false, false, 'Aggregation on orders: 3 result rows.'],
+        [
+            'an aggregation past the row cap',
+            aggregate,
+            50,
+            true,
+            false,
+            'Aggregation on orders: the first 50 result rows; there are more.',
+        ],
+        ['a find past the row cap', find, 50, true, false, 'The first 50 documents in orders; there are more.'],
+        [
+            'a find cut to fit',
+            find,
+            3,
+            false,
+            true,
+            'Found 3 documents in orders. Only the first 2 are shown; the rest did not fit.',
+        ],
+        [
+            'a find past the cap and cut to fit',
+            find,
+            50,
+            true,
+            true,
+            'The first 50 documents in orders; there are more. Only the first 2 are shown; the rest did not fit.',
+        ],
+        ['a find marked cut although every row fits', find, 2, false, true, 'Found 2 documents in orders.'],
+    ] as const)('writes a receipt for %s', async (_case, spell, count, capped, truncated, message) => {
         const well = new WishingWellService(
             powers({
-                read: vi.fn(async () => ({ count: 3, text: '[]', documents: [], truncated: true })),
+                read: vi.fn(async () => ({
+                    count,
+                    text: '[{"a":1},{"a":2}]',
+                    documents: [{ a: 1 }, { a: 2 }],
+                    truncated,
+                    capped,
+                })),
             }),
         );
-        const outcome = await well.makeWish('count orders', shop, context(), 'mcp', undefined, {
-            kind: 'aggregate',
-            collection: 'orders',
-            pipeline: '[{"$count":"n"}]',
-            title: 't',
-            message: 'm',
-        });
-        expect(outcome).toMatchObject({
+        await expect(well.makeWish('w', shop, context(), 'mcp', undefined, spell)).resolves.toMatchObject({
             status: 'answered',
-            message: 'Aggregation on orders: 3 result rows.',
-            resultCount: 3,
-            truncated: true,
+            message,
+            resultCount: count,
+            truncated,
+            capped,
             interpretedBy: 'agent',
         });
     });
@@ -173,7 +212,8 @@ describe('WishingWellService', () => {
         });
         const well = new WishingWellService(wishPowers);
         const outcome = await well.makeWish('a pony', {}, context(), 'webview');
-        expect(outcome).toMatchObject({ kind: 'answer', status: 'info', wish: 'a pony' });
+        expect(outcome).toMatchObject({ kind: 'answer', status: 'refused', wish: 'a pony' });
+        expect(outcome.message).toContain('It can');
         expect(outcome.actionLabel).toBeUndefined();
         expect(JSON.stringify(outcome)).not.toContain('duckduckgo');
     });
@@ -190,6 +230,22 @@ describe('WishingWellService', () => {
             kind: 'command',
             title: 'This wish needs GitHub Copilot',
         });
+    });
+
+    it('turns a pipeline Copilot wrote that writes into a playground script instead of agent mode', async () => {
+        const wishPowers = powers({
+            isCopilotAvailable: vi.fn(async () => true),
+            askCopilot: vi.fn(
+                async () =>
+                    '{"spell":"aggregate","collection":"orders","pipeline":[{"$match":{}},{"$out":"archive"}],"title":"Archive","message":"m"}',
+            ),
+        });
+        const ctx = context();
+        const outcome = await new WishingWellService(wishPowers).makeWish('archive orders', shop, ctx, 'webview');
+        expect(outcome).toMatchObject({ kind: 'playground', status: 'proposed', interpretedBy: 'copilot' });
+        expect(outcome.detail).toContain('$out');
+        expect(ctx.telemetry.properties.copilot).toBe('writeToPlayground');
+        expect(wishPowers.read).not.toHaveBeenCalled();
     });
 
     it('refuses an unknown grant id', async () => {
@@ -218,6 +274,146 @@ describe('WishingWellService', () => {
         // Still pending: the user can change their mind.
         confirmGrant.mockResolvedValue(true);
         await expect(well.grant(link.id, ctx, 'mcp')).resolves.toBe('granted');
+        expect(wishPowers.cast).toHaveBeenCalledTimes(1);
+    });
+
+    describe('when the user is slow to answer an outside agent', () => {
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        function slowUser(): { wishPowers: WishPowers; answer: (yes: boolean) => void } {
+            let answer: (yes: boolean) => void = () => undefined;
+            const wishPowers = powers({
+                confirmGrant: vi.fn(async () => new Promise<boolean>((resolve) => (answer = resolve))),
+            });
+            return { wishPowers, answer: (yes) => answer(yes) };
+        }
+
+        async function link(well: WishingWellService): Promise<string> {
+            const outcome = await well.makeWish('docs', {}, context(), 'mcp', undefined, {
+                kind: 'link',
+                url: 'https://example.com',
+                title: 't',
+                message: 'm',
+            });
+            return outcome.id;
+        }
+
+        it('says waiting after a minute, and still opens it once the user allows it', async () => {
+            vi.useFakeTimers();
+            const { wishPowers, answer } = slowUser();
+            const well = new WishingWellService(wishPowers);
+            const id = await link(well);
+            const ctx = context();
+
+            const first = well.grant(id, ctx, 'mcp');
+            await vi.advanceTimersByTimeAsync(60_000);
+            await expect(first).resolves.toBe('waiting');
+            expect(ctx.telemetry.properties.granted).toBe('waiting');
+            // Asked once: a second grant waits on the same question, never says the wish expired.
+            const second = well.grant(id, context(), 'mcp');
+            expect(wishPowers.confirmGrant).toHaveBeenCalledTimes(1);
+
+            answer(true);
+            await expect(second).resolves.toBe('granted');
+            expect(wishPowers.cast).toHaveBeenCalledTimes(1);
+        });
+
+        it('stays granted for an agent that asks again after the user allowed a one-shot wish late', async () => {
+            const { wishPowers, answer } = slowUser();
+            const well = new WishingWellService(wishPowers);
+            const id = await link(well);
+            const abort = new AbortController();
+
+            const first = well.grant(id, context(), 'mcp', abort.signal);
+            abort.abort();
+            await expect(first).resolves.toBe('waiting');
+            answer(true);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            await expect(well.grant(id, context(), 'mcp')).resolves.toBe('granted');
+            expect(wishPowers.cast).toHaveBeenCalledTimes(1);
+        });
+
+        it('reports a late failure once, to the caller that came back', async () => {
+            const { wishPowers, answer } = slowUser();
+            wishPowers.reportLateFailure = vi.fn();
+            vi.mocked(wishPowers.cast).mockRejectedValueOnce(new Error('no tree node'));
+            const well = new WishingWellService(wishPowers);
+            const id = await link(well);
+            const abort = new AbortController();
+
+            const first = well.grant(id, context(), 'mcp', abort.signal);
+            abort.abort();
+            await expect(first).resolves.toBe('waiting');
+            const second = well.grant(id, context(), 'mcp');
+            answer(true);
+            await expect(second).rejects.toThrow('no tree node');
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            expect(wishPowers.reportLateFailure).not.toHaveBeenCalled();
+        });
+
+        it('tells the user when a grant they allowed late fails', async () => {
+            const { wishPowers, answer } = slowUser();
+            wishPowers.reportLateFailure = vi.fn();
+            vi.mocked(wishPowers.cast).mockRejectedValueOnce(new Error('no tree node'));
+            const well = new WishingWellService(wishPowers);
+            const id = await link(well);
+            const abort = new AbortController();
+
+            const first = well.grant(id, context(), 'mcp', abort.signal);
+            abort.abort();
+            await expect(first).resolves.toBe('waiting');
+            answer(true);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            expect(wishPowers.reportLateFailure).toHaveBeenCalledWith(expect.any(String), expect.any(Error));
+        });
+
+        it('says waiting when the agent gives up, and leaves the wish pending if the user declines', async () => {
+            const { wishPowers, answer } = slowUser();
+            const well = new WishingWellService(wishPowers);
+            const id = await link(well);
+            const abort = new AbortController();
+
+            const first = well.grant(id, context(), 'mcp', abort.signal);
+            abort.abort();
+            await expect(first).resolves.toBe('waiting');
+            answer(false);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            expect(wishPowers.cast).not.toHaveBeenCalled();
+
+            vi.mocked(wishPowers.confirmGrant).mockResolvedValueOnce(true);
+            await expect(well.grant(id, context(), 'mcp')).resolves.toBe('granted');
+            expect(wishPowers.confirmGrant).toHaveBeenCalledTimes(2);
+        });
+    });
+
+    it('makes two grants of the same wish at once share one cast', async () => {
+        let finish: () => void = () => undefined;
+        const wishPowers = powers({ cast: vi.fn(async () => new Promise<void>((resolve) => (finish = resolve))) });
+        const well = new WishingWellService(wishPowers);
+        const outcome = await well.makeWish('w', shop, context(), 'mcp', undefined, {
+            kind: 'dashboard',
+            title: 't',
+            message: 'm',
+        });
+        const first = well.grant(outcome.id, context(), 'mcp');
+        const second = well.grant(outcome.id, context(), 'mcp');
+        finish();
+        await expect(Promise.all([first, second])).resolves.toEqual(['granted', 'granted']);
+        expect(wishPowers.cast).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+        ['an agent prompt', { kind: 'agent', prompt: 'p', title: 't', message: 'm' }],
+        ['a link', { kind: 'link', url: 'https://example.com', title: 't', message: 'm' }],
+    ] as const)('grants %s only once, and says granted when asked again', async (_case, spell) => {
+        const wishPowers = powers();
+        const well = new WishingWellService(wishPowers);
+        const outcome = await well.makeWish('w', {}, context(), 'webview', undefined, spell);
+        await expect(well.grant(outcome.id, context(), 'webview')).resolves.toBe('granted');
+        await expect(well.grant(outcome.id, context(), 'webview')).resolves.toBe('granted');
         expect(wishPowers.cast).toHaveBeenCalledTimes(1);
     });
 
@@ -255,9 +451,9 @@ describe('WishingWellService', () => {
 
         await expect(well.grant(outcome.id, context(), 'webview')).rejects.toThrow('Expand prod');
         const first = well.grant(outcome.id, context(), 'webview');
-        await expect(well.grant(outcome.id, context(), 'webview')).resolves.toBe('unknown');
+        const second = well.grant(outcome.id, context(), 'webview');
         finish();
-        await expect(first).resolves.toBe('granted');
+        await expect(Promise.all([first, second])).resolves.toEqual(['granted', 'granted']);
         expect(cast).toHaveBeenCalledTimes(2);
     });
 
@@ -279,6 +475,7 @@ describe('WishingWellService', () => {
                 detail: '{ "_id": 1 }',
                 spell: {
                     kind: 'collectionView' as const,
+                    database: 'shop',
                     collection: 'orders',
                     filter: '{"_id":1}',
                     title: 'Fished',
@@ -295,7 +492,9 @@ describe('WishingWellService', () => {
             kind: 'document',
             detail: '{ "_id": 1 }',
             actionLabel: 'Open in collection view',
+            actionHint: 'Opens shop.orders filtered to this document.',
         });
+        expect(well.describeGrant(outcome.id)?.actionHint).toBe('Opens shop.orders filtered to this document.');
         await well.grant(outcome.id, ctx, 'webview');
         expect(wishPowers.cast).toHaveBeenCalledWith(expect.objectContaining({ filter: '{"_id":1}' }), shop, ctx);
     });
@@ -311,10 +510,21 @@ describe('WishingWellService', () => {
         });
     });
 
+    it('never offers the shell tip inside the shell', async () => {
+        // 0.7 draws a tip; among the four cluster tips it is the shell one.
+        const tip = async (source: 'webview' | 'shell', roll: number): Promise<string> =>
+            (await new WishingWellService(powers(), () => roll).feelingLucky(shop, context(), source)).title;
+        await expect(tip('webview', 0.7)).resolves.toBe('The interactive shell');
+        for (const roll of [0.65, 0.7, 0.75, 0.79]) {
+            await expect(tip('shell', roll)).resolves.not.toBe('The interactive shell');
+        }
+    });
+
     it('never offers a cluster tip without a cluster', async () => {
+        const clusterTips = LUCKY_TIPS.filter((tip) => tip.needsCluster).map((tip) => tip.spell().title);
         for (const roll of [0, 0.2, 0.4, 0.45]) {
             const outcome = await new WishingWellService(powers(), () => roll).feelingLucky({}, context(), 'webview');
-            expect(outcome.kind === 'tip' ? outcome.actionLabel : 'Grant wish').toBe('Grant wish');
+            expect(clusterTips).not.toContain(outcome.title);
         }
     });
 

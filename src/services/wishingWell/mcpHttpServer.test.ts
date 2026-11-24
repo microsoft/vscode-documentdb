@@ -27,6 +27,7 @@ function options(overrides: Partial<McpServerOptions> = {}): McpServerOptions {
 interface Reply {
     readonly status: number;
     readonly body: string;
+    readonly headers: http.IncomingHttpHeaders;
 }
 
 function post(
@@ -52,7 +53,9 @@ function post(
             (response) => {
                 let data = '';
                 response.on('data', (chunk: Buffer) => (data += chunk.toString()));
-                response.on('end', () => resolve({ status: response.statusCode ?? 0, body: data }));
+                response.on('end', () =>
+                    resolve({ status: response.statusCode ?? 0, body: data, headers: response.headers }),
+                );
             },
         );
         request.on('error', reject);
@@ -154,6 +157,17 @@ describe('startMcpHttpServer', () => {
         server = await startMcpHttpServer(options(), 0);
         const reply = await post(server, { jsonrpc: '2.0', id: 1, method: 'ping' }, headers, host);
         expect(reply.status).toBe(status);
+    });
+
+    it('tells a caller with a bad token how to get a fresh config', async () => {
+        server = await startMcpHttpServer(options(), 0);
+        const reply = await post(server, { jsonrpc: '2.0', id: 1, method: 'ping' }, { Authorization: 'Bearer nope' });
+        expect(reply.status).toBe(401);
+        expect(reply.headers['www-authenticate']).toBe('Bearer');
+        expect(reply.headers['content-type']).toBe('application/json');
+        const message = (JSON.parse(reply.body) as { error: { message: string } }).error.message;
+        expect(message).toContain('token is missing or wrong');
+        expect(message).toContain('DocumentDB: Connect an Agent to the Wishing Well');
     });
 
     it('accepts its own origin and localhost', async () => {

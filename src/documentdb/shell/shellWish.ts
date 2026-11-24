@@ -27,7 +27,7 @@ export function parseShellWish(line: string): ShellWish | undefined {
         return undefined;
     }
     // Only the bare word: "wish open the dashboard" is still a wish.
-    if (/^open$/i.test(text)) {
+    if (/^open[.!]*$/i.test(text)) {
         return { kind: 'open' };
     }
     if (/^(me\s+luck|lucky|i'?m\s+feeling\s+lucky)[.!]*$/i.test(text)) {

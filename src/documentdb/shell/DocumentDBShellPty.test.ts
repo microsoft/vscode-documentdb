@@ -1771,11 +1771,77 @@ describe('DocumentDBShellPty', () => {
 
             expect(grant).toHaveBeenCalledTimes(1);
             expect(grant).toHaveBeenCalledWith('lucky-1', expect.anything(), 'shell');
-            expect(written).toContain('Granted: Open in collection view');
+            expect(written).toContain('Opened');
+            expect(written).not.toContain('Granted:');
+        });
 
+        it('opens a granted card again, as the well keeps it', async () => {
+            makeWish.mockResolvedValue(card({ id: 'view-1', actionLabel: 'Open in collection view' }));
+
+            await typeLine('wish show orders');
             await typeLine('wish open');
+            await typeLine('wish open.');
+
+            expect(grant).toHaveBeenCalledTimes(2);
+            expect(grant).toHaveBeenLastCalledWith('view-1', expect.anything(), 'shell');
+            expect(written).not.toContain('Nothing to open.');
+        });
+
+        it.each([
+            ['view', 'Opened'],
+            ['command', 'Done'],
+            ['agent', 'Sent to Copilot Chat'],
+            ['link', 'Opened in your browser'],
+        ] as const)('says what granting a %s card did', async (kind, receipt) => {
+            makeWish.mockResolvedValue(card({ kind, actionLabel: 'Grant wish' }));
+
+            await typeLine('wish something');
+            written = '';
+            await typeLine('wish open');
+
+            expect(written).toContain(receipt);
+        });
+
+        it.each(['agent', 'link'] as const)('opens a granted %s card only once', async (kind) => {
+            makeWish.mockResolvedValue(card({ kind, actionLabel: 'Grant wish' }));
+
+            await typeLine('wish ask copilot');
+            await typeLine('wish open');
+            await typeLine('wish open');
+
             expect(grant).toHaveBeenCalledTimes(1);
             expect(written).toContain('Nothing to open.');
+        });
+
+        it('says when the grant waits for an answer in VS Code and keeps the card', async () => {
+            makeWish.mockResolvedValue(card({ id: 'agent-1', kind: 'agent', actionLabel: 'Ask Copilot Chat' }));
+            grant.mockResolvedValueOnce('waiting');
+
+            await typeLine('wish ask copilot');
+            await typeLine('wish open');
+            expect(written).toContain('Waiting for your answer in VS Code.');
+
+            await typeLine('wish open');
+            expect(grant).toHaveBeenCalledTimes(2);
+            expect(written).toContain('Sent to Copilot Chat');
+        });
+
+        it('leaves the row-cap wording to the card message instead of repeating it', async () => {
+            makeWish.mockResolvedValue(
+                card({
+                    kind: 'query',
+                    status: 'answered',
+                    message: 'The first 1 documents in orders; there are more.',
+                    detail: '{ _id: 1 }',
+                    resultCount: 1,
+                    capped: true,
+                }),
+            );
+
+            await typeLine('wish find orders');
+
+            expect(written).toContain('there are more');
+            expect(written).not.toContain('Only the first results are shown.');
         });
 
         it('does not run a wished command until "wish open", and says when it expired', async () => {
@@ -1804,9 +1870,9 @@ describe('DocumentDBShellPty', () => {
             await typeLine('wish open');
             expect(written).toContain('Not granted.');
 
-            await typeLine('wish open');
+            await typeLine('wish open!');
             expect(grant).toHaveBeenCalledTimes(2);
-            expect(written).toContain('Granted: Open link');
+            expect(written).toContain('Opened in your browser');
         });
 
         it('forgets the last card once a newer wish prints one without an action', async () => {
