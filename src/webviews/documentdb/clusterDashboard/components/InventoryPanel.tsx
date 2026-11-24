@@ -88,7 +88,7 @@ export interface InventoryPanelProps {
         readonly phase: 'running' | 'settling';
     }>;
     isSubmissionBlocked?: () => boolean;
-    startOperation?: () => number | undefined;
+    startOperation?: (revealUnavailable?: boolean) => number | undefined;
     isOperationCurrent?: (revision: number) => boolean;
     onUnavailable?: (unavailable: ConnectionUnavailableDetails) => void;
 }
@@ -157,7 +157,6 @@ export const InventoryPanel = ({
     onRetryStorage,
     isCreatingNamespace,
     busyNamespaces,
-    isSubmissionBlocked = () => false,
     startOperation = () => 0,
     isOperationCurrent = () => true,
     onUnavailable = () => undefined,
@@ -315,7 +314,7 @@ export const InventoryPanel = ({
             activationSource: 'rowClick' | 'rowActionButton',
             isFiltered: boolean,
         ): void => {
-            const revision = startOperation();
+            const revision = startOperation(true);
             if (revision === undefined) {
                 return;
             }
@@ -345,7 +344,7 @@ export const InventoryPanel = ({
     useEffect(() => {
         const handleMessage = (event: MessageEvent<unknown>): void => {
             if (isShowCollectionsMessage(event.data)) {
-                if (isSubmissionBlocked()) {
+                if (startOperation(true) === undefined) {
                     return;
                 }
                 const { databaseName } = event.data;
@@ -356,9 +355,12 @@ export const InventoryPanel = ({
 
         window.addEventListener('message', handleMessage);
         return () => window.removeEventListener('message', handleMessage);
-    }, [isSubmissionBlocked, onViewStateChange, report]);
+    }, [onViewStateChange, report, startOperation]);
 
     const activate = (row: NamespaceRow, control: 'rowClick' | 'rowActionButton'): void => {
+        if (startOperation(true) === undefined) {
+            return;
+        }
         if (currentDatabase === null) {
             report('inventoryNavigation', {
                 direction: 'down',
@@ -401,7 +403,9 @@ export const InventoryPanel = ({
         allRows.length === 0
             ? currentDatabase === null
                 ? (storageError ?? (errors.length > 0 ? errors.join('; ') : null))
-                : (collections.error ?? (errors.length > 0 ? errors.join('; ') : null))
+                : (collections.error ??
+                  (collections.isInterrupted ? l10n.t('Connection lost') : null) ??
+                  (errors.length > 0 ? errors.join('; ') : null))
             : null;
     const canCreateNamespace = emptyStateFailureReason === null && (allRows.length > 0 || !inventoryIsLoading);
 

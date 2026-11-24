@@ -61,6 +61,7 @@ function renderInventory(overrides: Partial<InventoryPanelProps> = {}): string {
         collections: {
             result: null,
             isLoading: false,
+            isInterrupted: false,
             isTableLoading: false,
             error: null,
             reload: vi.fn(),
@@ -242,6 +243,7 @@ describe('InventoryPanel empty states', () => {
             collections: {
                 result: { databaseName: 'catalog', collections: [], omittedCollectionCount: 0, errors: [] },
                 isLoading: false,
+                isInterrupted: false,
                 isTableLoading: false,
                 error: null,
                 reload: vi.fn(),
@@ -259,6 +261,7 @@ describe('InventoryPanel empty states', () => {
             collections: {
                 result: null,
                 isLoading: false,
+                isInterrupted: false,
                 isTableLoading: false,
                 error: 'request timed out',
                 reload: vi.fn(),
@@ -268,6 +271,25 @@ describe('InventoryPanel empty states', () => {
         expect(markup).toContain('Could not read collections');
         expect(markup).toContain('The collections of &quot;catalog&quot; could not be listed: request timed out');
         expect(markup).toContain('Retry');
+        expect(markup).not.toContain('New Collection');
+    });
+
+    it('does not present an interrupted collection read as a loaded empty database', () => {
+        const markup = renderInventory({
+            viewState: databaseViewState('catalog'),
+            collections: {
+                result: null,
+                isLoading: false,
+                isInterrupted: true,
+                isTableLoading: false,
+                error: null,
+                reload: vi.fn(),
+            },
+        });
+
+        expect(markup).toContain('Could not read collections');
+        expect(markup).toContain('Connection lost');
+        expect(markup).not.toContain('No collections in');
         expect(markup).not.toContain('New Collection');
     });
 
@@ -298,6 +320,7 @@ describe('InventoryPanel empty states', () => {
                 collections: {
                     result,
                     isLoading: false,
+                    isInterrupted: false,
                     isTableLoading: false,
                     error: null,
                     reload: vi.fn(),
@@ -328,6 +351,7 @@ describe('InventoryPanel empty states', () => {
             collections: {
                 result,
                 isLoading: false,
+                isInterrupted: false,
                 isTableLoading: false,
                 error: null,
                 reload: vi.fn(),

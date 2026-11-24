@@ -18,6 +18,8 @@ export interface DatabaseCollectionsState {
     /** Time when the current database's collections were last read successfully. */
     lastUpdatedAt?: number;
     isLoading: boolean;
+    /** The current request was interrupted and is waiting for an explicit manual refresh. */
+    isInterrupted: boolean;
     /** True only when the table should be replaced by its skeleton. */
     isTableLoading: boolean;
     error: string | null;
@@ -37,7 +39,7 @@ export interface DatabaseCollectionsState {
 export function useDatabaseCollections(
     databaseName: string | null,
     isSubmissionBlocked: () => boolean,
-    startOperation: () => number | undefined,
+    startOperation: (revealUnavailable?: boolean) => number | undefined,
     isOperationCurrent: (revision: number) => boolean,
     onUnavailable: (unavailable: ConnectionUnavailableDetails) => void,
 ): DatabaseCollectionsState {
@@ -78,6 +80,13 @@ export function useDatabaseCollections(
             .then((result) => {
                 if (!disposed && isOperationCurrent(revision)) {
                     if (isConnectionUnavailableResponse(result)) {
+                        setEntry((current) => ({
+                            key,
+                            databaseName,
+                            result: current?.databaseName === databaseName ? current.result : null,
+                            lastUpdatedAt: current?.databaseName === databaseName ? current.lastUpdatedAt : undefined,
+                            error: result.unavailable.detail,
+                        }));
                         onUnavailable(result.unavailable);
                         return;
                     }
@@ -105,12 +114,15 @@ export function useDatabaseCollections(
 
     const reload = useCallback(
         (source: 'background' | 'manual' = 'background'): void => {
-            if (isSubmissionBlocked()) {
+            if (startOperation(source === 'manual') === undefined || isSubmissionBlocked()) {
+                return;
+            }
+            if (source === 'background' && abandonedKeys.current.has(key)) {
                 return;
             }
             setRequest((current) => ({ attempt: current.attempt + 1, source }));
         },
-        [isSubmissionBlocked],
+        [isSubmissionBlocked, key, startOperation],
     );
 
     const isCurrent = entry !== null && entry.key === key;
@@ -122,6 +134,7 @@ export function useDatabaseCollections(
         result: isSameDatabase ? entry.result : null,
         lastUpdatedAt: isSameDatabase ? entry.lastUpdatedAt : undefined,
         isLoading,
+        isInterrupted: wasAbandoned,
         isTableLoading:
             databaseName !== null && ((!isSameDatabase && !wasAbandoned) || (isLoading && request.source === 'manual')),
         error: isCurrent ? entry.error : null,
