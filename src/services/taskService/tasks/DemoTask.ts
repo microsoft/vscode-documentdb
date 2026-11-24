@@ -5,7 +5,7 @@
 
 import * as vscode from 'vscode';
 import { createExtensionTaskOptions } from '../extension/extensionTaskOptions';
-import { Task } from '../taskService';
+import { Task } from '@microsoft/vscode-ext-tasks';
 
 /**
  * A demo task implementation that demonstrates the Task abstract class.

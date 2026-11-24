@@ -8,10 +8,8 @@ import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * Decision 0006: code that moves into the packages never calls `vscode.l10n.t` and never reaches
- * extension modules (`ext`, `extensionVariables`, the `extension/` glue, anything outside this
- * folder, or the files below). Only `extension/**` and the files below, which stay in `src/` at
- * plan step 5.2, may.
+ * Decision 0006: package code never calls `vscode.l10n.t` or reaches extension modules. The
+ * transfer sources still in this folder are checked until they move at plan step 5.2.
  */
 const stayInExtension: Readonly<Record<string, string>> = {
     'data-api/readers/DocumentDbDocumentReader.ts': 'DocumentDB adapter; stays in src/ (decision 0005)',
@@ -56,8 +54,8 @@ function violations(file: string): string[] {
 describe('Task Service package boundary', () => {
     it('package-bound files do not call l10n.t or import extension modules', () => {
         const sources = packageBoundSources();
-        expect(sources).toContain('UI/taskProgressReportingService.ts');
-        expect(sources).toContain('resourceUsageHelper.ts');
+        expect(sources).toContain('data-api/readers/BaseDocumentReader.ts');
+        expect(sources).toContain('tasks/copy-and-paste/CopyPasteCollectionTask.ts');
 
         const offending = sources.flatMap((file) => violations(file).map((violation) => `${file}: ${violation}`));
 
@@ -66,5 +64,41 @@ describe('Task Service package boundary', () => {
         for (const file of Object.keys(stayInExtension)) {
             expect(() => readFileSync(path.join(root, file))).not.toThrow();
         }
+    });
+
+    it('the extracted task core does not import VS Code or extension-only modules', () => {
+        const packageRoot = path.resolve(root, '../../../packages/vscode-ext-tasks/src');
+        const sources = readdirSync(packageRoot, { recursive: true, encoding: 'utf8' })
+            .map((file) => file.split(path.sep).join('/'))
+            .filter((file) => file.endsWith('.ts') && !/\.test\.tsx?$/.test(file));
+        expect(sources).toContain('taskService.ts');
+        expect(sources).toContain('vscode/taskProgressReportingService.ts');
+
+        const offending = sources.flatMap((file) => {
+            const source = readFileSync(path.join(packageRoot, file), 'utf8');
+            const found: string[] = [];
+            if (/\bl10n\.t\s*\(/.test(source)) {
+                found.push('calls l10n.t');
+            }
+            for (const [, specifier] of source.matchAll(/from\s+'([^']+)'/g)) {
+                if (
+                    specifier === '@microsoft/vscode-azext-utils' ||
+                    (specifier === 'vscode' && !file.startsWith('vscode/'))
+                ) {
+                    found.push(`imports ${specifier}`);
+                }
+                if (specifier.startsWith('.')) {
+                    const relative = path.relative(
+                        packageRoot,
+                        path.resolve(path.dirname(path.join(packageRoot, file)), specifier),
+                    );
+                    if (relative.startsWith('..')) {
+                        found.push(`imports ${specifier}`);
+                    }
+                }
+            }
+            return found.map((violation) => `${file}: ${violation}`);
+        });
+        expect(offending).toEqual([]);
     });
 });

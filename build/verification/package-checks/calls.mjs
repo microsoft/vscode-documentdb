@@ -58,6 +58,32 @@ function stubPanel(onPost) {
 }
 
 export const allChecks = {
+    '@microsoft/vscode-ext-tasks': async (load) => {
+        const { Task, TaskState, createTaskService, whenTerminal } = await load('@microsoft/vscode-ext-tasks');
+        class ProbeTask extends Task {
+            type = 'probe';
+            name = 'Probe';
+            async doWork() {}
+        }
+        const service = createTaskService();
+        const task = new ProbeTask();
+        service.registerTask(task);
+        const finished = whenTerminal(task);
+        await task.start();
+        await finished;
+        assert.equal(task.getStatus().state, TaskState.Completed);
+        assert.equal(service.getTask(task.id), task);
+        return 'registered task reached Completed';
+    },
+
+    '@microsoft/vscode-ext-tasks/vscode': async (load) => {
+        const m = await load('@microsoft/vscode-ext-tasks/vscode');
+        assert.equal(typeof m.createTaskProgressReportingService, 'function');
+        assert.equal(typeof m.checkCanProceedAndInformUser, 'function');
+        assert.equal(typeof m.attachTaskLifecycleLogger, 'function');
+        return 'progress, conflict and lifecycle helpers exported';
+    },
+
     '@documentdb-js/operator-registry': async (load) => {
         const m = await load('@documentdb-js/operator-registry');
         const all = m.getAllCompletions();

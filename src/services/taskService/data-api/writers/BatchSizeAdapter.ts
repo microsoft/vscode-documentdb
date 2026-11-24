@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type TaskLogger } from '../../taskHost';
+import { type TaskLogger } from '@microsoft/vscode-ext-tasks';
 import { type DataTransferOptions, noopDataTransferLogger } from '../dataTransferHost';
 import { type ModeConfig } from '../types';
 import { type ResolvedStreamingWriterSettings, resolveStreamingWriterSettings } from './streamingWriterSettings';

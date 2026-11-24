@@ -1,0 +1,58 @@
+{
+  "name": "@microsoft/vscode-ext-tasks",
+  "version": "0.1.0",
+  "description": "Task lifecycle, resource tracking, and optional VS Code progress reporting for extensions.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./vscode": {
+      "types": "./dist/vscode.d.ts",
+      "default": "./dist/vscode.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "vscode": [
+        "./dist/vscode.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p .",
+    "clean": "rimraf dist tsconfig.tsbuildinfo",
+    "test": "vitest run --config ../../vitest.config.ts --project vscode-ext-tasks",
+    "typecheck:tests": "tsc -p tsconfig.test.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/vscode-documentdb",
+    "directory": "packages/vscode-ext-tasks"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@types/vscode": ">=1.109.0"
+  },
+  "peerDependenciesMeta": {
+    "@types/vscode": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}

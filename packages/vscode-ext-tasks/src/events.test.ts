@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it, vi } from 'vitest';
-import { Emitter, type Disposable } from './events';
+import { Emitter, type Disposable } from './events.js';
 
 describe('Emitter', () => {
     it('fires subscribed listeners with the provided data', () => {

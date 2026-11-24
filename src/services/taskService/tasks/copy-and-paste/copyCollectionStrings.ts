@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type TaskOptions, type TaskTelemetryContext } from '../../taskHost';
+import { type TaskOptions, type TaskTelemetryContext } from '@microsoft/vscode-ext-tasks';
 
 export interface CopyCollectionStrings {
     taskName: (

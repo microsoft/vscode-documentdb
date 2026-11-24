@@ -6,7 +6,7 @@
 import { type Document, type WithId } from 'mongodb';
 import { type ClustersClient } from '../../../../documentdb/ClustersClient';
 import { createExtensionDataTransferOptions } from '../../extension/extensionDataTransferOptions';
-import { type TaskTelemetryContext } from '../../taskHost';
+import { type TaskTelemetryContext } from '@microsoft/vscode-ext-tasks';
 import { type DocumentDetails } from '../types';
 import { BaseDocumentReader } from './BaseDocumentReader';
 

@@ -4,9 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { mergeStrings } from './taskHost';
-import { type TaskService } from './taskService';
-import { type ResourceDefinition } from './taskServiceResourceTracking';
+import { mergeStrings } from '../taskHost.js';
+import { type TaskService } from '../taskService.js';
+import { type ResourceDefinition } from '../taskServiceResourceTracking.js';
 
 /**
  * User-facing strings of the conflict warning. Defaults are English; a consumer that localizes

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Emitter, type Disposable, type Event } from './events';
+import { Emitter, type Disposable, type Event } from './events.js';
 import {
     defaultTaskStrings,
     mergeStrings,
@@ -12,13 +12,13 @@ import {
     type TaskStrings,
     type TaskTelemetryContext,
     type TaskTelemetryRunner,
-} from './taskHost';
+} from './taskHost.js';
 import {
     hasResourceConflict,
     type ResourceDefinition,
     type ResourceTrackingTask,
     type TaskInfo,
-} from './taskServiceResourceTracking';
+} from './taskServiceResourceTracking.js';
 
 const noopLogger: TaskLogger = {
     appendLine: (): void => {},
@@ -117,6 +117,23 @@ export interface TaskStateChangeEvent {
  */
 export function isTerminalState(state: TaskState): boolean {
     return state === TaskState.Completed || state === TaskState.Failed || state === TaskState.Stopped;
+}
+
+/**
+ * Resolves when the task reaches a terminal state, including if it has already finished.
+ */
+export function whenTerminal(task: Task): Promise<void> {
+    if (isTerminalState(task.getStatus().state)) {
+        return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => {
+        const subscription = task.onDidChangeState(({ newState }) => {
+            if (isTerminalState(newState)) {
+                subscription.dispose();
+                resolve();
+            }
+        });
+    });
 }
 
 /**

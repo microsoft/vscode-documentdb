@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { TaskService } from '../../services/taskService/extension/taskServiceInstance';
 import { CopyIndexesTask } from '../../services/taskService/tasks/copy-indexes/CopyIndexesTask';
-import { isTerminalState, type Task } from '../../services/taskService/taskService';
+import { isTerminalState, whenTerminal, type Task } from '@microsoft/vscode-ext-tasks';
 import { type PasteIndexesWizardContext } from './PasteIndexesWizardContext';
 
 export class ExecuteStep extends AzureWizardExecuteStep<PasteIndexesWizardContext> {
@@ -53,15 +53,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteIndexesWizardContex
         void ext.state.runWithTemporaryDescription(
             targetIndexesId,
             vscode.l10n.t('Pasting...'),
-            () =>
-                new Promise<void>((resolve) => {
-                    const subscription = task.onDidChangeState((event) => {
-                        if (isTerminalState(event.newState)) {
-                            subscription.dispose();
-                            resolve();
-                        }
-                    });
-                }),
+            () => whenTerminal(task),
             true,
         );
     }

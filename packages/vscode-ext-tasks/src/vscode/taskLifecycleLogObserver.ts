@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type Disposable } from '../events';
-import { type TaskLogger } from '../taskHost';
-import { TaskState, type TaskService } from '../taskService';
+import { type Disposable } from '../events.js';
+import { type TaskLogger } from '../taskHost.js';
+import { TaskState, type TaskService } from '../taskService.js';
 
 export function attachTaskLifecycleLogger(service: TaskService, logger: TaskLogger): Disposable {
     return service.onDidChangeTaskState((e) => {

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import Denque from 'denque';
-import { mergeStrings, type TaskLogger } from '../../taskHost';
+import { mergeStrings, type TaskLogger } from '@microsoft/vscode-ext-tasks';
 import {
     type DataTransferOptions,
     type DataTransferStrings,

@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { ext } from '../../../../extensionVariables';
 import { type CollectionIndexCopier, type CopyIndexesOptions } from '../../data-api/indexes/CollectionIndexCopier';
-import { TaskState } from '../../taskService';
+import { TaskState } from '@microsoft/vscode-ext-tasks';
 import { CopyIndexesTask, type CopyIndexesConfig } from './CopyIndexesTask';
 
 vi.mock('../../../../extensionVariables', () => ({

@@ -11,7 +11,7 @@ code:
 
 # Task Service and Data Transfer Packages
 
-**Status:** planning · **Created:** 2026-11-05
+**Status:** extraction in progress · **Created:** 2026-11-05
 
 > Extract the Task Service and the database-neutral document transfer engine from this extension
 > into two shareable npm packages, so another VS Code extension can run the same copy-and-paste
@@ -54,8 +54,7 @@ product glue stay in this extension. See [design.md](./design.md) for the full b
 
 ## Code map (today)
 
-- `src/services/taskService/taskService.ts`, `taskServiceResourceTracking.ts`: task core
-- `src/services/taskService/UI/**`, `resourceUsageHelper.ts`: VS Code presentation
+- `packages/vscode-ext-tasks/src/**`: task core and VS Code presentation
 - `src/services/taskService/data-api/**`: the engine and the DocumentDB API adapters
 - `src/services/taskService/tasks/**`: Copy and Paste Collection, Copy Indexes, a demo task
 - `src/commands/pasteCollection/**`, `src/commands/pasteIndexes/**`: wizards and task assembly
@@ -84,8 +83,6 @@ Recorded in [decisions.md](./decisions.md).
 
 ## Open questions
 
-- How long finished tasks stay in the registry. Today they stay until the extension restarts.
-- Whether registering a task should check resource conflicts. Today only destructive commands do.
 - Partition key support and the meaning of `GenerateNewIds` for Azure Cosmos DB for NoSQL. To be
   settled in the contract review with the NoSQL team.
 - Publishing: there is no publish workflow for the `@microsoft/vscode-ext-*` packages today.

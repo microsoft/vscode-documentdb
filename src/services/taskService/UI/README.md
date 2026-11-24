@@ -1,6 +1,8 @@
 # Task Service UI Components
 
-This folder contains optional UI services that integrate with the TaskService to provide visual feedback during task execution.
+The optional UI services now live in the
+[`@microsoft/vscode-ext-tasks/vscode` package subpath](../../../../packages/vscode-ext-tasks/README.md).
+The extension configures them in `../extension/`.
 
 ## Services
 
@@ -18,7 +20,7 @@ Displays VS Code notification progress dialogs for running tasks. Automatically 
   notification has no button.
 
 The service imports `vscode` for notifications but never calls `vscode.l10n.t` and does not use
-`ext` (decision 0006), so it can move to the package's `./vscode` subpath unchanged.
+`ext` (decision 0006).
 
 **Activation:** The extension's singleton (`extension/taskServiceInstance.ts`) is created with
 `getExtensionTaskProgressStrings()` and `showOutput: () => ext.outputChannel.show()`, and attached
@@ -55,7 +57,7 @@ The following example from `pasteCollection/ExecuteStep.ts` shows how to annotat
 ```typescript
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
-import { isTerminalState, type Task } from '../../services/taskService/taskService';
+import { whenTerminal, type Task } from '@microsoft/vscode-ext-tasks';
 
 export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardContext> {
     // ...
@@ -80,16 +82,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
      * The annotation is automatically cleared when the task reaches a terminal state.
      */
     private annotateNodeDuringTask(nodeId: string, label: string, task: Task): void {
-        void ext.state.runWithTemporaryDescription(nodeId, label, () => {
-            return new Promise<void>((resolve) => {
-                const subscription = task.onDidChangeState((event) => {
-                    if (isTerminalState(event.newState)) {
-                        subscription.dispose();
-                        resolve();
-                    }
-                });
-            });
-        });
+        void ext.state.runWithTemporaryDescription(nodeId, label, () => whenTerminal(task));
     }
 
     // ...

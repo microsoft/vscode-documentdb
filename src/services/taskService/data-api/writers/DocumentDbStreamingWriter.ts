@@ -8,7 +8,7 @@ import { l10n } from 'vscode';
 import { isBulkWriteError, type ClustersClient } from '../../../../documentdb/ClustersClient';
 import { ext } from '../../../../extensionVariables';
 import { createExtensionDataTransferOptions } from '../../extension/extensionDataTransferOptions';
-import { type TaskTelemetryContext } from '../../taskHost';
+import { type TaskTelemetryContext } from '@microsoft/vscode-ext-tasks';
 import {
     ConflictResolutionStrategy,
     type AbortBatchResult,

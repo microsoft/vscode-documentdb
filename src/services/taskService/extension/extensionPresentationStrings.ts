@@ -4,8 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { type ResourceUsageStrings } from '../resourceUsageHelper';
-import { type TaskProgressStrings } from '../UI/taskProgressReportingService';
+import { type ResourceUsageStrings, type TaskProgressStrings } from '@microsoft/vscode-ext-tasks/vscode';
 
 // `unknownError` keeps its English default: the extension has never localized it.
 export function getExtensionTaskProgressStrings(): Omit<TaskProgressStrings, 'unknownError'> {

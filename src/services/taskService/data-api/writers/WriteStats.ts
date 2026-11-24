@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { mergeStrings } from '../../taskHost';
+import { mergeStrings } from '@microsoft/vscode-ext-tasks';
 import { type DataTransferOptions, type DataTransferStrings, defaultDataTransferStrings } from '../dataTransferHost';
 import {
     ConflictResolutionStrategy,

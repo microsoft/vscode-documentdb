@@ -5,75 +5,10 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type TaskLogger, type TaskOptions, type TaskTelemetryContext, type TaskTelemetryRunner } from './taskHost';
-import { createTaskService, isTerminalState, Task, TaskState, type TaskStatus } from './taskService';
+import { type TaskLogger, type TaskOptions, type TaskTelemetryContext, type TaskTelemetryRunner } from './taskHost.js';
+import { createTaskService, isTerminalState, Task, TaskState, type TaskStatus } from './taskService.js';
 
 const TaskService = createTaskService();
-
-// Mock extensionVariables (ext) module
-vi.mock('../../extensionVariables', () => ({
-    ext: {
-        outputChannel: {
-            appendLine: vi.fn(), // Mock appendLine as a no-op function
-            error: vi.fn(),
-            trace: vi.fn(),
-            debug: vi.fn(),
-            warn: vi.fn(),
-            info: vi.fn(),
-            appendLog: vi.fn(),
-            show: vi.fn(),
-        },
-    },
-}));
-
-// Mock @microsoft/vscode-azext-utils module
-vi.mock('@microsoft/vscode-azext-utils', () => ({
-    callWithTelemetryAndErrorHandling: vi.fn(async (_eventName: string, callback: (context: any) => Promise<void>) => {
-        // Mock telemetry context
-        const mockContext = {
-            telemetry: {
-                properties: {},
-                measurements: {},
-            },
-            errorHandling: {
-                suppressDisplay: false,
-            },
-        };
-        return await callback(mockContext);
-    }),
-}));
-
-// Mock vscode module
-vi.mock('vscode', () => ({
-    l10n: {
-        t: (key: string, ...args: string[]): string => {
-            return args.length > 0 ? `${key} ${args.join(' ')}` : key;
-        },
-    },
-    ThemeIcon: vi.fn().mockImplementation(function (id: string) {
-        return { id };
-    }),
-    EventEmitter: vi.fn().mockImplementation(function () {
-        const listeners: Array<(...args: any[]) => void> = [];
-        return {
-            event: vi.fn((listener: (...args: any[]) => void) => {
-                listeners.push(listener);
-                return {
-                    dispose: vi.fn(() => {
-                        const index = listeners.indexOf(listener);
-                        if (index > -1) {
-                            listeners.splice(index, 1);
-                        }
-                    }),
-                };
-            }),
-            fire: vi.fn((data: any) => {
-                listeners.forEach((listener) => listener(data));
-            }),
-            dispose: vi.fn(),
-        };
-    }),
-}));
 
 /**
  * Simple test task implementation

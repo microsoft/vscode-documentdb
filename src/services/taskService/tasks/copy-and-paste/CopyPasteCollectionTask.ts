@@ -3,12 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import {
+    mergeStrings,
+    Task,
+    type ResourceDefinition,
+    type ResourceTrackingTask,
+    type TaskTelemetryContext,
+} from '@microsoft/vscode-ext-tasks';
 import { type CollectionIndexCopier, type IndexCopyResult } from '../../data-api/indexes/CollectionIndexCopier';
 import { type DocumentReader } from '../../data-api/types';
 import { type StreamingDocumentWriter, StreamingWriterError } from '../../data-api/writers/StreamingDocumentWriter';
-import { mergeStrings, type TaskTelemetryContext } from '../../taskHost';
-import { Task } from '../../taskService';
-import { type ResourceDefinition, type ResourceTrackingTask } from '../../taskServiceResourceTracking';
 import {
     type CopyCollectionStrings,
     type CopyPasteCollectionTaskOptions,

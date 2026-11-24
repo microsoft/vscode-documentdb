@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { mergeStrings } from '../taskHost';
-import { isTerminalState, TaskState, type Task, type TaskService } from '../taskService';
+import { mergeStrings } from '../taskHost.js';
+import { isTerminalState, TaskState, type Task, type TaskService } from '../taskService.js';
 
 /**
  * User-facing strings of the progress notifications. Defaults are English; a consumer that

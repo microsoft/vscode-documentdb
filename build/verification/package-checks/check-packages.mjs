@@ -67,9 +67,9 @@ const EXPECTED_NODE_LOAD_FAILURES = {
     '@microsoft/vscode-ext-webview-fluentui/components': /@fluentui[\\/]/,
 };
 
-// Packages the Vitest probe inlines: fluentui for the reason above; vscode-ext-webview so the
-// `vscode` alias reaches the `import 'vscode'` in its host entry.
-const VITEST_INLINE = ['@microsoft/vscode-ext-webview', '@microsoft/vscode-ext-webview-fluentui'];
+// Inline packages whose host entries import `vscode`, and Fluent UI for the reason above.
+const CONTROL_INLINE = ['@microsoft/vscode-ext-webview', '@microsoft/vscode-ext-webview-fluentui'];
+const VITEST_INLINE = [...CONTROL_INLINE, '@microsoft/vscode-ext-tasks'];
 
 const here = import.meta.dirname;
 const repo = path.resolve(here, '../../..');
@@ -415,8 +415,8 @@ try {
 
     // Control: without inlining, Vitest hands both packages to Node, which must fail exactly as
     // documented (Fluent's named exports; the host entry's bare `vscode` import).
-    if (inline.length < VITEST_INLINE.length) {
-        report.vitestWithoutInline = `not applicable: needs ${VITEST_INLINE.join(' and ')}`;
+    if (!CONTROL_INLINE.every((name) => inline.includes(name))) {
+        report.vitestWithoutInline = `not applicable: needs ${CONTROL_INLINE.join(' and ')}`;
     } else {
         const control = run(process.execPath, vitestArgs, {
             cwd: vitestConsumer,

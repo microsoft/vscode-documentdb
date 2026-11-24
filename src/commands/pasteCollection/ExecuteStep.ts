@@ -14,7 +14,7 @@ import { createExtensionTaskOptions } from '../../services/taskService/extension
 import { TaskService } from '../../services/taskService/extension/taskServiceInstance';
 import { CopyPasteCollectionTask } from '../../services/taskService/tasks/copy-and-paste/CopyPasteCollectionTask';
 import { type CopyPasteConfig } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
-import { isTerminalState, TaskState, type Task } from '../../services/taskService/taskService';
+import { isTerminalState, TaskState, whenTerminal, type Task } from '@microsoft/vscode-ext-tasks';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { nonNullValue } from '../../utils/nonNull';
 import { createCollectMetadata, createValidateSource } from './copyPasteCollectionHooks';
@@ -176,16 +176,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
         void ext.state.runWithTemporaryDescription(
             nodeId,
             label,
-            () => {
-                return new Promise<void>((resolve) => {
-                    const subscription = task.onDidChangeState((event) => {
-                        if (isTerminalState(event.newState)) {
-                            subscription.dispose();
-                            resolve();
-                        }
-                    });
-                });
-            },
+            () => whenTerminal(task),
             dontRefreshOnRemove,
         );
     }

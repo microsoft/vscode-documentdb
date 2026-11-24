@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createTaskService, Task } from '../taskService';
-import { createTaskProgressReportingService } from './taskProgressReportingService';
+import { createTaskService, Task } from '../taskService.js';
+import { createTaskProgressReportingService } from './taskProgressReportingService.js';
 
 const { progressPromises, showErrorMessage, showInformationMessage } = vi.hoisted(() => ({
     progressPromises: [] as Array<Promise<void>>,

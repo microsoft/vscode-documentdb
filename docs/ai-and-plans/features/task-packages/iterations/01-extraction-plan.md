@@ -374,6 +374,10 @@ existing package shape: ESM, `tsc -p .` to `dist/`, subpath exports with `typesV
 `publishConfig.access: public`, a Vitest project in `vitest.config.ts`, `tsconfig.test.json` and
 `typecheck:tests`, and a root `tsconfig.json` reference.
 
+> **In progress (2026-11-24):** the task core and its `./vscode` presentation are extracted first
+> in "[task engine pr5.1]". The data-transfer package follows in pr5.2. Both remain unpublished
+> pending the NoSQL contract review.
+
 ### 5.2 Move the code
 
 Move the core, the presentation (`./vscode`), the engine and the copy task (`./copy-collection`)

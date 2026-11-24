@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { mergeStrings, type TaskLogger, type TaskTelemetryContext } from '../../taskHost';
+import { mergeStrings, type TaskLogger, type TaskTelemetryContext } from '@microsoft/vscode-ext-tasks';
 import { type DataTransferStrings, defaultDataTransferStrings, noopDataTransferLogger } from '../dataTransferHost';
 import {
     type AbortBatchResult,

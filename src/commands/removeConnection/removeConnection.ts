@@ -12,7 +12,7 @@ import { ext } from '../../extensionVariables';
 import { ConnectionStorageService } from '../../services/connectionStorageService';
 import { getExtensionResourceUsageStrings } from '../../services/taskService/extension/extensionPresentationStrings';
 import { TaskService } from '../../services/taskService/extension/taskServiceInstance';
-import { checkCanProceedAndInformUser } from '../../services/taskService/resourceUsageHelper';
+import { checkCanProceedAndInformUser } from '@microsoft/vscode-ext-tasks/vscode';
 import {
     refreshParentInConnectionsView,
     withConnectionsViewProgress,

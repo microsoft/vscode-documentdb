@@ -6,7 +6,7 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import type * as vscode from 'vscode';
 import { type ConnectionItem, type ConnectionType } from '../../../services/connectionStorageService';
-import { type TaskInfo } from '../../../services/taskService/taskServiceResourceTracking';
+import { type TaskInfo } from '@microsoft/vscode-ext-tasks';
 
 /**
  * Quick pick item for folder selection

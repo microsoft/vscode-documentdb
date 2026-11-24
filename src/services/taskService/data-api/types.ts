@@ -9,7 +9,7 @@
  * and StreamingDocumentWriter.
  */
 
-import { type TaskTelemetryContext } from '../taskHost';
+import { type TaskTelemetryContext } from '@microsoft/vscode-ext-tasks';
 import { type DataTransferOptions } from './dataTransferHost';
 
 // =================================

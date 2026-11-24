@@ -10,7 +10,7 @@ import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { ext } from '../../extensionVariables';
 import { ConflictResolutionStrategy } from '../../services/taskService/data-api/types';
-import { type TaskTelemetryContext } from '../../services/taskService/taskHost';
+import { type TaskTelemetryContext } from '@microsoft/vscode-ext-tasks';
 import { SourceValidationError } from '../../services/taskService/tasks/copy-and-paste/CopyPasteCollectionTask';
 import { type CopyPasteConfig } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
 import { createCollectMetadata, createValidateSource } from './copyPasteCollectionHooks';

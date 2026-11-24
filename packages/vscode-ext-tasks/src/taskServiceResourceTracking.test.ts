@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { type ResourceDefinition, hasResourceConflict } from './taskServiceResourceTracking';
+import { type ResourceDefinition, hasResourceConflict } from './taskServiceResourceTracking.js';
 
 describe('ResourceTracking', () => {
     describe('hasResourceConflict', () => {

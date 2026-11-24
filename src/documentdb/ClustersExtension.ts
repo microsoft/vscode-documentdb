@@ -115,8 +115,8 @@ import { maybeShowReleaseNotesNotification } from '../services/releaseNotesNotif
 import { recordSurveyActivity } from '../services/survey/SurveyService';
 import { TaskProgressReportingService, TaskService } from '../services/taskService/extension/taskServiceInstance';
 import { DemoTask } from '../services/taskService/tasks/DemoTask';
-import { TaskState } from '../services/taskService/taskService';
-import { attachTaskLifecycleLogger } from '../services/taskService/UI/taskLifecycleLogObserver';
+import { TaskState } from '@microsoft/vscode-ext-tasks';
+import { attachTaskLifecycleLogger } from '@microsoft/vscode-ext-tasks/vscode';
 import { maybeShowWelcomeScreen } from '../services/welcomeScreen';
 import {
     CompletionCommandIds,

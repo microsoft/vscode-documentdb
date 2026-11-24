@@ -10,7 +10,7 @@ import { SchemaStore } from '../../documentdb/SchemaStore';
 import { ext } from '../../extensionVariables';
 import { getExtensionResourceUsageStrings } from '../../services/taskService/extension/extensionPresentationStrings';
 import { TaskService } from '../../services/taskService/extension/taskServiceInstance';
-import { checkCanProceedAndInformUser } from '../../services/taskService/resourceUsageHelper';
+import { checkCanProceedAndInformUser } from '@microsoft/vscode-ext-tasks/vscode';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';

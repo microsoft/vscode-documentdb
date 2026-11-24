@@ -4,10 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type Disposable } from '../events';
-import { type TaskLogger } from '../taskHost';
-import { createTaskService, Task, TaskState } from '../taskService';
-import { attachTaskLifecycleLogger } from './taskLifecycleLogObserver';
+import { type Disposable } from '../events.js';
+import { type TaskLogger } from '../taskHost.js';
+import { createTaskService, Task, TaskState } from '../taskService.js';
+import { attachTaskLifecycleLogger } from './taskLifecycleLogObserver.js';
 
 const TaskService = createTaskService();
 

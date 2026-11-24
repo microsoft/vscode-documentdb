@@ -12,7 +12,7 @@ import { ext } from '../../../../extensionVariables';
 import { type CollectionIndexCopier, type CopyIndexesOptions } from '../../data-api/indexes/CollectionIndexCopier';
 import { ConflictResolutionStrategy, type DocumentReader } from '../../data-api/types';
 import { type StreamingDocumentWriter } from '../../data-api/writers/StreamingDocumentWriter';
-import { type TaskTelemetryContext } from '../../taskHost';
+import { type TaskTelemetryContext } from '@microsoft/vscode-ext-tasks';
 import { CopyPasteCollectionTask, SourceValidationError } from './CopyPasteCollectionTask';
 import { type CopyPasteConfig } from './copyPasteConfig';
 

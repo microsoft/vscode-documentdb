@@ -4,6 +4,10 @@ Technical documentation for the Task Service framework, which provides long-runn
 
 Feature design and rationale: [Task Packages](../../../docs/ai-and-plans/features/task-packages/README.md).
 
+The generic task core and VS Code presentation now live in
+[`packages/vscode-ext-tasks`](../../../packages/vscode-ext-tasks/README.md); the file paths below
+describe their pre-extraction locations. Extension-specific adapters and glue remain here.
+
 ---
 
 ## Table of Contents

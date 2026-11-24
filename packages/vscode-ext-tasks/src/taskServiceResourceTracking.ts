@@ -10,11 +10,8 @@
  */
 export interface ResourceDefinition {
     /**
-     * The stable cluster identifier for resource tracking.
-     * Use `cluster.clusterId` (NOT treeId) to ensure tasks remain valid after folder moves.
-     *
-     * - Connections View: storageId (UUID from ConnectionStorageService)
-     * - Azure Resources View: Sanitized Azure Resource ID (/ replaced with _)
+     * The stable connection or cluster identifier for resource tracking.
+     * Do not use a presentation-specific tree path that can change while a task is running.
      */
     clusterId?: string;
 
