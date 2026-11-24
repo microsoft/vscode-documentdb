@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { TaskService } from './taskService';
+import { type TaskService } from './taskService';
 import { type ResourceDefinition } from './taskServiceResourceTracking';
 
 /**
@@ -17,10 +17,11 @@ import { type ResourceDefinition } from './taskServiceResourceTracking';
  * @returns Promise<boolean> - true if operation can proceed, false if blocked
  */
 export async function checkCanProceedAndInformUser(
+    taskService: TaskService,
     resource: ResourceDefinition,
     operationName: string,
 ): Promise<boolean> {
-    const conflictingTasks = TaskService.getConflictingTasks(resource);
+    const conflictingTasks = taskService.getConflictingTasks(resource);
 
     if (conflictingTasks.length > 0) {
         const taskList = conflictingTasks.map((task) => ` • ${task.taskName} (${task.taskType})`).join('\n');
