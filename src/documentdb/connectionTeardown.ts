@@ -98,7 +98,7 @@ export async function confirmTeardown(
 }
 
 /** Check the whole batch and fence it synchronously, before any resource is changed. */
-export function latchForTeardown(target: string | readonly string[], reason: TeardownReason): boolean {
+export function latchForTeardown(target: string | readonly string[], reason: TeardownReason | 'credentialsUpdating'): boolean {
     const ids = clusterIds(target);
     if (ids.some((clusterId) => TaskService.getConflictingTasks({ clusterId }).length > 0)) {
         return false;
@@ -184,7 +184,7 @@ async function removeConnections(
     const targets = new Map(
         clusterIds(ids).map((id) => [id, { previous: ClustersClient.getLatchReason(id), epoch: 0, started: false }]),
     );
-    if ([...targets.values()].some(({ previous }) => previous === 'credentialsChanged' || previous === 'connectionRemoved')) {
+    if ([...targets.values()].some(({ previous }) => previous === 'credentialsUpdating' || previous === 'connectionRemoved')) {
         throw new Error(vscode.l10n.t('A connection is already being updated or removed. Try again when it finishes.'));
     }
     if (!latchForTeardown(ids, 'connectionRemoved')) {

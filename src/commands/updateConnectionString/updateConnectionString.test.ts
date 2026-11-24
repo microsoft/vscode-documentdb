@@ -93,6 +93,11 @@ vi.mock('../../documentdb/ClustersClient', () => ({
         getEpoch: vi.fn(() => 0),
         getLatchReason: vi.fn(),
         getExistingClient: vi.fn(),
+        latch: vi.fn(),
+        unlatch: vi.fn(),
+        retireBoundViews: vi.fn(),
+        clearLastVerifiedIdentity: vi.fn(),
+        discardEntraPinForDifferentTenant: vi.fn(),
     },
 }));
 vi.mock('../../services/connectionReachabilityService', () => ({
@@ -200,7 +205,7 @@ describe('updateConnectionString rejected-destination recovery', () => {
             await updateConnectionString(makeContext(), item);
 
             expect(capturedContexts[0].connectionStringSaved).toBe(true);
-            expect(ClustersClient.deleteClient).toHaveBeenCalledExactlyOnceWith('stable-id');
+            expect(ClustersClient.deleteClient).toHaveBeenCalledExactlyOnceWith('stable-id', { alreadyInvalidated: true });
             expect(deleteCredentials).toHaveBeenCalledExactlyOnceWith('stable-id');
             expect(resetError).toHaveBeenCalledExactlyOnceWith(item.id);
             expect(provider.hasNodeErrorState(item.id)).toBe(false);
@@ -273,20 +278,20 @@ describe('updateConnectionString rejected-destination recovery', () => {
         },
     );
 
-    it('leaves the existing connected-edit lifecycle unchanged after a successful ordinary edit', async (): Promise<void> => {
+    it('retires the old client and bindings after an ordinary saved edit', async (): Promise<void> => {
         const resetError = vi.spyOn(provider, 'resetNodeErrorState');
         const refresh = vi.spyOn(provider, 'refresh');
         item.lastConnectionOutcome = 'connected';
-        const cachedCredentials = CredentialCache.getCredentials('stable-id');
 
         await updateConnectionString(makeContext(), item);
 
         expect(capturedContexts[0].connectionStringSaved).toBe(true);
         expect(storedConnection.secrets.connectionString).toBe(approvedUri);
-        expect(ClustersClient.deleteClient).not.toHaveBeenCalled();
-        expect(deleteCredentials).not.toHaveBeenCalled();
+        expect(ClustersClient.retireBoundViews).toHaveBeenCalledExactlyOnceWith('stable-id');
+        expect(ClustersClient.deleteClient).toHaveBeenCalledExactlyOnceWith('stable-id', { alreadyInvalidated: true });
+        expect(deleteCredentials).toHaveBeenCalledExactlyOnceWith('stable-id');
         expect(resetError).not.toHaveBeenCalled();
-        expect(CredentialCache.getCredentials('stable-id')).toBe(cachedCredentials);
+        expect(CredentialCache.getCredentials('stable-id')).toBeUndefined();
         expect(item.lastConnectionOutcome).toBe('connected');
         expect(refresh).toHaveBeenCalledOnce();
     });
@@ -303,8 +308,8 @@ describe('updateConnectionString rejected-destination recovery', () => {
 
         expect(storedConnection.secrets.connectionString).toBe(approvedUri);
         expect(capturedContexts[0].connectionStringSaved).toBe(true);
-        expect(ClustersClient.deleteClient).not.toHaveBeenCalled();
-        expect(deleteCredentials).not.toHaveBeenCalled();
+        expect(ClustersClient.retireBoundViews).toHaveBeenCalledExactlyOnceWith('stable-id');
+        expect(deleteCredentials).toHaveBeenCalledExactlyOnceWith('stable-id');
         expect(refresh).toHaveBeenCalledOnce();
     });
 });

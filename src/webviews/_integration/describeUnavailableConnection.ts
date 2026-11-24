@@ -37,6 +37,15 @@ export function describeUnavailableConnection(reason: ConnectionUnavailableReaso
                     action: 'retry',
                 },
             };
+        case 'credentialsUpdating':
+            return {
+                unavailable: {
+                    reason,
+                    title: l10n.t('Connection update in progress'),
+                    detail: l10n.t('Wait for the update to finish, then click Retry.'),
+                    action: 'retry',
+                },
+            };
         case 'identityChanged':
         case 'credentialsChanged':
             return {

@@ -6,6 +6,7 @@
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { ClustersClient, type ConnectionBinding } from '../../documentdb/ClustersClient';
+import { isRetiredConnectionBinding } from '../../documentdb/connectionBindingRetirement';
 import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
 import { runWithClient } from '../../documentdb/runWithClient';
 import {
@@ -26,7 +27,9 @@ export async function recoverBoundView(
         return { recovered: { text: '' } };
     }
 
-    const reason = ClustersClient.getLatchReason(binding.clusterId);
+    const reason = isRetiredConnectionBinding(binding)
+        ? 'credentialsChanged'
+        : ClustersClient.getLatchReason(binding.clusterId);
     if (reason) {
         return describeUnavailableConnection(reason);
     }
@@ -58,7 +61,7 @@ export function guardBoundViewOperation(binding: ConnectionBinding, signal?: Abo
         if (signal?.aborted) {
             throw new UserCancelledError('staleBoundViewOperation');
         }
-        const reason = ClustersClient.getLatchReason(clusterId);
+        const reason = isRetiredConnectionBinding(binding) ? 'credentialsChanged' : ClustersClient.getLatchReason(clusterId);
         if (reason) {
             throw new ConnectionUnavailableError(reason);
         }

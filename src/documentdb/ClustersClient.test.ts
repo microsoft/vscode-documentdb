@@ -322,6 +322,23 @@ describe('regular connection startup diagnostics', () => {
         expect(ClustersClient.getBinding(clusterId)).toBe(current.binding);
     });
 
+    it('does not let a retired view use a new client with the same fingerprint', async (): Promise<void> => {
+        const old = await ClustersClient.connectInteractive(clusterId);
+        const session = ClusterSession.getSession(await ClusterSession.initNewSession(clusterId));
+        ClustersClient.latch(clusterId, 'credentialsUpdating');
+        ClustersClient.retireBoundViews(clusterId);
+        await ClustersClient.deleteClient(clusterId, { alreadyInvalidated: true });
+        ClustersClient.unlatch(clusterId);
+
+        await expect(ClustersClient.resolveBoundClient(old.binding)).rejects.toMatchObject({ reason: 'credentialsChanged' });
+        expect(mockConnect).toHaveBeenCalledOnce();
+        const current = await ClustersClient.getClient(clusterId);
+        expect(current.binding.fingerprint).toBe(old.binding.fingerprint);
+        expect(current.generation).toBeGreaterThan(old.generation);
+        expect(() => session.assertAvailable()).toThrow(expect.objectContaining({ reason: 'credentialsChanged' }));
+        await expect(ClustersClient.resolveBoundClient(current.binding)).resolves.toBe(current);
+    });
+
     it('keeps session paging and schema accumulation on a same-identity replacement', async (): Promise<void> => {
         const original = await ClustersClient.connectInteractive(clusterId);
         const session = ClusterSession.getSession(await ClusterSession.initNewSession(clusterId));

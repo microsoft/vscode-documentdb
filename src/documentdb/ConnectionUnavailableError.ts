@@ -9,6 +9,7 @@ export type ConnectionUnavailableReason =
     | 'signInRequired'
     | 'credentialsRejected'
     | 'credentialsMissing'
+    | 'credentialsUpdating'
     | 'credentialsChanged'
     | 'identityChanged'
     | 'userDisconnected'

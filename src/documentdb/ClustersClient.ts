@@ -53,6 +53,7 @@ import { getAzureHostSuffix } from './auth/oidcAllowedHosts';
 import { readJwtTimes } from './auth/tokenExpiry';
 import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
 import { classifyConnectionFailure, type ConnectionFailure } from './connectionFailures';
+import { isRetiredConnectionBinding, retireConnectionBindings } from './connectionBindingRetirement';
 import { computeConnectionFingerprint, type ConnectionPrincipal } from './connectionFingerprint';
 import { ConnectionUnavailableError, type ConnectionUnavailableReason } from './ConnectionUnavailableError';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
@@ -843,11 +844,14 @@ export class ClustersClient {
     }
 
     /** A surface can follow new generations, but never start or use a client for a different identity. */
-    public static resolveBoundClient(
+    public static async resolveBoundClient(
         binding: ConnectionBinding,
         options?: { readonly background?: boolean; readonly trigger?: ClientStartupTrigger },
     ): Promise<ClustersClient> {
-        return ClustersClient.acquireClient(
+        if (isRetiredConnectionBinding(binding)) {
+            throw new ConnectionUnavailableError('credentialsChanged');
+        }
+        const client = await ClustersClient.acquireClient(
             binding.clusterId,
             undefined,
             undefined,
@@ -856,6 +860,14 @@ export class ClustersClient {
             options?.background === true,
             binding.fingerprint,
         );
+        if (isRetiredConnectionBinding(binding)) {
+            throw new ConnectionUnavailableError('credentialsChanged');
+        }
+        return client;
+    }
+
+    public static retireBoundViews(clusterId: string): void {
+        retireConnectionBindings(clusterId, ClustersClient._generations.get(clusterId) ?? 0);
     }
 
     /** Publish only after explicit sign-in and database startup succeed. The prior pin stays intact until then. */

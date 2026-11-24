@@ -15,6 +15,7 @@ import { toSlickGridTree, type TreeData } from '../utils/slickgrid/mongo/toSlick
 import { type QueryInsightsStage2Response } from '../webviews/documentdb/collectionView/types/queryInsights';
 import { ClustersClient, type ConnectionBinding, type FindQueryParams } from './ClustersClient';
 import { ConnectionUnavailableError } from './ConnectionUnavailableError';
+import { isRetiredConnectionBinding } from './connectionBindingRetirement';
 import { runWithClient } from './runWithClient';
 import { SchemaStore } from './SchemaStore';
 import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
@@ -91,6 +92,7 @@ export class ClusterSession {
         const { clusterId, fingerprint } = this.binding;
         return (
             epoch === ClustersClient.getEpoch(clusterId) &&
+            !isRetiredConnectionBinding(this.binding) &&
             ClustersClient.getLatchReason(clusterId) === undefined &&
             ClustersClient.getBinding(clusterId)?.fingerprint === fingerprint
         );
@@ -106,7 +108,9 @@ export class ClusterSession {
         if (signal?.aborted) {
             throw new UserCancelledError('staleCollectionViewOperation');
         }
-        const reason = ClustersClient.getLatchReason(this.binding.clusterId);
+        const reason = isRetiredConnectionBinding(this.binding)
+            ? 'credentialsChanged'
+            : ClustersClient.getLatchReason(this.binding.clusterId);
         if (reason) {
             throw new ConnectionUnavailableError(reason);
         }
