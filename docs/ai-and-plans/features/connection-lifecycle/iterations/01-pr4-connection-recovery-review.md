@@ -42,6 +42,23 @@ An obsolete recovery still cannot evict newer state or clear its latch. All 62 f
 tests passed across six suites. Reconciling an already in-flight recovery save that lands
 after teardown stays in WI-7, with F2.
 
+## Copilot review follow-up
+
+Claude Opus 5.5 validated the nine inline findings against `ca841a7c8`. The confirmed medium
+findings are addressed in dedicated commits. The operator approved reporting child expansion
+failures in this PR without adding child recovery actions or replaying the request.
+
+| Finding                                                                                                                                                                      | Disposition                                                                                                                                                                                                                                                        |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [R1](https://github.com/microsoft/vscode-documentdb/pull/1117#discussion_r4677891992)                                                                                        | `27345af20` explains how to restore the pinned Azure cloud or provider before retrying sign-in.                                                                                                                                                                    |
+| [R2](https://github.com/microsoft/vscode-documentdb/pull/1117#discussion_r4677892084)                                                                                        | Preserve the approved F1 scope: no new Native/RU or first-startup latch policy.                                                                                                                                                                                    |
+| [R3](https://github.com/microsoft/vscode-documentdb/pull/1117#discussion_r4677892154)                                                                                        | Keep retrying the silent lookup on a later foreground request so signing back in through VS Code Accounts can restore the session. Track in [#1119](https://github.com/microsoft/vscode-documentdb/issues/1119#issuecomment-7127895057).                           |
+| [R4](https://github.com/microsoft/vscode-documentdb/pull/1117#discussion_r4677892272)                                                                                        | `f3407187a` preserves localized Managed Identity guidance in the typed callback error without copying unrecognized SDK text into the message.                                                                                                                      |
+| [R5](https://github.com/microsoft/vscode-documentdb/pull/1117#discussion_r4677892358), [R7](https://github.com/microsoft/vscode-documentdb/pull/1117#discussion_r4677892494) | Defer the two low-severity telemetry gaps to [#1123](https://github.com/microsoft/vscode-documentdb/issues/1123).                                                                                                                                                  |
+| [R6](https://github.com/microsoft/vscode-documentdb/pull/1117#discussion_r4677892428)                                                                                        | `195243c52` lets Quick Start Retry clear only its current rejection and reload its service-owned credentials.                                                                                                                                                      |
+| [R8](https://github.com/microsoft/vscode-documentdb/pull/1117#discussion_r4677892557)                                                                                        | `228be9f90` explains the rejection and points to the appropriate existing tree action.                                                                                                                                                                             |
+| [R9](https://github.com/microsoft/vscode-documentdb/pull/1117#discussion_r4677892633)                                                                                        | `b1b446e6d` reports foreground database and index listing failures against the binding that ran them and rethrows the original error. Optional navigation to the owning cluster is tracked in [#1124](https://github.com/microsoft/vscode-documentdb/issues/1124). |
+
 ## Handoff verification
 
 OP-3 passed on the older CI VSIX. The current review proposals do not change the tested
@@ -58,3 +75,8 @@ enum-to-string lint error and a storage fixture type mismatch; both were fixed
 without changing recovery behavior or weakening any assertions. Full CI also passed
 on code head `d422d065b`. The operator confirmation is a documentation-only follow-up;
 it does not change the tested build or require repeating OP-3.
+
+After the Copilot fixes, local Case 2 passed again: localization generation and check,
+formatting, lint, build, strict workspace test type-check, the full runtime suite
+(432 files; 9,805 tests passed, one skipped), and VSIX packaging. The earlier OP-3 and
+worker smoke results stand; no repeat live test was required for these fixes.
