@@ -14,7 +14,6 @@ import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirm
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import {
     connectionRecoveryActions,
-    connectionUnavailableReasons,
     type ConnectionRecoveryRequest,
     type ConnectionRecoveryResponse,
     type ConnectionUnavailableResponse,
@@ -24,7 +23,7 @@ import { guardBoundViewOperation, runBoundViewOperation } from '../boundViewOper
 
 export type RouterContext = BaseRouterContext & {
     clusterId: string;
-    readonly binding: { current: ConnectionBinding };
+    readonly binding: ConnectionBinding;
     readonly describeUnavailable: (reason: ConnectionUnavailableError['reason']) => ConnectionUnavailableResponse;
     readonly recoverUnavailable: (
         request: ConnectionRecoveryRequest,
@@ -52,7 +51,7 @@ async function runDocumentViewOperation<T>(
     operation: (binding: ConnectionBinding) => Promise<T>,
 ): Promise<T | ConnectionUnavailableResponse> {
     try {
-        return await operation(ctx.binding.current);
+        return await operation(ctx.binding);
     } catch (error) {
         if (error instanceof ConnectionUnavailableError) {
             return ctx.describeUnavailable(error.reason);
@@ -139,7 +138,7 @@ export const documentsViewRouter = router({
             });
         }),
     recoverUnavailable: publicProcedureWithTelemetry
-        .input(z.object({ reason: z.enum(connectionUnavailableReasons), action: z.enum(connectionRecoveryActions) }))
+        .input(z.object({ action: z.enum(connectionRecoveryActions) }))
         .mutation(({ input, ctx }) => (ctx as RouterContext).recoverUnavailable(input)),
 });
 

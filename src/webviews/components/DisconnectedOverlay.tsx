@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Button, Dialog, DialogActions, DialogBody, DialogSurface, DialogTitle } from '@fluentui/react-components';
+import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
-import { type JSX, type ReactNode } from 'react';
+import { useId, type JSX, type ReactNode } from 'react';
 import {
     type ConnectionRecoveryAction,
     type ConnectionUnavailableDetails,
@@ -16,28 +16,18 @@ interface DisconnectedOverlayProps {
     readonly unavailable?: ConnectionUnavailableDetails;
     readonly onAction: (action: ConnectionRecoveryAction) => void;
     readonly recovering?: boolean;
+    readonly warnOnClose?: boolean;
     readonly children: ReactNode;
-}
-
-function actionLabel(action: ConnectionRecoveryAction): string {
-    switch (action) {
-        case 'reconnect':
-            return l10n.t('Reconnect');
-        case 'signInAgain':
-            return l10n.t('Retry sign-in');
-        case 'updateCredentials':
-            return l10n.t('Update credentials…');
-        case 'close':
-            return l10n.t('Close view');
-    }
 }
 
 export function DisconnectedOverlay({
     unavailable,
     onAction,
     recovering,
+    warnOnClose,
     children,
 }: DisconnectedOverlayProps): JSX.Element {
+    const descriptionId = useId();
     const disconnected = unavailable !== undefined;
 
     return (
@@ -47,10 +37,14 @@ export function DisconnectedOverlay({
             </div>
             {unavailable && (
                 <Dialog open={disconnected} modalType="modal" inertTrapFocus>
-                    <DialogSurface className="disconnectedOverlay">
+                    <DialogSurface className="disconnectedOverlay" aria-describedby={descriptionId}>
                         <DialogBody>
-                            <DialogTitle className="disconnectedOverlayTitle">{unavailable.text}</DialogTitle>
-                            <DialogActions className="disconnectedOverlayActions">
+                            <DialogTitle className="disconnectedOverlayTitle">{unavailable.title}</DialogTitle>
+                            <DialogContent id={descriptionId} className="disconnectedOverlayDetail">
+                                <p>{unavailable.detail}</p>
+                                {warnOnClose && <p>{l10n.t('Closing this view discards unsaved changes.')}</p>}
+                            </DialogContent>
+                            <DialogActions fluid className="disconnectedOverlayActions">
                                 {unavailable.action !== 'close' && (
                                     <Button
                                         appearance="primary"
@@ -61,10 +55,10 @@ export function DisconnectedOverlay({
                                             }
                                         }}
                                     >
-                                        {actionLabel(unavailable.action)}
+                                        {l10n.t('Retry')}
                                     </Button>
                                 )}
-                                <Button onClick={() => onAction('close')}>{actionLabel('close')}</Button>
+                                <Button onClick={() => onAction('close')}>{l10n.t('Close view')}</Button>
                             </DialogActions>
                         </DialogBody>
                     </DialogSurface>

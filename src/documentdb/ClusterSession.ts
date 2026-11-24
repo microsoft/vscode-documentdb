@@ -73,17 +73,10 @@ export class ClusterSession {
      * Private constructor to enforce the use of `initNewSession` for creating new sessions.
      * This ensures that sessions are properly initialized and managed.
      */
-    private constructor(private binding: ConnectionBinding) {}
+    private constructor(private readonly binding: ConnectionBinding) {}
 
     public getBinding(): ConnectionBinding {
         return this.binding;
-    }
-
-    public rebind(binding: ConnectionBinding): void {
-        if (binding.clusterId !== this.binding.clusterId) {
-            throw new Error('Cannot rebind a collection session to another cluster.');
-        }
-        this.binding = binding;
     }
 
     public async getClient(): Promise<ClustersClient> {

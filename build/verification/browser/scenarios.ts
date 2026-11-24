@@ -2434,8 +2434,9 @@ const documentEditReadiness = { ...documentViewBase.readiness, content: ['Save']
 const saveDocumentPath = 'mongoClusters.documentView.saveDocument';
 const disconnectedDocument = {
     reason: 'userDisconnected',
-    text: 'Disconnected',
-    action: 'reconnect',
+    title: 'Disconnected',
+    detail: 'Connect from the connection tree, then click Retry.',
+    action: 'retry',
 } as const;
 const documentEditorName = 'Document Editor: Edit the document in JSON format';
 const firstDocumentEdit = {
@@ -2509,7 +2510,7 @@ const documentViewScenarios = {
                         name: 'disable Document View',
                         message: { type: 'documentView.connectionUnavailable', unavailable: disconnectedDocument },
                     },
-                    { action: 'click', role: 'button', name: 'Reconnect' },
+                    { action: 'click', role: 'button', name: 'Retry' },
                     {
                         action: 'waitFor',
                         name: 'the editor to be enabled after reconnect',
@@ -2603,8 +2604,9 @@ const collectionFilter = { action: 'replaceText', role: 'textbox', name: collect
 const runCollectionQuery = { action: 'click', role: 'button', name: 'Find Query: execute the current editor values' } as const;
 const collectionSignInRequired = {
     reason: 'signInRequired',
-    text: 'Microsoft sign-in is required.',
-    action: 'signInAgain',
+    title: 'Sign-in required',
+    detail: 'Sign in from the connection tree, then click Retry.',
+    action: 'retry',
 } as const;
 const collectionViewScenarios = {
     default: collectionViewBase,
@@ -2615,6 +2617,10 @@ const collectionViewScenarios = {
             [collectionQueryPath]: {
                 ...fixtures.collectionView.rpc[collectionQueryPath],
                 afterFirst: { results: [{ unavailable: collectionSignInRequired }] },
+            },
+            'mongoClusters.collectionView.recoverUnavailable': {
+                type: 'mutation',
+                results: [{ recovered: { text: 'Reconnected' } }],
             },
             'common.reportEvent': { type: 'mutation', results: [], undefinedResult: true },
         },
@@ -2640,10 +2646,10 @@ const collectionViewScenarios = {
             },
             {
                 kind: 'text',
-                name: 'shows only explicit sign-in and Close view actions',
+                name: 'offers Retry and Close view while sign-in stays in the tree',
                 selector: '.disconnectedOverlay',
-                includes: ['Retry sign-in', 'Close view'],
-                excludes: ['Reconnect'],
+                includes: ['Sign-in required', 'Sign in from the connection tree, then click Retry.', 'Close view'],
+                excludes: ['Reconnect', 'Retry sign-in'],
             },
             {
                 kind: 'calls',
@@ -2651,7 +2657,7 @@ const collectionViewScenarios = {
                 path: collectionQueryPath,
                 count: 2,
                 checkInput: false,
-                steps: [{ action: 'press', role: 'button', name: 'Retry sign-in', key: 'Control+Enter' }],
+                steps: [{ action: 'press', role: 'button', name: 'Retry', key: 'Control+Enter' }],
             },
         ],
     },
@@ -2692,7 +2698,7 @@ const collectionViewScenarios = {
                 kind: 'text',
                 name: 'the late reply does not change the displayed disconnect reason',
                 selector: '.disconnectedOverlay',
-                includes: ['Disconnected', 'Reconnect'],
+                includes: ['Disconnected', 'Retry'],
                 excludes: ['Retry sign-in'],
             },
         ],

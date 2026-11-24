@@ -11,14 +11,13 @@ import { type RouterContext } from './collectionViewRouter';
 
 const mocks = vi.hoisted(() => ({
     getBinding: vi.fn(),
-    getLastVerifiedIdentity: vi.fn(),
+    getEpoch: vi.fn(() => 1),
     getLatchReason: vi.fn(),
     resolveBoundClient: vi.fn(),
     unlatch: vi.fn(),
     getCredentials: vi.fn(),
     postMessage: vi.fn(),
     sessionBinding: vi.fn(),
-    sessionRebind: vi.fn(),
 }));
 
 vi.mock('../../../documentdb/ClustersClient', () => ({ ClustersClient: mocks }));
@@ -26,7 +25,6 @@ vi.mock('../../../documentdb/ClusterSession', () => ({
     ClusterSession: {
         getSession: () => ({
             getBinding: mocks.sessionBinding,
-            rebind: mocks.sessionRebind,
         }),
     },
 }));
@@ -54,17 +52,6 @@ beforeEach((): void => {
     mocks.getBinding.mockReturnValue(originalBinding);
     mocks.getLatchReason.mockReturnValue(undefined);
     mocks.sessionBinding.mockReturnValue(originalBinding);
-    mocks.getLastVerifiedIdentity.mockReturnValue({
-        kind: 'entra',
-        accountId: 'account',
-        accountLabel: 'Account B',
-        tenantId: 'tenant',
-        providerId: 'microsoft',
-    });
-    mocks.getCredentials.mockReturnValue({
-        authMechanism: 'MicrosoftEntraID',
-        entraIdConfig: { tenantId: 'tenant' },
-    });
     vi.mocked(openAppWebview).mockImplementation(
         <T>(options: OpenAppWebviewOptions<T>): AppWebviewController<T> => {
             const listeners = new Set<() => void>();
@@ -113,8 +100,9 @@ it('registers the Collection View and pushes a typed unavailable payload', (): v
         type: 'collectionView.connectionUnavailable',
         unavailable: {
             reason: 'userDisconnected',
-            text: expect.any(String),
-            action: 'reconnect',
+            title: expect.any(String),
+            detail: expect.any(String),
+            action: 'retry',
         },
     });
 
@@ -124,36 +112,33 @@ it('registers the Collection View and pushes a typed unavailable payload', (): v
 
 it('reconnects the existing session without replaying a query', async (): Promise<void> => {
     openPanel();
-    mocks.getLatchReason.mockReturnValueOnce('userDisconnected');
     mocks.resolveBoundClient.mockResolvedValue({ binding: { ...originalBinding, generation: 2 } });
-    const described = context.describeUnavailable('userDisconnected');
 
     await expect(
-        context.recoverUnavailable({ reason: 'userDisconnected', action: described.unavailable.action }),
+        context.recoverUnavailable({ action: 'retry' }),
     ).resolves.toEqual({ recovered: { text: 'Reconnected' } });
-    expect(mocks.unlatch).toHaveBeenCalledExactlyOnceWith(clusterId);
-    expect(mocks.sessionRebind).toHaveBeenCalledWith({ ...originalBinding, generation: 2 });
+    expect(mocks.unlatch).not.toHaveBeenCalled();
+    expect(mocks.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(originalBinding, { trigger: 'collectionView' });
 });
 
-it('requires an explicit rebind for a changed identity', async (): Promise<void> => {
+it('does not rebind to a different identity', async (): Promise<void> => {
     openPanel();
     mocks.getBinding.mockReturnValue(newerBinding);
     mocks.resolveBoundClient.mockResolvedValue({ binding: newerBinding });
 
-    context.describeUnavailable('identityChanged');
-    await expect(context.recoverUnavailable({ reason: 'identityChanged', action: 'reconnect' })).resolves.toEqual({
-        recovered: { text: 'Now connected as Account B' },
+    await expect(context.recoverUnavailable({ action: 'retry' })).resolves.toMatchObject({
+        unavailable: { reason: 'identityChanged', action: 'close' },
     });
-    expect(mocks.sessionRebind).toHaveBeenCalledExactlyOnceWith(newerBinding);
+    expect(mocks.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(originalBinding, { trigger: 'collectionView' });
 });
 
-it('does not let stale Reconnect clear a removal latch', async (): Promise<void> => {
+it('does not let stale Retry clear a removal latch', async (): Promise<void> => {
     openPanel();
     context.describeUnavailable('userDisconnected');
     mocks.getLatchReason.mockReturnValue('connectionRemoved');
 
     await expect(
-        context.recoverUnavailable({ reason: 'userDisconnected', action: 'reconnect' }),
+        context.recoverUnavailable({ action: 'retry' }),
     ).resolves.toMatchObject({ unavailable: { reason: 'connectionRemoved', action: 'close' } });
     expect(mocks.unlatch).not.toHaveBeenCalled();
     expect(mocks.resolveBoundClient).not.toHaveBeenCalled();

@@ -30,7 +30,6 @@ import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumen
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import {
     connectionRecoveryActions,
-    connectionUnavailableReasons,
     type ConnectionRecoveryRequest,
     type ConnectionRecoveryResponse,
     type ConnectionUnavailableResponse,
@@ -103,7 +102,7 @@ export type RouterContext = BaseRouterContext & {
      * Stable cluster identifier for tree lookups; DB operations use the host-only binding.
      */
     clusterId: string;
-    readonly binding: { current: ConnectionBinding };
+    readonly binding: ConnectionBinding;
     readonly describeUnavailable: (reason: ConnectionUnavailableError['reason']) => ConnectionUnavailableResponse;
     readonly recoverUnavailable: (
         request: ConnectionRecoveryRequest,
@@ -150,7 +149,7 @@ function dashboardContext(ctx: FrameworkRouterContext): WithTelemetry<RouterCont
 function runDashboardOperation<T>(
     ctx: RouterContext,
     operation: (client: ClustersClient) => Promise<T>,
-    binding = ctx.binding.current,
+    binding = ctx.binding,
     assertCurrent = guardBoundViewOperation(binding, ctx.signal),
 ): Promise<T> {
     return runBoundViewOperation(binding, assertCurrent, operation, { trigger: 'clusterDashboard' });
@@ -161,7 +160,7 @@ async function runDashboardViewOperation<T>(
     operation: (binding: ConnectionBinding) => Promise<T>,
 ): Promise<T | ConnectionUnavailableResponse> {
     try {
-        return await operation(ctx.binding.current);
+        return await operation(ctx.binding);
     } catch (error) {
         if (error instanceof ConnectionUnavailableError) {
             return ctx.describeUnavailable(error.reason);
@@ -633,6 +632,6 @@ export const clusterDashboardRouter = router({
         },
     ),
     recoverUnavailable: publicProcedureWithTelemetry
-        .input(z.object({ reason: z.enum(connectionUnavailableReasons), action: z.enum(connectionRecoveryActions) }))
+        .input(z.object({ action: z.enum(connectionRecoveryActions) }))
         .mutation(({ input, ctx }) => (ctx as RouterContext).recoverUnavailable(input)),
 });

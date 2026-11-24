@@ -7,39 +7,36 @@ import * as l10n from '@vscode/l10n';
 import { type ConnectionUnavailableReason } from '../../documentdb/ConnectionUnavailableError';
 import { type ConnectionUnavailableResponse } from './connectionUnavailable';
 
-interface RecoveryCapabilities {
-    readonly canRetrySignIn: boolean;
-    readonly canUpdateCredentials: boolean;
-    readonly canReconnect: boolean;
-}
-
 export function describeUnavailableConnection(
     reason: ConnectionUnavailableReason,
-    { canRetrySignIn, canUpdateCredentials, canReconnect }: RecoveryCapabilities,
 ): ConnectionUnavailableResponse {
     switch (reason) {
         case 'signInRequired':
             return {
                 unavailable: {
                     reason,
-                    text: l10n.t('Microsoft sign-in is required.'),
-                    action: canRetrySignIn ? 'signInAgain' : 'close',
+                    title: l10n.t('Sign-in required'),
+                    detail: l10n.t('Sign in from the connection tree, then click Retry.'),
+                    action: 'retry',
                 },
             };
         case 'credentialsRejected':
             return {
                 unavailable: {
                     reason,
-                    text: l10n.t('The database rejected the connection credentials.'),
-                    action: canRetrySignIn ? 'signInAgain' : canUpdateCredentials ? 'updateCredentials' : 'close',
+                    title: l10n.t('Authentication failed'),
+                    detail: l10n.t('Repair the connection in the tree, then click Retry.'),
+                    action: 'retry',
                 },
             };
         case 'credentialsMissing':
+        case 'userDisconnected':
             return {
                 unavailable: {
                     reason,
-                    text: l10n.t('No credentials found.'),
-                    action: canUpdateCredentials ? 'updateCredentials' : 'close',
+                    title: l10n.t('Disconnected'),
+                    detail: l10n.t('Connect from the connection tree, then click Retry.'),
+                    action: 'retry',
                 },
             };
         case 'identityChanged':
@@ -47,26 +44,27 @@ export function describeUnavailableConnection(
             return {
                 unavailable: {
                     reason,
-                    text: l10n.t('The connection identity or settings have changed.'),
-                    action: canReconnect ? 'reconnect' : 'close',
-                },
-            };
-        case 'userDisconnected':
-            return {
-                unavailable: {
-                    reason,
-                    text: l10n.t('Disconnected'),
-                    action: canReconnect ? 'reconnect' : 'close',
+                    title: l10n.t('Connection changed'),
+                    detail: l10n.t('This view is tied to the previous connection. Close it and reopen it from the tree.'),
+                    action: 'close',
                 },
             };
         case 'connectionRemoved':
-            return { unavailable: { reason, text: l10n.t('The connection was removed.'), action: 'close' } };
+            return {
+                unavailable: {
+                    reason,
+                    title: l10n.t('Connection removed'),
+                    detail: l10n.t('This connection is no longer in the tree. Close this view.'),
+                    action: 'close',
+                },
+            };
         case 'unreachable':
             return {
                 unavailable: {
                     reason,
-                    text: l10n.t('Connection lost'),
-                    action: canReconnect ? 'reconnect' : 'close',
+                    title: l10n.t('Connection lost'),
+                    detail: l10n.t('Check the network or server, then click Retry.'),
+                    action: 'retry',
                 },
             };
     }

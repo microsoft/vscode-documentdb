@@ -835,7 +835,7 @@ export const CollectionView = (): JSX.Element => {
         const revision = ++lifecycleRevisionRef.current;
         setRecovering(true);
         void trpcClient.mongoClusters.collectionView.recoverUnavailable
-            .mutate({ reason: current.reason, action })
+            .mutate({ action })
             .then((response: ConnectionUnavailableResponse | ConnectionRecoveryResponse) => {
                 if (disposedRef.current || revision !== lifecycleRevisionRef.current || action === 'close') {
                     return;

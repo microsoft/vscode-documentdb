@@ -37,7 +37,6 @@ import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumen
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import {
     connectionRecoveryActions,
-    connectionUnavailableReasons,
     type ConnectionRecoveryRequest,
     type ConnectionRecoveryResponse,
     type ConnectionUnavailableResponse,
@@ -782,6 +781,6 @@ export const collectionsViewRouter = router({
             });
         }),
     recoverUnavailable: publicProcedureWithTelemetry
-        .input(z.object({ reason: z.enum(connectionUnavailableReasons), action: z.enum(connectionRecoveryActions) }))
+        .input(z.object({ action: z.enum(connectionRecoveryActions) }))
         .mutation(({ input, ctx }) => (ctx as RouterContext).recoverUnavailable(input)),
 });

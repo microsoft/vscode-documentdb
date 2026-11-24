@@ -84,9 +84,9 @@ function createContext(
         dbExperience: API.DocumentDB,
         webviewName: 'clusterDashboard',
         clusterId: 'cluster-id',
-        binding: { current: binding },
+        binding,
         describeUnavailable: (reason) => ({
-            unavailable: { reason, text: 'Connection unavailable.', action: 'close' },
+            unavailable: { reason, title: 'Connection unavailable', detail: 'Close this view.', action: 'close' },
         }),
         recoverUnavailable: vi.fn(),
         clusterDisplayName: 'Test cluster',
@@ -170,7 +170,8 @@ describe('clusterDashboardRouter create actions', () => {
             await expect(createCallerFactory(clusterDashboardRouter)(createContext()).measureRtt()).resolves.toEqual({
                 unavailable: {
                     reason: 'signInRequired',
-                    text: 'Connection unavailable.',
+                    title: 'Connection unavailable',
+                    detail: 'Close this view.',
                     action: 'close',
                 },
             });
@@ -197,7 +198,8 @@ describe('clusterDashboardRouter create actions', () => {
         ).resolves.toEqual({
             unavailable: {
                 reason: 'credentialsRejected',
-                text: 'Connection unavailable.',
+                title: 'Connection unavailable',
+                detail: 'Close this view.',
                 action: 'close',
             },
         });
@@ -259,7 +261,8 @@ describe('clusterDashboardRouter create actions', () => {
         await expect(caller.copyConnectionString()).resolves.toEqual({
             unavailable: {
                 reason: 'identityChanged',
-                text: 'Connection unavailable.',
+                title: 'Connection unavailable',
+                detail: 'Close this view.',
                 action: 'close',
             },
         });

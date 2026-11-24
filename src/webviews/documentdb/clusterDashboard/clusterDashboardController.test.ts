@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { describe, expect, it, vi, type Mock } from 'vitest';
 
 vi.mock('@vscode/l10n', () => ({
@@ -42,7 +41,6 @@ vi.mock('../../../documentdb/ClustersClient', () => ({
         getBinding: vi.fn(),
         getEpoch: vi.fn(),
         getLatchReason: vi.fn(),
-        getLastVerifiedIdentity: vi.fn(),
         resolveBoundClient: vi.fn(),
         unlatch: vi.fn(),
     },
@@ -57,6 +55,7 @@ vi.mock('./resolveNamespaceNode', () => ({
 import * as vscode from 'vscode';
 import { openCollectionViewInternal } from '../../../commands/openCollectionView/openCollectionView';
 import { ClustersClient } from '../../../documentdb/ClustersClient';
+import { ConnectionUnavailableError } from '../../../documentdb/ConnectionUnavailableError';
 import { getConnectionSurfaces } from '../../../documentdb/connectionSurfaces';
 import { CredentialCache } from '../../../documentdb/CredentialCache';
 import { openAppWebview } from '../../_integration/openAppWebview';
@@ -136,7 +135,7 @@ describe('openClusterDashboardWebview panel lifecycle', () => {
         expect(second).toBe(first);
         expect(openAppWebview).toHaveBeenCalledExactlyOnceWith(
             expect.objectContaining({
-                context: expect.objectContaining({ ...firstLink, binding: { current: firstBinding } }),
+                context: expect.objectContaining({ ...firstLink, binding: firstBinding }),
                 config: expect.not.objectContaining({ binding: expect.anything() }),
             }),
         );
@@ -188,8 +187,9 @@ describe('openClusterDashboardWebview panel lifecycle', () => {
             type: 'clusterDashboard.connectionUnavailable',
             unavailable: {
                 reason: 'userDisconnected',
-                text: expect.any(String),
-                action: 'reconnect',
+                title: expect.any(String),
+                detail: expect.any(String),
+                action: 'retry',
             },
         });
 
@@ -204,7 +204,6 @@ describe('cluster dashboard unavailable recovery', () => {
         vi.mocked(ClustersClient.getBinding).mockReturnValue(binding);
         vi.mocked(ClustersClient.getLatchReason).mockReturnValue(undefined);
         vi.mocked(CredentialCache.getCredentials).mockReturnValue(undefined);
-        vi.mocked(ClustersClient.getLastVerifiedIdentity).mockReturnValue(undefined);
         const controller = open(CLUSTER);
         const options = vi.mocked(openAppWebview).mock.calls.at(-1)?.[0];
         return { controller, context: options?.context as RouterContext };
@@ -212,20 +211,17 @@ describe('cluster dashboard unavailable recovery', () => {
 
     it('resumes the same identity without reloading the dashboard', async () => {
         const { controller, context } = openRecoveryContext();
-        let latchReason: 'userDisconnected' | undefined = 'userDisconnected';
-        vi.mocked(ClustersClient.getLatchReason).mockImplementation(() => latchReason);
-        vi.mocked(ClustersClient.unlatch).mockImplementation(() => {
-            latchReason = undefined;
-        });
         vi.mocked(ClustersClient.resolveBoundClient).mockResolvedValue({
             binding: { ...binding, generation: 2 },
         } as never);
 
         context.describeUnavailable('userDisconnected');
         await expect(
-            context.recoverUnavailable({ reason: 'userDisconnected', action: 'reconnect' }),
+            context.recoverUnavailable({ action: 'retry' }),
         ).resolves.toEqual({ recovered: { text: 'Reconnected' } });
-        expect(context.binding.current.generation).toBe(2);
+        expect(context.binding).toEqual(binding);
+        expect(ClustersClient.unlatch).not.toHaveBeenCalled();
+        expect(ClustersClient.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(binding, { trigger: 'clusterDashboard' });
         expect(controller.panel.webview.postMessage).not.toHaveBeenCalled();
         controller.dispose();
     });
@@ -237,15 +233,15 @@ describe('cluster dashboard unavailable recovery', () => {
             vi.mocked(ClustersClient.getLatchReason).mockReturnValue(latchReason);
 
             await expect(
-                context.recoverUnavailable({ reason: 'userDisconnected', action: 'reconnect' }),
-            ).resolves.toMatchObject({ unavailable: { reason: latchReason, action: 'close' } });
+                context.recoverUnavailable({ action: 'retry' }),
+            ).resolves.toMatchObject({ unavailable: { reason: latchReason, action: latchReason === 'connectionRemoved' ? 'close' : 'retry' } });
             expect(ClustersClient.unlatch).not.toHaveBeenCalled();
             expect(ClustersClient.resolveBoundClient).not.toHaveBeenCalled();
             controller.dispose();
         }
     });
 
-    it('keeps a latch that appears while Reconnect is resolving', async () => {
+    it('keeps a latch that appears while Retry is resolving', async () => {
         const { controller, context } = openRecoveryContext();
         let latchReason: 'connectionRemoved' | undefined;
         vi.mocked(ClustersClient.getLatchReason).mockImplementation(() => latchReason);
@@ -256,40 +252,29 @@ describe('cluster dashboard unavailable recovery', () => {
         context.describeUnavailable('userDisconnected');
 
         await expect(
-            context.recoverUnavailable({ reason: 'userDisconnected', action: 'reconnect' }),
+            context.recoverUnavailable({ action: 'retry' }),
         ).resolves.toMatchObject({ unavailable: { reason: 'connectionRemoved', action: 'close' } });
-        expect(context.binding.current).toEqual(binding);
+        expect(context.binding).toEqual(binding);
         controller.dispose();
     });
 
-    it('keeps the overlay when sign-in is dismissed and requires an explicit changed-identity rebind', async () => {
+    it('keeps the overlay if sign-in is needed or the connection identity changes', async () => {
         const { controller, context } = openRecoveryContext();
-        vi.mocked(CredentialCache.getCredentials).mockReturnValue({
-            authMechanism: 'MicrosoftEntraID',
-            entraIdConfig: { tenantId: 'tenant' },
-        } as never);
-        vi.mocked(ClustersClient.getLastVerifiedIdentity).mockReturnValue({
-            kind: 'entra',
-            accountId: 'account-b',
-            accountLabel: 'Account B',
-            tenantId: 'tenant',
-            providerId: 'microsoft',
-        });
-        vi.mocked(vscode.commands.executeCommand).mockRejectedValueOnce(new UserCancelledError('dismissed'));
+        vi.mocked(ClustersClient.resolveBoundClient).mockRejectedValueOnce(new ConnectionUnavailableError('signInRequired'));
 
         const described = context.describeUnavailable('signInRequired');
         await expect(
-            context.recoverUnavailable({ reason: 'signInRequired', action: described.unavailable.action }),
+            context.recoverUnavailable({ action: 'retry' }),
         ).resolves.toEqual(described);
 
         const replacement = { ...binding, fingerprint: 'identity-b', generation: 2 };
         vi.mocked(ClustersClient.getBinding).mockReturnValue(replacement);
         vi.mocked(ClustersClient.resolveBoundClient).mockResolvedValue({ binding: replacement } as never);
-        context.describeUnavailable('identityChanged');
         await expect(
-            context.recoverUnavailable({ reason: 'identityChanged', action: 'reconnect' }),
-        ).resolves.toEqual({ recovered: { text: 'Now connected as Account B' } });
-        expect(context.binding.current).toEqual(replacement);
+            context.recoverUnavailable({ action: 'retry' }),
+        ).resolves.toMatchObject({ unavailable: { reason: 'identityChanged', action: 'close' } });
+        expect(context.binding).toEqual(binding);
+        expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
         controller.dispose();
     });
 });
@@ -395,8 +380,9 @@ describe('cluster dashboard native context menu commands', () => {
             type: 'clusterDashboard.connectionUnavailable',
             unavailable: {
                 reason: 'userDisconnected',
-                text: expect.any(String),
-                action: 'reconnect',
+                title: expect.any(String),
+                detail: expect.any(String),
+                action: 'retry',
             },
         });
         controller.dispose();

@@ -51,6 +51,7 @@ import { readOnlyJsonDocumentProvider } from '../../../../utils/readOnlyJsonDocu
 import { type BaseRouterContext } from '../../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../../_integration/trpc';
 import { throwIfBoundViewUnavailable } from '../../boundViewOperations';
+import { ConnectionUnavailableError } from '../../../../documentdb/ConnectionUnavailableError';
 import { runCollectionViewOperation, type RouterContext as CollectionViewRouterContext } from '../collectionViewRouter';
 import { FIELD_SUGGESTION_LIMIT } from './constants';
 import { buildCreateIndexShellCommand, buildIndexSpec, CreateIndexInputSchema, isWildcardKey } from './indexCreation';
@@ -163,7 +164,7 @@ export const indexViewRouter = router({
                     const stats = await client.getCollectionStats(myCtx.databaseName, myCtx.collectionName);
                     indexSizes = stats.indexSizes ?? {};
                 } catch (error) {
-                    throwIfBoundViewUnavailable(session.getBinding(), error);
+                    throwIfBoundViewUnavailable(client.binding, error);
                     meterSilentCatch('indexView_getCollectionStats');
                 }
 
@@ -187,7 +188,7 @@ export const indexViewRouter = router({
                         });
                     }
                 } catch (error) {
-                    throwIfBoundViewUnavailable(session.getBinding(), error);
+                    throwIfBoundViewUnavailable(client.binding, error);
                     meterSilentCatch('indexView_getIndexStats');
                 }
 
@@ -219,7 +220,9 @@ export const indexViewRouter = router({
                     async (client) => (await client.getCollectionStats(myCtx.databaseName, myCtx.collectionName)).count,
                 );
             } catch (error) {
-                throwIfBoundViewUnavailable(session.getBinding(), error);
+                if (error instanceof ConnectionUnavailableError) {
+                    throw error;
+                }
                 meterSilentCatch('indexView_getDocumentCount');
                 return 0;
             }

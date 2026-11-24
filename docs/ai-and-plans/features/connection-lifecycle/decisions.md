@@ -27,7 +27,8 @@ created: 2026-11-19
 | 0013 | Correct the minimal design where it lost edits, identity or recovery: latch before save, epoch checks      | Accepted (modifies 0012)    | Operator: "update the plan" after the omissions review      | 2026-11-19 | —                                                                |
 | 0014 | Keep in-memory connection settings after a rejection for a verified Entra identity                         | Accepted                    | Operator selected A to make sign-in recovery smoother       | 2026-11-23 | Yes; WI-5 previously said to delete the entry                    |
 | 0015 | Use the existing latch to block startup after authentication rejection                                     | Accepted                    | Operator selected A; keep the approach simple and pragmatic | 2026-11-23 | Yes; expands the existing latch rather than adding a second hold |
-| 0016 | Keep disconnected webviews open under a full-view overlay                                                  | Accepted                    | Operator chose a simple disabled state with explicit actions | 2026-11-24 | Yes; replaces the inline banner and single-action layout |
+| 0016 | Keep disconnected webviews open under a full-view overlay                                                  | Accepted (modified by 0017) | Operator chose a simple disabled state with explicit actions | 2026-11-24 | Yes; replaces the inline banner and single-action layout |
+| 0017 | Limit unavailable webview recovery to Retry and Close view                                                 | Accepted                    | Operator wants credential repair in the tree and no extra recovery workflow in a tab | 2026-11-24 | Yes; removes in-view credential repair |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -437,3 +438,20 @@ Close. If there is no repair the tab can perform, show only **Close** and leave 
 until the user chooses it. Do not retry rejected credentials or navigate away automatically.
 Keep this component local to the lifecycle webviews for now rather than adding a general
 feature to the webview framework.
+
+## 0017. Limit unavailable webview recovery to Retry and Close view
+
+The operator decided that editing credentials from an open webview is not needed, including as
+a WI-7 follow-up. Users repair credentials or sign in again from the tree. An unavailable view
+keeps its contents under the Fluent dialog and offers **Close view** and, where safe, **Retry**.
+Retry may attempt a connection with the credentials already available; it must not open a
+credential wizard, bypass a credential rejection or removal, silently switch identities, or
+resubmit the failed operation.
+
+Retry keeps the tab bound to its original identity and does not clear a latch. After a
+same-identity repair in the tree, Retry can use the repaired connection. After an identity
+change, reopen from the tree instead of moving the old view or its draft to the new identity.
+A dirty Document View warns that Close view discards unsaved changes, without a second prompt.
+
+The operator approved testing the identity guard in OP-4 and testing the WI-7 **Keep open
+(disabled)** choice and its disable message in OP-5. Neither check is dropped.

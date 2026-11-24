@@ -4,9 +4,52 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
+import * as l10n from '@vscode/l10n';
 import { ClustersClient, type ConnectionBinding } from '../../documentdb/ClustersClient';
 import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
 import { runWithClient } from '../../documentdb/runWithClient';
+import {
+    type ConnectionRecoveryRequest,
+    type ConnectionRecoveryResponse,
+    type ConnectionUnavailableResponse,
+} from '../_integration/connectionUnavailable';
+import { describeUnavailableConnection } from '../_integration/describeUnavailableConnection';
+
+export async function recoverBoundView(
+    binding: ConnectionBinding,
+    trigger: NonNullable<Parameters<typeof runWithClient>[2]>['trigger'],
+    close: () => void,
+    { action }: ConnectionRecoveryRequest,
+): Promise<ConnectionRecoveryResponse | ConnectionUnavailableResponse> {
+    if (action === 'close') {
+        close();
+        return { recovered: { text: '' } };
+    }
+
+    const reason = ClustersClient.getLatchReason(binding.clusterId);
+    if (reason) {
+        return describeUnavailableConnection(reason);
+    }
+
+    try {
+        const assertCurrent = guardBoundViewOperation(binding);
+        const result = await runWithClient(
+            binding,
+            async () => ({ recovered: { text: l10n.t('Reconnected') } }),
+            { trigger },
+        );
+        if ('unavailable' in result) {
+            return describeUnavailableConnection(result.unavailable.reason);
+        }
+        assertCurrent();
+        return result;
+    } catch (error) {
+        if (error instanceof ConnectionUnavailableError) {
+            return describeUnavailableConnection(error.reason);
+        }
+        throw error;
+    }
+}
 
 /** Snapshot per operation, not per panel: later operations can use a recovered generation. */
 export function guardBoundViewOperation(binding: ConnectionBinding, signal?: AbortSignal): () => void {

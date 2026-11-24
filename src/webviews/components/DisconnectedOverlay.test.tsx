@@ -16,8 +16,9 @@ import { DisconnectedOverlay } from './DisconnectedOverlay';
 it('keeps content mounted but inert, and only closes or retries on explicit clicks', async (): Promise<void> => {
     const unavailable: ConnectionUnavailableDetails = {
         reason: 'signInRequired',
-        text: 'Your Microsoft session is unavailable.',
-        action: 'signInAgain',
+        title: 'Sign-in required',
+        detail: 'Sign in from the connection tree, then click Retry.',
+        action: 'retry',
     };
     const onAction = vi.fn();
     const host = document.createElement('div');
@@ -27,7 +28,7 @@ it('keeps content mounted but inert, and only closes or retries on explicit clic
         const render = async (failure?: ConnectionUnavailableDetails, recovering?: boolean): Promise<void> => {
             await act(async () =>
                 root.render(
-                    <DisconnectedOverlay unavailable={failure} onAction={onAction} recovering={recovering}>
+                    <DisconnectedOverlay unavailable={failure} onAction={onAction} recovering={recovering} warnOnClose>
                         <textarea aria-label="Document" defaultValue="unsaved edit" />
                     </DisconnectedOverlay>,
                 ),
@@ -35,10 +36,14 @@ it('keeps content mounted but inert, and only closes or retries on explicit clic
         };
         await render();
         const draft = host.querySelector('textarea');
-        await render({ ...unavailable, reason: 'credentialsMissing', action: 'close' });
+        await render({
+            reason: 'identityChanged',
+            title: 'Connection changed',
+            detail: 'Reopen it from the tree.',
+            action: 'close',
+        });
         const dialog = (): HTMLElement | null => document.querySelector('.disconnectedOverlay[aria-modal="true"]');
         const buttons = (): HTMLButtonElement[] => [...(dialog()?.querySelectorAll('button') ?? [])];
-        expect(dialog()?.textContent).toContain(unavailable.text);
         expect(host.querySelector('[inert] textarea')).toBe(draft);
         expect(draft?.value).toBe('unsaved edit');
         expect(dialog()?.getAttribute('role')).toBe('dialog');
@@ -50,13 +55,19 @@ it('keeps content mounted but inert, and only closes or retries on explicit clic
         expect(onAction).toHaveBeenCalledExactlyOnceWith('close');
 
         await render(unavailable, true);
-        expect(buttons().map((button) => button.textContent)).toEqual(['Retry sign-in', 'Close view']);
+        expect(document.getElementById(dialog()?.getAttribute('aria-labelledby') ?? '')?.textContent).toBe(
+            unavailable.title,
+        );
+        const description = document.getElementById(dialog()?.getAttribute('aria-describedby') ?? '');
+        expect(description?.textContent).toContain(unavailable.detail);
+        expect(description?.textContent).toContain('Closing this view discards unsaved changes.');
+        expect(buttons().map((button) => button.textContent)).toEqual(['Retry', 'Close view']);
         expect(buttons()[0]?.getAttribute('aria-disabled')).toBe('true');
         await act(async () => buttons()[0]?.click());
         expect(onAction).toHaveBeenCalledTimes(1);
         await render(unavailable);
         await act(async () => buttons()[0]?.click());
-        expect(onAction).toHaveBeenLastCalledWith('signInAgain');
+        expect(onAction).toHaveBeenLastCalledWith('retry');
 
         await render();
         expect(dialog()).toBeNull();

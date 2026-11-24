@@ -88,8 +88,8 @@ result may continue, but say so in the message. Record the result in the Progres
 | OP-1 | WI-1, CP-0         | **Two parts.** (a) Before the handler change: does an expired token on a new socket get code 18 or a socket close? (b) After it: renewal succeeds. |
 | OP-2 | WI-3, CP-W3        | The azext workflow checks on the packaged VSIX: Azure sign-in, discovery, filters, deep links, wizards, Azure Resources view.                      |
 | OP-3 | WI-5 done          | OT-2's tree part with a real sign-out: Sign in again, a dismissal, no reprompt.                                                                    |
-| OP-4 | WI-6 done          | OT-1 (short form, with the WI-4 hook) and OT-3(a) and (b) on a dev build.                                                                          |
-| OP-5 | WI-7 done          | OT-7 on a dev build: Disconnect during a copy, export or import, during an in-flight query or save, and a folder delete with a connected child.    |
+| OP-4 | WI-6 done          | OT-1 (short form, with the WI-4 hook) and OT-3(a) identity guard and (b) same-user password change, on a dev build.                               |
+| OP-5 | WI-7 done          | OT-7 plus OT-3(a)'s **Keep open (disabled)** choice and pushed disable message, on a dev build.                                                   |
 | OP-6 | Before PR F (CP-5) | OT-1 to OT-7 on the packaged VSIX, with at least one real wait of two hours or more (PR F step 3).                                                 |
 
 ### Per-PR workflow
@@ -405,7 +405,7 @@ a checkpoint changes them.
     new panels run as identity B while panels opened as A stay disabled.
   - `reason` is one of: `signInRequired`, `credentialsRejected`, `credentialsMissing`, `credentialsChanged`,
     `identityChanged`, `userDisconnected`, `connectionRemoved`, `unreachable`.
-  - `action` is one of: `reconnect`, `signInAgain`, `updateCredentials`, `close`.
+  - `action` is `retry` or `close`. Close view is always available.
   - Reasons are bounded enums. The webview gets the localized text and the action from the host.
   - The only push is teardown: Disconnect with Keep open calls each registered surface's `disable(reason)`
     (WI-6 host step 1).
@@ -1471,16 +1471,13 @@ approved plan allows; the webview half then stacks on the host half without wait
    - **Document View:** the dirty editor content and `isDirty`.
    - **Dashboard:** the last data (WI-8 stops the polling).
 4. **Actions.**
-   - **Reconnect** (same fingerprint): clear the latch if one is set, and resolve again. On success,
-     remove the overlay and re-enable the actions; the live region announces "Reconnected". The query is
-     not run automatically, and there is **no** "out of date" notice (decision 0010; see #1106). After a
-     Disconnect the credentials are still cached (0011), so this is silent.
-   - **Reconnect after an identity change:** an explicit rebind to the new fingerprint, then show "Now
-     connected as {label}" (OT-3).
-   - **Sign in again:** the WI-5 command.
-   - **Update credentials:** the existing command.
-   - **Close view:** dispose the panel only through this explicit action. When no supported repair is
-     available in the tab, Close view is the only action.
+   - **Retry:** resolve only the original fingerprint, silently and without clearing a latch.
+     After a same-identity repair in the tree, recovery removes the overlay without replaying the
+     failed operation. The live region announces "Reconnected"; there is no out-of-date notice
+     (decision 0010; see #1106). Sign-in and credential changes stay in the tree.
+   - **Close view:** the only action after an identity change or removal. Reopen from the tree
+     to use a different identity. A dirty Document View warns that closing discards unsaved
+     changes; do not open a second prompt (decision 0017).
 5. **L2-dev scenarios** (`scenarios.ts` and `fixtures.ts`):
    - `collectionView/disconnected-signInRequired`: query text kept, Run disabled, no host calls when
      Run is clicked;
@@ -1562,6 +1559,11 @@ behave as today.
   all eight dark-theme scenarios for Collection View, Document View and Dashboard passed.
   The dialog uses **Disconnected** for an explicit disconnect, **Connection lost** for an
   unreachable connection, and **Close view** for explicit disposal.
+- **Final recovery design:** Decision 0017 supersedes the earlier in-view repair and rebind
+  experiments. The operator approved a short status title, separate next-step text, and
+  **Retry** beside **Close view** in an interactive Collection View preview on 2026-11-24.
+  Credential repair stays in the tree; Retry keeps the original identity and never resubmits an
+  operation. The dirty Document View warning stays in the dialog, without another prompt.
 
 ---
 

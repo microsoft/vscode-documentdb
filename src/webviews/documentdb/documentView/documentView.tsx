@@ -431,7 +431,7 @@ export const DocumentView = (): JSX.Element => {
         const revision = ++operationRevisionRef.current;
         setRecovering(true);
         void trpcClient.mongoClusters.documentView.recoverUnavailable
-            .mutate({ reason: current.reason, action })
+            .mutate({ action })
             .then((response: ConnectionUnavailableResponse | ConnectionRecoveryResponse) => {
                 if (disposedRef.current || revision !== operationRevisionRef.current || action === 'close') {
                     return;
@@ -473,6 +473,7 @@ export const DocumentView = (): JSX.Element => {
 
     return (
         <DisconnectedOverlay
+            warnOnClose={isDirty}
             unavailable={unavailable}
             onAction={handleUnavailableAction}
             recovering={recovering}

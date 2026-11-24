@@ -5,14 +5,8 @@
 
 import { type ConnectionUnavailableReason } from '../../documentdb/ConnectionUnavailableError';
 
-export type ConnectionRecoveryAction = 'reconnect' | 'signInAgain' | 'updateCredentials' | 'close';
-
-export const connectionRecoveryActions = [
-    'reconnect',
-    'signInAgain',
-    'updateCredentials',
-    'close',
-] as const satisfies readonly ConnectionRecoveryAction[];
+export const connectionRecoveryActions = ['retry', 'close'] as const;
+export type ConnectionRecoveryAction = (typeof connectionRecoveryActions)[number];
 
 export const connectionUnavailableReasons = [
     'signInRequired',
@@ -27,7 +21,8 @@ export const connectionUnavailableReasons = [
 
 export interface ConnectionUnavailableDetails {
     readonly reason: ConnectionUnavailableReason;
-    readonly text: string;
+    readonly title: string;
+    readonly detail: string;
     readonly action: ConnectionRecoveryAction;
 }
 
@@ -36,7 +31,6 @@ export interface ConnectionUnavailableResponse {
 }
 
 export interface ConnectionRecoveryRequest {
-    readonly reason: ConnectionUnavailableReason;
     readonly action: ConnectionRecoveryAction;
 }
 
@@ -62,7 +56,8 @@ function isConnectionUnavailableDetails(value: unknown): value is ConnectionUnav
     const candidate = value as Partial<ConnectionUnavailableDetails>;
     return (
         connectionUnavailableReasons.some((reason) => reason === candidate.reason) &&
-        typeof candidate.text === 'string' &&
+        typeof candidate.title === 'string' &&
+        typeof candidate.detail === 'string' &&
         connectionRecoveryActions.some((action) => action === candidate.action)
     );
 }

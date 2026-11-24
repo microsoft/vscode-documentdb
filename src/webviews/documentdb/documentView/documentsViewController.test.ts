@@ -5,6 +5,7 @@
 
 import { beforeEach, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import { ConnectionUnavailableError } from '../../../documentdb/ConnectionUnavailableError';
 import { getConnectionSurfaces } from '../../../documentdb/connectionSurfaces';
 import { type OpenAppWebviewOptions, type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
 import {
@@ -15,7 +16,7 @@ import { type RouterContext } from './documentsViewRouter';
 
 const mocks = vi.hoisted(() => ({
     getBinding: vi.fn(),
-    getLastVerifiedIdentity: vi.fn(),
+    getEpoch: vi.fn(() => 1),
     getLatchReason: vi.fn(),
     resolveBoundClient: vi.fn(),
     unlatch: vi.fn(),
@@ -58,17 +59,6 @@ beforeEach((): void => {
     }
     mocks.getBinding.mockReturnValue(originalBinding);
     mocks.getLatchReason.mockReturnValue(undefined);
-    mocks.getLastVerifiedIdentity.mockReturnValue({
-        kind: 'entra',
-        accountId: 'account',
-        accountLabel: 'Account B',
-        tenantId: 'tenant',
-        providerId: 'microsoft',
-    });
-    mocks.getCredentials.mockReturnValue({
-        authMechanism: 'MicrosoftEntraID',
-        entraIdConfig: { tenantId: 'tenant' },
-    });
     vi.spyOn(vscode.commands, 'executeCommand').mockImplementation(mocks.executeCommand);
     vi.mocked(openAppWebview).mockImplementation(
         <T>(options: OpenAppWebviewOptions<T>): AppWebviewController<T> => {
@@ -111,86 +101,71 @@ it('registers the panel, sends typed disable payloads and unregisters on dispose
         type: 'documentView.connectionUnavailable',
         unavailable: {
             reason: 'userDisconnected',
-            text: expect.any(String),
-            action: 'reconnect',
+            title: expect.any(String),
+            detail: expect.any(String),
+            action: 'retry',
         },
     });
 
     opened[0].dispose();
     expect(getConnectionSurfaces(clusterId)).toEqual([]);
-    expect(context.binding.current).toEqual(originalBinding);
+    expect(context.binding).toBe(originalBinding);
 });
 
 it('resumes a same-identity binding without replaying document operations', async (): Promise<void> => {
     const context = openPanel();
-    mocks.getLatchReason.mockReturnValueOnce('userDisconnected');
     mocks.resolveBoundClient.mockResolvedValue({ binding: { ...originalBinding, generation: 2 } });
-    const described = context.describeUnavailable('userDisconnected');
 
     await expect(
-        context.recoverUnavailable({ reason: 'userDisconnected', action: described.unavailable.action }),
+        context.recoverUnavailable({ action: 'retry' }),
     ).resolves.toEqual({ recovered: { text: 'Reconnected' } });
-    expect(mocks.unlatch).toHaveBeenCalledExactlyOnceWith(clusterId);
+    expect(mocks.unlatch).not.toHaveBeenCalled();
     expect(mocks.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(originalBinding, {
         trigger: 'documentView',
     });
-    expect(context.binding.current.generation).toBe(2);
+    expect(context.binding).toBe(originalBinding);
 });
 
-it('requires an explicit rebind for a changed identity', async (): Promise<void> => {
+it('keeps the original binding after an identity change', async (): Promise<void> => {
     const context = openPanel();
     mocks.getBinding.mockReturnValue(newerBinding);
     mocks.resolveBoundClient.mockResolvedValue({ binding: newerBinding });
     const described = context.describeUnavailable('identityChanged');
-    expect(described.unavailable.action).toBe('reconnect');
+    expect(described.unavailable.action).toBe('close');
 
     await expect(
-        context.recoverUnavailable({ reason: 'identityChanged', action: 'reconnect' }),
-    ).resolves.toEqual({ recovered: { text: 'Now connected as Account B' } });
-    expect(context.binding.current).toEqual(newerBinding);
+        context.recoverUnavailable({ action: 'retry' }),
+    ).resolves.toEqual(described);
+    expect(mocks.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(originalBinding, { trigger: 'documentView' });
+    expect(context.binding).toBe(originalBinding);
 });
 
-it('uses the explicit sign-in command and closes only on Close', async (): Promise<void> => {
+it('does not prompt on Retry and closes only on Close view', async (): Promise<void> => {
     const context = openPanel();
-    const described = context.describeUnavailable('credentialsRejected');
-    expect(described.unavailable.action).toBe('signInAgain');
-    mocks.getBinding.mockReturnValue(originalBinding);
+    const described = context.describeUnavailable('signInRequired');
+    expect(described.unavailable.action).toBe('retry');
+    mocks.resolveBoundClient.mockRejectedValueOnce(new ConnectionUnavailableError('signInRequired'));
 
-    await expect(context.recoverUnavailable({ reason: 'credentialsRejected', action: 'signInAgain' })).resolves.toEqual(
+    await expect(context.recoverUnavailable({ action: 'retry' })).resolves.toEqual(
         described,
     );
-    expect(mocks.executeCommand).toHaveBeenCalledExactlyOnceWith('vscode-documentdb.command.signInAgain', {
-        clusterId,
-    });
+    expect(mocks.executeCommand).not.toHaveBeenCalled();
 
     expect(getConnectionSurfaces(clusterId)).toHaveLength(1);
     context.describeUnavailable('connectionRemoved');
-    await context.recoverUnavailable({ reason: 'connectionRemoved', action: 'close' });
+    await context.recoverUnavailable({ action: 'close' });
     expect(getConnectionSurfaces(clusterId)).toEqual([]);
 });
 
-it('keeps a removed connection unavailable when an old Reconnect action arrives', async (): Promise<void> => {
+it('keeps a removed connection unavailable when an old Retry action arrives', async (): Promise<void> => {
     const context = openPanel();
     context.describeUnavailable('userDisconnected');
     mocks.getLatchReason.mockReturnValue('connectionRemoved');
 
-    await expect(context.recoverUnavailable({ reason: 'userDisconnected', action: 'reconnect' })).resolves.toMatchObject({
+    await expect(context.recoverUnavailable({ action: 'retry' })).resolves.toMatchObject({
         unavailable: { reason: 'connectionRemoved', action: 'close' },
     });
     expect(mocks.unlatch).not.toHaveBeenCalled();
     expect(mocks.resolveBoundClient).not.toHaveBeenCalled();
     expect(getConnectionSurfaces(clusterId)).toHaveLength(1);
-});
-
-it('requires explicit rebind if sign-in succeeds with a different identity', async (): Promise<void> => {
-    const context = openPanel();
-    context.describeUnavailable('signInRequired');
-    mocks.executeCommand.mockImplementationOnce(async () => {
-        mocks.getBinding.mockReturnValue(newerBinding);
-    });
-
-    await expect(context.recoverUnavailable({ reason: 'signInRequired', action: 'signInAgain' })).resolves.toMatchObject({
-        unavailable: { reason: 'identityChanged', action: 'reconnect' },
-    });
-    expect(context.binding.current).toBe(originalBinding);
 });

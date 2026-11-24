@@ -50,8 +50,9 @@ Evidence, telemetry and source pointers: [research-findings.md](./research-findi
 - **Keep one client per cluster.** Surfaces resolve it per operation and check its identity
   fingerprint and generation.
 - **Never change identity under an open surface.** It stays open, keeps its state, and shows a
-  shaded, disabled view with a dialog that explains the reason. Offer **Close view** and, when supported, an
-  explicit recovery action.
+  shaded, disabled view with a dialog that names the problem in a short title and gives the next
+  step separately. Offer **Close view**, with **Retry** beside it when the view can safely reuse
+  the available credentials. Credential repair stays in the tree.
 - After a database rejects a verified Entra identity, discard the client but keep its in-memory
   connection settings for explicit sign-in. Do not retain the rejected token or retry silently.
   When the tree offers **Retry sign-in**, it does not also offer **Retry**.
@@ -88,6 +89,7 @@ See [decisions.md](./decisions.md):
 - 0014 retain in-memory settings for explicit sign-in recovery after verified Entra rejection.
 - 0015 use the existing latch to block startup after authentication rejection until explicit recovery.
 - 0016 keep disconnected webviews open under a full-view overlay with explicit actions.
+- 0017 limit unavailable webview recovery to Retry and Close view.
 
 ## Timeline
 

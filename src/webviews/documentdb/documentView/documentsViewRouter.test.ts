@@ -37,7 +37,7 @@ const upsertDocument = vi.fn<ClustersClient['upsertDocument']>();
 const pointRead = vi.fn<ClustersClient['pointRead']>();
 const viewPanelTitleSetter = vi.fn();
 const describeUnavailable = vi.fn((reason: ConnectionUnavailableError['reason']) => ({
-    unavailable: { reason, text: 'Connection unavailable.', action: 'close' as const },
+    unavailable: { reason, title: 'Connection unavailable', detail: 'Close this view.', action: 'close' as const },
 }));
 const recoverUnavailable = vi.fn();
 const id = new ObjectId('000000000000000000000001');
@@ -56,7 +56,7 @@ function createCaller(signal?: AbortSignal): ReturnType<typeof callDocumentView>
         databaseName: 'database',
         collectionName: 'collection',
         documentId: 'id',
-        binding: { current: binding },
+        binding,
         describeUnavailable,
         recoverUnavailable,
         signal,
@@ -69,7 +69,7 @@ describe('Document View bound operations', () => {
     beforeEach(() => {
         vi.resetAllMocks();
         describeUnavailable.mockImplementation((reason: ConnectionUnavailableError['reason']) => ({
-            unavailable: { reason, text: 'Connection unavailable.', action: 'close' as const },
+            unavailable: { reason, title: 'Connection unavailable', detail: 'Close this view.', action: 'close' as const },
         }));
         mocks.getBinding.mockReturnValue(newerBinding);
         mocks.getEpoch.mockReturnValue(3);
@@ -118,7 +118,7 @@ describe('Document View bound operations', () => {
         const unavailable = new ConnectionUnavailableError('identityChanged');
         mocks.resolveBoundClient.mockRejectedValueOnce(unavailable);
         await expect(createCaller().saveDocument(input)).resolves.toEqual({
-            unavailable: { reason: 'identityChanged', text: 'Connection unavailable.', action: 'close' },
+            unavailable: { reason: 'identityChanged', title: 'Connection unavailable', detail: 'Close this view.', action: 'close' },
         });
         expect(upsertDocument).not.toHaveBeenCalled();
     });
@@ -129,7 +129,7 @@ describe('Document View bound operations', () => {
         mocks.reportFailure.mockReturnValueOnce('credentialsRejected');
 
         await expect(createCaller().saveDocument(input)).resolves.toEqual({
-            unavailable: { reason: 'credentialsRejected', text: 'Connection unavailable.', action: 'close' },
+            unavailable: { reason: 'credentialsRejected', title: 'Connection unavailable', detail: 'Close this view.', action: 'close' },
         });
         expect(mocks.reportFailure).toHaveBeenCalledExactlyOnceWith(newerBinding, failure);
         expect(upsertDocument).toHaveBeenCalledOnce();
@@ -141,7 +141,7 @@ describe('Document View bound operations', () => {
         mocks.reportFailure.mockReturnValueOnce('signInRequired');
 
         await expect(createCaller().getDocumentById(serializedId)).resolves.toEqual({
-            unavailable: { reason: 'signInRequired', text: 'Connection unavailable.', action: 'close' },
+            unavailable: { reason: 'signInRequired', title: 'Connection unavailable', detail: 'Close this view.', action: 'close' },
         });
     });
 
@@ -151,7 +151,7 @@ describe('Document View bound operations', () => {
         await expect(
             createCaller().saveDocument({ documentContent: '{"invalid"' }),
         ).resolves.toEqual({
-            unavailable: { reason: 'userDisconnected', text: 'Connection unavailable.', action: 'close' },
+            unavailable: { reason: 'userDisconnected', title: 'Connection unavailable', detail: 'Close this view.', action: 'close' },
         });
         expect(upsertDocument).not.toHaveBeenCalled();
     });

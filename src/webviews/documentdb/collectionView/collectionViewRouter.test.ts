@@ -45,7 +45,7 @@ vi.mock('../../_integration/trpc', async () => {
 
 const binding = { clusterId: 'cluster', fingerprint: 'host-only-fingerprint', generation: 1 };
 const describeUnavailable = vi.fn((reason: ConnectionUnavailableError['reason']) => ({
-    unavailable: { reason, text: 'Connection unavailable.', action: 'close' as const },
+    unavailable: { reason, title: 'Connection unavailable', detail: 'Close this view.', action: 'close' as const },
 }));
 const callCollectionView = createCallerFactory(collectionsViewRouter);
 
@@ -68,7 +68,7 @@ function createCaller(): ReturnType<typeof callCollectionView> {
 beforeEach((): void => {
     vi.resetAllMocks();
     describeUnavailable.mockImplementation((reason: ConnectionUnavailableError['reason']) => ({
-        unavailable: { reason, text: 'Connection unavailable.', action: 'close' as const },
+        unavailable: { reason, title: 'Connection unavailable', detail: 'Close this view.', action: 'close' as const },
     }));
     mocks.getBinding.mockReturnValue(binding);
     mocks.getEpoch.mockReturnValue(1);
@@ -86,7 +86,7 @@ it('returns structured unavailability from a Collection View query', async (): P
             executionIntent: 'initial',
         }),
     ).resolves.toEqual({
-        unavailable: { reason: 'credentialsRejected', text: 'Connection unavailable.', action: 'close' },
+        unavailable: { reason: 'credentialsRejected', title: 'Connection unavailable', detail: 'Close this view.', action: 'close' },
     });
     expect(mocks.runFindQueryWithCache).toHaveBeenCalledOnce();
 });

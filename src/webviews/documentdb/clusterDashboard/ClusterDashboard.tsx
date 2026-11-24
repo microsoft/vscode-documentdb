@@ -727,7 +727,7 @@ export const ClusterDashboard = (): JSX.Element => {
         const revision = ++operationRevisionRef.current;
         setRecovering(true);
         void trpcClient.clusterDashboard.recoverUnavailable
-            .mutate({ reason: current.reason, action })
+            .mutate({ action })
             .then((response: ConnectionUnavailableResponse | ConnectionRecoveryResponse) => {
                 if (disposedRef.current || revision !== operationRevisionRef.current || action === 'close') {
                     return;

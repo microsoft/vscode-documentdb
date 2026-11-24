@@ -10,25 +10,18 @@ import * as vscode from 'vscode';
 import { type DeepLinkTelemetry } from '../../../deepLinks/deepLinkTelemetry';
 
 import { openCollectionViewInternal } from '../../../commands/openCollectionView/openCollectionView';
-import { AuthMethodId } from '../../../documentdb/auth/AuthMethodId';
-import { ClustersClient, type ConnectionBinding } from '../../../documentdb/ClustersClient';
+import { type ConnectionBinding } from '../../../documentdb/ClustersClient';
 import { registerConnectionSurface } from '../../../documentdb/connectionSurfaces';
 import {
     ConnectionUnavailableError,
     type ConnectionUnavailableReason,
 } from '../../../documentdb/ConnectionUnavailableError';
-import { CredentialCache } from '../../../documentdb/CredentialCache';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
-import {
-    type ConnectionRecoveryRequest,
-    type ConnectionRecoveryResponse,
-    type ConnectionUnavailableMessage,
-    type ConnectionUnavailableResponse,
-} from '../../_integration/connectionUnavailable';
+import { type ConnectionUnavailableMessage } from '../../_integration/connectionUnavailable';
 import { describeUnavailableConnection } from '../../_integration/describeUnavailableConnection';
 import { openAppWebview, type AppWebviewController } from '../../_integration/openAppWebview';
-import { guardBoundViewOperation, isBoundViewOperationCurrent } from '../boundViewOperations';
+import { guardBoundViewOperation, isBoundViewOperationCurrent, recoverBoundView } from '../boundViewOperations';
 import {
     CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS,
     type ClusterDashboardContextMenuContext,
@@ -119,7 +112,7 @@ const openPanels = new Map<string, OpenPanel>();
 interface OpenPanel {
     readonly controller: AppWebviewController<ClusterDashboardWebviewConfigurationType>;
     readonly config: ClusterDashboardWebviewConfigurationType;
-    readonly binding: { current: ConnectionBinding };
+    readonly binding: ConnectionBinding;
     readonly postUnavailable: (reason: ConnectionUnavailableReason) => void;
 }
 
@@ -261,7 +254,7 @@ async function runRowAction(
 ): Promise<void> {
     const databaseName = menuContext.clusterDashboardDatabase;
     const collectionName = menuContext.clusterDashboardCollection;
-    const assertCurrent = guardBoundViewOperation(panel.binding.current);
+    const assertCurrent = guardBoundViewOperation(panel.binding);
     assertCurrent();
 
     actionContext.telemetry.properties.namespaceLevel = collectionName === undefined ? 'database' : 'collection';
@@ -377,32 +370,6 @@ export function registerClusterDashboardContextMenuCommands(context: vscode.Exte
     }
 }
 
-function canRetrySignIn(clusterId: string): boolean {
-    const credentials = CredentialCache.getCredentials(clusterId);
-    const identity = ClustersClient.getLastVerifiedIdentity(clusterId);
-    return (
-        credentials?.authMechanism === AuthMethodId.MicrosoftEntraID &&
-        identity?.kind === 'entra' &&
-        identity.tenantId === credentials.entraIdConfig?.tenantId
-    );
-}
-
-function identityLabel(clusterId: string): string {
-    const identity = ClustersClient.getLastVerifiedIdentity(clusterId);
-    switch (identity?.kind) {
-        case 'entra':
-            return identity.accountLabel;
-        case 'native':
-            return identity.username;
-        case 'managedIdentity':
-            return identity.clientId ?? vscode.l10n.t('managed identity');
-        case 'none':
-            return vscode.l10n.t('no authentication');
-        default:
-            return vscode.l10n.t('connection');
-    }
-}
-
 export function openClusterDashboardWebview(
     initialData: ClusterDashboardWebviewConfigurationType,
     binding: ConnectionBinding,
@@ -419,137 +386,18 @@ export function openClusterDashboardWebview(
     // second id for the same session.
     initialData = { ...initialData, dashboardSessionId: randomUUID() };
 
-    const bindingRef = { current: binding };
-    let activeUnavailable: ConnectionUnavailableResponse | undefined;
-
     // Declared before `trpcContext` because that context closes over it, and assigned after,
     // because `openAppWebview` needs the context. `const` is not available for that ordering.
     // eslint-disable-next-line prefer-const
     let controller: AppWebviewController<ClusterDashboardWebviewConfigurationType>;
 
-    const describeUnavailable = (reason: ConnectionUnavailableReason): ConnectionUnavailableResponse => {
-        const current = ClustersClient.getBinding(initialData.clusterId);
-        const canReconnect =
-            reason === 'identityChanged' || reason === 'credentialsChanged'
-                ? current !== undefined && current.fingerprint !== bindingRef.current.fingerprint
-                : reason === 'userDisconnected' || reason === 'unreachable';
-        activeUnavailable = describeUnavailableConnection(reason, {
-            canRetrySignIn: canRetrySignIn(initialData.clusterId),
-            canUpdateCredentials: false,
-            canReconnect,
-        });
-        return activeUnavailable;
-    };
-
     const postUnavailable = (reason: ConnectionUnavailableReason): void => {
-        const described = describeUnavailable(reason);
         const message: ConnectionUnavailableMessage = {
             type: 'clusterDashboard.connectionUnavailable',
-            unavailable: described.unavailable,
+            unavailable: describeUnavailableConnection(reason).unavailable,
         };
         if (!controller.isDisposed) {
             void controller.panel.webview.postMessage(message);
-        }
-    };
-
-    const recoverUnavailable = async (
-        request: ConnectionRecoveryRequest,
-    ): Promise<ConnectionUnavailableResponse | ConnectionRecoveryResponse> => {
-        if (request.action === 'close') {
-            controller.dispose();
-            return { recovered: { text: '' } };
-        }
-
-        if (
-            activeUnavailable === undefined ||
-            activeUnavailable.unavailable.reason !== request.reason ||
-            activeUnavailable.unavailable.action !== request.action
-        ) {
-            return activeUnavailable ?? describeUnavailable(request.reason);
-        }
-
-        const latchReason = ClustersClient.getLatchReason(initialData.clusterId);
-        if (latchReason && latchReason !== request.reason) {
-            return describeUnavailable(latchReason);
-        }
-
-        if (request.action === 'signInAgain') {
-            if (!canRetrySignIn(initialData.clusterId)) {
-                return describeUnavailable(request.reason);
-            }
-            const before = ClustersClient.getBinding(initialData.clusterId);
-            try {
-                await vscode.commands.executeCommand('vscode-documentdb.command.signInAgain', {
-                    clusterId: initialData.clusterId,
-                });
-            } catch (error) {
-                if (error instanceof UserCancelledError) {
-                    return describeUnavailable(request.reason);
-                }
-                throw error;
-            }
-
-            const recovered = ClustersClient.getBinding(initialData.clusterId);
-            const reasonAfterSignIn = ClustersClient.getLatchReason(initialData.clusterId);
-            if (reasonAfterSignIn || !recovered || recovered.generation === before?.generation) {
-                return describeUnavailable(reasonAfterSignIn ?? request.reason);
-            }
-            if (recovered.fingerprint !== bindingRef.current.fingerprint) {
-                return describeUnavailable('identityChanged');
-            }
-            bindingRef.current = recovered;
-            activeUnavailable = undefined;
-            return { recovered: { text: vscode.l10n.t('Reconnected') } };
-        }
-
-        if (request.action !== 'reconnect') {
-            return describeUnavailable(request.reason);
-        }
-
-        const original = bindingRef.current;
-        const current = ClustersClient.getBinding(initialData.clusterId);
-        const isExplicitRebind =
-            request.reason === 'identityChanged' || request.reason === 'credentialsChanged';
-        if (isExplicitRebind && (!current || current.fingerprint === original.fingerprint)) {
-            return describeUnavailable(request.reason);
-        }
-        const target = isExplicitRebind ? current : (current?.fingerprint === original.fingerprint ? current : original);
-        if (!target) {
-            return describeUnavailable(request.reason);
-        }
-
-        if (latchReason) {
-            if (latchReason !== 'userDisconnected' && latchReason !== 'credentialsChanged') {
-                return describeUnavailable(latchReason);
-            }
-            ClustersClient.unlatch(initialData.clusterId);
-        }
-
-        try {
-            const resolved = await ClustersClient.resolveBoundClient(target, { trigger: 'clusterDashboard' });
-            const reasonAfterReconnect = ClustersClient.getLatchReason(initialData.clusterId);
-            if (reasonAfterReconnect) {
-                return describeUnavailable(reasonAfterReconnect);
-            }
-            if (
-                ClustersClient.getBinding(initialData.clusterId)?.fingerprint !== target.fingerprint
-            ) {
-                return describeUnavailable(request.reason);
-            }
-            bindingRef.current = resolved.binding;
-            activeUnavailable = undefined;
-            return {
-                recovered: {
-                    text: isExplicitRebind
-                        ? vscode.l10n.t('Now connected as {0}', identityLabel(initialData.clusterId))
-                        : vscode.l10n.t('Reconnected'),
-                },
-            };
-        } catch (error) {
-            if (error instanceof ConnectionUnavailableError) {
-                return describeUnavailable(error.reason);
-            }
-            throw error;
         }
     };
 
@@ -558,9 +406,9 @@ export function openClusterDashboardWebview(
         dbExperience: API.DocumentDB,
         webviewName: 'clusterDashboard',
         clusterId: initialData.clusterId,
-        binding: bindingRef,
-        describeUnavailable,
-        recoverUnavailable,
+        binding,
+        describeUnavailable: describeUnavailableConnection,
+        recoverUnavailable: (request) => recoverBoundView(binding, 'clusterDashboard', () => controller.dispose(), request),
         clusterDisplayName: initialData.clusterDisplayName,
         viewId: initialData.viewId,
         dashboardSessionId: initialData.dashboardSessionId,
@@ -569,7 +417,7 @@ export function openClusterDashboardWebview(
         onNamespaceBusy: async (databaseName, collectionName, busy): Promise<void> => {
             if (!controller.isDisposed) {
                 await postNamespaceBusy(
-                    { controller, config: initialData, binding: bindingRef, postUnavailable },
+                    { controller, config: initialData, binding, postUnavailable },
                     databaseName,
                     collectionName,
                     'create',
@@ -607,7 +455,7 @@ export function openClusterDashboardWebview(
         },
     });
 
-    openPanels.set(panelKey, { controller, config: initialData, binding: bindingRef, postUnavailable });
+    openPanels.set(panelKey, { controller, config: initialData, binding, postUnavailable });
     const session = initialData;
     trackDashboardLifetime(controller, (lifetime) => reportDashboardClosed(lifetime, session));
     const registration = registerConnectionSurface({
