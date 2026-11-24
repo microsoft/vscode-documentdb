@@ -58,21 +58,25 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
                 continue;
             }
             const locator = page.getByRole(step.role, { name: step.name, exact: true });
-            if (step.action === 'click') {
+            if (step.action === 'press') {
+                await locator.press(step.key, { timeout: 60000 });
+            } else if (step.action === 'click') {
                 await locator.click({ timeout: 60000 });
             } else if (step.action === 'replaceText') {
                 const modifier = await page.evaluate(() => (/Mac|iPhone|iPad/.test(navigator.platform) ? 'Meta' : 'Control'));
+                const renderedEditor = `.monaco-editor:has([aria-label="${step.name}"]) .view-lines`;
                 await locator.press(`${modifier}+A`, { timeout: 60000 });
                 await locator.press('Backspace', { timeout: 60000 });
                 await wait(
-                    () => document.querySelector('.monaco-editor .view-lines')?.textContent?.trim() === '',
-                    undefined,
+                    (selector) => document.querySelector(selector)?.textContent?.trim() === '',
+                    renderedEditor,
                     'cleared editor',
                 );
                 await page.keyboard.insertText(step.value);
                 await wait(
-                    (value) => document.querySelector('.monaco-editor .view-lines')?.textContent?.replace(/\u00a0/g, ' ').includes(value) === true,
-                    step.value,
+                    ({ selector, value }) =>
+                        document.querySelector(selector)?.textContent?.replace(/\u00a0/g, ' ').includes(value) === true,
+                    { selector: renderedEditor, value: step.value },
                     'editor text to render',
                 );
             } else {
@@ -121,6 +125,7 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
                                         count: calls.length,
                                         matching: calls.filter(
                                             (call): boolean =>
+                                                expected.checkInput === false ||
                                                 JSON.stringify(call.input) === JSON.stringify(expected.input),
                                         ).length,
                                     };
@@ -131,7 +136,10 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
                                 name: assertion.name,
                                 passed: actual.count === assertion.count && actual.matching === assertion.count,
                                 actual,
-                                expected: { count: assertion.count, input: assertion.input },
+                                expected:
+                                    assertion.checkInput === false
+                                        ? { count: assertion.count }
+                                        : { count: assertion.count, input: assertion.input },
                             });
                         } else if (assertion.kind === 'order') {
                             const actual = await page.evaluate(

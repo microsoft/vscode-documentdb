@@ -66,7 +66,7 @@ describe('Shared browser fixture core', (): void => {
         ]);
     });
 
-    it('releases only the next held reply and drops an aborted request', async (): Promise<void> => {
+    it('releases a held reply and drops an aborted request', async (): Promise<void> => {
         const messages = vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
         const path = 'localQuickStart.checkPort';
         const api = fakeVsCodeApi({ [path]: { ...rpc[path], holdReply: true } }, [])();

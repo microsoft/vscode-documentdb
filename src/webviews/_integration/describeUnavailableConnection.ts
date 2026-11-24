@@ -55,7 +55,7 @@ export function describeUnavailableConnection(
             return {
                 unavailable: {
                     reason,
-                    text: l10n.t('The connection is disconnected.'),
+                    text: l10n.t('Disconnected'),
                     action: canReconnect ? 'reconnect' : 'close',
                 },
             };
@@ -65,7 +65,7 @@ export function describeUnavailableConnection(
             return {
                 unavailable: {
                     reason,
-                    text: l10n.t('Connection lost.'),
+                    text: l10n.t('Connection lost'),
                     action: canReconnect ? 'reconnect' : 'close',
                 },
             };

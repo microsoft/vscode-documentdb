@@ -36,29 +36,30 @@ it('keeps content mounted but inert, and only closes or retries on explicit clic
         await render();
         const draft = host.querySelector('textarea');
         await render({ ...unavailable, reason: 'credentialsMissing', action: 'close' });
-        expect(host.textContent).toContain(unavailable.text);
+        const dialog = (): HTMLElement | null => document.querySelector('.disconnectedOverlay[aria-modal="true"]');
+        const buttons = (): HTMLButtonElement[] => [...(dialog()?.querySelectorAll('button') ?? [])];
+        expect(dialog()?.textContent).toContain(unavailable.text);
         expect(host.querySelector('[inert] textarea')).toBe(draft);
         expect(draft?.value).toBe('unsaved edit');
-        expect(host.querySelector('[role="status"]')?.getAttribute('aria-live')).toBe('polite');
-        expect([...host.querySelectorAll('button')].map((button) => button.textContent)).toEqual(['Close']);
-        expect(document.activeElement).toBe(host.querySelector('button'));
+        expect(dialog()?.getAttribute('role')).toBe('dialog');
+        expect(buttons().map((button) => button.textContent)).toEqual(['Close view']);
+        await act(async () => buttons()[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
         expect(onAction).not.toHaveBeenCalled();
-        await act(async () => host.querySelector('button')?.click());
+        expect(dialog()).not.toBeNull();
+        await act(async () => buttons()[0]?.click());
         expect(onAction).toHaveBeenCalledExactlyOnceWith('close');
 
         await render(unavailable, true);
-        expect([...host.querySelectorAll('button')].map((button) => button.textContent)).toEqual([
-            'Retry sign-in',
-            'Close',
-        ]);
-        expect(host.querySelector('button')?.getAttribute('aria-disabled')).toBe('true');
-        await act(async () => host.querySelector('button')?.click());
+        expect(buttons().map((button) => button.textContent)).toEqual(['Retry sign-in', 'Close view']);
+        expect(buttons()[0]?.getAttribute('aria-disabled')).toBe('true');
+        await act(async () => buttons()[0]?.click());
         expect(onAction).toHaveBeenCalledTimes(1);
         await render(unavailable);
-        await act(async () => host.querySelector('button')?.click());
+        await act(async () => buttons()[0]?.click());
         expect(onAction).toHaveBeenLastCalledWith('signInAgain');
 
         await render();
+        expect(dialog()).toBeNull();
         expect(host.querySelector('[inert]')).toBeNull();
         expect(host.querySelector('textarea')).toBe(draft);
         expect(draft?.value).toBe('unsaved edit');

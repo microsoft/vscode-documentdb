@@ -25,6 +25,7 @@ export interface RpcFixture {
     readonly keepOpen?: boolean;
     readonly undefinedResult?: boolean;
     readonly holdReply?: boolean;
+    readonly afterFirst?: { readonly results: readonly unknown[]; readonly holdReply?: boolean };
 }
 
 export type RpcFixtures = Readonly<Partial<Record<FixturePaths, RpcFixture>>>;
@@ -42,8 +43,12 @@ type StreamItem<T> = T extends AsyncIterable<infer Item> ? Item : T;
 // deliberately supports explicit undefined results, so these fixtures retain the host's void type.
 type FixtureResult<T> = [T] extends [never] ? void : StreamItem<T>;
 export type TypedRpcFixtures = {
-    readonly [P in FixturePaths]?: Omit<RpcFixture, 'results'> & {
+    readonly [P in FixturePaths]?: Omit<RpcFixture, 'results' | 'afterFirst'> & {
         readonly results: readonly FixtureResult<FixtureAtPath<FixtureOutputs, P>>[];
+        readonly afterFirst?: {
+            readonly results: readonly FixtureResult<FixtureAtPath<FixtureOutputs, P>>[];
+            readonly holdReply?: boolean;
+        };
     };
 };
 

@@ -39,9 +39,10 @@ export function fakeVsCodeApi(rpc: RpcFixtures, errors: string[]): typeof window
     const calls: HarnessCall[] = [];
     window.__harnessCalls = calls;
     const subscriptions = new Set<string>();
+    const seenPaths = new Set<string>();
     const heldReplies = new Map<string, { readonly path: string; readonly sendReply: () => void }>();
     window.__harnessReleaseReply = (path): boolean => {
-        for (const [id, reply] of heldReplies) {
+        for (const [id, reply] of [...heldReplies].reverse()) {
             if (reply.path === path) {
                 heldReplies.delete(id);
                 reply.sendReply();
@@ -78,11 +79,13 @@ export function fakeVsCodeApi(rpc: RpcFixtures, errors: string[]): typeof window
         if (response.keepOpen) {
             subscriptions.add(id);
         }
+        const reply = seenPaths.has(op.path) ? (response.afterFirst ?? response) : response;
+        seenPaths.add(op.path);
         const sendReply = (): void => {
             if (response.keepOpen && !subscriptions.has(id)) {
                 return;
             }
-            for (const result of response.results) {
+            for (const result of reply.results) {
                 send({ id, result });
             }
             if (response.undefinedResult) {
@@ -92,7 +95,7 @@ export function fakeVsCodeApi(rpc: RpcFixtures, errors: string[]): typeof window
                 send({ id, complete: true });
             }
         };
-        if (response.holdReply) {
+        if (reply.holdReply) {
             heldReplies.set(id, { path: op.path, sendReply });
         } else {
             queueMicrotask(sendReply);

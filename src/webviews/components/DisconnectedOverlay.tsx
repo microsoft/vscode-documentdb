@@ -3,14 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Button } from '@fluentui/react-components';
+import { Button, Dialog, DialogActions, DialogBody, DialogSurface, DialogTitle } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
-import { useEffect, useId, useRef, type JSX, type ReactNode } from 'react';
+import { type JSX, type ReactNode } from 'react';
 import {
     type ConnectionRecoveryAction,
     type ConnectionUnavailableDetails,
 } from '../_integration/connectionUnavailable';
-import { Announcer } from './accessibility';
 import './DisconnectedOverlay.scss';
 
 interface DisconnectedOverlayProps {
@@ -29,7 +28,7 @@ function actionLabel(action: ConnectionRecoveryAction): string {
         case 'updateCredentials':
             return l10n.t('Update credentials…');
         case 'close':
-            return l10n.t('Close');
+            return l10n.t('Close view');
     }
 }
 
@@ -39,14 +38,7 @@ export function DisconnectedOverlay({
     recovering,
     children,
 }: DisconnectedOverlayProps): JSX.Element {
-    const textId = useId();
-    const firstAction = useRef<HTMLButtonElement>(null);
     const disconnected = unavailable !== undefined;
-    useEffect(() => {
-        if (disconnected) {
-            firstAction.current?.focus();
-        }
-    }, [disconnected]);
 
     return (
         <>
@@ -54,32 +46,29 @@ export function DisconnectedOverlay({
                 {children}
             </div>
             {unavailable && (
-                <section className="disconnectedOverlay" aria-labelledby={textId}>
-                    <p id={textId}>{unavailable.text}</p>
-                    <div className="disconnectedOverlayActions">
-                        {unavailable.action !== 'close' && (
-                            <Button
-                                ref={firstAction}
-                                appearance="primary"
-                                disabledFocusable={recovering}
-                                onClick={() => {
-                                    if (!recovering) {
-                                        onAction(unavailable.action);
-                                    }
-                                }}
-                            >
-                                {actionLabel(unavailable.action)}
-                            </Button>
-                        )}
-                        <Button
-                            ref={unavailable.action === 'close' ? firstAction : undefined}
-                            onClick={() => onAction('close')}
-                        >
-                            {actionLabel('close')}
-                        </Button>
-                    </div>
-                    <Announcer key={`${unavailable.reason}:${unavailable.text}`} when message={unavailable.text} />
-                </section>
+                <Dialog open={disconnected} modalType="modal" inertTrapFocus>
+                    <DialogSurface className="disconnectedOverlay">
+                        <DialogBody>
+                            <DialogTitle className="disconnectedOverlayTitle">{unavailable.text}</DialogTitle>
+                            <DialogActions className="disconnectedOverlayActions">
+                                {unavailable.action !== 'close' && (
+                                    <Button
+                                        appearance="primary"
+                                        disabledFocusable={recovering}
+                                        onClick={() => {
+                                            if (!recovering) {
+                                                onAction(unavailable.action);
+                                            }
+                                        }}
+                                    >
+                                        {actionLabel(unavailable.action)}
+                                    </Button>
+                                )}
+                                <Button onClick={() => onAction('close')}>{actionLabel('close')}</Button>
+                            </DialogActions>
+                        </DialogBody>
+                    </DialogSurface>
+                </Dialog>
             )}
         </>
     );

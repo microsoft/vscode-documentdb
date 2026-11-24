@@ -1373,7 +1373,7 @@ webview as a structured unavailable result, not a generic query error.
 
 - Collection View (all tabs), Document View and the Cluster Dashboard resolve their client per operation
   through a binding.
-- They show an unavailable state (C-5) with a full-view overlay, Close, and a repair action when supported.
+- They show an unavailable state (C-5) with a dimmed view, Close view, and a repair action when supported.
 - They keep all user state.
 - They never apply stale results.
 - They never run under another identity.
@@ -1448,9 +1448,10 @@ approved plan allows; the webview half then stacks on the host half without wait
 ### Webviews
 
 1. **Shared UI.**
-   - A feature-local `DisconnectedOverlay` shades the webview and shows the host-provided reason
-     text in the center. Show **Close** and at most one supported repair action (decision 0016).
-     Announce the reason politely and give keyboard focus to an overlay action, not the disabled content.
+   - A feature-local `DisconnectedOverlay` uses a controlled Fluent `Dialog` to dim the webview
+     and show the host-provided reason in the center. Show **Close view** and at most one supported
+     repair action (decision 0016). Focus stays in the dialog; Escape and backdrop clicks do not
+     dismiss it or close the view.
    - It shows when a procedure returns `unavailable`, or when the host's `disable(reason)` sends its one
      message to the panel over the existing webview channel.
    - Put it in the shared webview components folder, and run the detecting-accessibility-issues skill on
@@ -1478,8 +1479,8 @@ approved plan allows; the webview half then stacks on the host half without wait
      connected as {label}" (OT-3).
    - **Sign in again:** the WI-5 command.
    - **Update credentials:** the existing command.
-   - **Close:** dispose the panel only through an explicit action. When no supported repair is
-     available in the tab, Close is the only action.
+   - **Close view:** dispose the panel only through this explicit action. When no supported repair is
+     available in the tab, Close view is the only action.
 5. **L2-dev scenarios** (`scenarios.ts` and `fixtures.ts`):
    - `collectionView/disconnected-signInRequired`: query text kept, Run disabled, no host calls when
      Run is clicked;
@@ -1554,6 +1555,13 @@ behave as today.
   A bound import keeps its original client for every batch; tree-originated transfers keep their
   existing behavior. The build and 91 focused tests passed, including an identity change while
   the import picker is open. Collection View command forwarding and WI-7 task leases are separate.
+- **Collection View overlay:** Documents, Indexes and Query Insights share the view's connection
+  binding. The view preserves its query and applied results, returns typed unavailable responses,
+  and forwards the initiating binding to imports and exports. The sign-in and late-page browser
+  scenarios passed in all three themes before the dialog refinement. After adopting Fluent Dialog,
+  all eight dark-theme scenarios for Collection View, Document View and Dashboard passed.
+  The dialog uses **Disconnected** for an explicit disconnect, **Connection lost** for an
+  unreachable connection, and **Close view** for explicit disposal.
 
 ---
 

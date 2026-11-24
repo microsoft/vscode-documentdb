@@ -52,6 +52,7 @@ export type ScenarioStep =
       }
     | { readonly action: 'fill'; readonly role: 'textbox' | 'searchbox'; readonly name: string; readonly value: string }
     | { readonly action: 'replaceText'; readonly role: 'textbox'; readonly name: string; readonly value: string }
+    | { readonly action: 'press'; readonly role: 'button'; readonly name: string; readonly key: string }
     | { readonly action: 'waitFor'; readonly name: string; readonly selector: string }
     | { readonly action: 'post'; readonly name: string; readonly message: unknown }
     | { readonly action: 'releaseReply'; readonly name: string; readonly path: FixturePaths };
@@ -61,10 +62,12 @@ type CallAssertion = {
         readonly kind: 'calls';
         readonly name: string;
         readonly path: P;
-        readonly input: FixtureAtPath<FixtureInputs, P>;
         readonly count: number;
         readonly steps: readonly ScenarioStep[];
-    };
+    } & (
+        | { readonly input: FixtureAtPath<FixtureInputs, P>; readonly checkInput?: true }
+        | { readonly checkInput: false }
+    );
 }[FixturePaths];
 
 /** The elements matching `selector`, in document order, contain `texts` one to one and in order. */
@@ -2431,7 +2434,7 @@ const documentEditReadiness = { ...documentViewBase.readiness, content: ['Save']
 const saveDocumentPath = 'mongoClusters.documentView.saveDocument';
 const disconnectedDocument = {
     reason: 'userDisconnected',
-    text: 'The connection is disconnected.',
+    text: 'Disconnected',
     action: 'reconnect',
 } as const;
 const documentEditorName = 'Document Editor: Edit the document in JSON format';
@@ -2591,8 +2594,113 @@ const clusterDashboardScenarios = {
     },
 } as const satisfies Readonly<Record<string, Scenario<'clusterDashboard'>>>;
 
+const collectionViewBase = defaultScenario('collectionView');
+const collectionQueryPath = 'mongoClusters.collectionView.runFindQuery';
+const collectionTablePath = 'mongoClusters.collectionView.getCurrentPageAsTable';
+const collectionFilterName = 'Filter: Enter the DocumentDB query filter';
+const collectionFilterSelector = `.monaco-editor:has([aria-label="${collectionFilterName}"]) .view-lines`;
+const collectionFilter = { action: 'replaceText', role: 'textbox', name: collectionFilterName, value: '{"name":"Alpha"}' } as const;
+const runCollectionQuery = { action: 'click', role: 'button', name: 'Find Query: execute the current editor values' } as const;
+const collectionSignInRequired = {
+    reason: 'signInRequired',
+    text: 'Microsoft sign-in is required.',
+    action: 'signInAgain',
+} as const;
+const collectionViewScenarios = {
+    default: collectionViewBase,
+    'disconnected-signInRequired': {
+        ...collectionViewBase,
+        rpc: {
+            ...collectionViewBase.rpc,
+            [collectionQueryPath]: {
+                ...fixtures.collectionView.rpc[collectionQueryPath],
+                afterFirst: { results: [{ unavailable: collectionSignInRequired }] },
+            },
+            'common.reportEvent': { type: 'mutation', results: [], undefinedResult: true },
+        },
+        assertions: [
+            {
+                kind: 'attribute',
+                name: 'keeps the query and results mounted but disables their controls',
+                selector: '.disconnectedOverlayBackground',
+                attribute: 'inert',
+                expected: '',
+                steps: [
+                    collectionFilter,
+                    runCollectionQuery,
+                    { action: 'waitFor', name: 'sign-in overlay', selector: '.disconnectedOverlay' },
+                ],
+            },
+            {
+                kind: 'text',
+                name: 'retains the filter text',
+                selector: collectionFilterSelector,
+                includes: ['"name":"Alpha"'],
+                excludes: [],
+            },
+            {
+                kind: 'text',
+                name: 'shows only explicit sign-in and Close view actions',
+                selector: '.disconnectedOverlay',
+                includes: ['Retry sign-in', 'Close view'],
+                excludes: ['Reconnect'],
+            },
+            {
+                kind: 'calls',
+                name: 'the query shortcut while disconnected does not run another query',
+                path: collectionQueryPath,
+                count: 2,
+                checkInput: false,
+                steps: [{ action: 'press', role: 'button', name: 'Retry sign-in', key: 'Control+Enter' }],
+            },
+        ],
+    },
+    'stale-page-after-disconnect': {
+        ...collectionViewBase,
+        rpc: {
+            ...collectionViewBase.rpc,
+            [collectionTablePath]: {
+                ...fixtures.collectionView.rpc[collectionTablePath],
+                afterFirst: { results: [{ path: [], headers: ['_id', 'name', 'quantity'], data: [] }], holdReply: true },
+            },
+            'common.reportEvent': { type: 'mutation', results: [], undefinedResult: true },
+        },
+        assertions: [
+            {
+                kind: 'calls',
+                name: 'the next-page query starts before disconnect',
+                path: collectionQueryPath,
+                count: 2,
+                checkInput: false,
+                steps: [collectionFilter, { action: 'click', role: 'button', name: 'Go to next page' }],
+            },
+            {
+                kind: 'stableText',
+                name: 'applied rows survive a disconnect and a late page reply',
+                selector: '.slick-viewport',
+                steps: [
+                    {
+                        action: 'post',
+                        name: 'disable Collection View',
+                        message: { type: 'collectionView.connectionUnavailable', unavailable: disconnectedDocument },
+                    },
+                    { action: 'waitFor', name: 'the disconnect overlay', selector: '.disconnectedOverlay' },
+                    { action: 'releaseReply', name: 'deliver the late collection page reply', path: collectionTablePath },
+                ],
+            },
+            {
+                kind: 'text',
+                name: 'the late reply does not change the displayed disconnect reason',
+                selector: '.disconnectedOverlay',
+                includes: ['Disconnected', 'Reconnect'],
+                excludes: ['Retry sign-in'],
+            },
+        ],
+    },
+} as const satisfies Readonly<Record<string, Scenario<'collectionView'>>>;
+
 export const scenarios = {
-    collectionView: { default: defaultScenario('collectionView') },
+    collectionView: collectionViewScenarios,
     documentView: documentViewScenarios,
     clusterDashboard: clusterDashboardScenarios,
     atlasCredentials: { default: defaultScenario('atlasCredentials', atlasSteps) },

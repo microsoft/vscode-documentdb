@@ -228,5 +228,5 @@ it('ignores a load reply after disable and leaves an edit-mode placeholder unsav
 
     expect(host.querySelector('textarea')?.value).toBe('{"field":"preserved"}');
     expect([...host.querySelectorAll('button')].find((button) => button.textContent === 'Save')?.disabled).toBe(true);
-    expect(host.textContent).toContain('Connection is disconnected.');
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Connection is disconnected.');
 });
