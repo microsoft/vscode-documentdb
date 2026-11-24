@@ -31,6 +31,8 @@ import {
     diagnosticsSrvTargets,
     diagnosticsStartedAt,
     fixtures,
+    wishFortuneOutcome,
+    wishPlaygroundOutcome,
     type DiagnosticsCard,
     type DiagnosticsFinding,
     type DiagnosticsRow,
@@ -2428,6 +2430,42 @@ export const scenarios = {
     clusterDashboard: { default: defaultScenario('clusterDashboard') },
     atlasCredentials: { default: defaultScenario('atlasCredentials', atlasSteps) },
     connectionDiagnostics: diagnosticsScenarios,
+    wishingWell: {
+        default: defaultScenario('wishingWell'),
+        granted: {
+            ...defaultScenario('wishingWell', [
+                { action: 'fill', role: 'textbox', name: 'Your wish', value: 'Add 20 sample customers' },
+                { action: 'click', role: 'button', name: 'Make a wish' },
+            ]),
+            readiness: {
+                content: [wishPlaygroundOutcome.title, 'Read by Copilot', 'Open in a playground'],
+                noProgressbar: true,
+            },
+            assertions: [
+                {
+                    kind: 'calls',
+                    name: 'the wish is sent once',
+                    path: 'wishingWell.makeWish',
+                    input: { wish: 'Add 20 sample customers' },
+                    count: 1,
+                    steps: [],
+                },
+                {
+                    kind: 'calls',
+                    name: 'granting sends the outcome id only',
+                    path: 'wishingWell.grant',
+                    input: { id: wishPlaygroundOutcome.id },
+                    count: 1,
+                    steps: [{ action: 'click', role: 'button', name: 'Open in a playground' }],
+                },
+            ],
+        },
+        lucky: {
+            ...defaultScenario('wishingWell', [{ action: 'click', role: 'button', name: "I'm feeling lucky" }]),
+            readiness: { content: [wishFortuneOutcome.title, wishFortuneOutcome.message], noProgressbar: true },
+            assertions: [],
+        },
+    },
     localQuickStart: {
         default: defaultScenario('localQuickStart', continueSteps),
         introduction: {

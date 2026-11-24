@@ -18,7 +18,7 @@ import { formatTokenCount } from '../utils/formatTokenCount';
  * disambiguate shared telemetry events (e.g., `copilot.sendMessage`) by
  * source. Add a new value here when introducing a new AI-backed feature.
  */
-export type CopilotFeatureSource = 'queryInsights' | 'queryGeneration';
+export type CopilotFeatureSource = 'queryInsights' | 'queryGeneration' | 'wishingWell';
 
 /**
  * Options for sending a message to the language model

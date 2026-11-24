@@ -117,6 +117,24 @@ export async function newPlaygroundWithContent(
     });
 }
 
+/** Opens a playground with no connection; running it asks for a database. */
+export async function newUnboundPlayground(content: string): Promise<void> {
+    const document = await openUntitledPlayground(content, createPlaygroundFileName(vscode.workspace.textDocuments));
+    await vscode.window.showTextDocument(document, { preview: false });
+}
+
+async function openUntitledPlayground(content: string, fileName: string): Promise<vscode.TextDocument> {
+    // Create untitled file with a workspace-relative path so VS Code's hot exit
+    // can persist the content across restarts. Without a real-looking path,
+    // untitled documents lose their content on relaunch.
+    const folderPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.tmpdir();
+    const uri = vscode.Uri.file(path.join(folderPath, fileName)).with({ scheme: 'untitled' });
+    const edit = new vscode.WorkspaceEdit();
+    edit.insert(uri, new vscode.Position(0, 0), content);
+    await vscode.workspace.applyEdit(edit);
+    return vscode.workspace.openTextDocument(uri);
+}
+
 /**
  * Shared logic for creating an untitled playground document and binding its connection.
  */
@@ -127,20 +145,11 @@ async function createPlaygroundWithContent(
 ): Promise<void> {
     const service = PlaygroundService.getInstance();
 
-    // Create untitled file with a workspace-relative path so VS Code's hot exit
-    // can persist the content across restarts. Without a real-looking path,
-    // untitled documents lose their content on relaunch.
     const fileName = createPlaygroundFileName(vscode.workspace.textDocuments, {
         clusterDisplayName: connection.clusterDisplayName,
         databaseOrCollectionName: collectionName ?? connection.databaseName,
     });
-    const folderPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.tmpdir();
-    const filePath = path.join(folderPath, fileName);
-    const uri = vscode.Uri.file(filePath).with({ scheme: 'untitled' });
-    const edit = new vscode.WorkspaceEdit();
-    edit.insert(uri, new vscode.Position(0, 0), content);
-    await vscode.workspace.applyEdit(edit);
-    const doc = await vscode.workspace.openTextDocument(uri);
+    const doc = await openUntitledPlayground(content, fileName);
     await vscode.window.showTextDocument(doc, { preview: true });
 
     // Bind connection to this specific document

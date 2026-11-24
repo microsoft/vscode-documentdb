@@ -18,6 +18,10 @@ import { type ConnectionDiagnosticsConfiguration } from '../../../src/webviews/d
 import { panelRowIds } from '../../../src/webviews/documentdb/connectionDiagnostics/panelTypes';
 import { type DocumentsViewWebviewConfigurationType } from '../../../src/webviews/documentdb/documentView/documentsViewController';
 import { type LocalQuickStartConfigurationType } from '../../../src/webviews/documentdb/localQuickStart/localQuickStartController';
+import {
+    type WishingWellWebviewConfig,
+    type WishOutcome,
+} from '../../../src/webviews/documentdb/wishingWell/wishingWellTypes';
 import { type FixtureInputs, type FixtureOutputs, type RpcFixture, type RpcFixtures } from './core/fixtures';
 
 type Inputs = FixtureInputs;
@@ -91,6 +95,24 @@ const quickStartConfig: LocalQuickStartConfigurationType = {
     initialInstanceState: InstanceState.NotInstalled,
 };
 const atlasConfig: AtlasCredentialsWebviewConfig = { mode: 'add', authMethod: 'apikey' };
+const wishingWellConfig: WishingWellWebviewConfig = {};
+export const wishPlaygroundOutcome: WishOutcome = {
+    id: 'stage0-wish',
+    kind: 'playground',
+    title: 'Twenty sample customers',
+    message: 'This script inserts 20 customers with names, emails and sign-up dates.',
+    detail: "db.getCollection('customers').insertMany(\n  Array.from({ length: 20 }, (_, i) => ({ name: `Customer ${i + 1}` }))\n)",
+    actionLabel: 'Open in a playground',
+    actionHint: 'Nothing runs until you run it in the playground.',
+    interpretedBy: 'copilot',
+};
+export const wishFortuneOutcome: WishOutcome = {
+    id: 'stage0-lucky',
+    kind: 'fortune',
+    title: 'Your fortune',
+    message: 'Your next query returns in under ten milliseconds.',
+    interpretedBy: 'well',
+};
 const diagnosticsConfig: ConnectionDiagnosticsConfiguration = {
     connectionName: 'Stage 0 fixture connection',
     diagnosticsSessionId: 'stage0-diagnostics-session',
@@ -648,6 +670,19 @@ export const fixtures = {
             'atlasCredentials.submitApiKey': reply<Outputs['atlasCredentials']['submitApiKey']>('mutation', {
                 success: true,
             }),
+        },
+    },
+    wishingWell: {
+        config: wishingWellConfig,
+        monaco: false,
+        content: ['Wishing Well', 'Copilot reads your wishes, so almost anything goes.'],
+        styles: [{ selector: '.wishing-well', property: 'display', expected: 'flex' }],
+        rpc: {
+            ...common,
+            'wishingWell.status': reply<Outputs['wishingWell']['status']>('query', { copilotAvailable: true }),
+            'wishingWell.makeWish': reply<Outputs['wishingWell']['makeWish']>('mutation', wishPlaygroundOutcome),
+            'wishingWell.feelingLucky': reply<Outputs['wishingWell']['feelingLucky']>('mutation', wishFortuneOutcome),
+            'wishingWell.grant': reply<Outputs['wishingWell']['grant']>('mutation', { granted: true }),
         },
     },
 } satisfies Record<WebviewName, ViewFixture>;

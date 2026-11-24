@@ -12,6 +12,7 @@ import { ext } from '../../extensionVariables';
 import { ErrorExplanationService } from '../../services/errorExplanationService';
 import { maskSecrets } from '../../services/localQuickStart/outputMasking';
 import { recordSurveyActivity } from '../../services/survey/SurveyService';
+import { currentWishingWell } from '../../services/wishingWell/wishingWellRegistry';
 import { settingsKeys } from '../../settingsKeys';
 import { COMPLETION_OFFERED_EVENT, type CompletionCategory } from '../../telemetry/completionCategories';
 import { accumulateTelemetry } from '../../utils/accumulatingTelemetry';
@@ -23,6 +24,7 @@ import { type SerializableExecutionResult } from '../playground/workerTypes';
 import { SchemaStore } from '../SchemaStore';
 import { getHostsFromConnectionString } from '../utils/connectionStringHelpers';
 import { addDomainInfoToProperties } from '../utils/getClusterMetadata';
+import { Views } from '../Views';
 import { getClosingBrackets } from './bracketDepthCounter';
 import { colorizeShellInput } from './highlighting/colorizeShellInput';
 import { SettingsHintError } from './SettingsHintError';
@@ -41,6 +43,7 @@ import {
     type ShellTerminalInfo,
     unregisterShellTerminal,
 } from './ShellTerminalLinkProvider';
+import { parseShellWish, type ShellWish } from './shellWish';
 import { terminalDisplayWidth } from './terminalDisplayWidth';
 
 const COMPACT_CONNECTION_SUMMARY_MIN_COLUMNS = 100;
@@ -117,6 +120,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private _lastShownHistorySuggestion: string | undefined;
     /** Optional initial input to pre-fill after initialization. */
     private _initialInput: string | undefined;
+    /** A shell command a wish wrote, typed in at the next prompt. */
+    private _wishedInput: string | undefined;
 
     // ─── Telemetry tracking ──────────────────────────────────────────────────
 
@@ -685,7 +690,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         this._spinner.start();
 
         try {
-            await this.evaluateInput(trimmed);
+            const wish = parseShellWish(trimmed);
+            if (wish) {
+                await this.handleWish(wish);
+            } else {
+                await this.evaluateInput(trimmed);
+            }
         } catch (error: unknown) {
             await this.handleEvalError(error);
         } finally {
@@ -703,6 +713,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 if (!this._closed) {
                     this.showPrompt();
 
+                    // A wish that wrote a shell command types it in for the user to run.
+                    if (this._wishedInput) {
+                        this._inputHandler.insertText(this._wishedInput);
+                        this._wishedInput = undefined;
+                    }
+
                     // Process any input that was queued during execution
                     // (e.g., remaining lines from a multi-line paste).
                     this._inputHandler.processPendingInput();
@@ -711,6 +727,74 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
             this._interrupted = false;
         }
+    }
+
+    /**
+     * `wish <words>` goes to the Wishing Well with this shell's cluster and current database. A
+     * wished shell command is typed in for the user; other actions open as they would from the tab.
+     */
+    private async handleWish(wish: ShellWish): Promise<void> {
+        const well = currentWishingWell();
+        if (wish.kind === 'usage' || !well) {
+            this._spinner?.stop();
+            this._spinner = undefined;
+            this.writeLine(
+                this._outputFormatter.formatSystemMessage(
+                    well
+                        ? l10n.t(
+                              'Usage: wish <anything>, for example: wish how many orders shipped last week. Or: wish me luck',
+                          )
+                        : l10n.t('The Wishing Well is not available.'),
+                ),
+            );
+            return;
+        }
+
+        await callWithTelemetryAndErrorHandling('shell.wish', async (context) => {
+            context.errorHandling.suppressDisplay = true;
+            context.errorHandling.rethrow = true;
+            context.telemetry.properties.shellSessionId = this._shellSessionId;
+
+            const scope = {
+                cluster: {
+                    clusterId: this._connectionInfo.clusterId,
+                    clusterDisplayName: this._connectionInfo.clusterDisplayName,
+                    viewId: Views.ConnectionsView as string,
+                },
+                databaseName: this._currentDatabase,
+            };
+            const outcome =
+                wish.kind === 'lucky'
+                    ? await well.feelingLucky(scope, context, 'shell')
+                    : await well.makeWish(wish.text, scope, context, 'shell');
+
+            this._spinner?.stop();
+            this._spinner = undefined;
+            if (this._interrupted) {
+                return;
+            }
+
+            this.writeLine(this._outputFormatter.formatSystemMessage(`\u2728 ${outcome.title}`));
+            this.writeLine(outcome.message);
+
+            if (outcome.kind === 'shell' && outcome.detail && !outcome.detail.includes('\n')) {
+                this._wishedInput = outcome.detail;
+                this.writeLine(
+                    this._outputFormatter.formatSystemMessage(
+                        l10n.t('The well typed it in for you. Press Enter to run it.'),
+                    ),
+                );
+                return;
+            }
+            if (outcome.detail) {
+                this.writeLine(outcome.detail);
+            }
+            // The user asked for it at their own prompt, so what the card would offer happens now.
+            if (outcome.actionLabel && outcome.kind !== 'query') {
+                await well.grant(outcome.id, context, 'shell');
+                this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Granted: {0}', outcome.actionLabel)));
+            }
+        });
     }
 
     private async evaluateInput(input: string): Promise<void> {

@@ -68,6 +68,7 @@ import {
     openInteractiveShell,
     openInteractiveShellWithInput,
 } from '../commands/openInteractiveShell/openInteractiveShell';
+import { openWishingWell } from '../commands/openWishingWell/openWishingWell';
 import { pasteCollection } from '../commands/pasteCollection/pasteCollection';
 import { pasteIndexes } from '../commands/pasteIndexes/pasteIndexes';
 import { connectPlayground, showConnectionInfo } from '../commands/playground/connectDatabase';
@@ -116,6 +117,10 @@ import { DemoTask } from '../services/taskService/tasks/DemoTask';
 import { TaskService } from '../services/taskService/taskService';
 import { TaskProgressReportingService } from '../services/taskService/UI/taskProgressReportingService';
 import { maybeShowWelcomeScreen } from '../services/welcomeScreen';
+import { WishingWellAgentAccess } from '../services/wishingWell/agentAccess';
+import { createAgentToolset, registerWishLanguageModelTools } from '../services/wishingWell/wishAgentTools';
+import { getWishingWell } from '../services/wishingWell/wishingWell';
+import { setWishingWell } from '../services/wishingWell/wishingWellRegistry';
 import {
     CompletionCommandIds,
     normalizeCompletionCategory,
@@ -1019,6 +1024,24 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.clusterDashboard.open',
                     withTreeNodeCommandCorrelation(openClusterDashboard),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.wishingWell.open',
+                    withTreeNodeCommandCorrelation(openWishingWell),
+                );
+
+                // One well for the tab, the shell's `wish`, Copilot's agent tools and outside agents.
+                setWishingWell(getWishingWell());
+                ext.context.subscriptions.push(...registerWishLanguageModelTools(getWishingWell));
+                const wishingWellAgentAccess = new WishingWellAgentAccess(createAgentToolset(getWishingWell));
+                ext.context.subscriptions.push(wishingWellAgentAccess);
+                void wishingWellAgentAccess.restore();
+                registerCommand('vscode-documentdb.command.wishingWell.connectAgent', () =>
+                    wishingWellAgentAccess.enable(),
+                );
+                registerCommand('vscode-documentdb.command.wishingWell.disconnectAgents', () =>
+                    wishingWellAgentAccess.disable(),
                 );
 
                 // Inline button variant — same handler, different activationSource

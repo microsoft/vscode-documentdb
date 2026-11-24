@@ -766,6 +766,26 @@
         "icon": "$(graph)"
       },
       {
+        "//": "Wishing Well",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.wishingWell.open",
+        "title": "Make a Wish",
+        "icon": "$(sparkle)"
+      },
+      {
+        "//": "Wishing Well: let outside agents make wishes over MCP",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.wishingWell.connectAgent",
+        "title": "Connect an Agent to the Wishing Well",
+        "icon": "$(plug)"
+      },
+      {
+        "//": "Wishing Well: stop the MCP endpoint",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.wishingWell.disconnectAgents",
+        "title": "Disconnect Agents from the Wishing Well"
+      },
+      {
         "command": "vscode-documentdb.command.clusterDashboard.context.viewCollections",
         "title": "View Collections"
       },
@@ -1395,6 +1415,24 @@
           "command": "vscode-documentdb.command.clusterDashboard.open",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && !listMultiSelection",
           "group": "1@3"
+        },
+        {
+          "//": "[Account] Wishing Well",
+          "command": "vscode-documentdb.command.wishingWell.open",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
+          "group": "1@9"
+        },
+        {
+          "//": "[Database] Wishing Well",
+          "command": "vscode-documentdb.command.wishingWell.open",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && !listMultiSelection",
+          "group": "1@9"
+        },
+        {
+          "//": "[Collection] Wishing Well",
+          "command": "vscode-documentdb.command.wishingWell.open",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && !listMultiSelection",
+          "group": "1@9"
         },
         {
           "//": "[Database] Open Interactive Shell",
@@ -2280,6 +2318,101 @@
             }
           }
         ]
+      }
+    ],
+    "languageModelTools": [
+      {
+        "name": "documentdb_list_connections",
+        "displayName": "List DocumentDB connections",
+        "toolReferenceName": "documentdbConnections",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(database)",
+        "userDescription": "List the DocumentDB connections saved in VS Code",
+        "modelDescription": "Lists the DocumentDB and MongoDB API connections saved in the VS Code DocumentDB extension, and whether each is connected. No secrets.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "documentdb_make_wish",
+        "displayName": "Make a wish",
+        "toolReferenceName": "wish",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(sparkle)",
+        "userDescription": "Make a wish at the DocumentDB Wishing Well",
+        "modelDescription": "Make a wish at the DocumentDB Wishing Well. Describe what you want in plain words; the well answers questions about the data by running read-only queries, drafts scripts for changes, and opens the extension tools (collection view with a query, interactive shell, query playground, cluster dashboard, index advice, import and export, connection diagnostics, DocumentDB Local). Nothing changes data: writes come back as a playground script for the user to run. When the reply has a wishId and an action, call documentdb_grant_wish to make it happen.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "wish": {
+              "type": "string",
+              "description": "What you want, in plain words."
+            },
+            "spell": {
+              "type": "object",
+              "description": "Optional. When you already know exactly what to do, pass one spell, e.g. {\"spell\":\"aggregate\",\"collection\":\"orders\",\"pipeline\":[{\"$count\":\"n\"}]}. Spells: answer, find, aggregate, collectionView, shell, playground, dashboard, newDocument, tool, command, agent, link. Read-only queries run; everything else waits for documentdb_grant_wish."
+            },
+            "connection": {
+              "type": "string",
+              "description": "Name or id of a saved DocumentDB connection from documentdb_list_connections. Omit for wishes that need no database."
+            },
+            "database": {
+              "type": "string",
+              "description": "Database to wish on. Needs connection."
+            },
+            "collection": {
+              "type": "string",
+              "description": "Collection to wish on. Needs database."
+            }
+          },
+          "required": [
+            "wish"
+          ]
+        }
+      },
+      {
+        "name": "documentdb_grant_wish",
+        "displayName": "Grant a wish",
+        "toolReferenceName": "grantWish",
+        "canBeReferencedInPrompt": false,
+        "icon": "$(sparkle-filled)",
+        "userDescription": "Carry out a wish the Wishing Well proposed",
+        "modelDescription": "Carries out a wish that documentdb_make_wish proposed, in VS Code: opens the view, playground, shell or command it named. Never runs a write.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "wishId": {
+              "type": "string",
+              "description": "The wishId from documentdb_make_wish."
+            }
+          },
+          "required": [
+            "wishId"
+          ]
+        }
+      },
+      {
+        "name": "documentdb_feeling_lucky",
+        "displayName": "I am feeling lucky",
+        "toolReferenceName": "feelingLucky",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(sparkle)",
+        "userDescription": "Draw a surprise from the Wishing Well",
+        "modelDescription": "Draws a surprise from the DocumentDB Wishing Well: a random document or trivia from the given connection, a feature tip, or a fortune.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "connection": {
+              "type": "string",
+              "description": "Name or id of a saved DocumentDB connection from documentdb_list_connections. Omit for wishes that need no database."
+            },
+            "database": {
+              "type": "string",
+              "description": "Database to wish on. Needs connection."
+            }
+          }
+        }
       }
     ]
   },

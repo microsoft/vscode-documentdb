@@ -45,6 +45,7 @@ import { indexViewRouter } from '../documentdb/collectionView/indexesTab/indexVi
 import { connectionDiagnosticsRouter } from '../documentdb/connectionDiagnostics/connectionDiagnosticsRouter';
 import { documentsViewRouter as documentViewRouter } from '../documentdb/documentView/documentsViewRouter';
 import { localQuickStartRouter } from '../documentdb/localQuickStart/localQuickStartRouter';
+import { wishingWellRouter } from '../documentdb/wishingWell/wishingWellRouter';
 import { confirmInput, showModalConfirmation, type ConfirmResult } from './commonDialogs';
 import { WEBVIEW_CONFIG } from './configuration';
 import { type ViewLoadTracker } from './observability/viewLoadTelemetry';
@@ -335,6 +336,7 @@ export const appRouter = router({
     },
     localQuickStart: localQuickStartRouter,
     connectionDiagnostics: connectionDiagnosticsRouter,
+    wishingWell: wishingWellRouter,
 });
 
 // Export type router type signature, this is used by the client.

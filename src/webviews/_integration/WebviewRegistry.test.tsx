@@ -19,6 +19,7 @@ const moduleLoads = vi.hoisted(() => ({
         ConnectionDiagnostics: (): string => 'connectionDiagnostics',
     })),
     atlasCredentials: vi.fn(() => ({ AtlasCredentialsView: (): string => 'atlasCredentials' })),
+    wishingWell: vi.fn(() => ({ WishingWell: (): string => 'wishingWell' })),
 }));
 
 vi.mock('../documentdb/clusterDashboard/ClusterDashboard', moduleLoads.clusterDashboard);
@@ -27,6 +28,7 @@ vi.mock('../documentdb/documentView/documentView', moduleLoads.documentView);
 vi.mock('../documentdb/localQuickStart/LocalQuickStart', moduleLoads.localQuickStart);
 vi.mock('../documentdb/connectionDiagnostics/ConnectionDiagnostics', moduleLoads.connectionDiagnostics);
 vi.mock('../documentdb/atlasCredentials/AtlasCredentialsView', moduleLoads.atlasCredentials);
+vi.mock('../documentdb/wishingWell/WishingWell', moduleLoads.wishingWell);
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -39,6 +41,7 @@ describe('WebviewRegistry', () => {
             | 'localQuickStart'
             | 'atlasCredentials'
             | 'connectionDiagnostics'
+            | 'wishingWell'
         >();
         expect(Object.keys(WebviewRegistry).sort()).toEqual(Object.keys(moduleLoads).sort());
         for (const load of Object.values(moduleLoads)) {
@@ -50,6 +53,7 @@ describe('WebviewRegistry', () => {
         const root = createRoot(host);
         const loaded = new Set<WebviewName>();
         const names: WebviewName[] = [
+            'wishingWell',
             'connectionDiagnostics',
             'atlasCredentials',
             'localQuickStart',
