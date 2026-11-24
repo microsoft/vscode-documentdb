@@ -64,7 +64,7 @@ npm run package          # catches bundling and missing-asset failures
 tests under their stricter `tsconfig.test.json` settings. Vitest runtime success (or
 an ad hoc `vitest --typecheck` invocation) is not a substitute for the exact
 `npm run typecheck:tests` script. Keep this list aligned with the
-[CI static-check job](workflows/main.yml), and report that script's result separately.
+[CI static-check job](workflows/ci-checks.yml), and report that script's result separately.
 
 Also confirm the AI pre-review (CONTRIBUTING.md §6) has run and its review file is
 committed under `docs/ai-and-plans/features/<name>/iterations/`.

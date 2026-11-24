@@ -36,15 +36,17 @@ the operator-run ADO build and the G0 manual checklist passed on 2026-10-02 (G0)
 
 ### GitHub Actions (`.github/workflows/`)
 
-| Workflow                              | Triggers                                                          | What it does                                                                                                                                                                                                                                                                                                                                                                 |
-| ------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `main.yml` ("CI")                     | PRs and pushes: `main`, `release/**`; PRs to `feature/**`; manual | In tiers (decision 0002, [CI](../../../../build/verification/README.md#ci)): static checks and unit tests on draft PRs; ready PRs and pushes add the VSIX build, inspection and activation; the npm package checks, self-tests and the webview host check when their paths change; `ci:full-requested` runs all once. Parallel jobs (decision 0014, see 3.0). One PR comment |
-| `api-extractor.yaml`                  | Push to `main` and `release/**`; PRs                              | Extracts the public API typings                                                                                                                                                                                                                                                                                                                                              |
-| `api-publish.yaml`                    | Manual                                                            | Publishes the API typings package to npm                                                                                                                                                                                                                                                                                                                                     |
-| `npm-publish-documentdb-js.yml`       | Manual; `dry_run` defaults to `true`, one checkbox per package    | Builds, type-checks package tests, tests and verifies packages, and dry-runs publication; explicit real publication to npmjs with provenance requires successful verification and environment approval                                                                                                                                                                       |
-| `bump-version-pr.yaml`                | Stable GitHub release published; manual                           | Prepares a version-specific branch for the next patch's `alpha.0`, updating the root manifest and lockfile. Creates or updates an assigned reminder issue with a prefilled PR link; a maintainer submits the PR and normal PR CI runs. Release tags must match `main`; existing development versions are left alone.                                                         |
-| `deploy-documentation-production.yml` | Push to `main` touching `docs/**`; manual                         | Deploys the documentation site                                                                                                                                                                                                                                                                                                                                               |
-| `seed-build-cache.yml`                | Manual (`seed` / `verify`)                                        | Build-size cache                                                                                                                                                                                                                                                                                                                                                             |
+| Workflow                              | Triggers                                                       | What it does                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `main.yml` ("CI")                     | PRs and pushes: `main`, `release/**`; PRs to `feature/**`      | Automatic entry point calling `ci-checks.yml`. Draft PRs use the fast tier; ready PRs and pushes use standard. Keeps the top-level required `Merge gate`.                                                                                                                                                            |
+| `ci-requested.yml` ("CI requested")   | PR labeled, with no target-branch filter; manual               | Calls `ci-checks.yml` for `ci:full-requested` only, running every check once. Manual runs are full with `enforce_full_run`, fast without it. Keeps the top-level gate; unrelated labels and manual fast runs cannot satisfy the required check.                                                                      |
+| `ci-checks.yml` ("CI checks")         | `workflow_call` from either CI entry point                     | Shared tier selection, parallel checks, artifacts, validation and one PR report comment (decision 0002, [CI](../../../../build/verification/README.md#ci), decision 0014, see 3.0).                                                                                                                                  |
+| `api-extractor.yaml`                  | Push to `main` and `release/**`; PRs                           | Extracts the public API typings                                                                                                                                                                                                                                                                                      |
+| `api-publish.yaml`                    | Manual                                                         | Publishes the API typings package to npm                                                                                                                                                                                                                                                                             |
+| `npm-publish-documentdb-js.yml`       | Manual; `dry_run` defaults to `true`, one checkbox per package | Builds, type-checks package tests, tests and verifies packages, and dry-runs publication; explicit real publication to npmjs with provenance requires successful verification and environment approval                                                                                                               |
+| `bump-version-pr.yaml`                | Stable GitHub release published; manual                        | Prepares a version-specific branch for the next patch's `alpha.0`, updating the root manifest and lockfile. Creates or updates an assigned reminder issue with a prefilled PR link; a maintainer submits the PR and normal PR CI runs. Release tags must match `main`; existing development versions are left alone. |
+| `deploy-documentation-production.yml` | Push to `main` touching `docs/**`; manual                      | Deploys the documentation site                                                                                                                                                                                                                                                                                       |
+| `seed-build-cache.yml`                | Manual (`seed` / `verify`)                                     | Build-size cache                                                                                                                                                                                                                                                                                                     |
 
 Workflows that install dependencies use **public npmjs**: there is no `.npmrc` at the repository
 root. The version-bump workflow needs no dependency installation; it runs the repository's
@@ -53,7 +55,7 @@ root. The version-bump workflow needs no dependency installation; it runs the re
 It needs contents and issues write access, not permission to create PRs or dispatch workflows.
 Its integration tests run in the CI unit-tests job.
 
-All checkouts in `main.yml` use `actions/checkout`'s default ref: GitHub's synthetic
+All checkouts in `ci-checks.yml` use `actions/checkout`'s default ref: GitHub's synthetic
 **merge ref for PRs**, and `github.sha` for push/manual runs. Stage 6 restores this policy
 for S1-F01 by coordinator decision, reverting Stage 1's temporary PR-head override.
 The package, L1 and L3 jobs therefore use the same merge tree as the quality checks, exercising
@@ -171,8 +173,10 @@ in a browser, and L3 installs the VSIX into a downloaded VS Code and checks that
 
 `Plan: choose checks` runs first. `Static checks`, `Unit tests`, `npm packages: verify tarballs`
 and `VSIX: build` then run in parallel; `VSIX: inspect contents` and `VSIX: activate in VS Code`
-need `VSIX: build`. `PR report` and the `Merge gate` need every job and run with
-`if: always()` (decision 0013, decision 0014). The gate is the only required check.
+need `VSIX: build`. `PR report` and `Validate expected checks` need every check job and run with
+`if: always()` (decision 0013, decision 0014). The validation result is returned to the calling
+workflow, whose top-level `Merge gate` preserves the required check name. A missing or unsuccessful
+result fails the caller's gate. The gate is the only required CI check.
 
 Each job has `timeout-minutes`, about 3 to 4 times its duration in the first standard-tier run and
 at least 5: plan, `VSIX: build`, `PR report` and the gate 5; npm packages 6; inspection and
@@ -234,9 +238,9 @@ per-graph base values are unavailable instead of showing a false reduction. With
 section says "No size data for `<base>` yet; sizes only."; if an earlier invariant prevents the L1 report, it says measurements are
 unavailable. As before, token-written comments are restricted to same-repository PRs; fork PRs
 still get artifacts and job logs. Packaging, L1 and L3 run in the standard and full tiers: ready
-PRs to any of the three target branches, pushes to `main` and `release/**`, `ci:full-requested`,
-and dispatches with `enforce_full_run`. Draft PRs and other dispatches run only the static checks
-and unit tests.
+PRs to any of the three automatic target-branch patterns, pushes to `main` and `release/**`,
+`ci:full-requested` on any PR target, and dispatches with `enforce_full_run`. Draft PRs without an
+explicit full request and other dispatches run only the static checks and unit tests.
 
 ADO's unsigned-VSIX inspection uses `--manifest-report` and enforces the L1 invariants **before
 signing** (no size gate since G8 item 22). A report-only `CopyFiles@2` step, with `condition: succeededOrFailed()`, stages
@@ -256,18 +260,22 @@ actual ADO run remain operator verification.
   OIDC permission. It checks out the dispatch commit, selects Node from `.nvmrc`, installs npm
   **11.20.0** and runs `npm ci`, `npm run build --workspaces --if-present`, `npm run typecheck:tests`,
   `npm run test --workspaces --if-present`, and `npm run verify:packages`. The latter packs all
-  six workspaces and checks packed-test rejection, exports/types and representative consumer
+  eight workspaces and checks packed-test rejection, exports/types and representative consumer
   calls (including rejection controls).
 - It then runs `npm publish --dry-run --workspace <package>` for each selected
-  `@documentdb-js/*` package. With `dry_run=true` and no package selected, it dry-runs **all four**.
+  `@documentdb-js/*` package. With `dry_run=true` and no package selected, it dry-runs **all six
+  selectable packages**: operator registry, schema analyzer, shell API types, shell runtime,
+  SRV resolver and connection diagnostics.
   A dry-run never requires a reviewer to approve an environment, never requests `id-token: write`,
   and never schedules the publish job.
 - **Publish to npmjs.com** has `needs: verify` and `if: ${{ !inputs.dry_run }}`. A real-publish
   dispatch must select at least one package; otherwise verification fails before environment
   approval can be requested. The publish job preserves the protected
   `npm-publish-documentdb-js-scope` environment, `id-token: write`, Trusted Publishing and
-  per-package `--provenance` publication. It installs/builds again in its own checkout; the
-  verifier does not transfer the exact checked tarballs into that job.
+  per-package `--provenance` publication. The verify job packs the selected packages with
+  lifecycle scripts disabled and records their SHA-256 hashes. The publish job downloads
+  those tarballs, checks their hashes and package names, and publishes them with
+  `--ignore-scripts`; it never installs repository dependencies, builds or runs package scripts.
 - The ADO route for `@microsoft/vscode-ext-webview*` checks the exact archives it ships (Stage 8,
   W3): after `pack-npm-packages.ps1`, `build-npm-packages.yml` runs
   `check-packages.mjs --archives "$(ob_outputDirectory)\npm-packages"` and fails the build on any
@@ -296,6 +304,20 @@ package's npm Trusted Publisher configuration matches this repository, workflow 
 Dry-run success cannot validate OIDC authentication or npm-side publisher settings. Nothing in
 this change modifies those settings or environment policy. This closes PR-F02's missing
 verification gate for this GitHub publish path, **not** the ADO `@microsoft/*` path or general PR CI.
+
+**SRV resolver:** select `publish_srv_resolver` in this GitHub workflow, first with
+`dry_run=true`, then with `dry_run=false` for the approved release. The selector is wired through
+input validation, dry-run, packing and publication. It is not in the ADO release dropdown:
+that route supports only the two `@microsoft/vscode-ext-webview*` packages.
+Publish `@documentdb-js/srv-resolver@1.1.0` before the first
+`@documentdb-js/connection-diagnostics@0.1.0` release, which depends on `^1.1.0`.
+
+**Connection diagnostics:** `publish_connection_diagnostics` is wired the same way. When both
+are selected, the workflow publishes it after the SRV resolver. npm accepts a Trusted Publisher
+only for a package that already exists, so the operator publishes `0.1.0` manually. Afterwards,
+configure the package's Trusted Publisher on npmjs.com (this repository,
+`npm-publish-documentdb-js.yml`, the `npm-publish-documentdb-js-scope` environment) and allow
+`npm publish`, not only staged publishing. Later versions then publish through this workflow.
 
 **Validation (2026-10-07):** branch dry-run
 [37618213760](https://github.com/microsoft/vscode-documentdb/actions/runs/37618213760), at
