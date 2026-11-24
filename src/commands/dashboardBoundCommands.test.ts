@@ -43,7 +43,12 @@ vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
     },
 }));
 vi.mock('../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: vi.fn(), getEpoch: vi.fn(() => 0), resolveBoundClient: vi.fn(), reportFailure: vi.fn() },
+    ClustersClient: {
+        getClient: vi.fn(),
+        getEpoch: vi.fn(() => 0),
+        resolveBoundClient: vi.fn(),
+        reportFailure: vi.fn(),
+    },
 }));
 vi.mock('../documentdb/CredentialCache', () => ({
     CredentialCache: { getCredentials: vi.fn(), hasCredentials: vi.fn(() => true) },

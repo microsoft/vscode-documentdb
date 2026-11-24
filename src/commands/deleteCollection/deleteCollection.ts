@@ -65,9 +65,13 @@ export async function deleteCollection(
         const drop = (client: ClustersClient): Promise<boolean> =>
             client.dropCollection(node.databaseInfo.name, node.collectionInfo.name);
         const binding = options?.binding;
-        const runDrop = binding
-            ? (): Promise<boolean> => runBoundNamespaceCommand(clusterId, binding, drop, confirmationEpoch)
-            : drop.bind(undefined, await ClustersClient.getClient(clusterId));
+        let runDrop: () => Promise<boolean>;
+        if (binding) {
+            runDrop = () => runBoundNamespaceCommand(clusterId, binding, drop, confirmationEpoch);
+        } else {
+            const client = await ClustersClient.getClient(clusterId);
+            runDrop = () => drop(client);
+        }
 
         let success = false;
         await ext.state.showDeleting(node.id, async () => {
