@@ -44,6 +44,18 @@ export function isBoundViewOperationCurrent(assertCurrent: () => void): boolean 
     }
 }
 
+/** Lets collectors that normally absorb driver errors preserve terminal connection failures. */
+export function throwIfBoundViewUnavailable(binding: ConnectionBinding, error: unknown): void {
+    const kind = ClustersClient.reportFailure(binding, error);
+    switch (kind) {
+        case 'signInRequired':
+        case 'credentialsRejected':
+        case 'credentialsMissing':
+        case 'identityChanged':
+            throw new ConnectionUnavailableError(kind);
+    }
+}
+
 /** Preserve procedure success shapes until the shared host mapping lands. */
 export async function runBoundViewOperation<T>(
     binding: ConnectionBinding,

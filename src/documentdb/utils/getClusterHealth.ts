@@ -278,7 +278,10 @@ function toStringOrNull(value: unknown): string | null {
  * @returns A sample where unsupported/failed commands are reported through `errors`
  *          rather than by throwing.
  */
-export async function sampleClusterHealth(client: MongoClient): Promise<ClusterHealthSample> {
+export async function sampleClusterHealth(
+    client: MongoClient,
+    onCommandError?: (error: unknown) => void,
+): Promise<ClusterHealthSample> {
     const sample: ClusterHealthSample = {
         pingLatencyMs: null,
         uptimeSeconds: null,
@@ -301,6 +304,7 @@ export async function sampleClusterHealth(client: MongoClient): Promise<ClusterH
                 sample.pingLatencyMs = performance.now() - startedAt;
                 return null;
             } catch (error) {
+                onCommandError?.(error);
                 return describeCommandFailure('ping', error);
             }
         })(),
@@ -314,6 +318,7 @@ export async function sampleClusterHealth(client: MongoClient): Promise<ClusterH
                 sample.uptimeSeconds = toNumberOrNull(serverStatus.uptime);
                 return null;
             } catch (error) {
+                onCommandError?.(error);
                 // Expected on Azure DocumentDB (vCore) and DocumentDB Local before 1.2: neither supports `serverStatus`.
                 const failure = describeCommandFailure('serverStatus', error);
                 if (isUnsupportedCommandError(error)) {
@@ -349,6 +354,7 @@ export async function getStorageStats(
     client: MongoClient,
     signal?: AbortSignal,
     diagnostics?: RawCommandDiagnostic[],
+    onCommandError?: (error: unknown) => void,
 ): Promise<ClusterStorageStats> {
     const errors: string[] = [];
     const adminDb = client.db().admin();
@@ -363,6 +369,7 @@ export async function getStorageStats(
             result: { ok: true, response: listed },
         });
     } catch (error) {
+        onCommandError?.(error);
         diagnostics?.push({
             database: 'admin',
             command: listDatabasesCommand,
@@ -421,6 +428,7 @@ export async function getStorageStats(
                 // replaced, but `null` (field absent) should fall back to storageSize.
                 database.sizeOnDiskBytes ??= toNumberOrNull(stats.storageSize);
             } catch (error) {
+                onCommandError?.(error);
                 diagnostics?.push({
                     database: name,
                     command: dbStatsCommand,
@@ -462,6 +470,7 @@ export async function getDatabaseCollections(
     client: MongoClient,
     databaseName: string,
     signal?: AbortSignal,
+    onCommandError?: (error: unknown) => void,
 ): Promise<DatabaseCollectionsResult> {
     const errors: string[] = [];
     const db = client.db(databaseName);
@@ -470,6 +479,7 @@ export async function getDatabaseCollections(
     try {
         listed = await db.listCollections().toArray();
     } catch (error) {
+        onCommandError?.(error);
         return {
             databaseName,
             collections: [],
@@ -511,6 +521,7 @@ export async function getDatabaseCollections(
                 collection.indexSizeBytes = toNumberOrNull(stats.totalIndexSize);
                 collection.indexes = toNumberOrNull(stats.nindexes);
             } catch (error) {
+                onCommandError?.(error);
                 errors.push(describeCommandFailure(`collStats:${name}`, error));
             }
 

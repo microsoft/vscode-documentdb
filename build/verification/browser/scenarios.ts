@@ -50,7 +50,7 @@ export type ScenarioStep =
           readonly role: 'button' | 'link' | 'switch' | 'menuitem' | 'radio';
           readonly name: string;
       }
-    | { readonly action: 'fill'; readonly role: 'textbox'; readonly name: string; readonly value: string }
+    | { readonly action: 'fill'; readonly role: 'textbox' | 'searchbox'; readonly name: string; readonly value: string }
     | { readonly action: 'replaceText'; readonly role: 'textbox'; readonly name: string; readonly value: string }
     | { readonly action: 'waitFor'; readonly name: string; readonly selector: string }
     | { readonly action: 'post'; readonly name: string; readonly message: unknown }
@@ -2535,10 +2535,66 @@ const documentViewScenarios = {
     },
 } as const satisfies Readonly<Record<string, Scenario<'documentView'>>>;
 
+const clusterDashboardBase = defaultScenario('clusterDashboard');
+const clusterDashboardScenarios = {
+    default: clusterDashboardBase,
+    disconnected: {
+        ...clusterDashboardBase,
+        readiness: { ...clusterDashboardBase.readiness, content: ['stage0_inventory'] },
+        rpc: {
+            ...clusterDashboardBase.rpc,
+            'clusterDashboard.recoverUnavailable': {
+                type: 'mutation',
+                results: [{ recovered: { text: 'Reconnected' } }],
+            },
+        },
+        assertions: [
+            {
+                kind: 'attribute',
+                name: 'keeps the dashboard mounted behind the unavailable overlay',
+                selector: '.disconnectedOverlayBackground',
+                attribute: 'inert',
+                expected: '',
+                steps: [
+                    {
+                        action: 'fill',
+                        role: 'searchbox',
+                        name: 'Filter databases by name',
+                        value: 'stage0',
+                    },
+                    {
+                        action: 'post',
+                        name: 'disable Cluster Dashboard',
+                        message: {
+                            type: 'clusterDashboard.connectionUnavailable',
+                            unavailable: disconnectedDocument,
+                        },
+                    },
+                    { action: 'waitFor', name: 'disconnected overlay', selector: '.disconnectedOverlay' },
+                ],
+            },
+            {
+                kind: 'text',
+                name: 'keeps the last inventory and filter visible',
+                selector: '.inventoryPanel',
+                includes: ['stage0_inventory'],
+                excludes: [],
+            },
+            {
+                kind: 'attribute',
+                name: 'keeps the inventory filter',
+                selector: 'input[aria-label="Filter databases by name"]',
+                attribute: 'value',
+                expected: 'stage0',
+            },
+        ],
+    },
+} as const satisfies Readonly<Record<string, Scenario<'clusterDashboard'>>>;
+
 export const scenarios = {
     collectionView: { default: defaultScenario('collectionView') },
     documentView: documentViewScenarios,
-    clusterDashboard: { default: defaultScenario('clusterDashboard') },
+    clusterDashboard: clusterDashboardScenarios,
     atlasCredentials: { default: defaultScenario('atlasCredentials', atlasSteps) },
     connectionDiagnostics: diagnosticsScenarios,
     localQuickStart: {

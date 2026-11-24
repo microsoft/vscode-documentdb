@@ -19,6 +19,10 @@ import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
 
 import { type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
+import {
+    type ConnectionUnavailableDetails,
+    isConnectionUnavailableResponse,
+} from '../../../_integration/connectionUnavailable';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
 import { useFilterUsageReporter } from '../../../components/useFilterUsageReporter';
 import { isShowCollectionsMessage } from '../clusterDashboardContextMenu';
@@ -83,6 +87,10 @@ export interface InventoryPanelProps {
         readonly operation: 'create' | 'delete';
         readonly phase: 'running' | 'settling';
     }>;
+    isSubmissionBlocked?: () => boolean;
+    startOperation?: () => number | undefined;
+    isOperationCurrent?: (revision: number) => boolean;
+    onUnavailable?: (unavailable: ConnectionUnavailableDetails) => void;
 }
 
 /**
@@ -149,6 +157,10 @@ export const InventoryPanel = ({
     onRetryStorage,
     isCreatingNamespace,
     busyNamespaces,
+    isSubmissionBlocked = () => false,
+    startOperation = () => 0,
+    isOperationCurrent = () => true,
+    onUnavailable = () => undefined,
 }: InventoryPanelProps): JSX.Element => {
     const { sort, filterText, currentDatabase } = viewState;
     const trpcClient = useTrpcClient();
@@ -303,9 +315,21 @@ export const InventoryPanel = ({
             activationSource: 'rowClick' | 'rowActionButton',
             isFiltered: boolean,
         ): void => {
+            const revision = startOperation();
+            if (revision === undefined) {
+                return;
+            }
             void trpcClient.clusterDashboard.openCollectionView
                 .mutate({ databaseName, collectionName, activationSource, isFiltered })
+                .then((response) => {
+                    if (isOperationCurrent(revision) && isConnectionUnavailableResponse(response)) {
+                        onUnavailable(response.unavailable);
+                    }
+                })
                 .catch((error: unknown) => {
+                    if (!isOperationCurrent(revision)) {
+                        return;
+                    }
                     void trpcClient.common.displayErrorMessage.mutate({
                         message: l10n.t('Failed to open the collection view.'),
                         modal: false,
@@ -313,7 +337,7 @@ export const InventoryPanel = ({
                     });
                 });
         },
-        [trpcClient],
+        [isOperationCurrent, onUnavailable, startOperation, trpcClient],
     );
 
     // Every other context-menu entry is carried out on the host against the row's tree node;
@@ -321,6 +345,9 @@ export const InventoryPanel = ({
     useEffect(() => {
         const handleMessage = (event: MessageEvent<unknown>): void => {
             if (isShowCollectionsMessage(event.data)) {
+                if (isSubmissionBlocked()) {
+                    return;
+                }
                 const { databaseName } = event.data;
                 report('inventoryNavigation', { direction: 'down', control: 'rowContextMenu', level: 'databases' });
                 onViewStateChange((current) => ({ ...current, currentDatabase: databaseName, filterText: '' }));
@@ -329,7 +356,7 @@ export const InventoryPanel = ({
 
         window.addEventListener('message', handleMessage);
         return () => window.removeEventListener('message', handleMessage);
-    }, [onViewStateChange, report]);
+    }, [isSubmissionBlocked, onViewStateChange, report]);
 
     const activate = (row: NamespaceRow, control: 'rowClick' | 'rowActionButton'): void => {
         if (currentDatabase === null) {

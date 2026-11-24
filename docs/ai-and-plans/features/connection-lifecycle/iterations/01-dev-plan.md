@@ -1543,7 +1543,12 @@ behave as today.
   rebind. A stale Reconnect cannot clear a Remove latch. Build and 26 focused tests passed.
   The default, dirty-disconnect, and stale-save-after-reconnect scenarios passed in dark,
   light, and high-contrast themes. The two recovery scenarios each sent one save and no
-  automatic replay. The remaining panels and Collection View browser scenarios are in progress.
+  automatic replay.
+- **Dashboard overlay:** Added structured unavailable replies, registration, and explicit
+  recovery. The disabled view keeps its last inventory and filter, and does not submit
+  automatic requests while the overlay is visible. The build, 118 focused view tests, and
+  66 browser harness tests passed. Default and disconnected Dashboard scenarios passed in
+  dark, light, and high-contrast themes. Next: Collection View recovery and bound handoffs.
 
 ---
 

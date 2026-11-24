@@ -34,6 +34,7 @@ vi.mock('../../../documentdb/ClustersClient', () => ({
         getBinding: vi.fn(),
         getEpoch: vi.fn(),
         getLatchReason: vi.fn(),
+        reportFailure: vi.fn(),
     },
 }));
 vi.mock('../../../documentdb/CredentialCache', () => ({ CredentialCache: { getCredentials: vi.fn() } }));
@@ -83,7 +84,11 @@ function createContext(
         dbExperience: API.DocumentDB,
         webviewName: 'clusterDashboard',
         clusterId: 'cluster-id',
-        binding,
+        binding: { current: binding },
+        describeUnavailable: (reason) => ({
+            unavailable: { reason, text: 'Connection unavailable.', action: 'close' },
+        }),
+        recoverUnavailable: vi.fn(),
         clusterDisplayName: 'Test cluster',
         viewId: 'connectionsView',
         dashboardSessionId: 'dashboard-session',
@@ -156,6 +161,47 @@ describe('clusterDashboardRouter create actions', () => {
                 { trigger: 'clusterDashboardPoll', background: true },
             );
         });
+
+        it('returns a bounded unavailable response for terminal poll resolution', async () => {
+            vi.mocked(ClustersClient.resolveBoundClient).mockRejectedValueOnce(
+                new ConnectionUnavailableError('signInRequired'),
+            );
+
+            await expect(createCallerFactory(clusterDashboardRouter)(createContext()).measureRtt()).resolves.toEqual({
+                unavailable: {
+                    reason: 'signInRequired',
+                    text: 'Connection unavailable.',
+                    action: 'close',
+                },
+            });
+        });
+    });
+
+    it('returns unavailable when a storage collector observes rejected credentials', async () => {
+        const rejected = new Error('authentication failed');
+        const client = {
+            binding,
+            getMongoClient: () => ({
+                db: () => ({
+                    admin: () => ({
+                        listDatabases: vi.fn().mockRejectedValue(rejected),
+                    }),
+                }),
+            }),
+        };
+        vi.mocked(ClustersClient.resolveBoundClient).mockResolvedValue(client as never);
+        vi.mocked(ClustersClient.reportFailure).mockReturnValue('credentialsRejected');
+
+        await expect(
+            createCallerFactory(clusterDashboardRouter)(createContext()).getStorageStats({ loadReason: 'manual' }),
+        ).resolves.toEqual({
+            unavailable: {
+                reason: 'credentialsRejected',
+                text: 'Connection unavailable.',
+                action: 'close',
+            },
+        });
+        expect(ClustersClient.reportFailure).toHaveBeenCalledWith(binding, rejected);
     });
 
     it('opens the shell with the default database', async () => {
@@ -210,8 +256,12 @@ describe('clusterDashboardRouter create actions', () => {
         });
         const caller = createCallerFactory(clusterDashboardRouter)(createContext());
 
-        await expect(caller.copyConnectionString()).rejects.toMatchObject({
-            cause: expect.any(ConnectionUnavailableError),
+        await expect(caller.copyConnectionString()).resolves.toEqual({
+            unavailable: {
+                reason: 'identityChanged',
+                text: 'Connection unavailable.',
+                action: 'close',
+            },
         });
         expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
     });
