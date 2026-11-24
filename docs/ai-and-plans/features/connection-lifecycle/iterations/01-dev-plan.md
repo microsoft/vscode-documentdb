@@ -1748,6 +1748,10 @@ behave as today.
   dialog: a password-only edit does not change the fingerprint. The proposed per-cluster
   generation watermark is an implementation candidate to validate in the saved-edit slice,
   not a new public contract. No operator decision is needed for the lease slice.
+- **WI-7 S1:** Import and export hold a collection lease from client resolution through
+  completion. Task admission checks the same latch as client startup. Existing conflict queries
+  see leases, including the folder-delete check. The task, transfer and Dashboard-bound command
+  test suites passed together (18 tests).
 - **Carry-forward from WI-4d:** An explicit Update Credentials that changes the tenant must
   replace or clear the old verified Entra identity so the next connect can use the saved
   tenant (decision 0011). Automatic reconnect remains pinned until that explicit update.
