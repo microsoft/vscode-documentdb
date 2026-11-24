@@ -10,7 +10,7 @@ code:
 
 # `@microsoft/vscode-ext-webview-fluentui`
 
-**Status:** 1.1.0 prepared; increments 1-6 implemented and accepted · **Created:** 2026-08-18
+**Status:** 1.3.0 in the workspace; increments 1-6 implemented and accepted · **Created:** 2026-08-18
 
 > The React theming layer and a small set of components, extracted so other VS Code extensions can
 > make Fluent UI look correct inside a webview without rebuilding it.
@@ -149,9 +149,10 @@ On 2026-09-10 the operator confirmed that the requested increment 4 acceptance t
 and satisfactory. The review of `b4aee678` also passed `npm run build` and all 18 focused tests
 across the badge, metric-card and components-entry suites. Detailed browser evidence is in the
 increment 4 work log; no screen-reader transcript or exact operator test matrix was supplied.
+On 2026-11-24 the operator confirmed a successful extension debug review with Fluent components
+9.75.2 and icons 2.0.345.
 
-The package manifest is now `1.1.0`. Version `1.0.0` was the initial release. Version `1.1.0`
-contains:
+Version `1.0.0` was the initial release. Version `1.1.0` contains:
 
 - the wizard's `scroll` and `sticky-navigation` header behaviors described in decision 0031;
 - the `./monaco` entry, including the React hook and imperative theme factory described in decision
@@ -159,12 +160,14 @@ contains:
 - the shared VS Code color source used to keep Fluent and Monaco surfaces aligned across live theme
   changes.
 
+The workspace manifest is now `1.3.0`; see the
+[package changelog](../../../../packages/vscode-ext-webview-fluentui/CHANGELOG.md) for later changes.
 Preview versions were already being published; the absence of `private: true` remains intentional
 (0027). This does not claim that `1.1.0` has been published to the registry.
 
-The operator subsequently confirmed there are no external package consumers. Breaking API changes
-were permitted while finalizing this extraction before the `1.0.0` release-version bump (0029).
-The copied theming implementation in the other repository is not adoption of the published package.
+Before the `1.0.0` release-version bump, the operator confirmed there were no external package
+consumers, allowing breaking API changes while finalizing the extraction (0029). At that time, the
+copied theming implementation in the other repository was not adoption of the published package.
 Full-webview sizing with `100vh` is the accepted default (0028); the component READMEs document
 bounded-parent embedding workarounds for both `Container` and `Wizard`.
 

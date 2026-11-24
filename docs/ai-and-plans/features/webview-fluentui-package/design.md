@@ -197,13 +197,14 @@ This is the first real divergence from the sibling package, whose entire build i
 
 ## 7. Dependencies
 
-`peerDependencies`, chosen to satisfy both known consumers simultaneously:
+`peerDependencies`, chosen so consumers can upgrade Fluent independently:
 
-| Peer                         | Range   | This extension | vscode-cosmosdb |
-| ---------------------------- | ------- | -------------- | --------------- |
-| `react`                      | `>=19`  | `~19.2.4`      | `~19.2.1`       |
-| `@fluentui/react-components` | `~9.74` | `~9.74.4`      | `~9.74.1`       |
-| `@fluentui/react-icons`      | `~2.0`  | `~2.0.320`     | `~2.0.313`      |
+| Peer                                        | Range                | This extension      |
+| ------------------------------------------- | -------------------- | ------------------- |
+| `react`                                     | `>=19`               | `~19.2.4`           |
+| `@fluentui/react-components`                | `~9.74 \|\| ~9.75.1` | `~9.75.1`           |
+| `@fluentui/react-icons`                     | `~2.0`               | `~2.0.345`          |
+| `@fluentui/react-motion-components-preview` | `^0.15.6`            | installed as a peer |
 
 `devDependencies`: `sass` (the style build), `@fluentui/react-progress` - the latter because
 `fluentOverrides.test.ts` does `require.resolve('@fluentui/react-progress')` and currently works only
@@ -221,12 +222,11 @@ applying, with no build error. The `fluentOverrides` test suite is the tripwire.
 English default when the consumer does not supply one. A consumer that ships translations passes a
 localized builder because the repo's `npm run l10n` extractor does not scan `node_modules`.
 
-The workspace manifest now declares `version: 1.1.0`, prepared for release by this branch. The
-operator confirmed on 2026-09-10 that the package is already being published, so the absence of
-`private: true` is intentional. Decision 0027 replaces the original workspace-only restriction.
-Registry versions and the publication status of individual commits must be checked separately.
-The operator also confirmed there are no external consumers; decision 0029 records the resulting
-latitude to finalize the API before wider adoption.
+The workspace manifest declares `version: 1.3.0`. The operator confirmed on 2026-09-10 that the
+package was already being published, so the absence of `private: true` is intentional. Decision
+0027 replaces the original workspace-only restriction. Registry versions and the publication status
+of individual commits must be checked separately. Before the initial release, the operator confirmed
+there were no external consumers; decision 0029 records the resulting latitude to finalize the API.
 
 ## 8. Testing
 
