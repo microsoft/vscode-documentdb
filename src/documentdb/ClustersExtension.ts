@@ -17,6 +17,8 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import { type AzureResourcesExtensionApiWithActivity } from '@microsoft/vscode-azext-utils/activity';
 import { type AzExtResourceType, getAzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
+import { TaskState } from '@microsoft/vscode-ext-tasks';
+import { attachTaskLifecycleLogger } from '@microsoft/vscode-ext-tasks/vscode';
 import * as vscode from 'vscode';
 import { accessDataMigrationServices } from '../commands/accessDataMigrationServices/accessDataMigrationServices';
 import { addConnectionFromRegistry } from '../commands/addConnectionFromRegistry/addConnectionFromRegistry';
@@ -115,8 +117,6 @@ import { maybeShowReleaseNotesNotification } from '../services/releaseNotesNotif
 import { recordSurveyActivity } from '../services/survey/SurveyService';
 import { TaskProgressReportingService, TaskService } from '../services/taskService/extension/taskServiceInstance';
 import { DemoTask } from '../services/taskService/tasks/DemoTask';
-import { TaskState } from '@microsoft/vscode-ext-tasks';
-import { attachTaskLifecycleLogger } from '@microsoft/vscode-ext-tasks/vscode';
 import { maybeShowWelcomeScreen } from '../services/welcomeScreen';
 import {
     CompletionCommandIds,

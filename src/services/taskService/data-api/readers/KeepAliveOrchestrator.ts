@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import Denque from 'denque';
 import { mergeStrings, type TaskLogger } from '@microsoft/vscode-ext-tasks';
+import Denque from 'denque';
 import {
     type DataTransferOptions,
     type DataTransferStrings,

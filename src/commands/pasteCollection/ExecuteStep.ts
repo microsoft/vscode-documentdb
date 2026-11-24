@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
+import { isTerminalState, TaskState, whenTerminal, type Task } from '@microsoft/vscode-ext-tasks';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
@@ -14,7 +15,6 @@ import { createExtensionTaskOptions } from '../../services/taskService/extension
 import { TaskService } from '../../services/taskService/extension/taskServiceInstance';
 import { CopyPasteCollectionTask } from '../../services/taskService/tasks/copy-and-paste/CopyPasteCollectionTask';
 import { type CopyPasteConfig } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
-import { isTerminalState, TaskState, whenTerminal, type Task } from '@microsoft/vscode-ext-tasks';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { nonNullValue } from '../../utils/nonNull';
 import { createCollectMetadata, createValidateSource } from './copyPasteCollectionHooks';

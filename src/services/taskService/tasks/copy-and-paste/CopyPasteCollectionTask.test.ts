@@ -6,13 +6,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { type TaskTelemetryContext } from '@microsoft/vscode-ext-tasks';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { ext } from '../../../../extensionVariables';
 import { type CollectionIndexCopier, type CopyIndexesOptions } from '../../data-api/indexes/CollectionIndexCopier';
 import { ConflictResolutionStrategy, type DocumentReader } from '../../data-api/types';
 import { type StreamingDocumentWriter } from '../../data-api/writers/StreamingDocumentWriter';
-import { type TaskTelemetryContext } from '@microsoft/vscode-ext-tasks';
 import { CopyPasteCollectionTask, SourceValidationError } from './CopyPasteCollectionTask';
 import { type CopyPasteConfig } from './copyPasteConfig';
 

@@ -4,11 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
+import { isTerminalState, whenTerminal, type Task } from '@microsoft/vscode-ext-tasks';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { TaskService } from '../../services/taskService/extension/taskServiceInstance';
 import { CopyIndexesTask } from '../../services/taskService/tasks/copy-indexes/CopyIndexesTask';
-import { isTerminalState, whenTerminal, type Task } from '@microsoft/vscode-ext-tasks';
 import { type PasteIndexesWizardContext } from './PasteIndexesWizardContext';
 
 export class ExecuteStep extends AzureWizardExecuteStep<PasteIndexesWizardContext> {

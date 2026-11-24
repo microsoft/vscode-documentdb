@@ -3,12 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type TaskTelemetryContext } from '@microsoft/vscode-ext-tasks';
 import { type Document, type WithId, type WriteError } from 'mongodb';
 import { l10n } from 'vscode';
 import { isBulkWriteError, type ClustersClient } from '../../../../documentdb/ClustersClient';
 import { ext } from '../../../../extensionVariables';
 import { createExtensionDataTransferOptions } from '../../extension/extensionDataTransferOptions';
-import { type TaskTelemetryContext } from '@microsoft/vscode-ext-tasks';
 import {
     ConflictResolutionStrategy,
     type AbortBatchResult,
