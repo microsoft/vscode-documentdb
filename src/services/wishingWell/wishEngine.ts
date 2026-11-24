@@ -5,7 +5,9 @@
 
 import * as l10n from '@vscode/l10n';
 import { z } from 'zod';
+import { withoutControlCharacters } from '../../documentdb/shell/shellWish';
 import { type WishOutcome } from '../../webviews/documentdb/wishingWell/wishingWellTypes';
+import { toShellQuery } from './wishQuery';
 
 /** A wish that needs a connection, database or collection the scope does not have. */
 export class WishScopeError extends Error {}
@@ -166,7 +168,7 @@ export const WISH_COMMANDS: readonly WishCommand[] = [
         id: 'workbench.action.showCommands',
         summary: 'Show every command VS Code can run',
         label: () => l10n.t('Show all commands'),
-        keywords: /\b(all commands|command palette|what can (you|i) do)\b/i,
+        keywords: /\b(all commands|command palette)\b/i,
     },
 ];
 
@@ -182,6 +184,8 @@ export interface WishPromptScope {
     readonly collectionNames?: readonly string[];
     /** `path: type` lines for the scoped collection. */
     readonly fields?: readonly string[];
+    /** `path: type` lines for other collections (all of a small database, else those the wish names), by name. */
+    readonly fieldsByCollection?: Readonly<Record<string, readonly string[]>>;
 }
 
 const MAX_TITLE = 80;
@@ -206,7 +210,7 @@ export function spellMenu(): string {
         (command) => `     - ${command.id}: ${command.summary}${command.takesText ? ' (takes "argument")' : ''}`,
     ).join('\n');
     return [
-        '1. {"spell":"answer"} — questions, explanations, advice, jokes. Put the answer in "message" (plain text, at most 150 words).',
+        '1. {"spell":"answer"} — questions, explanations, advice, jokes. "message" IS the answer itself (plain text, at most 150 words), never a description of it.',
         '2. {"spell":"find","collection":"...","filter":{...},"project":{...},"sort":{...}} — answer a question about the data by reading documents; add "limit" only when the wish asks for a number of them. Runs read-only right away.',
         '3. {"spell":"aggregate","collection":"...","pipeline":[...]} — counts, sums, groupings, top-N, joins. Runs read-only right away; $out and $merge are not allowed.',
         '4. {"spell":"collectionView","collection":"...","filter":{...},"sort":{...},"tab":"documents|indexes|insights"} — show documents in the collection view; "indexes" manages indexes; "insights" explains and speeds up a slow query with index advice.',
@@ -214,15 +218,22 @@ export function spellMenu(): string {
         '6. {"spell":"playground","script":"..."} — anything that CHANGES data (insert, update, delete, sample data, create index, drop) or a multi-step script. DocumentDB API shell JavaScript, e.g. db.getCollection(\'orders\').insertMany([...]). Comment it briefly; the user reviews and runs it.',
         '7. {"spell":"dashboard"} — the cluster dashboard: health, sizes, databases and collections at a glance.',
         '8. {"spell":"newDocument","collection":"..."} — open the editor for one new document.',
-        '9. {"spell":"tool","tool":"import|export|diagnose|createCollection|createDatabase","collection":"..."} — import or export documents (JSON/CSV), diagnose a connection problem, or create a collection or database with the guided wizard.',
+        '9. {"spell":"tool","tool":"import|export|diagnose|createCollection|createDatabase","collection":"..."} — import loads a JSON file the user picks; export writes the whole collection to a JSON file (no filter, no CSV, not a backup); diagnose checks a connection problem; createCollection and createDatabase ask the user for the name.',
         '10. {"spell":"command","commandId":"...","argument":"..."} — run one of these VS Code commands; "argument" only where noted:',
         commands,
         '11. {"spell":"agent","prompt":"..."} — work outside the database: writing or changing code and files in the workspace, research. "prompt" is a complete instruction for the Copilot agent.',
         '12. {"spell":"link","url":"https://..."} — a web page that grants the wish.',
         'Spells with "collection" (find, aggregate, collectionView, newDocument, tool) also take "database"; it defaults to the current one.',
-        'Every spell also has "title" (at most 8 words) and "message" (one or two sentences saying what happens).',
+        'Every spell also has "title" (at most 8 words) and "message". For "answer", "message" is the answer. For every other spell, "message" says in one or two sentences what will happen and names anything the query leaves out or assumes.',
         'filter, project, sort and pipeline are JSON; dates as {"$date":"2024-01-01T00:00:00Z"}, ids as {"$oid":"..."}.',
     ].join('\n');
+}
+
+function fieldLine(collection: string, fields: readonly string[]): string {
+    return `Fields of ${JSON.stringify(collection)}: ${fields
+        .slice(0, 80)
+        .map((field) => clip(field, 120))
+        .join(', ')}.`;
 }
 
 /** The single request that turns a wish into a spell. The model answers with one JSON object. */
@@ -244,8 +255,16 @@ export function buildWishPrompt(wish: string, scope: WishPromptScope): string {
             where.push(`Current collection: "${scope.collectionName}".`);
         }
         if (scope.fields?.length) {
-            where.push(`Fields of "${scope.collectionName ?? ''}": ${scope.fields.slice(0, 80).join(', ')}.`);
+            where.push(fieldLine(scope.collectionName ?? '', scope.fields));
         }
+        for (const [name, fields] of Object.entries(scope.fieldsByCollection ?? {})) {
+            if (name !== scope.collectionName && fields.length > 0) {
+                where.push(fieldLine(name, fields));
+            }
+        }
+        where.push(
+            'Use only field names listed here. If the wish needs a collection whose fields are not listed, say in "message" that its field names are a guess.',
+        );
     } else {
         where.push(
             'No database is connected, so spells 2 to 9 are unavailable except "playground", which asks for a database when run.',
@@ -276,7 +295,13 @@ const jsonish = z.union([z.string(), z.record(z.string(), z.unknown()), z.array(
 const text = { title: z.string().min(1), message: z.string().min(1) };
 const namespace = { database: z.string().optional(), collection: z.string().optional() };
 const spellReply = z.discriminatedUnion('spell', [
-    z.object({ spell: z.literal('answer'), ...text }),
+    // Small models sometimes put the answer in "answer" and describe it in "message".
+    z.object({
+        spell: z.literal('answer'),
+        title: text.title,
+        message: z.string().optional(),
+        answer: z.string().optional(),
+    }),
     z.object({
         spell: z.literal('find'),
         ...namespace,
@@ -311,12 +336,38 @@ const spellReply = z.discriminatedUnion('spell', [
     z.object({ spell: z.literal('link'), url: z.string().min(1), ...text }),
 ]);
 
-function asJsonText(value: unknown): string | undefined {
+/** Code is never cut: a cut filter or pipeline cannot parse, so one too long is refused instead. */
+function asCode(name: string, value: unknown, toText: (raw: string) => string = (raw) => raw): CodeText {
     if (value === undefined) {
-        return undefined;
+        return { text: undefined };
     }
-    const raw = typeof value === 'string' ? value.trim() : JSON.stringify(value);
-    return raw.length > 0 && raw !== '{}' ? clip(raw, MAX_CODE) : undefined;
+    const raw = toText(typeof value === 'string' ? value.trim() : JSON.stringify(value));
+    if (raw.length > MAX_CODE) {
+        return { problem: `"${name}" is too long: keep it under ${MAX_CODE} characters` };
+    }
+    return { text: raw.length > 0 && raw !== '{}' ? raw : undefined };
+}
+
+type CodeText = { readonly text: string | undefined } | { readonly problem: string };
+
+/** A find or view query as the shell text the read and the collection view both parse. */
+function readQuery(value: {
+    readonly filter?: unknown;
+    readonly project?: unknown;
+    readonly sort?: unknown;
+}): { filter?: string; project?: string; sort?: string } | { problem: string } {
+    const parts = {
+        filter: asCode('filter', value.filter, toShellQuery),
+        project: asCode('project', value.project, toShellQuery),
+        sort: asCode('sort', value.sort, toShellQuery),
+    };
+    for (const part of Object.values(parts)) {
+        if ('problem' in part) {
+            return { problem: part.problem };
+        }
+    }
+    const text = (part: CodeText): string | undefined => ('text' in part ? part.text : undefined);
+    return { filter: text(parts.filter), project: text(parts.project), sort: text(parts.sort) };
 }
 
 function optionalName(value: string | undefined): string | undefined {
@@ -356,7 +407,12 @@ function pipelineProblem(value: unknown): string | undefined {
     if ('problem' in pipeline) {
         return pipeline.problem;
     }
-    const stage = writeStage(pipeline.stages);
+    let stage: string | undefined;
+    try {
+        stage = writeStage(pipeline.stages);
+    } catch {
+        return '"pipeline" is nested too deeply';
+    }
     return stage ? `aggregate pipeline uses ${stage}, which writes` : undefined;
 }
 
@@ -396,26 +452,37 @@ export function parseSpellResult(reply: string): SpellResult {
     }
 
     const value = read.value;
+    if (value.spell === 'answer') {
+        const answer = [value.answer, value.message].find((candidate) => candidate?.trim());
+        return answer
+            ? { spell: { kind: 'answer', title: clip(value.title, MAX_TITLE), message: clip(answer, MAX_MESSAGE) } }
+            : { reason: '"message" is required for an answer: it holds the answer' };
+    }
     const base = { title: clip(value.title, MAX_TITLE), message: clip(value.message, MAX_MESSAGE) };
     switch (value.spell) {
-        case 'answer':
-            return { spell: { kind: 'answer', ...base } };
-        case 'find':
+        case 'find': {
+            const query = readQuery(value);
+            if ('problem' in query) {
+                return { reason: query.problem };
+            }
             return {
                 spell: {
                     kind: 'find',
                     ...base,
                     database: optionalName(value.database),
                     collection: optionalName(value.collection),
-                    filter: asJsonText(value.filter),
-                    project: asJsonText(value.project),
-                    sort: asJsonText(value.sort),
+                    ...query,
                     // Kept as asked: the read clamps it to the cap and can then say more rows exist.
                     limit: value.limit,
                 },
             };
+        }
         case 'aggregate': {
-            const pipeline = asJsonText(value.pipeline);
+            const code = asCode('pipeline', value.pipeline);
+            if ('problem' in code) {
+                return { reason: code.problem };
+            }
+            const pipeline = code.text;
             if (!pipeline) {
                 return { reason: '"pipeline" is required for aggregate' };
             }
@@ -433,27 +500,32 @@ export function parseSpellResult(reply: string): SpellResult {
                 },
             };
         }
-        case 'collectionView':
+        case 'collectionView': {
+            const query = readQuery(value);
+            if ('problem' in query) {
+                return { reason: query.problem };
+            }
             return {
                 spell: {
                     kind: 'collectionView',
                     ...base,
                     database: optionalName(value.database),
                     collection: optionalName(value.collection),
-                    filter: asJsonText(value.filter),
-                    project: asJsonText(value.project),
-                    sort: asJsonText(value.sort),
+                    ...query,
                     tab: value.tab,
                 },
             };
-        case 'shell':
+        }
+        case 'shell': {
+            const command = withoutControlCharacters(value.command ?? '');
             return {
                 spell: {
                     kind: 'shell',
                     ...base,
-                    command: value.command?.trim() ? clip(value.command, MAX_CODE) : undefined,
+                    command: command.trim() ? clip(command, MAX_CODE) : undefined,
                 },
             };
+        }
         case 'playground':
             return { spell: { kind: 'playground', ...base, script: clip(value.script, MAX_CODE) } };
         case 'dashboard':
@@ -512,7 +584,12 @@ export function writeAggregateToPlayground(reply: string, fallbackCollection?: s
     }
     const value = read.value;
     const pipeline = readPipeline(value.pipeline);
-    const stage = 'stages' in pipeline ? writeStage(pipeline.stages) : undefined;
+    let stage: string | undefined;
+    try {
+        stage = 'stages' in pipeline ? writeStage(pipeline.stages) : undefined;
+    } catch {
+        return undefined;
+    }
     if (!stage || 'problem' in pipeline) {
         return undefined;
     }
@@ -554,6 +631,30 @@ function toolLabel(tool: WishTool): string {
         createDatabase: l10n.t('Create a database'),
     };
     return labels[tool];
+}
+
+/** What a tool's grant really does, for the card, naming the collection the documents go into or come from. */
+function toolHint(spell: Extract<Spell, { kind: 'tool' }>): string {
+    const where = spellTarget(spell);
+    if (where && spell.tool === 'import') {
+        return l10n.t('Imports a JSON file you pick into {0}.', where);
+    }
+    if (where && spell.tool === 'export') {
+        return l10n.t('Exports the whole of {0} as JSON to a file you pick.', where);
+    }
+    const hints: Record<WishTool, string> = {
+        import: l10n.t('Imports a JSON file you pick.'),
+        export: l10n.t('Exports the whole collection as JSON to a file you pick.'),
+        diagnose: l10n.t('Opens the connection diagnostics.'),
+        createCollection: l10n.t('Asks you for the name of the new collection.'),
+        createDatabase: l10n.t('Asks you for the name of the new database.'),
+    };
+    return hints[spell.tool];
+}
+
+/** The message a spell sent without one gets, so it is never shown as the sender's own words. */
+export function defaultMessage(spell: Spell): string {
+    return defaultText(spell).message;
 }
 
 /** Card text for a spell an agent sent without its own, built from what the spell does. */
@@ -603,10 +704,7 @@ function defaultText(spell: Spell): SpellText {
                 message: l10n.t('Opens the editor for a new document in {0}.', where),
             };
         case 'tool':
-            return {
-                title: toolLabel(spell.tool),
-                message: l10n.t('Opens the guided steps; nothing changes until you confirm.'),
-            };
+            return { title: toolLabel(spell.tool), message: toolHint(spell) };
         case 'command': {
             const label =
                 WISH_COMMANDS.find((candidate) => candidate.id === spell.commandId)?.label() ?? spell.commandId;
@@ -633,7 +731,7 @@ function givenText(value: unknown): string | undefined {
 export function parseAgentSpell(spell: Readonly<Record<string, unknown>>, wish: string): SpellResult {
     const title = givenText(spell.title);
     const message = givenText(spell.message);
-    if (spell.spell === 'answer' && !message) {
+    if (spell.spell === 'answer' && !message && !givenText(spell.answer)) {
         return { reason: '"message" is required for an answer: it holds the answer' };
     }
 
@@ -696,8 +794,9 @@ export function pipelineWrites(value: unknown): boolean {
     return writeStage(value) !== undefined;
 }
 
+/** Read verbs with a generic noun; a wish that names a real collection needs neither. */
 const DATA_WISH =
-    /\b(find|show|list|query|search|get|see|view|check|which|who|how many|count|top|latest|newest|oldest)\b[\s\S]*\b(documents?|records?|rows?|data|users?|customers?|orders?|items?|products?|entries)\b/i;
+    /\b(find|show|list|query|search|get|see|view|check|which|who|how many|count|top|latest|newest|oldest)\b[\s\S]*\b(documents?|records?|rows?|data|items?|entries)\b/i;
 /** Verbs that ask for a change. Without Copilot the well never guesses which write call, so this only routes. */
 const CHANGE_VERB =
     /\b(insert|add|create|update|delete|remove|drop|seed|generate|fake|rename|set|populate|clear|purge|wipe|change|modify|edit|mark|increase|decrease|replace|fix|truncate|empty|get rid of)\b/i;
@@ -705,13 +804,39 @@ const CHANGE_NOUNS =
     /\b(documents?|records?|rows?|data|users?|customers?|orders?|items?|products?|index(es)?|fields?|entries|this collection)\b/i;
 /** Questions and reads lead with these, so "can you show the orders I need to delete" stays a read. */
 const READ_LEAD =
-    /^\s*(?:(?:please|hey|ok|okay|now|so|can you|could you|would you|i want to|i'?d like to|help me|let me)[\s,]+)*(show|list|find|get|fetch|display|search|look|see|view|check|any|which|what|how|who|when|where|why|count|give me|tell me|is|are|was|were|did|does|do)\b/i;
+    /^\s*(?:(?:please|hey|ok|okay|now|so|can you|could you|would you|i want to|i'?d like to|help me|let me)[\s,]+)*(show|list|find|get|fetch|display|search|look|see|view|check|select|any|which|what|how|who|when|where|why|count|give me|tell me|is|are|was|were|did|does|do)\b/i;
 /** A read that goes on to change: "find all test orders and delete them". */
 const THEN_CHANGE = /\band (then )?(delete|remove|update|change|fix|mark|drop|clear)\b/i;
 /** Look like change verbs but are not: "add up the totals", "set up DocumentDB", "a data set". */
 const NOT_A_CHANGE = /\b(add up|adds up|set up|sets up|data ?sets?|sets? of|add-ons?)\b/gi;
 /** Asks for a script to read with: a find to start from is the honest draft. */
 const SCRIPT_ASK = /\b(playground|script|query|report|chart|pipeline|aggregation)\b/i;
+/** The whole wish asks for help, so "what can you do to speed up queries" is not one. */
+const HELP_WISH =
+    /^\W*(please\W+)?help\W*$|^\W*what can (you|the well) do( for me| here)?\W*$|^\W*what can i (wish|ask) for( here)?\W*$/i;
+/** A question about the connection's health; the cluster's health is the dashboard's. */
+const DIAGNOSE_WISH =
+    /\b(diagnose|troubleshoot|health ?check|can'?t connect|cannot connect|connection (problem|issue|error)s?)\b|\bconnection\b.*\bhealthy?\b|\bhealthy?\b.*\bconnection\b/i;
+/** The noun ends the request or names what follows, so "create a database user" is not one. */
+const NOUN_ENDS = String.raw`(?=\s*[.!?]*\s*$|\s+(called|named|for|in|on)\b|\s+["'\x60])`;
+const CREATE_COLLECTION = new RegExp(
+    String.raw`(\b(create|add|make)\s+(an?\s+|the\s+)?(new\s+|empty\s+)?|\bnew\s+)collection` + NOUN_ENDS,
+    'i',
+);
+const CREATE_DATABASE = new RegExp(
+    String.raw`(\b(create|add|make)\s+(an?\s+|the\s+)?(new\s+|empty\s+)?|\bnew\s+)(database|db)` + NOUN_ENDS,
+    'i',
+);
+/** Asks to run something or names the shell, so a shell expression in the wish is meant for it. */
+const RUN_OR_SHELL = /\b(run|execute|exec|shell|repl|mongosh)\b/i;
+/** A question that quotes an expression asks about it; only "run" or "execute" types it in. */
+const QUESTION = /^\W*(why|how|what|does|do|is|are|can|could|should|when|where|which)\b|\?\s*$/i;
+/** Words that may come before the first collection a wish names when it only names what to read. */
+const NAME_LEAD =
+    /^(the|a|an|all|every|each|my|our|your|some|any|top|first|last|newest|latest|oldest|recent|most|least|biggest|largest|smallest|cheapest|highest|lowest|number|of|total|sum|average|avg|max|maximum|min|minimum|distinct|\d+)$/i;
+
+/** How the keyword fallback was reached: no Copilot at all, or a Copilot reply the well could not use. */
+export type KeywordReason = 'unavailable' | 'unreadable';
 
 /** `true` when the wish asks to change data, wherever the verb sits; questions and reads are not. */
 function asksForChange(wish: string, scope: WishPromptScope): boolean {
@@ -723,7 +848,7 @@ function asksForChange(wish: string, scope: WishPromptScope): boolean {
     }
     const aboutData =
         CHANGE_NOUNS.test(text) ||
-        mentionedCollection(text, scope.collectionNames) !== undefined ||
+        mentionedCollections(text, scopeCollections(scope)).length > 0 ||
         scope.collectionName !== undefined;
     return aboutData && CHANGE_VERB.test(text);
 }
@@ -732,6 +857,24 @@ function asksForChange(wish: string, scope: WishPromptScope): boolean {
 const DASHBOARD_WISH =
     /\b(each|every|all|per) (collections?|databases?)\b|\b(collections?|databases?) (sizes?|stats)\b|\bhow (big|large)\b[\s\S]*\b(collections?|databases?|cluster)\b|\b(biggest|largest|smallest) (collections?|databases?)\b|\bwhich (collection|database)s? (is|are|has|have|uses?)\b|\bsizes? of\b|\bhow much (space|storage|disk)\b|\bsummary of (my|the|this) (database|cluster|data)\b|\b(list|show|which|how many)\b[\s\S]*\b(collections|databases)\b/i;
 
+/** "what's in this database?", "what do I have in shop": the user looks around, which the dashboard shows. */
+const LOOK_AROUND =
+    /^\W*(?:what['\u2019]?s|what is|what do (?:i|we) have|what have (?:i|we) got)\s+in\s+(?:(?:this|my|our|the)\s+)?([\p{L}\p{N}_-]+(?:\.[\p{L}\p{N}_-]+)*)(?:\s+(?:database|db|cluster))?\W*$/iu;
+const PLACE_WORDS = /^(here|there|database|db|cluster|server|connection|data)$/i;
+
+/** The place a look-around wish asks about: a place word or a database name, never a collection. */
+function lookAroundPlace(request: string, scope: WishPromptScope): string | undefined {
+    const place = LOOK_AROUND.exec(request)?.[1];
+    if (!place) {
+        return undefined;
+    }
+    const databases = [scope.databaseName, ...(scope.databaseNames ?? [])].filter(
+        (name): name is string => name !== undefined,
+    );
+    const isDatabase = databases.some((name) => name.toLowerCase() === place.toLowerCase());
+    return PLACE_WORDS.test(place) || isDatabase ? place.toLowerCase() : undefined;
+}
+
 const FILTER_WORDS =
     /\b(where|with|without|over|under|above|below|between|before|after|since|named|called|which|who|whose|contains?|containing|equals?|greater|less|more than|fewer than|at least|at most|not|today|yesterday)\b|\b(last|this|past|previous) (\d+ )?(minute|hour|day|week|month|year)s?\b|\b(in|from) \d{4}\b|[<>=]/i;
 /** "customer 42" is a value, not a limit; "last 3 days" is a filter. */
@@ -739,11 +882,14 @@ const LIMIT_WORDS =
     /\b(top|first|last|latest|newest|oldest|recent|limit( to)?) \d+\b(?! (minute|hour|day|week|month|year)s?\b)|\b\d+ (newest|latest|oldest)\b|\b(show|list|find|get|fetch|display|export|give)( me)?( the)? \d+\b(?! (minute|hour|day|week|month|year)s?\b)/i;
 const SORT_WORDS =
     /\b(newest|latest|oldest|recent|top|biggest|largest|smallest|highest|lowest|cheapest|most|least|sort(ed)?|order(ed)? by)\b/i;
+/** Not bare "total": it is often a field, as in "sorted by total". */
 const COUNT_WORDS =
-    /\b(how many|count|number of|sum|total|average|avg|per|max(imum)?|min(imum)?|group(ed)? by|distinct)\b/i;
+    /\b(how many|count|number of|sum|in total|totals|average|avg|per|max(imum)?|min(imum)?|group(ed)? by|distinct)\b/i;
 /** Words that only say "show me the documents"; anything else in a wish is something left undone. */
 const READ_FILLER =
     /\b(please|can|could|would|you|i|want|to|see|show|list|find|get|fetch|display|open|view|me|my|all|the|a|an|of|in|from|documents?|records?|rows?|data|entries|collection|everything|items?|whole)\b/gi;
+/** What an export wish says about the export itself, which the export tool covers. */
+const EXPORT_FILLER = /\b(export|json|csv|files?|as|into|out)\b/gi;
 
 /** Turns a wish into a comment line that cannot break out of the comment. */
 function asComment(wish: string): string {
@@ -759,22 +905,107 @@ function escapeRegExp(text: string): string {
     return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** The collection a wish names, when it names one the well knows ("customer" finds customers). */
-function mentionedCollection(
-    wish: string,
-    names: readonly string[] | undefined,
-    singular: boolean = true,
-): string | undefined {
+/** The forms a wish may use for a name: the name, and for a plural also its singular. */
+function nameForms(name: string, singular: boolean): string[] {
+    const lower = name.toLowerCase();
+    const forms = [lower];
+    if (singular && lower.length > 3) {
+        if (lower.endsWith('ies')) {
+            forms.push(`${lower.slice(0, -3)}y`);
+        }
+        if (/(s|x|z|ch|sh)es$/.test(lower)) {
+            forms.push(lower.slice(0, -2));
+        }
+        if (lower.endsWith('s') && !lower.endsWith('ss')) {
+            forms.push(lower.slice(0, -1));
+        }
+    }
+    return forms;
+}
+
+/** Scripts written without spaces between words, where a name sits inside the sentence. */
+const UNSPACED_SCRIPT = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}]/u;
+
+/** A whole-word match, so "order" is not found inside "reorder" or "order_items". */
+function wordPattern(form: string): RegExp {
+    if (UNSPACED_SCRIPT.test(form)) {
+        return new RegExp(escapeRegExp(form), 'giu');
+    }
+    return new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRegExp(form)}(?![\\p{L}\\p{N}_])`, 'giu');
+}
+
+/** "I wish I could see the orders" asks to see the orders, not about a "wishes" collection. */
+const WISH_LEAD =
+    /^\W*(?:i\s+wish|my\s+wish(?:\s+is)?)(?:\s+(?:for|that|to|i\s+(?:could|had|knew|would|might)))?\b[\s:,.-]*/i;
+
+function withoutWishLead(wish: string): string {
+    const rest = wish.replace(WISH_LEAD, '');
+    return rest.trim().length > 0 ? rest : wish;
+}
+
+interface Mention {
+    readonly name: string;
+    readonly start: number;
+    readonly end: number;
+}
+
+/** Each name the wish mentions once, ordered by where it appears, with where it was found. */
+function mentionSpans(wish: string, names: readonly string[] | undefined, singular: boolean): Mention[] {
     const lower = wish.toLowerCase();
-    return [...(names ?? [])]
-        .sort((a, b) => b.length - a.length)
-        .find((name) => {
-            const forms = [name.toLowerCase()];
-            if (singular && /s$/i.test(name) && name.length > 3) {
-                forms.push(name.toLowerCase().slice(0, -1));
+    const spans: (Mention & { exactness: number })[] = [];
+    for (const name of new Set(names ?? [])) {
+        for (const form of name ? nameForms(name, singular) : []) {
+            // Compiling a pattern per name is slow with thousands of collections, so only names in the text.
+            if (!lower.includes(form)) {
+                continue;
             }
-            return forms.some((form) => new RegExp(`\\b${escapeRegExp(form)}\\b`).test(lower));
-        });
+            for (const match of wish.matchAll(wordPattern(form))) {
+                const exactness = match[0] === name ? 2 : Number(form === name.toLowerCase());
+                spans.push({ name, start: match.index, end: match.index + match[0].length, exactness });
+            }
+        }
+    }
+    // At one position the longer name wins, then the exact name over a singular or another case.
+    spans.sort((a, b) => a.start - b.start || b.end - a.end || b.exactness - a.exactness);
+    const accepted: Mention[] = [];
+    let covered = 0;
+    for (const span of spans) {
+        if (span.start >= covered) {
+            covered = span.end;
+            accepted.push(span);
+        }
+    }
+    // In "customer orders" the last name is the head noun; the ones before it only describe it.
+    const ordered: Mention[] = [];
+    let run: Mention[] = [];
+    for (const span of accepted) {
+        const previous = run[run.length - 1];
+        if (previous && !/^\s*$/.test(wish.slice(previous.end, span.start))) {
+            ordered.push(...run.reverse());
+            run = [];
+        }
+        run.push(span);
+    }
+    ordered.push(...run.reverse());
+    return ordered.filter((span, index) => ordered.findIndex((other) => other.name === span.name) === index);
+}
+
+function mentions(wish: string, names: readonly string[] | undefined, singular: boolean): string[] {
+    return mentionSpans(withoutWishLead(wish), names, singular).map((span) => span.name);
+}
+
+/** Every collection in `names` the wish mentions, by name or singular, in the order they appear. */
+export function mentionedCollections(wish: string, names: readonly string[] | undefined): string[] {
+    return mentions(wish, names, true);
+}
+
+/** The first name the wish puts right after `lead` (which ends in `$`), as in "into customers". */
+function nameAfter(wish: string, names: readonly string[], lead: RegExp): string | undefined {
+    return mentionSpans(wish, names, true).find((span) => lead.test(wish.slice(0, span.start)))?.name;
+}
+
+function scopeCollections(scope: WishPromptScope): string[] {
+    return [...(scope.collectionNames ?? []), ...(scope.collectionName ? [scope.collectionName] : [])];
 }
 
 /** "a", "a or b", "a, b or c". */
@@ -799,30 +1030,94 @@ function droppedParts(wish: string): string | undefined {
 }
 
 /** The words of a read wish beyond "show me the documents in orders", which a keyword pick cannot apply. */
-function leftover(wish: string, collection: string): string {
-    return wish
-        .replace(new RegExp(`\\b${escapeRegExp(collection)}\\b`, 'gi'), ' ')
-        .replace(READ_FILLER, ' ')
+function leftover(wish: string, collection: string, verb: 'open' | 'export'): string {
+    let rest = wish;
+    for (const form of nameForms(collection, true)) {
+        rest = rest.replace(wordPattern(form), ' ');
+    }
+    rest = rest.replace(READ_FILLER, ' ');
+    if (verb === 'export') {
+        rest = rest.replace(EXPORT_FILLER, ' ');
+    }
+    return rest
         .replace(/[^\p{L}\p{N}\s'-]/gu, ' ')
         .replace(/\s+/g, ' ')
         .trim();
 }
 
+/** The keyword fallback's standard line, honest about why it matched words at all. */
+function matchedWords(copilot: KeywordReason): string {
+    return copilot === 'unreadable'
+        ? l10n.t("Copilot's reply could not be used, so the well matched your words to a tool instead.")
+        : l10n.t('Copilot is not available, so the well matched your words to a tool.');
+}
+
 /** What a keyword pick tells the user about the part of the wish it did not do. */
-function honestOpen(wish: string, collection: string, verb: 'open' | 'export'): string {
-    const dropped = droppedParts(wish);
-    if (dropped) {
-        return verb === 'open'
-            ? l10n.t('Without Copilot I can open {0}, but I did not {1}.', collection, dropped)
-            : l10n.t('Without Copilot I can export {0}, but I did not {1}.', collection, dropped);
+function honestOpen(wish: string, collection: string, verb: 'open' | 'export', copilot: KeywordReason): string {
+    const rest = leftover(wish, collection, verb);
+    const skipped = droppedParts(wish) ?? (rest.length > 0 ? l10n.t('apply "{0}"', rest) : undefined);
+    if (!skipped) {
+        return matchedWords(copilot);
     }
-    const rest = leftover(wish, collection);
-    if (rest.length === 0) {
-        return l10n.t('Copilot is not available, so the well matched your words to a tool.');
+    if (copilot === 'unreadable') {
+        return verb === 'open'
+            ? l10n.t(
+                  "Copilot's reply could not be used, so the well matched your words: it can open {0}, but it did not {1}.",
+                  collection,
+                  skipped,
+              )
+            : l10n.t(
+                  "Copilot's reply could not be used, so the well matched your words: it can export {0}, but it did not {1}.",
+                  collection,
+                  skipped,
+              );
     }
     return verb === 'open'
-        ? l10n.t('Without Copilot I can open {0}, but I did not apply "{1}".', collection, rest)
-        : l10n.t('Without Copilot I can export {0}, but I did not apply "{1}".', collection, rest);
+        ? l10n.t('Without Copilot I can open {0}, but I did not {1}.', collection, skipped)
+        : l10n.t('Without Copilot I can export {0}, but I did not {1}.', collection, skipped);
+}
+
+/** Words that leave "drop the orders collection" about the whole collection. */
+const WHOLE_COLLECTION_WORDS =
+    /\b(drop|delete|remove|the|a|an|this|that|my|our|whole|entire|please|can|could|you|i|want|to|collection|table)\b/gi;
+
+/** "drop orders" or "delete the orders collection", with nothing that narrows it to some documents. */
+function dropsWholeCollection(wish: string, collection: string | undefined): boolean {
+    let rest = wish;
+    for (const form of collection ? nameForms(collection, true) : []) {
+        rest = rest.replace(wordPattern(form), ' ');
+    }
+    return rest.replace(WHOLE_COLLECTION_WORDS, ' ').replace(/[^\p{L}\p{N}]+/gu, '').length === 0;
+}
+
+/** The calls a change wish chooses from, as comments: the keyword well never writes one itself. */
+function changeCalls(wish: string, collection: string | undefined, names: readonly string[]): string[] {
+    const deleteMany = '//   deleteMany({ <filter> })   // cannot be undone';
+    if (/\bindex(es)?\b/i.test(wish)) {
+        return /\b(drop|remove|delete)\b/i.test(wish)
+            ? ["//   dropIndex('<index name>')"]
+            : ['//   createIndex({ <field>: 1 })'];
+    }
+    const aboutDocuments = /\b(documents?|records?|rows?|entries|fields?|columns?|keys?|values?)\b/i.test(wish);
+    if (!aboutDocuments && (/\bdrop\b/i.test(wish) || /\b(delete|remove)\b[\s\S]*\bcollection\b/i.test(wish))) {
+        const drop = '//   drop()   // deletes the whole collection and its indexes; cannot be undone';
+        // "drop the test orders" may mean some documents, so the call that keeps the rest comes first.
+        return dropsWholeCollection(wish, collection) ? [drop] : [deleteMany, drop];
+    }
+    if (/\brename\b/i.test(wish)) {
+        const renamesCollection =
+            !/\bfields?\b/i.test(wish) &&
+            (/\bcollection\b/i.test(wish) || nameAfter(wish, names, /\brename\s+(the\s+)?$/i) !== undefined);
+        return renamesCollection
+            ? ["//   renameCollection('<new name>')"]
+            : ["//   updateMany({}, { $rename: { '<old name>': '<new name>' } })"];
+    }
+    return [
+        '//   insertMany([{ ... }])',
+        '//   updateMany({ <filter> }, { $set: { <field>: <value> } })',
+        "//   updateMany({ <filter> }, { $unset: { <field>: '' } })",
+        deleteMany,
+    ];
 }
 
 /**
@@ -830,56 +1125,209 @@ function honestOpen(wish: string, collection: string, verb: 'open' | 'export'): 
  * deleteMany), so it never drafts one: it opens a find on the collection and lists the calls to choose
  * from. Nothing runs until the user runs it.
  */
-function startingScript(wish: string, collection: string | undefined, change: boolean): string {
+function startingScript(
+    wish: string,
+    collection: string | undefined,
+    change: boolean,
+    copilot: KeywordReason,
+    names: readonly string[],
+): string {
     const target = `db.getCollection(${quoteJs(collection ?? 'collectionName')})`;
+    const why = copilot === 'unreadable' ? "Copilot's reply could not be used" : 'Copilot is not available';
     const choices = change
         ? [
-              '// Copilot is not available to write this change. Look at the documents first, then pick the call you need:',
-              '//   insertMany([{ ... }])',
-              '//   updateMany({ <filter> }, { $set: { <field>: <value> } })',
-              "//   updateMany({ <filter> }, { $unset: { <field>: '' } })",
-              '//   deleteMany({ <filter> })   // cannot be undone',
+              `// ${why} to write this change. Look at the documents first, then pick the call you need:`,
+              ...changeCalls(wish, collection, names),
           ]
-        : ['// Copilot is not available to write this query. Start from this find and add a filter, sort or limit.'];
+        : [`// ${why} to write this query. Start from this find and add a filter, sort or limit.`];
     return [asComment(wish), ...choices, `${target}.find({})`].join('\n');
 }
 
+/** Ends a `db.` expression at the first space outside brackets and quotes. */
+function expressionAt(text: string, start: number): string {
+    let depth = 0;
+    let quote: string | undefined;
+    let end = start;
+    for (; end < text.length; end++) {
+        const char = text[end];
+        if (quote) {
+            if (char === '\\') {
+                end++;
+            } else if (char === quote) {
+                quote = undefined;
+            }
+        } else if (char === '"' || char === "'" || char === '`') {
+            quote = char;
+        } else if ('([{'.includes(char)) {
+            depth++;
+        } else if (')]}'.includes(char)) {
+            depth--;
+        } else if (/\s/.test(char) && depth <= 0) {
+            break;
+        }
+    }
+    return text.slice(start, end).replace(/[.,;:!?]+$/, '');
+}
+
+/** A shell expression the wish asks to run, typed in as written; the user still presses Enter. */
+function shellCommand(wish: string, scope: WishPromptScope): string | undefined {
+    if (!RUN_OR_SHELL.test(wish) || (QUESTION.test(wish) && !/\b(run|execute|exec)\b/i.test(wish))) {
+        return undefined;
+    }
+    const quoted = /`([^`]+)`/.exec(wish)?.[1].trim();
+    const start = wish.search(/\bdb\.[\w$]/);
+    const show = /\bshow (dbs|databases|collections|tables)\b/i.exec(wish);
+    const use = /\buse ([\w-]+)/.exec(wish);
+    const databases = [...(scope.databaseNames ?? []), ...(scope.databaseName ? [scope.databaseName] : [])];
+    let command: string | undefined;
+    if (quoted && /^(db\.|show\s|use\s)/.test(quoted)) {
+        command = quoted;
+    } else if (start >= 0) {
+        command = expressionAt(wish, start);
+    } else if (show) {
+        command = `show ${show[1].toLowerCase()}`;
+    } else if (use && databases.includes(use[1])) {
+        command = `use ${use[1]}`;
+    }
+    // A line break would read as Enter in the shell.
+    return command === undefined
+        ? undefined
+        : withoutControlCharacters(command.replace(/\s*[\r\n\u2028\u2029]+\s*/g, ' '));
+}
+
+/** What the keyword well can do where it was opened, for "help" and "what can you do". */
+function helpSpell(scope: WishPromptScope, copilot: KeywordReason): Spell {
+    const lines: string[] = [];
+    if (scope.connectionName === undefined) {
+        lines.push(
+            l10n.t('Set up DocumentDB Local, add a connection, or discover your clusters.'),
+            l10n.t('Open settings, keyboard shortcuts, extensions or a color theme.'),
+            l10n.t('Open the well from a connection, database or collection to work with its data.'),
+        );
+    } else {
+        // Only a name that opens its collection when typed as it is; "stats" opens the dashboard.
+        const example = [scope.collectionName, ...(scope.collectionNames ?? []).slice(0, 10)].find((name) => {
+            const spell = name ? keywordSpell(name, scope, copilot, false) : undefined;
+            return spell?.kind === 'collectionView' && spell.collection === name && spell.tab === undefined;
+        });
+        if (scope.databaseName) {
+            lines.push(
+                example
+                    ? l10n.t('Open a collection by naming it, such as "{0}".', example)
+                    : l10n.t('Open a collection by naming it.'),
+                l10n.t('Show the indexes or Query Insights of a collection.'),
+                l10n.t('Import a JSON file, or export a whole collection as JSON.'),
+                l10n.t('Draft a playground for a change; nothing runs until you run it.'),
+                l10n.t('Create a collection; it asks you for the name.'),
+            );
+        }
+        lines.push(l10n.t('Open the dashboard or the shell, diagnose the connection, or create a database.'));
+    }
+    const lead =
+        copilot === 'unreadable'
+            ? l10n.t("Copilot's reply could not be used, so the well matched your words. By keywords it can:")
+            : l10n.t(
+                  'Without Copilot the well matches your words to a tool; it does not read or change data itself. It can:',
+              );
+    return {
+        kind: 'answer',
+        title: l10n.t('What the well can do'),
+        message: [lead, ...lines.map((line) => `- ${line}`)].join('\n'),
+    };
+}
+
 /**
- * The keyword fallback used without Copilot: a tool launcher, not a query writer. Returns `undefined`
- * when nothing matches; the caller then hands the wish to Copilot agent mode or says honestly that it
- * cannot grant it.
+ * The keyword fallback used without Copilot, or when Copilot's reply could not be used: a tool
+ * launcher, not a query writer. Returns `undefined` when nothing matches; the caller then hands the
+ * wish to Copilot agent mode or says honestly that it cannot grant it.
  */
-export function matchWishByKeyword(wish: string, scope: WishPromptScope): Spell | undefined {
+export function matchWishByKeyword(
+    wish: string,
+    scope: WishPromptScope,
+    copilot: KeywordReason = 'unavailable',
+): Spell | undefined {
+    return keywordSpell(wish, scope, copilot, true);
+}
+
+/**
+ * `true` when the wish only names what to read: a read verb, or nothing but "the 5 newest" before the
+ * name. After an unusable Copilot reply only a read verb counts; anything else goes to agent mode.
+ */
+function readsNamedCollection(request: string, names: readonly string[], copilot: KeywordReason): boolean {
+    if (READ_LEAD.test(request)) {
+        return true;
+    }
+    if (copilot === 'unreadable') {
+        return false;
+    }
+    const first = mentionSpans(request, names, true).reduce(
+        (earliest, span) => Math.min(earliest, span.start),
+        request.length,
+    );
+    return request
+        .slice(0, first)
+        .split(/[^\p{L}\p{N}]+/u)
+        .every((word) => word.length === 0 || NAME_LEAD.test(word));
+}
+
+/** `help` is false while the help answer looks for a collection name that opens as written. */
+function keywordSpell(wish: string, scope: WishPromptScope, copilot: KeywordReason, help: boolean): Spell | undefined {
     const connected = scope.connectionName !== undefined;
-    const collection = mentionedCollection(wish, scope.collectionNames) ?? scope.collectionName;
-    const known = { title: '', message: l10n.t('Copilot is not available, so the well matched your words to a tool.') };
+    const request = withoutWishLead(wish);
+    const names = scopeCollections(scope);
+    const named = mentionedCollections(request, names);
+    const collection = named[0] ?? scope.collectionName;
+    // Where a write lands: "import orders.json into customers" imports into customers.
+    const target = nameAfter(request, names, /\b(into|to|in)\s+(the\s+)?$/i) ?? collection;
+    const known = { title: '', message: matchedWords(copilot) };
+
+    if (HELP_WISH.test(request)) {
+        return help ? helpSpell(scope, copilot) : undefined;
+    }
 
     if (connected) {
-        if (/\b(dashboard|overview|health|stats|statistics)\b/i.test(wish)) {
+        const command = shellCommand(request, scope);
+        if (command) {
+            return { kind: 'shell', command, ...known, title: l10n.t('Interactive shell') };
+        }
+        if (DIAGNOSE_WISH.test(request)) {
+            return { kind: 'tool', tool: 'diagnose', ...known, title: l10n.t('Diagnose the connection') };
+        }
+        if (/\b(dashboard|overview|healthy?|stats|statistics)\b/i.test(request)) {
             return { kind: 'dashboard', ...known, title: l10n.t('Cluster dashboard') };
         }
-        if (/\b(shell|repl|mongosh)\b/i.test(wish)) {
+        if (/\b(shell|repl|mongosh)\b/i.test(request)) {
             return { kind: 'shell', ...known, title: l10n.t('Interactive shell') };
         }
-        if (/\bimport\b/i.test(wish)) {
-            return { kind: 'tool', tool: 'import', collection, ...known, title: l10n.t('Import documents') };
+        if (/\bimport\b/i.test(request)) {
+            return { kind: 'tool', tool: 'import', collection: target, ...known, title: l10n.t('Import documents') };
         }
-        if (/\bexport\b/i.test(wish)) {
+        if (/\bexport\b/i.test(request)) {
+            const csv = /\bcsv\b/i.test(request)
+                ? l10n.t('Export writes JSON, not CSV, and always the whole collection.')
+                : undefined;
             return {
                 kind: 'tool',
                 tool: 'export',
                 collection,
                 title: l10n.t('Export documents'),
-                message: collection ? honestOpen(wish, collection, 'export') : known.message,
+                message: [collection ? honestOpen(request, collection, 'export', copilot) : known.message, csv]
+                    .filter((part): part is string => part !== undefined)
+                    .join(' '),
             };
         }
-        if (/\b(diagnose|troubleshoot|can'?t connect|cannot connect|connection (problem|issue|error))\b/i.test(wish)) {
-            return { kind: 'tool', tool: 'diagnose', ...known, title: l10n.t('Diagnose the connection') };
+        const database = mentions(request, scope.databaseNames, false)[0];
+        // At cluster scope a new collection needs a database to go in, or the grant fails.
+        if (CREATE_COLLECTION.test(request) && (scope.databaseName !== undefined || database !== undefined)) {
+            return { kind: 'tool', tool: 'createCollection', database, ...known, title: l10n.t('Create a collection') };
+        }
+        if (CREATE_DATABASE.test(request)) {
+            return { kind: 'tool', tool: 'createDatabase', ...known, title: l10n.t('Create a database') };
         }
         const insights =
-            /\bexplain\b/i.test(wish) ||
-            (/\b(slow|faster|speed up|performance)\b/i.test(wish) && /\b(quer(y|ies)|index(es)?)\b/i.test(wish));
-        if (collection && (insights || /\bindex(es)?\b/i.test(wish))) {
+            /\bexplain\b/i.test(request) ||
+            (/\b(slow|faster|speed up|performance)\b/i.test(request) && /\b(quer(y|ies)|index(es)?)\b/i.test(request));
+        if (collection && (insights || /\bindex(es)?\b/i.test(request))) {
             return {
                 kind: 'collectionView',
                 collection,
@@ -888,30 +1336,30 @@ export function matchWishByKeyword(wish: string, scope: WishPromptScope): Spell 
                 title: insights ? l10n.t('Query Insights for {0}', collection) : l10n.t('Indexes of {0}', collection),
             };
         }
-        if (collection && /\bnew (document|record|item)\b/i.test(wish)) {
+        if (collection && /\bnew (document|record|item)\b/i.test(request)) {
             return { kind: 'newDocument', collection, ...known, title: l10n.t('A new document in {0}', collection) };
         }
     }
 
-    const change = asksForChange(wish, scope);
+    const change = asksForChange(request, scope);
     // "playground" is explicit; "query" or "report" only when the wish does not read as a question.
-    if (change || /\bplayground\b/i.test(wish) || (SCRIPT_ASK.test(wish) && !READ_LEAD.test(wish))) {
+    if (change || /\bplayground\b/i.test(request) || (SCRIPT_ASK.test(request) && !READ_LEAD.test(request))) {
         return {
             kind: 'playground',
             title: l10n.t('A playground for your wish'),
-            message: change
-                ? l10n.t(
-                      'Without Copilot the well cannot write this change. The playground lists the calls to choose from; nothing runs until you run it.',
-                  )
-                : l10n.t('Without Copilot the well cannot write this query. The playground starts from a find.'),
-            script: startingScript(wish, collection, change),
+            message: playgroundMessage(change, copilot),
+            script: startingScript(wish, change ? target : collection, change, copilot, names),
         };
     }
 
     // "how big is orders" asks about the collection; "how big is order 5" about one document.
-    const sizeOfCollection =
-        /\bhow (big|large)\b/i.test(wish) && mentionedCollection(wish, scope.collectionNames, false) !== undefined;
-    if (connected && (DASHBOARD_WISH.test(wish) || sizeOfCollection)) {
+    const sizeOfCollection = /\bhow (big|large)\b/i.test(request) && mentions(request, names, false).length > 0;
+    const place = named.length === 0 ? lookAroundPlace(request, scope) : undefined;
+    // "what's in here" on a collection asks about that collection.
+    if (connected && scope.collectionName && (place === 'here' || place === 'there')) {
+        return openCollection(request, scope.collectionName, copilot);
+    }
+    if (connected && (DASHBOARD_WISH.test(request) || sizeOfCollection || place !== undefined)) {
         return {
             kind: 'dashboard',
             title: l10n.t('Cluster dashboard'),
@@ -921,26 +1369,54 @@ export function matchWishByKeyword(wish: string, scope: WishPromptScope): Spell 
         };
     }
 
-    if (connected && collection && DATA_WISH.test(wish)) {
+    // A generic noun ("show the documents") reads the scoped or named collection, ahead of any command.
+    if (connected && collection && DATA_WISH.test(request)) {
+        return openCollection(request, collection, copilot);
+    }
+
+    const command = WISH_COMMANDS.find((candidate) => candidate.keywords.test(request));
+    if (command) {
         return {
-            kind: 'collectionView',
-            collection,
-            title: l10n.t('Documents in {0}', collection),
-            message: honestOpen(wish, collection, 'open'),
+            kind: 'command',
+            commandId: command.id,
+            argument: command.takesText ? searchTextFrom(request, command.keywords) : undefined,
+            title: command.label(),
+            message: l10n.t('The well knows a command for this.'),
         };
     }
 
-    const command = WISH_COMMANDS.find((candidate) => candidate.keywords.test(wish));
-    if (!command) {
-        return undefined;
+    // After the commands, so a "settings" collection does not take over "open my settings"; and only for
+    // a read, so a change the verb list misses ("archive the orders") is not opened as if it were one.
+    if (connected && named.length > 0 && readsNamedCollection(request, names, copilot)) {
+        return openCollection(request, named[0], copilot);
     }
+    return undefined;
+}
+
+function openCollection(wish: string, collection: string, copilot: KeywordReason): Spell {
     return {
-        kind: 'command',
-        commandId: command.id,
-        argument: command.takesText ? searchTextFrom(wish, command.keywords) : undefined,
-        title: command.label(),
-        message: l10n.t('The well knows a command for this.'),
+        kind: 'collectionView',
+        collection,
+        title: l10n.t('Documents in {0}', collection),
+        message: honestOpen(wish, collection, 'open', copilot),
     };
+}
+
+function playgroundMessage(change: boolean, copilot: KeywordReason): string {
+    if (copilot === 'unreadable') {
+        return change
+            ? l10n.t(
+                  "Copilot's reply could not be used, so the well did not write this change. The playground lists the calls to choose from; nothing runs until you run it.",
+              )
+            : l10n.t(
+                  "Copilot's reply could not be used, so the well did not write this query. The playground starts from a find.",
+              );
+    }
+    return change
+        ? l10n.t(
+              'Without Copilot the well cannot write this change. The playground lists the calls to choose from; nothing runs until you run it.',
+          )
+        : l10n.t('Without Copilot the well cannot write this query. The playground starts from a find.');
 }
 
 /** "open settings for font size" → "font size". */
@@ -1111,7 +1587,7 @@ export function wishExamples(scope: WishExampleScope, copilotAvailable: boolean)
         scope.collectionName ??
         (scope.databaseName
             ? scope.collectionNames?.find(
-                  (name) => name.length <= 40 && mentionedCollection(name, scope.collectionNames) === name,
+                  (name) => name.length <= 40 && mentionedCollections(name, scope.collectionNames)[0] === name,
               )
             : undefined);
     if (copilotAvailable) {
@@ -1309,10 +1785,7 @@ function actionFor(spell: Spell): { actionLabel?: string; actionHint?: string } 
         case 'newDocument':
             return { actionLabel: l10n.t('Open a new document'), actionHint: spellTarget(spell) };
         case 'tool':
-            return {
-                actionLabel: toolLabel(spell.tool),
-                actionHint: l10n.t('Opens the guided steps; nothing changes until you confirm.'),
-            };
+            return { actionLabel: toolLabel(spell.tool), actionHint: toolHint(spell) };
         case 'command': {
             const command = WISH_COMMANDS.find((candidate) => candidate.id === spell.commandId);
             const label = command?.label() ?? spell.commandId;
@@ -1351,6 +1824,8 @@ function codeFor(spell: Spell): string | undefined {
                     spell.filter ? `filter: ${spell.filter}` : undefined,
                     spell.project ? `project: ${spell.project}` : undefined,
                     spell.sort ? `sort: ${spell.sort}` : undefined,
+                    // The rows a limit returns are not every match, so the card says it was there.
+                    spell.kind === 'find' && spell.limit !== undefined ? `limit: ${spell.limit}` : undefined,
                 ]
                     .filter(Boolean)
                     .join('\n') || undefined
@@ -1382,12 +1857,17 @@ export function spellToOutcome(
         link: 'link',
     };
     const action = actionFor(spell);
+    const code = codeFor(spell);
+    // A read's rows go in `detail` once it runs; the query that found them stays beside them.
+    const read = spell.kind === 'find' || spell.kind === 'aggregate';
     return {
         id,
         kind: kinds[spell.kind],
         title: spell.title,
         message: spell.message,
-        detail: codeFor(spell),
+        detail: read ? undefined : code,
+        // An unfiltered find ran a query too, and a read card always shows what ran.
+        query: read ? (code ?? 'filter: {}') : undefined,
         status: action.actionLabel ? 'proposed' : 'info',
         wish: wish === undefined ? undefined : clip(wish, MAX_MESSAGE),
         interpretedBy,

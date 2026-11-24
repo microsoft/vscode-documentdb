@@ -47,6 +47,7 @@ type FakeWell = WishingWellService & {
     makeWish: ReturnType<typeof vi.fn>;
     grant: ReturnType<typeof vi.fn<() => Promise<GrantResult>>>;
     describeConnection: ReturnType<typeof vi.fn>;
+    isCopilotAvailable: ReturnType<typeof vi.fn<() => Promise<boolean>>>;
 };
 
 const connectedScope = {
@@ -87,6 +88,7 @@ function well(): FakeWell {
             }),
         ),
         grant: vi.fn(async (): Promise<GrantResult> => 'granted'),
+        isCopilotAvailable: vi.fn(async () => false),
         describeGrant: vi.fn(() => ({ title: 'Orders', message: 'm' })),
         describeConnection: vi.fn(async () => ({ databases: ['shop', 'blog'] })),
     } as unknown as FakeWell;
@@ -290,6 +292,36 @@ describe('callWishTool', () => {
             },
         );
 
+        it.each([
+            ['has no Copilot', false, 'This VS Code has no Copilot to read plain wishes'],
+            [
+                'could not use its Copilot reply',
+                true,
+                "The well's Copilot reader could not turn this wish into a spell",
+            ],
+        ])('asks for a spell when only keywords read a plain wish because VS Code %s', async (_case, copilot, says) => {
+            const target = well();
+            target.isCopilotAvailable.mockResolvedValue(copilot);
+            const result = await callWishTool(target, 'documentdb_make_wish', { wish: 'orders over 300' }, 'mcp');
+            expect(result.text).toContain(says);
+            expect(result.text).toContain('Pass a "spell"');
+        });
+
+        it('does not ask for a spell when the agent sent one', async () => {
+            const target = well();
+            const result = await callWishTool(
+                target,
+                'documentdb_make_wish',
+                {
+                    wish: 'count orders',
+                    spell: { spell: 'aggregate', collection: 'orders', pipeline: [{ $count: 'n' }] },
+                },
+                'mcp',
+            );
+            expect(result.text).not.toContain('Pass a "spell"');
+            expect(target.isCopilotAvailable).not.toHaveBeenCalled();
+        });
+
         it('rejects input that does not match the schema', async () => {
             await expect(callWishTool(well(), 'documentdb_make_wish', { wish: '' }, 'mcp')).rejects.toThrow();
         });
@@ -326,6 +358,19 @@ describe('callWishTool', () => {
             expect(showInformationMessage).not.toHaveBeenCalled();
         });
 
+        it('says an opened wizard is not done, and still tells the user an agent opened it', async () => {
+            const target = well();
+            target.grant.mockResolvedValue('opened');
+            const result = await callWishTool(target, 'documentdb_grant_wish', { wishId: 'w1' }, 'mcp');
+            expect(result.isError).not.toBe(true);
+            expect(result.text).toContain('Opened in VS Code: Orders.');
+            expect(result.text).toContain('the well is not told how they end');
+            expect(result.text).toContain('do not report it as done');
+            expect(result.text).not.toContain('Granted');
+            expect(result.structured).toEqual({ granted: true, completed: false, result: 'opened' });
+            expect(showInformationMessage).toHaveBeenCalledWith('An agent granted a wish: Orders');
+        });
+
         it('reports an expired grant as an error the agent can read', async () => {
             const target = well();
             target.grant.mockResolvedValue('unknown');
@@ -348,11 +393,55 @@ describe('outcomeForAgent', () => {
             }),
         );
         expect(result.text).toContain('Found 3 documents in orders.\n\n[{"a":1}]');
-        expect(result.text).toContain('project fewer fields to see more');
+        expect(result.text).toContain('project fewer fields');
         expect(result.text).not.toContain('at most 50 rows');
         expect(result.text).not.toContain('there are more');
         expect(result.text).toContain('Optional: call documentdb_grant_wish with wishId "w1"');
         expect(result.structured).toMatchObject({ status: 'answered', truncated: true, wishId: 'w1' });
+    });
+
+    it('shows the query that ran and what the reader said about it before the rows', () => {
+        const result = outcomeForAgent(
+            outcome({
+                status: 'answered',
+                message: 'Found 1 document in orders.',
+                query: 'filter: {"total":{"$gt":2400}}',
+                readerNote: 'This does not filter by gold tier.',
+                detail: '[{"a":1}]',
+                resultCount: 1,
+                interpretedBy: 'copilot',
+            }),
+        );
+        expect(result.text).toBe(
+            [
+                'Orders',
+                'Found 1 document in orders.',
+                '',
+                'Query that ran:',
+                'filter: {"total":{"$gt":2400}}',
+                '',
+                "The well's Copilot reader said: This does not filter by gold tier.",
+                '',
+                '[{"a":1}]',
+            ].join('\n'),
+        );
+        expect(result.structured).toMatchObject({
+            query: 'filter: {"total":{"$gt":2400}}',
+            readerNote: 'This does not filter by gold tier.',
+        });
+    });
+
+    it('warns that zero rows may come from a wrong field name or type', () => {
+        const result = outcomeForAgent(
+            outcome({
+                status: 'answered',
+                message: 'No documents in customers matched.',
+                query: 'filter: {"joined":{"$gt":"2024-03-01"}}',
+                resultCount: 0,
+            }),
+        );
+        expect(result.text).toContain('Zero rows can mean a wrong field name or value type');
+        expect(outcomeForAgent(outcome({ status: 'answered', resultCount: 2 })).text).not.toContain('Zero rows');
     });
 
     it('says more rows exist past the cap without claiming any were cut', () => {
@@ -379,6 +468,18 @@ describe('outcomeForAgent', () => {
         );
         expect(result.text).toContain('only if the user asked for it to open');
         expect(result.isError).not.toBe(true);
+    });
+
+    it('does not say the query of a refused read ran, since it may never have reached the server', () => {
+        const result = outcomeForAgent(
+            outcome({
+                status: 'refused',
+                message: 'The well could not read this: Unexpected token (2:14)',
+                query: 'filter: {total: {$gt: }}',
+            }),
+        );
+        expect(result.text).toContain('Query:\nfilter: {total: {$gt: }}');
+        expect(result.text).not.toContain('Query that ran');
     });
 
     it('marks a refusal as an error with nothing to grant', () => {

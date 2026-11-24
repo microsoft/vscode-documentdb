@@ -97,6 +97,9 @@ const quickStartConfig: LocalQuickStartConfigurationType = {
 };
 const atlasConfig: AtlasCredentialsWebviewConfig = { mode: 'add', authMethod: 'apikey' };
 const wishingWellConfig: WishingWellWebviewConfig = {};
+// The line a well opened without a connection shows under the wish box.
+export const wishUnscopedHint =
+    'Not scoped to a connection. To ask about your data, open Make a Wish from a connection, database or collection in the DocumentDB side bar.';
 export const wishPlaygroundOutcome: WishOutcome = {
     id: 'stage0-wish',
     kind: 'playground',
@@ -161,6 +164,8 @@ export const wishAnsweredOutcome: WishOutcome = {
     kind: 'query',
     title: 'Orders over 300',
     message: 'Found 3 documents in orders. Only the first 2 are shown; the rest did not fit.',
+    query: 'filter: {"total":{"$gt":300}}',
+    readerNote: 'Reads "over 300" as a total above 300, so an order of exactly 300 is left out.',
     detail: '[\n  { "_id": 1, "total": 320 },\n  { "_id": 2, "total": 415 }\n]',
     resultCount: 3,
     truncated: true,
@@ -177,6 +182,7 @@ export const wishCappedOutcome: WishOutcome = {
     id: 'stage0-capped',
     title: 'Every order',
     message: 'The first 50 documents in orders; there are more.',
+    query: 'filter: {}',
     detail: JSON.stringify(
         Array.from({ length: 50 }, (_, index) => ({ _id: index + 1 })),
         undefined,
@@ -185,6 +191,8 @@ export const wishCappedOutcome: WishOutcome = {
     resultCount: 50,
     truncated: false,
     capped: true,
+    // The note belongs to the "over 300" read this fixture copies, not to an unfiltered one.
+    readerNote: undefined,
     wish: 'every order',
 };
 // The read hit its cap, and only two of those 50 rows fit the card.
@@ -194,6 +202,32 @@ export const wishCappedCutOutcome: WishOutcome = {
     message: 'The first 50 documents in orders; there are more. Only the first 2 are shown; the rest did not fit.',
     detail: wishAnsweredOutcome.detail,
     truncated: true,
+};
+// A read that matched nothing: no rows, so the query is what the user checks.
+export const wishZeroRowsOutcome: WishOutcome = {
+    id: 'stage0-zero-rows',
+    kind: 'query',
+    title: 'Customers who joined after March 2024',
+    message: 'No documents in customers matched.',
+    query: 'filter: {"joinedAt":{"$gt":ISODate("2024-03-01T00:00:00.000Z")}}',
+    resultCount: 0,
+    actionLabel: 'Open in collection view',
+    actionHint: 'Opens customers in the collection view with this query.',
+    wish: 'customers who joined after 1 March 2024',
+    status: 'answered',
+    interpretedBy: 'copilot',
+};
+// A wizard: granting it opens steps the user finishes in VS Code.
+export const wishToolOutcome: WishOutcome = {
+    id: 'stage0-tool',
+    kind: 'tool',
+    title: 'Export orders',
+    message: 'The export steps save the documents in orders to a JSON file.',
+    actionLabel: 'Export documents',
+    actionHint: 'Exports the whole of orders as JSON to a file you pick.',
+    wish: 'export the orders',
+    status: 'proposed',
+    interpretedBy: 'copilot',
 };
 // What the well says when it cannot match a wish without Copilot.
 export const wishCannotGrantOutcome: WishOutcome = {
@@ -228,12 +262,14 @@ export const wishCommandOutcome: WishOutcome = {
     status: 'proposed',
     interpretedBy: 'copilot',
 };
+// A read the server stopped: the well refuses it and keeps the query to check.
 export const wishRefusedOutcome: WishOutcome = {
     id: 'stage0-refused',
     kind: 'query',
-    title: 'Copy orders to an archive',
-    message: 'The well only reads: this pipeline uses $out, which writes.',
-    wish: 'copy the orders to an archive collection',
+    title: 'Orders by note',
+    message: 'The well could not read this: The read ran longer than 20 seconds, so the server stopped it.',
+    query: 'filter: {"note":{"$regex":"late"}}',
+    wish: 'orders whose note mentions late',
     status: 'refused',
     interpretedBy: 'copilot',
 };
@@ -801,6 +837,7 @@ export const fixtures = {
         monaco: false,
         content: [
             'Wishing Well',
+            wishUnscopedHint,
             'Copilot reads your wishes, so almost anything goes.',
             'Try:',
             ...wishCopilotExamples,
@@ -816,6 +853,7 @@ export const fixtures = {
             'wishingWell.feelingLucky': reply<Outputs['wishingWell']['feelingLucky']>('mutation', wishFortuneOutcome),
             'wishingWell.grant': reply<Outputs['wishingWell']['grant']>('mutation', {
                 granted: true,
+                opened: false,
                 waiting: false,
                 declined: false,
             }),

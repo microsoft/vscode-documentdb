@@ -38,8 +38,8 @@ export const SPELL_DESCRIPTION = [
     'Optional. Pass one spell when you know exactly what to do; the well checks it like any wish.',
     'find and aggregate run read-only at once; every other spell waits for documentdb_grant_wish.',
     'Spells ("?" marks an optional field; collection and database default to this tool\'s own arguments;',
-    'filter, project, sort and pipeline are JSON):',
-    'answer {message} replies in words;',
+    'filter, project, sort and pipeline are JSON, with dates as {"$date":"2024-01-01T00:00:00Z"} and ids as {"$oid":"…"}):',
+    'answer {message} where message is the answer itself;',
     'find {collection?, database?, filter?, project?, sort?, limit?};',
     'aggregate {collection?, database?, pipeline}, never $out or $merge;',
     'collectionView {collection?, database?, filter?, project?, sort?, tab?: documents|indexes|insights}, where insights explains a slow query;',
@@ -47,7 +47,7 @@ export const SPELL_DESCRIPTION = [
     'playground {script} for anything that changes data;',
     'dashboard {};',
     'newDocument {collection?, database?};',
-    'tool {tool: import|export|diagnose|createCollection|createDatabase, collection?, database?};',
+    'tool {tool: import|export|diagnose|createCollection|createDatabase, collection?, database?}, where export writes the whole collection to a JSON file (no filter, no CSV), import loads a JSON file the user picks, and the create tools ask the user for the name;',
     `command {commandId, argument?} with commandId one of ${WISH_COMMANDS.map((command) => command.id).join(', ')};`,
     `"argument" is search text, only for ${WISH_COMMANDS.filter((command) => command.takesText)
         .map((command) => command.id)
@@ -92,8 +92,9 @@ export const WISH_TOOLS: readonly McpTool[] = [
             "and opens the extension's own tools (collection view with a query, interactive shell, query playground,",
             'cluster dashboard, index advice, import and export, connection diagnostics, DocumentDB Local).',
             'Nothing changes data: writes come back as a playground script for the user to run.',
-            'A read comes back answered with its rows, at most 50 of them. A reply that proposes an action has a wishId:',
-            'call documentdb_grant_wish only when the user wants that to happen in VS Code.',
+            'A read comes back answered with the query that ran and its rows, at most 50 of them.',
+            'Without Copilot in VS Code, plain words only pick a tool: pass "spell" to run a query.',
+            'A reply that proposes an action has a wishId: call documentdb_grant_wish only when the user wants that to happen in VS Code.',
         ].join(' '),
         inputSchema: {
             type: 'object',
@@ -111,7 +112,7 @@ export const WISH_TOOLS: readonly McpTool[] = [
         name: WISH_TOOL_NAMES.grantWish,
         title: 'Grant a wish',
         description:
-            'Carries out a wish that documentdb_make_wish proposed, in the user’s VS Code window: opens the view, playground, shell, command, link or Copilot Chat it named. Links, Copilot hand-offs and non-DocumentDB commands ask the user first. Never runs a write.',
+            'Carries out a wish that documentdb_make_wish proposed, in the user’s VS Code window: opens the view, playground, shell, command, link or Copilot Chat it named. Links, Copilot hand-offs and non-DocumentDB commands ask the user first. Tools (import, export, create, diagnose) and commands only open their steps: the result is "opened", the user finishes them, and it is not done until they say so. Never runs a write.',
         inputSchema: {
             type: 'object',
             properties: { wishId: { type: 'string', description: 'The wishId from documentdb_make_wish.' } },

@@ -17,7 +17,7 @@ import { settingsKeys } from '../../settingsKeys';
 import { COMPLETION_OFFERED_EVENT, type CompletionCategory } from '../../telemetry/completionCategories';
 import { accumulateTelemetry } from '../../utils/accumulatingTelemetry';
 import { classifyCommand, extractRunCommandName } from '../../utils/classifyCommand';
-import { type WishKind } from '../../webviews/documentdb/wishingWell/wishingWellTypes';
+import { type WishKind, type WishOutcome } from '../../webviews/documentdb/wishingWell/wishingWellTypes';
 import { ClustersClient } from '../ClustersClient';
 import { CredentialCache } from '../CredentialCache';
 import { deserializeResultForSchema, feedResultToSchemaStore } from '../feedResultToSchemaStore';
@@ -44,7 +44,7 @@ import {
     type ShellTerminalInfo,
     unregisterShellTerminal,
 } from './ShellTerminalLinkProvider';
-import { parseShellWish, type ShellWish } from './shellWish';
+import { parseShellWish, type ShellWish, wishedCommandLines, withoutControlCharacters } from './shellWish';
 import { terminalDisplayWidth } from './terminalDisplayWidth';
 
 const COMPACT_CONNECTION_SUMMARY_MIN_COLUMNS = 100;
@@ -93,8 +93,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private _evaluating = false;
     /** Whether the shell has been closed. */
     private _closed = false;
-    /** Whether the current evaluation was cancelled by Ctrl+C. */
-    private _interrupted = false;
+    /** Ctrl+C aborts the running line's own controller, so the next line cannot un-cancel it. */
+    private _lineCancel: AbortController | undefined;
     /** Spinner shown during long-running evaluations. */
     private _spinner: ShellSpinner | undefined;
     /** The terminal instance this PTY is attached to (set via {@link setTerminal}). */
@@ -146,7 +146,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         this._deepLink = options.deepLink;
         this._connectionInfo = options.connectionInfo;
         this._currentDatabase = options.connectionInfo.databaseName;
-        this._initialInput = options.initialInput;
+        // Comes from a wish or another view; a control character could make the prompt show another command.
+        this._initialInput = options.initialInput && withoutControlCharacters(options.initialInput);
 
         this._completionProvider = new ShellCompletionProvider();
         this._ghostText = new ShellGhostText(() => this.isColorEnabled());
@@ -207,6 +208,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             onTab: (buffer: string, cursor: number) => this.handleTab(buffer, cursor),
             onBufferChange: (buffer: string, cursor: number) => this.handleBufferChange(buffer, cursor),
             onAcceptGhostText: () => this.handleAcceptGhostText(),
+            isCompleteLine: (line: string) => parseShellWish(line) !== undefined,
         });
     }
 
@@ -683,8 +685,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         }
 
         // Disable input while evaluating
+        const cancel = new AbortController();
+        this._lineCancel = cancel;
         this._evaluating = true;
-        this._interrupted = false;
         this._inputHandler.setEnabled(false);
 
         // Start the spinner — it appears after a short delay so fast
@@ -695,25 +698,31 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         try {
             const wish = parseShellWish(trimmed);
             if (wish) {
-                await this.handleWish(wish);
+                await this.handleWish(wish, cancel.signal);
             } else {
-                await this.evaluateInput(trimmed);
+                await this.evaluateInput(trimmed, cancel.signal);
             }
         } catch (error: unknown) {
-            await this.handleEvalError(error);
+            await this.handleEvalError(error, cancel.signal);
         } finally {
-            // Stop the spinner before writing results or the next prompt.
-            this._spinner?.stop();
-            this._spinner = undefined;
+            // After Ctrl+C the interrupt handler already showed a prompt, and a newer line may own the shell.
+            if (!cancel.signal.aborted) {
+                // Stop the spinner before writing results or the next prompt.
+                this._spinner?.stop();
+                this._spinner = undefined;
 
-            this._evaluating = false;
-
-            // If Ctrl+C was pressed, the interrupt handler already re-enabled
-            // input and showed a prompt — don't duplicate.
-            if (!this._interrupted) {
+                this._evaluating = false;
                 this._inputHandler.setEnabled(true);
 
                 if (!this._closed) {
+                    // Input queued behind the wish, such as a pasted newline, must not press Enter on its command.
+                    if (this._wishedInput && this._inputHandler.discardPendingInput()) {
+                        this.writeLine(
+                            this._outputFormatter.formatSystemMessage(
+                                l10n.t('Dropped the input pasted after the wish, so only your Enter runs it.'),
+                            ),
+                        );
+                    }
                     this.showPrompt();
 
                     // A wish that wrote a shell command types it in for the user to run.
@@ -727,8 +736,6 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                     this._inputHandler.processPendingInput();
                 }
             }
-
-            this._interrupted = false;
         }
     }
 
@@ -737,7 +744,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * prints here and nothing opens until the user types `wish open`; a wished shell command is typed
      * in for the user to run.
      */
-    private async handleWish(wish: ShellWish): Promise<void> {
+    private async handleWish(wish: ShellWish, signal: AbortSignal): Promise<void> {
         const well = currentWishingWell();
         if (wish.kind === 'usage' || !well) {
             this._spinner?.stop();
@@ -754,7 +761,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             return;
         }
         if (wish.kind === 'open') {
-            await this.openWish(well);
+            await this.openWish(well, signal);
             return;
         }
 
@@ -776,31 +783,37 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             const outcome =
                 wish.kind === 'lucky'
                     ? await well.feelingLucky(scope, context, 'shell')
-                    : await well.makeWish(wish.text, scope, context, 'shell');
+                    : await well.makeWish(wish.text, scope, context, 'shell', signal);
 
-            this._spinner?.stop();
-            this._spinner = undefined;
-            if (this._interrupted) {
+            if (signal.aborted) {
                 return;
             }
+            this._spinner?.stop();
+            this._spinner = undefined;
 
             this.writeLine(this._outputFormatter.formatSystemMessage(`\u2728 ${outcome.title}`));
             this.writeLine(outcome.message);
 
-            if (outcome.kind === 'shell' && outcome.detail && !outcome.detail.includes('\n')) {
-                this._wishedInput = outcome.detail;
-                this.writeLine(
-                    this._outputFormatter.formatSystemMessage(
-                        l10n.t('The well typed it in for you. Press Enter to run it.'),
-                    ),
-                );
+            // Already in a shell, so a shell card is only ever its command, typed in at the prompt.
+            if (outcome.kind === 'shell') {
+                this.typeInWishedCommand(outcome.detail);
                 return;
+            }
+            // A read shows what ran and what the reader said about it before the rows it returned.
+            if (outcome.query) {
+                // A refused read may never have reached the server.
+                const label = outcome.status === 'refused' ? l10n.t('Query:') : l10n.t('Query that ran:');
+                this.writeLine(this._outputFormatter.formatSystemMessage(label));
+                this.writeLine(outcome.query);
+            }
+            if (outcome.readerNote) {
+                const label = this._outputFormatter.formatSystemMessage(`${readerNoteLabel(outcome.interpretedBy)}:`);
+                this.writeLine(`${label} ${outcome.readerNote}`);
             }
             if (outcome.detail) {
                 this.writeLine(outcome.detail);
             }
-            // Opening another shell from this one is never what the user wanted.
-            if (outcome.actionLabel && outcome.kind !== 'shell') {
+            if (outcome.actionLabel) {
                 this._openableWish = { id: outcome.id, kind: outcome.kind };
                 const offer = l10n.t('Type "wish open" to {0}.', lowerFirstLetter(outcome.actionLabel));
                 this.writeLine(
@@ -812,8 +825,36 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         });
     }
 
+    /** Puts a wished command on the next prompt for the user to run with Enter. */
+    private typeInWishedCommand(command: string | undefined): void {
+        if (!command?.trim()) {
+            this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('You are in the shell already.')));
+            return;
+        }
+        const clean = withoutControlCharacters(command);
+        const lines = wishedCommandLines(clean);
+        if (!lines) {
+            this.writeLine(clean);
+            this.writeLine(
+                this._outputFormatter.formatSystemMessage(
+                    l10n.t(
+                        'It spans several lines that would not run as one, so the well did not type it in. Paste it to run it.',
+                    ),
+                ),
+            );
+            return;
+        }
+        this._wishedInput = this.joinPastedLines(lines);
+        this.writeLine(
+            this._outputFormatter.formatSystemMessage(l10n.t('The well typed it in for you. Press Enter to run it.')),
+        );
+    }
+
     /** Grants the last card's action. The only way a shell wish opens a tab, a link or Chat. */
-    private async openWish(well: NonNullable<ReturnType<typeof currentWishingWell>>): Promise<void> {
+    private async openWish(
+        well: NonNullable<ReturnType<typeof currentWishingWell>>,
+        signal: AbortSignal,
+    ): Promise<void> {
         const openable = this._openableWish;
         if (!openable) {
             this._spinner?.stop();
@@ -833,13 +874,14 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 this._openableWish = undefined;
             }
 
-            this._spinner?.stop();
-            this._spinner = undefined;
-            if (this._interrupted) {
+            if (signal.aborted) {
                 return;
             }
+            this._spinner?.stop();
+            this._spinner = undefined;
             const messages: Record<typeof result, string> = {
                 granted: grantReceipt(openable.kind),
+                opened: openedReceipt(openable.kind),
                 declined: l10n.t('Not granted.'),
                 waiting: l10n.t('Waiting for your answer in VS Code. If you allow it, the wish is granted.'),
                 unknown: l10n.t('That wish has expired. Make it again.'),
@@ -848,7 +890,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         });
     }
 
-    private async evaluateInput(input: string): Promise<void> {
+    private async evaluateInput(input: string, signal: AbortSignal): Promise<void> {
         this._commandCount++;
         const commandIndex = this._commandCount;
         const commandCategory = classifyCommand(input);
@@ -876,22 +918,22 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             } catch (evalError) {
                 // Ctrl+C kills the worker, producing a "Worker terminated" error.
                 // Re-classify as user cancellation for accurate telemetry.
-                if (this._interrupted) {
+                if (signal.aborted) {
                     throw new UserCancelledError('shell.eval');
                 }
                 throw evalError;
+            }
+
+            // If this eval was cancelled by Ctrl+C, skip output — the interrupt
+            // handler already showed ^C and a new prompt.
+            if (signal.aborted) {
+                return;
             }
 
             // Stop the spinner before writing any output so the spinner
             // character doesn't collide with the result text.
             this._spinner?.stop();
             this._spinner = undefined;
-
-            // If this eval was cancelled by Ctrl+C, skip output — the interrupt
-            // handler already showed ^C and a new prompt.
-            if (this._interrupted) {
-                return;
-            }
 
             // ── Post-eval telemetry ──────────────────────────────────────
             context.telemetry.properties.resultType = result.type ?? 'null';
@@ -924,16 +966,16 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * Handles display of eval errors in the terminal.
      * Called by handleLineInput when evaluateInput throws.
      */
-    private async handleEvalError(error: unknown): Promise<void> {
+    private async handleEvalError(error: unknown, signal: AbortSignal): Promise<void> {
+        // Suppress errors from intentional Ctrl+C cancellation — the interrupt
+        // handler already showed ^C and a new prompt.
+        if (signal.aborted) {
+            return;
+        }
+
         // Stop the spinner before writing error output.
         this._spinner?.stop();
         this._spinner = undefined;
-
-        // Suppress errors from intentional Ctrl+C cancellation — the interrupt
-        // handler already showed ^C and a new prompt.
-        if (this._interrupted) {
-            return;
-        }
 
         const rawMessage = error instanceof Error ? error.message : String(error);
         // Strip technical error codes for clean user-facing output;
@@ -1117,9 +1159,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     private handleInterrupt(): void {
         if (this._evaluating) {
-            // Mark as interrupted so evaluateInput() knows to suppress its
-            // error/result output and handleLineInput() skips the double prompt.
-            this._interrupted = true;
+            // Aborting tells the line to suppress its late output and leave the prompt to this handler.
+            this._lineCancel?.abort();
+            this._wishedInput = undefined;
 
             // Stop the spinner immediately on Ctrl+C.
             this._spinner?.stop();
@@ -1132,6 +1174,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             this._inputHandler.setEnabled(true);
             this.writeLine('');
             this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('^C')));
+            // The rest of a paste must not run after the user said stop.
+            if (this._inputHandler.discardPendingInput()) {
+                this.writeLine(
+                    this._outputFormatter.formatSystemMessage(l10n.t('Dropped the rest of the pasted input.')),
+                );
+            }
             this.showPrompt();
         } else {
             // Not evaluating — just clear the current line and show a new prompt
@@ -1831,6 +1879,25 @@ function grantReceipt(kind: WishKind): string {
             return l10n.t('Done');
         default:
             return l10n.t('Opened');
+    }
+}
+
+/** The well is not told how opened steps end, so this never reads as done. */
+function openedReceipt(kind: WishKind): string {
+    return kind === 'command'
+        ? l10n.t('Started in VS Code. Finish any steps there.')
+        : l10n.t('Opened in VS Code. Finish the steps there.');
+}
+
+/** Whose note a read carries, in the Wishing Well tab's words. */
+function readerNoteLabel(interpretedBy: WishOutcome['interpretedBy']): string {
+    switch (interpretedBy) {
+        case 'copilot':
+            return l10n.t("Copilot's note");
+        case 'agent':
+            return l10n.t("Agent's note");
+        default:
+            return l10n.t('Note');
     }
 }
 

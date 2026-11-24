@@ -191,6 +191,9 @@ export class WishingWellAgentAccess implements vscode.Disposable {
         const receipt = [
             vscode.l10n.t('Copied {0}. It contains your access token, so keep it private.', what),
             vscode.l10n.t(
+                "Copilot in the Wishing Well sees only field names, but documents an agent reads are sent to the agent's model.",
+            ),
+            vscode.l10n.t(
                 'Keep this VS Code window open while the agent works. To check the setup, ask the agent to list your DocumentDB connections.',
             ),
         ];

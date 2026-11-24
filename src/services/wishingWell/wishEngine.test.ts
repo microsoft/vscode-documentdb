@@ -15,11 +15,13 @@ import {
     buildWishPrompt,
     cannotGrantSpell,
     matchWishByKeyword,
+    mentionedCollections,
     parseAgentSpell,
     parseSpell,
     parseSpellResult,
     pickLuckyKind,
     pipelineWrites,
+    spellMenu,
     spellToOutcome,
     WISH_COMMANDS,
     wishExamples,
@@ -27,6 +29,7 @@ import {
     type Spell,
     type WishExampleScope,
     type WishPromptScope,
+    type WishTool,
 } from './wishEngine';
 
 describe('parseSpell', () => {
@@ -317,6 +320,39 @@ describe('matchWishByKeyword', () => {
         expect(matchWishByKeyword(wish, {})?.kind).not.toBe('dashboard');
     });
 
+    it.each([
+        "what's in this database?",
+        'what is in this database',
+        "what's in here",
+        'what do I have in shop',
+        'What\u2019s in my shop database?',
+        "what's in this cluster.",
+    ])('opens the dashboard for a look around with a connection, and refuses it without: %s', (wish) => {
+        expect(matchWishByKeyword(wish, connected)).toMatchObject({ kind: 'dashboard' });
+        expect(matchWishByKeyword(wish, { connectionName: 'prod', databaseNames: ['shop'] })).toMatchObject({
+            kind: 'dashboard',
+        });
+        expect(matchWishByKeyword(wish, {})).toBeUndefined();
+    });
+
+    it('opens a named or current collection, not the dashboard, for "what\'s in"', () => {
+        expect(matchWishByKeyword("what's in orders?", connected)).toMatchObject({
+            kind: 'collectionView',
+            collection: 'orders',
+        });
+        expect(matchWishByKeyword("what's in my customers database?", connected)).toMatchObject({
+            kind: 'collectionView',
+            collection: 'customers',
+        });
+        const onCustomers = { ...connected, collectionName: 'customers' };
+        expect(matchWishByKeyword("what's in here?", onCustomers)).toMatchObject({
+            kind: 'collectionView',
+            collection: 'customers',
+        });
+        expect(matchWishByKeyword("what's in this database?", onCustomers)).toMatchObject({ kind: 'dashboard' });
+        expect(matchWishByKeyword("what's in the cart?", connected)?.kind).not.toBe('dashboard');
+    });
+
     it.each(['how big is order 5', 'how large is the biggest order'])(
         'keeps a question about one item off the dashboard: %s',
         (wish) => {
@@ -417,7 +453,7 @@ describe('matchWishByKeyword', () => {
     });
 
     it('keeps a multi-line wish inside its comment', () => {
-        const lines = scriptOf(matchWishByKeyword('insert users\ndb.dropDatabase() more', {})).split('\n');
+        const lines = scriptOf(matchWishByKeyword('insert users\ndb.dropDatabase()\u2028more', {})).split('\n');
         expect(lines[0]).toMatch(/^\/\/ Wish: /);
         expect(lines.filter((line) => line.includes('dropDatabase'))).toEqual([lines[0]]);
     });
@@ -481,9 +517,13 @@ describe('wishExamples', () => {
         expect(examples).toContain('How many documents are in each collection?');
     });
 
-    it('never names a collection the keywords cannot find again', () => {
-        const examples = wishExamples(scopes[4][1], false);
-        expect(examples.join(' ')).not.toContain('$weird');
+    it('names an odd collection only where the keywords find it again', () => {
+        const scope = scopes[4][1];
+        for (const example of wishExamples(scope, false).filter((text) => text.includes('$weird'))) {
+            expect(matchWishByKeyword(example, promptScope(scope)), example).toMatchObject(
+                example.startsWith('Add ') ? { kind: 'playground' } : { collection: '$weird' },
+            );
+        }
     });
 
     /** What a collection example promises to open; anything else misfires. */
@@ -619,7 +659,7 @@ describe('spellToOutcome', () => {
         ).toMatchObject({ actionLabel: 'Grant wish', actionHint: 'Runs "x.unknown".' });
     });
 
-    it('shows the query it will open', () => {
+    it('keeps the query a read runs apart from the rows it finds', () => {
         const outcome = spellToOutcome(
             { kind: 'find', collection: 'orders', filter: '{"a":1}', sort: '{"b":-1}', title: 't', message: 'm' },
             'id',
@@ -627,10 +667,42 @@ describe('spellToOutcome', () => {
         );
         expect(outcome).toMatchObject({
             kind: 'query',
-            detail: 'filter: {"a":1}\nsort: {"b":-1}',
+            query: 'filter: {"a":1}\nsort: {"b":-1}',
             actionLabel: 'Open in collection view',
             actionHint: 'Opens orders in the collection view with this query.',
         });
+        expect(outcome.detail).toBeUndefined();
+        const aggregate = spellToOutcome(
+            { kind: 'aggregate', collection: 'orders', pipeline: '[{"$count":"n"}]', title: 't', message: 'm' },
+            'id',
+            'copilot',
+        );
+        expect(aggregate).toMatchObject({ query: '[{"$count":"n"}]', detail: undefined });
+        const unfiltered = spellToOutcome(
+            { kind: 'find', collection: 'orders', title: 't', message: 'm' },
+            'id',
+            'copilot',
+        );
+        expect(unfiltered).toMatchObject({ query: 'filter: {}', detail: undefined });
+    });
+
+    it('still shows the query a view opens with as its detail', () => {
+        const outcome = spellToOutcome(
+            { kind: 'collectionView', collection: 'orders', filter: '{"a":1}', title: 't', message: 'm' },
+            'id',
+            'copilot',
+        );
+        expect(outcome).toMatchObject({ detail: 'filter: {"a":1}', query: undefined });
+    });
+
+    it.each<[WishTool, string]>([
+        ['export', 'Exports the whole collection as JSON to a file you pick.'],
+        ['import', 'Imports a JSON file you pick.'],
+        ['createCollection', 'Asks you for the name of the new collection.'],
+        ['createDatabase', 'Asks you for the name of the new database.'],
+    ])('says what the %s tool really does', (tool, hint) => {
+        expect(spellToOutcome({ kind: 'tool', tool, title: 't', message: 'm' }, 'id', 'well').actionHint).toBe(hint);
+        expect(parseAgentSpell({ spell: 'tool', tool }, 'w').spell?.message).toBe(hint);
     });
 
     it.each<[Spell, string, string]>([
@@ -749,5 +821,513 @@ describe('writeAggregateToPlayground extras', () => {
         });
         const spell = writeAggregateToPlayground(reply);
         expect(spell?.kind === 'playground' ? spell.script : '').toContain('.aggregate(EJSON.parse(');
+    });
+});
+
+describe('query text at parse time', () => {
+    it('stores find and view queries as the shell text the read and the collection view both parse', () => {
+        const find = parseSpell(
+            JSON.stringify({
+                spell: 'find',
+                collection: 'customers',
+                filter: { joined: { $gte: { $date: '2024-03-01T00:00:00Z' } } },
+                project: { name: 1 },
+                sort: '{"joined":-1}',
+                title: 't',
+                message: 'm',
+            }),
+        );
+        expect(find).toMatchObject({
+            filter: '{"joined":{"$gte":ISODate("2024-03-01T00:00:00.000Z")}}',
+            project: '{"name":1}',
+            sort: '{"joined":-1}',
+        });
+        const view = parseSpell(
+            JSON.stringify({
+                spell: 'collectionView',
+                collection: 'orders',
+                filter: '{"_id":{"$oid":"6b04df29e0e56cfc21895da6"}}',
+                title: 't',
+                message: 'm',
+            }),
+        );
+        expect(view).toMatchObject({ filter: '{"_id":ObjectId("6b04df29e0e56cfc21895da6")}' });
+    });
+
+    it('leaves a pipeline as Extended JSON, which the read parses with EJSON', () => {
+        const pipeline = '[{"$match":{"at":{"$gte":{"$date":"2024-03-01T00:00:00Z"}}}}]';
+        expect(
+            parseSpell(
+                JSON.stringify({ spell: 'aggregate', collection: 'orders', pipeline, title: 't', message: 'm' }),
+            ),
+        ).toMatchObject({ pipeline });
+    });
+
+    it('treats an agent spell the same way', () => {
+        expect(
+            parseAgentSpell(
+                { spell: 'find', collection: 'orders', filter: { _id: { $oid: '6b04df29e0e56cfc21895da6' } } },
+                'w',
+            ).spell,
+        ).toMatchObject({ filter: '{"_id":ObjectId("6b04df29e0e56cfc21895da6")}' });
+    });
+});
+
+describe('answer replies', () => {
+    it('takes the answer from "answer" when a model describes it in "message"', () => {
+        const reply = JSON.stringify({
+            spell: 'answer',
+            title: 'How $lookup works',
+            message: 'Explains the aggregation stage that joins documents.',
+            answer: '$lookup joins documents from another collection.',
+        });
+        expect(parseSpell(reply)).toEqual({
+            kind: 'answer',
+            title: 'How $lookup works',
+            message: '$lookup joins documents from another collection.',
+        });
+    });
+
+    it('uses "message" when "answer" is empty or missing', () => {
+        expect(
+            parseSpell('{"spell":"answer","title":"t","message":"An index is a sorted lookup.","answer":""}'),
+        ).toMatchObject({ message: 'An index is a sorted lookup.' });
+        expect(parseSpell('{"spell":"answer","title":"t","answer":"An index is a sorted lookup."}')).toMatchObject({
+            message: 'An index is a sorted lookup.',
+        });
+    });
+
+    it('needs the answer in one of them', () => {
+        expect(parseSpellResult('{"spell":"answer","title":"t","answer":"  "}').reason).toContain('"message"');
+        expect(parseAgentSpell({ spell: 'answer', answer: 'An index is a sorted lookup.' }, 'w').spell).toMatchObject({
+            kind: 'answer',
+            message: 'An index is a sorted lookup.',
+        });
+    });
+});
+
+describe('the prompt and spell menu', () => {
+    it('lists the fields of other collections the wish names, once each and capped', () => {
+        const prompt = buildWishPrompt('which gold customers spent the most', {
+            connectionName: 'prod',
+            databaseName: 'shop',
+            collectionName: 'orders',
+            collectionNames: ['orders', 'customers'],
+            fields: ['total: double'],
+            fieldsByCollection: {
+                orders: ['total: double'],
+                customers: Array.from({ length: 100 }, (_, index) => `f${index}: string`),
+            },
+        });
+        expect(prompt.match(/Fields of "orders": total: double\./g)).toHaveLength(1);
+        expect(prompt).toContain('Fields of "customers": f0: string');
+        expect(prompt).toContain('f79: string.');
+        expect(prompt).not.toContain('f80: string');
+        expect(prompt).toContain('Use only field names listed here.');
+    });
+
+    it('makes "message" the answer for an answer, and a description of what happens for every other spell', () => {
+        const menu = spellMenu();
+        expect(menu).toContain('"message" IS the answer itself');
+        expect(menu).toContain('For every other spell, "message" says');
+        expect(menu).not.toContain('"message" (one or two sentences saying what happens)');
+    });
+
+    it('promises only what import, export and the create tools do', () => {
+        const menu = spellMenu();
+        expect(menu).not.toContain('JSON/CSV');
+        expect(menu).toContain('export writes the whole collection to a JSON file (no filter, no CSV, not a backup)');
+        expect(menu).toContain('createCollection and createDatabase ask the user for the name');
+    });
+});
+
+describe('mentionedCollections', () => {
+    it.each<[string, string[], string[]]>([
+        ['count orders per customer', ['customers', 'orders'], ['orders', 'customers']],
+        ['customers and their orders', ['orders', 'customers'], ['customers', 'orders']],
+        ['show me a wish', ['wishes'], ['wishes']],
+        ['every category', ['categories'], ['categories']],
+        ['the box', ['boxes'], ['boxes']],
+        ['ORDERS please', ['orders'], ['orders']],
+        ['reorder the order_items', ['orders', 'order_items'], ['order_items']],
+        ['open order-items', ['orders', 'order-items'], ['order-items']],
+        ['显示 订单', ['订单'], ['订单']],
+        ['nothing here', ['orders'], []],
+    ])('"%s" in %j mentions %j', (wish, names, expected) => {
+        expect(mentionedCollections(wish, names)).toEqual(expected);
+    });
+
+    it('knows no names without a list', () => {
+        expect(mentionedCollections('orders', undefined)).toEqual([]);
+    });
+});
+
+describe('keyword routes', () => {
+    const shop: WishPromptScope = {
+        connectionName: 'prod',
+        databaseName: 'shop',
+        collectionNames: ['customers', 'orders', 'wishes', 'invoices'],
+    };
+
+    it.each([
+        ['show me the wishes', 'wishes'],
+        ['how many invoices are there?', 'invoices'],
+        ['orders', 'orders'],
+        ['orders over 300 sorted by total', 'orders'],
+        ['count orders per customer', 'orders'],
+    ])('opens the collection "%s" names', (wish, collection) => {
+        const spell = matchWishByKeyword(wish, shop);
+        expect(spell).toMatchObject({ kind: 'collectionView', collection });
+        expect(spell?.kind === 'collectionView' ? spell.tab : 'none').toBeUndefined();
+    });
+
+    it('keeps generic nouns working in a collection-scoped well, and opens no other collection for them', () => {
+        const events: WishPromptScope = { connectionName: 'prod', databaseName: 'shop', collectionName: 'events' };
+        expect(matchWishByKeyword('show the latest documents', events)).toMatchObject({
+            kind: 'collectionView',
+            collection: 'events',
+        });
+        expect(matchWishByKeyword('show the users', events)).toBeUndefined();
+    });
+
+    it.each<[string, Record<string, unknown>]>([
+        ['create a collection called invoices', { kind: 'tool', tool: 'createCollection' }],
+        ['make a new collection', { kind: 'tool', tool: 'createCollection' }],
+        ['create a database', { kind: 'tool', tool: 'createDatabase' }],
+        ['is my connection healthy?', { kind: 'tool', tool: 'diagnose' }],
+        ['run a health check', { kind: 'tool', tool: 'diagnose' }],
+        ['is the cluster healthy?', { kind: 'dashboard' }],
+        ['cluster health', { kind: 'dashboard' }],
+    ])('routes "%s"', (wish, spell) => {
+        expect(matchWishByKeyword(wish, shop)).toMatchObject(spell);
+    });
+
+    it('creates a collection in the database the wish names', () => {
+        expect(
+            matchWishByKeyword('create a collection in analytics', {
+                connectionName: 'prod',
+                databaseNames: ['shop', 'analytics'],
+            }),
+        ).toMatchObject({ tool: 'createCollection', database: 'analytics' });
+    });
+
+    it.each(['help', 'Help!', 'what can you do?', 'What can I wish for?'])(
+        'answers "%s" with what the well can do where it is',
+        (wish) => {
+            const spell = matchWishByKeyword(wish, shop);
+            expect(spell).toMatchObject({ kind: 'answer', title: 'What the well can do' });
+            expect(spell?.message).toContain('"customers"');
+            expect(spell?.message.split('\n').length).toBeLessThanOrEqual(8);
+            expect(matchWishByKeyword(wish, {})?.message).toContain('DocumentDB Local');
+            expect(spellToOutcome(spell ?? cannotGrantSpell(false), 'id', 'well').actionLabel).toBeUndefined();
+        },
+    );
+
+    it('never sends "what can you do" to the Command Palette, and keeps "help me …" a task', () => {
+        const palette = WISH_COMMANDS.find((command) => command.id === 'workbench.action.showCommands');
+        expect(palette?.keywords.test('what can you do')).toBe(false);
+        expect(matchWishByKeyword('help me insert sample customers', shop)?.kind).toBe('playground');
+    });
+
+    it.each([
+        ['run db.orders.countDocuments() in the shell', 'db.orders.countDocuments()'],
+        [
+            'run db.orders.find({ total: { $gt: 300 } }).limit(5) in the shell please',
+            'db.orders.find({ total: { $gt: 300 } }).limit(5)',
+        ],
+        ["execute db.getCollection('a b').stats()", "db.getCollection('a b').stats()"],
+        ['run db.orders.find({\n  total: 1\n})', 'db.orders.find({ total: 1 })'],
+        ['run `show dbs`', 'show dbs'],
+        ['show collections in the shell', 'show collections'],
+        ['use shop in the shell', 'use shop'],
+    ])('types the shell expression in "%s", on one line', (wish, command) => {
+        expect(matchWishByKeyword(wish, shop)).toMatchObject({ kind: 'shell', command });
+    });
+
+    it('opens the shell without a command when the wish carries none', () => {
+        const spell = matchWishByKeyword('use the shell to count orders', shop);
+        expect(spell?.kind).toBe('shell');
+        expect(spell?.kind === 'shell' ? spell.command : 'not a shell').toBeUndefined();
+    });
+
+    it.each<[string, string, string]>([
+        ['create an index on email in customers', '//   createIndex({ <field>: 1 })', 'deleteMany'],
+        ['drop the index on email from customers', "//   dropIndex('<index name>')", 'createIndex'],
+        [
+            'drop the wishes collection',
+            '//   drop()   // deletes the whole collection and its indexes; cannot be undone',
+            'insertMany',
+        ],
+        [
+            'rename the field total to amount in orders',
+            "//   updateMany({}, { $rename: { '<old name>': '<new name>' } })",
+            'deleteMany',
+        ],
+    ])('drafts comments that fit "%s", and still writes nothing', (wish, call, absent) => {
+        const spell = matchWishByKeyword(wish, { collectionNames: ['customers', 'orders', 'wishes'] });
+        const script = spell?.kind === 'playground' ? spell.script : '';
+        expect(script).toContain(call);
+        expect(script).not.toContain(absent);
+        expect(script.split('\n').filter((line) => !line.startsWith('//'))).toEqual([
+            expect.stringMatching(/^db\.getCollection\('\w+'\)\.find\(\{\}\)$/),
+        ]);
+    });
+
+    it('says export writes JSON, never CSV, and always the whole collection', () => {
+        const spell = matchWishByKeyword('export orders to csv', shop);
+        expect(spell).toMatchObject({ kind: 'tool', tool: 'export', collection: 'orders' });
+        expect(spell?.message).toContain('Export writes JSON, not CSV, and always the whole collection.');
+        expect(spell?.message).not.toContain('did not apply');
+    });
+});
+
+describe('keyword mode after an unusable Copilot reply', () => {
+    const shop: WishPromptScope = {
+        connectionName: 'prod',
+        databaseName: 'shop',
+        collectionNames: ['customers', 'orders'],
+    };
+
+    it.each([
+        'show me the orders',
+        'count orders per customer',
+        'show me teh customers pls',
+        'export orders to csv',
+        'export the orders with status open',
+        'delete orders with total 0',
+        'open a playground',
+        'open the shell',
+        'help',
+        'what can you do',
+    ])('never says Copilot is missing: %s', (wish) => {
+        for (const scope of [shop, {}]) {
+            const spell = matchWishByKeyword(wish, scope, 'unreadable');
+            const text = [spell?.message ?? '', spell?.kind === 'playground' ? spell.script : ''].join('\n');
+            expect(text).not.toMatch(/not available|without copilot/i);
+            if (spell && spell.kind !== 'command') {
+                expect(text).toContain("Copilot's reply could not be used");
+            }
+        }
+    });
+});
+
+describe('keyword routes that must not misfire', () => {
+    const shop: WishPromptScope = {
+        connectionName: 'prod',
+        databaseName: 'shop',
+        collectionNames: ['customers', 'orders', 'wishes'],
+    };
+    const script = (spell: Spell | undefined): string => (spell?.kind === 'playground' ? spell.script : '');
+
+    it('finds names in a wish quickly, even with thousands of collections', () => {
+        const names = Array.from({ length: 20_000 }, (_, index) => `tenant_${index}_orders`);
+        const started = performance.now();
+        expect(mentionedCollections('show me tenant_19999_orders please', names)).toEqual(['tenant_19999_orders']);
+        expect(performance.now() - started).toBeLessThan(500);
+    });
+
+    it.each<[string, readonly string[], string[]]>([
+        ['show order', ['orders', 'order'], ['order']],
+        ['show orders', ['Orders', 'orders'], ['orders']],
+        ['show the customer orders', ['customers', 'orders'], ['orders', 'customers']],
+        ['show me new orders', ['new', 'orders'], ['orders', 'new']],
+        ['I wish I could see the orders', ['wishes', 'orders'], ['orders']],
+        ['显示订单', ['订单'], ['订单']],
+    ])('"%s" in %j mentions %j', (wish, names, expected) => {
+        expect(mentionedCollections(wish, names)).toEqual(expected);
+    });
+
+    it.each([
+        ['import the orders file into customers', 'customers'],
+        ['import orders.json into customer_archive', 'customer_archive'],
+    ])('imports "%s" into the collection after "into", and the card names it', (wish, collection) => {
+        const spell = matchWishByKeyword(wish, {
+            ...shop,
+            collectionNames: ['customers', 'orders', 'customer_archive'],
+        });
+        expect(spell).toMatchObject({ kind: 'tool', tool: 'import', collection });
+        expect(spellToOutcome(spell ?? cannotGrantSpell(false), 'id', 'well').actionHint).toBe(
+            `Imports a JSON file you pick into ${collection}.`,
+        );
+    });
+
+    it('drafts a change against the collection it goes into', () => {
+        expect(script(matchWishByKeyword('add sample orders to customers', shop))).toContain(
+            "db.getCollection('customers').find({})",
+        );
+    });
+
+    it.each([
+        'erase the pending orders',
+        'archive orders older than 2023',
+        'cancel pending orders',
+        'dedupe the customers',
+        'write a TypeScript type for an order',
+    ])('does not open a collection for a change its verbs miss: %s', (wish) => {
+        expect(matchWishByKeyword(wish, shop)).toBeUndefined();
+    });
+
+    it.each(['write a TypeScript type for an order', 'cancel pending orders', 'orders over 300 sorted by total'])(
+        'leaves "%s" to agent mode after an unusable Copilot reply',
+        (wish) => {
+            expect(matchWishByKeyword(wish, shop, 'unreadable')).toBeUndefined();
+        },
+    );
+
+    it.each([
+        ['the 5 newest orders', 'orders'],
+        ['number of orders', 'orders'],
+        ['I wish for the 5 newest orders', 'orders'],
+        ['I wish I could see the orders over 300', 'orders'],
+        ['SELECT * FROM orders WHERE total > 300', 'orders'],
+    ])('still opens the collection "%s" only names', (wish, collection) => {
+        expect(matchWishByKeyword(wish, shop)).toMatchObject({ kind: 'collectionView', collection });
+    });
+
+    it.each<[string, string, string]>([
+        ['settings', 'open my settings', 'workbench.action.openSettings'],
+        ['themes', 'switch to dark theme', 'workbench.action.selectTheme'],
+        ['local', 'start a local database', 'vscode-documentdb.command.localQuickStart.open'],
+        ['files', 'open a file', 'workbench.action.quickOpen'],
+        ['connections', 'new connection', 'vscode-documentdb.command.connectionsView.newConnection'],
+    ])('keeps a "%s" collection from taking over "%s"', (name, wish, commandId) => {
+        expect(matchWishByKeyword(wish, { ...shop, collectionNames: [name, 'orders'] })).toMatchObject({
+            kind: 'command',
+            commandId,
+        });
+    });
+
+    it.each([
+        'drop orders where status is cancelled',
+        'drop the test orders',
+        'delete every order in the orders collection',
+    ])('offers deleteMany first when "%s" may mean some documents', (wish) => {
+        const lines = script(matchWishByKeyword(wish, shop)).split('\n');
+        const deleteMany = lines.findIndex((line) => line.includes('deleteMany({ <filter> })'));
+        expect(deleteMany).toBeGreaterThan(-1);
+        expect(deleteMany).toBeLessThan(lines.findIndex((line) => line.includes('drop()')));
+    });
+
+    it('offers only drop() when the wish names the whole collection', () => {
+        for (const wish of ['drop orders', 'drop the orders collection']) {
+            expect(script(matchWishByKeyword(wish, shop))).not.toContain('deleteMany');
+        }
+    });
+
+    it.each(['rename customers to clients', 'rename the orders collection to archive'])(
+        'renames the collection, not a field, for "%s"',
+        (wish) => {
+            const draft = script(matchWishByKeyword(wish, shop));
+            expect(draft).toContain("renameCollection('<new name>')");
+            expect(draft).not.toContain('$rename');
+        },
+    );
+
+    it('answers only a wish that is all about help', () => {
+        expect(matchWishByKeyword('what can you do to speed up queries on orders?', shop)).toMatchObject({
+            kind: 'collectionView',
+            collection: 'orders',
+            tab: 'insights',
+        });
+    });
+
+    it.each(['stats', 'shell', 'export', 'help', 'index'])(
+        'never offers a "%s" collection as one that opens by its name',
+        (name) => {
+            const help = matchWishByKeyword('help', { ...shop, collectionNames: [name, 'orders'] });
+            expect(help?.message).toContain('such as "orders"');
+        },
+    );
+
+    it.each(['create a database user', 'add a database connection', 'make a db backup'])(
+        'does not create a database for "%s"',
+        (wish) => {
+            expect(matchWishByKeyword(wish, shop)).not.toMatchObject({ kind: 'tool', tool: 'createDatabase' });
+        },
+    );
+
+    it.each(['create a collection index on email', 'add a collection validator to orders'])(
+        'does not create a collection for "%s"',
+        (wish) => {
+            expect(matchWishByKeyword(wish, shop)).not.toMatchObject({ kind: 'tool', tool: 'createCollection' });
+        },
+    );
+
+    it('does not offer a new collection at cluster scope without a database to put it in', () => {
+        const cluster: WishPromptScope = { connectionName: 'prod', databaseNames: ['shop'] };
+        expect(matchWishByKeyword('create a collection called invoices', cluster)).toBeUndefined();
+    });
+
+    it.each(['why does db.orders.drop() not work in the shell?', 'what type does db.orders.findOne() return?'])(
+        'types nothing in for a question about an expression: %s',
+        (wish) => {
+            const spell = matchWishByKeyword(wish, shop);
+            expect(spell?.kind === 'shell' ? spell.command : undefined).toBeUndefined();
+        },
+    );
+
+    it('strips terminal control characters from a wished shell command', () => {
+        const escape = String.fromCharCode(27);
+        const wish = `run \`db.orders.drop();//${escape}[2K${escape}[1Gshop> db.orders.find()\` in the shell`;
+        const spell = matchWishByKeyword(wish, shop);
+        expect(spell?.kind === 'shell' ? spell.command : '').not.toContain(escape);
+        const agent = parseAgentSpell({ spell: 'shell', command: `db.orders.drop()${escape}[2K` }, 'w').spell;
+        expect(agent?.kind === 'shell' ? agent.command : '').toBe('db.orders.drop()[2K');
+    });
+
+    it('does not call a field named total a count', () => {
+        expect(matchWishByKeyword('orders over 300 sorted by total', shop)?.message).not.toContain('count');
+    });
+});
+
+describe('query code that does not fit', () => {
+    it('refuses a filter that grows past the limit when converted, instead of cutting it mid-literal', () => {
+        const filter = { day: { $in: Array.from({ length: 300 }, () => ({ $date: '2024-01-01' })) } };
+        expect(JSON.stringify(filter).length).toBeLessThan(8000);
+        const result = parseSpellResult(
+            JSON.stringify({ spell: 'find', collection: 'c', filter, title: 't', message: 'm' }),
+        );
+        expect(result.spell).toBeUndefined();
+        expect(result.reason).toContain('"filter" is too long');
+    });
+
+    it('refuses a pipeline that does not fit, which a cut could never parse', () => {
+        const pipeline = [
+            { $match: { _id: { $in: Array.from({ length: 800 }, (_, index) => `id-${index}-xxxxxxxx`) } } },
+        ];
+        expect(parseAgentSpell({ spell: 'aggregate', collection: 'c', pipeline }, 'w').reason).toContain(
+            '"pipeline" is too long',
+        );
+    });
+
+    it('refuses a pipeline nested too deeply to check, instead of throwing', () => {
+        let stage = '{"a":1}';
+        for (let level = 0; level < 20_000; level++) {
+            stage = `{"a":${stage}}`;
+        }
+        expect(() =>
+            parseAgentSpell({ spell: 'aggregate', collection: 'c', pipeline: `[${stage}]` }, 'w'),
+        ).not.toThrow();
+    });
+
+    it("shows a find's limit with its query, so a limited result is not read as every match", () => {
+        const spell = parseSpell(
+            '{"spell":"find","collection":"orders","sort":{"total":-1},"limit":3,"title":"t","message":"m"}',
+        );
+        expect(spellToOutcome(spell ?? cannotGrantSpell(false), 'id', 'copilot').query).toBe(
+            'sort: {"total":-1}\nlimit: 3',
+        );
+    });
+});
+
+describe('field lines in the prompt', () => {
+    it('cuts a very long field path, so one wide collection cannot crowd out the wish', () => {
+        const prompt = buildWishPrompt('w', {
+            connectionName: 'prod',
+            databaseName: 'shop',
+            fieldsByCollection: { orders: [`${'a.'.repeat(5000)}b: string`] },
+        });
+        expect(prompt.length).toBeLessThan(6000);
+        expect(prompt).toContain('Fields of "orders": a.a.');
     });
 });

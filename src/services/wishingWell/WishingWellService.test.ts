@@ -12,7 +12,7 @@ vi.mock('@vscode/l10n', () => ({
     ),
 }));
 
-import { LUCKY_TIPS, WishScopeError } from './wishEngine';
+import { LUCKY_TIPS, parseAgentSpell, WishScopeError } from './wishEngine';
 import { WishingWellService } from './WishingWellService';
 import { type WishPowers } from './wishPowers';
 import { type WishScope } from './wishScope';
@@ -83,9 +83,13 @@ describe('WishingWellService', () => {
             resultCount: 2,
             truncated: false,
             detail: '[{"a":1},{"a":2}]',
+            query: 'filter: {"total":{"$gt":100}}',
             message: 'Found 2 documents in orders.',
             actionLabel: expect.any(String),
         });
+        // "Orders over 100." only repeats the wish, so it is no note.
+        expect(outcome.readerNote).toBeUndefined();
+        expect(wishPowers.describeScope).toHaveBeenCalledWith(shop, 'orders over 100');
         expect(vi.mocked(wishPowers.askCopilot).mock.calls[0][0]).toContain('"orders"');
         expect(wishPowers.cast).not.toHaveBeenCalled();
 
@@ -132,7 +136,14 @@ describe('WishingWellService', () => {
             true,
             'The first 50 documents in orders; there are more. Only the first 2 are shown; the rest did not fit.',
         ],
-        ['a find marked cut although every row fits', find, 2, false, true, 'Found 2 documents in orders.'],
+        [
+            'a find whose rows all fit but were summarized',
+            find,
+            2,
+            false,
+            true,
+            'Found 2 documents in orders. Long values were shortened to fit.',
+        ],
     ] as const)('writes a receipt for %s', async (_case, spell, count, capped, truncated, message) => {
         const well = new WishingWellService(
             powers({
@@ -152,6 +163,127 @@ describe('WishingWellService', () => {
             truncated,
             capped,
             interpretedBy: 'agent',
+        });
+    });
+
+    it('says one summarized document was shortened to fit', async () => {
+        const well = new WishingWellService(
+            powers({
+                read: vi.fn(async () => ({
+                    count: 1,
+                    text: '[{"a":"(9000 characters not shown)"}]',
+                    documents: [{ a: 'x'.repeat(9000) }],
+                    truncated: true,
+                    capped: false,
+                })),
+            }),
+        );
+        await expect(well.makeWish('w', shop, context(), 'mcp', undefined, find)).resolves.toMatchObject({
+            message: 'Found 1 document in orders. Long values were shortened to fit.',
+        });
+    });
+
+    it('says values were shortened even when rows were cut too, so a note is never read as data', async () => {
+        const well = new WishingWellService(
+            powers({
+                read: vi.fn(async () => ({
+                    count: 50,
+                    text: '[{"big":"(9000 characters not shown)"},{"a":2}]',
+                    documents: [],
+                    truncated: true,
+                    capped: false,
+                    summarized: true,
+                })),
+            }),
+        );
+        await expect(well.makeWish('w', shop, context(), 'mcp', undefined, find)).resolves.toMatchObject({
+            message:
+                'Found 50 documents in orders. Only the first 2 are shown; the rest did not fit. Long values were shortened to fit.',
+        });
+    });
+
+    it('samples no collection the wish names when no Copilot will read the fields', async () => {
+        const wishPowers = powers();
+        await new WishingWellService(wishPowers).makeWish('count orders per customer', shop, context(), 'webview');
+        expect(wishPowers.describeScope).toHaveBeenCalledWith(shop, undefined);
+    });
+
+    it('keeps the query and what Copilot said about it beside the rows', async () => {
+        const well = new WishingWellService(
+            powers({
+                isCopilotAvailable: vi.fn(async () => true),
+                askCopilot: vi.fn(
+                    async () =>
+                        '{"spell":"find","collection":"orders","filter":{"total":{"$gt":2400}},"title":"Big spenders","message":"Orders over 2400. This does not filter by gold tier yet."}',
+                ),
+            }),
+        );
+        const outcome = await well.makeWish('gold customers who spent over 2400', shop, context(), 'webview');
+        expect(outcome).toMatchObject({
+            status: 'answered',
+            message: 'Found 2 documents in orders.',
+            query: 'filter: {"total":{"$gt":2400}}',
+            readerNote: 'Orders over 2400. This does not filter by gold tier yet.',
+            detail: '[{"a":1},{"a":2}]',
+        });
+    });
+
+    it.each([
+        ['an aggregate', aggregate, '[{"$count":"n"}]'],
+        ['a find', { ...find, filter: '{"total":0}' }, 'filter: {"total":0}'],
+    ] as const)('shows %s that found nothing by its query alone, never as rows', async (_case, spell, query) => {
+        const well = new WishingWellService(
+            powers({
+                read: vi.fn(async () => ({ count: 0, text: '[]', documents: [], truncated: false, capped: false })),
+            }),
+        );
+        const outcome = await well.makeWish('w', shop, context(), 'mcp', undefined, spell);
+        expect(outcome).toMatchObject({ status: 'answered', resultCount: 0, query, readerNote: 'm' });
+        expect(outcome.detail).toBeUndefined();
+    });
+
+    it.each([
+        ['is empty', ' '],
+        ['repeats the title', 'Big orders.'],
+        ['repeats the wish', 'Orders over 100!'],
+    ])('keeps no reader note when the message %s', async (_case, message) => {
+        const outcome = await new WishingWellService(powers()).makeWish(
+            'orders over 100',
+            shop,
+            context(),
+            'mcp',
+            undefined,
+            {
+                ...find,
+                title: 'Big orders',
+                message,
+            },
+        );
+        expect(outcome.readerNote).toBeUndefined();
+    });
+
+    it("shows no agent's note for an agent spell sent without a message", async () => {
+        const spell = parseAgentSpell({ spell: 'find', collection: 'orders' }, 'orders').spell;
+        expect(spell?.message).toBe('Reads documents in orders.');
+        const outcome = await new WishingWellService(powers()).makeWish('w', shop, context(), 'mcp', undefined, spell);
+        expect(outcome).toMatchObject({ status: 'answered', query: 'filter: {}' });
+        expect(outcome.readerNote).toBeUndefined();
+    });
+
+    it('keeps the query and the reader note on a read that is refused', async () => {
+        const well = new WishingWellService(
+            powers({ read: vi.fn(async () => Promise.reject(new Error('unknown operator: $oid'))) }),
+        );
+        const outcome = await well.makeWish('w', shop, context(), 'mcp', undefined, {
+            ...find,
+            filter: '{"_id":{"$oid":"x"}}',
+            message: 'Looks up one order by id.',
+        });
+        expect(outcome).toMatchObject({
+            status: 'refused',
+            message: 'The well could not read this: unknown operator: $oid',
+            query: 'filter: {"_id":{"$oid":"x"}}',
+            readerNote: 'Looks up one order by id.',
         });
     });
 
@@ -186,11 +318,24 @@ describe('WishingWellService', () => {
         const well = new WishingWellService(
             powers({ isCopilotAvailable: vi.fn(async () => true), askCopilot: vi.fn(async () => 'sure!') }),
         );
-        await expect(well.makeWish('open the dashboard', shop, ctx, 'webview')).resolves.toMatchObject({
-            kind: 'view',
-            interpretedBy: 'well',
-        });
+        const outcome = await well.makeWish('open the dashboard', shop, ctx, 'webview');
+        expect(outcome).toMatchObject({ kind: 'view', interpretedBy: 'well' });
         expect(ctx.telemetry.properties.copilot).toBe('unparsable');
+        // Copilot is there; only its reply was unusable.
+        expect(outcome.message).toContain("Copilot's reply could not be used");
+        expect(outcome.message).not.toContain('not available');
+    });
+
+    it.each([
+        ['is missing', false, 'Without Copilot', "Copilot's reply"],
+        ['replied with nonsense', true, "Copilot's reply could not be used", 'Without Copilot'],
+    ])('says why keywords drafted a change when Copilot %s', async (_case, copilot, says, never) => {
+        const outcome = await new WishingWellService(
+            powers({ isCopilotAvailable: vi.fn(async () => copilot), askCopilot: vi.fn(async () => 'sure!') }),
+        ).makeWish('delete the zero-total orders', shop, context(), 'webview');
+        expect(outcome.kind).toBe('playground');
+        expect(outcome.message).toContain(says);
+        expect(`${outcome.message}\n${outcome.detail ?? ''}`).not.toContain(never);
     });
 
     it('hands an unknown wish to Copilot agent mode only with Copilot and Chat', async () => {
@@ -418,24 +563,46 @@ describe('WishingWellService', () => {
     });
 
     it.each([
-        ['an outside agent opening DocumentDB UI', 'mcp', { kind: 'dashboard', title: 't', message: 'm' }],
+        ['an outside agent opening DocumentDB UI', 'mcp', { kind: 'dashboard', title: 't', message: 'm' }, 'granted'],
         [
             'an outside agent running a DocumentDB command',
             'mcp',
             { kind: 'command', commandId: 'vscode-documentdb.command.localQuickStart.open', title: 't', message: 'm' },
+            'opened',
         ],
         [
             'the webview opening a link',
             'webview',
             { kind: 'link', url: 'https://example.com', title: 't', message: 'm' },
+            'granted',
         ],
-        ['Copilot, which confirms itself', 'copilotTool', { kind: 'agent', prompt: 'p', title: 't', message: 'm' }],
-    ] as const)('does not ask again for %s', async (_case, source, spell) => {
+        [
+            'Copilot, which confirms itself',
+            'copilotTool',
+            { kind: 'agent', prompt: 'p', title: 't', message: 'm' },
+            'granted',
+        ],
+    ] as const)('does not ask again for %s', async (_case, source, spell, result) => {
         const wishPowers = powers();
         const well = new WishingWellService(wishPowers);
         const outcome = await well.makeWish('w', shop, context(), source, undefined, spell);
-        await expect(well.grant(outcome.id, context(), source)).resolves.toBe('granted');
+        await expect(well.grant(outcome.id, context(), source)).resolves.toBe(result);
         expect(wishPowers.confirmGrant).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['an export', { kind: 'tool', tool: 'export', collection: 'orders', title: 't', message: 'm' }],
+        ['a create', { kind: 'tool', tool: 'createCollection', title: 't', message: 'm' }],
+        ['a VS Code command', { kind: 'command', commandId: 'workbench.action.selectTheme', title: 't', message: 'm' }],
+    ] as const)('says %s was opened, not done, and can open it again', async (_case, spell) => {
+        const wishPowers = powers();
+        const well = new WishingWellService(wishPowers);
+        const ctx = context();
+        const outcome = await well.makeWish('w', shop, ctx, 'mcp', undefined, spell);
+        await expect(well.grant(outcome.id, ctx, 'mcp')).resolves.toBe('opened');
+        expect(ctx.telemetry.properties.granted).toBe('opened');
+        await expect(well.grant(outcome.id, ctx, 'mcp')).resolves.toBe('opened');
+        expect(wishPowers.cast).toHaveBeenCalledTimes(2);
     });
 
     it('keeps a grant that failed so it can be tried again, and never casts it twice at once', async () => {
@@ -548,7 +715,7 @@ describe('WishingWellService', () => {
             message: 'Orders over 100.',
             actionLabel: read.actionLabel,
             actionHint: read.actionHint,
-            detail: expect.stringContaining('"$gt":100'),
+            detail: 'filter: {"total":{"$gt":100}}',
         });
         expect(well.describeGrant(read.id)?.detail).not.toContain('"a":1');
     });

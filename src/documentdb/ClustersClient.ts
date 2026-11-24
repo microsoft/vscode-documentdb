@@ -23,6 +23,7 @@ import {
     MongoBulkWriteError,
     MongoClient,
     ObjectId,
+    type Abortable,
     type ClientSession,
     type Collection,
     type DeleteResult,
@@ -942,22 +943,30 @@ export class ClustersClient {
      * @param databaseName - The name of the database
      * @param collectionName - The name of the collection
      * @param queryParams - Find query parameters (filter, project, sort, skip, limit)
+     * @param execution - Optional server time limit and abort signal for the query
      * @returns Array of matching documents
      */
     async runFindQuery(
         databaseName: string,
         collectionName: string,
         queryParams: FindQueryParams,
+        execution?: { readonly maxTimeMS?: number; readonly signal?: AbortSignal },
     ): Promise<WithId<Document>[]> {
         // Parse filter query
         const filterStr = queryParams.filter?.trim() || '{}';
         const filterObj: Filter<Document> = toFilterQueryObj(filterStr);
 
         // Build find options
-        const options: FindOptions = {
+        const options: FindOptions & Abortable = {
             skip: queryParams.skip ?? 0,
             limit: queryParams.limit ?? 0,
         };
+        if (execution?.maxTimeMS !== undefined) {
+            options.maxTimeMS = execution.maxTimeMS;
+        }
+        if (execution?.signal) {
+            options.signal = execution.signal;
+        }
 
         // Parse and add projection if provided
         if (queryParams.project && queryParams.project.trim() !== '{}') {

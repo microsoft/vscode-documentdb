@@ -9,6 +9,7 @@ import {
     Body1Strong,
     Button,
     Caption1,
+    Caption1Strong,
     Card,
     CardHeader,
     Spinner,
@@ -24,10 +25,12 @@ import {
     ClockRegular,
     CodeRegular,
     DataBarVerticalRegular,
+    DismissRegular,
     DocumentRegular,
     FlashRegular,
     LightbulbRegular,
     LinkRegular,
+    OpenRegular,
     SparkleRegular,
     StarRegular,
     TableSearchRegular,
@@ -68,8 +71,15 @@ const KIND_ICONS: Record<WishKind, JSX.Element> = {
 
 const MAX_HISTORY = 10;
 
-/** Granted, or still waiting for the user to answer a confirmation in VS Code. */
-type GrantState = 'granted' | 'waiting';
+/** Granted; opened as steps the user finishes in VS Code; or waiting for the user to answer a confirmation. */
+type GrantState = 'granted' | 'opened' | 'waiting';
+
+// Only a finished grant gets the check mark: the well is not told how opened steps end.
+const GRANT_ICONS: Record<GrantState, JSX.Element> = {
+    granted: <CheckmarkCircleFilled aria-hidden />,
+    opened: <OpenRegular aria-hidden />,
+    waiting: <ClockRegular aria-hidden />,
+};
 
 /** Most grants finish at once; a spinner that flashes for one frame only distracts. */
 const SPINNER_DELAY_MS = 300;
@@ -89,9 +99,12 @@ function useDelayed(flag: boolean, delayMs: number): boolean {
     return flag && late;
 }
 
-function grantStateOf(result: { granted: boolean; waiting: boolean }): GrantState | undefined {
+function grantStateOf(result: { granted: boolean; opened: boolean; waiting: boolean }): GrantState | undefined {
     if (result.granted) {
         return 'granted';
+    }
+    if (result.opened) {
+        return 'opened';
     }
     return result.waiting ? 'waiting' : undefined;
 }
@@ -109,6 +122,11 @@ function copilotStatusText(status: WishingWellStatus | undefined): string {
 function receipt(kind: WishKind, state: GrantState): string {
     if (state === 'waiting') {
         return l10n.t('Waiting for you in VS Code');
+    }
+    if (state === 'opened') {
+        return kind === 'command'
+            ? l10n.t('Started in VS Code. Finish any steps there.')
+            : l10n.t('Opened in VS Code. Finish the steps there.');
     }
     switch (kind) {
         case 'agent':
@@ -135,7 +153,34 @@ function againLabel(kind: WishKind): string | undefined {
     }
 }
 
+function readByText(interpretedBy: WishOutcome['interpretedBy']): string {
+    switch (interpretedBy) {
+        case 'copilot':
+            return l10n.t('Read by Copilot');
+        case 'agent':
+            return l10n.t('Cast by your agent');
+        default:
+            return l10n.t('From the well');
+    }
+}
+
+function noteLabel(interpretedBy: WishOutcome['interpretedBy']): string {
+    switch (interpretedBy) {
+        case 'copilot':
+            return l10n.t("Copilot's note");
+        case 'agent':
+            return l10n.t("Agent's note");
+        default:
+            return l10n.t('Note');
+    }
+}
+
 function announcement(outcome: WishOutcome): string {
+    const summary = cardSummary(outcome);
+    return outcome.readerNote ? `${summary} ${noteLabel(outcome.interpretedBy)}: ${outcome.readerNote}` : summary;
+}
+
+function cardSummary(outcome: WishOutcome): string {
     switch (outcome.status) {
         case 'refused':
             return l10n.t('The well could not grant this wish. {0}', outcome.message);
@@ -145,6 +190,21 @@ function announcement(outcome: WishOutcome): string {
             return `${outcome.title}. ${outcome.message}`;
     }
 }
+
+/** Code shown verbatim; the label tells two blocks on one card apart. */
+const CodeBlock = ({ label, code }: { readonly label?: string; readonly code: string }): JSX.Element => {
+    if (!label) {
+        return <pre className="ww-card__detail">{code}</pre>;
+    }
+    return (
+        <figure className="ww-card__block">
+            <figcaption>
+                <Caption1 className="ww-muted">{label}</Caption1>
+            </figcaption>
+            <pre className="ww-card__detail">{code}</pre>
+        </figure>
+    );
+};
 
 interface OutcomeCardProps {
     readonly outcome: WishOutcome;
@@ -157,39 +217,38 @@ interface OutcomeCardProps {
 const OutcomeCard = ({ outcome, latest, grantState, granting, onGrant }: OutcomeCardProps): JSX.Element => {
     const slowGrant = useDelayed(granting, SPINNER_DELAY_MS);
     const refused = outcome.status === 'refused';
-    const again = grantState === 'granted' ? againLabel(outcome.kind) : undefined;
+    const again = grantState === 'granted' || grantState === 'opened' ? againLabel(outcome.kind) : undefined;
     const className = ['ww-card', latest && 'ww-card--latest', refused && 'ww-card--refused'].filter(Boolean).join(' ');
     return (
         <Card className={className} data-kind={outcome.kind} data-status={outcome.status}>
             <CardHeader
                 image={<span className="ww-card__icon">{refused ? <WarningRegular /> : KIND_ICONS[outcome.kind]}</span>}
                 header={<Body1Strong>{outcome.title}</Body1Strong>}
-                description={
-                    <Caption1 className="ww-muted">
-                        {outcome.interpretedBy === 'copilot'
-                            ? l10n.t('Read by Copilot')
-                            : outcome.interpretedBy === 'agent'
-                              ? l10n.t('Cast by your agent')
-                              : l10n.t('From the well')}
-                    </Caption1>
-                }
+                description={<Caption1 className="ww-muted">{readByText(outcome.interpretedBy)}</Caption1>}
             />
             {outcome.wish && <Caption1 className="ww-card__wish">{l10n.t('You wished: {0}', outcome.wish)}</Caption1>}
             <Body1 className="ww-card__message">{outcome.message}</Body1>
             {outcome.status === 'answered' && (
                 <Caption1 className="ww-muted">{l10n.t('Read-only result: nothing was changed.')}</Caption1>
             )}
-            {outcome.detail && <pre className="ww-card__detail">{outcome.detail}</pre>}
+            {/* A read's query stays in view: with zero rows or a refusal, it is the thing to check. */}
+            {outcome.query && (
+                // A refused read may never have reached the server.
+                <CodeBlock label={refused ? l10n.t('Query') : l10n.t('Query that ran')} code={outcome.query} />
+            )}
+            {outcome.readerNote && (
+                <div className="ww-card__note">
+                    <Caption1Strong>{noteLabel(outcome.interpretedBy)}</Caption1Strong>
+                    <Body1 className="ww-card__message">{outcome.readerNote}</Body1>
+                </div>
+            )}
+            {outcome.detail && <CodeBlock label={outcome.query ? l10n.t('Result') : undefined} code={outcome.detail} />}
             {outcome.actionLabel && !refused && (
                 <div className="ww-card__actions">
                     {grantState ? (
                         <>
-                            <span className={grantState === 'waiting' ? 'ww-waiting' : 'ww-granted'}>
-                                {grantState === 'waiting' ? (
-                                    <ClockRegular aria-hidden />
-                                ) : (
-                                    <CheckmarkCircleFilled aria-hidden />
-                                )}
+                            <span className={`ww-${grantState}`}>
+                                {GRANT_ICONS[grantState]}
                                 {receipt(outcome.kind, grantState)}
                             </span>
                             {again && (
@@ -240,6 +299,18 @@ export const WishingWell = (): JSX.Element => {
 
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const examplesLabelId = useId();
+    const unscopedHintId = useId();
+    const pending = useRef<AbortController | undefined>(undefined);
+    // Cancel hides itself, so focus goes back to the wish once the box is enabled again.
+    const refocus = useRef(false);
+    const slowToss = useDelayed(busy !== undefined, SPINNER_DELAY_MS);
+
+    useEffect(() => {
+        if (busy === undefined && refocus.current) {
+            refocus.current = false;
+            inputRef.current?.focus();
+        }
+    }, [busy]);
 
     const refreshStatus = useCallback((): void => {
         trpcClient.wishingWell.status
@@ -270,22 +341,30 @@ export const WishingWell = (): JSX.Element => {
             if (busy || (kind === 'wish' && !text)) {
                 return;
             }
+            const controller = new AbortController();
+            pending.current = controller;
             setBusy(kind);
             setError(undefined);
             setSplash((count) => count + 1);
             try {
                 const outcome =
                     kind === 'wish'
-                        ? await trpcClient.wishingWell.makeWish.mutate({ wish: text })
-                        : await trpcClient.wishingWell.feelingLucky.mutate();
+                        ? await trpcClient.wishingWell.makeWish.mutate({ wish: text }, { signal: controller.signal })
+                        : await trpcClient.wishingWell.feelingLucky.mutate(undefined, { signal: controller.signal });
                 setOutcomes((previous) => [outcome, ...previous].slice(0, MAX_HISTORY));
                 if (kind === 'wish') {
                     setWish('');
                 }
             } catch (caught) {
-                setError(caught instanceof Error ? caught.message : String(caught));
+                // A cancelled wish stays in the box to change or make again.
+                if (!controller.signal.aborted) {
+                    setError(caught instanceof Error ? caught.message : String(caught));
+                }
             } finally {
-                setBusy(undefined);
+                if (pending.current === controller) {
+                    pending.current = undefined;
+                    setBusy(undefined);
+                }
             }
         },
         [busy, trpcClient, wish],
@@ -317,6 +396,13 @@ export const WishingWell = (): JSX.Element => {
         },
         [trpcClient],
     );
+
+    const cancel = (): void => {
+        if (pending.current) {
+            refocus.current = true;
+            pending.current.abort();
+        }
+    };
 
     const onSubmit = (event: FormEvent): void => {
         event.preventDefault();
@@ -370,7 +456,15 @@ export const WishingWell = (): JSX.Element => {
                         onChange={(_event, data) => setWish(data.value)}
                         onKeyDown={onKeyDown}
                         disabled={busy !== undefined}
+                        aria-describedby={configuration.clusterDisplayName ? undefined : unscopedHintId}
                     />
+                    {!configuration.clusterDisplayName && (
+                        <Caption1 id={unscopedHintId} className="ww-muted">
+                            {l10n.t(
+                                'Not scoped to a connection. To ask about your data, open Make a Wish from a connection, database or collection in the DocumentDB side bar.',
+                            )}
+                        </Caption1>
+                    )}
                     <div className="ww-buttons">
                         <Button
                             appearance="primary"
@@ -387,6 +481,11 @@ export const WishingWell = (): JSX.Element => {
                         >
                             {l10n.t("I'm feeling lucky")}
                         </Button>
+                        {slowToss && (
+                            <Button appearance="subtle" icon={<DismissRegular />} onClick={cancel}>
+                                {l10n.t('Cancel')}
+                            </Button>
+                        )}
                     </div>
                     <div className="ww-status">
                         <Badge

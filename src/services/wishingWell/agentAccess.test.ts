@@ -200,6 +200,7 @@ describe('WishingWellAgentAccess', () => {
         expect(mocks.state.get(PORT_STATE)).toBe(DEFAULT_AGENT_PORT);
         expect(mocks.writeText).toHaveBeenCalledWith(expect.stringContaining('Bearer secret-token'));
         expect(lastMessage()).toContain('contains your access token');
+        expect(lastMessage()).toContain("documents an agent reads are sent to the agent's model");
         expect(lastMessage()).toContain('Keep this VS Code window open');
         expect(lastMessage()).toContain('list your DocumentDB connections');
         expect(lastMessage()).not.toContain('temporary address');

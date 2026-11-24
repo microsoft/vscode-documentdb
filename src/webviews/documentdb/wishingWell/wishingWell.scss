@@ -195,6 +195,21 @@
         word-break: break-word;
     }
 
+    &__block {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin: 0;
+    }
+
+    &__note {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 2px 0 2px 10px;
+        border-left: 3px solid var(--vscode-textLink-foreground);
+    }
+
     &__actions {
         display: flex;
         flex-wrap: wrap;
@@ -220,6 +235,7 @@
 }
 
 .ww-granted,
+.ww-opened,
 .ww-waiting {
     display: inline-flex;
     align-items: center;
@@ -230,6 +246,7 @@
     color: var(--colorPaletteGreenForeground1);
 }
 
+.ww-opened,
 .ww-waiting {
     color: var(--vscode-descriptionForeground);
 }

@@ -43,6 +43,8 @@ import {
     wishKeywordOutcome,
     wishPlaygroundOutcome,
     wishRefusedOutcome,
+    wishToolOutcome,
+    wishZeroRowsOutcome,
     type DiagnosticsCard,
     type DiagnosticsFinding,
     type DiagnosticsRow,
@@ -237,6 +239,13 @@ function defaultScenario<V extends WebviewName>(view: V, steps: readonly Scenari
 
 const base = fixtures.localQuickStart;
 const wishingWell = fixtures.wishingWell;
+// A missing fixture field fails here, not as an empty string every page contains.
+function shown(text: string | undefined): string {
+    if (!text) {
+        throw new Error('A Wishing Well fixture is missing text its scenario expects.');
+    }
+    return text;
+}
 // The warning edge a refused card draws.
 const wishRefusedStyle: StyleExpectation = {
     selector: '.ww-card--refused',
@@ -2499,25 +2508,77 @@ export const scenarios = {
                 },
             ],
         },
-        'command-granted': {
+        'command-opened': {
             config: wishingWell.config,
             rpc: {
                 ...wishingWell.rpc,
                 'wishingWell.makeWish': { type: 'mutation', results: [wishCommandOutcome] },
+                'wishingWell.grant': {
+                    type: 'mutation',
+                    results: [{ granted: false, opened: true, waiting: false, declined: false }],
+                },
             } as const satisfies TypedRpcFixtures,
             steps: [
                 { action: 'fill', role: 'textbox', name: 'Your wish', value: 'make the text bigger' },
                 { action: 'click', role: 'button', name: 'Make a wish' },
                 { action: 'click', role: 'button', name: 'Zoom in' },
             ],
-            readiness: { content: [wishCommandOutcome.title, 'Done', 'Do it again'], noProgressbar: true },
+            readiness: {
+                content: [wishCommandOutcome.title, 'Started in VS Code. Finish any steps there.', 'Do it again'],
+                noProgressbar: true,
+            },
             assertions: [
                 {
                     kind: 'text',
-                    name: 'a command that ran offers to run it again, not to open it',
+                    name: 'a started command offers to run it again and does not claim it is done',
                     selector: '.ww-results',
-                    includes: ['Done', 'Do it again'],
-                    excludes: ['Open again'],
+                    includes: ['Started in VS Code', 'Do it again'],
+                    excludes: ['\\bDone\\b', 'Open again'],
+                },
+            ],
+        },
+        opened: {
+            config: wishingWell.config,
+            rpc: {
+                ...wishingWell.rpc,
+                'wishingWell.makeWish': { type: 'mutation', results: [wishToolOutcome] },
+                'wishingWell.grant': {
+                    type: 'mutation',
+                    results: [{ granted: false, opened: true, waiting: false, declined: false }],
+                },
+            } as const satisfies TypedRpcFixtures,
+            steps: [
+                { action: 'fill', role: 'textbox', name: 'Your wish', value: 'export the orders' },
+                { action: 'click', role: 'button', name: 'Make a wish' },
+                { action: 'click', role: 'button', name: 'Export documents' },
+            ],
+            readiness: {
+                content: [wishToolOutcome.title, 'Opened in VS Code. Finish the steps there.', 'Open again'],
+                selectors: ['.ww-opened'],
+                noProgressbar: true,
+            },
+            assertions: [
+                {
+                    kind: 'text',
+                    name: 'an opened wizard leaves the user to finish it, and does not read as done',
+                    selector: '.ww-results',
+                    includes: ['Finish the steps there', 'Open again'],
+                    excludes: ['\\bDone\\b', 'Export documents'],
+                },
+                {
+                    kind: 'attribute',
+                    name: 'an opened wizard gets no check mark',
+                    selector: '.ww-results .ww-granted',
+                    attribute: 'class',
+                    expected: null,
+                },
+                {
+                    kind: 'calls',
+                    name: 'Open again opens the steps again',
+                    path: 'wishingWell.grant',
+                    input: { id: wishToolOutcome.id },
+                    count: 2,
+                    steps: [{ action: 'click', role: 'button', name: 'Open again' }],
                 },
             ],
         },
@@ -2554,7 +2615,7 @@ export const scenarios = {
                 ...wishingWell.rpc,
                 'wishingWell.grant': {
                     type: 'mutation',
-                    results: [{ granted: false, waiting: true, declined: false }],
+                    results: [{ granted: false, opened: false, waiting: true, declined: false }],
                 },
             } as const satisfies TypedRpcFixtures,
             steps: [
@@ -2613,6 +2674,13 @@ export const scenarios = {
             },
             assertions: [
                 {
+                    kind: 'text',
+                    name: 'a well opened on a connection does not say it is unscoped',
+                    selector: 'main',
+                    includes: ['Wishing on Stage 0 fixture cluster / shop'],
+                    excludes: ['Not scoped to a connection'],
+                },
+                {
                     kind: 'calls',
                     name: 'an example fills the box, and making the wish sends it',
                     path: 'wishingWell.makeWish',
@@ -2638,11 +2706,21 @@ export const scenarios = {
                     'You wished: orders over 300',
                     wishAnsweredOutcome.message,
                     'Read-only result: nothing was changed.',
+                    'Query that ran',
+                    shown(wishAnsweredOutcome.query),
+                    "Copilot's note",
+                    shown(wishAnsweredOutcome.readerNote),
                     'Open in collection view',
                 ],
                 noProgressbar: true,
             },
             assertions: [
+                {
+                    kind: 'order',
+                    name: 'the query and the note come before the rows they produced',
+                    selector: '.ww-results figcaption, .ww-results .ww-card__note',
+                    texts: ['Query that ran', "Copilot's note", 'Result'],
+                },
                 {
                     kind: 'attribute',
                     name: 'the results landmark names the latest wish',
@@ -2679,7 +2757,7 @@ export const scenarios = {
                     name: 'a capped result that fits does not claim it was cut',
                     selector: '.ww-results',
                     includes: ['there are more'],
-                    excludes: ['did not fit'],
+                    excludes: ['did not fit', "Copilot's note"],
                 },
             ],
         },
@@ -2699,6 +2777,39 @@ export const scenarios = {
             },
             assertions: [],
         },
+        'zero-rows': {
+            config: wishingWell.config,
+            rpc: {
+                ...wishingWell.rpc,
+                'wishingWell.makeWish': { type: 'mutation', results: [wishZeroRowsOutcome] },
+            } as const satisfies TypedRpcFixtures,
+            steps: [
+                {
+                    action: 'fill',
+                    role: 'textbox',
+                    name: 'Your wish',
+                    value: 'customers who joined after 1 March 2024',
+                },
+                { action: 'click', role: 'button', name: 'Make a wish' },
+            ],
+            readiness: {
+                content: [
+                    wishZeroRowsOutcome.title,
+                    wishZeroRowsOutcome.message,
+                    'Query that ran',
+                    shown(wishZeroRowsOutcome.query),
+                ],
+                noProgressbar: true,
+            },
+            assertions: [
+                {
+                    kind: 'order',
+                    name: 'a read that found nothing shows its query and no empty result',
+                    selector: '.ww-results figcaption',
+                    texts: ['Query that ran'],
+                },
+            ],
+        },
         refused: {
             config: wishingWell.config,
             rpc: {
@@ -2710,12 +2821,12 @@ export const scenarios = {
                     action: 'fill',
                     role: 'textbox',
                     name: 'Your wish',
-                    value: 'copy the orders to an archive collection',
+                    value: 'orders whose note mentions late',
                 },
                 { action: 'click', role: 'button', name: 'Make a wish' },
             ],
             readiness: {
-                content: [wishRefusedOutcome.title, wishRefusedOutcome.message],
+                content: [wishRefusedOutcome.title, wishRefusedOutcome.message, shown(wishRefusedOutcome.query)],
                 selectors: ['.ww-card--refused'],
                 noProgressbar: true,
             },
@@ -2726,6 +2837,13 @@ export const scenarios = {
                     selector: '.ww-card--refused button',
                     attribute: 'type',
                     expected: null,
+                },
+                {
+                    kind: 'text',
+                    name: 'a refused read does not claim its query ran',
+                    selector: '.ww-card--refused',
+                    includes: ['Query'],
+                    excludes: ['Query that ran'],
                 },
                 { kind: 'style', ...wishRefusedStyle },
             ],

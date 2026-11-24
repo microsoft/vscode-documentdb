@@ -595,6 +595,27 @@ describe('DocumentDBShellPty', () => {
         });
     });
 
+    describe('initial input', () => {
+        it('drops terminal escapes from the input it pre-fills, so Enter runs what the prompt shows', async () => {
+            const escape = String.fromCharCode(27);
+            mockEvaluate.mockResolvedValue({ type: 'string', printable: '"ok"', durationMs: 1 });
+            pty = new DocumentDBShellPty({
+                ...defaultOptions,
+                initialInput: `db.orders.drop();//${escape}[2K${escape}[1Gdb.orders.find()`,
+            });
+            pty.onDidWrite((data) => {
+                written += data;
+            });
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(mockEvaluate).toHaveBeenCalledWith('db.orders.drop();//[2K[1Gdb.orders.find()', 80);
+        });
+    });
+
     describe('print suppression', () => {
         beforeEach(async () => {
             pty.open(undefined);
@@ -1802,6 +1823,24 @@ describe('DocumentDBShellPty', () => {
             expect(written).toContain(receipt);
         });
 
+        it.each([
+            ['tool', 'Opened in VS Code. Finish the steps there.'],
+            ['command', 'Started in VS Code. Finish any steps there.'],
+        ] as const)('says an opened %s card is for the user to finish, and keeps it', async (kind, receipt) => {
+            makeWish.mockResolvedValue(card({ kind, actionLabel: 'Export documents' }));
+            grant.mockResolvedValue('opened');
+
+            await typeLine('wish export orders');
+            written = '';
+            await typeLine('wish open');
+
+            expect(written).toContain(receipt);
+            expect(written).not.toContain('Done');
+
+            await typeLine('wish open');
+            expect(grant).toHaveBeenCalledTimes(2);
+        });
+
         it.each(['agent', 'link'] as const)('opens a granted %s card only once', async (kind) => {
             makeWish.mockResolvedValue(card({ kind, actionLabel: 'Grant wish' }));
 
@@ -1852,7 +1891,13 @@ describe('DocumentDBShellPty', () => {
 
             await typeLine('wish zoom in');
 
-            expect(makeWish).toHaveBeenCalledWith('zoom in', expect.anything(), expect.anything(), 'shell');
+            expect(makeWish).toHaveBeenCalledWith(
+                'zoom in',
+                expect.anything(),
+                expect.anything(),
+                'shell',
+                expect.any(AbortSignal),
+            );
             expect(grant).not.toHaveBeenCalled();
             expect(written).toContain('Type "wish open" to grant wish. Runs "Zoom in".');
 
@@ -1887,6 +1932,49 @@ describe('DocumentDBShellPty', () => {
             expect(written).toContain('Nothing to open.');
         });
 
+        it('prints the query that ran and the reader note before the rows', async () => {
+            makeWish.mockResolvedValue(
+                card({
+                    kind: 'query',
+                    status: 'answered',
+                    message: 'Found 1 document in customers.',
+                    query: 'filter: { spent: { $gt: 2400 } }',
+                    readerNote: 'This does not filter by gold yet.',
+                    detail: '{ _id: 7 }',
+                    resultCount: 1,
+                    interpretedBy: 'copilot',
+                }),
+            );
+
+            await typeLine('wish gold customers who spent over 2400');
+
+            const query = written.indexOf('filter: { spent: { $gt: 2400 } }');
+            const note = written.indexOf("Copilot's note:");
+            const rows = written.indexOf('{ _id: 7 }');
+            expect(written).toContain('Query that ran:');
+            expect(written).toContain('This does not filter by gold yet.');
+            expect(query).toBeGreaterThan(-1);
+            expect(note).toBeGreaterThan(query);
+            expect(rows).toBeGreaterThan(note);
+        });
+
+        it('shows the query of a read that found nothing', async () => {
+            makeWish.mockResolvedValue(
+                card({
+                    kind: 'query',
+                    status: 'answered',
+                    message: 'Found no documents in customers.',
+                    query: 'filter: { joinedAt: { $gt: ISODate("2024-03-01T00:00:00.000Z") } }',
+                    resultCount: 0,
+                }),
+            );
+
+            await typeLine('wish customers who joined after March 2024');
+
+            expect(written).toContain('Query that ran:');
+            expect(written).toContain('joinedAt');
+        });
+
         it('types a wished shell command in without offering to open another shell', async () => {
             makeWish.mockResolvedValue(
                 card({ kind: 'shell', detail: 'db.orders.countDocuments()', actionLabel: 'Open the shell' }),
@@ -1897,7 +1985,246 @@ describe('DocumentDBShellPty', () => {
             expect(written).toContain('Press Enter to run it.');
             expect(written).toContain('db.orders.countDocuments()');
             expect(written).not.toContain('wish open');
+            expect(written).not.toContain('Dropped the input');
             expect(grant).not.toHaveBeenCalled();
+        });
+
+        it('types a command over several lines in as one line, and runs it only on Enter', async () => {
+            mockEvaluate.mockResolvedValue({ type: 'string', printable: '"ok"', durationMs: 1 });
+            makeWish.mockResolvedValue(
+                card({
+                    kind: 'shell',
+                    detail: 'db.orders.find({ total: { $gt: 300 } })\n  .sort({ total: -1 })',
+                    actionLabel: 'Open the shell',
+                }),
+            );
+
+            await typeLine('wish run the big orders query');
+            expect(mockEvaluate).not.toHaveBeenCalled();
+            expect(written).toContain('Press Enter to run it.');
+
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(mockEvaluate).toHaveBeenCalledWith(
+                'db.orders.find({ total: { $gt: 300 } }).sort({ total: -1 })',
+                80,
+            );
+        });
+
+        it('does not let input pasted behind the wish press Enter on the command it typed in', async () => {
+            mockEvaluate.mockResolvedValue({ type: 'string', printable: '"ok"', durationMs: 1 });
+            makeWish.mockResolvedValue(
+                card({ kind: 'shell', detail: 'db.orders.deleteMany({})', actionLabel: 'Open the shell' }),
+            );
+
+            pty.handleInput('wish clear the orders\r\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(makeWish).toHaveBeenCalledTimes(1);
+            expect(mockEvaluate).not.toHaveBeenCalled();
+            expect(written).toContain('Press Enter to run it.');
+            expect(written).toContain('Dropped the input pasted after the wish');
+
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            expect(mockEvaluate).toHaveBeenCalledWith('db.orders.deleteMany({})', 80);
+        });
+
+        it('still runs input pasted behind a wish that typed nothing in', async () => {
+            mockEvaluate.mockResolvedValue({ type: 'string', printable: '"ok"', durationMs: 1 });
+            makeWish.mockResolvedValue(card({ actionLabel: 'Open the dashboard' }));
+
+            pty.handleInput('wish show the dashboard\rshow dbs\r');
+            await new Promise((resolve) => setTimeout(resolve, 20));
+
+            expect(mockEvaluate).toHaveBeenCalledWith('show dbs', 80);
+            expect(written).not.toContain('Dropped the input');
+        });
+
+        describe('cancelled with Ctrl+C', () => {
+            const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 10));
+            const deleteCard = card({
+                kind: 'shell',
+                detail: 'db.orders.deleteMany({})',
+                actionLabel: 'Open the shell',
+            });
+            let resolveWish: (outcome: WishOutcome) => void;
+
+            beforeEach(() => {
+                mockEvaluate.mockResolvedValue({ type: 'string', printable: '"ok"', durationMs: 1 });
+                makeWish.mockReturnValue(new Promise<WishOutcome>((resolve) => (resolveWish = resolve)));
+            });
+
+            it('never types its command in, even after the user ran another line', async () => {
+                await typeLine('wish clear the orders');
+                pty.handleInput('\x03');
+                await typeLine('show dbs');
+                for (const key of 'db.orders.countDocuments()') {
+                    pty.handleInput(key);
+                }
+                resolveWish(deleteCard);
+                await tick();
+                pty.handleInput('\r');
+                await tick();
+
+                expect((makeWish.mock.calls[0] as unknown[])[4]).toHaveProperty('aborted', true);
+                expect(written).not.toContain('Press Enter to run it.');
+                expect(mockEvaluate.mock.calls.map(([input]) => input as string)).toEqual([
+                    'show dbs',
+                    'db.orders.countDocuments()',
+                ]);
+            });
+
+            it('does not unlock the prompt or stop Ctrl+C under a newer command that is still running', async () => {
+                await typeLine('wish clear the orders');
+                pty.handleInput('\x03');
+                mockEvaluate.mockReturnValueOnce(new Promise(() => undefined));
+                await typeLine('db.slow()');
+                resolveWish(deleteCard);
+                await tick();
+                pty.handleInput('\r');
+                await tick();
+
+                expect(mockEvaluate.mock.calls.map(([input]) => input as string)).toEqual(['db.slow()']);
+                pty.handleInput('\x03');
+                expect(mockKillWorker).toHaveBeenCalledTimes(2);
+            });
+
+            it('drops the rest of a paste instead of running it after the next command', async () => {
+                pty.handleInput('wish show the dashboard\rdb.orders.drop()\r');
+                await tick();
+                pty.handleInput('\x03');
+                resolveWish(card({ actionLabel: 'Open the dashboard' }));
+                await typeLine('show dbs');
+                await tick();
+
+                expect(written).toContain('Dropped the rest of the pasted input.');
+                expect(mockEvaluate.mock.calls.map(([input]) => input as string)).toEqual(['show dbs']);
+            });
+
+            it('drops the rest of a paste behind any interrupted command', async () => {
+                mockEvaluate.mockReturnValueOnce(new Promise(() => undefined));
+                pty.handleInput('db.slow()\rdb.orders.drop()\r');
+                await tick();
+                pty.handleInput('\x03');
+                await typeLine('show dbs');
+                await tick();
+
+                expect(mockEvaluate.mock.calls.map(([input]) => input as string)).toEqual(['db.slow()', 'show dbs']);
+            });
+        });
+
+        it.each([
+            ["wish what's in this database?", "what's in this database?"],
+            ["wish don't show the system collections", "don't show the system collections"],
+        ])('sends %j to the well on Enter despite its apostrophe', async (line, wish) => {
+            makeWish.mockResolvedValue(card({}));
+
+            await typeLine(line);
+
+            expect(makeWish).toHaveBeenCalledWith(
+                wish,
+                expect.anything(),
+                expect.anything(),
+                'shell',
+                expect.anything(),
+            );
+            expect(written).not.toContain('┆');
+        });
+
+        it('draws a lucky card for "wish i\'m feeling lucky" on Enter', async () => {
+            feelingLucky.mockResolvedValue(card({}));
+
+            await typeLine("wish i'm feeling lucky");
+
+            expect(feelingLucky).toHaveBeenCalledTimes(1);
+            expect(written).not.toContain('┆');
+        });
+
+        it('still continues JavaScript about a variable named wish', async () => {
+            await typeLine("wish = 'unfinished");
+
+            expect(written).toContain('┆');
+            expect(makeWish).not.toHaveBeenCalled();
+        });
+
+        it('does not type in a command whose comment would hide the lines after it', async () => {
+            makeWish.mockResolvedValue(
+                card({
+                    kind: 'shell',
+                    detail: 'db.orders.find() // big ones\n  .limit(5)',
+                    actionLabel: 'Open the shell',
+                }),
+            );
+
+            await typeLine('wish run the big orders query');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(written).toContain('.limit(5)');
+            expect(written).toContain('Paste it to run it.');
+            expect(written).not.toContain('Press Enter to run it.');
+            expect(mockEvaluate).not.toHaveBeenCalled();
+        });
+
+        it('does not join separate statements into one line that would run something else', async () => {
+            makeWish.mockResolvedValue(
+                card({ kind: 'shell', detail: 'use shop\ndb.orders.find()', actionLabel: 'Open the shell' }),
+            );
+
+            await typeLine('wish switch to shop and list the orders');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(written).toContain('Paste it to run it.');
+            expect(written).not.toContain('Press Enter to run it.');
+            expect(mockEvaluate).not.toHaveBeenCalled();
+        });
+
+        it('strips terminal escapes, so the prompt shows the command Enter runs', async () => {
+            const escape = String.fromCharCode(27);
+            mockEvaluate.mockResolvedValue({ type: 'string', printable: '"ok"', durationMs: 1 });
+            makeWish.mockResolvedValue(
+                card({
+                    kind: 'shell',
+                    detail: `db.orders.drop();//${escape}[2K${escape}[1Gdb.orders.find()`,
+                    actionLabel: 'Open the shell',
+                }),
+            );
+
+            await typeLine('wish run it');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(mockEvaluate).toHaveBeenCalledWith('db.orders.drop();//[2K[1Gdb.orders.find()', 80);
+        });
+
+        it('does not say the query of a refused read ran', async () => {
+            makeWish.mockResolvedValue(
+                card({
+                    kind: 'query',
+                    status: 'refused',
+                    message: 'The well could not read this: Unexpected token (2:14)',
+                    query: 'filter: {total: {$gt: }}',
+                }),
+            );
+
+            await typeLine('wish orders over nothing');
+
+            expect(written).toContain('Query:');
+            expect(written).not.toContain('Query that ran:');
+        });
+
+        it('says so when a wish for the shell comes back without a command', async () => {
+            makeWish.mockResolvedValue(
+                card({ kind: 'shell', message: 'Opens the interactive shell.', actionLabel: 'Open the shell' }),
+            );
+
+            await typeLine('wish open the shell');
+
+            expect(written).toContain('You are in the shell already.');
+            expect(written).not.toContain('Type "wish open"');
         });
 
         it("asks the well in the shell's own tree view", async () => {
@@ -1916,6 +2243,7 @@ describe('DocumentDBShellPty', () => {
                 { cluster: expect.objectContaining({ viewId: 'discoveryView' }), databaseName: 'testdb' },
                 expect.anything(),
                 'shell',
+                expect.any(AbortSignal),
             );
         });
     });

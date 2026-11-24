@@ -15,6 +15,7 @@ import { modifierKey } from '../../constants';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { SchemaStore } from '../../documentdb/SchemaStore';
 import { Views } from '../../documentdb/Views';
+import { ext } from '../../extensionVariables';
 import { settingsKeys } from '../../settingsKeys';
 import { revealInConnectionsView } from '../../tree/connections-view/connectionsViewHelpers';
 import { openUrl } from '../../utils/openUrl';
@@ -28,6 +29,7 @@ import { SettingsService } from '../SettingsService';
 import {
     CHAT_OPEN_COMMAND,
     MAX_RESULT_DOCUMENTS,
+    mentionedCollections,
     pickOne,
     pipelineWrites,
     WISH_COMMANDS,
@@ -37,6 +39,7 @@ import {
     type WishPromptScope,
     type WishTool,
 } from './wishEngine';
+import { toShellQuery } from './wishQuery';
 import { type WishCluster, type WishScope } from './wishScope';
 
 /** A card drawn from the scoped cluster's own data. */
@@ -57,6 +60,8 @@ export interface ReadResult {
     readonly truncated: boolean;
     /** The read hit its row cap, so more rows exist than it returned. */
     readonly capped: boolean;
+    /** A shown document had long values replaced by a note, so its text is not all data. */
+    readonly summarized?: boolean;
 }
 
 /**
@@ -67,8 +72,11 @@ export interface WishPowers {
     isCopilotAvailable(): Promise<boolean>;
     askCopilot(prompt: string, signal?: AbortSignal): Promise<string>;
     isChatAvailable(): Promise<boolean>;
-    /** Names and field paths for the prompt. Samples the collection when its schema is unknown. */
-    describeScope(scope: WishScope): Promise<WishPromptScope>;
+    /**
+     * Names and field paths for the prompt. Samples a collection when its schema is unknown. With the
+     * wish, also describes the collections it names, so the reader does not guess their fields.
+     */
+    describeScope(scope: WishScope, wish?: string): Promise<WishPromptScope>;
     /** Runs a find or aggregate spell read-only. */
     read(
         spell: Extract<Spell, { kind: 'find' | 'aggregate' }>,
@@ -84,6 +92,7 @@ export interface WishPowers {
     confirmGrant(spell: Spell): Promise<boolean>;
     /** A grant the user allowed after its caller stopped waiting failed; nobody else will say so. */
     reportLateFailure?(title: string, error: unknown): void;
+    /** Opens what the spell grants. Tool and command spells return once started; the user finishes them. */
     cast(spell: Spell, scope: WishScope, context: IActionContext): Promise<void>;
 }
 
@@ -92,6 +101,12 @@ const MAX_DETAIL = 6000;
 /** Rows a find reads when the wish names no limit. */
 const DEFAULT_FIND_LIMIT = 20;
 const READ_TIMEOUT_MS = 20_000;
+/** Other collections a wish names get field hints, so the reader does not guess their fields. */
+const MAX_NAMED_COLLECTIONS = 3;
+/** A database this small gets every collection's fields, since a wish like "who spent the most?" names none. */
+const DESCRIBE_ALL_COLLECTIONS = 5;
+/** A slow sample must not hold up the wish; its fields are left out instead. */
+const SAMPLE_TIMEOUT_MS = 3000;
 /** Bounds the trivia scan on large clusters: it runs one count per collection. */
 const TRIVIA_DATABASES = 10;
 const TRIVIA_COLLECTIONS = 25;
@@ -260,6 +275,70 @@ function quoteJs(name: string): string {
     return `'${JSON.stringify(name).slice(1, -1).replace(/\\"/g, '"').replace(/'/g, "\\'")}'`;
 }
 
+/** Extended JSON keys the shell parser leaves as plain sub-documents, where `EJSON.parse` reads a value. */
+const EJSON_KEY =
+    /"\$(date|oid|numberLong|numberDecimal|numberInt|numberDouble|binary|timestamp|regularExpression|uuid|minKey|maxKey|symbol|code|dbPointer|undefined)"\s*:/;
+
+/**
+ * A pipeline as the playground should read it: shell syntax, or `EJSON.parse` exactly like the inline
+ * read when shell syntax cannot say it ($timestamp, NaN), so the playground returns the card's rows.
+ */
+function playgroundPipeline(pipeline: string): string {
+    const shell = toShellQuery(pipeline);
+    if (!EJSON_KEY.test(shell)) {
+        return shell;
+    }
+    const literal = JSON.stringify(pipeline)
+        .replace(/\u2028/g, '\\u2028')
+        .replace(/\u2029/g, '\\u2029');
+    return `EJSON.parse(${literal}, { relaxed: false })`;
+}
+
+/** Collections besides `current` whose fields Copilot's prompt gets; none when Copilot will not read the wish. */
+function collectionsToDescribe(wish: string | undefined, names: readonly string[], current?: string): string[] {
+    if (wish === undefined) {
+        return [];
+    }
+    if (names.length <= DESCRIBE_ALL_COLLECTIONS) {
+        return names.filter((name) => name !== current);
+    }
+    return mentionedCollections(wish, names)
+        .filter((name) => name !== current)
+        .slice(0, MAX_NAMED_COLLECTIONS);
+}
+
+/** Waits at most `ms` for `work`, which keeps running after that. */
+async function within(work: Promise<unknown>, ms: number): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, ms);
+    });
+    try {
+        await Promise.race([work, late]);
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+/** The server's time-limit error (code 50) in plain words; other errors pass through. */
+function readError(error: unknown): Error {
+    if (error instanceof Error && 'code' in error && (error as { code: unknown }).code === 50) {
+        return new Error(
+            l10n.t('The read ran longer than {0} seconds, so the server stopped it.', READ_TIMEOUT_MS / 1000),
+        );
+    }
+    return error instanceof Error ? error : new Error(String(error));
+}
+
+/** Starts a command that waits on the user (wizard, dialog, picker) so a grant never hangs until they finish. */
+function startCommand(commandId: string, ...args: unknown[]): void {
+    Promise.resolve(vscode.commands.executeCommand(commandId, ...args)).catch((error: unknown) => {
+        // Command wrappers show their own error to the user, so this only logs.
+        const reason = error instanceof Error ? error.message : String(error);
+        ext.outputChannel.error(`[Wishing Well] ${commandId} failed: ${reason}`);
+    });
+}
+
 export function createWishPowers(): WishPowers {
     const client = (cluster: WishCluster): Promise<ClustersClient> => ClustersClient.getClient(cluster.clusterId);
 
@@ -278,12 +357,32 @@ export function createWishPowers(): WishPowers {
             .map((collection) => collection.name);
     }
 
-    async function fields(cluster: WishCluster, databaseName: string, collectionName: string): Promise<string[]> {
+    /**
+     * Known fields, sampling on a cache miss when `sample` is set. A slower sample gives none this time,
+     * and the server stops it too, so a wish never leaves a sample running behind it.
+     */
+    async function fields(
+        cluster: WishCluster,
+        databaseName: string,
+        collectionName: string,
+        sample: boolean,
+    ): Promise<string[]> {
         const store = SchemaStore.getInstance();
         let known = store.getKnownFields(cluster.clusterId, databaseName, collectionName);
-        if (known.length === 0) {
-            const sample = await (await client(cluster)).getSampleDocuments(databaseName, collectionName, 10);
-            store.addDocuments(cluster.clusterId, databaseName, collectionName, sample as never);
+        if (known.length === 0 && sample) {
+            const sampled = client(cluster)
+                .then((sampleClient) =>
+                    sampleClient
+                        .getMongoClient()
+                        .db(databaseName)
+                        .collection(collectionName)
+                        .aggregate([{ $sample: { size: 10 } }], { maxTimeMS: SAMPLE_TIMEOUT_MS })
+                        .toArray(),
+                )
+                .then((documents) =>
+                    store.addDocuments(cluster.clusterId, databaseName, collectionName, documents as never),
+                );
+            await within(sampled, SAMPLE_TIMEOUT_MS);
             known = store.getKnownFields(cluster.clusterId, databaseName, collectionName);
         }
         return known.map((field) => `${field.path}: ${field.bsonType ?? field.type}`);
@@ -474,7 +573,7 @@ export function createWishPowers(): WishPowers {
             return (await vscode.commands.getCommands(true)).includes(CHAT_OPEN_COMMAND);
         },
 
-        async describeScope(scope: WishScope): Promise<WishPromptScope> {
+        async describeScope(scope: WishScope, wish?: string): Promise<WishPromptScope> {
             const cluster = scope.cluster;
             if (!cluster) {
                 return {};
@@ -486,19 +585,36 @@ export function createWishPowers(): WishPowers {
                 databaseNames?: string[];
                 collectionNames?: string[];
                 fields?: string[];
+                fieldsByCollection?: Record<string, string[]>;
             } = {
                 connectionName: cluster.clusterDisplayName,
                 databaseName: scope.databaseName,
                 collectionName: scope.collectionName,
             };
-            if (scope.databaseName) {
-                described.collectionNames = await collections(cluster, scope.databaseName).catch(() => []);
+            const databaseName = scope.databaseName;
+            if (databaseName) {
+                described.collectionNames = await collections(cluster, databaseName).catch(() => []);
                 const fieldsOf =
                     scope.collectionName ??
                     (described.collectionNames.length === 1 ? described.collectionNames[0] : undefined);
+                const others = collectionsToDescribe(wish, described.collectionNames, fieldsOf);
+                // Only Copilot's prompt reads fields, so without a wish the cache is enough.
+                const sample = wish !== undefined;
+                const [scopedFields, otherFields] = await Promise.all([
+                    fieldsOf ? fields(cluster, databaseName, fieldsOf, sample).catch((): string[] => []) : undefined,
+                    Promise.all(
+                        others.map((name) => fields(cluster, databaseName, name, sample).catch((): string[] => [])),
+                    ),
+                ]);
                 if (fieldsOf) {
                     described.collectionName = fieldsOf;
-                    described.fields = await fields(cluster, scope.databaseName, fieldsOf).catch(() => []);
+                    described.fields = scopedFields;
+                }
+                const found = others
+                    .map((name, index) => [name, otherFields[index]] as const)
+                    .filter(([, lines]) => lines.length > 0);
+                if (found.length > 0) {
+                    described.fieldsByCollection = Object.fromEntries(found);
                 }
             } else {
                 described.databaseNames = await databases(cluster, scope).catch(() => []);
@@ -514,16 +630,24 @@ export function createWishPowers(): WishPowers {
             let capped: boolean;
             if (spell.kind === 'find') {
                 const limit = Math.min(spell.limit ?? DEFAULT_FIND_LIMIT, MAX_RESULT_DOCUMENTS);
-                // A limit the wish asked for is its answer; only the well's own cap leaves rows out.
                 // A limit the wish asked for is its answer, unless the cap cut it down.
                 const ownCap = spell.limit === undefined || spell.limit > MAX_RESULT_DOCUMENTS;
-                const rows = await readClient.runFindQuery(databaseName, collectionName, {
-                    filter: spell.filter,
-                    project: spell.project,
-                    sort: spell.sort,
-                    skip: 0,
-                    limit: ownCap ? limit + 1 : limit,
-                });
+                const rows = await readClient
+                    .runFindQuery(
+                        databaseName,
+                        collectionName,
+                        {
+                            filter: toShellQuery(spell.filter),
+                            project: toShellQuery(spell.project),
+                            sort: toShellQuery(spell.sort),
+                            skip: 0,
+                            limit: ownCap ? limit + 1 : limit,
+                        },
+                        { maxTimeMS: READ_TIMEOUT_MS, signal },
+                    )
+                    .catch((error: unknown) => {
+                        throw readError(error);
+                    });
                 capped = rows.length > limit;
                 documents = rows.slice(0, limit);
             } else {
@@ -553,7 +677,10 @@ export function createWishPowers(): WishPowers {
                         maxTimeMS: READ_TIMEOUT_MS,
                         signal,
                     })
-                    .toArray();
+                    .toArray()
+                    .catch((error: unknown) => {
+                        throw readError(error);
+                    });
                 capped = rows.length > MAX_RESULT_DOCUMENTS;
                 documents = rows.slice(0, MAX_RESULT_DOCUMENTS);
             }
@@ -565,6 +692,7 @@ export function createWishPowers(): WishPowers {
                 documents,
                 truncated: shown < documents.length || summarized,
                 capped,
+                summarized,
             };
         },
 
@@ -598,16 +726,16 @@ export function createWishPowers(): WishPowers {
                     const { cluster, databaseName, collectionName } = requireNamespace(scope, spell);
                     // Only a limit the wish named; without one the view pages as it always does.
                     const limit = spell.kind === 'find' ? spell.limit : undefined;
+                    const filter = toShellQuery(spell.filter);
+                    const project = toShellQuery(spell.project);
+                    const sort = toShellQuery(spell.sort);
                     await openCollectionViewInternal(context, {
                         clusterId: cluster.clusterId,
                         clusterDisplayName: cluster.clusterDisplayName,
                         viewId: cluster.viewId,
                         databaseName,
                         collectionName,
-                        initialQuery:
-                            spell.filter || spell.project || spell.sort || limit
-                                ? { filter: spell.filter, project: spell.project, sort: spell.sort, limit }
-                                : undefined,
+                        initialQuery: filter || project || sort || limit ? { filter, project, sort, limit } : undefined,
                         initialTab: spell.kind === 'collectionView' && spell.tab ? TABS[spell.tab] : undefined,
                     });
                     return;
@@ -617,7 +745,7 @@ export function createWishPowers(): WishPowers {
                     await openPlayground(
                         context,
                         scope,
-                        `db.getCollection(${quoteJs(collection)}).aggregate(${spell.pipeline})`,
+                        `db.getCollection(${quoteJs(collection)}).aggregate(${playgroundPipeline(spell.pipeline)})`,
                         spell.database ?? scope.databaseName,
                     );
                     return;
@@ -662,11 +790,11 @@ export function createWishPowers(): WishPowers {
                 }
                 case 'tool': {
                     const node = await treeNode(context, scope, spell);
-                    await vscode.commands.executeCommand(TOOL_COMMANDS[spell.tool].commandId, node);
+                    startCommand(TOOL_COMMANDS[spell.tool].commandId, node);
                     return;
                 }
                 case 'command':
-                    await vscode.commands.executeCommand(spell.commandId, ...(spell.argument ? [spell.argument] : []));
+                    startCommand(spell.commandId, ...(spell.argument ? [spell.argument] : []));
                     return;
                 case 'agent':
                     await vscode.commands.executeCommand(CHAT_OPEN_COMMAND, { query: spell.prompt, mode: 'agent' });

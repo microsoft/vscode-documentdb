@@ -20,6 +20,14 @@ export type RouterContext = BaseRouterContext & {
     >;
 };
 
+/** `opened`: steps started in VS Code that the user finishes there; the well is not told how they end. */
+interface GrantReply {
+    readonly granted: boolean;
+    readonly opened: boolean;
+    readonly waiting: boolean;
+    readonly declined: boolean;
+}
+
 /** Focus re-checks Copilot every time, but lists the collections behind the examples at most this often. */
 const DESCRIBE_TTL_MS = 60_000;
 
@@ -76,9 +84,14 @@ export const wishingWellRouter = router({
 
     grant: publicProcedureWithTelemetry
         .input(z.object({ id: z.string().min(1) }))
-        .mutation(async ({ input, ctx }): Promise<{ granted: boolean; waiting: boolean; declined: boolean }> => {
+        .mutation(async ({ input, ctx }): Promise<GrantReply> => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
             const result = await myCtx.well.grant(input.id, myCtx.actionContext, 'webview');
-            return { granted: result === 'granted', waiting: result === 'waiting', declined: result === 'declined' };
+            return {
+                granted: result === 'granted',
+                opened: result === 'opened',
+                waiting: result === 'waiting',
+                declined: result === 'declined',
+            };
         }),
 });

@@ -144,10 +144,11 @@ describe('wishingWellRouter.status', () => {
 
 describe('wishingWellRouter.grant', () => {
     it.each([
-        ['granted', { granted: true, waiting: false, declined: false }],
-        ['waiting', { granted: false, waiting: true, declined: false }],
-        ['unknown', { granted: false, waiting: false, declined: false }],
-        ['declined', { granted: false, waiting: false, declined: true }],
+        ['granted', { granted: true, opened: false, waiting: false, declined: false }],
+        ['opened', { granted: false, opened: true, waiting: false, declined: false }],
+        ['waiting', { granted: false, opened: false, waiting: true, declined: false }],
+        ['unknown', { granted: false, opened: false, waiting: false, declined: false }],
+        ['declined', { granted: false, opened: false, waiting: false, declined: true }],
     ] as const)('maps %s', async (result, expected) => {
         const well = createWell();
         well.grant.mockResolvedValue(result);

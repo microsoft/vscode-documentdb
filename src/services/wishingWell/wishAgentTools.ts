@@ -36,18 +36,38 @@ function grantEffect(actionLabel: string, actionHint: string | undefined): strin
     return actionHint ? `${actionLabel} (${actionHint.replace(/\.$/, '')})` : actionLabel;
 }
 
-/** What an agent reads back: the card as text, plus the same facts as structured data. */
-export function outcomeForAgent(outcome: WishOutcome): McpToolResult {
+function noteLabel(interpretedBy: WishOutcome['interpretedBy']): string {
+    return interpretedBy === 'agent' ? 'Your spell said' : "The well's Copilot reader said";
+}
+
+/** What an agent reads back: the card as text, plus the same facts as structured data. `note` follows the message. */
+export function outcomeForAgent(outcome: WishOutcome, note?: string): McpToolResult {
     const lines = [outcome.title, outcome.message];
+    if (note) {
+        lines.push('', note);
+    }
+    if (outcome.query) {
+        // A refused read may never have reached the server.
+        lines.push('', outcome.status === 'refused' ? 'Query:' : 'Query that ran:', outcome.query);
+    }
+    if (outcome.readerNote) {
+        lines.push('', `${noteLabel(outcome.interpretedBy)}: ${outcome.readerNote}`);
+    }
     if (outcome.detail) {
         lines.push('', outcome.detail);
+    }
+    if (outcome.status === 'answered' && outcome.resultCount === 0) {
+        lines.push(
+            '',
+            'Zero rows can mean a wrong field name or value type: check a sample document before trusting it.',
+        );
     }
     // The message already says how many rows there are and how many fit; only the remedy is new.
     if (outcome.capped) {
         lines.push('', 'Reads return at most 50 rows: narrow the filter, or sort and ask for the rows you need.');
     }
     if (outcome.truncated) {
-        lines.push('', 'Long values or documents were summarized to fit: project fewer fields to see more.');
+        lines.push('', 'To see more, project fewer fields or narrow the filter.');
     }
     const grantable =
         outcome.actionLabel !== undefined && (outcome.status === 'answered' || outcome.status === 'proposed');
@@ -70,6 +90,8 @@ export function outcomeForAgent(outcome: WishOutcome): McpToolResult {
             kind: outcome.kind,
             title: outcome.title,
             message: outcome.message,
+            query: outcome.query,
+            readerNote: outcome.readerNote,
             detail: outcome.detail,
             resultCount: outcome.resultCount,
             truncated: outcome.truncated,
@@ -220,6 +242,14 @@ async function withScope(
 /** Points at the spell contract without repeating it on every mistake. */
 const SPELL_POINTER = `The spells and their fields are in the "spell" parameter description of ${WISH_TOOL_NAMES.makeWish}.`;
 
+/** For a plain wish the well's own reader could not read: the agent can say exactly what it wants instead. */
+async function plainWishNote(well: WishingWellService): Promise<string> {
+    const why = (await well.isCopilotAvailable())
+        ? "The well's Copilot reader could not turn this wish into a spell."
+        : 'This VS Code has no Copilot to read plain wishes, so the well only matched keywords.';
+    return `${why} Pass a "spell" to say exactly what to do. ${SPELL_POINTER}`;
+}
+
 /** Tells the user an outside agent did something in their window. */
 function announce(source: WishSource, title: string): void {
     if (source === 'mcp') {
@@ -259,9 +289,11 @@ export async function callWishTool(
                 }
                 spell = parsed.spell;
             }
-            return withScope('makeWish', scopeRequest(input), interactive, async (scope, context) =>
-                outcomeForAgent(await well.makeWish(input.wish, scope, context, source, signal, spell)),
-            );
+            return withScope('makeWish', scopeRequest(input), interactive, async (scope, context) => {
+                const outcome = await well.makeWish(input.wish, scope, context, source, signal, spell);
+                const unread = !spell && outcome.interpretedBy === 'well';
+                return outcomeForAgent(outcome, unread ? await plainWishNote(well) : undefined);
+            });
         }
 
         case WISH_TOOL_NAMES.feelingLucky: {
@@ -292,6 +324,12 @@ export async function callWishTool(
                         return {
                             text: `The user has not answered in VS Code yet. If they allow "${title}", it will open.`,
                             structured: { granted: false, result },
+                        };
+                    case 'opened':
+                        announce(source, title);
+                        return {
+                            text: `Opened in VS Code: ${title}. Any steps it opens are for the user to finish there, and the well is not told how they end, so do not report it as done.`,
+                            structured: { granted: true, completed: false, result },
                         };
                     case 'granted':
                         announce(source, title);

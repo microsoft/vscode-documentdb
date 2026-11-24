@@ -27,8 +27,12 @@ export interface WishOutcome {
     readonly kind: WishKind;
     readonly title: string;
     readonly message: string;
-    /** Code or document shown verbatim under the message. */
+    /** Code or document shown verbatim under the message. For a read that found rows, the rows. */
     readonly detail?: string;
+    /** The filter, sort and projection, or the pipeline, that a read ran. Shown next to its rows. */
+    readonly query?: string;
+    /** What the reader (Copilot or an agent) said about its own query, such as a condition it left out. */
+    readonly readerNote?: string;
     /** Present when the outcome needs one click to happen; the host keeps what that click does. */
     readonly actionLabel?: string;
     /** Says exactly what the action will do, so nothing happens behind the user's back. */

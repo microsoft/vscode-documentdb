@@ -10,6 +10,7 @@ import { type WishOutcome } from '../../webviews/documentdb/wishingWell/wishingW
 import {
     buildWishPrompt,
     cannotGrantSpell,
+    defaultMessage,
     fortunes,
     agentSpell as handToAgent,
     installCopilotSpell,
@@ -29,10 +30,11 @@ import { type WishScope } from './wishScope';
 export type WishSource = 'webview' | 'shell' | 'copilotTool' | 'mcp';
 
 /**
- * `declined`: the user said no in VS Code; the wish stays pending. `waiting`: the user has not
- * answered yet, or the caller gave up; it is still granted if the user allows it.
+ * `opened`: guided steps or a command started in VS Code; the user finishes them and the well is not
+ * told how they end. `declined`: the user said no in VS Code; the wish stays pending. `waiting`: the
+ * user has not answered yet, or the caller gave up; it is still granted if the user allows it.
  */
-export type GrantResult = 'granted' | 'unknown' | 'declined' | 'waiting';
+export type GrantResult = 'granted' | 'opened' | 'unknown' | 'declined' | 'waiting';
 
 /** What a pending grant will do, resolved by the host so a confirmation never relies on agent prose. */
 export interface GrantDescription {
@@ -104,15 +106,21 @@ export class WishingWellService {
         context.telemetry.properties.hasCluster = String(scope.cluster !== undefined);
         context.telemetry.measurements.wishLength = wish.length;
 
-        const promptScope = agentSpell ? {} : await this.powers.describeScope(scope).catch(() => ({}));
         const copilotAvailable = agentSpell ? false : await this.isCopilotAvailable();
+        // Only Copilot's prompt reads fields, so keyword mode samples no collection.
+        const promptScope = agentSpell
+            ? {}
+            : await this.powers.describeScope(scope, copilotAvailable ? wish : undefined).catch(() => ({}));
         if (!agentSpell && !copilotAvailable) {
             context.telemetry.properties.copilot = 'unavailable';
         }
         const fromCopilot = copilotAvailable
             ? await this.interpretWithCopilot(wish, promptScope, context, signal)
             : undefined;
-        let spell = agentSpell ?? fromCopilot ?? matchWishByKeyword(wish, promptScope);
+        let spell =
+            agentSpell ??
+            fromCopilot ??
+            matchWishByKeyword(wish, promptScope, copilotAvailable ? 'unreadable' : 'unavailable');
         let cannotGrant = false;
         if (!spell) {
             // Agent mode without Copilot would only end in a sign-in error, so say what the well can do.
@@ -271,8 +279,10 @@ export class WishingWellService {
                 this.done.delete(oldest);
             }
         }
-        context.telemetry.properties.granted = 'true';
-        return 'granted';
+        // Tools and commands return once they start; the user finishes them and the well never hears how.
+        const result = pending.spell.kind === 'tool' || pending.spell.kind === 'command' ? 'opened' : 'granted';
+        context.telemetry.properties.granted = result === 'granted' ? 'true' : result;
+        return result;
     }
 
     /** The user's answer, or `waiting` when the caller gives up or the user takes too long. */
@@ -335,16 +345,18 @@ export class WishingWellService {
     private async read(
         spell: Extract<Spell, { kind: 'find' | 'aggregate' }>,
         scope: WishScope,
-        outcome: WishOutcome,
+        planned: WishOutcome,
         signal?: AbortSignal,
     ): Promise<WishOutcome> {
+        // The receipt replaces the message, so what the reader said about its query is kept as a note.
+        const outcome = { ...planned, readerNote: readerNote(spell, planned) };
         try {
             const result = await this.powers.read(spell, scope, signal);
             return {
                 ...outcome,
                 status: 'answered',
                 message: readReceipt(spell, spell.collection ?? scope.collectionName ?? '', result),
-                detail: result.count === 0 ? outcome.detail : result.text,
+                detail: result.count === 0 ? undefined : result.text,
                 resultCount: result.count,
                 truncated: result.truncated,
                 capped: result.capped,
@@ -366,6 +378,8 @@ export class WishingWellService {
 
     private remember(spell: Spell, scope: WishScope, outcome: WishOutcome): WishOutcome {
         if (outcome.actionLabel) {
+            // What the grant opens: a read's query, not the rows it already showed.
+            const opens = spellToOutcome(spell, outcome.id, outcome.interpretedBy);
             this.keep(outcome.id, {
                 spell,
                 scope,
@@ -374,8 +388,7 @@ export class WishingWellService {
                     message: spell.message,
                     actionLabel: outcome.actionLabel,
                     actionHint: outcome.actionHint,
-                    // What the grant opens, not the rows a read already showed.
-                    detail: spellToOutcome(spell, outcome.id, outcome.interpretedBy).detail,
+                    detail: opens.detail ?? opens.query,
                 },
             });
         }
@@ -403,6 +416,24 @@ function documentHint(spell: Spell): { actionHint?: string } {
     return { actionHint: l10n.t('Opens {0} filtered to this document.', where) };
 }
 
+/** Lower case, without spaces or punctuation at the ends, to compare a message with the title or wish. */
+function bare(text: string | undefined): string {
+    return (text ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/^[\p{P}\s]+|[\p{P}\s]+$/gu, '');
+}
+
+/** What Copilot or an agent said about its own query, unless it only repeats the title, the wish or the default. */
+function readerNote(spell: Spell, outcome: WishOutcome): string | undefined {
+    const note = bare(spell.message);
+    if (outcome.interpretedBy === 'well' || !note) {
+        return undefined;
+    }
+    const echoes = [spell.title, outcome.wish, defaultMessage(spell)].some((text) => note === bare(text));
+    return echoes ? undefined : spell.message.trim();
+}
+
 /** How many whole rows a read's text shows. It is always a JSON array. */
 export function rowsShown(text: string): number | undefined {
     try {
@@ -416,13 +447,20 @@ export function rowsShown(text: string): number | undefined {
 /** "Found 3 documents in orders.", plus whether more exist and whether all of them fit. */
 function readReceipt(spell: Spell, collection: string, result: ReadResult): string {
     const receipt = countReceipt(spell, collection, result.count, result.capped);
-    const shown = result.truncated ? rowsShown(result.text) : undefined;
-    if (shown === undefined || shown >= result.count) {
+    if (!result.truncated) {
         return receipt;
     }
-    return shown === 1
-        ? l10n.t('{0} Only the first one is shown; the rest did not fit.', receipt)
-        : l10n.t('{0} Only the first {1} are shown; the rest did not fit.', receipt, shown);
+    const shown = rowsShown(result.text);
+    // Every row is there, so cutting to fit could only have summarized a document.
+    if (shown === undefined || shown >= result.count) {
+        return l10n.t('{0} Long values were shortened to fit.', receipt);
+    }
+    const cut =
+        shown === 1
+            ? l10n.t('{0} Only the first one is shown; the rest did not fit.', receipt)
+            : l10n.t('{0} Only the first {1} are shown; the rest did not fit.', receipt, shown);
+    // A summarized value must never be read as data, even when rows were cut too.
+    return result.summarized ? l10n.t('{0} Long values were shortened to fit.', cut) : cut;
 }
 
 function countReceipt(spell: Spell, collection: string, count: number, capped: boolean): string {
