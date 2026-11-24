@@ -33,11 +33,9 @@ export async function recoverBoundView(
 
     try {
         const assertCurrent = guardBoundViewOperation(binding);
-        const result = await runWithClient(
-            binding,
-            async () => ({ recovered: { text: l10n.t('Reconnected') } }),
-            { trigger },
-        );
+        const result = await runWithClient(binding, async () => ({ recovered: { text: l10n.t('Reconnected') } }), {
+            trigger,
+        });
         if ('unavailable' in result) {
             return describeUnavailableConnection(result.unavailable.reason);
         }

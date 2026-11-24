@@ -5,8 +5,8 @@
 
 import * as vscode from 'vscode';
 import { type ConnectionBinding } from '../../../documentdb/ClustersClient';
-import { type ConnectionUnavailableReason } from '../../../documentdb/ConnectionUnavailableError';
 import { registerConnectionSurface } from '../../../documentdb/connectionSurfaces';
+import { type ConnectionUnavailableReason } from '../../../documentdb/ConnectionUnavailableError';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { type ConnectionUnavailableMessage } from '../../_integration/connectionUnavailable';
@@ -50,8 +50,6 @@ export function openDocumentWebview(
     // (in response to a tRPC call), well after the handle is assigned below.
     const handle: { controller?: AppWebviewController<DocumentsViewWebviewConfigurationType> } = {};
 
-    let controller: AppWebviewController<DocumentsViewWebviewConfigurationType>;
-
     const postUnavailable = (reason: ConnectionUnavailableReason): void => {
         const message: ConnectionUnavailableMessage = {
             type: 'documentView.connectionUnavailable',
@@ -80,7 +78,7 @@ export function openDocumentWebview(
         },
     };
 
-    controller = openAppWebview({
+    const controller: AppWebviewController<DocumentsViewWebviewConfigurationType> = openAppWebview({
         title,
         webviewName: 'documentView',
         panelViewType: 'vscode-documentdb-document-view',

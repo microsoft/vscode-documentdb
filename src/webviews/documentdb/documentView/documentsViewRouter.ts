@@ -62,7 +62,9 @@ async function runDocumentViewOperation<T>(
 
 export const documentsViewRouter = router({
     getInfo: publicProcedureWithTelemetry.query(({ ctx }) => {
-        const { binding: _binding, ...info } = ctx as WithTelemetry<RouterContext>;
+        const info = Object.fromEntries(
+            Object.entries(ctx as WithTelemetry<RouterContext>).filter(([key]) => key !== 'binding'),
+        );
 
         return l10n.t('Info from the webview: ') + JSON.stringify(info);
     }),

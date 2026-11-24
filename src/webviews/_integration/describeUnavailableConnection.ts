@@ -7,9 +7,7 @@ import * as l10n from '@vscode/l10n';
 import { type ConnectionUnavailableReason } from '../../documentdb/ConnectionUnavailableError';
 import { type ConnectionUnavailableResponse } from './connectionUnavailable';
 
-export function describeUnavailableConnection(
-    reason: ConnectionUnavailableReason,
-): ConnectionUnavailableResponse {
+export function describeUnavailableConnection(reason: ConnectionUnavailableReason): ConnectionUnavailableResponse {
     switch (reason) {
         case 'signInRequired':
             return {
@@ -45,7 +43,9 @@ export function describeUnavailableConnection(
                 unavailable: {
                     reason,
                     title: l10n.t('Connection changed'),
-                    detail: l10n.t('This view is tied to the previous connection. Close it and reopen it from the tree.'),
+                    detail: l10n.t(
+                        'This view is tied to the previous connection. Close it and reopen it from the tree.',
+                    ),
                     action: 'close',
                 },
             };

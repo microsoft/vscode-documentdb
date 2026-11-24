@@ -650,9 +650,9 @@ export const QueryInsightsMain = (): JSX.Element => {
             }
             const result =
                 await trpcClient.mongoClusters.collectionView.queryInsights.executeQueryInsightsAction.mutate({
-                actionId,
-                payload,
-            });
+                    actionId,
+                    payload,
+                });
             if (!isOperationCurrent(lifecycleRevision)) {
                 return { success: false };
             }
@@ -673,9 +673,9 @@ export const QueryInsightsMain = (): JSX.Element => {
             }
             const result =
                 await trpcClient.mongoClusters.collectionView.queryInsights.executeQueryInsightsAction.mutate({
-                actionId,
-                payload,
-            });
+                    actionId,
+                    payload,
+                });
             if (!isOperationCurrent(lifecycleRevision)) {
                 return { success: false };
             }

@@ -23,8 +23,7 @@ vi.mock('../../extensionVariables', () => ({
     ext: {
         outputChannel: { info: vi.fn(), trace: vi.fn(), warn: vi.fn(), error: vi.fn(), show: vi.fn() },
         state: {
-            runWithTemporaryDescription: async (_id: string, _description: string, task: () => Promise<void>) =>
-                task(),
+            runWithTemporaryDescription: async (_id: string, _description: string, task: () => Promise<void>) => task(),
             notifyChildrenChanged: vi.fn(),
         },
     },
@@ -61,10 +60,7 @@ it('does not import using a different identity selected while the file picker wa
         valuesToMask: [],
     } as unknown as IActionContext;
     vi.mocked(vscode.window.withProgress).mockImplementationOnce((_options, task) =>
-        task(
-            { report: vi.fn() },
-            { isCancellationRequested: false, onCancellationRequested: vi.fn() },
-        ),
+        task({ report: vi.fn() }, { isCancellationRequested: false, onCancellationRequested: vi.fn() }),
     );
 
     await expect(importDocuments(context, source, undefined, { binding })).rejects.toMatchObject({

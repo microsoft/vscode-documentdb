@@ -86,7 +86,12 @@ it('returns structured unavailability from a Collection View query', async (): P
             executionIntent: 'initial',
         }),
     ).resolves.toEqual({
-        unavailable: { reason: 'credentialsRejected', title: 'Connection unavailable', detail: 'Close this view.', action: 'close' },
+        unavailable: {
+            reason: 'credentialsRejected',
+            title: 'Connection unavailable',
+            detail: 'Close this view.',
+            action: 'close',
+        },
     });
     expect(mocks.runFindQueryWithCache).toHaveBeenCalledOnce();
 });

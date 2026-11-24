@@ -3,7 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling, type IActionContext, UserCancelledError } from '@microsoft/vscode-azext-utils';
+import {
+    callWithTelemetryAndErrorHandling,
+    UserCancelledError,
+    type IActionContext,
+} from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
@@ -408,7 +412,8 @@ export function openClusterDashboardWebview(
         clusterId: initialData.clusterId,
         binding,
         describeUnavailable: describeUnavailableConnection,
-        recoverUnavailable: (request) => recoverBoundView(binding, 'clusterDashboard', () => controller.dispose(), request),
+        recoverUnavailable: (request) =>
+            recoverBoundView(binding, 'clusterDashboard', () => controller.dispose(), request),
         clusterDisplayName: initialData.clusterDisplayName,
         viewId: initialData.viewId,
         dashboardSessionId: initialData.dashboardSessionId,

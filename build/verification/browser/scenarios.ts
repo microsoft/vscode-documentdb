@@ -2600,8 +2600,17 @@ const collectionQueryPath = 'mongoClusters.collectionView.runFindQuery';
 const collectionTablePath = 'mongoClusters.collectionView.getCurrentPageAsTable';
 const collectionFilterName = 'Filter: Enter the DocumentDB query filter';
 const collectionFilterSelector = `.monaco-editor:has([aria-label="${collectionFilterName}"]) .view-lines`;
-const collectionFilter = { action: 'replaceText', role: 'textbox', name: collectionFilterName, value: '{"name":"Alpha"}' } as const;
-const runCollectionQuery = { action: 'click', role: 'button', name: 'Find Query: execute the current editor values' } as const;
+const collectionFilter = {
+    action: 'replaceText',
+    role: 'textbox',
+    name: collectionFilterName,
+    value: '{"name":"Alpha"}',
+} as const;
+const runCollectionQuery = {
+    action: 'click',
+    role: 'button',
+    name: 'Find Query: execute the current editor values',
+} as const;
 const collectionSignInRequired = {
     reason: 'signInRequired',
     title: 'Sign-in required',
@@ -2714,7 +2723,10 @@ const collectionViewScenarios = {
             ...collectionViewBase.rpc,
             [collectionTablePath]: {
                 ...fixtures.collectionView.rpc[collectionTablePath],
-                afterFirst: { results: [{ path: [], headers: ['_id', 'name', 'quantity'], data: [] }], holdReply: true },
+                afterFirst: {
+                    results: [{ path: [], headers: ['_id', 'name', 'quantity'], data: [] }],
+                    holdReply: true,
+                },
             },
             'common.reportEvent': { type: 'mutation', results: [], undefinedResult: true },
         },
@@ -2738,7 +2750,11 @@ const collectionViewScenarios = {
                         message: { type: 'collectionView.connectionUnavailable', unavailable: disconnectedDocument },
                     },
                     { action: 'waitFor', name: 'the disconnect overlay', selector: '.disconnectedOverlay' },
-                    { action: 'releaseReply', name: 'deliver the late collection page reply', path: collectionTablePath },
+                    {
+                        action: 'releaseReply',
+                        name: 'deliver the late collection page reply',
+                        path: collectionTablePath,
+                    },
                 ],
             },
             {

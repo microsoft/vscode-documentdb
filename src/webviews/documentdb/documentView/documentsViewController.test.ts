@@ -7,11 +7,12 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { ConnectionUnavailableError } from '../../../documentdb/ConnectionUnavailableError';
 import { getConnectionSurfaces } from '../../../documentdb/connectionSurfaces';
-import { type OpenAppWebviewOptions, type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
 import {
-    type DocumentsViewWebviewConfigurationType,
-    openDocumentWebview,
-} from './documentsViewController';
+    type AppWebviewController,
+    openAppWebview,
+    type OpenAppWebviewOptions,
+} from '../../_integration/openAppWebview';
+import { type DocumentsViewWebviewConfigurationType, openDocumentWebview } from './documentsViewController';
 import { type RouterContext } from './documentsViewRouter';
 
 const mocks = vi.hoisted(() => ({
@@ -60,35 +61,33 @@ beforeEach((): void => {
     mocks.getBinding.mockReturnValue(originalBinding);
     mocks.getLatchReason.mockReturnValue(undefined);
     vi.spyOn(vscode.commands, 'executeCommand').mockImplementation(mocks.executeCommand);
-    vi.mocked(openAppWebview).mockImplementation(
-        <T>(options: OpenAppWebviewOptions<T>): AppWebviewController<T> => {
-            const disposeListeners = new Set<() => void>();
-            let disposed = false;
-            const dispose = (): void => {
-                if (disposed) {
-                    return;
-                }
-                disposed = true;
-                for (const listener of disposeListeners) {
-                    listener();
-                }
-            };
-            const context = options.context as RouterContext;
-            opened.push({ dispose, context });
-            return {
-                panel: {
-                    title: options.title,
-                    webview: { postMessage: mocks.postMessage },
-                },
-                isDisposed: false,
-                onDisposed: (listener: () => void) => {
-                    disposeListeners.add(listener);
-                    return { dispose: () => disposeListeners.delete(listener) } as vscode.Disposable;
-                },
-                dispose,
-            } as unknown as AppWebviewController<T>;
-        },
-    );
+    vi.mocked(openAppWebview).mockImplementation(<T>(options: OpenAppWebviewOptions<T>): AppWebviewController<T> => {
+        const disposeListeners = new Set<() => void>();
+        let disposed = false;
+        const dispose = (): void => {
+            if (disposed) {
+                return;
+            }
+            disposed = true;
+            for (const listener of disposeListeners) {
+                listener();
+            }
+        };
+        const context = options.context as RouterContext;
+        opened.push({ dispose, context });
+        return {
+            panel: {
+                title: options.title,
+                webview: { postMessage: mocks.postMessage },
+            },
+            isDisposed: false,
+            onDisposed: (listener: () => void) => {
+                disposeListeners.add(listener);
+                return { dispose: () => disposeListeners.delete(listener) } as vscode.Disposable;
+            },
+            dispose,
+        } as unknown as AppWebviewController<T>;
+    });
 });
 
 it('registers the panel, sends typed disable payloads and unregisters on dispose', (): void => {
@@ -116,9 +115,9 @@ it('resumes a same-identity binding without replaying document operations', asyn
     const context = openPanel();
     mocks.resolveBoundClient.mockResolvedValue({ binding: { ...originalBinding, generation: 2 } });
 
-    await expect(
-        context.recoverUnavailable({ action: 'retry' }),
-    ).resolves.toEqual({ recovered: { text: 'Reconnected' } });
+    await expect(context.recoverUnavailable({ action: 'retry' })).resolves.toEqual({
+        recovered: { text: 'Reconnected' },
+    });
     expect(mocks.unlatch).not.toHaveBeenCalled();
     expect(mocks.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(originalBinding, {
         trigger: 'documentView',
@@ -133,9 +132,7 @@ it('keeps the original binding after an identity change', async (): Promise<void
     const described = context.describeUnavailable('identityChanged');
     expect(described.unavailable.action).toBe('close');
 
-    await expect(
-        context.recoverUnavailable({ action: 'retry' }),
-    ).resolves.toEqual(described);
+    await expect(context.recoverUnavailable({ action: 'retry' })).resolves.toEqual(described);
     expect(mocks.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(originalBinding, { trigger: 'documentView' });
     expect(context.binding).toBe(originalBinding);
 });
@@ -146,9 +143,7 @@ it('does not prompt on Retry and closes only on Close view', async (): Promise<v
     expect(described.unavailable.action).toBe('retry');
     mocks.resolveBoundClient.mockRejectedValueOnce(new ConnectionUnavailableError('signInRequired'));
 
-    await expect(context.recoverUnavailable({ action: 'retry' })).resolves.toEqual(
-        described,
-    );
+    await expect(context.recoverUnavailable({ action: 'retry' })).resolves.toEqual(described);
     expect(mocks.executeCommand).not.toHaveBeenCalled();
 
     expect(getConnectionSurfaces(clusterId)).toHaveLength(1);

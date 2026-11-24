@@ -417,7 +417,12 @@ export class ClusterSession {
             path: path,
             headers:
                 this._databaseName && this._collectionName
-                    ? store.getPropertyNamesAtLevel(this.binding.clusterId, this._databaseName, this._collectionName, path)
+                    ? store.getPropertyNamesAtLevel(
+                          this.binding.clusterId,
+                          this._databaseName,
+                          this._collectionName,
+                          path,
+                      )
                     : [],
             data: getDataAtPath(this._currentRawDocuments, path),
         };
@@ -433,7 +438,11 @@ export class ClusterSession {
         if (!this._databaseName || !this._collectionName) {
             return [];
         }
-        return SchemaStore.getInstance().getKnownFields(this.binding.clusterId, this._databaseName, this._collectionName);
+        return SchemaStore.getInstance().getKnownFields(
+            this.binding.clusterId,
+            this._databaseName,
+            this._collectionName,
+        );
     }
 
     // ============================================================================

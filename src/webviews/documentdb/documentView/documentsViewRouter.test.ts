@@ -69,7 +69,12 @@ describe('Document View bound operations', () => {
     beforeEach(() => {
         vi.resetAllMocks();
         describeUnavailable.mockImplementation((reason: ConnectionUnavailableError['reason']) => ({
-            unavailable: { reason, title: 'Connection unavailable', detail: 'Close this view.', action: 'close' as const },
+            unavailable: {
+                reason,
+                title: 'Connection unavailable',
+                detail: 'Close this view.',
+                action: 'close' as const,
+            },
         }));
         mocks.getBinding.mockReturnValue(newerBinding);
         mocks.getEpoch.mockReturnValue(3);
@@ -118,7 +123,12 @@ describe('Document View bound operations', () => {
         const unavailable = new ConnectionUnavailableError('identityChanged');
         mocks.resolveBoundClient.mockRejectedValueOnce(unavailable);
         await expect(createCaller().saveDocument(input)).resolves.toEqual({
-            unavailable: { reason: 'identityChanged', title: 'Connection unavailable', detail: 'Close this view.', action: 'close' },
+            unavailable: {
+                reason: 'identityChanged',
+                title: 'Connection unavailable',
+                detail: 'Close this view.',
+                action: 'close',
+            },
         });
         expect(upsertDocument).not.toHaveBeenCalled();
     });
@@ -129,7 +139,12 @@ describe('Document View bound operations', () => {
         mocks.reportFailure.mockReturnValueOnce('credentialsRejected');
 
         await expect(createCaller().saveDocument(input)).resolves.toEqual({
-            unavailable: { reason: 'credentialsRejected', title: 'Connection unavailable', detail: 'Close this view.', action: 'close' },
+            unavailable: {
+                reason: 'credentialsRejected',
+                title: 'Connection unavailable',
+                detail: 'Close this view.',
+                action: 'close',
+            },
         });
         expect(mocks.reportFailure).toHaveBeenCalledExactlyOnceWith(newerBinding, failure);
         expect(upsertDocument).toHaveBeenCalledOnce();
@@ -141,17 +156,25 @@ describe('Document View bound operations', () => {
         mocks.reportFailure.mockReturnValueOnce('signInRequired');
 
         await expect(createCaller().getDocumentById(serializedId)).resolves.toEqual({
-            unavailable: { reason: 'signInRequired', title: 'Connection unavailable', detail: 'Close this view.', action: 'close' },
+            unavailable: {
+                reason: 'signInRequired',
+                title: 'Connection unavailable',
+                detail: 'Close this view.',
+                action: 'close',
+            },
         });
     });
 
     it('returns save unavailability before attempting unrelated document validation', async (): Promise<void> => {
         mocks.resolveBoundClient.mockRejectedValueOnce(new ConnectionUnavailableError('userDisconnected'));
 
-        await expect(
-            createCaller().saveDocument({ documentContent: '{"invalid"' }),
-        ).resolves.toEqual({
-            unavailable: { reason: 'userDisconnected', title: 'Connection unavailable', detail: 'Close this view.', action: 'close' },
+        await expect(createCaller().saveDocument({ documentContent: '{"invalid"' })).resolves.toEqual({
+            unavailable: {
+                reason: 'userDisconnected',
+                title: 'Connection unavailable',
+                detail: 'Close this view.',
+                action: 'close',
+            },
         });
         expect(upsertDocument).not.toHaveBeenCalled();
     });
@@ -160,14 +183,14 @@ describe('Document View bound operations', () => {
         const preallocatedId = '{"$oid":"000000000000000000000099"}';
         upsertDocument.mockResolvedValue({ documentId: id, document });
 
-        await createCaller().saveDocument({ documentContent: EJSON.stringify({ field: 'value' }), documentId: preallocatedId });
+        await createCaller().saveDocument({
+            documentContent: EJSON.stringify({ field: 'value' }),
+            documentId: preallocatedId,
+        });
 
-        expect(upsertDocument).toHaveBeenCalledExactlyOnceWith(
-            'database',
-            'collection',
-            preallocatedId,
-            { field: 'value' },
-        );
+        expect(upsertDocument).toHaveBeenCalledExactlyOnceWith('database', 'collection', preallocatedId, {
+            field: 'value',
+        });
     });
 
     it('does not turn a nonterminal write failure into unavailability', async () => {

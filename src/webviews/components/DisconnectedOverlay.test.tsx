@@ -56,16 +56,21 @@ it('dismisses without closing, and only closes a dirty view after confirmation',
             action: 'close',
         });
         const dialog = (): HTMLElement | null => document.querySelector('.disconnectedOverlay[aria-modal="true"]');
-        const buttons = (): HTMLButtonElement[] =>
-            [...(dialog()?.querySelectorAll<HTMLButtonElement>('.disconnectedOverlayActions button') ?? [])];
+        const buttons = (): HTMLButtonElement[] => [
+            ...(dialog()?.querySelectorAll<HTMLButtonElement>('.disconnectedOverlayActions button') ?? []),
+        ];
         expect(host.querySelector('[inert] textarea')).toBe(draft);
         expect(draft?.value).toBe('unsaved edit');
         expect(dialog()?.getAttribute('role')).toBe('dialog');
         expect(buttons().map((button) => button.textContent)).toEqual(['Close view']);
-        await act(async () => buttons()[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+        await act(async () =>
+            buttons()[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })),
+        );
         expect(onAction).not.toHaveBeenCalled();
         expect(dialog()).not.toBeNull();
-        await act(async () => dialog()?.querySelector<HTMLButtonElement>('button[aria-label^="Dismiss dialog"]')?.click());
+        await act(async () =>
+            dialog()?.querySelector<HTMLButtonElement>('button[aria-label^="Dismiss dialog"]')?.click(),
+        );
         expect(onDismiss).toHaveBeenCalledOnce();
         expect(confirm).not.toHaveBeenCalled();
         expect(onAction).not.toHaveBeenCalled();
@@ -76,7 +81,10 @@ it('dismisses without closing, and only closes a dirty view after confirmation',
         await render({ ...unavailable, action: 'close' });
         await act(async () => buttons()[0]?.click());
         expect(confirm).toHaveBeenCalledWith(
-            expect.objectContaining({ detail: 'Closing this view discards unsaved changes.', confirmLabel: 'Close view' }),
+            expect.objectContaining({
+                detail: 'Closing this view discards unsaved changes.',
+                confirmLabel: 'Close view',
+            }),
         );
         expect(onAction).not.toHaveBeenCalled();
         expect(dialog()).not.toBeNull();

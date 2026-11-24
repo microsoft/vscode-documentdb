@@ -29,13 +29,13 @@ import { ManagedIdentityAuthHandler } from './auth/ManagedIdentityAuthHandler';
 import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
 import { NativeAuthHandler } from './auth/NativeAuthHandler';
 import { NoAuthHandler } from './auth/NoAuthHandler';
-import { ClusterSession } from './ClusterSession';
 import {
     addEstablishedConnectionContext,
     ClustersClient,
     getIndexExclusionReason,
     type IndexItemModel,
 } from './ClustersClient';
+import { ClusterSession } from './ClusterSession';
 import { computeConnectionFingerprint } from './connectionFingerprint';
 import { ConnectionUnavailableError } from './ConnectionUnavailableError';
 import { CredentialCache } from './CredentialCache';

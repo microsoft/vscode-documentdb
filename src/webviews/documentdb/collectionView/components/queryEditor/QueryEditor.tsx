@@ -494,10 +494,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
             });
 
             // Check if this request was aborted while waiting for response
-            if (
-                abortController.signal.aborted ||
-                !currentContext.lifecycle.isOperationCurrent(lifecycleRevision)
-            ) {
+            if (abortController.signal.aborted || !currentContext.lifecycle.isOperationCurrent(lifecycleRevision)) {
                 return; // Ignore the response if we aborted
             }
 
@@ -520,10 +517,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
             setAiPromptValue('');
         } catch (error) {
             // Check if this request was aborted
-            if (
-                abortController.signal.aborted ||
-                !currentContext.lifecycle.isOperationCurrent(lifecycleRevision)
-            ) {
+            if (abortController.signal.aborted || !currentContext.lifecycle.isOperationCurrent(lifecycleRevision)) {
                 return; // Ignore errors from aborted requests
             }
 

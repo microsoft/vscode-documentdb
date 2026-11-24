@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type * as azextUtils from '@microsoft/vscode-azext-utils';
 import { describe, expect, it, vi, type Mock } from 'vitest';
 
 vi.mock('@vscode/l10n', () => ({
@@ -10,7 +11,7 @@ vi.mock('@vscode/l10n', () => ({
 }));
 
 vi.mock('vscode', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('vscode')>()),
+    ...(await importOriginal<typeof vscode>()),
     ViewColumn: { One: 1 },
     Uri: { joinPath: vi.fn((base: unknown, ...parts: string[]) => ({ base, parts })) },
     commands: { registerCommand: vi.fn(), executeCommand: vi.fn() },
@@ -18,7 +19,7 @@ vi.mock('vscode', async (importOriginal) => ({
 }));
 
 vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@microsoft/vscode-azext-utils')>()),
+    ...(await importOriginal<typeof azextUtils>()),
     callWithTelemetryAndErrorHandling: vi.fn(async (_eventId: string, callback: (context: unknown) => Promise<void>) =>
         callback({ telemetry: { properties: {}, measurements: {} }, errorHandling: {} }),
     ),
@@ -55,8 +56,8 @@ vi.mock('./resolveNamespaceNode', () => ({
 import * as vscode from 'vscode';
 import { openCollectionViewInternal } from '../../../commands/openCollectionView/openCollectionView';
 import { ClustersClient } from '../../../documentdb/ClustersClient';
-import { ConnectionUnavailableError } from '../../../documentdb/ConnectionUnavailableError';
 import { getConnectionSurfaces } from '../../../documentdb/connectionSurfaces';
+import { ConnectionUnavailableError } from '../../../documentdb/ConnectionUnavailableError';
 import { CredentialCache } from '../../../documentdb/CredentialCache';
 import { openAppWebview } from '../../_integration/openAppWebview';
 import { CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS } from './clusterDashboardContextMenu';
@@ -216,12 +217,14 @@ describe('cluster dashboard unavailable recovery', () => {
         } as never);
 
         context.describeUnavailable('userDisconnected');
-        await expect(
-            context.recoverUnavailable({ action: 'retry' }),
-        ).resolves.toEqual({ recovered: { text: 'Reconnected' } });
+        await expect(context.recoverUnavailable({ action: 'retry' })).resolves.toEqual({
+            recovered: { text: 'Reconnected' },
+        });
         expect(context.binding).toEqual(binding);
         expect(ClustersClient.unlatch).not.toHaveBeenCalled();
-        expect(ClustersClient.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(binding, { trigger: 'clusterDashboard' });
+        expect(ClustersClient.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(binding, {
+            trigger: 'clusterDashboard',
+        });
         expect(controller.panel.webview.postMessage).not.toHaveBeenCalled();
         controller.dispose();
     });
@@ -232,9 +235,9 @@ describe('cluster dashboard unavailable recovery', () => {
             context.describeUnavailable('userDisconnected');
             vi.mocked(ClustersClient.getLatchReason).mockReturnValue(latchReason);
 
-            await expect(
-                context.recoverUnavailable({ action: 'retry' }),
-            ).resolves.toMatchObject({ unavailable: { reason: latchReason, action: latchReason === 'connectionRemoved' ? 'close' : 'retry' } });
+            await expect(context.recoverUnavailable({ action: 'retry' })).resolves.toMatchObject({
+                unavailable: { reason: latchReason, action: latchReason === 'connectionRemoved' ? 'close' : 'retry' },
+            });
             expect(ClustersClient.unlatch).not.toHaveBeenCalled();
             expect(ClustersClient.resolveBoundClient).not.toHaveBeenCalled();
             controller.dispose();
@@ -251,28 +254,28 @@ describe('cluster dashboard unavailable recovery', () => {
         });
         context.describeUnavailable('userDisconnected');
 
-        await expect(
-            context.recoverUnavailable({ action: 'retry' }),
-        ).resolves.toMatchObject({ unavailable: { reason: 'connectionRemoved', action: 'close' } });
+        await expect(context.recoverUnavailable({ action: 'retry' })).resolves.toMatchObject({
+            unavailable: { reason: 'connectionRemoved', action: 'close' },
+        });
         expect(context.binding).toEqual(binding);
         controller.dispose();
     });
 
     it('keeps the overlay if sign-in is needed or the connection identity changes', async () => {
         const { controller, context } = openRecoveryContext();
-        vi.mocked(ClustersClient.resolveBoundClient).mockRejectedValueOnce(new ConnectionUnavailableError('signInRequired'));
+        vi.mocked(ClustersClient.resolveBoundClient).mockRejectedValueOnce(
+            new ConnectionUnavailableError('signInRequired'),
+        );
 
         const described = context.describeUnavailable('signInRequired');
-        await expect(
-            context.recoverUnavailable({ action: 'retry' }),
-        ).resolves.toEqual(described);
+        await expect(context.recoverUnavailable({ action: 'retry' })).resolves.toEqual(described);
 
         const replacement = { ...binding, fingerprint: 'identity-b', generation: 2 };
         vi.mocked(ClustersClient.getBinding).mockReturnValue(replacement);
         vi.mocked(ClustersClient.resolveBoundClient).mockResolvedValue({ binding: replacement } as never);
-        await expect(
-            context.recoverUnavailable({ action: 'retry' }),
-        ).resolves.toMatchObject({ unavailable: { reason: 'identityChanged', action: 'close' } });
+        await expect(context.recoverUnavailable({ action: 'retry' })).resolves.toMatchObject({
+            unavailable: { reason: 'identityChanged', action: 'close' },
+        });
         expect(context.binding).toEqual(binding);
         expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
         controller.dispose();

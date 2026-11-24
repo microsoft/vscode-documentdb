@@ -6,10 +6,7 @@
 import { ClustersClient, type ConnectionBinding } from './ClustersClient';
 import { ConnectionUnavailableError } from './ConnectionUnavailableError';
 
-export async function resolveTransferClient(
-    clusterId: string,
-    binding?: ConnectionBinding,
-): Promise<ClustersClient> {
+export async function resolveTransferClient(clusterId: string, binding?: ConnectionBinding): Promise<ClustersClient> {
     if (!binding) {
         return ClustersClient.getClient(clusterId);
     }

@@ -20,6 +20,10 @@ import {
 } from '../../../commands/llmEnhancedCommands/queryGenerationCommands';
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
 
+import {
+    ConnectionUnavailableError,
+    type ConnectionUnavailableReason,
+} from '../../../documentdb/ConnectionUnavailableError';
 import { parseFindExpression } from '../../../documentdb/playground/parseFindExpression';
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
@@ -42,7 +46,6 @@ import {
     type ConnectionUnavailableResponse,
 } from '../../_integration/connectionUnavailable';
 import { queryInsightsRouter } from './queryInsights/queryInsightsRouter';
-import { ConnectionUnavailableError, type ConnectionUnavailableReason } from '../../../documentdb/ConnectionUnavailableError';
 
 export type RouterContext = BaseRouterContext & {
     sessionId: string;
@@ -632,19 +635,19 @@ export const collectionsViewRouter = router({
                 await session.getClient();
                 session.assertCurrent(epoch, myCtx.signal);
 
-            // ── Telemetry: activation source for cross-feature analytics ──
-            myCtx.actionContext.telemetry.properties.activationSource = 'collectionViewToolbar';
-            myCtx.actionContext.telemetry.properties.hasFilter =
-                input.filter && input.filter.replace(/\s/g, '') !== '{}' ? 'true' : 'false';
+                // ── Telemetry: activation source for cross-feature analytics ──
+                myCtx.actionContext.telemetry.properties.activationSource = 'collectionViewToolbar';
+                myCtx.actionContext.telemetry.properties.hasFilter =
+                    input.filter && input.filter.replace(/\s/g, '') !== '{}' ? 'true' : 'false';
 
-            const query = buildFindExpression(
-                myCtx.collectionName,
-                input.filter,
-                input.project,
-                input.sort,
-                input.skip,
-                input.limit,
-            );
+                const query = buildFindExpression(
+                    myCtx.collectionName,
+                    input.filter,
+                    input.project,
+                    input.sort,
+                    input.skip,
+                    input.limit,
+                );
 
                 await vscode.commands.executeCommand('vscode-documentdb.command.playground.new.withContent', {
                     clusterId: myCtx.clusterId,
@@ -674,17 +677,17 @@ export const collectionsViewRouter = router({
                 await session.getClient();
                 session.assertCurrent(epoch, myCtx.signal);
 
-            // ── Telemetry: activation source for cross-feature analytics ──
-            myCtx.actionContext.telemetry.properties.activationSource = 'collectionViewToolbar';
+                // ── Telemetry: activation source for cross-feature analytics ──
+                myCtx.actionContext.telemetry.properties.activationSource = 'collectionViewToolbar';
 
-            const query = buildFindExpression(
-                myCtx.collectionName,
-                input.filter,
-                input.project,
-                input.sort,
-                input.skip,
-                input.limit,
-            );
+                const query = buildFindExpression(
+                    myCtx.collectionName,
+                    input.filter,
+                    input.project,
+                    input.sort,
+                    input.skip,
+                    input.limit,
+                );
 
                 await vscode.commands.executeCommand(ShellCommandIds.openWithInput, {
                     clusterId: myCtx.clusterId,

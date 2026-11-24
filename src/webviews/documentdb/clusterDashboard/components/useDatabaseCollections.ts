@@ -103,12 +103,15 @@ export function useDatabaseCollections(
         };
     }, [databaseName, isOperationCurrent, key, onUnavailable, request.source, startOperation, trpcClient]);
 
-    const reload = useCallback((source: 'background' | 'manual' = 'background'): void => {
-        if (isSubmissionBlocked()) {
-            return;
-        }
-        setRequest((current) => ({ attempt: current.attempt + 1, source }));
-    }, [isSubmissionBlocked]);
+    const reload = useCallback(
+        (source: 'background' | 'manual' = 'background'): void => {
+            if (isSubmissionBlocked()) {
+                return;
+            }
+            setRequest((current) => ({ attempt: current.attempt + 1, source }));
+        },
+        [isSubmissionBlocked],
+    );
 
     const isCurrent = entry !== null && entry.key === key;
     const isSameDatabase = entry !== null && entry.databaseName === databaseName;
@@ -120,8 +123,7 @@ export function useDatabaseCollections(
         lastUpdatedAt: isSameDatabase ? entry.lastUpdatedAt : undefined,
         isLoading,
         isTableLoading:
-            databaseName !== null &&
-            ((!isSameDatabase && !wasAbandoned) || (isLoading && request.source === 'manual')),
+            databaseName !== null && ((!isSameDatabase && !wasAbandoned) || (isLoading && request.source === 'manual')),
         error: isCurrent ? entry.error : null,
         reload,
     };

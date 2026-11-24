@@ -38,15 +38,15 @@ import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 
 import { type ClusterHealthSample, type ClusterStorageStats } from '../../../documentdb/utils/getClusterHealth';
-import { type ViewFirstDataOutcome } from '../../_integration/observability/viewLoadTelemetry';
 import {
+    isConnectionUnavailableMessage,
+    isConnectionUnavailableResponse,
     type ConnectionRecoveryAction,
     type ConnectionRecoveryResponse,
     type ConnectionUnavailableDetails,
     type ConnectionUnavailableResponse,
-    isConnectionUnavailableMessage,
-    isConnectionUnavailableResponse,
 } from '../../_integration/connectionUnavailable';
+import { type ViewFirstDataOutcome } from '../../_integration/observability/viewLoadTelemetry';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { useViewLoadTelemetry } from '../../_integration/useViewLoadTelemetry';
 import { Announcer } from '../../components/accessibility';
@@ -136,9 +136,7 @@ export const ClusterDashboard = (): JSX.Element => {
     }, []);
     const isOperationCurrent = useCallback(
         (revision: number): boolean =>
-            !disposedRef.current &&
-            revision === operationRevisionRef.current &&
-            unavailableRef.current === undefined,
+            !disposedRef.current && revision === operationRevisionRef.current && unavailableRef.current === undefined,
         [],
     );
     const startOperation = useCallback((revealUnavailable = false): number | undefined => {
@@ -791,190 +789,187 @@ export const ClusterDashboard = (): JSX.Element => {
             recovering={recovering}
         >
             <div className="clusterDashboard">
-            {isBusy && <ProgressBar thickness="large" shape="square" className="progressBar" aria-hidden={true} />}
+                {isBusy && <ProgressBar thickness="large" shape="square" className="progressBar" aria-hidden={true} />}
 
-            {/*
-             * The connection Badge changes silently, so the two transitions worth hearing get
-             * their own live regions. `connecting` is deliberately not announced: it is the
-             * mount state and also the gap after a single absorbed failure, which the badge
-             * itself treats as not worth reporting.
-             */}
-            <Announcer when={connectionState === 'connected'} message={l10n.t('Connected to the cluster.')} />
-            <Announcer
-                when={connectionState === 'disconnected'}
-                message={l10n.t('Lost connection to the cluster.')}
-                politeness="assertive"
-            />
-            {/* Everything else is narrated imperatively, from the callback that caused it. */}
-            <Announcer key={live.n} when={live.text.length > 0} message={live.text} politeness={live.politeness} />
-
-            {/*
-             * The shaded band is the Collection View's header row: it carries the view's
-             * identity and nothing else, separated from the work below by a single shade and
-             * rule rather than by whitespace.
-             */}
-            <div className="dashboardHeaderBand">
-                <DashboardHeader
-                    clusterDisplayName={clusterInfo?.clusterDisplayName ?? configuration.clusterDisplayName}
-                    clusterInfo={clusterInfo}
-                    latestSample={latestSample}
-                    connectionState={connectionState}
-                    azure={configuration.azure}
-                    onShowRawDiagnostics={() => void exportDiagnostics()}
-                    isExportingDiagnostics={isExporting}
-                />
-            </div>
-
-            {/*
-             * Actions sit below the band, not inside it — the Collection View puts its
-             * `.primaryActionBar` in the panel, under the shaded tab strip. It is also the
-             * row with space to grow: more tools will land here.
-             */}
-            <Overflow padding={40} hasHiddenItems>
-                <Toolbar
-                    size="small"
-                    className="primaryActionBar actionBarToolbar dashboardToolbar"
-                    aria-label={l10n.t('Cluster actions')}
-                >
-                    <OverflowItem id="shell" priority={2}>
-                        <Tooltip
-                            content={l10n.t('Open an interactive shell against this cluster')}
-                            relationship="description"
-                            withArrow
-                        >
-                            <ToolbarButton icon={<WindowConsoleRegular />} onClick={() => void openShell()}>
-                                {l10n.t('Open Shell')}
-                            </ToolbarButton>
-                        </Tooltip>
-                    </OverflowItem>
-                    <OverflowItem id="copy" priority={1}>
-                        <Tooltip
-                            content={l10n.t('Copy this cluster’s connection string to the clipboard')}
-                            relationship="description"
-                            withArrow
-                        >
-                            <ToolbarButton icon={<CopyRegular />} onClick={() => void copyConnectionString()}>
-                                {l10n.t('Copy Connection String')}
-                            </ToolbarButton>
-                        </Tooltip>
-                    </OverflowItem>
-                    <OverflowItem id="refresh" pinned>
-                        <Tooltip
-                            content={l10n.t('Re-read cluster storage statistics and the current inventory')}
-                            relationship="description"
-                            withArrow
-                        >
-                            <ToolbarButton
-                                className="toolbarRightGroupStart"
-                                icon={<ArrowClockwiseRegular />}
-                                disabled={isRefreshingStorage || collections.isLoading}
-                                onClick={refreshData}
-                            >
-                                {l10n.t('Refresh')}
-                            </ToolbarButton>
-                        </Tooltip>
-                    </OverflowItem>
-                    <ClusterMoreActionsMenu
-                        openShell={() => void openShell()}
-                        copyConnectionString={() => void copyConnectionString()}
-                        exportDiagnostics={() => void exportDiagnostics()}
-                        openDataMigration={() => void openDataMigration()}
-                        isExporting={isExporting}
-                    />
-                    {configuration.feedbackPermitted === true && (
-                        <OverflowItem id="feedback" pinned>
-                            <div className="dashboardToolbarFeedback">
-                                <ToolbarDivider />
-                                <DashboardFeedback />
-                            </div>
-                        </OverflowItem>
-                    )}
-                </Toolbar>
-            </Overflow>
-
-            {/*
-             * One full-width column, the Indexes tab's shape. There is no separate scroll
-             * region: the whole page scrolls, so the identity band and the action bar move
-             * off the top like everything else rather than staying pinned above a short
-             * viewport of table.
-             */}
-            <div className="dashboardContent">
                 {/*
-                 * A failed read is stated where it happened and stays there until it succeeds:
-                 * a toast is gone by the time the reader looks up, and neither read retries
-                 * itself.
+                 * The connection Badge changes silently, so the two transitions worth hearing get
+                 * their own live regions. `connecting` is deliberately not announced: it is the
+                 * mount state and also the gap after a single absorbed failure, which the badge
+                 * itself treats as not worth reporting.
                  */}
-                {clusterInfoError !== null && (
-                    <MessageBar intent="error" layout="multiline">
-                        <MessageBarBody>
-                            {l10n.t('Failed to read cluster information: {0}', clusterInfoError)}
-                        </MessageBarBody>
-                        <MessageBarActions>
-                            <Button appearance="secondary" onClick={() => void loadClusterInfo()}>
-                                {l10n.t('Retry')}
-                            </Button>
-                        </MessageBarActions>
-                    </MessageBar>
-                )}
-
-                {storageError !== null && (storageStats?.databases?.length ?? 0) > 0 && (
-                    <MessageBar intent="error" layout="multiline">
-                        <MessageBarBody>
-                            {l10n.t('Failed to read storage statistics: {0}', storageError)}
-                        </MessageBarBody>
-                        <MessageBarActions>
-                            <Button
-                                appearance="secondary"
-                                disabled={isRefreshingStorage}
-                                onClick={() => void loadStorageStats('manual')}
-                            >
-                                {l10n.t('Retry')}
-                            </Button>
-                        </MessageBarActions>
-                    </MessageBar>
-                )}
-
-                <StatusStrip
-                    storageStats={isRefreshingStorage ? null : storageStats}
-                    currentDatabase={inventoryViewState.currentDatabase}
-                    isUnavailable={!isRefreshingStorage && storageStats === null && storageError !== null}
-                />
-                <InventoryPanel
-                    storageStats={storageStats}
-                    storageError={storageError}
-                    storageLastUpdatedAt={storageLastUpdatedAt}
-                    isLoading={
-                        (storageStats === null && storageError === null) ||
-                        isManuallyRefreshingStorage ||
-                        collections.isTableLoading
-                    }
-                    collections={collections}
-                    viewState={inventoryViewState}
-                    onViewStateChange={setInventoryViewState}
-                    onCreateNamespace={(control) => void createNamespace(control)}
-                    onRetryStorage={() => void loadStorageStats('manual')}
-                    isCreatingNamespace={isCreatingNamespace}
-                    busyNamespaces={busyNamespaces}
-                    isSubmissionBlocked={isSubmissionBlocked}
-                    startOperation={startOperation}
-                    isOperationCurrent={isOperationCurrent}
-                    onUnavailable={showUnavailable}
-                />
-            </div>
-
-            <footer className="dashboardPreferences">
-                <Checkbox
-                    className="dashboardPreferenceCheckbox"
-                    checked={showDashboardOnConnect}
-                    disabled={isSavingDashboardPreference}
-                    label={l10n.t('Show dashboard when connecting')}
-                    onChange={(_event, data) => void updateShowDashboardOnConnect(data.checked === true)}
-                />
-            </footer>
+                <Announcer when={connectionState === 'connected'} message={l10n.t('Connected to the cluster.')} />
                 <Announcer
-                    when={recoveryAnnouncement !== undefined}
-                    message={recoveryAnnouncement ?? ''}
+                    when={connectionState === 'disconnected'}
+                    message={l10n.t('Lost connection to the cluster.')}
+                    politeness="assertive"
                 />
+                {/* Everything else is narrated imperatively, from the callback that caused it. */}
+                <Announcer key={live.n} when={live.text.length > 0} message={live.text} politeness={live.politeness} />
+
+                {/*
+                 * The shaded band is the Collection View's header row: it carries the view's
+                 * identity and nothing else, separated from the work below by a single shade and
+                 * rule rather than by whitespace.
+                 */}
+                <div className="dashboardHeaderBand">
+                    <DashboardHeader
+                        clusterDisplayName={clusterInfo?.clusterDisplayName ?? configuration.clusterDisplayName}
+                        clusterInfo={clusterInfo}
+                        latestSample={latestSample}
+                        connectionState={connectionState}
+                        azure={configuration.azure}
+                        onShowRawDiagnostics={() => void exportDiagnostics()}
+                        isExportingDiagnostics={isExporting}
+                    />
+                </div>
+
+                {/*
+                 * Actions sit below the band, not inside it — the Collection View puts its
+                 * `.primaryActionBar` in the panel, under the shaded tab strip. It is also the
+                 * row with space to grow: more tools will land here.
+                 */}
+                <Overflow padding={40} hasHiddenItems>
+                    <Toolbar
+                        size="small"
+                        className="primaryActionBar actionBarToolbar dashboardToolbar"
+                        aria-label={l10n.t('Cluster actions')}
+                    >
+                        <OverflowItem id="shell" priority={2}>
+                            <Tooltip
+                                content={l10n.t('Open an interactive shell against this cluster')}
+                                relationship="description"
+                                withArrow
+                            >
+                                <ToolbarButton icon={<WindowConsoleRegular />} onClick={() => void openShell()}>
+                                    {l10n.t('Open Shell')}
+                                </ToolbarButton>
+                            </Tooltip>
+                        </OverflowItem>
+                        <OverflowItem id="copy" priority={1}>
+                            <Tooltip
+                                content={l10n.t('Copy this cluster’s connection string to the clipboard')}
+                                relationship="description"
+                                withArrow
+                            >
+                                <ToolbarButton icon={<CopyRegular />} onClick={() => void copyConnectionString()}>
+                                    {l10n.t('Copy Connection String')}
+                                </ToolbarButton>
+                            </Tooltip>
+                        </OverflowItem>
+                        <OverflowItem id="refresh" pinned>
+                            <Tooltip
+                                content={l10n.t('Re-read cluster storage statistics and the current inventory')}
+                                relationship="description"
+                                withArrow
+                            >
+                                <ToolbarButton
+                                    className="toolbarRightGroupStart"
+                                    icon={<ArrowClockwiseRegular />}
+                                    disabled={isRefreshingStorage || collections.isLoading}
+                                    onClick={refreshData}
+                                >
+                                    {l10n.t('Refresh')}
+                                </ToolbarButton>
+                            </Tooltip>
+                        </OverflowItem>
+                        <ClusterMoreActionsMenu
+                            openShell={() => void openShell()}
+                            copyConnectionString={() => void copyConnectionString()}
+                            exportDiagnostics={() => void exportDiagnostics()}
+                            openDataMigration={() => void openDataMigration()}
+                            isExporting={isExporting}
+                        />
+                        {configuration.feedbackPermitted === true && (
+                            <OverflowItem id="feedback" pinned>
+                                <div className="dashboardToolbarFeedback">
+                                    <ToolbarDivider />
+                                    <DashboardFeedback />
+                                </div>
+                            </OverflowItem>
+                        )}
+                    </Toolbar>
+                </Overflow>
+
+                {/*
+                 * One full-width column, the Indexes tab's shape. There is no separate scroll
+                 * region: the whole page scrolls, so the identity band and the action bar move
+                 * off the top like everything else rather than staying pinned above a short
+                 * viewport of table.
+                 */}
+                <div className="dashboardContent">
+                    {/*
+                     * A failed read is stated where it happened and stays there until it succeeds:
+                     * a toast is gone by the time the reader looks up, and neither read retries
+                     * itself.
+                     */}
+                    {clusterInfoError !== null && (
+                        <MessageBar intent="error" layout="multiline">
+                            <MessageBarBody>
+                                {l10n.t('Failed to read cluster information: {0}', clusterInfoError)}
+                            </MessageBarBody>
+                            <MessageBarActions>
+                                <Button appearance="secondary" onClick={() => void loadClusterInfo()}>
+                                    {l10n.t('Retry')}
+                                </Button>
+                            </MessageBarActions>
+                        </MessageBar>
+                    )}
+
+                    {storageError !== null && (storageStats?.databases?.length ?? 0) > 0 && (
+                        <MessageBar intent="error" layout="multiline">
+                            <MessageBarBody>
+                                {l10n.t('Failed to read storage statistics: {0}', storageError)}
+                            </MessageBarBody>
+                            <MessageBarActions>
+                                <Button
+                                    appearance="secondary"
+                                    disabled={isRefreshingStorage}
+                                    onClick={() => void loadStorageStats('manual')}
+                                >
+                                    {l10n.t('Retry')}
+                                </Button>
+                            </MessageBarActions>
+                        </MessageBar>
+                    )}
+
+                    <StatusStrip
+                        storageStats={isRefreshingStorage ? null : storageStats}
+                        currentDatabase={inventoryViewState.currentDatabase}
+                        isUnavailable={!isRefreshingStorage && storageStats === null && storageError !== null}
+                    />
+                    <InventoryPanel
+                        storageStats={storageStats}
+                        storageError={storageError}
+                        storageLastUpdatedAt={storageLastUpdatedAt}
+                        isLoading={
+                            (storageStats === null && storageError === null) ||
+                            isManuallyRefreshingStorage ||
+                            collections.isTableLoading
+                        }
+                        collections={collections}
+                        viewState={inventoryViewState}
+                        onViewStateChange={setInventoryViewState}
+                        onCreateNamespace={(control) => void createNamespace(control)}
+                        onRetryStorage={() => void loadStorageStats('manual')}
+                        isCreatingNamespace={isCreatingNamespace}
+                        busyNamespaces={busyNamespaces}
+                        isSubmissionBlocked={isSubmissionBlocked}
+                        startOperation={startOperation}
+                        isOperationCurrent={isOperationCurrent}
+                        onUnavailable={showUnavailable}
+                    />
+                </div>
+
+                <footer className="dashboardPreferences">
+                    <Checkbox
+                        className="dashboardPreferenceCheckbox"
+                        checked={showDashboardOnConnect}
+                        disabled={isSavingDashboardPreference}
+                        label={l10n.t('Show dashboard when connecting')}
+                        onChange={(_event, data) => void updateShowDashboardOnConnect(data.checked === true)}
+                    />
+                </footer>
+                <Announcer when={recoveryAnnouncement !== undefined} message={recoveryAnnouncement ?? ''} />
             </div>
         </DisconnectedOverlay>
     );

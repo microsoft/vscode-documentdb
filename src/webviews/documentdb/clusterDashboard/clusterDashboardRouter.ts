@@ -255,35 +255,29 @@ export const clusterDashboardRouter = router({
     /** Per-collection breakdown for one database, loaded when its row is expanded. */
     getDatabaseCollections: publicProcedureWithTelemetry
         .input(z.object({ databaseName: z.string().min(1), loadReason: LOAD_REASON.optional() }))
-        .query(
-            async ({ input, ctx }): Promise<DatabaseCollectionsResult | ConnectionUnavailableResponse> => {
-                const myCtx = dashboardContext(ctx);
-                myCtx.actionContext.telemetry.properties.loadReason = input.loadReason ?? 'initial';
+        .query(async ({ input, ctx }): Promise<DatabaseCollectionsResult | ConnectionUnavailableResponse> => {
+            const myCtx = dashboardContext(ctx);
+            myCtx.actionContext.telemetry.properties.loadReason = input.loadReason ?? 'initial';
 
-                return runDashboardViewOperation(myCtx, async (binding) => {
-                    // Expanding a row can fan out to 100 `collStats`; the panel is often collapsed or the
-                    // dashboard closed long before they finish.
-                    const result = await runDashboardOperation(
-                        myCtx,
-                        (client) =>
-                            getDatabaseCollections(
-                                client.getMongoClient(),
-                                input.databaseName,
-                                myCtx.signal,
-                                (error) => throwIfBoundViewUnavailable(client.binding, error),
-                            ),
-                        binding,
-                    );
+            return runDashboardViewOperation(myCtx, async (binding) => {
+                // Expanding a row can fan out to 100 `collStats`; the panel is often collapsed or the
+                // dashboard closed long before they finish.
+                const result = await runDashboardOperation(
+                    myCtx,
+                    (client) =>
+                        getDatabaseCollections(client.getMongoClient(), input.databaseName, myCtx.signal, (error) =>
+                            throwIfBoundViewUnavailable(client.binding, error),
+                        ),
+                    binding,
+                );
 
-                    myCtx.actionContext.telemetry.measurements.collectionCount = result.collections.length;
-                    myCtx.actionContext.telemetry.measurements.omittedCollectionCount =
-                        result.omittedCollectionCount;
-                    myCtx.actionContext.telemetry.measurements.statsErrorCount = result.errors.length;
+                myCtx.actionContext.telemetry.measurements.collectionCount = result.collections.length;
+                myCtx.actionContext.telemetry.measurements.omittedCollectionCount = result.omittedCollectionCount;
+                myCtx.actionContext.telemetry.measurements.statsErrorCount = result.errors.length;
 
-                    return result;
-                });
-            },
-        ),
+                return result;
+            });
+        }),
 
     /** Live health sample. Polled by the webview, so telemetry is suppressed. */
     measureRtt: publicProcedureWithTelemetry.query(
@@ -404,7 +398,10 @@ export const clusterDashboardRouter = router({
                     throw new Error(describeMissingNamespace(myCtx.clusterDisplayName));
                 }
 
-                await vscode.commands.executeCommand('vscode-documentdb.command.accessDataMigrationServices', clusterNode);
+                await vscode.commands.executeCommand(
+                    'vscode-documentdb.command.accessDataMigrationServices',
+                    clusterNode,
+                );
             });
         },
     ),
@@ -430,16 +427,21 @@ export const clusterDashboardRouter = router({
 
                 let databaseName: string | undefined;
                 try {
-                    await vscode.commands.executeCommand('vscode-documentdb.command.createDatabase', clusterNode, null, {
-                        source: 'webview;clusterDashboard',
-                        activationSource,
-                        onNameResolved: async (name: string): Promise<void> => {
-                            assertCurrent();
-                            databaseName = name;
-                            await myCtx.onNamespaceBusy?.(name, undefined, true);
-                            assertCurrent();
+                    await vscode.commands.executeCommand(
+                        'vscode-documentdb.command.createDatabase',
+                        clusterNode,
+                        null,
+                        {
+                            source: 'webview;clusterDashboard',
+                            activationSource,
+                            onNameResolved: async (name: string): Promise<void> => {
+                                assertCurrent();
+                                databaseName = name;
+                                await myCtx.onNamespaceBusy?.(name, undefined, true);
+                                assertCurrent();
+                            },
                         },
-                    });
+                    );
                 } catch (error) {
                     if (databaseName !== undefined && isBoundViewOperationCurrent(assertCurrent)) {
                         await myCtx.onNamespaceBusy?.(databaseName, undefined, false);
@@ -451,8 +453,7 @@ export const clusterDashboardRouter = router({
                 // not the same as a name having been confirmed. Without this the event counts every
                 // abandoned dialog as a create.
                 assertCurrent();
-                myCtx.actionContext.telemetry.properties.nameConfirmed =
-                    databaseName === undefined ? 'false' : 'true';
+                myCtx.actionContext.telemetry.properties.nameConfirmed = databaseName === undefined ? 'false' : 'true';
             });
         }),
 

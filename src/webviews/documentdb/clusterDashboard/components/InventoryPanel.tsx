@@ -20,8 +20,8 @@ import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
 
 import { type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
 import {
-    type ConnectionUnavailableDetails,
     isConnectionUnavailableResponse,
+    type ConnectionUnavailableDetails,
 } from '../../../_integration/connectionUnavailable';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
 import { useFilterUsageReporter } from '../../../components/useFilterUsageReporter';

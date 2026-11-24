@@ -39,8 +39,9 @@
 
 import * as l10n from '@vscode/l10n';
 import { z } from 'zod';
-import { ClusterSession } from '../../../../documentdb/ClusterSession';
 import { type IndexItemModel } from '../../../../documentdb/ClustersClient';
+import { ClusterSession } from '../../../../documentdb/ClusterSession';
+import { ConnectionUnavailableError } from '../../../../documentdb/ConnectionUnavailableError';
 import { PlaygroundCommandIds } from '../../../../documentdb/playground/constants';
 import { SchemaStore } from '../../../../documentdb/SchemaStore';
 import { ShellCommandIds } from '../../../../documentdb/shell/constants';
@@ -51,7 +52,6 @@ import { readOnlyJsonDocumentProvider } from '../../../../utils/readOnlyJsonDocu
 import { type BaseRouterContext } from '../../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../../_integration/trpc';
 import { throwIfBoundViewUnavailable } from '../../boundViewOperations';
-import { ConnectionUnavailableError } from '../../../../documentdb/ConnectionUnavailableError';
 import { runCollectionViewOperation, type RouterContext as CollectionViewRouterContext } from '../collectionViewRouter';
 import { FIELD_SUGGESTION_LIMIT } from './constants';
 import { buildCreateIndexShellCommand, buildIndexSpec, CreateIndexInputSchema, isWildcardKey } from './indexCreation';
@@ -69,7 +69,9 @@ export type RouterContext = BaseRouterContext & {
     collectionName: string;
 };
 
-type IndexRouterContext = WithTelemetry<RouterContext & Pick<CollectionViewRouterContext, 'sessionId' | 'describeUnavailable'>>;
+type IndexRouterContext = WithTelemetry<
+    RouterContext & Pick<CollectionViewRouterContext, 'sessionId' | 'describeUnavailable'>
+>;
 
 /** Convert a raw IndexItemModel to the IndexRow shape used by the webview. */
 function toIndexRow(

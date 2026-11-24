@@ -44,7 +44,10 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
                 throw new Error(`Page failed before step: ${step.name}`);
             }
             if (step.action === 'post') {
-                await page.evaluate((message): void => window.postMessage(message, window.location.origin), step.message);
+                await page.evaluate(
+                    (message): void => window.postMessage(message, window.location.origin),
+                    step.message,
+                );
                 continue;
             }
             if (step.action === 'releaseReply') {
@@ -63,7 +66,9 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
             } else if (step.action === 'click') {
                 await locator.click({ timeout: 60000 });
             } else if (step.action === 'replaceText') {
-                const modifier = await page.evaluate(() => (/Mac|iPhone|iPad/.test(navigator.platform) ? 'Meta' : 'Control'));
+                const modifier = await page.evaluate(() =>
+                    /Mac|iPhone|iPad/.test(navigator.platform) ? 'Meta' : 'Control',
+                );
                 const renderedEditor = `.monaco-editor:has([aria-label="${step.name}"]) .view-lines`;
                 await locator.press(`${modifier}+A`, { timeout: 60000 });
                 await locator.press('Backspace', { timeout: 60000 });
@@ -75,7 +80,10 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
                 await page.keyboard.insertText(step.value);
                 await wait(
                     ({ selector, value }) =>
-                        document.querySelector(selector)?.textContent?.replace(/\u00a0/g, ' ').includes(value) === true,
+                        document
+                            .querySelector(selector)
+                            ?.textContent?.replace(/\u00a0/g, ' ')
+                            .includes(value) === true,
                     { selector: renderedEditor, value: step.value },
                     'editor text to render',
                 );

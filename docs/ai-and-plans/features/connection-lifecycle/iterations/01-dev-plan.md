@@ -88,8 +88,8 @@ result may continue, but say so in the message. Record the result in the Progres
 | OP-1 | WI-1, CP-0         | **Two parts.** (a) Before the handler change: does an expired token on a new socket get code 18 or a socket close? (b) After it: renewal succeeds. |
 | OP-2 | WI-3, CP-W3        | The azext workflow checks on the packaged VSIX: Azure sign-in, discovery, filters, deep links, wizards, Azure Resources view.                      |
 | OP-3 | WI-5 done          | OT-2's tree part with a real sign-out: Sign in again, a dismissal, no reprompt.                                                                    |
-| OP-4 | WI-6 done          | OT-1 (short form, with the WI-4 hook) and OT-3(a) identity guard and (b) same-user password change, on a dev build.                               |
-| OP-5 | WI-7 done          | OT-7 plus OT-3(a)'s **Keep open (disabled)** choice and pushed disable message, on a dev build.                                                   |
+| OP-4 | WI-6 done          | OT-1 (short form, with the WI-4 hook) and OT-3(a) identity guard and (b) same-user password change, on a dev build.                                |
+| OP-5 | WI-7 done          | OT-7 plus OT-3(a)'s **Keep open (disabled)** choice and pushed disable message, on a dev build.                                                    |
 | OP-6 | Before PR F (CP-5) | OT-1 to OT-7 on the packaged VSIX, with at least one real wait of two hours or more (PR F step 3).                                                 |
 
 ### Per-PR workflow
@@ -1569,8 +1569,11 @@ behave as today.
 - **OP-4 partial live evidence (`1.1.1-alpha.2`):** The operator switched between Entra and invalid
   username/password credentials rather than testing two valid Native users. They saw Dashboard
   move from Retry/Close view to Close view only as the identity change was recognized. Collection
-  View went directly to Close view only on the next query. Silent renewal after expiry and
-  password-only rotation for the same user were not reported.
+  View went directly to Close view only on the next query.
+- **OP-4 cleared (`1.1.1-alpha.3`, 2026-11-24):** The operator reported that silent Entra renewal
+  passed and explicitly lifted the gate without running the same-user password-only rotation test.
+  The earlier authentication-change result is accepted as the identity-guard evidence.
+  OP-5 still covers **Keep open (disabled)** and the pushed disable notification.
 
 ---
 

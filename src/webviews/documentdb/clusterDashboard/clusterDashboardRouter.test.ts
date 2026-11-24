@@ -20,7 +20,7 @@ const mockResolveNamespaceNode = vi.fn();
 const mockUpdateGlobalSetting = vi.fn();
 
 vi.mock('vscode', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('vscode')>()),
+    ...(await importOriginal<typeof vscode>()),
     commands: { executeCommand: vi.fn() },
 }));
 
@@ -156,10 +156,10 @@ describe('clusterDashboardRouter create actions', () => {
             const caller = createCallerFactory(clusterDashboardRouter)(createContext());
 
             await expect(caller.measureRtt()).rejects.toMatchObject({ cause: unavailable });
-            expect(ClustersClient.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(
-                binding,
-                { trigger: 'clusterDashboardPoll', background: true },
-            );
+            expect(ClustersClient.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(binding, {
+                trigger: 'clusterDashboardPoll',
+                background: true,
+            });
         });
 
         it('returns a bounded unavailable response for terminal poll resolution', async () => {

@@ -112,9 +112,7 @@ export const DocumentView = (): JSX.Element => {
         setIsLoading(false);
     }, []);
     const isCurrentOperation = (revision: number): boolean =>
-        !disposedRef.current &&
-        revision === operationRevisionRef.current &&
-        unavailableRef.current === undefined;
+        !disposedRef.current && revision === operationRevisionRef.current && unavailableRef.current === undefined;
     const startOperation = (): number | undefined => {
         if (unavailableRef.current) {
             setUnavailable(unavailableRef.current);

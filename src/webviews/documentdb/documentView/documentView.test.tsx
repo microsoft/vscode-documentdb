@@ -14,7 +14,7 @@ import { DocumentView } from './documentView';
 const mocks = vi.hoisted(() => ({
     configuration: undefined as DocumentsViewWebviewConfigurationType | undefined,
     getDocumentById: vi.fn(),
-    saveDocument: vi.fn(),
+    saveDocument: vi.fn<(request: { documentId: string }) => Promise<unknown>>(),
     recoverUnavailable: vi.fn(),
     explainOperationFailure: vi.fn(),
     displayErrorMessage: vi.fn(),
@@ -185,7 +185,7 @@ it('keeps a newer edit and reuses the preallocated insert identity after an olde
     await edit('{"field":"first"}');
     await save();
     await edit('{"field":"second"}');
-    const firstIdentity = mocks.saveDocument.mock.calls[0][0].documentId as string;
+    const firstIdentity = mocks.saveDocument.mock.calls[0][0].documentId;
     expect(firstIdentity).toMatch(/^\{"\$oid":"[a-f0-9]{24}"\}$/);
 
     await act(async () =>
@@ -195,9 +195,9 @@ it('keeps a newer edit and reuses the preallocated insert identity after an olde
         }),
     );
     expect(host.querySelector('textarea')?.value).toBe('{"field":"second"}');
-    expect([...host.querySelectorAll('button')].some((button) => button.textContent === 'Save' && !button.disabled)).toBe(
-        true,
-    );
+    expect(
+        [...host.querySelectorAll('button')].some((button) => button.textContent === 'Save' && !button.disabled),
+    ).toBe(true);
 
     await save();
     expect(mocks.saveDocument).toHaveBeenCalledTimes(2);

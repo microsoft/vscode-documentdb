@@ -5,7 +5,11 @@
 
 import { beforeEach, expect, it, vi } from 'vitest';
 import { getConnectionSurfaces } from '../../../documentdb/connectionSurfaces';
-import { type OpenAppWebviewOptions, type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
+import {
+    type AppWebviewController,
+    openAppWebview,
+    type OpenAppWebviewOptions,
+} from '../../_integration/openAppWebview';
 import { openCollectionWebview } from './collectionViewController';
 import { type RouterContext } from './collectionViewRouter';
 
@@ -52,32 +56,30 @@ beforeEach((): void => {
     mocks.getBinding.mockReturnValue(originalBinding);
     mocks.getLatchReason.mockReturnValue(undefined);
     mocks.sessionBinding.mockReturnValue(originalBinding);
-    vi.mocked(openAppWebview).mockImplementation(
-        <T>(options: OpenAppWebviewOptions<T>): AppWebviewController<T> => {
-            const listeners = new Set<() => void>();
-            let disposed = false;
-            const dispose = (): void => {
-                if (disposed) {
-                    return;
-                }
-                disposed = true;
-                for (const listener of listeners) {
-                    listener();
-                }
-            };
-            context = options.context as RouterContext;
-            opened.push({ dispose });
-            return {
-                panel: { title: options.title, webview: { postMessage: mocks.postMessage } },
-                isDisposed: false,
-                onDisposed: (listener: () => void) => {
-                    listeners.add(listener);
-                    return { dispose: () => listeners.delete(listener) };
-                },
-                dispose,
-            } as unknown as AppWebviewController<T>;
-        },
-    );
+    vi.mocked(openAppWebview).mockImplementation(<T>(options: OpenAppWebviewOptions<T>): AppWebviewController<T> => {
+        const listeners = new Set<() => void>();
+        let disposed = false;
+        const dispose = (): void => {
+            if (disposed) {
+                return;
+            }
+            disposed = true;
+            for (const listener of listeners) {
+                listener();
+            }
+        };
+        context = options.context as RouterContext;
+        opened.push({ dispose });
+        return {
+            panel: { title: options.title, webview: { postMessage: mocks.postMessage } },
+            isDisposed: false,
+            onDisposed: (listener: () => void) => {
+                listeners.add(listener);
+                return { dispose: () => listeners.delete(listener) };
+            },
+            dispose,
+        } as unknown as AppWebviewController<T>;
+    });
 });
 
 function openPanel(): void {
@@ -114,9 +116,9 @@ it('reconnects the existing session without replaying a query', async (): Promis
     openPanel();
     mocks.resolveBoundClient.mockResolvedValue({ binding: { ...originalBinding, generation: 2 } });
 
-    await expect(
-        context.recoverUnavailable({ action: 'retry' }),
-    ).resolves.toEqual({ recovered: { text: 'Reconnected' } });
+    await expect(context.recoverUnavailable({ action: 'retry' })).resolves.toEqual({
+        recovered: { text: 'Reconnected' },
+    });
     expect(mocks.unlatch).not.toHaveBeenCalled();
     expect(mocks.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(originalBinding, { trigger: 'collectionView' });
 });
@@ -137,9 +139,9 @@ it('does not let stale Retry clear a removal latch', async (): Promise<void> => 
     context.describeUnavailable('userDisconnected');
     mocks.getLatchReason.mockReturnValue('connectionRemoved');
 
-    await expect(
-        context.recoverUnavailable({ action: 'retry' }),
-    ).resolves.toMatchObject({ unavailable: { reason: 'connectionRemoved', action: 'close' } });
+    await expect(context.recoverUnavailable({ action: 'retry' })).resolves.toMatchObject({
+        unavailable: { reason: 'connectionRemoved', action: 'close' },
+    });
     expect(mocks.unlatch).not.toHaveBeenCalled();
     expect(mocks.resolveBoundClient).not.toHaveBeenCalled();
 });
