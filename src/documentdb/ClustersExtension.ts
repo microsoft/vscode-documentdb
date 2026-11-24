@@ -86,7 +86,9 @@ import { retryAuthentication } from '../commands/retryAuthentication/retryAuthen
 import { revealView } from '../commands/revealView/revealView';
 import { clearSchemaCache } from '../commands/schemaStore/clearSchemaCache';
 import { showSchemaStoreStats } from '../commands/schemaStore/showSchemaStoreStats';
+import { showConnectionStats } from '../commands/showConnectionStats/showConnectionStats';
 import { showWorkerStats } from '../commands/showWorkerStats/showWorkerStats';
+import { signInAgain } from '../commands/signInAgain/signInAgain';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
 import { updateCredentials } from '../commands/updateCredentials/updateCredentials';
 import { isVCoreAndRURolloutEnabled } from '../extension';
@@ -623,6 +625,10 @@ export class ClustersExtension implements vscode.Disposable {
                     withCommandCorrelation(showSchemaStoreStats),
                 );
 
+                registerCommand(
+                    'vscode-documentdb.command.showConnectionStats',
+                    withCommandCorrelation(showConnectionStats),
+                );
                 registerCommand('vscode-documentdb.command.showWorkerStats', withCommandCorrelation(showWorkerStats));
 
                 //// General Commands:
@@ -1007,6 +1013,10 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.internal.retry',
                     withTreeNodeCommandCorrelation(retryAuthentication),
+                );
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.signInAgain',
+                    withTreeNodeCommandCorrelation(signInAgain),
                 );
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.internal.revealView',

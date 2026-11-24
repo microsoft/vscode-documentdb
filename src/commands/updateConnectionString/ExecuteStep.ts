@@ -18,9 +18,15 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCSWizardContext> {
     public priority: number = 100;
 
     public async execute(context: UpdateCSWizardContext): Promise<void> {
+        if (context.isRecoveryCurrent?.() === false) {
+            return;
+        }
         const resourceType =
             context.storageZone ?? (context.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters);
         const connection = await ConnectionStorageService.get(context.storageId, resourceType);
+        if (context.isRecoveryCurrent?.() === false) {
+            return;
+        }
 
         if (!connection || !connection.secrets?.connectionString) {
             ext.outputChannel.error(
@@ -87,6 +93,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCSWizardContext> {
 
             await ConnectionStorageService.save(resourceType, connection, true);
             context.connectionStringSaved = true;
+            if (context.isRecoveryCurrent?.() === false) {
+                return;
+            }
 
             if (clearedEntraMethod) {
                 void window.showInformationMessage(

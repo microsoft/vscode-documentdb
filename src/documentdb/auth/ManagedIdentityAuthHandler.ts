@@ -12,6 +12,7 @@ import { type CachedClusterCredentials } from '../CredentialCache';
 import { withTokenAcquisitionTiming, type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { notifyAuthPhaseObserver, type AuthCallerPolicy, type AuthPhaseObserver } from './authCallerPolicy';
 import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
+import { AuthMethodId } from './AuthMethod';
 import { resolveManagedIdentityTokenResource, TokenResourceResolutionError } from './documentdbTokenResource';
 import { evaluateEntraDestinationFromSettings, getEntraCustomHostnameSuffix } from './entraDestinationSettings';
 import { classifyEntraError } from './entraErrors/classifyEntraError';
@@ -100,6 +101,7 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
         const configuration = buildOidcClientConfiguration({
             connectionString,
             policy,
+            callbackAuthMethod: AuthMethodId.ManagedIdentity,
             oidcCallback: async (): Promise<OIDCResponse> => {
                 const currentDecision = evaluateEntraDestinationFromSettings(connectionString);
                 traceEntraDestination(currentDecision, this.tokenCorrelationId, traceContext);

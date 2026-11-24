@@ -18,8 +18,10 @@ code:
 - [#1059](https://github.com/microsoft/vscode-documentdb/issues/1059)
 - [#566](https://github.com/microsoft/vscode-documentdb/issues/566)
 - [#990](https://github.com/microsoft/vscode-documentdb/issues/990)
-- follow-up after 1.2.0: [#1105](https://github.com/microsoft/vscode-documentdb/issues/1105) (Kubernetes tunnels, network resilience) and
-  [#1106](https://github.com/microsoft/vscode-documentdb/issues/1106) (out-of-date results)
+- follow-ups after 1.2.0: [#1105](https://github.com/microsoft/vscode-documentdb/issues/1105)
+  (Kubernetes tunnels, network resilience), [#1106](https://github.com/microsoft/vscode-documentdb/issues/1106)
+  (out-of-date results), and [#1119](https://github.com/microsoft/vscode-documentdb/issues/1119)
+  (prompt handling of Microsoft account sign-out)
 
 **Branch:** `feature/connection-lifecycle`, with stacked sub-PRs from `dev/tnaum/*`. Implementation
 does not wait for intermediate merges; the operator handles approvals and merges (decision 0006).
@@ -49,6 +51,9 @@ Evidence, telemetry and source pointers: [research-findings.md](./research-findi
   fingerprint and generation.
 - **Never change identity under an open surface.** It becomes disconnected, keeps its state, says why
   and offers one action.
+- After a database rejects a verified Entra identity, discard the client but keep its in-memory
+  connection settings for explicit sign-in. Do not retain the rejected token or retry silently.
+  When the tree offers **Retry sign-in**, it does not also offer **Retry**.
 - **One teardown** serves Disconnect, Remove Connection and identity-changing credential updates.
 - Disconnect uses the existing task-conflict guard: if a copy or export is using the cluster,
   leave the task and connection running. The user can retry after the task finishes or is stopped.
@@ -79,6 +84,8 @@ See [decisions.md](./decisions.md):
 - 0011 Disconnect keeps the cached credentials and the verified identity; only Remove drops them;
 - 0012 a minimal lifecycle design: no state machine, one epoch, no prompts in `getClient`, one-step teardown;
 - 0013 corrections to 0012: latch before a credential save, epoch checks on replies, bindings carried through handoffs, an operation wrapper, folder deletion runs teardown.
+- 0014 retain in-memory settings for explicit sign-in recovery after verified Entra rejection.
+- 0015 use the existing latch to block startup after authentication rejection until explicit recovery.
 
 ## Timeline
 

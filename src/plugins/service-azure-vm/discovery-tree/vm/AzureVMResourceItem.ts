@@ -254,6 +254,7 @@ export class AzureVMResourceItem extends ClusterItemBase<VirtualMachineModel> {
      */
     protected async authenticateAndConnect(): Promise<ClustersClient | null> {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
+            const epoch = ClustersClient.getEpoch(this.cluster.clusterId);
             context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
             context.telemetry.properties.view = Views.DiscoveryView;
             if (this.journeyCorrelationId) {
@@ -330,8 +331,7 @@ export class AzureVMResourceItem extends ClusterItemBase<VirtualMachineModel> {
                     error,
                     context,
                 });
-                await ClustersClient.deleteClient(this.cluster.clusterId);
-                CredentialCache.deleteCredentials(this.cluster.clusterId);
+                await this.finishFailedStartup(context, error, epoch);
                 return null;
             }
 

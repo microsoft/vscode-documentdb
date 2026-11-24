@@ -135,7 +135,7 @@ Every PR names the issues it may resolve, using the table below, and says for ea
   Keep it factual and short. Never include tokens, account names, cluster names or connection strings.
   Record the comment's link in the WI's Progress block.
 
-- **Work moved to a follow-up issue** (#1105, #1106): when a PR hands work over, comment on the
+- **Work moved to a follow-up issue** (#1105, #1106, #1119): when a PR hands work over, comment on the
   follow-up in the same way, so it can be planned from that comment alone.
 
 | Issue | Title (short)                                     | PRs           | Expected                                                       |
@@ -148,6 +148,7 @@ Every PR names the issues it may resolve, using the table below, and says for ea
 | #1091 | Dashboard health check: pause, back off, stop     | 6 (WI-8)      | Partial unless WI-8 also does the visibility pause and backoff |
 | #1105 | Follow-up: Kubernetes tunnels, network resilience | —             | Not resolved; comment when a PR moves work there               |
 | #1106 | Follow-up: indicate possibly out-of-date results  | —             | Not resolved; comment when a PR moves work there               |
+| #1119 | Follow-up: handle Microsoft sign-out promptly     | —             | Not in 1.2.0                                                   |
 
 ### Skills to load per work item
 
@@ -339,6 +340,12 @@ Moved to [#1106](https://github.com/microsoft/vscode-documentdb/issues/1106) (de
 "results may be out of date" indication. That covers the return from the disconnected state, long idle,
 and writes made from another view or another client.
 
+Prompt handling of Microsoft account sign-out is deferred to
+[#1119](https://github.com/microsoft/vscode-documentdb/issues/1119), after 1.2.0. Under decisions
+0001 and 0012, signing out of VS Code does not close an established database client. The client
+can keep authenticating with a cached token while the server accepts it. When the driver requests
+a new token and the pinned session is gone, recovery remains explicit through **Sign in again**.
+
 Generic idle and network-drop recovery **stays in scope**: closed-client and transient classification,
 the cancelled-reuse fix, closed-client replacement and OT-4. It is #1102's "recover on the next
 operation without a restart". The no-regression rules in WI-5 and WI-6 keep tunneled connections
@@ -414,6 +421,8 @@ a checkpoint changes them.
     Only the explicit Connect and Reconnect actions clear the latch, plus one internal case: an
     identity-changing credential update whose save reached nothing clears the latch it set (WI-7 step 5).
     New tasks and resource leases are refused while the latch is set.
+    A `credentialsRejected` latch blocks startup until the matching explicit recovery clears it
+    with an unchanged epoch (decision 0015). That recovery cannot clear a teardown latch.
   - **One epoch:** a per-cluster counter that `invalidate` increases **synchronously** on every latch,
     unlatch, eviction and teardown. A startup publishes only if the epoch is unchanged. Every recovery
     command (Retry, Sign in again, Reconnect) captures the epoch **before** its first `await`, and applies
@@ -1171,8 +1180,8 @@ shim (0005).
      | `TokenCallbackError` (step 2)                                                 | Entra, MI  | `transient`, workflow broken | replace on the next **foreground** operation | Retry                                           |
      | `ConnectionUnavailableError('credentialsMissing')` (F-20)                     | any        | `credentialsMissing`         | none to keep                                 | Update credentials                              |
      | code 18                                                                       | Native, RU | `credentialsRejected`        | evict; no automatic retry                    | Update credentials (RU: Retry re-reads the key) |
-     | code 18 after a fresh callback                                                | Entra      | per T-5                      | evict                                        | per T-5                                         |
-     | `MongoNotConnectedError`, `topologyClosed`, "Client must be connected"        | any        | `clientClosed`               | new generation on the next foreground call   | none                                            |
+     | final code 18                                                                 | Entra      | `credentialsRejected`        | evict; no automatic retry                    | Sign in again with a verified Entra identity    |
+     | `MongoNotConnectedError`, `MongoTopologyClosedError`                          | any        | `clientClosed`               | new generation on the next foreground call   | none                                            |
      | network errors, timeouts, server selection with no auth cause                 | any        | `transient`                  | keep                                         | Retry                                           |
      | anything else                                                                 | any        | `other`                      | keep                                         | existing behavior                               |
 
@@ -1204,16 +1213,19 @@ shim (0005).
    - Route both catch paths in `getChildren` (cached-client reuse and `listDatabases`) through
      `reportFailure`. Keep the modal-plus-actions presentation.
    - Change `createErrorRecoveryChildren` to:
-     - **Sign in again** (when the kind is `signInRequired`), or **Update credentials** (the
-       provider-owned action that exists today);
+     - **Retry sign-in** when the kind is `signInRequired` or `credentialsRejected` and the
+       Entra identity and settings are available, or **Update credentials** (the provider-owned
+       action that exists today);
      - then Diagnose;
      - then Open shell;
-     - then **Retry last**.
+     - then **Retry last**, except when **Retry sign-in** is offered in its place.
    - Check that order against the skill text, and update the skill in WI-10 if it differs.
    - Call `addEstablishedConnectionContext` on the failure events of `connect`, `getchildren` and the tree.
    - **Keep credentials on recoverable failures (F-20).** In every provider item's `authenticateAndConnect`
      failure path, still call `deleteClient`, but call `CredentialCache.deleteCredentials` only when the
-     kind is `credentialsRejected`, or `other` as today. For `transient`, `clientClosed` and
+     kind is `credentialsRejected`, or `other` as today. For `credentialsRejected` with a verified
+     Entra identity, retain the in-memory settings for explicit **Sign in again** (decision 0014).
+     For `transient`, `clientClosed` and
      `signInRequired`, keep the entry: a network outage during a tree expand must not leave open surfaces
      with nothing to reconnect from, nor make the user retype a discovery password. Put the decision in
      one shared helper, not in ten copies.
@@ -1271,6 +1283,86 @@ shim (0005).
 - OT-2's tree part can be reproduced with the WI-4 hook.
 
 **Progress:**
+
+- **CP-2, advisor verdict: revise before wiring.** The classifier draft builds and 32 focused
+  tests pass. The pinned 7.2.0 workflow test shows that if a cached OIDC token receives code 18,
+  the driver calls the callback and propagates the final rejection unchanged if that token is
+  also refused. This does not prove that the callback returned newly issued token bytes.
+  Treat the final Entra authentication rejection as `credentialsRejected` and evict the client,
+  rather than adding callback-freshness fields with no reliable producer (85% advisor confidence).
+  Keep typed `noSession` distinct. Plain network failures (including the OP-1a shape and tunnel
+  refusal) and mixed per-server failures keep the client. Closed-client checks are typed only.
+  Plain callback errors do not reach the per-server descriptions through the pinned OIDC path,
+  so R5 does not require changing the Entra explainer now. Cancellation and destination handling
+  stay in place.
+- **CP-2 / OC-1, accepted (2026-11-23):** The operator chose A for smoother recovery and asked
+  to record it in [decision 0014](../decisions.md#0014-keep-in-memory-connection-settings-after-a-rejection-for-a-verified-entra-identity).
+  Evict the rejected client, but keep the in-memory settings for a verified Entra identity.
+  Explicit **Sign in again** then works when invoked with just `clusterId`. No rejected token is
+  retained, no automatic retry is started, and Native/RU rejection and persistent storage are unchanged.
+- **CP-2 revision verified:** Removed the unproducible freshness inputs. The contract test now
+  sends the exact final code 18 from the driver workflow through the classifier. Case 1 passed:
+  build and 31 focused tests across classification, the driver contract, and the Entra explainer.
+- **CP-2 / OC-2, accepted:** Reuse the existing latch for `credentialsRejected` rather than
+  adding a separate hold. Eviction must not let an ordinary operation open another client with
+  rejected settings. Only the matching explicit recovery can clear the rejection, and only if
+  its epoch is current. The operator preferred the simpler option and asked to record
+  [decision 0015](../decisions.md#0015-use-the-existing-latch-to-block-startup-after-authentication-rejection).
+- **OP-3 candidate:** Host and tree recovery, Retry and **Sign in again** are implemented
+  for [draft PR4 (#1117)](https://github.com/microsoft/vscode-documentdb/pull/1117). Case 1 passed:
+  the host batch passed 222 tests, the tree batch passed 367, and a final 127-test run covered
+  the Native discovery Retry correction and the core recovery paths. These counts overlap.
+  OP-3 requires a real Entra sign-out on the dev host and a fresh-socket callback. PR4 pre-review
+  and handoff checks remain; WI-6 does not start before OP-3 is cleared.
+- **OP-3 UI clarification:** The operator accepted showing **Sign in again** instead of **Retry**
+  when Entra sign-in is the next useful step. Diagnose and Open shell remain. This follows decision
+  0001's single sign-in action and preserves the original Retry behavior for transient failures.
+- **Draft PR4 CI follow-up:** The VSIX built, passed inspection, and activated in VS Code. Static
+  checks exposed stale localization, formatting changes, and a type-only import lint error. The
+  full test run found 32 failures in three suites whose mocks did not expose the new lifecycle
+  methods. Update those fixtures without changing their assertions or runtime recovery behavior.
+  OP-3 remains the live Entra sign-out and dismissal gate.
+- **OP-3 partial live run (2026-11-23):** A CI-built PR4 VSIX loaded databases and the dashboard.
+  After sign-out, idle sockets closed and fresh sockets became ready under the same client startup.
+  No post-sign-out OIDC callback appears in the supplied excerpt, and sign-in recovery and dismissal
+  were not reached. The run is inconclusive; OP-3 remains open. On resume, close the dashboard,
+  wait until the cached token is no longer accepted, and explicitly refresh the cluster node
+  without restarting the extension host. Collapse and re-expand can show cached children.
+- **OP-3 resumed on the older VSIX (2026-11-23):** A refresh opened a new socket on the
+  same client. OIDC callback invocation 2 threw, and the database listing failed.
+  The operator confirmed that the initial failure showed an error modal, not a sign-in
+  prompt. Closing the modal revealed the recovery action. They confirmed dismissing the
+  actual Microsoft sign-in prompt as requested and that the recovery actions remained.
+  A later explicit sign-in restored the database list. **OP-3 passed** on the older CI VSIX.
+  The operator approved renaming the tree action to **Retry sign-in**, first before Diagnose
+  and Open shell, without a separate Retry row. Command ID and recovery behavior are unchanged.
+- **Sign-out scope review (2026-11-23):** Claude Opus 5.5 recommended keeping the approved
+  1.2.0 scope (80% confidence). Prompt sign-out handling would need account-specific session
+  checks, coordination with active tasks, and separate handling for Shell and Playground
+  clients. Track it in [#1119](https://github.com/microsoft/vscode-documentdb/issues/1119).
+  OP-3 and its required evidence are unchanged.
+- **Future operator VSIX builds:** Give each new test candidate a distinct extension version in
+  the root `package.json` and corresponding root lockfile entries. Verify the version in the
+  packaged manifest, and give the operator that version, the commit, and the CI artifact link.
+  Do not rebuild an unchanged candidate just to label the partial run.
+- **Connection stats add-on:** Add a read-only **Show Connection Stats** command alongside
+  **Show Worker Stats**, as a separate WI-5 commit. The extension-host snapshot shows client
+  generation, age, auth method, startup correlation, pending or held state, and whether socket
+  events are traced. It contains no cluster or account identifiers and makes no service calls.
+  For Entra it shows the UTC expiry declared by the last token supplied to the driver, with
+  the remaining time at capture (`hh:mm:ss`), `expired`, or `unknown`. This local diagnostic
+  retains no token and does not predict server acceptance or force renewal.
+  Leave socket counts out rather than guessing. The operator requested restarting OP-3 on
+  the next CI-built candidate, `1.1.1-alpha.1`, which includes the diagnostics and worker fix.
+- **Worker startup regression:** PR4's shared OIDC code imported the VS Code UI auth-method
+  module into the Node worker path. Keep the shared auth IDs independent of VS Code. Verify
+  the next packaged candidate starts both Shell and Playground; the tree OP-3 gate is unchanged.
+- **PR4 handoff verification:** OP-3 passed, author-approved pre-review fixes are in
+  [the review record](./01-pr4-connection-recovery-review.md), and local Case 2 passed
+  (9,796 runtime tests passed, one skipped). Full CI passed on `d422d065b`.
+  The operator confirmed both Shell and Playground on the CI-built `1.1.1-alpha.1` VSIX
+  on 2026-11-24. The worker smoke gate is cleared, and PR4 can move to operator review.
+  WI-6 continues on this base without waiting for PR4 to merge.
 
 ---
 

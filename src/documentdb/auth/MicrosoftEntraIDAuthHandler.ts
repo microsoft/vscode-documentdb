@@ -18,6 +18,7 @@ import {
     type AuthPhaseObserver,
 } from './authCallerPolicy';
 import { type AuthHandler, type AuthHandlerResponse, type VerifiedEntraIdentity } from './AuthHandler';
+import { AuthMethodId } from './AuthMethod';
 import { resolveInteractiveTokenResource, TokenResourceResolutionError } from './documentdbTokenResource';
 import { evaluateEntraDestinationFromSettings, getEntraCustomHostnameSuffix } from './entraDestinationSettings';
 import { classifyEntraError } from './entraErrors/classifyEntraError';
@@ -78,6 +79,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
     public async configureAuth(
         timings?: ConnectionStartupTimings,
         traceContext?: AuthTraceContext,
+        acquireRecoverySession?: (request: Parameters<typeof getEntraSession>[0]) => ReturnType<typeof getEntraSession>,
     ): Promise<AuthHandlerResponse> {
         const authCorrelationId = randomUUID();
         const { connectionString, clusterId } = this.clusterCredentials;
@@ -139,12 +141,12 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                             throw new EntraSignInRequiredError('providerChanged');
                         }
                         try {
-                            const session = await getEntraSession({
+                            const session = await (acquireRecoverySession ?? getEntraSession)({
                                 providerId: pin?.providerId ?? signInEnvironment.providerId,
                                 resource,
                                 tenantId,
                                 account: pin ? { id: pin.accountId, label: pin.accountLabel } : undefined,
-                                mode: interactive ? 'interactive' : 'silent',
+                                mode: acquireRecoverySession ? 'forceNew' : interactive ? 'interactive' : 'silent',
                             });
                             return { session, signInEnvironment };
                         } finally {
@@ -176,7 +178,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                 }
                 throw new Error(l10n.t('Failed to obtain Entra ID token.'));
             }
-            if (pin && session.account.id !== pin.accountId) {
+            if (pin && !acquireRecoverySession && session.account.id !== pin.accountId) {
                 throw new EntraIdentityMismatchError();
             }
         } catch (error) {
@@ -227,6 +229,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         const configuration = buildOidcClientConfiguration({
             connectionString,
             policy,
+            callbackAuthMethod: AuthMethodId.MicrosoftEntraID,
             oidcCallback: async (_params: OIDCCallbackParams): Promise<OIDCResponse> => {
                 const currentInvocation = ++invocation;
                 let observation: EntraTokenLookupObservation = { outcome: 'failed' };
@@ -263,7 +266,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                         observation = { outcome: 'noSession' };
                         throw error;
                     }
-                    if (observation.outcome === 'identityMismatch') {
+                    if (error instanceof EntraIdentityMismatchError || error instanceof EntraDestinationRejectedError) {
                         throw error;
                     }
                     recordEntraTokenFailure(clusterId, {
@@ -271,7 +274,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                         authMethod: 'interactive',
                         ruleId: classifyEntraError(error instanceof Error ? error.message : String(error))?.ruleId,
                     });
-                    throw new TokenCallbackError(error);
+                    throw error;
                 } finally {
                     traceAuthFlow(
                         'interactiveEntra.oidcCallback',

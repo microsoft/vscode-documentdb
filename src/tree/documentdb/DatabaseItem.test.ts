@@ -35,6 +35,7 @@ vi.mock('../../utils/accumulatingTelemetry', () => ({
 vi.mock('../../documentdb/ClustersClient', () => ({
     ClustersClient: {
         getClient: vi.fn(),
+        reportFailure: vi.fn(),
     },
 }));
 
@@ -65,10 +66,23 @@ describe('DatabaseItem - async collection count loading', () => {
         estimateDocumentCountMock = vi.fn().mockResolvedValue(0);
 
         (ClustersClient.getClient as Mock).mockResolvedValue({
+            binding: { clusterId: cluster.clusterId, fingerprint: 'identity', generation: 1 },
             listCollections: listCollectionsMock,
             countCollections: countCollectionsMock,
             estimateDocumentCount: estimateDocumentCountMock,
         });
+    });
+
+    it('reports the failed list against its own binding and preserves the error', async (): Promise<void> => {
+        const error = new Error('List collections failed');
+        listCollectionsMock.mockRejectedValueOnce(error);
+
+        await expect(new DatabaseItem(cluster, databaseInfo).getChildren()).rejects.toBe(error);
+        expect(ClustersClient.reportFailure).toHaveBeenCalledExactlyOnceWith(
+            { clusterId: cluster.clusterId, fingerprint: 'identity', generation: 1 },
+            error,
+        );
+        expect(listCollectionsMock).toHaveBeenCalledOnce();
     });
 
     function flushAsync(): Promise<void> {

@@ -15,6 +15,7 @@ import { type AuthPhaseObserver } from './authCallerPolicy';
 import { buildAuthConnectionTarget } from './authConnectionTarget';
 import { AuthMethodId } from './AuthMethod';
 import * as tokenResources from './documentdbTokenResource';
+import { TokenCallbackError } from './entraErrors/entraCallbackErrors';
 import { EntraErrorExplainer } from './entraErrors/EntraErrorExplainer';
 import {
     getRecentEntraTokenFailure,
@@ -22,6 +23,7 @@ import {
     resetEntraTokenFailuresForTests,
 } from './entraErrors/entraTokenFailures';
 import { ManagedIdentityAuthHandler } from './ManagedIdentityAuthHandler';
+import { ManagedIdentityGuidanceError } from './managedIdentityErrors';
 import { EntraDestinationRejectedError } from './oidcAllowedHosts';
 import { expiresInSecondsFromTimestamp } from './tokenExpiry';
 
@@ -341,16 +343,7 @@ describe('ManagedIdentityAuthHandler', () => {
         expect(getManagedIdentityAccessToken.mock.calls[0][3]).toBe(getManagedIdentityAccessToken.mock.calls[1][3]);
     });
 
-    it('propagates the provider readable failure', async () => {
-        getManagedIdentityAccessToken.mockRejectedValue(new Error('More than one managed identity is available.'));
-        const handler = new ManagedIdentityAuthHandler(buildCredentials());
-
-        const { options } = await handler.configureAuth();
-
-        await expect(invokeOidcCallback(options)).rejects.toThrow(/more than one managed identity/i);
-    });
-
-    it('records failures only inside the deferred token callback and rethrows the same error', async (): Promise<void> => {
+    it('wraps and records failures only inside the deferred token callback', async (): Promise<void> => {
         const connectionString = 'mongodb://cluster.mongocluster.cosmos.azure.us/';
         const handler = new ManagedIdentityAuthHandler(
             buildCredentials({ connectionString, connectionStringWithPassword: connectionString }),
@@ -367,7 +360,10 @@ describe('ManagedIdentityAuthHandler', () => {
         expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
         expect(getManagedIdentityAccessToken).not.toHaveBeenCalled();
 
-        await expect(invokeOidcCallback(options)).rejects.toBe(error);
+        const callback = invokeOidcCallback(options);
+        await expect(callback).rejects.toBeInstanceOf(TokenCallbackError);
+        await expect(callback).rejects.toMatchObject({ authMethod: AuthMethodId.ManagedIdentity, cause: error });
+        await expect(callback).rejects.not.toThrow(/AADSTS500011/);
         expect(startupProperties.entraFailureKind).toBe('tokenAcquisitionFailed');
         expect(JSON.stringify(startupProperties)).not.toMatch(/cluster-1|AADSTS|https/);
         expect(getRecentEntraTokenFailure('cluster-1')).toEqual({
@@ -376,6 +372,24 @@ describe('ManagedIdentityAuthHandler', () => {
             ruleId: 'resourceNotInTenant',
             timestamp: expect.any(Number),
         });
+    });
+
+    it('preserves the actionable managed identity message in the typed callback wrapper', async (): Promise<void> => {
+        const message =
+            'This machine has more than one managed identity, so the right one cannot be chosen automatically. Reconnect and enter the client ID you want to use.';
+        const accessToken = 'private-access-token';
+        const cause = Object.freeze(Object.assign(new ManagedIdentityGuidanceError(message), { accessToken }));
+        getManagedIdentityAccessToken.mockRejectedValueOnce(cause);
+        const { options } = await new ManagedIdentityAuthHandler(buildCredentials()).configureAuth();
+
+        const callback = invokeOidcCallback(options);
+        await expect(callback).rejects.toMatchObject({
+            name: 'TokenCallbackError',
+            message,
+            authMethod: AuthMethodId.ManagedIdentity,
+            cause,
+        });
+        await expect(callback).rejects.not.toThrow(accessToken);
     });
 
     it('does not record token resource resolution errors as token-acquisition failures', async (): Promise<void> => {
@@ -416,11 +430,12 @@ describe('ManagedIdentityAuthHandler', () => {
             surface: 'extension',
             startupProperties: failedProperties,
         });
-        await expect(invokeOidcCallback(failed.options)).rejects.toBe(error);
+        const callbackError: unknown = await invokeOidcCallback(failed.options).catch((failure: unknown) => failure);
+        expect(callbackError).toMatchObject({ cause: error });
         const failure = getRecentEntraTokenFailure('cluster-1');
         expect(failure).toMatchObject({ cloudCategory: 'usgov', authMethod: 'managedIdentity' });
         const diagnostics = new EntraErrorExplainer();
-        expect(await diagnostics.explain({ clusterId: 'cluster-1', error })).toContain(
+        expect(await diagnostics.explain({ clusterId: 'cluster-1', error: callbackError })).toContain(
             'Sign-in failed in Azure US Government',
         );
 
@@ -600,14 +615,18 @@ describe('ManagedIdentityAuthHandler', () => {
             const error = new Error('AADSTS700016: identity not found');
             getManagedIdentityAccessToken.mockRejectedValueOnce(error);
             const events: string[] = [];
+            const onTokenFailed = vi.fn(() => {
+                events.push('tokenFailed');
+            });
             const handler = new ManagedIdentityAuthHandler(buildCredentials(), {
                 interactive: false,
-                observer: recordingObserver(events),
+                observer: { ...recordingObserver(events), onTokenFailed },
             });
 
             const { options } = await handler.configureAuth();
             expect(events).toEqual(['resolved:public:host:*.mongocluster.cosmos.azure.com']);
-            await expect(invokeOidcCallback(options)).rejects.toBe(error);
+            await expect(invokeOidcCallback(options)).rejects.toMatchObject({ cause: error });
+            expect(onTokenFailed).toHaveBeenCalledExactlyOnceWith(error);
             expect(events).toEqual([
                 'resolved:public:host:*.mongocluster.cosmos.azure.com',
                 'tokenStarted',
@@ -655,7 +674,7 @@ describe('ManagedIdentityAuthHandler', () => {
             await expect(invokeOidcCallback(options)).resolves.toMatchObject({ accessToken: 'a-token' });
             const error = new Error('token failure');
             getManagedIdentityAccessToken.mockRejectedValueOnce(error);
-            await expect(invokeOidcCallback(options)).rejects.toBe(error);
+            await expect(invokeOidcCallback(options)).rejects.toMatchObject({ cause: error });
         });
     });
 });

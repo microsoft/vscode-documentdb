@@ -94,6 +94,7 @@ export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
      */
     protected async authenticateAndConnect(): Promise<ClustersClient | null> {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
+            const epoch = ClustersClient.getEpoch(this.cluster.clusterId);
             context.telemetry.properties.view = Views.AzureResourcesView;
             context.telemetry.properties.branch = 'documentdb';
             context.telemetry.properties.connectionInitiatedFrom = Views.AzureResourcesView;
@@ -203,8 +204,7 @@ export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
                 });
 
                 // Clean up failed connection
-                await ClustersClient.deleteClient(this.cluster.clusterId);
-                CredentialCache.deleteCredentials(this.cluster.clusterId);
+                await this.finishFailedStartup(context, error, epoch);
 
                 return null;
             }

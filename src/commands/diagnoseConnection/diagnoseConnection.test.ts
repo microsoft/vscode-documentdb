@@ -49,7 +49,10 @@ vi.mock('../../documentdb/CredentialCache', () => ({
     CredentialCache: { hasCredentials: vi.fn(), setCredentials: vi.fn(), setAuthCredentials: vi.fn() },
 }));
 vi.mock('../../documentdb/ClustersClient', () => ({
+    addEstablishedConnectionContext: vi.fn(),
     ClustersClient: {
+        getEpoch: vi.fn(() => 0),
+        getLatchReason: vi.fn(),
         getClient: vi.fn(),
         exists: vi.fn().mockReturnValue(false),
         getExistingClient: vi.fn(),

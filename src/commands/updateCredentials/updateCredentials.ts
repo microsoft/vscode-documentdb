@@ -57,6 +57,12 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
     }
+    const clusterId = node.cluster.clusterId;
+    let epoch = ClustersClient.getEpoch(clusterId);
+    const recoveringRejection = ClustersClient.getLatchReason(clusterId) === 'credentialsRejected';
+    const isRecoveryCurrent = recoveringRejection
+        ? (): boolean => ClustersClient.getEpoch(clusterId) === epoch
+        : undefined;
     // The failed attempt these credentials replace; the reconnect's `connect.startup` names it in
     // `previousFailedStartupCorrelationId`, so it shows whether the new credentials worked.
     const failedStartupCorrelationId = ClustersClient.getLastFailedStartupCorrelationId(node.cluster.clusterId);
@@ -72,6 +78,9 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     const resourceType = resolveStorageZone(node.cluster);
 
     const storedItem = await ConnectionStorageService.get(node.storageId, resourceType);
+    if (isRecoveryCurrent?.() === false) {
+        return;
+    }
     // Type guard ensures we have connection properties (not a folder)
     const connectionCredentials = storedItem && isConnection(storedItem) ? storedItem : undefined;
     const connectionString = connectionCredentials?.secrets?.connectionString || '';
@@ -115,6 +124,7 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
         storageId: node.storageId,
         isErrorState,
         reconnectAfterError: false,
+        isRecoveryCurrent,
     };
 
     const wizard = new AzureWizard(wizardContext, {
@@ -137,15 +147,35 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     });
 
     await wizard.prompt();
+    if (isRecoveryCurrent?.() === false) {
+        return;
+    }
     await wizard.execute();
-
-    await ClustersClient.deleteClient(node.cluster.clusterId);
+    if (isRecoveryCurrent?.() === false || (recoveringRejection && !wizardContext.credentialsSaved)) {
+        return;
+    }
 
     const updatedStoredItem = await ConnectionStorageService.get(node.storageId, resourceType);
+    if (isRecoveryCurrent?.() === false) {
+        return;
+    }
     const updatedConnection = updatedStoredItem && isConnection(updatedStoredItem) ? updatedStoredItem : undefined;
+    const closing = ClustersClient.deleteClient(clusterId);
+    epoch = ClustersClient.getEpoch(clusterId);
+    await closing;
+    // Do not publish cached credentials over a lifecycle change during close.
+    if (ClustersClient.getEpoch(clusterId) !== epoch) {
+        return;
+    }
     const authMethod = authMethodFromString(updatedConnection?.properties.selectedAuthMethod);
     const username = updatedConnection?.secrets.nativeAuthConfig?.connectionUser;
     const password = updatedConnection?.secrets.nativeAuthConfig?.connectionPassword;
+    if (recoveringRejection && authMethod === AuthMethodId.MicrosoftEntraID) {
+        ClustersClient.discardEntraPinForDifferentTenant(
+            clusterId,
+            updatedConnection?.secrets.entraIdAuthConfig?.tenantId,
+        );
+    }
     if (updatedConnection && authMethod && !(authMethod === AuthMethodId.NativeAuth && (!username || !password))) {
         const connectionString = new DocumentDBConnectionString(updatedConnection.secrets.connectionString);
 
@@ -161,6 +191,9 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     } else {
         // Clear stale credentials so the tree can prompt from storage.
         CredentialCache.deleteCredentials(node.cluster.clusterId);
+    }
+    if (recoveringRejection && updatedConnection) {
+        ClustersClient.clearCredentialRejection(clusterId, epoch);
     }
 
     shutdownEvaluator(node.cluster.clusterId);

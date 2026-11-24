@@ -11,9 +11,13 @@ import {
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { EntraDestinationRejectedError } from '../../documentdb/auth/oidcAllowedHosts';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
+import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
+import { CredentialCache } from '../../documentdb/CredentialCache';
 import { ShellCommandIds } from '../../documentdb/shell/constants';
+import { Views } from '../../documentdb/Views';
 import { type Experience } from '../../DocumentDBExperiences';
 import { containsRetryNode, RETRY_NODE_ID_SUFFIX } from '../api/retryNode';
 import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
@@ -67,11 +71,22 @@ const mockGetSetting = vi.fn().mockReturnValue(false);
 vi.mock('../../documentdb/CredentialCache', () => ({
     CredentialCache: {
         hasCredentials: (...args: unknown[]) => mockHasCredentials(...args),
+        getCredentials: vi.fn(),
+        deleteCredentials: vi.fn(),
     },
 }));
 
 vi.mock('../../documentdb/ClustersClient', () => ({
-    ClustersClient: { connectInteractive: vi.fn(), exists: vi.fn().mockReturnValue(false), getExistingClient: vi.fn() },
+    addEstablishedConnectionContext: vi.fn(),
+    ClustersClient: {
+        connectInteractive: vi.fn(),
+        exists: vi.fn().mockReturnValue(false),
+        getExistingClient: vi.fn(),
+        getLatchReason: vi.fn(),
+        getEpoch: vi.fn(() => 0),
+        getLastVerifiedIdentity: vi.fn(),
+        reportFailure: vi.fn(),
+    },
 }));
 
 vi.mock('../../extensionVariables', () => ({
@@ -434,6 +449,148 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
                 ) => unknown,
             ) => task({ report: vi.fn() }, { isCancellationRequested: false, onCancellationRequested: vi.fn() }),
         );
+    });
+
+    it.each(['signInRequired', 'credentialsRejected'] as const)(
+        'offers Retry sign-in instead of Retry for %s and keeps the failed-expansion marker',
+        async (reason): Promise<void> => {
+            if (reason === 'credentialsRejected') {
+                ClustersClientMock.getLatchReason.mockReturnValueOnce(reason);
+            }
+            ClustersClientMock.connectInteractive.mockRejectedValueOnce(new ConnectionUnavailableError(reason));
+            vi.mocked(CredentialCache.getCredentials).mockReturnValue({
+                clusterId: 'cluster-1',
+                connectionString: 'mongodb://example.test',
+                authMechanism: AuthMethodId.MicrosoftEntraID,
+            });
+            ClustersClientMock.getLastVerifiedIdentity.mockReturnValue({
+                kind: 'entra',
+                providerId: 'microsoft',
+                accountLabel: 'test',
+                accountId: 'id',
+            });
+            const item = new TestClusterItem(makeCluster(), null);
+
+            const children = await item.getChildren();
+
+            expect(children.map(({ id }) => id)).toEqual([
+                'cluster-1/sign-in-again',
+                'cluster-1/diagnose',
+                'cluster-1/open-shell',
+            ]);
+            expect(children[0]).toMatchObject({ label: 'Retry sign-in' });
+            if (reason === 'credentialsRejected') {
+                expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(expect.any(String), {
+                    modal: true,
+                    detail: 'The database rejected the credentials. Choose Retry sign-in to continue.',
+                });
+            }
+            expect(item.hasRetryNode(children)).toBe(true);
+            expect(ClustersClientMock.reportFailure).not.toHaveBeenCalled();
+            expect(CredentialCache.deleteCredentials).not.toHaveBeenCalled();
+            vi.mocked(CredentialCache.getCredentials).mockReset();
+            ClustersClientMock.getLastVerifiedIdentity.mockReset();
+        },
+    );
+
+    it('does not publish a database listing from a different identity', async (): Promise<void> => {
+        const binding = { clusterId: 'cluster-1', fingerprint: 'old', generation: 1 };
+        const client = {
+            ...makeClient(vi.fn().mockResolvedValue([{ name: 'old-database' }])),
+            binding,
+        } as ClustersClient;
+        const replacement = { ...client, fingerprint: 'new' } as ClustersClient;
+        ClustersClientMock.connectInteractive.mockResolvedValueOnce(client);
+        ClustersClientMock.getExistingClient.mockReturnValueOnce(replacement);
+
+        expect(await new TestClusterItem(makeCluster(), null).getChildren()).toEqual([]);
+        expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+    });
+
+    it.each(['diagnose', 'sign-in-again'])(
+        'does not mistake a database named %s for a recovery action',
+        (name): void => {
+            const item = new TestClusterItem(makeCluster(), null);
+            const child = {
+                id: `cluster-1/${name}`,
+                contextValue: 'treeItem_documentdbdatabase',
+                getTreeItem: (): vscode.TreeItem => ({ label: name }),
+            };
+
+            expect(item.hasRetryNode([child])).toBe(false);
+        },
+    );
+
+    it('keeps actionable recovery children without an inert Retry for stored credentials', async (): Promise<void> => {
+        ClustersClientMock.getLatchReason.mockReturnValue('credentialsRejected');
+        ClustersClientMock.connectInteractive.mockRejectedValueOnce(
+            new ConnectionUnavailableError('credentialsRejected'),
+        );
+        const item = new TestClusterItem({ ...makeCluster(), viewId: Views.ConnectionsView }, null);
+        try {
+            const children = await item.getChildren();
+
+            expect(children.map(({ id }) => id)).toEqual(['cluster-1/diagnose', 'cluster-1/open-shell']);
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(expect.any(String), {
+                modal: true,
+                detail: 'The database rejected the credentials. Choose Update credentials to continue.',
+            });
+            expect(item.hasRetryNode(children)).toBe(true);
+        } finally {
+            ClustersClientMock.getLatchReason.mockReset();
+        }
+    });
+
+    it('keeps Retry for a synthetic Connections view item without a credential editor', async (): Promise<void> => {
+        ClustersClientMock.getLatchReason.mockReturnValue('credentialsRejected');
+        ClustersClientMock.connectInteractive.mockRejectedValueOnce(
+            new ConnectionUnavailableError('credentialsRejected'),
+        );
+        const item = new TestClusterItem({ ...makeCluster(), viewId: Views.ConnectionsView }, null);
+        item.contextValue = 'treeItem_quickStartInstance';
+        try {
+            expect((await item.getChildren()).map(({ id }) => id)).toEqual([
+                'cluster-1/diagnose',
+                'cluster-1/open-shell',
+                'cluster-1/retry',
+            ]);
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(expect.any(String), {
+                modal: true,
+                detail: 'The database rejected the credentials. Choose Retry to reload them.',
+            });
+        } finally {
+            ClustersClientMock.getLatchReason.mockReset();
+        }
+    });
+
+    it('explains how to reload a rejected Azure key', async (): Promise<void> => {
+        ClustersClientMock.getLatchReason.mockReturnValue('credentialsRejected');
+        ClustersClientMock.connectInteractive.mockRejectedValueOnce(
+            new ConnectionUnavailableError('credentialsRejected'),
+        );
+        const item = new TestClusterItem({ ...makeCluster(), viewId: Views.AzureResourcesView }, null);
+        item.readReplacementKey = vi.fn();
+        try {
+            await item.getChildren();
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(expect.any(String), {
+                modal: true,
+                detail: 'The database rejected the key. Choose Retry to read the key from Azure again.',
+            });
+        } finally {
+            ClustersClientMock.getLatchReason.mockReset();
+        }
+    });
+
+    it('reports the binding that executed listDatabases, not the current cache entry', async (): Promise<void> => {
+        const error = new Error('deprecated generation');
+        const binding = { clusterId: 'cluster-1', fingerprint: 'old', generation: 1 };
+        const client = { ...makeClient(vi.fn().mockRejectedValue(error)), binding } as ClustersClient;
+        ClustersClientMock.connectInteractive.mockResolvedValueOnce(client);
+        ClustersClientMock.reportFailure.mockReturnValueOnce(undefined);
+
+        expect(await new TestClusterItem(makeCluster(), null).getChildren()).toEqual([]);
+        expect(ClustersClientMock.reportFailure).toHaveBeenCalledExactlyOnceWith(binding, error);
+        expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
     });
 
     it('returns a retry node when reusing the cached client fails (without listing databases)', async () => {

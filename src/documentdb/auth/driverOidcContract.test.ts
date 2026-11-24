@@ -18,6 +18,8 @@ import { AutomatedCallbackWorkflow as DriverWorkflow } from 'mongodb/lib/cmap/au
 // eslint-disable-next-line import/no-internal-modules -- The workflow needs the driver's real token cache.
 import { TokenCache as DriverTokenCache } from 'mongodb/lib/cmap/auth/mongodb_oidc/token_cache.js';
 import { describe, expect, it, vi } from 'vitest';
+import { classifyConnectionFailure } from '../connectionFailures';
+import { AuthMethodId } from './AuthMethod';
 
 // The driver's public declarations omit these internals. Type only the surface the suite uses.
 interface SaslStart {
@@ -118,6 +120,29 @@ describe('driver contract: mongodb OIDC workflow (7.2.0)', () => {
         expect(command.mock.calls.map(([, request]) => BSON.deserialize(request.payload.value()))).toEqual([
             { jwt: 'dummy-cached-token' },
             { jwt: 'dummy-renewed-token' },
+        ]);
+    });
+
+    it('propagates the final code 18 unchanged when the callback-supplied token is also rejected', async (): Promise<void> => {
+        const cache = new TokenCache();
+        cache.put({ accessToken: 'dummy-cached-token' });
+        const callback = vi.fn<OIDCCallbackFunction>().mockResolvedValue({ accessToken: 'dummy-callback-token' });
+        const workflow = new AutomatedCallbackWorkflow(cache, callback);
+        const finalError = new MongoServerError({ code: 18, errmsg: 'dummy authentication failure' });
+        const command = vi
+            .fn<FakeConnection['command']>()
+            .mockRejectedValueOnce(new MongoServerError({ code: 18, errmsg: 'dummy authentication failure' }))
+            .mockRejectedValueOnce(finalError);
+
+        await expect(workflow.execute({ command }, credentials)).rejects.toBe(finalError);
+        expect(classifyConnectionFailure(finalError, AuthMethodId.MicrosoftEntraID)).toEqual({
+            kind: 'credentialsRejected',
+            generation: 'evict',
+        });
+        expect(callback).toHaveBeenCalledTimes(1);
+        expect(command.mock.calls.map(([, request]) => BSON.deserialize(request.payload.value()))).toEqual([
+            { jwt: 'dummy-cached-token' },
+            { jwt: 'dummy-callback-token' },
         ]);
     });
 

@@ -10,21 +10,23 @@ created: 2026-11-19
 > Why connections stay usable across token expiry and idle drops, and how open surfaces behave
 > when credentials or the identity change. Evidence: [research-findings.md](./research-findings.md).
 
-| #    | Decision                                                                                                   | Status                      | Changed from the proposal?                             | Date       | PR  |
-| ---- | ---------------------------------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------ | ---------- | --- |
-| 0001 | Entra tokens are renewed silently in every OIDC callback; the callback never prompts                       | Accepted                    | Operator accepted the explanation (2026-11-19)         | 2026-11-19 | —   |
-| 0002 | Keep one cached client per cluster; surfaces resolve it per operation with identity + generation           | Accepted (modified by 0010) | Operator position: per-operation clients cost too much | 2026-11-19 | —   |
-| 0003 | An open surface never moves to a different identity; it becomes disconnected, keeps its state and says why | Accepted                    | Operator requirement                                   | 2026-11-19 | —   |
-| 0004 | Disconnect lets the user choose: close all affected tabs, or keep them open and disabled                   | Accepted                    | Operator position; the default is still open (Q2)      | 2026-11-19 | —   |
-| 0005 | Fix stale ARM credentials by upgrading azureauth to v6 (#990), not with a local shim                       | Accepted                    | Operator: open to updating dependencies                | 2026-11-19 | —   |
-| 0006 | Deliver through `feature/connection-lifecycle` with stacked sub-PRs, ship once                             | Accepted (amended)          | Operator removed the intermediate merge wait           | 2026-11-19 | —   |
-| 0007 | The Disconnect choice is a VS Code modal with nothing remembered; a setting can set the default            | Accepted                    | Operator: modal cannot pre-select; no remembering      | 2026-11-19 | —   |
-| 0008 | Upgrade the azext stack as high as viable without breaking workflows, using Azure Resources as reference   | Accepted                    | Operator: replaces the "minimal versions" proposal     | 2026-11-19 | —   |
-| 0009 | Kubernetes tunnel recovery, cluster ID case handling and wider network-resilience testing move to #1105    | Accepted                    | Operator: keep 1.2.0 focused; schedule after release   | 2026-11-19 | —   |
-| 0010 | Rely on the server to reject expired tokens; replacing a client for the same identity is transparent       | Accepted                    | Operator: no rotation, no out-of-date notices          | 2026-11-19 | —   |
-| 0011 | Disconnect keeps the cached credentials and the verified identity; only Remove drops them                  | Accepted                    | Operator: reverses the #1059 proposal (plan Q3)        | 2026-11-19 | —   |
-| 0012 | Keep the lifecycle design minimal: no state machine, one epoch, no prompts in getClient, one-step teardown | Accepted                    | Operator: approved every proposed simplification       | 2026-11-19 | —   |
-| 0013 | Correct the minimal design where it lost edits, identity or recovery: latch before save, epoch checks      | Accepted (modifies 0012)    | Operator: "update the plan" after the omissions review | 2026-11-19 | —   |
+| #    | Decision                                                                                                   | Status                      | Changed from the proposal?                                  | Date       | PR                                                               |
+| ---- | ---------------------------------------------------------------------------------------------------------- | --------------------------- | ----------------------------------------------------------- | ---------- | ---------------------------------------------------------------- |
+| 0001 | Entra tokens are renewed silently in every OIDC callback; the callback never prompts                       | Accepted                    | Operator accepted the explanation (2026-11-19)              | 2026-11-19 | —                                                                |
+| 0002 | Keep one cached client per cluster; surfaces resolve it per operation with identity + generation           | Accepted (modified by 0010) | Operator position: per-operation clients cost too much      | 2026-11-19 | —                                                                |
+| 0003 | An open surface never moves to a different identity; it becomes disconnected, keeps its state and says why | Accepted                    | Operator requirement                                        | 2026-11-19 | —                                                                |
+| 0004 | Disconnect lets the user choose: close all affected tabs, or keep them open and disabled                   | Accepted                    | Operator position; the default is still open (Q2)           | 2026-11-19 | —                                                                |
+| 0005 | Fix stale ARM credentials by upgrading azureauth to v6 (#990), not with a local shim                       | Accepted                    | Operator: open to updating dependencies                     | 2026-11-19 | —                                                                |
+| 0006 | Deliver through `feature/connection-lifecycle` with stacked sub-PRs, ship once                             | Accepted (amended)          | Operator removed the intermediate merge wait                | 2026-11-19 | —                                                                |
+| 0007 | The Disconnect choice is a VS Code modal with nothing remembered; a setting can set the default            | Accepted                    | Operator: modal cannot pre-select; no remembering           | 2026-11-19 | —                                                                |
+| 0008 | Upgrade the azext stack as high as viable without breaking workflows, using Azure Resources as reference   | Accepted                    | Operator: replaces the "minimal versions" proposal          | 2026-11-19 | —                                                                |
+| 0009 | Kubernetes tunnel recovery, cluster ID case handling and wider network-resilience testing move to #1105    | Accepted                    | Operator: keep 1.2.0 focused; schedule after release        | 2026-11-19 | —                                                                |
+| 0010 | Rely on the server to reject expired tokens; replacing a client for the same identity is transparent       | Accepted                    | Operator: no rotation, no out-of-date notices               | 2026-11-19 | —                                                                |
+| 0011 | Disconnect keeps the cached credentials and the verified identity; only Remove drops them                  | Accepted                    | Operator: reverses the #1059 proposal (plan Q3)             | 2026-11-19 | —                                                                |
+| 0012 | Keep the lifecycle design minimal: no state machine, one epoch, no prompts in getClient, one-step teardown | Accepted                    | Operator: approved every proposed simplification            | 2026-11-19 | —                                                                |
+| 0013 | Correct the minimal design where it lost edits, identity or recovery: latch before save, epoch checks      | Accepted (modifies 0012)    | Operator: "update the plan" after the omissions review      | 2026-11-19 | —                                                                |
+| 0014 | Keep in-memory connection settings after a rejection for a verified Entra identity                         | Accepted                    | Operator selected A to make sign-in recovery smoother       | 2026-11-23 | Yes; WI-5 previously said to delete the entry                    |
+| 0015 | Use the existing latch to block startup after authentication rejection                                     | Accepted                    | Operator selected A; keep the approach simple and pragmatic | 2026-11-23 | Yes; expands the existing latch rather than adding a second hold |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -399,3 +401,26 @@ The findings, each confirmed in the code, and the corrections now in the dev pla
   submission, no replay, no stale UI update and no claim that an unacknowledged write was not applied.
 
 None of the corrections adds a state machine or a service; 0012's other rules stand.
+
+## 0014. Keep in-memory connection settings after a rejection for a verified Entra identity
+
+A final Entra database authentication rejection still evicts the client. If the connection has a
+verified Entra identity, keep its existing in-memory connection settings so **Sign in again** can
+start from that identity, including when invoked with only `clusterId`. The operator chose this
+over deleting the settings and losing that recovery action, to keep recovery smooth.
+
+This does not retain the rejected token, write anything to persistent storage, change destination
+checks, or start a silent retry. Native authentication and RU key handling are unchanged. The
+explicit sign-in path still checks the epoch after prompting and never moves an open surface to a
+different identity.
+
+## 0015. Use the existing latch to block startup after authentication rejection
+
+Evicting a rejected client is not enough: a subsequent operation could immediately start a new
+one with the same settings. Set the existing in-memory latch to `credentialsRejected` before
+evicting the rejected generation. The matching explicit recovery can clear that reason only if
+the epoch still matches. It cannot clear a latch set by Disconnect, Remove or a credential change.
+
+The operator chose to reuse the existing latch rather than introduce a separate authentication
+hold, keeping one place to check for an unavailable connection. The rejection latch uses the
+existing epoch and does not add a subscription, new persistence, or a retry loop.
