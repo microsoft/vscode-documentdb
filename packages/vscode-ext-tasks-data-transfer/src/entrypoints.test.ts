@@ -18,9 +18,11 @@ describe('package entry points', () => {
             [
                 '--input-type=module',
                 '-e',
-                "import { BaseDocumentReader } from '@microsoft/vscode-ext-tasks-data-transfer'; " +
-                    "import { CopyPasteCollectionTask } from '@microsoft/vscode-ext-tasks-data-transfer/copy-collection'; " +
-                    "console.log(typeof BaseDocumentReader, typeof CopyPasteCollectionTask)",
+                [
+                    "import { BaseDocumentReader } from '@microsoft/vscode-ext-tasks-data-transfer';",
+                    "import { CopyPasteCollectionTask } from '@microsoft/vscode-ext-tasks-data-transfer/copy-collection';",
+                    'console.log(typeof BaseDocumentReader, typeof CopyPasteCollectionTask)',
+                ].join(' '),
             ],
             { cwd: packageRoot, encoding: 'utf8' },
         );
