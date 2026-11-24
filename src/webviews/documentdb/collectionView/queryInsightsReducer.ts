@@ -35,6 +35,7 @@ import { type QueryInsightsStreamEvent } from './types/queryInsightsStream';
 //   startStage1Load   :  *                              → s1Loading      (also: full reset of any prior stages — fresh query)
 //   stage1Succeeded   :  s1Loading                      → s2Loading      (auto-chains; stage1 data is carried forward)
 //   stage1Failed      :  s1Loading                      → s1Error
+//   cancelStages12    :  s1Loading | s2Loading          → s1Cancelled | s2Cancelled
 //
 //   stage2Succeeded   :  s2Loading                      → s3Idle         (now showing the "Get AI" button)
 //   stage2Failed      :  s2Loading                      → s2Error
@@ -160,6 +161,20 @@ export function stage1Failed(prev: QueryInsightsState, message: string, code: st
         return trace('stage1Failed[ignored]', prev, prev);
     }
     return trace('stage1Failed', prev, { kind: 's1Error', message, code });
+}
+
+/**
+ * Stop an interrupted Stage 1 or Stage 2 without returning to `idle`, which
+ * would let the tab fallback immediately start a replacement request.
+ */
+export function cancelStages12(prev: QueryInsightsState): QueryInsightsState {
+    if (prev.kind === 's1Loading') {
+        return trace('cancelStages12', prev, { kind: 's1Cancelled' });
+    }
+    if (prev.kind === 's2Loading') {
+        return trace('cancelStages12', prev, { kind: 's2Cancelled', stage1: prev.stage1 });
+    }
+    return trace('cancelStages12[ignored]', prev, prev);
 }
 
 // ============================================================================

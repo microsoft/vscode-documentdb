@@ -41,7 +41,7 @@ import { ToolbarTableNavigation } from './components/toolbar/ToolbarTableNavigat
 import { ToolbarViewNavigation } from './components/toolbar/ToolbarViewNavigation';
 import { ViewSwitcher } from './components/toolbar/ViewSwitcher';
 import { IndexesTab } from './indexesTab/IndexesTab';
-import { stage1Failed, stage1Succeeded, startStage1Load } from './queryInsightsReducer';
+import { cancelStages12, stage1Failed, stage1Succeeded, startStage1Load } from './queryInsightsReducer';
 import { QueryInsightsMain } from './queryInsightsTab/QueryInsightsTab';
 import { extractErrorCode } from './utils/errorCodeExtractor';
 
@@ -183,7 +183,11 @@ export const CollectionView = (): JSX.Element => {
         unavailableRef.current = failure;
         setUnavailable(failure);
         setRecoveryAnnouncement(undefined);
-        setCurrentContext((prev) => ({ ...prev, isLoading: false }));
+        setCurrentContext((prev) => ({
+            ...prev,
+            isLoading: false,
+            queryInsights: cancelStages12(prev.queryInsights),
+        }));
     }, []);
 
     const beginOperation = useCallback((revealUnavailable = true): number | undefined => {

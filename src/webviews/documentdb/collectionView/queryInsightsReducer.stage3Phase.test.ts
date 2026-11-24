@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import { type AIIndexRecommendation } from '../../../services/ai/types';
 import { type QueryInsightsState } from './collectionViewContext';
-import { applyStage3Event, startStage3Load } from './queryInsightsReducer';
+import { applyStage3Event, cancelStages12, startStage3Load } from './queryInsightsReducer';
 import { type QueryInsightsStage1Response, type QueryInsightsStage2Response } from './types/queryInsights';
 import { type QueryInsightsStreamEvent } from './types/queryInsightsStream';
 
@@ -36,6 +36,20 @@ const STAGE1: QueryInsightsStage1Response = {
 
 /** Minimal Stage 2 payload — only its presence matters to these tests. */
 const STAGE2 = { executionTimeMs: 1, concerns: [] } as unknown as QueryInsightsStage2Response;
+
+describe('queryInsightsReducer — interrupted early stages', () => {
+    it('cancels Stage 1 without re-arming the idle fallback', () => {
+        const interrupted = cancelStages12({ kind: 's1Loading' });
+
+        expect(interrupted.kind).toBe('s1Cancelled');
+    });
+
+    it('cancels Stage 2 while preserving the completed Stage 1 result', () => {
+        const interrupted = cancelStages12({ kind: 's2Loading', stage1: STAGE1 });
+
+        expect(interrupted).toEqual({ kind: 's2Cancelled', stage1: STAGE1 });
+    });
+});
 
 /** Build an `s3Loading` state with a fresh empty streaming buffer. */
 function loadingState(requestKey = 'rk-1'): QueryInsightsState {

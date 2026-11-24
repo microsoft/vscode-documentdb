@@ -111,7 +111,10 @@ export const QueryInsightsMain = (): JSX.Element => {
 
     /** Stage 1 result (if Stage 1 has succeeded — present from `s2Loading` onward). */
     const stage1Data =
-        pipeline.kind === 'idle' || pipeline.kind === 's1Loading' || pipeline.kind === 's1Error'
+        pipeline.kind === 'idle' ||
+        pipeline.kind === 's1Loading' ||
+        pipeline.kind === 's1Error' ||
+        pipeline.kind === 's1Cancelled'
             ? null
             : pipeline.stage1;
 
@@ -120,8 +123,10 @@ export const QueryInsightsMain = (): JSX.Element => {
         pipeline.kind === 'idle' ||
         pipeline.kind === 's1Loading' ||
         pipeline.kind === 's1Error' ||
+        pipeline.kind === 's1Cancelled' ||
         pipeline.kind === 's2Loading' ||
-        pipeline.kind === 's2Error'
+        pipeline.kind === 's2Error' ||
+        pipeline.kind === 's2Cancelled'
             ? null
             : pipeline.stage2;
 
@@ -165,6 +170,8 @@ export const QueryInsightsMain = (): JSX.Element => {
      * in lock step. See packages/vscode-ext-webview ADVANCED.md.
      */
     const stage3SubscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
+    const stage2InFlightRef = useRef(false);
+    const stage2RequestRevisionRef = useRef(0);
 
     /**
      * Timer ref for the delayed 'Query Execution Failed' card surfaced when
@@ -237,6 +244,8 @@ export const QueryInsightsMain = (): JSX.Element => {
         if (!unavailable) {
             return;
         }
+        stage2RequestRevisionRef.current += 1;
+        stage2InFlightRef.current = false;
         stage3SubscriptionRef.current?.unsubscribe();
         stage3SubscriptionRef.current = null;
         dispatch(cancelStage3);
@@ -395,7 +404,6 @@ export const QueryInsightsMain = (): JSX.Element => {
     // pipeline leaves `s2Loading`, but we may have already re-rendered in
     // `s2Loading` once before that. The ref prevents the effect from
     // double-firing within that window.
-    const stage2InFlightRef = useRef(false);
     useEffect(() => {
         if (pipeline.kind === 's2Loading' && !stage2InFlightRef.current) {
             const lifecycleRevision = beginOperation();
@@ -403,6 +411,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                 return;
             }
             stage2InFlightRef.current = true;
+            const requestRevision = ++stage2RequestRevisionRef.current;
 
             // Track start time to ensure minimum duration for better UX.
             const startTime = performance.now();
@@ -437,7 +446,9 @@ export const QueryInsightsMain = (): JSX.Element => {
                     dispatch((prev) => stage2Failed(prev, errorMessage, errorCode));
                 })
                 .finally(() => {
-                    stage2InFlightRef.current = false;
+                    if (requestRevision === stage2RequestRevisionRef.current) {
+                        stage2InFlightRef.current = false;
+                    }
                 });
         }
     }, [pipeline.kind, trpcClient, dispatch, beginOperation, isOperationCurrent, showUnavailable]);
@@ -457,7 +468,11 @@ export const QueryInsightsMain = (): JSX.Element => {
     // Skeleton while Stage 1 or Stage 2 is loading (NOT during Stage 3).
     // N/A only on Stage 1 / Stage 2 errors (Stage 3 errors don't affect metrics).
     const showMetricsSkeleton = pipeline.kind === 's1Loading' || pipeline.kind === 's2Loading';
-    const hasMetricsError = pipeline.kind === 's1Error' || pipeline.kind === 's2Error';
+    const hasMetricsError =
+        pipeline.kind === 's1Error' ||
+        pipeline.kind === 's1Cancelled' ||
+        pipeline.kind === 's2Error' ||
+        pipeline.kind === 's2Cancelled';
 
     // Value resolution for metric/summary cells. The result drives the cell's
     // placeholder logic (see `MetricCard`): `null` → "N/A" (unavailable), `undefined`
