@@ -26,7 +26,7 @@ import { ext } from '../../../extensionVariables';
 import { type ConnectionUnavailableMessage } from '../../_integration/connectionUnavailable';
 import { describeUnavailableConnection } from '../../_integration/describeUnavailableConnection';
 import { openAppWebview, type AppWebviewController } from '../../_integration/openAppWebview';
-import { guardBoundViewOperation, isBoundViewOperationCurrent, recoverBoundView } from '../boundViewOperations';
+import { guardBoundViewOperation, recoverBoundView } from '../boundViewOperations';
 import {
     CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS,
     type ClusterDashboardContextMenuContext,
@@ -348,7 +348,7 @@ async function runRowAction(
             await postInventoryChanged(panel, databaseName);
         }
     } finally {
-        if (action.reportsBusy && !panel.controller.isDisposed && isBoundViewOperationCurrent(assertCurrent)) {
+        if (action.reportsBusy && !panel.controller.isDisposed && !panel.getUnavailable()) {
             await postNamespaceBusy(panel, databaseName, collectionName, 'delete', false);
         }
     }
