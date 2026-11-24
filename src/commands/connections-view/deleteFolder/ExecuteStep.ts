@@ -11,8 +11,8 @@ import {
     refreshParentInConnectionsView,
     withConnectionsViewProgress,
 } from '../../../tree/connections-view/connectionsViewHelpers';
-import { type DeleteFolderWizardContext } from './DeleteFolderWizardContext';
 import { enumerateConnectionsInFolder } from '../verificationUtils';
+import { type DeleteFolderWizardContext } from './DeleteFolderWizardContext';
 
 /**
  * Step to execute the folder deletion operation.
@@ -30,7 +30,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<DeleteFolderWizardContex
         context.deletedFolders = 0;
         context.deletedConnections = 0;
 
-            const ids = await enumerateConnectionsInFolder(context.folderItem.storageId, context.connectionType);
+        const ids = await enumerateConnectionsInFolder(context.folderItem.storageId, context.connectionType);
         try {
             await withConnectionRemoval(ids, async (removeConnection) => {
                 await withConnectionsViewProgress(async () => {
@@ -70,7 +70,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<DeleteFolderWizardContex
                 await ConnectionStorageService.delete(context.connectionType, child.id);
                 context.deletedFolders++;
             } else {
-                await removeConnection(child.id, () => ConnectionStorageService.delete(context.connectionType, child.id));
+                await removeConnection(child.id, () =>
+                    ConnectionStorageService.delete(context.connectionType, child.id),
+                );
                 context.deletedConnections++;
             }
         }

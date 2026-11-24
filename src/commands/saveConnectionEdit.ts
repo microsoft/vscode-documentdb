@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
-import * as vscode from 'vscode';
 import { isDeepStrictEqual } from 'node:util';
+import * as vscode from 'vscode';
 import { clearEntraTokenFailure } from '../documentdb/auth/entraErrors/entraTokenFailures';
 import { ClustersClient } from '../documentdb/ClustersClient';
 import { getConnectionSurfaces } from '../documentdb/connectionSurfaces';
@@ -93,15 +93,25 @@ export async function saveConnectionEdit(
                 const closing = ClustersClient.deleteClient(clusterId, { alreadyInvalidated: true });
                 CredentialCache.deleteCredentials(clusterId);
                 clearEntraTokenFailure(clusterId);
-                if (!after || !isConnection(after) || !before || !isConnection(before) ||
-                    before.properties.selectedAuthMethod !== after.properties.selectedAuthMethod) {
+                if (
+                    !after ||
+                    !isConnection(after) ||
+                    !before ||
+                    !isConnection(before) ||
+                    before.properties.selectedAuthMethod !== after.properties.selectedAuthMethod
+                ) {
                     ClustersClient.clearLastVerifiedIdentity(clusterId);
                 } else if (before.secrets.entraIdAuthConfig?.tenantId !== after.secrets.entraIdAuthConfig?.tenantId) {
-                    ClustersClient.discardEntraPinForDifferentTenant(clusterId, after.secrets.entraIdAuthConfig?.tenantId);
+                    ClustersClient.discardEntraPinForDifferentTenant(
+                        clusterId,
+                        after.secrets.entraIdAuthConfig?.tenantId,
+                    );
                 }
                 if (!saved || !after) {
                     void vscode.window.showWarningMessage(
-                        vscode.l10n.t('The connection update may be incomplete. Check the saved settings before reconnecting.'),
+                        vscode.l10n.t(
+                            'The connection update may be incomplete. Check the saved settings before reconnecting.',
+                        ),
                     );
                 }
                 await closing;

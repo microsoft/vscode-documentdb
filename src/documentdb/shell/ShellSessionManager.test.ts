@@ -107,7 +107,11 @@ describe('ShellSessionManager', () => {
     const clusterId = 'test-cluster-id';
 
     it('does not initialize or evaluate a worker while the cluster is disconnected', async () => {
-        const manager = new ShellSessionManager({ clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' });
+        const manager = new ShellSessionManager({
+            clusterId,
+            clusterDisplayName: 'Test Cluster',
+            databaseName: 'test',
+        });
         ClustersClient.latch(clusterId, 'userDisconnected');
         try {
             await expect(manager.initialize()).rejects.toMatchObject({ reason: 'userDisconnected' });

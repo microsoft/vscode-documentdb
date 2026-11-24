@@ -163,7 +163,10 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
                 }
                 const authMethod = authMethodFromString(updated.properties.selectedAuthMethod);
                 const native = updated.secrets.nativeAuthConfig;
-                if (!authMethod || (authMethod === AuthMethodId.NativeAuth && (!native?.connectionUser || !native.connectionPassword))) {
+                if (
+                    !authMethod ||
+                    (authMethod === AuthMethodId.NativeAuth && (!native?.connectionUser || !native.connectionPassword))
+                ) {
                     return;
                 }
                 CredentialCache.setAuthCredentials(

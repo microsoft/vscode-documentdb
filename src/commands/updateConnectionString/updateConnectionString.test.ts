@@ -205,7 +205,9 @@ describe('updateConnectionString rejected-destination recovery', () => {
             await updateConnectionString(makeContext(), item);
 
             expect(capturedContexts[0].connectionStringSaved).toBe(true);
-            expect(ClustersClient.deleteClient).toHaveBeenCalledExactlyOnceWith('stable-id', { alreadyInvalidated: true });
+            expect(ClustersClient.deleteClient).toHaveBeenCalledExactlyOnceWith('stable-id', {
+                alreadyInvalidated: true,
+            });
             expect(deleteCredentials).toHaveBeenCalledExactlyOnceWith('stable-id');
             expect(resetError).toHaveBeenCalledExactlyOnceWith(item.id);
             expect(provider.hasNodeErrorState(item.id)).toBe(false);

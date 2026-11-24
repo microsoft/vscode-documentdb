@@ -3,7 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling, UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
+import {
+    callWithTelemetryAndErrorHandling,
+    UserCancelledError,
+    type IActionContext,
+} from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { getPlaygroundEvaluators, stopPlaygroundEvaluator } from '../commands/playground/executePlaygroundCode';
 import { SettingsService } from '../services/SettingsService';
@@ -66,12 +70,14 @@ export async function confirmTeardown(
     const setting = SettingsService.getSetting<string>(settingsKeys.openTabsOnDisconnect);
     let choice: TeardownChoice = setting === 'keepOpenDisabled' ? 'keepOpenDisabled' : 'close';
     const closeAll = vscode.l10n.t('Close all');
-    if (setting !== 'closeAll' && setting !== 'keepOpenDisabled' && ids.some((id) => getConnectionSurfaces(id).length)) {
+    if (
+        setting !== 'closeAll' &&
+        setting !== 'keepOpenDisabled' &&
+        ids.some((id) => getConnectionSurfaces(id).length)
+    ) {
         const keepOpen = vscode.l10n.t('Keep open (disabled)');
         const selected = await vscode.window.showWarningMessage(
-            intent === 'connectionRemoved'
-                ? vscode.l10n.t('Remove the connection?')
-                : vscode.l10n.t('Disconnect?'),
+            intent === 'connectionRemoved' ? vscode.l10n.t('Remove the connection?') : vscode.l10n.t('Disconnect?'),
             { modal: true, detail: vscode.l10n.t('What should happen to the open tabs for this connection?') },
             closeAll,
             keepOpen,
@@ -98,7 +104,10 @@ export async function confirmTeardown(
 }
 
 /** Check the whole batch and fence it synchronously, before any resource is changed. */
-export function latchForTeardown(target: string | readonly string[], reason: TeardownReason | 'credentialsUpdating'): boolean {
+export function latchForTeardown(
+    target: string | readonly string[],
+    reason: TeardownReason | 'credentialsUpdating',
+): boolean {
     const ids = clusterIds(target);
     if (ids.some((clusterId) => TaskService.getConflictingTasks({ clusterId }).length > 0)) {
         return false;
@@ -162,7 +171,9 @@ export async function commitTeardown(
 
 export async function withConnectionRemoval(
     ids: readonly string[],
-    remove: (removeConnection: (clusterId: string, deleteStored: () => Promise<void>) => Promise<void>) => Promise<void>,
+    remove: (
+        removeConnection: (clusterId: string, deleteStored: () => Promise<void>) => Promise<void>,
+    ) => Promise<void>,
 ): Promise<void> {
     await reportTeardown(ids, 'connectionRemoved', async ({ telemetry }) => {
         await removeConnections(ids, remove, telemetry.properties);
@@ -171,7 +182,9 @@ export async function withConnectionRemoval(
 
 async function removeConnections(
     ids: readonly string[],
-    remove: (removeConnection: (clusterId: string, deleteStored: () => Promise<void>) => Promise<void>) => Promise<void>,
+    remove: (
+        removeConnection: (clusterId: string, deleteStored: () => Promise<void>) => Promise<void>,
+    ) => Promise<void>,
     properties: IActionContext['telemetry']['properties'],
 ): Promise<void> {
     const confirmed = await confirmTeardown(ids, 'connectionRemoved');
@@ -184,7 +197,11 @@ async function removeConnections(
     const targets = new Map(
         clusterIds(ids).map((id) => [id, { previous: ClustersClient.getLatchReason(id), epoch: 0, started: false }]),
     );
-    if ([...targets.values()].some(({ previous }) => previous === 'credentialsUpdating' || previous === 'connectionRemoved')) {
+    if (
+        [...targets.values()].some(
+            ({ previous }) => previous === 'credentialsUpdating' || previous === 'connectionRemoved',
+        )
+    ) {
         throw new Error(vscode.l10n.t('A connection is already being updated or removed. Try again when it finishes.'));
     }
     if (!latchForTeardown(ids, 'connectionRemoved')) {
@@ -222,7 +239,10 @@ async function removeConnections(
         });
     } finally {
         for (const [id, target] of targets) {
-            if (ClustersClient.getEpoch(id) !== target.epoch || ClustersClient.getLatchReason(id) !== 'connectionRemoved') {
+            if (
+                ClustersClient.getEpoch(id) !== target.epoch ||
+                ClustersClient.getLatchReason(id) !== 'connectionRemoved'
+            ) {
                 continue;
             }
             if (target.started) {
@@ -258,8 +278,8 @@ async function reportTeardown(
             (total, id) => total + getConnectionSurfaces(id).length,
             0,
         );
-        context.telemetry.measurements.shellCount = getRegisteredShellTerminals().filter(
-            (shell) => targets.has(shell.info.clusterId),
+        context.telemetry.measurements.shellCount = getRegisteredShellTerminals().filter((shell) =>
+            targets.has(shell.info.clusterId),
         ).length;
         const playgrounds = getPlaygroundEvaluators();
         context.telemetry.measurements.playgroundCount = [...targets].filter((id) => playgrounds.has(id)).length;

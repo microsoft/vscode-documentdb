@@ -9,6 +9,8 @@ import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { traceAuthFlow, traceAuthOperation, traceEntraDestination, type AuthTraceContext } from '../../utils/authTrace';
 import { getBatchSizeSetting, getConnectionTimeoutMs } from '../../utils/workspacUtils';
+import { ClustersClient } from '../ClustersClient';
+import { ConnectionUnavailableError } from '../ConnectionUnavailableError';
 import { CredentialCache } from '../CredentialCache';
 import { AuthMethodId } from '../auth/AuthMethod';
 import {
@@ -19,8 +21,6 @@ import {
 } from '../auth/documentdbTokenResource';
 import { evaluateEntraDestinationFromSettings } from '../auth/entraDestinationSettings';
 import { clearEntraTokenFailure, recordEntraTokenFailure } from '../auth/entraErrors/entraTokenFailures';
-import { ClustersClient } from '../ClustersClient';
-import { ConnectionUnavailableError } from '../ConnectionUnavailableError';
 import { EntraDestinationRejectedError } from '../auth/oidcAllowedHosts';
 import {
     WorkerSessionManager,

@@ -61,7 +61,9 @@ export function guardBoundViewOperation(binding: ConnectionBinding, signal?: Abo
         if (signal?.aborted) {
             throw new UserCancelledError('staleBoundViewOperation');
         }
-        const reason = isRetiredConnectionBinding(binding) ? 'credentialsChanged' : ClustersClient.getLatchReason(clusterId);
+        const reason = isRetiredConnectionBinding(binding)
+            ? 'credentialsChanged'
+            : ClustersClient.getLatchReason(clusterId);
         if (reason) {
             throw new ConnectionUnavailableError(reason);
         }

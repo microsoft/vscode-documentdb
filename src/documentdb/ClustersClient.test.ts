@@ -330,7 +330,9 @@ describe('regular connection startup diagnostics', () => {
         await ClustersClient.deleteClient(clusterId, { alreadyInvalidated: true });
         ClustersClient.unlatch(clusterId);
 
-        await expect(ClustersClient.resolveBoundClient(old.binding)).rejects.toMatchObject({ reason: 'credentialsChanged' });
+        await expect(ClustersClient.resolveBoundClient(old.binding)).rejects.toMatchObject({
+            reason: 'credentialsChanged',
+        });
         expect(mockConnect).toHaveBeenCalledOnce();
         const current = await ClustersClient.getClient(clusterId);
         expect(current.binding.fingerprint).toBe(old.binding.fingerprint);

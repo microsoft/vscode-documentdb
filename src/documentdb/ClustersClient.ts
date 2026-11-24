@@ -52,8 +52,8 @@ import { EntraSignInRequiredError } from './auth/entraErrors/entraCallbackErrors
 import { getAzureHostSuffix } from './auth/oidcAllowedHosts';
 import { readJwtTimes } from './auth/tokenExpiry';
 import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
-import { classifyConnectionFailure, type ConnectionFailure } from './connectionFailures';
 import { isRetiredConnectionBinding, retireConnectionBindings } from './connectionBindingRetirement';
+import { classifyConnectionFailure, type ConnectionFailure } from './connectionFailures';
 import { computeConnectionFingerprint, type ConnectionPrincipal } from './connectionFingerprint';
 import { ConnectionUnavailableError, type ConnectionUnavailableReason } from './ConnectionUnavailableError';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';

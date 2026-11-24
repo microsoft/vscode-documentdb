@@ -83,17 +83,19 @@ export async function updateConnectionString(context: IActionContext, node: Docu
     if (isRecoveryCurrent?.() === false) {
         return;
     }
-    const changed = wizardContext.newConnectionString && wizardContext.newConnectionString !== wizardContext.originalConnectionString
-        ? await saveConnectionEdit(
-              node,
-              async (isCurrent) => {
-                  wizardContext.isRecoveryCurrent = isCurrent;
-                  await wizard.execute();
-                  return wizardContext.connectionStringSaved === true;
-              },
-              { canStart: isRecoveryCurrent },
-          )
-        : false;
+    const changed =
+        wizardContext.newConnectionString &&
+        wizardContext.newConnectionString !== wizardContext.originalConnectionString
+            ? await saveConnectionEdit(
+                  node,
+                  async (isCurrent) => {
+                      wizardContext.isRecoveryCurrent = isCurrent;
+                      await wizard.execute();
+                      return wizardContext.connectionStringSaved === true;
+                  },
+                  { canStart: isRecoveryCurrent },
+              )
+            : false;
     if (recovering && changed && wizardContext.connectionStringSaved) {
         ext.connectionsBranchDataProvider.resetNodeErrorState(node.id);
         node.lastConnectionFailureReason = undefined;

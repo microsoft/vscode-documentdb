@@ -10,9 +10,13 @@ import { ext } from '../../extensionVariables';
 import { ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { type TreeElement } from '../../tree/TreeElement';
 
+function isClusterNode(node: TreeElement | undefined): node is ClusterItemBase {
+    return node instanceof ClusterItemBase;
+}
+
 export async function disconnect(context: IActionContext, node?: TreeElement): Promise<void> {
     context.telemetry.suppressAll = true; // connection.disconnect owns this operation's telemetry.
-    if (!(node instanceof ClusterItemBase)) {
+    if (!isClusterNode(node)) {
         throw new UserCancelledError();
     }
 
@@ -25,10 +29,7 @@ export async function disconnect(context: IActionContext, node?: TreeElement): P
 }
 
 export function connectDisconnected(_context: IActionContext, node?: TreeElement): void {
-    if (
-        !(node instanceof ClusterItemBase) ||
-        ClustersClient.getLatchReason(node.cluster.clusterId) !== 'userDisconnected'
-    ) {
+    if (!isClusterNode(node) || ClustersClient.getLatchReason(node.cluster.clusterId) !== 'userDisconnected') {
         return;
     }
 

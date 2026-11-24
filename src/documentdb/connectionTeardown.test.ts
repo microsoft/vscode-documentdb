@@ -8,7 +8,13 @@ import * as l10n from '@vscode/l10n';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { registerConnectionSurface, type ConnectionSurface } from './connectionSurfaces';
-import { commitTeardown, confirmTeardown, latchForTeardown, teardownConnection, withConnectionRemoval } from './connectionTeardown';
+import {
+    commitTeardown,
+    confirmTeardown,
+    latchForTeardown,
+    teardownConnection,
+    withConnectionRemoval,
+} from './connectionTeardown';
 
 const mocks = vi.hoisted(() => ({
     getSetting: vi.fn(),
@@ -42,11 +48,15 @@ vi.mock('@microsoft/vscode-azext-utils', () => ({
     },
 }));
 vi.mock('../services/SettingsService', () => ({ SettingsService: { getSetting: mocks.getSetting } }));
-vi.mock('../services/taskService/taskService', () => ({ TaskService: { getConflictingTasks: mocks.getConflictingTasks } }));
+vi.mock('../services/taskService/taskService', () => ({
+    TaskService: { getConflictingTasks: mocks.getConflictingTasks },
+}));
 vi.mock('./ClustersClient', () => ({ ClustersClient: { ...mocks, exists: () => true } }));
 vi.mock('./CredentialCache', () => ({ CredentialCache: { deleteCredentials: mocks.deleteCredentials } }));
 vi.mock('./auth/entraErrors/entraTokenFailures', () => ({ clearEntraTokenFailure: mocks.clearEntraTokenFailure }));
-vi.mock('./shell/ShellTerminalLinkProvider', () => ({ getRegisteredShellTerminals: mocks.getRegisteredShellTerminals }));
+vi.mock('./shell/ShellTerminalLinkProvider', () => ({
+    getRegisteredShellTerminals: mocks.getRegisteredShellTerminals,
+}));
 vi.mock('../commands/playground/executePlaygroundCode', () => ({
     getPlaygroundEvaluators: mocks.getPlaygroundEvaluators,
     stopPlaygroundEvaluator: mocks.stopPlaygroundEvaluator,
@@ -105,18 +115,22 @@ describe('connection teardown', () => {
             latches.set(id, reason);
             epochs.set(id, (epochs.get(id) ?? 0) + 1);
         });
-        mocks.unlatch.mockImplementation((id: string) => { latches.delete(id); });
+        mocks.unlatch.mockImplementation((id: string) => {
+            latches.delete(id);
+        });
         mocks.getSetting.mockReturnValue('keepOpenDisabled');
         const draft = register('documentView', true);
         const failedDelete = new Error('Storage write failed');
 
-        await expect(withConnectionRemoval([clusterId, otherId], async (remove) => {
-            await remove(clusterId, async () => {
-                expect(latches.get(otherId)).toBe('connectionRemoved');
-                expect(draft.disable).toHaveBeenCalledExactlyOnceWith('connectionRemoved');
-                throw failedDelete;
-            });
-        })).rejects.toBe(failedDelete);
+        await expect(
+            withConnectionRemoval([clusterId, otherId], async (remove) => {
+                await remove(clusterId, async () => {
+                    expect(latches.get(otherId)).toBe('connectionRemoved');
+                    expect(draft.disable).toHaveBeenCalledExactlyOnceWith('connectionRemoved');
+                    throw failedDelete;
+                });
+            }),
+        ).rejects.toBe(failedDelete);
 
         expect(latches.get(clusterId)).toBe('userDisconnected');
         expect(latches.has(otherId)).toBe(false);

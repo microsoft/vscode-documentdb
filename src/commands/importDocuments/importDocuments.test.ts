@@ -17,7 +17,12 @@ import { exportQueryResults } from '../exportDocuments/exportDocuments';
 import { importDocuments } from './importDocuments';
 
 vi.mock('../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: vi.fn(), getLatchReason: vi.fn(), resolveBoundClient: vi.fn(), reportFailure: vi.fn() },
+    ClustersClient: {
+        getClient: vi.fn(),
+        getLatchReason: vi.fn(),
+        resolveBoundClient: vi.fn(),
+        reportFailure: vi.fn(),
+    },
     isBulkWriteError: vi.fn(() => false),
 }));
 vi.mock('node:fs/promises', () => ({

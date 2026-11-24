@@ -195,7 +195,9 @@ describe('clusterDashboardRouter create actions', () => {
             } as unknown as ClustersClient);
             vi.mocked(ClustersClient.reportFailure).mockReturnValueOnce(kind);
 
-            await expect(createCallerFactory(clusterDashboardRouter)(createContext()).measureRtt()).resolves.toMatchObject({
+            await expect(
+                createCallerFactory(clusterDashboardRouter)(createContext()).measureRtt(),
+            ).resolves.toMatchObject({
                 unavailable: { reason },
             });
             expect(ClustersClient.reportFailure).toHaveBeenCalledWith(binding, failure);
@@ -214,7 +216,9 @@ describe('clusterDashboardRouter create actions', () => {
             } as unknown as ClustersClient);
             vi.mocked(ClustersClient.reportFailure).mockReturnValueOnce('other');
 
-            await expect(createCallerFactory(clusterDashboardRouter)(createContext()).measureRtt()).resolves.toMatchObject({
+            await expect(
+                createCallerFactory(clusterDashboardRouter)(createContext()).measureRtt(),
+            ).resolves.toMatchObject({
                 pingLatencyMs: expect.any(Number),
                 uptimeSeconds: null,
                 errors: [expect.stringContaining('serverStatus')],

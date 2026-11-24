@@ -259,10 +259,12 @@ describe('updateCredentials post-wizard updates', () => {
             wizardContext.nativeAuthConfig = { connectionUser: 'old-user', connectionPassword: 'new-password' };
             await new ExecuteStep().execute(wizardContext);
         });
-        mockSave.mockImplementationOnce(async (_zone: storageModule.StorageZone, item: storageModule.ConnectionItem) => {
-            stored.secrets = structuredClone(item.secrets);
-            throw new Error('Metadata write failed');
-        });
+        mockSave.mockImplementationOnce(
+            async (_zone: storageModule.StorageZone, item: storageModule.ConnectionItem) => {
+                stored.secrets = structuredClone(item.secrets);
+                throw new Error('Metadata write failed');
+            },
+        );
 
         await updateCredentials(context, node);
 
@@ -294,7 +296,10 @@ describe('updateCredentials post-wizard updates', () => {
                 properties: { ...originalConnection.properties, selectedAuthMethod: authMethod },
                 secrets: { connectionString: 'mongodb://new.example.com:27017/', ...secrets },
             };
-            mockGet.mockResolvedValueOnce(originalConnection).mockResolvedValueOnce(originalConnection).mockResolvedValue(savedConnection);
+            mockGet
+                .mockResolvedValueOnce(originalConnection)
+                .mockResolvedValueOnce(originalConnection)
+                .mockResolvedValue(savedConnection);
             mockExecute.mockImplementationOnce(async (wizardContext) => {
                 wizardContext.credentialsSaved = true;
             });
@@ -318,19 +323,24 @@ describe('updateCredentials post-wizard updates', () => {
             });
             expect(CredentialCache.hasCredentials(node.cluster.treeId)).toBe(false);
             expect(mockDeleteCredentials).toHaveBeenCalledExactlyOnceWith(node.cluster.clusterId);
-            expect(mockDeleteClient).toHaveBeenCalledExactlyOnceWith(node.cluster.clusterId, { alreadyInvalidated: true });
+            expect(mockDeleteClient).toHaveBeenCalledExactlyOnceWith(node.cluster.clusterId, {
+                alreadyInvalidated: true,
+            });
             expect(mockShutdownEvaluator).toHaveBeenCalledExactlyOnceWith(node.cluster.clusterId);
         },
     );
 
     it('deletes cached credentials when stored native authentication has no password', async () => {
-        mockGet.mockResolvedValueOnce(originalConnection).mockResolvedValueOnce(originalConnection).mockResolvedValue({
-            ...originalConnection,
-            secrets: {
-                ...originalConnection.secrets,
-                nativeAuthConfig: { connectionUser: 'new-user' },
-            },
-        });
+        mockGet
+            .mockResolvedValueOnce(originalConnection)
+            .mockResolvedValueOnce(originalConnection)
+            .mockResolvedValue({
+                ...originalConnection,
+                secrets: {
+                    ...originalConnection.secrets,
+                    nativeAuthConfig: { connectionUser: 'new-user' },
+                },
+            });
 
         await updateCredentials(context, node);
 
@@ -339,10 +349,13 @@ describe('updateCredentials post-wizard updates', () => {
     });
 
     it('deletes cached credentials when the stored authentication method is missing', async () => {
-        mockGet.mockResolvedValueOnce(originalConnection).mockResolvedValueOnce(originalConnection).mockResolvedValue({
-            ...originalConnection,
-            properties: { ...originalConnection.properties, selectedAuthMethod: undefined },
-        });
+        mockGet
+            .mockResolvedValueOnce(originalConnection)
+            .mockResolvedValueOnce(originalConnection)
+            .mockResolvedValue({
+                ...originalConnection,
+                properties: { ...originalConnection.properties, selectedAuthMethod: undefined },
+            });
 
         await updateCredentials(context, node);
 
@@ -353,16 +366,27 @@ describe('updateCredentials post-wizard updates', () => {
     it('offers to disconnect only shells using the previous connection settings', async () => {
         const disconnect = vi.fn();
         const disconnectOther = vi.fn();
-        mockGet.mockResolvedValueOnce(originalConnection).mockResolvedValueOnce(originalConnection).mockResolvedValue({
-            ...originalConnection,
-            secrets: { ...originalConnection.secrets, nativeAuthConfig: { connectionUser: 'old-user', connectionPassword: 'new-password' } },
-        });
+        mockGet
+            .mockResolvedValueOnce(originalConnection)
+            .mockResolvedValueOnce(originalConnection)
+            .mockResolvedValue({
+                ...originalConnection,
+                secrets: {
+                    ...originalConnection.secrets,
+                    nativeAuthConfig: { connectionUser: 'old-user', connectionPassword: 'new-password' },
+                },
+            });
         mockExecute.mockImplementationOnce(async (wizardContext) => {
             wizardContext.credentialsSaved = true;
         });
-        vi.spyOn(vscode.l10n, 't').mockImplementation((message) => typeof message === 'string' ? message : message.message);
-        const showInformation: (message: string, options: vscode.MessageOptions, ...items: string[]) => Thenable<string | undefined> =
-            vscode.window.showInformationMessage;
+        vi.spyOn(vscode.l10n, 't').mockImplementation((message) =>
+            typeof message === 'string' ? message : message.message,
+        );
+        const showInformation: (
+            message: string,
+            options: vscode.MessageOptions,
+            ...items: string[]
+        ) => Thenable<string | undefined> = vscode.window.showInformationMessage;
         vi.mocked(showInformation).mockResolvedValueOnce('Disconnect');
         mockGetRegisteredShellTerminals.mockReturnValue([
             { info: { clusterId: 'another-cluster-id' }, disconnect: disconnectOther },

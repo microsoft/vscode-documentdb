@@ -59,7 +59,7 @@ vi.mock('../verificationUtils', async () => ({
 }));
 
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
-import { withConnectionRemoval } from '../../../documentdb/connectionTeardown';
+import { type withConnectionRemoval } from '../../../documentdb/connectionTeardown';
 import { ConnectionType, ItemType, type ConnectionItem } from '../../../services/connectionStorageService';
 import { type DeleteFolderWizardContext } from './DeleteFolderWizardContext';
 import { ExecuteStep } from './ExecuteStep';

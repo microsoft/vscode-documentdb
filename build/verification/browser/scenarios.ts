@@ -2580,7 +2580,11 @@ const clusterDashboardScenarios = {
                         },
                     },
                     { action: 'waitFor', name: 'disconnected overlay', selector: '.disconnectedOverlay' },
-                    { action: 'releaseReply', name: 'deliver the old health poll', path: 'clusterDashboard.measureRtt' },
+                    {
+                        action: 'releaseReply',
+                        name: 'deliver the old health poll',
+                        path: 'clusterDashboard.measureRtt',
+                    },
                 ],
             },
             {
