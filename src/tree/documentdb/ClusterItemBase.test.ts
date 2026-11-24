@@ -530,6 +530,22 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
         }
     });
 
+    it('keeps Retry for a synthetic Connections view item without a credential editor', async (): Promise<void> => {
+        ClustersClientMock.getLatchReason.mockReturnValue('credentialsRejected');
+        ClustersClientMock.connectInteractive.mockRejectedValueOnce(new ConnectionUnavailableError('credentialsRejected'));
+        const item = new TestClusterItem({ ...makeCluster(), viewId: Views.ConnectionsView }, null);
+        item.contextValue = 'treeItem_quickStartInstance';
+        try {
+            expect((await item.getChildren()).map(({ id }) => id)).toEqual([
+                'cluster-1/diagnose',
+                'cluster-1/open-shell',
+                'cluster-1/retry',
+            ]);
+        } finally {
+            ClustersClientMock.getLatchReason.mockReset();
+        }
+    });
+
     it('reports the binding that executed listDatabases, not the current cache entry', async (): Promise<void> => {
         const error = new Error('deprecated generation');
         const binding = { clusterId: 'cluster-1', fingerprint: 'old', generation: 1 };

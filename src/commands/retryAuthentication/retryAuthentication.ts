@@ -11,6 +11,7 @@ import { addEstablishedConnectionContext, ClustersClient } from '../../documentd
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { inferViewIdFromTreeId, Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
+import { isQuickStartClusterId } from '../../services/localQuickStart/quickStartTypes';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { ConnectionSourceUnavailableError } from '../../tree/documentdb/diagnosticCredentialRead';
 import { type TreeElement } from '../../tree/TreeElement';
@@ -90,12 +91,13 @@ export async function retryAuthentication(context: IActionContext, node: Retryab
             if (!node.readReplacementKey) {
                 const view = getViewId(node);
                 const credentials = CredentialCache.getCredentials(clusterId);
-                // Native discovery nodes have no saved-credential editor. Retry through the
-                // existing provider flow, but never with the rejected cached credentials.
+                const quickStart = view === Views.ConnectionsView && isQuickStartClusterId(clusterId);
+                const nativeDiscovery =
+                    (view === Views.DiscoveryView || view === Views.AzureResourcesView) &&
+                    credentials !== undefined &&
+                    (credentials.authMechanism ?? AuthMethodId.NativeAuth) === AuthMethodId.NativeAuth;
                 if (
-                    (view !== Views.DiscoveryView && view !== Views.AzureResourcesView) ||
-                    !credentials ||
-                    (credentials.authMechanism ?? AuthMethodId.NativeAuth) !== AuthMethodId.NativeAuth ||
+                    (!quickStart && !nativeDiscovery) ||
                     !ClustersClient.clearCredentialRejection(clusterId, epoch)
                 ) {
                     return;

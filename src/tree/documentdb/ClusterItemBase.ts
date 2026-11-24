@@ -348,6 +348,13 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
         );
     }
 
+    private hasStoredCredentialEditor(): boolean {
+        return (
+            this.cluster.viewId === String(Views.ConnectionsView) &&
+            this.contextValue.split(';').includes(CLUSTER_ITEM_CONTEXT_VALUE)
+        );
+    }
+
     /**
      * Builds the FAILURE-TYPE error-recovery nodes owned by the element layer.
      *
@@ -369,7 +376,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 this.lastConnectionFailureKind === 'credentialsRejected') &&
             this.canSignInAgain();
         const rejectedStoredCredentials =
-            this.cluster.viewId === String(Views.ConnectionsView) &&
+            this.hasStoredCredentialEditor() &&
             ClustersClient.getLatchReason(this.cluster.clusterId) === 'credentialsRejected';
         return [
             ...(needsSignIn

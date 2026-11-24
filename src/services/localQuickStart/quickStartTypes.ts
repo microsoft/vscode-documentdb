@@ -130,6 +130,11 @@ export function clusterId(alias: string): string {
     return `quickstart-${alias}`;
 }
 
+/** Whether the stable cluster ID belongs to the supported managed instance. */
+export function isQuickStartClusterId(id: string): boolean {
+    return id === clusterId(DEFAULT_ALIAS);
+}
+
 /** Reduced lifecycle state set for the POC (design §6, decision D8). */
 export enum InstanceState {
     NotInstalled = 'NotInstalled',
