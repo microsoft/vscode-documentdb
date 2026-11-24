@@ -263,9 +263,9 @@ actual ADO run remain operator verification.
   eight workspaces and checks packed-test rejection, exports/types and representative consumer
   calls (including rejection controls).
 - It then runs `npm publish --dry-run --workspace <package>` for each selected
-  `@documentdb-js/*` package. With `dry_run=true` and no package selected, it dry-runs **all five
-  selectable packages**: operator registry, schema analyzer, shell API types, shell runtime and
-  SRV resolver.
+  `@documentdb-js/*` package. With `dry_run=true` and no package selected, it dry-runs **all six
+  selectable packages**: operator registry, schema analyzer, shell API types, shell runtime,
+  SRV resolver and connection diagnostics.
   A dry-run never requires a reviewer to approve an environment, never requests `id-token: write`,
   and never schedules the publish job.
 - **Publish to npmjs.com** has `needs: verify` and `if: ${{ !inputs.dry_run }}`. A real-publish
@@ -311,8 +311,13 @@ input validation, dry-run, packing and publication. It is not in the ADO release
 that route supports only the two `@microsoft/vscode-ext-webview*` packages.
 Publish `@documentdb-js/srv-resolver@1.1.0` before the first
 `@documentdb-js/connection-diagnostics@0.1.0` release, which depends on `^1.1.0`.
-Connection diagnostics is verified as a workspace but is not yet selectable in this publishing
-workflow; preparing its changelog does not configure its publication.
+
+**Connection diagnostics:** `publish_connection_diagnostics` is wired the same way. When both
+are selected, the workflow publishes it after the SRV resolver. npm accepts a Trusted Publisher
+only for a package that already exists, so the operator publishes `0.1.0` manually. Afterwards,
+configure the package's Trusted Publisher on npmjs.com (this repository,
+`npm-publish-documentdb-js.yml`, the `npm-publish-documentdb-js-scope` environment) and allow
+`npm publish`, not only staged publishing. Later versions then publish through this workflow.
 
 **Validation (2026-10-07):** branch dry-run
 [37618213760](https://github.com/microsoft/vscode-documentdb/actions/runs/37618213760), at
