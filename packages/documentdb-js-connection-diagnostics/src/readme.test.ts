@@ -10,8 +10,8 @@ import { builtInFindingCodes, DEFAULT_TIMEOUTS, skipReasons } from './index.js';
 
 const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
 
-function section(heading: string): string {
-    const content = readme.split(`\n## ${heading}\n`)[1];
+function section(heading: string, source: string = readme): string {
+    const content = source.replace(/\r\n/g, '\n').split(`\n## ${heading}\n`)[1];
     expect(content, `Missing README section: ${heading}`).toBeDefined();
     return content?.split('\n## ')[0] ?? '';
 }
@@ -21,6 +21,16 @@ function firstColumnCodes(content: string): string[] {
 }
 
 describe('package README catalogue', (): void => {
+    it.each([
+        ['LF', '\n'],
+        ['CRLF', '\r\n'],
+    ])('reads README sections with %s line endings', (_label, newline): void => {
+        const source = readme.replace(/\r?\n/g, newline);
+        for (const heading of ['Finding codes', 'Skip reasons', 'Timeouts and retry profiles']) {
+            expect(section(heading, source)).not.toBe('');
+        }
+    });
+
     it('documents every built-in finding code exactly once in catalogue order with no extra codes', (): void => {
         expect(firstColumnCodes(section('Finding codes'))).toEqual([...builtInFindingCodes]);
     });
