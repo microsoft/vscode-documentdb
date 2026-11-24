@@ -61,7 +61,7 @@ export function useDatabaseCollections(
     const key = `${request.attempt}\u0000${databaseName ?? ''}`;
     const abandonedKeys = useRef(new Set<string>());
     const blocked = isSubmissionBlocked();
-    if (blocked) {
+    if (blocked && databaseName !== null && entry?.key !== key) {
         abandonedKeys.current.add(key);
     }
 
