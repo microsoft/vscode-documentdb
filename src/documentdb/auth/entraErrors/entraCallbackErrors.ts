@@ -5,6 +5,7 @@
 
 import * as l10n from '@vscode/l10n';
 import { AuthMethodId } from '../AuthMethodId';
+import { ManagedIdentityGuidanceError } from '../managedIdentityErrors';
 
 export class EntraSignInRequiredError extends Error {
     constructor(public readonly reason: 'noSession' | 'providerChanged') {
@@ -27,7 +28,11 @@ export class TokenCallbackError extends Error {
         cause: unknown,
         public readonly authMethod: TokenCallbackAuthMethod = AuthMethodId.MicrosoftEntraID,
     ) {
-        super(l10n.t('Failed to obtain a Microsoft Entra ID token.'), { cause });
+        const message =
+            authMethod === AuthMethodId.ManagedIdentity && cause instanceof ManagedIdentityGuidanceError
+                ? cause.message
+                : l10n.t('Failed to obtain a Microsoft Entra ID token.');
+        super(message, { cause });
         this.name = 'TokenCallbackError';
     }
 }
