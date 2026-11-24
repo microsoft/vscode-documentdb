@@ -41,6 +41,7 @@
   "files": [
     "dist",
     "README.md",
+    "CHANGELOG.md",
     "ADVANCED.md",
     "MIGRATION.md",
     "LICENSE"
