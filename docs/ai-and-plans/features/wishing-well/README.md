@@ -1,7 +1,8 @@
 ---
 feature: wishing-well
 kind: overview
-status: planned
+status: active
+prs: [1122]
 created: 2026-11-23
 code:
   - src/services/wishingWell/**
@@ -30,7 +31,9 @@ turns on.
 Rules the code keeps:
 
 - Wishes never write data. Changes come back as a playground script the user runs.
-- Read-only queries run when the wish is made; everything else waits for a grant.
+- Read-only queries run when the wish is made and show the query that ran; the rest waits for a grant.
+- Wizards and commands are opened, not completed: the well is not told how they end. Export writes
+  the whole collection, as JSON only.
 - Only allowlisted VS Code commands run. Anything else goes to Copilot agent mode.
 - A shell wish prints its card; nothing opens until the user types `wish open`.
 - Outside agents get answered, proposed or refused replies; they never trigger a sign-in prompt,
@@ -39,4 +42,5 @@ Rules the code keeps:
   token and rejects browser origins.
 - Telemetry records the kind of action, never the wish text.
 
-Screenshots of the demo are in [images/](images/).
+Screenshots of the demo are in [images/](images/). The review rounds, what was decided and the
+questions left for the team are in [iterations/01-review.md](iterations/01-review.md).
