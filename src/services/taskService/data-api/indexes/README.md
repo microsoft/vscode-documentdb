@@ -118,7 +118,8 @@ for the explicit cross-database revisit condition.
 
 ## Files
 
-- `CollectionIndexCopier.ts` — provider-neutral task contract and shared progress/result types
+- [`CollectionIndexCopier.ts`](../../../../../packages/vscode-ext-tasks-data-transfer/src/data-api/indexes/CollectionIndexCopier.ts)
+  — provider-neutral task contract and shared progress/result types in the transfer package
 - `DocumentDbCollectionIndexCopier.ts` — DocumentDB API endpoint ownership, index comparison, and
   creation
 - `createIndexCopier.ts` — endpoint-based construction shared by both wizards

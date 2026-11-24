@@ -1,90 +1,14 @@
-# Task Service UI Components
+# Task UI integration
 
-The optional UI services now live in the
-[`@microsoft/vscode-ext-tasks/vscode` package subpath](../../../../packages/vscode-ext-tasks/README.md).
-The extension configures them in `../extension/`.
+The optional progress reporter, conflict warning, and lifecycle log observer live in the
+[`@microsoft/vscode-ext-tasks/vscode` subpath](../../../../packages/vscode-ext-tasks/README.md).
+The DocumentDB extension supplies localized strings and its output-channel callback in
+[`extension/`](../extension/), and attaches the reporter and observer during activation.
 
-## Services
+## Tree annotations
 
-### TaskProgressReportingService
-
-Displays VS Code notification progress dialogs for running tasks. Automatically attaches to the TaskService and monitors all registered tasks. Shows progress percentage, status messages, and allows task cancellation via the notification.
-
-**Strings and host services:** `createTaskProgressReportingService(options?)` takes
-`TaskProgressReportingOptions`:
-
-- `strings?: Partial<TaskProgressStrings>`: merged over `defaultTaskProgressStrings` (English) with
-  `mergeStrings`. Parameterized entries are functions, for example `failed(taskName, errorMessage)`.
-- `showOutput?: () => void`: when set, the Failed notification offers a button labelled
-  `strings.showOutput` and calls `showOutput` when that same label is chosen. Without it, the
-  notification has no button.
-
-The service imports `vscode` for notifications but never calls `vscode.l10n.t` and does not use
-`ext` (decision 0006).
-
-**Activation:** The extension's singleton (`extension/taskServiceInstance.ts`) is created with
-`getExtensionTaskProgressStrings()` and `showOutput: () => ext.outputChannel.show()`, and attached
-during extension initialization with `TaskProgressReportingService.attach(TaskService)`.
-
-### Task lifecycle log observer
-
-`attachTaskLifecycleLogger(service, logger)` writes initialization, start, completion, stop, and
-failure lines for registered tasks. Failures use `logger.error`; other lifecycle lines use
-`logger.appendLine`. It has no VS Code or extension-global dependencies.
-
-**Activation:** Attached alongside the progress reporter, with the returned subscription registered
-in the extension context for disposal. `Task` itself does not write lifecycle lines.
-
-## Design Principles
-
-1. **Separation from TaskService** - These services consume TaskService events but don't modify its core behavior
-2. **Optional activation** - Not all tasks require all UI services
-3. **Cleanup guarantee** - All visual indicators are cleared when tasks reach terminal states
-4. **Throttled updates** - High-frequency updates are throttled to prevent excessive UI refreshes
-
----
-
-## Tree View Annotations
-
-A common requirement is to show temporary status on a tree view item while a task is running. The `ext.state.runWithTemporaryDescription` utility, combined with task state events, provides a clean way to achieve this.
-
-The annotation is applied when the task starts and automatically removed when the task reaches a terminal state (Completed, Failed, or Stopped).
-
-### Example: Annotating Nodes During Collection Paste
-
-The following example from `pasteCollection/ExecuteStep.ts` shows how to annotate the source and target collection nodes in the tree view during a copy-paste operation.
-
-```typescript
-import * as vscode from 'vscode';
-import { ext } from '../../extensionVariables';
-import { whenTerminal, type Task } from '@microsoft/vscode-ext-tasks';
-
-export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardContext> {
-    // ...
-
-    public async execute(context: PasteCollectionWizardContext): Promise<void> {
-        // ... task setup ...
-        const task = new CopyPasteCollectionTask(config, reader, writer);
-        TaskService.registerTask(task);
-
-        // Set up tree annotations to show progress on source and target nodes
-        // Annotations are automatically cleared when the task reaches a terminal state
-        if (ext.copiedCollectionNode?.id) {
-            void this.annotateNodeDuringTask(ext.copiedCollectionNode.id, vscode.l10n.t('Copying…'), task);
-        }
-        void this.annotateNodeDuringTask(context.targetNode.id, vscode.l10n.t('Pasting…'), task);
-
-        void task.start();
-    }
-
-    /**
-     * Annotates a tree node with a temporary description while the task is running.
-     * The annotation is automatically cleared when the task reaches a terminal state.
-     */
-    private annotateNodeDuringTask(nodeId: string, label: string, task: Task): void {
-        void ext.state.runWithTemporaryDescription(nodeId, label, () => whenTerminal(task));
-    }
-
-    // ...
-}
-```
+Collection paste temporarily annotates source and target tree items through
+`ext.state.runWithTemporaryDescription`. The callback waits for `whenTerminal(task)`, so the
+annotation stays until the task completes, fails, or stops. See
+[`ExecuteStep.ts`](../../../commands/pasteCollection/ExecuteStep.ts) for the extension-specific
+implementation.

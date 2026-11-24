@@ -30,7 +30,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc -p .",
+    "build": "tsc -p . && tsc -p type-tests",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
     "test": "vitest run --config ../../vitest.config.ts --project vscode-ext-tasks-data-transfer",
     "typecheck:tests": "tsc -p tsconfig.test.json"
