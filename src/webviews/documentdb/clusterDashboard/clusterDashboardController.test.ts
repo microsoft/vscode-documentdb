@@ -37,6 +37,10 @@ vi.mock('../../../commands/openCollectionView/openCollectionView', () => ({
     openCollectionViewInternal: vi.fn(async () => undefined),
 }));
 
+vi.mock('../../../commands/copyReference/copyReference', () => ({
+    copyNamespaceReference: vi.fn(),
+}));
+
 vi.mock('../../../documentdb/ClustersClient', () => ({
     ClustersClient: {
         getBinding: vi.fn(),
@@ -54,6 +58,7 @@ vi.mock('./resolveNamespaceNode', () => ({
 }));
 
 import * as vscode from 'vscode';
+import { copyNamespaceReference } from '../../../commands/copyReference/copyReference';
 import { openCollectionViewInternal } from '../../../commands/openCollectionView/openCollectionView';
 import { ClustersClient } from '../../../documentdb/ClustersClient';
 import { getConnectionSurfaces } from '../../../documentdb/connectionSurfaces';
@@ -340,7 +345,7 @@ describe('cluster dashboard native context menu commands', () => {
             'vscode-documentdb.command.dropCollection',
             { id: 'tree-node' },
             null,
-            { source: 'webview;clusterDashboard' },
+            { source: 'webview;clusterDashboard', binding },
         );
         expect(controller.panel.webview.postMessage).toHaveBeenNthCalledWith(1, {
             type: 'clusterDashboard.namespaceBusy',
@@ -391,26 +396,52 @@ describe('cluster dashboard native context menu commands', () => {
         controller.dispose();
     });
 
-    it('refreshes inventory after paste returns', async () => {
+    it('does not register Dashboard Paste', () => {
         const { handlers, controller } = registerAndOpen();
 
-        await handlers.get(CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.pasteCollection)?.({
+        expect(handlers.has('vscode-documentdb.command.clusterDashboard.context.pasteCollection')).toBe(false);
+        controller.dispose();
+    });
+
+    it('keeps only local reference copying available in this panel until Retry succeeds', async () => {
+        const { handlers, controller } = registerAndOpen();
+        const other = open(CLUSTER, 'inventory');
+        const dashboardContext = vi.mocked(openAppWebview).mock.calls[0][0].context as RouterContext;
+        const row = {
             clusterDashboardClusterId: CLUSTER,
             clusterDashboardSelectedDatabase: 'sales',
             clusterDashboardDatabase: 'sales',
+            clusterDashboardCollection: 'orders',
+        };
+        const exportRow = handlers.get(CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.exportDocuments);
+        dashboardContext.describeUnavailable('unreachable');
+
+        await exportRow?.(row);
+        await handlers.get(CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.copyReference)?.(row);
+        expect(copyNamespaceReference).toHaveBeenCalledWith(expect.anything(), 'sales', 'orders');
+        expect(resolveNamespaceNode).not.toHaveBeenCalled();
+        expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+        expect(controller.panel.webview.postMessage).toHaveBeenCalledExactlyOnceWith({
+            type: 'clusterDashboard.connectionUnavailable',
+            unavailable: expect.objectContaining({ reason: 'unreachable' }),
         });
 
-        expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
-            'vscode-documentdb.command.pasteCollection',
-            { id: 'tree-node' },
-            null,
-            { source: 'webview;clusterDashboard' },
+        vi.mocked(ClustersClient.resolveBoundClient).mockRejectedValueOnce(
+            new ConnectionUnavailableError('unreachable'),
         );
-        expect(controller.panel.webview.postMessage).toHaveBeenCalledWith({
-            type: 'clusterDashboard.inventoryChanged',
-            databaseName: 'sales',
-        });
+        await expect(dashboardContext.recoverUnavailable({ action: 'retry' })).resolves.toHaveProperty('unavailable');
+        await exportRow?.(row);
+        expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
 
+        await exportRow?.({ ...row, clusterDashboardSelectedDatabase: 'inventory' });
+        expect(vscode.commands.executeCommand).toHaveBeenCalledOnce();
+
+        vi.mocked(ClustersClient.resolveBoundClient).mockResolvedValueOnce({ binding } as ClustersClient);
+        await expect(dashboardContext.recoverUnavailable({ action: 'retry' })).resolves.toHaveProperty('recovered');
+        expect(vscode.commands.executeCommand).toHaveBeenCalledOnce(); // No replay.
+        await exportRow?.(row);
+        expect(vscode.commands.executeCommand).toHaveBeenCalledTimes(2);
+        other.dispose();
         controller.dispose();
     });
 
@@ -424,6 +455,12 @@ describe('cluster dashboard native context menu commands', () => {
             clusterDashboardCollection: 'orders',
         });
 
+        expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+            'vscode-documentdb.command.importDocuments',
+            { id: 'tree-node' },
+            null,
+            { source: 'webview;clusterDashboard', binding },
+        );
         expect(controller.panel.webview.postMessage).toHaveBeenCalledWith({
             type: 'clusterDashboard.inventoryChanged',
             databaseName: 'sales',
@@ -442,6 +479,12 @@ describe('cluster dashboard native context menu commands', () => {
             clusterDashboardCollection: 'orders',
         });
 
+        expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+            'vscode-documentdb.command.exportDocuments',
+            { id: 'tree-node' },
+            null,
+            { source: 'webview;clusterDashboard', binding },
+        );
         expect(controller.panel.webview.postMessage).not.toHaveBeenCalled();
 
         controller.dispose();

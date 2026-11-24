@@ -798,10 +798,6 @@
         "title": "Copy Collection"
       },
       {
-        "command": "vscode-documentdb.command.clusterDashboard.context.pasteCollection",
-        "title": "Paste Collection"
-      },
-      {
         "command": "vscode-documentdb.command.clusterDashboard.context.exportDocuments",
         "title": "Export Documents"
       },
@@ -1000,11 +996,6 @@
           "group": "3_open@2"
         },
         {
-          "command": "vscode-documentdb.command.clusterDashboard.context.pasteCollection",
-          "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == database",
-          "group": "4_transfer@1"
-        },
-        {
           "command": "vscode-documentdb.command.clusterDashboard.context.deleteDatabase",
           "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == database",
           "group": "9_delete@1"
@@ -1038,11 +1029,6 @@
           "command": "vscode-documentdb.command.clusterDashboard.context.copyCollection",
           "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == collection",
           "group": "3_transfer@1"
-        },
-        {
-          "command": "vscode-documentdb.command.clusterDashboard.context.pasteCollection",
-          "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == collection",
-          "group": "3_transfer@2"
         },
         {
           "command": "vscode-documentdb.command.clusterDashboard.context.exportDocuments",
@@ -1631,10 +1617,6 @@
         },
         {
           "command": "vscode-documentdb.command.clusterDashboard.context.copyCollection",
-          "when": "never"
-        },
-        {
-          "command": "vscode-documentdb.command.clusterDashboard.context.pasteCollection",
           "when": "never"
         },
         {

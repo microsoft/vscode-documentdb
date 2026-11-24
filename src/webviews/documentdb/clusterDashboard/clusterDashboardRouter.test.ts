@@ -318,6 +318,7 @@ describe('clusterDashboardRouter create actions', () => {
             expect.objectContaining({
                 source: 'webview;clusterDashboard',
                 activationSource: 'clusterDashboard:emptyState',
+                binding: createContext().binding,
                 onNameResolved: expect.any(Function),
             }),
         );
@@ -361,6 +362,7 @@ describe('clusterDashboardRouter create actions', () => {
             expect.objectContaining({
                 source: 'webview;clusterDashboard',
                 activationSource: 'clusterDashboard:inventoryToolbar',
+                binding: createContext().binding,
                 onNameResolved: expect.any(Function),
             }),
         );

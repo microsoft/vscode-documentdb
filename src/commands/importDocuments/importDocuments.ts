@@ -19,12 +19,13 @@ import { ext } from '../../extensionVariables';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { BufferErrorCode, createMongoDbBuffer, type DocumentBuffer } from '../../utils/documentBuffer';
 import { getRootPath } from '../../utils/workspacUtils';
+import { rethrowBoundCommandUnavailable } from '../rethrowBoundCommandUnavailable';
 
 export async function importDocuments(
     context: IActionContext,
     selectedItem: vscode.Uri | CollectionItem | undefined,
     uris: vscode.Uri[] | undefined,
-    options?: { readonly binding?: ConnectionBinding },
+    options?: { readonly binding?: ConnectionBinding; readonly source?: string },
 ): Promise<void> {
     if (selectedItem instanceof vscode.Uri) {
         uris ||= [selectedItem];
@@ -79,6 +80,11 @@ export async function importDocuments(
         await ext.state.runWithTemporaryDescription(selectedItem.id, l10n.t('Importing…'), async () => {
             await importDocumentsWithProgress(selectedItem, uris, options?.binding);
         });
+    } catch (error) {
+        if (options?.binding && options.source === 'webview;clusterDashboard') {
+            rethrowBoundCommandUnavailable(context, error);
+        }
+        throw error;
     } finally {
         // Always refresh at the database level (parent of the collection) so collection
         // descriptions (document counts) update correctly, even after partial failures

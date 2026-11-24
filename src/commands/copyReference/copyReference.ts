@@ -57,10 +57,7 @@ function opt(label: string, value: string): CopyReferenceOption {
     return { id: value, label, detail: value, alwaysShow: true };
 }
 
-function getDatabaseOptions(node: DatabaseItem): CopyReferenceOption[] {
-    const dbName = node.databaseInfo.name;
-    const host = getClusterHost(node.cluster.connectionString);
-
+function getDatabaseOptions(dbName: string, host?: string): CopyReferenceOption[] {
     const options: CopyReferenceOption[] = [opt(l10n.t('Name'), dbName), opt(l10n.t('Shell Command'), `use ${dbName}`)];
 
     if (host) {
@@ -70,9 +67,7 @@ function getDatabaseOptions(node: DatabaseItem): CopyReferenceOption[] {
     return options;
 }
 
-function getCollectionOptions(node: CollectionItem): CopyReferenceOption[] {
-    const dbName = node.databaseInfo.name;
-    const collName = node.collectionInfo.name;
+function getCollectionOptions(dbName: string, collName: string): CopyReferenceOption[] {
     const quoted = needsQuoting(collName) || needsQuoting(dbName);
     const escapedCollName = escapeDoubleQuotes(collName);
 
@@ -108,28 +103,25 @@ function getIndexOptions(node: IndexItem): CopyReferenceOption[] {
     return options;
 }
 
-function getOptionsForNode(node: DatabaseItem | CollectionItem | IndexItem): {
-    title: string;
-    options: CopyReferenceOption[];
-} {
-    if (node instanceof IndexItem) {
-        return {
-            title: l10n.t('Copy Reference: {0}', node.indexInfo.name),
-            options: getIndexOptions(node),
-        };
+export async function copyNamespaceReference(
+    context: IActionContext,
+    databaseName: string,
+    collectionName?: string,
+    host?: string,
+): Promise<void> {
+    if (collectionName === undefined) {
+        await copyReferenceOptions(
+            context,
+            l10n.t('Copy Reference: {0}', databaseName),
+            getDatabaseOptions(databaseName, host),
+        );
+    } else {
+        await copyReferenceOptions(
+            context,
+            l10n.t('Copy Reference: {0}.{1}', databaseName, collectionName),
+            getCollectionOptions(databaseName, collectionName),
+        );
     }
-
-    if (node instanceof CollectionItem) {
-        return {
-            title: l10n.t('Copy Reference: {0}.{1}', node.databaseInfo.name, node.collectionInfo.name),
-            options: getCollectionOptions(node),
-        };
-    }
-
-    return {
-        title: l10n.t('Copy Reference: {0}', node.databaseInfo.name),
-        options: getDatabaseOptions(node),
-    };
 }
 
 export async function copyReference(
@@ -140,8 +132,25 @@ export async function copyReference(
         throw new Error(l10n.t('No node selected.'));
     }
 
-    const { title, options } = getOptionsForNode(node);
+    if (node instanceof IndexItem) {
+        await copyReferenceOptions(context, l10n.t('Copy Reference: {0}', node.indexInfo.name), getIndexOptions(node));
+    } else if (node instanceof CollectionItem) {
+        await copyNamespaceReference(context, node.databaseInfo.name, node.collectionInfo.name);
+    } else {
+        await copyNamespaceReference(
+            context,
+            node.databaseInfo.name,
+            undefined,
+            getClusterHost(node.cluster.connectionString),
+        );
+    }
+}
 
+async function copyReferenceOptions(
+    context: IActionContext,
+    title: string,
+    options: CopyReferenceOption[],
+): Promise<void> {
     const picked = await context.ui.showQuickPick(options, {
         placeHolder: title,
         stepName: 'copyReference',

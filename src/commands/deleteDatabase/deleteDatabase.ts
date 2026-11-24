@@ -5,23 +5,38 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { ClustersClient } from '../../documentdb/ClustersClient';
+import { ClustersClient, type ConnectionBinding } from '../../documentdb/ClustersClient';
+import { resolveTransferClient } from '../../documentdb/resolveTransferClient';
 import { SchemaStore } from '../../documentdb/SchemaStore';
 import { ext } from '../../extensionVariables';
 import { checkCanProceedAndInformUser } from '../../services/taskService/resourceUsageHelper';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
+import { rethrowBoundCommandUnavailable } from '../rethrowBoundCommandUnavailable';
 
-export async function deleteAzureDatabase(context: IActionContext, node: DatabaseItem): Promise<void> {
+interface DeleteDatabaseCommandOptions {
+    readonly binding?: ConnectionBinding;
+}
+
+export async function deleteAzureDatabase(
+    context: IActionContext,
+    node: DatabaseItem,
+    _nodes?: DatabaseItem[],
+    options?: DeleteDatabaseCommandOptions,
+): Promise<void> {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
     }
 
-    return deleteDatabase(context, node);
+    return deleteDatabase(context, node, options);
 }
 
-export async function deleteDatabase(context: IActionContext, node: DatabaseItem): Promise<void> {
+export async function deleteDatabase(
+    context: IActionContext,
+    node: DatabaseItem,
+    options?: DeleteDatabaseCommandOptions,
+): Promise<void> {
     context.telemetry.properties.experience = node.experience.api;
 
     // Check if any running tasks are using this database
@@ -52,17 +67,23 @@ export async function deleteDatabase(context: IActionContext, node: DatabaseItem
     }
 
     try {
-        const client = await ClustersClient.getClient(node.cluster.clusterId);
+        const client = options?.binding ? undefined : await ClustersClient.getClient(node.cluster.clusterId);
 
         let success = false;
         await ext.state.showDeleting(node.id, async () => {
-            success = await client.dropDatabase(node.databaseInfo.name);
+            const resolvedClient = client ?? (await resolveTransferClient(node.cluster.clusterId, options?.binding));
+            success = await resolvedClient.dropDatabase(node.databaseInfo.name);
         });
 
         if (success) {
             SchemaStore.getInstance().clearDatabase(node.cluster.clusterId, node.databaseInfo.name);
             showConfirmationAsInSettings(l10n.t('The "{databaseId}" database has been deleted.', { databaseId }));
         }
+    } catch (error) {
+        if (options?.binding) {
+            rethrowBoundCommandUnavailable(context, error);
+        }
+        throw error;
     } finally {
         const lastSlashIndex = node.id.lastIndexOf('/');
         let parentId = node.id;

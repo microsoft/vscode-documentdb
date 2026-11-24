@@ -433,6 +433,7 @@ export const clusterDashboardRouter = router({
                         null,
                         {
                             source: 'webview;clusterDashboard',
+                            binding,
                             activationSource,
                             onNameResolved: async (name: string): Promise<void> => {
                                 assertCurrent();
@@ -484,6 +485,7 @@ export const clusterDashboardRouter = router({
                         null,
                         {
                             source: 'webview;clusterDashboard',
+                            binding,
                             activationSource,
                             onNameResolved: async (name: string): Promise<void> => {
                                 assertCurrent();

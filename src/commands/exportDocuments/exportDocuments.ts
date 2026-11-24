@@ -13,11 +13,24 @@ import { ext } from '../../extensionVariables';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { appendToFile } from '../../utils/fs/appendToFile';
 import { getRootPath } from '../../utils/workspacUtils';
+import { rethrowBoundCommandUnavailable } from '../rethrowBoundCommandUnavailable';
 
-export async function exportEntireCollection(context: IActionContext, node?: CollectionItem) {
+export async function exportEntireCollection(
+    context: IActionContext,
+    node?: CollectionItem,
+    _nodes?: CollectionItem[],
+    options?: { readonly source?: string; readonly binding?: ConnectionBinding },
+): Promise<void> {
     context.telemetry.properties.experience = node?.experience.api;
 
-    return exportQueryResults(context, node);
+    try {
+        await exportQueryResults(context, node, options);
+    } catch (error) {
+        if (options?.binding) {
+            rethrowBoundCommandUnavailable(context, error);
+        }
+        throw error;
+    }
 }
 
 export async function exportQueryResults(

@@ -7,6 +7,7 @@ import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
+import { runBoundNamespaceCommand } from '../runBoundNamespaceCommand';
 import { type CreateCollectionWizardContext } from './CreateCollectionWizardContext';
 
 export class ExecuteStep extends AzureWizardExecuteStep<CreateCollectionWizardContext> {
@@ -15,14 +16,20 @@ export class ExecuteStep extends AzureWizardExecuteStep<CreateCollectionWizardCo
     public async execute(context: CreateCollectionWizardContext): Promise<void> {
         const collectionName = context.newCollectionName!;
         const databaseName = context.databaseId;
-        const client = await ClustersClient.getClient(context.credentialsId);
+        const client = context.binding ? undefined : await ClustersClient.getClient(context.credentialsId);
 
         return ext.state.showCreatingChild(
             context.nodeId,
             l10n.t('Creating "{nodeName}"…', { nodeName: collectionName }),
             async () => {
                 await new Promise((resolve) => setTimeout(resolve, 250));
-                await client.createCollection(databaseName, collectionName);
+                if (context.binding) {
+                    await runBoundNamespaceCommand(context.credentialsId, context.binding, (boundClient) =>
+                        boundClient.createCollection(databaseName, collectionName),
+                    );
+                } else {
+                    await client?.createCollection(databaseName, collectionName);
+                }
             },
         );
     }
