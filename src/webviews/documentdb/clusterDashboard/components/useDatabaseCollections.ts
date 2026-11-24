@@ -90,6 +90,7 @@ export function useDatabaseCollections(
                         onUnavailable(result.unavailable);
                         return;
                     }
+                    abandonedKeys.current.delete(key);
                     setEntry({ key, databaseName, result, lastUpdatedAt: Date.now(), error: null });
                 }
             })
