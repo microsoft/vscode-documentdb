@@ -85,7 +85,7 @@ For `CopyPasteCollectionTask`, the order is: validate the source collection, cou
 **Example:**
 
 ```typescript
-const reader = new DocumentDbDocumentReader(clusterId, databaseName, collectionName);
+const reader = new DocumentDbDocumentReader(() => ClustersClient.getClient(clusterId), databaseName, collectionName);
 const stream = reader.streamDocuments({ keepAlive: true });
 
 for await (const doc of stream) {
@@ -368,7 +368,7 @@ src/services/taskService/data-api/
 
 ```typescript
 // Create reader and writer
-const reader = new DocumentDbDocumentReader(sourceClusterId, sourceDb, sourceCollection);
+const reader = new DocumentDbDocumentReader(() => ClustersClient.getClient(sourceClusterId), sourceDb, sourceCollection);
 const writer = new DocumentDbStreamingWriter(targetClient, targetDb, targetCollection);
 
 // Create task
