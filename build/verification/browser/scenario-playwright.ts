@@ -49,11 +49,32 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
             }
             if (step.action === 'releaseReply') {
                 await wait((path) => window.__harnessReleaseReply(path), step.path, step.name);
+                // The reply is an asynchronous message. Give the app a render before reading the result.
+                await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+                continue;
+            }
+            if (step.action === 'waitFor') {
+                await wait((selector) => document.querySelector(selector) !== null, step.selector, step.name);
                 continue;
             }
             const locator = page.getByRole(step.role, { name: step.name, exact: true });
             if (step.action === 'click') {
                 await locator.click({ timeout: 60000 });
+            } else if (step.action === 'replaceText') {
+                const modifier = await page.evaluate(() => (/Mac|iPhone|iPad/.test(navigator.platform) ? 'Meta' : 'Control'));
+                await locator.press(`${modifier}+A`, { timeout: 60000 });
+                await locator.press('Backspace', { timeout: 60000 });
+                await wait(
+                    () => document.querySelector('.monaco-editor .view-lines')?.textContent?.trim() === '',
+                    undefined,
+                    'cleared editor',
+                );
+                await page.keyboard.insertText(step.value);
+                await wait(
+                    (value) => document.querySelector('.monaco-editor .view-lines')?.textContent?.replace(/\u00a0/g, ' ').includes(value) === true,
+                    step.value,
+                    'editor text to render',
+                );
             } else {
                 await locator.fill(step.value, { timeout: 60000 });
             }

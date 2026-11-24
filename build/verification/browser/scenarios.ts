@@ -51,6 +51,8 @@ export type ScenarioStep =
           readonly name: string;
       }
     | { readonly action: 'fill'; readonly role: 'textbox'; readonly name: string; readonly value: string }
+    | { readonly action: 'replaceText'; readonly role: 'textbox'; readonly name: string; readonly value: string }
+    | { readonly action: 'waitFor'; readonly name: string; readonly selector: string }
     | { readonly action: 'post'; readonly name: string; readonly message: unknown }
     | { readonly action: 'releaseReply'; readonly name: string; readonly path: FixturePaths };
 
@@ -2424,9 +2426,118 @@ const diagnosticsScenarios = {
     ),
 } as const satisfies Readonly<Record<string, Scenario<'connectionDiagnostics'>>>;
 
+const documentViewBase = defaultScenario('documentView');
+const documentEditReadiness = { ...documentViewBase.readiness, content: ['Save'] };
+const saveDocumentPath = 'mongoClusters.documentView.saveDocument';
+const disconnectedDocument = {
+    reason: 'userDisconnected',
+    text: 'The connection is disconnected.',
+    action: 'reconnect',
+} as const;
+const documentEditorName = 'Document Editor: Edit the document in JSON format';
+const firstDocumentEdit = {
+    action: 'replaceText',
+    role: 'textbox',
+    name: documentEditorName,
+    value: '{"_id":"stage0-1","name":"First pending edit"}',
+} as const;
+const saveDocumentStep = { action: 'click', role: 'button', name: 'Save to the database' } as const;
+
+const documentViewScenarios = {
+    default: documentViewBase,
+    'disconnected-dirty': {
+        ...documentViewBase,
+        readiness: documentEditReadiness,
+        rpc: {
+            ...documentViewBase.rpc,
+            [saveDocumentPath]: { type: 'mutation', results: [{ unavailable: disconnectedDocument }] },
+            'common.reportEvent': { type: 'mutation', results: [], undefinedResult: true },
+        },
+        assertions: [
+            {
+                kind: 'attribute',
+                name: 'preserves the mounted draft behind an inert overlay',
+                selector: '.disconnectedOverlayBackground',
+                attribute: 'inert',
+                expected: '',
+                steps: [
+                    firstDocumentEdit,
+                    saveDocumentStep,
+                    { action: 'waitFor', name: 'disconnected overlay', selector: '.disconnectedOverlay' },
+                ],
+            },
+            {
+                kind: 'text',
+                name: 'the rejected save does not replace the draft',
+                selector: '.monaco-editor .view-lines',
+                includes: ['First pending edit'],
+                excludes: ['Stage 0 document payload'],
+            },
+        ],
+    },
+    'stale-save-after-reconnect': {
+        ...documentViewBase,
+        readiness: documentEditReadiness,
+        rpc: {
+            ...documentViewBase.rpc,
+            [saveDocumentPath]: {
+                type: 'mutation',
+                holdReply: true,
+                results: [{ documentId: '"stage0-1"', documentStringified: '{"name":"Old save reply"}' }],
+            },
+            'mongoClusters.documentView.recoverUnavailable': {
+                type: 'mutation',
+                results: [{ recovered: { text: 'Reconnected' } }],
+            },
+            'common.reportEvent': { type: 'mutation', results: [], undefinedResult: true },
+        },
+        assertions: [
+            {
+                kind: 'attribute',
+                name: 'recovery does not discard the editor',
+                selector: '.disconnectedOverlayBackground',
+                attribute: 'inert',
+                expected: null,
+                steps: [
+                    firstDocumentEdit,
+                    saveDocumentStep,
+                    {
+                        action: 'post',
+                        name: 'disable Document View',
+                        message: { type: 'documentView.connectionUnavailable', unavailable: disconnectedDocument },
+                    },
+                    { action: 'click', role: 'button', name: 'Reconnect' },
+                    {
+                        action: 'waitFor',
+                        name: 'the editor to be enabled after reconnect',
+                        selector: '.disconnectedOverlayBackground:not([inert])',
+                    },
+                    {
+                        ...firstDocumentEdit,
+                        value: '{"_id":"stage0-1","name":"Newer unsaved edit"}',
+                    },
+                ],
+            },
+            {
+                kind: 'stableText',
+                name: 'the old save reply cannot overwrite the newer edit',
+                selector: '.monaco-editor .view-lines',
+                steps: [{ action: 'releaseReply', name: 'deliver the old save reply', path: saveDocumentPath }],
+            },
+            {
+                kind: 'attribute',
+                name: 'the newer edit stays dirty and can be saved',
+                selector: 'button[aria-label="Save to the database"]',
+                attribute: 'disabled',
+                expected: null,
+            },
+        ],
+    },
+} as const satisfies Readonly<Record<string, Scenario<'documentView'>>>;
+
 export const scenarios = {
     collectionView: { default: defaultScenario('collectionView') },
-    documentView: { default: defaultScenario('documentView') },
+    documentView: documentViewScenarios,
     clusterDashboard: { default: defaultScenario('clusterDashboard') },
     atlasCredentials: { default: defaultScenario('atlasCredentials', atlasSteps) },
     connectionDiagnostics: diagnosticsScenarios,

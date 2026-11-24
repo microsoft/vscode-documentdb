@@ -1541,7 +1541,9 @@ behave as today.
   disable message. It stays open with the draft intact and offers explicit Close and supported
   repairs. Dismissing sign-in does not report recovery; a different account requires an explicit
   rebind. A stale Reconnect cannot clear a Remove latch. Build and 26 focused tests passed.
-  The remaining panels and browser scenarios are still in progress.
+  The default, dirty-disconnect, and stale-save-after-reconnect scenarios passed in dark,
+  light, and high-contrast themes. The two recovery scenarios each sent one save and no
+  automatic replay. The remaining panels and Collection View browser scenarios are in progress.
 
 ---
 
