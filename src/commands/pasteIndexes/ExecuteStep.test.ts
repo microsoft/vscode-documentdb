@@ -7,8 +7,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { TaskState, type TaskStateChangeEvent } from '@microsoft/vscode-ext-tasks';
-import { ext } from '../../extensionVariables';
 import { type CollectionIndexCopier } from '@microsoft/vscode-ext-tasks-data-transfer';
+import { ext } from '../../extensionVariables';
 import { TaskService } from '../../services/taskService/extension/taskServiceInstance';
 import { CopyIndexesTask } from '../../services/taskService/tasks/copy-indexes/CopyIndexesTask';
 import { ExecuteStep } from './ExecuteStep';

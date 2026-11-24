@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as vscode from 'vscode';
 import { type CopyCollectionStrings } from '@microsoft/vscode-ext-tasks-data-transfer/copy-collection';
+import * as vscode from 'vscode';
 
 export function getExtensionCopyCollectionStrings(): CopyCollectionStrings {
     return {

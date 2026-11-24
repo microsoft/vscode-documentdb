@@ -9,12 +9,12 @@ import {
     type AzureWizardPromptStep,
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
+import { ConflictResolutionStrategy } from '@microsoft/vscode-ext-tasks-data-transfer';
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
-import { ConflictResolutionStrategy } from '@microsoft/vscode-ext-tasks-data-transfer';
 import { settingsKeys } from '../../settingsKeys';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';

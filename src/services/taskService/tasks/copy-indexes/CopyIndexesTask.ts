@@ -9,13 +9,13 @@ import {
     type ResourceTrackingTask,
     type TaskTelemetryContext,
 } from '@microsoft/vscode-ext-tasks';
-import * as vscode from 'vscode';
-import { ext } from '../../../../extensionVariables';
 import {
     type CollectionEndpoint,
     type CollectionIndexCopier,
     type IndexCopyResult,
 } from '@microsoft/vscode-ext-tasks-data-transfer';
+import * as vscode from 'vscode';
+import { ext } from '../../../../extensionVariables';
 import { createExtensionTaskOptions } from '../../extension/extensionTaskOptions';
 
 export interface CopyIndexesConfig {

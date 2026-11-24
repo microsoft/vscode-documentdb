@@ -3,10 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { readdirSync, readFileSync } from 'node:fs';
-import * as path from 'node:path';
 import { createTaskService, TaskState } from '@microsoft/vscode-ext-tasks';
 import { ConflictResolutionStrategy, type DocumentDetails } from '@microsoft/vscode-ext-tasks-data-transfer';
+import { readdirSync, readFileSync } from 'node:fs';
+import * as path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { copyCollection } from '../../../packages/vscode-ext-tasks-data-transfer/type-tests/copy-task';
 import {

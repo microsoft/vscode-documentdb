@@ -5,11 +5,11 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { type CollectionIndexCopier } from '@microsoft/vscode-ext-tasks-data-transfer';
 import type * as ClustersClientModule from '../../documentdb/ClustersClient';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { CopyPasteBufferService, type CopiedIndexScope } from '../../services/CopyPasteBufferService';
-import { type CollectionIndexCopier } from '@microsoft/vscode-ext-tasks-data-transfer';
 import { LoadSourceIndexesStep } from './LoadSourceIndexesStep';
 import { type PasteIndexesWizardContext } from './PasteIndexesWizardContext';
 

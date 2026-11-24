@@ -3,11 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { Task } from '@microsoft/vscode-ext-tasks';
+import { CopyPasteCollectionTask } from '@microsoft/vscode-ext-tasks-data-transfer/copy-collection';
 import { execFileSync } from 'node:child_process';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Task } from '@microsoft/vscode-ext-tasks';
-import { CopyPasteCollectionTask } from '@microsoft/vscode-ext-tasks-data-transfer/copy-collection';
 import { describe, expect, it } from 'vitest';
 
 describe('package entry points', () => {

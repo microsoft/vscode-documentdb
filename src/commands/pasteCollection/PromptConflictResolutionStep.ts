@@ -4,9 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
+import { ConflictResolutionStrategy } from '@microsoft/vscode-ext-tasks-data-transfer';
 import * as l10n from '@vscode/l10n';
 import { documentDbSupportedConflictStrategies } from '../../services/taskService/data-api/writers/DocumentDbStreamingWriter';
-import { ConflictResolutionStrategy } from '@microsoft/vscode-ext-tasks-data-transfer';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 
 export class PromptConflictResolutionStep extends AzureWizardPromptStep<PasteCollectionWizardContext> {

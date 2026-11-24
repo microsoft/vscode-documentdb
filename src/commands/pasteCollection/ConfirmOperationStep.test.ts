@@ -5,8 +5,8 @@
 
 import { beforeEach, describe, expect, it, vi, type MockedFunction } from 'vitest';
 
-import * as vscode from 'vscode';
 import { ConflictResolutionStrategy } from '@microsoft/vscode-ext-tasks-data-transfer';
+import * as vscode from 'vscode';
 import { ConfirmOperationStep } from './ConfirmOperationStep';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 
