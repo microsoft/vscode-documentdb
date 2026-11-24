@@ -9,7 +9,7 @@ import type * as ClustersClientModule from '../../documentdb/ClustersClient';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { CopyPasteBufferService, type CopiedIndexScope } from '../../services/CopyPasteBufferService';
-import { type CollectionIndexCopier } from '../../services/taskService/data-api/indexes/CollectionIndexCopier';
+import { type CollectionIndexCopier } from '@microsoft/vscode-ext-tasks-data-transfer';
 import { LoadSourceIndexesStep } from './LoadSourceIndexesStep';
 import { type PasteIndexesWizardContext } from './PasteIndexesWizardContext';
 

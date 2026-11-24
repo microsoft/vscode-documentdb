@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { noopDataTransferLogger } from '../dataTransferHost';
+import { noopDataTransferLogger } from '../dataTransferHost.js';
 import {
     type BatchAttemptOutcome,
     ConflictResolutionStrategy,
@@ -14,8 +14,8 @@ import {
     type PartialProgress,
     type StrategyBatchResult,
     type StreamingWriterOptions,
-} from '../types';
-import { StreamingDocumentWriter } from './StreamingDocumentWriter';
+} from '../types.js';
+import { StreamingDocumentWriter } from './StreamingDocumentWriter.js';
 
 class RetryAfterStreamingWriter extends StreamingDocumentWriter {
     constructor(options?: StreamingWriterOptions) {

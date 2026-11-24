@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { mergeStrings, type TaskLogger, type TaskTelemetryContext } from '@microsoft/vscode-ext-tasks';
-import { type DataTransferStrings, defaultDataTransferStrings, noopDataTransferLogger } from '../dataTransferHost';
+import { type DataTransferStrings, defaultDataTransferStrings, noopDataTransferLogger } from '../dataTransferHost.js';
 import {
     type AbortBatchResult,
     type BatchAttemptOutcome,
@@ -22,14 +22,14 @@ import {
     type StrategyBatchResult,
     type StreamingWriterOptions,
     type StreamWriteResult,
-} from '../types';
-import { BatchSizeAdapter } from './BatchSizeAdapter';
+} from '../types.js';
+import { BatchSizeAdapter } from './BatchSizeAdapter.js';
 import {
     computeRetryDelay,
     type ResolvedStreamingWriterSettings,
     resolveStreamingWriterSettings,
-} from './streamingWriterSettings';
-import { WriteStats } from './WriteStats';
+} from './streamingWriterSettings.js';
+import { WriteStats } from './WriteStats.js';
 
 /**
  * Configuration for streaming write operations.

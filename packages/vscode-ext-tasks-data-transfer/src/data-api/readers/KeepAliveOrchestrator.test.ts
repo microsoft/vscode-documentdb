@@ -5,37 +5,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type DocumentDetails } from '../types';
-import { KeepAliveOrchestrator } from './KeepAliveOrchestrator';
-
-// Mock extensionVariables (ext) module
-vi.mock('../../../../extensionVariables', () => ({
-    ext: {
-        outputChannel: {
-            appendLine: vi.fn(),
-            error: vi.fn(),
-            warn: vi.fn(),
-            debug: vi.fn(),
-            trace: vi.fn(),
-            appendLog: vi.fn(),
-            show: vi.fn(),
-            info: vi.fn(),
-        },
-    },
-}));
-
-// Mock vscode module
-vi.mock('vscode', () => ({
-    l10n: {
-        t: (key: string, ...args: unknown[]): string => {
-            let result = key;
-            args.forEach((arg, index) => {
-                result = result.replace(`{${index}}`, String(arg));
-            });
-            return result;
-        },
-    },
-}));
+import { type DocumentDetails } from '../types.js';
+import { KeepAliveOrchestrator } from './KeepAliveOrchestrator.js';
 
 // Helper function to create test documents
 function createDocuments(count: number, startId: number = 1): DocumentDetails[] {

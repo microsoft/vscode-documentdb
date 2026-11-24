@@ -13,8 +13,8 @@ import {
     type PartialProgress,
     type StrategyBatchResult,
     type StreamingWriterSettings,
-} from '../types';
-import { StreamingDocumentWriter, StreamingWriterError } from './StreamingDocumentWriter';
+} from '../types.js';
+import { StreamingDocumentWriter, StreamingWriterError } from './StreamingDocumentWriter.js';
 
 class OutcomeStreamingWriter extends StreamingDocumentWriter {
     constructor(settings?: StreamingWriterSettings) {

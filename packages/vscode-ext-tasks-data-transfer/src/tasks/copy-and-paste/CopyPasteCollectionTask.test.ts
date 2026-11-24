@@ -5,60 +5,26 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { ClustersClient } from '../../../../documentdb/ClustersClient';
-import { CredentialCache } from '../../../../documentdb/CredentialCache';
-import { ext } from '../../../../extensionVariables';
-import { type CollectionIndexCopier, type CopyIndexesOptions } from '../../data-api/indexes/CollectionIndexCopier';
-import { ConflictResolutionStrategy, type DocumentReader } from '../../data-api/types';
-import { type StreamingDocumentWriter } from '../../data-api/writers/StreamingDocumentWriter';
-import { type TaskTelemetryContext } from '@microsoft/vscode-ext-tasks';
-import { CopyPasteCollectionTask, SourceValidationError } from './CopyPasteCollectionTask';
-import { type CopyPasteConfig } from './copyPasteConfig';
+import { type TaskLogger, type TaskTelemetryContext } from '@microsoft/vscode-ext-tasks';
+import { type CollectionIndexCopier, type CopyIndexesOptions } from '../../data-api/indexes/CollectionIndexCopier.js';
+import { ConflictResolutionStrategy, type DocumentReader } from '../../data-api/types.js';
+import { type StreamingDocumentWriter } from '../../data-api/writers/StreamingDocumentWriter.js';
+import { CopyPasteCollectionTask, SourceValidationError } from './CopyPasteCollectionTask.js';
+import { type CopyPasteConfig } from './copyPasteConfig.js';
 
-vi.mock('@microsoft/vscode-azext-utils', () => ({
-    callWithTelemetryAndErrorHandling: vi.fn(),
-}));
-
-vi.mock('../../../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: vi.fn() },
-}));
-
-vi.mock('../../../../documentdb/CredentialCache', () => ({
-    CredentialCache: { hasCredentials: vi.fn() },
-}));
-
-vi.mock('../../../../extensionVariables', () => ({
-    ext: {
-        outputChannel: {
-            appendLine: vi.fn(),
-            error: vi.fn(),
-            trace: vi.fn(),
-            debug: vi.fn(),
-            warn: vi.fn(),
-        },
-    },
-}));
-
-vi.mock('vscode', () => ({
-    l10n: {
-        t: (message: string, ...args: string[]): string =>
-            args.reduce((result, value, index) => result.replace(`{${index}}`, value), message),
-    },
-    EventEmitter: vi.fn().mockImplementation(function () {
-        return {
-            event: vi.fn(),
-            fire: vi.fn(),
-            dispose: vi.fn(),
-        };
-    }),
-    ThemeIcon: vi.fn(),
-}));
+const logger: TaskLogger = {
+    appendLine: vi.fn(),
+    trace: vi.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+};
 
 class TestCopyPasteCollectionTask extends CopyPasteCollectionTask {
     public readonly progressUpdates: Array<{ progress: number; message?: string }> = [];
 
-    public runWorkForTest(signal: AbortSignal, context: IActionContext): Promise<void> {
+    public runWorkForTest(signal: AbortSignal, context: TaskTelemetryContext): Promise<void> {
         return this.doWork(signal, context);
     }
 
@@ -80,10 +46,10 @@ const config: CopyPasteConfig = {
     copyIndexes: true,
 };
 
-function createContext(): IActionContext {
+function createContext(): TaskTelemetryContext {
     return {
         telemetry: { properties: {}, measurements: {} },
-    } as IActionContext;
+    };
 }
 
 describe('CopyPasteCollectionTask index phase', () => {
@@ -105,14 +71,14 @@ describe('CopyPasteCollectionTask index phase', () => {
         const reader = { streamDocuments: vi.fn() } as unknown as DocumentReader;
         const writer = { streamDocuments: vi.fn() } as unknown as StreamingDocumentWriter;
         const task = new TestCopyPasteCollectionTask(config, reader, writer, indexCopier, 0, {
-            logger: ext.outputChannel,
+            logger,
         });
         const context = createContext();
 
         await task.runWorkForTest(new AbortController().signal, context);
 
         expect(task.progressUpdates).toContainEqual({ progress: 0, message: 'Copying 20 indexes...' });
-        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[CopyPasteTask] Index copy progress: 1/20 (email_1).');
+        expect(logger.trace).toHaveBeenCalledWith('[CopyPasteTask] Index copy progress: 1/20 (email_1).');
         expect(indexCopier.copyIndexes).toHaveBeenCalledWith(
             expect.not.objectContaining({ sourceIndexNames: expect.anything() }),
         );
@@ -349,15 +315,13 @@ describe('CopyPasteCollectionTask injected hooks', () => {
         });
     });
 
-    it('initializes without hooks or DocumentDB infrastructure access', async () => {
+    it('initializes from the injected reader and writer without hooks', async () => {
         const task = new InitializableCopyPasteCollectionTask(config, reader, writer);
         const signal = new AbortController().signal;
         const context = createContext();
 
         await expect(task.runInitializeForTest(signal, context)).resolves.toBeUndefined();
 
-        expect(ClustersClient.getClient).not.toHaveBeenCalled();
-        expect(CredentialCache.hasCredentials).not.toHaveBeenCalled();
         expect(reader.countDocuments).toHaveBeenCalledWith(signal, context);
         expect(writer.ensureTargetExists).toHaveBeenCalledOnce();
     });

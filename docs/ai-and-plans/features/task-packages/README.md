@@ -55,8 +55,9 @@ product glue stay in this extension. See [design.md](./design.md) for the full b
 ## Code map (today)
 
 - `packages/vscode-ext-tasks/src/**`: task core and VS Code presentation
-- `src/services/taskService/data-api/**`: the engine and the DocumentDB API adapters
-- `src/services/taskService/tasks/**`: Copy and Paste Collection, Copy Indexes, a demo task
+- `packages/vscode-ext-tasks-data-transfer/src/**`: transfer engine and Copy and Paste Collection task
+- `src/services/taskService/data-api/**`: DocumentDB API adapters
+- `src/services/taskService/tasks/**`: Copy Indexes and a demo task
 - `src/commands/pasteCollection/**`, `src/commands/pasteIndexes/**`: wizards and task assembly
 - `src/documentdb/ClustersExtension.ts`: attaches progress reporting, lifecycle logging, and the
   product-specific survey completion subscriber at activation

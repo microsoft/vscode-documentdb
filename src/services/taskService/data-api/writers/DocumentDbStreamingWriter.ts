@@ -3,14 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type Document, type WithId, type WriteError } from 'mongodb';
-import { l10n } from 'vscode';
-import { isBulkWriteError, type ClustersClient } from '../../../../documentdb/ClustersClient';
-import { ext } from '../../../../extensionVariables';
-import { createExtensionDataTransferOptions } from '../../extension/extensionDataTransferOptions';
 import { type TaskTelemetryContext } from '@microsoft/vscode-ext-tasks';
 import {
     ConflictResolutionStrategy,
+    StreamingDocumentWriter,
     type AbortBatchResult,
     type DocumentDetails,
     type EnsureTargetExistsResult,
@@ -22,8 +18,12 @@ import {
     type SkipBatchResult,
     type StrategyBatchResult,
     type StreamingWriterSettings,
-} from '../types';
-import { StreamingDocumentWriter } from './StreamingDocumentWriter';
+} from '@microsoft/vscode-ext-tasks-data-transfer';
+import { type Document, type WithId, type WriteError } from 'mongodb';
+import { l10n } from 'vscode';
+import { isBulkWriteError, type ClustersClient } from '../../../../documentdb/ClustersClient';
+import { ext } from '../../../../extensionVariables';
+import { createExtensionDataTransferOptions } from '../../extension/extensionDataTransferOptions';
 
 export const documentDbSupportedConflictStrategies: readonly ConflictResolutionStrategy[] = [
     ConflictResolutionStrategy.Abort,

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type DocumentDetails, type ModeConfig, type StreamingWriterSettings } from '../types';
+import { type DocumentDetails, type ModeConfig, type StreamingWriterSettings } from '../types.js';
 
 export interface ResolvedStreamingWriterSettings {
     batching: {

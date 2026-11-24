@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it, vi, type MockedFunction } from 'vitest';
 
 import * as vscode from 'vscode';
-import { ConflictResolutionStrategy } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
+import { ConflictResolutionStrategy } from '@microsoft/vscode-ext-tasks-data-transfer';
 import { ConfirmOperationStep } from './ConfirmOperationStep';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 

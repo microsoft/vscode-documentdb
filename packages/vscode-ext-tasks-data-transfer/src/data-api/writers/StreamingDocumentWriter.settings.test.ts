@@ -12,9 +12,9 @@ import {
     type PartialProgress,
     type StrategyBatchResult,
     type StreamingWriterOptions,
-} from '../types';
-import { BatchSizeAdapter } from './BatchSizeAdapter';
-import { StreamingDocumentWriter } from './StreamingDocumentWriter';
+} from '../types.js';
+import { BatchSizeAdapter } from './BatchSizeAdapter.js';
+import { StreamingDocumentWriter } from './StreamingDocumentWriter.js';
 
 class ThrottleError extends Error {
     constructor(public readonly processedCount: number = 0) {

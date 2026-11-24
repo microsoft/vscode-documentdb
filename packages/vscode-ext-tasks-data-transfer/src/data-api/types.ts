@@ -10,7 +10,7 @@
  */
 
 import { type TaskTelemetryContext } from '@microsoft/vscode-ext-tasks';
-import { type DataTransferOptions } from './dataTransferHost';
+import { type DataTransferOptions } from './dataTransferHost.js';
 
 // =================================
 // PUBLIC INTERFACES
@@ -81,8 +81,8 @@ export interface StreamingWriterOptions extends DataTransferOptions {
  * or counting documents.
  *
  * @example
- * // Create a reader for a specific source
- * const reader = new DocumentDbDocumentReader(() => ClustersClient.getClient(connectionId), databaseName, collectionName);
+ * // Create an adapter for a specific source
+ * const reader: DocumentReader = createReaderForSource();
  *
  * // Stream documents from the configured source
  * for await (const doc of reader.streamDocuments()) {
@@ -227,12 +227,12 @@ interface BaseBatchResult<TDocumentId = unknown> {
  * Result of Skip strategy batch write.
  *
  * Skip strategy inserts new documents and skips documents that conflict
- * with existing documents (same _id).
+ * with existing documents having the same identifier.
  */
 export interface SkipBatchResult<TDocumentId = unknown> extends BaseBatchResult<TDocumentId> {
     /** Number of new documents successfully inserted */
     insertedCount: number;
-    /** Number of documents skipped due to _id conflicts */
+    /** Number of documents skipped due to identifier conflicts */
     skippedCount: number;
 }
 
@@ -265,7 +265,7 @@ export interface OverwriteBatchResult<TDocumentId = unknown> extends BaseBatchRe
 /**
  * Result of GenerateNewIds strategy batch write.
  *
- * GenerateNewIds strategy generates new _id for all documents and inserts them.
+ * GenerateNewIds strategy generates new identifiers for all documents and inserts them.
  * No conflicts can occur since all IDs are unique.
  */
 export interface GenerateNewIdsBatchResult<TDocumentId = unknown> extends BaseBatchResult<TDocumentId> {
@@ -421,8 +421,8 @@ export enum ConflictResolutionStrategy {
     Overwrite = 'overwrite',
 
     /**
-     * Generate new _id values for all documents to avoid conflicts.
-     * Original _id values are preserved in a separate field.
+     * Generate new identifiers for all documents to avoid conflicts. Preserving an original
+     * identifier is adapter-specific.
      */
     GenerateNewIds = 'generateNewIds',
 }

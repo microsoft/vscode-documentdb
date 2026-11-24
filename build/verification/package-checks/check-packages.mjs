@@ -69,7 +69,11 @@ const EXPECTED_NODE_LOAD_FAILURES = {
 
 // Inline packages whose host entries import `vscode`, and Fluent UI for the reason above.
 const CONTROL_INLINE = ['@microsoft/vscode-ext-webview', '@microsoft/vscode-ext-webview-fluentui'];
-const VITEST_INLINE = [...CONTROL_INLINE, '@microsoft/vscode-ext-tasks'];
+const VITEST_INLINE = [
+    ...CONTROL_INLINE,
+    '@microsoft/vscode-ext-tasks',
+    '@microsoft/vscode-ext-tasks-data-transfer',
+];
 
 const here = import.meta.dirname;
 const repo = path.resolve(here, '../../..');
@@ -367,7 +371,11 @@ try {
         '--reporter',
         'verbose',
     ];
-    const inline = VITEST_INLINE.filter((name) => ours.has(name));
+    const inline = VITEST_INLINE.filter(
+        (name) =>
+            ours.has(name) ||
+            (name === '@microsoft/vscode-ext-tasks' && ours.has('@microsoft/vscode-ext-tasks-data-transfer')),
+    );
     const vitest = run(process.execPath, vitestArgs, {
         cwd: vitestConsumer,
         env: { ...probeEnv, PROBE_INLINE: inline.join(','), CI: 'true' },

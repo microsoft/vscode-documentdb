@@ -10,15 +10,15 @@ import {
     type ResourceTrackingTask,
     type TaskTelemetryContext,
 } from '@microsoft/vscode-ext-tasks';
-import { type CollectionIndexCopier, type IndexCopyResult } from '../../data-api/indexes/CollectionIndexCopier';
-import { type DocumentReader } from '../../data-api/types';
-import { type StreamingDocumentWriter, StreamingWriterError } from '../../data-api/writers/StreamingDocumentWriter';
+import { type CollectionIndexCopier, type IndexCopyResult } from '../../data-api/indexes/CollectionIndexCopier.js';
+import { type DocumentReader } from '../../data-api/types.js';
+import { type StreamingDocumentWriter, StreamingWriterError } from '../../data-api/writers/StreamingDocumentWriter.js';
 import {
     type CopyCollectionStrings,
     type CopyPasteCollectionTaskOptions,
     defaultCopyCollectionStrings,
-} from './copyCollectionStrings';
-import { type CopyPasteConfig } from './copyPasteConfig';
+} from './copyCollectionStrings.js';
+import { type CopyPasteConfig } from './copyPasteConfig.js';
 
 /**
  * Error thrown when source validation fails for copy-paste operations.

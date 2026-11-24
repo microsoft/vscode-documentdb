@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { mergeStrings } from '@microsoft/vscode-ext-tasks';
-import { type DataTransferOptions, type DataTransferStrings, defaultDataTransferStrings } from '../dataTransferHost';
+import { type DataTransferOptions, type DataTransferStrings, defaultDataTransferStrings } from '../dataTransferHost.js';
 import {
     ConflictResolutionStrategy,
     isAbortResult,
@@ -13,7 +13,7 @@ import {
     type PartialProgress,
     type StrategyBatchResult,
     type StreamWriteResult,
-} from '../types';
+} from '../types.js';
 
 /**
  * Aggregated statistics tracker for streaming document write operations.

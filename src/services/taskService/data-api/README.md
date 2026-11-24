@@ -2,6 +2,10 @@
 
 Feature design and rationale: [Task Packages](../../../../docs/ai-and-plans/features/task-packages/README.md).
 
+The generic engine now lives in
+[`packages/vscode-ext-tasks-data-transfer`](../../../../packages/vscode-ext-tasks-data-transfer/README.md);
+the file paths below describe the pre-extraction layout. DocumentDB adapters remain here.
+
 ## Overview
 
 The Data API provides a robust, database-agnostic framework for streaming and bulk writing documents between databases. It's designed to handle large-scale data operations with features like adaptive batching, automatic retry logic, and intelligent conflict resolution.

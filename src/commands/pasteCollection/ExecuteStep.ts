@@ -12,8 +12,7 @@ import { DocumentDbStreamingWriter } from '../../services/taskService/data-api/w
 import { getExtensionCopyCollectionStrings } from '../../services/taskService/extension/extensionCopyCollectionStrings';
 import { createExtensionTaskOptions } from '../../services/taskService/extension/extensionTaskOptions';
 import { TaskService } from '../../services/taskService/extension/taskServiceInstance';
-import { CopyPasteCollectionTask } from '../../services/taskService/tasks/copy-and-paste/CopyPasteCollectionTask';
-import { type CopyPasteConfig } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
+import { CopyPasteCollectionTask, type CopyPasteConfig } from '@microsoft/vscode-ext-tasks-data-transfer/copy-collection';
 import { isTerminalState, TaskState, whenTerminal, type Task } from '@microsoft/vscode-ext-tasks';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { nonNullValue } from '../../utils/nonNull';

@@ -4,10 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type TaskLogger } from '@microsoft/vscode-ext-tasks';
-import { type DataTransferOptions, noopDataTransferLogger } from '../dataTransferHost';
-import { type ModeConfig } from '../types';
-import { type ResolvedStreamingWriterSettings, resolveStreamingWriterSettings } from './streamingWriterSettings';
-import { type OptimizationModeConfig } from './writerTypes.internal';
+import { type DataTransferOptions, noopDataTransferLogger } from '../dataTransferHost.js';
+import { type ModeConfig } from '../types.js';
+import { type ResolvedStreamingWriterSettings, resolveStreamingWriterSettings } from './streamingWriterSettings.js';
+import { type OptimizationModeConfig } from './writerTypes.internal.js';
 
 /**
  * Configuration for batch size adaptation behavior.

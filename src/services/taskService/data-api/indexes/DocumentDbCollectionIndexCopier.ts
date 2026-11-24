@@ -15,7 +15,7 @@ import {
     type GetSourceIndexSummaryOptions,
     type IndexCopyResult,
     type SourceIndexSummary,
-} from './CollectionIndexCopier';
+} from '@microsoft/vscode-ext-tasks-data-transfer';
 
 export type DocumentDbCollectionEndpoint = CollectionEndpoint;
 

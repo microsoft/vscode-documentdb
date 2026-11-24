@@ -5,7 +5,7 @@
 
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
-import { type DataTransferOptions, type DataTransferStrings } from '../data-api/dataTransferHost';
+import { type DataTransferOptions, type DataTransferStrings } from '@microsoft/vscode-ext-tasks-data-transfer';
 
 export function getExtensionDataTransferStrings(): DataTransferStrings {
     return {

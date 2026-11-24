@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi, type MockedFunction } from 'vites
 import { openUrl, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
-import { type GetSourceIndexSummaryOptions } from '../../services/taskService/data-api/indexes/CollectionIndexCopier';
+import { type GetSourceIndexSummaryOptions } from '@microsoft/vscode-ext-tasks-data-transfer';
 import { CountSourceIndexesStep } from './CountSourceIndexesStep';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 import { createIndexCopier } from './createIndexCopier';
