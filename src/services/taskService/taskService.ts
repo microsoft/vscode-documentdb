@@ -258,7 +258,12 @@ export abstract class Task {
      * This method implements the template method pattern, handling all state
      * transitions and error handling automatically.
      *
-     * @returns A Promise that resolves when the task has been started (not when it completes).
+     * The returned Promise resolves once initialization is over, not when the task completes.
+     * An initialization failure does not reject it: the task ends as Failed, with the original
+     * error in `status.error`, and `doWork` is never called. This holds for any telemetry runner,
+     * including one that swallows the callback's error and resolves with `undefined`.
+     *
+     * @returns A Promise that resolves when initialization is over.
      * @throws Error if the task is not in a valid state to start.
      */
     public async start(): Promise<void> {
@@ -267,6 +272,10 @@ export abstract class Task {
         }
 
         this.updateStatus(TaskState.Initializing, this.strings.initializingTask, 0);
+
+        // Recorded inside the callback because the telemetry runner may swallow the error.
+        let initializationFailed = false;
+        let initializationError: unknown;
 
         try {
             // Allow subclasses to perform initialization with telemetry
@@ -277,42 +286,55 @@ export abstract class Task {
                 context.telemetry.properties.task_name = this.name;
                 context.telemetry.properties.task_phase = 'initialization';
 
-                await this.onInitialize?.(this.abortController.signal, context);
+                try {
+                    await this.onInitialize?.(this.abortController.signal, context);
+                } catch (error) {
+                    initializationFailed = true;
+                    initializationError = error;
+                    // Rethrow so the runner records the failure in telemetry.
+                    throw error;
+                }
 
                 // Record initialization completion
                 context.telemetry.properties.task_initializationCompleted = 'true';
             });
+        } catch (error) {
+            // The runner rethrew: either the initialization error or its own failure.
+            initializationFailed = true;
+            initializationError ??= error;
+        }
 
-            // Check if abort was requested during initialization
+        if (initializationFailed) {
+            // A stop request during initialization is cancellation, not failure: an abort-aware
+            // onInitialize may reject after Stop, so finalize as Stopped without starting work.
             if (this.abortController.signal.aborted) {
-                this.updateStatus(TaskState.Stopping, this.strings.stoppedDuringInitialization);
-                // Let runWork handle the final state transition
-                void this.runWork().catch((error) => {
-                    if (!this.isFinalState()) {
-                        this.updateStatus(TaskState.Failed, this.strings.taskFailed, 0, error);
-                    }
-                });
-                return;
+                this.updateStatus(TaskState.Stopped, this.strings.stoppedDuringInitialization);
+            } else {
+                this.updateStatus(TaskState.Failed, this.strings.failedToInitializeTask, 0, initializationError);
             }
+            return;
+        }
 
-            this.updateStatus(TaskState.Running, this.strings.taskRunning, 0);
-
-            // Start the actual work asynchronously
+        // Check if abort was requested during initialization
+        if (this.abortController.signal.aborted) {
+            this.updateStatus(TaskState.Stopping, this.strings.stoppedDuringInitialization);
+            // Let runWork handle the final state transition
             void this.runWork().catch((error) => {
                 if (!this.isFinalState()) {
                     this.updateStatus(TaskState.Failed, this.strings.taskFailed, 0, error);
                 }
             });
-        } catch (error) {
-            // A stop request during initialization is cancellation, not failure: an abort-aware
-            // onInitialize may reject after Stop, so finalize as Stopped without starting work.
-            if (this.abortController.signal.aborted) {
-                this.updateStatus(TaskState.Stopped, this.strings.stoppedDuringInitialization);
-                return;
-            }
-            this.updateStatus(TaskState.Failed, this.strings.failedToInitializeTask, 0, error);
-            throw error;
+            return;
         }
+
+        this.updateStatus(TaskState.Running, this.strings.taskRunning, 0);
+
+        // Start the actual work asynchronously
+        void this.runWork().catch((error) => {
+            if (!this.isFinalState()) {
+                this.updateStatus(TaskState.Failed, this.strings.taskFailed, 0, error);
+            }
+        });
     }
 
     /**
