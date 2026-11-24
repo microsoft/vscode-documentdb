@@ -283,6 +283,9 @@ async function runRowAction(
         }
         assertBound();
     };
+    if (!ClustersClient.getBinding(panel.binding.clusterId)) {
+        throw new ConnectionUnavailableError(ClustersClient.getLatchReason(panel.binding.clusterId) ?? 'unreachable');
+    }
     assertCurrent();
 
     if (action.kind === 'showCollections') {
