@@ -121,6 +121,9 @@ describe('KeepAliveOrchestrator', () => {
             // Read first document
             const first = await orchestrator.next();
             expect(first.done).toBe(false);
+            if (first.done) {
+                throw new Error('Expected the first document');
+            }
             expect(first.value.id).toBe('doc1');
 
             // Simulate slow consumption - advance time past interval

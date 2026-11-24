@@ -79,9 +79,10 @@ describe('CopyPasteCollectionTask index phase', () => {
 
         expect(task.progressUpdates).toContainEqual({ progress: 0, message: 'Copying 20 indexes...' });
         expect(logger.trace).toHaveBeenCalledWith('[CopyPasteTask] Index copy progress: 1/20 (email_1).');
-        expect(indexCopier.copyIndexes).toHaveBeenCalledWith(
-            expect.not.objectContaining({ sourceIndexNames: expect.anything() }),
-        );
+        expect(indexCopier.copyIndexes).toHaveBeenCalled();
+        const options = vi.mocked(indexCopier.copyIndexes).mock.calls[0][0];
+        expect(options).toBeDefined();
+        expect(options?.sourceIndexNames).toBeUndefined();
         expect(context.telemetry.measurements.selectedIndexCount).toBe(20);
         expect(context.telemetry.measurements.sourceIndexCount).toBeUndefined();
         expect(context.telemetry.properties.copyOperationCorrelationId).toBe('operation-id');

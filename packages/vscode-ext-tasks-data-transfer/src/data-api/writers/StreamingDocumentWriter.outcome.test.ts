@@ -70,7 +70,7 @@ describe('StreamingDocumentWriter batch attempt outcomes', () => {
         const writer = new OutcomeStreamingWriter();
         const documents = createDocuments(10);
         const remaining = documents.filter((document) => [2, 5, 9].includes(Number(document.id)));
-        const onProgress = vi.fn();
+        const onProgress = vi.fn<(processedCount: number, details?: string) => void>();
         writer.writeBatch.mockResolvedValueOnce({
             result: { processedCount: 7, insertedCount: 7 },
             remaining,
@@ -92,7 +92,7 @@ describe('StreamingDocumentWriter batch attempt outcomes', () => {
         const writer = new OutcomeStreamingWriter();
         const documents = createDocuments(3);
         const duplicateError = new Error('Duplicate document');
-        const onProgress = vi.fn();
+        const onProgress = vi.fn<(processedCount: number, details?: string) => void>();
         writer.writeBatch.mockResolvedValueOnce({
             result: {
                 processedCount: 2,
@@ -123,7 +123,7 @@ describe('StreamingDocumentWriter batch attempt outcomes', () => {
         const writer = new OutcomeStreamingWriter();
         const documents = createDocuments(4);
         const duplicateError = new Error('Duplicate document');
-        const onProgress = vi.fn();
+        const onProgress = vi.fn<(processedCount: number, details?: string) => void>();
         writer.writeBatch.mockResolvedValueOnce({
             result: { processedCount: 1, insertedCount: 1, abortedCount: 0 },
             remaining: documents.slice(1),
@@ -229,7 +229,7 @@ describe('StreamingDocumentWriter batch attempt outcomes', () => {
     it('retries only the unwritten suffix for returned throttle progress containing only counts', async () => {
         const writer = new OutcomeStreamingWriter();
         const documents = createDocuments(10);
-        const onProgress = vi.fn();
+        const onProgress = vi.fn<(processedCount: number, details?: string) => void>();
         writer.writeBatch.mockResolvedValueOnce({
             result: { processedCount: 4, insertedCount: 4 },
             errorType: 'throttle',
@@ -249,7 +249,7 @@ describe('StreamingDocumentWriter batch attempt outcomes', () => {
         try {
             const writer = new OutcomeStreamingWriter({ retry: { maxAttemptsWithoutProgress: 2 } });
             const documents = createDocuments(1);
-            const onProgress = vi.fn();
+            const onProgress = vi.fn<(processedCount: number, details?: string) => void>();
             writer.writeBatch.mockResolvedValue({
                 result: { processedCount: 0, insertedCount: 0 },
                 errorType: 'throttle',
@@ -281,7 +281,7 @@ describe('StreamingDocumentWriter batch attempt outcomes', () => {
         async (errorType) => {
             const writer = new OutcomeStreamingWriter({ retry: { maxAttemptsWithoutProgress: 2 } });
             const documents = createDocuments(10);
-            const onProgress = vi.fn();
+            const onProgress = vi.fn<(processedCount: number, details?: string) => void>();
             writer.writeBatch.mockResolvedValue({
                 result: { processedCount: 0, insertedCount: 0 },
                 remaining: documents,
@@ -301,7 +301,7 @@ describe('StreamingDocumentWriter batch attempt outcomes', () => {
     it('exhausts the retry limit for a returned outcome without progress, remaining documents or error type', async () => {
         const writer = new OutcomeStreamingWriter({ retry: { maxAttemptsWithoutProgress: 2 } });
         const documents = createDocuments(3);
-        const onProgress = vi.fn();
+        const onProgress = vi.fn<(processedCount: number, details?: string) => void>();
         writer.writeBatch.mockResolvedValue({ result: { processedCount: 0, insertedCount: 0 } });
 
         await expect(writer.streamDocuments(createDocumentStream(documents), config, { onProgress })).rejects.toThrow(
@@ -316,7 +316,7 @@ describe('StreamingDocumentWriter batch attempt outcomes', () => {
     it('retries the unwritten suffix for a returned partial outcome without remaining documents or error type', async () => {
         const writer = new OutcomeStreamingWriter();
         const documents = createDocuments(10);
-        const onProgress = vi.fn();
+        const onProgress = vi.fn<(processedCount: number, details?: string) => void>();
         writer.writeBatch.mockResolvedValueOnce({ result: { processedCount: 4, insertedCount: 4 } });
 
         const result = await writer.streamDocuments(createDocumentStream(documents), config, { onProgress });
@@ -371,7 +371,7 @@ describe('StreamingDocumentWriter batch attempt outcomes', () => {
     it('counts completed throttle progress once when no documents remain', async () => {
         const writer = new OutcomeStreamingWriter();
         const documents = createDocuments(10);
-        const onProgress = vi.fn();
+        const onProgress = vi.fn<(processedCount: number, details?: string) => void>();
         writer.writeBatch.mockResolvedValueOnce({
             result: { processedCount: 10, insertedCount: 10 },
             remaining: [],
