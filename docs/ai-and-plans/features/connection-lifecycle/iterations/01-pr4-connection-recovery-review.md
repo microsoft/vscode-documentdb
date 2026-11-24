@@ -47,12 +47,14 @@ after teardown stays in WI-7, with F2.
 OP-3 passed on the older CI VSIX. The current review proposals do not change the tested
 sign-out, dismissal, or explicit sign-in sequence. The local `1.1.1-alpha.1` VSIX packaged
 successfully; its shared Shell/Playground worker booted in plain Node and acknowledged
-shutdown. A live Shell and Playground smoke test is separate.
+shutdown. On 2026-11-24, the operator confirmed that both Shell and Playground work
+on the requested CI-built `1.1.1-alpha.1` VSIX. The live smoke gate is cleared.
 
 Final local Case 2 passed: localization generation and check, formatting, lint, build,
 strict workspace test type-check, the full runtime suite (**432 files; 9,796 passed, one
 skipped**), and VSIX packaging. The initial label test was corrected to assert the
 label on the existing plain-object tree fixture. The review-fix run also caught an
 enum-to-string lint error and a storage fixture type mismatch; both were fixed
-without changing recovery behavior or weakening any assertions. PR4 remains a draft
-until the live packaged Shell and Playground smoke test is recorded.
+without changing recovery behavior or weakening any assertions. Full CI also passed
+on code head `d422d065b`. The operator confirmation is a documentation-only follow-up;
+it does not change the tested build or require repeating OP-3.
