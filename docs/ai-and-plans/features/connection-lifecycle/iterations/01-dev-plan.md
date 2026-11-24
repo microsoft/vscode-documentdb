@@ -88,8 +88,8 @@ result may continue, but say so in the message. Record the result in the Progres
 | OP-1 | WI-1, CP-0         | **Two parts.** (a) Before the handler change: does an expired token on a new socket get code 18 or a socket close? (b) After it: renewal succeeds. |
 | OP-2 | WI-3, CP-W3        | The azext workflow checks on the packaged VSIX: Azure sign-in, discovery, filters, deep links, wizards, Azure Resources view.                      |
 | OP-3 | WI-5 done          | OT-2's tree part with a real sign-out: Sign in again, a dismissal, no reprompt.                                                                    |
-| OP-4 | WI-6 done          | OT-1 (short form, with the WI-4 hook) and OT-3(a) identity guard and (b) same-user password change, on a dev build.                                |
-| OP-5 | WI-7 done          | OT-7 plus OT-3(a)'s **Keep open (disabled)** choice and pushed disable message, on a dev build.                                                    |
+| OP-4 | WI-6 done          | Cleared: short OT-1 and OT-3 identity-guard evidence; the original password-only recovery check was waived by the operator.                        |
+| OP-5 | WI-7 done          | OT-7, including **Keep open (disabled)** and its pushed disable message, plus OT-3's immediate lock after a saved edit (decision 0018).            |
 | OP-6 | Before PR F (CP-5) | OT-1 to OT-7 on the packaged VSIX, with at least one real wait of two hours or more (PR F step 3).                                                 |
 
 ### Per-PR workflow
@@ -1648,8 +1648,8 @@ behave as today.
         worker. **Playground:** stop the worker. The latch keeps both from respawning (F-15).
      4. Close the client (`deleteClient`). Clear the Entra failure registry and `SchemaStore.clearCluster`.
         Clear the `CredentialCache` entry and `lastVerifiedIdentity` **only** when `dropCredentials` is
-        set (Remove). Disconnect keeps both (A3, decision 0011), so Connect and a tab's Reconnect are
-        silent and pinned to the same identity.
+        set (Remove). Disconnect keeps both (A3, decision 0011), so tree Connect and then tab Retry
+        can reuse the same identity.
      5. Refresh the tree (T-2).
    - **Never touched:** VS Code auth sessions, the managed identity cache, the ARM cache.
    - **Keys:** every store keeps its current `clusterId` matching. Provider-specific equality is out of
@@ -1670,7 +1670,8 @@ behave as today.
      - Follow [settings/README.md](../../settings/README.md) for the group, `order` and the ID naming
        rules. If an existing group fits better than `connections`, use it and record the final ID in
        Progress.
-     - The same choice applies to Remove Connection and to identity-changing credential updates.
+     - The same choice applies to Remove Connection. Saved connection edits keep old views open
+       and locked without asking for a tab choice (decision 0018).
      - The setting never skips the unsaved-edits confirmation: when Close all is chosen and an editor is
        dirty, that confirmation still appears.
      - Skip the modal when no surfaces are registered.
@@ -1684,27 +1685,19 @@ behave as today.
      folder, its connections, panels, drafts and shells intact. Descendants without a client or open
      surface still get their `CredentialCache` entry and schema cleared, as Remove does.
 5. **Update Credentials and Update Connection String.**
-   - Compute the **new** fingerprint from the wizard context before saving.
-   - **Make save success explicit** (F-19): the execute step must report whether the save succeeded, for
-     example with a flag on the wizard context. Today it catches failures and returns normally.
-   - **Same fingerprint:** save. Only after a confirmed success, call `invalidate` and replace the client
-     with a new generation; surfaces continue.
-   - **Different fingerprint:**
-     1. `confirmTeardown` **before** saving.
-     2. `latchForTeardown` **before** saving. On a conflict, stop: nothing is saved. Now no import, task or
-        connect can start while the save runs.
-     3. Save.
-     4. **Storage decides, not the success flag** (F-21). Re-read the stored connection and compute its
-        fingerprint:
-        - it differs from the live binding (a full save, **or** a partial one where the secrets were
-          written): `commitTeardown` with reason `credentialsChanged` and `dropCredentials: false`, so what
-          is stored is what the next connect uses. `lastVerifiedIdentity` is replaced on the next successful
-          connect. If the save reported a failure, also tell the user the change may be incomplete and offer
-          Update Credentials;
-        - it equals the live binding (nothing reached storage): clear the latch. The old binding stays
-          usable, and the user is told the save failed.
-   - The latch and the `invalidate` call make sure a concurrent connect cannot publish the old credentials
-     after the change.
+   - Follow decision 0018: do not classify edits into same- and different-fingerprint recovery
+     flows or ask whether to close tabs. Check for task conflicts, fence new operations while
+     persisting the edit, and make the save result explicit (F-19).
+   - **Storage decides, not the success flag** (F-21). Compare the relevant before/after stored
+     connection settings in memory, including credentials; never log or persist the comparison.
+     If storage is unchanged, release the save fence without retiring the old views. Preserve
+     existing failure reporting for a failed save.
+   - If storage changed, retire the old bindings, invalidate the old client and cached settings,
+     and push `credentialsChanged` to the affected views. They keep their contents but cannot
+     Retry; new views use the saved settings. If the save reported a failure, warn that the
+     change may be incomplete. Fence concurrent startup so it cannot publish the old credentials.
+   - Keep the existing identity checks for other sources of change. Silent token renewal, a
+     same-account sign-in and reconnect with unchanged settings do not retire old bindings.
    - Add a **Disconnect** button to the D12 modal for open shells.
 6. **Telemetry.**
    - One `connection.disconnect` event with `source` (`command`, `remove`, `credentialsChanged`),
@@ -1718,7 +1711,7 @@ behave as today.
   cluster is not blocked; Disconnect succeeds once the task is done or stopped;
 - a token response that arrives after Disconnect is ignored;
 - Reconnect uses the current credentials and cloud settings;
-- after Disconnect, a tab's Reconnect and the tree's Connect succeed without the tree reloading
+- after Disconnect, tree Connect followed by tab Retry succeeds without the tree reloading
   credentials and without a prompt (native, Entra and discovery with a typed password); after Remove,
   the `CredentialCache` entry and `lastVerifiedIdentity` are gone;
 - Remove reuses the same teardown;
@@ -1731,6 +1724,8 @@ behave as today.
 - an import attempted while Update Credentials is saving is refused with the latch's reason, and nothing
   is half-applied;
 - a save that fails before any write keeps the old binding and clears the latch;
+- a cancelled or identical edit keeps old views usable; a saved password-only edit permanently
+  locks existing views with their contents kept and no tab-choice prompt;
 - a save whose metadata write fails after the secret write ends in teardown under `credentialsChanged`,
   never in a split state (old client, new stored secrets);
 - deleting a folder with a connected child that has a dirty Document View and a live shell: cancelling

@@ -28,7 +28,8 @@ created: 2026-11-19
 | 0014 | Keep in-memory connection settings after a rejection for a verified Entra identity                         | Accepted                    | Operator selected A to make sign-in recovery smoother                                | 2026-11-23 | Yes; WI-5 previously said to delete the entry                    |
 | 0015 | Use the existing latch to block startup after authentication rejection                                     | Accepted                    | Operator selected A; keep the approach simple and pragmatic                          | 2026-11-23 | Yes; expands the existing latch rather than adding a second hold |
 | 0016 | Keep disconnected webviews open under a full-view overlay                                                  | Accepted (modified by 0017) | Operator chose a simple disabled state with explicit actions                         | 2026-11-24 | Yes; replaces the inline banner and single-action layout         |
-| 0017 | Limit unavailable webview recovery to Retry and Close view                                                 | Accepted                    | Operator wants credential repair in the tree and no extra recovery workflow in a tab | 2026-11-24 | Yes; removes in-view credential repair                           |
+| 0017 | Limit unavailable webview recovery to Retry and Close view                                                 | Accepted (modified by 0018) | Operator wants credential repair in the tree and no extra recovery workflow in a tab | 2026-11-24 | Yes; removes in-view credential repair                           |
+| 0018 | Saved connection edits permanently lock existing views                                                     | Accepted                    | Operator prefers simple reconnect for unchanged settings over recovery after edits   | 2026-11-24 | Yes; removes same-identity recovery after a saved edit           |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -455,3 +456,20 @@ A dirty Document View warns that Close view discards unsaved changes, without a 
 
 The operator approved testing the identity guard in OP-4 and testing the WI-7 **Keep open
 (disabled)** choice and its disable message in OP-5. Neither check is dropped.
+
+## 0018. Saved connection edits permanently lock existing views
+
+The operator chose to optimize for the common workflow: reconnect with unchanged settings.
+Recovering existing tabs after an explicit credentials or connection-string edit adds complexity
+for an uncommon workflow. In WI-7, any such edit saved in this VS Code window that changes stored
+connection details, including a password-only change, makes existing views **Close view** only.
+Keep their contents and allow dismissal for copying. Do not prompt about tabs or close them when
+saving; open new views from the tree after the edit. The Disconnect and Remove tab choices are
+unchanged.
+
+Silent renewal, a network reconnect and signing back in as the same account with unchanged
+settings remain supported. A cancelled edit or a save that leaves storage unchanged does not lock
+views. If a failed save partially changed storage, retire the old views and tell the user the
+change may be incomplete. No cross-window watcher is added. The identity guard still checks
+changes from other sources, and commands still check their originating binding after pickers
+and confirmations.

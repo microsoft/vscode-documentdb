@@ -58,7 +58,10 @@ Evidence, telemetry and source pointers: [research-findings.md](./research-findi
 - After a database rejects a verified Entra identity, discard the client but keep its in-memory
   connection settings for explicit sign-in. Do not retain the rejected token or retry silently.
   When the tree offers **Retry sign-in**, it does not also offer **Retry**.
-- **One teardown** serves Disconnect, Remove Connection and identity-changing credential updates.
+- **Disconnect and Remove Connection** share a teardown and a tab choice. Saving a change to
+  connection details (including a password-only change) in this window keeps old tabs open and
+  copyable, but they cannot recover. Open new tabs from the tree. Unchanged settings still
+  support Retry and silent token renewal.
 - Disconnect uses the existing task-conflict guard: if a copy or export is using the cluster,
   leave the task and connection running. The user can retry after the task finishes or is stopped.
 
@@ -92,6 +95,7 @@ See [decisions.md](./decisions.md):
 - 0015 use the existing latch to block startup after authentication rejection until explicit recovery.
 - 0016 keep disconnected webviews open under a full-view overlay with explicit actions.
 - 0017 limit unavailable webview recovery to Retry and Close view.
+- 0018 saved connection edits permanently lock existing views.
 
 ## Timeline
 
