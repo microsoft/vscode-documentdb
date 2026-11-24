@@ -8,7 +8,8 @@ import * as l10n from '@vscode/l10n';
 import { EJSON, type Document } from 'bson';
 import * as fs from 'node:fs/promises';
 import * as vscode from 'vscode';
-import { ClustersClient, isBulkWriteError } from '../../documentdb/ClustersClient';
+import { ClustersClient, isBulkWriteError, type ConnectionBinding } from '../../documentdb/ClustersClient';
+import { resolveTransferClient } from '../../documentdb/resolveTransferClient';
 import {
     AzureDomains,
     getHostsFromConnectionString,
@@ -23,6 +24,7 @@ export async function importDocuments(
     context: IActionContext,
     selectedItem: vscode.Uri | CollectionItem | undefined,
     uris: vscode.Uri[] | undefined,
+    options?: { readonly binding?: ConnectionBinding },
 ): Promise<void> {
     if (selectedItem instanceof vscode.Uri) {
         uris ||= [selectedItem];
@@ -75,7 +77,7 @@ export async function importDocuments(
 
     try {
         await ext.state.runWithTemporaryDescription(selectedItem.id, l10n.t('Importing…'), async () => {
-            await importDocumentsWithProgress(selectedItem, uris);
+            await importDocumentsWithProgress(selectedItem, uris, options?.binding);
         });
     } finally {
         // Always refresh at the database level (parent of the collection) so collection
@@ -85,7 +87,11 @@ export async function importDocuments(
     }
 }
 
-export async function importDocumentsWithProgress(selectedItem: CollectionItem, uris: vscode.Uri[]): Promise<void> {
+export async function importDocumentsWithProgress(
+    selectedItem: CollectionItem,
+    uris: vscode.Uri[],
+    binding?: ConnectionBinding,
+): Promise<void> {
     const result = await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
@@ -145,11 +151,16 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
             const incrementDocuments = 75 / (countDocuments || 1);
             let count = 0;
             let buffer: DocumentBuffer<unknown> | undefined;
+            let boundClient: ClustersClient | undefined;
             if (selectedItem instanceof CollectionItem) {
                 // Get the connection string from the ClustersClient, not from the cluster model.
                 // For Discovery View items, the cluster model may not have connectionString populated,
                 // but the ClustersClient will have it after authentication.
-                const client = await ClustersClient.getClient(selectedItem.cluster.clusterId);
+                const client = await resolveTransferClient(selectedItem.cluster.clusterId, binding);
+                if (binding) {
+                    // A bound import must not switch clients between batches.
+                    boundClient = client;
+                }
                 const connectionString = client.getConnectionString();
 
                 // Determine if this is an Azure MongoDB RU resource
@@ -187,7 +198,7 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
                     }),
                 });
 
-                const result = await insertDocument(selectedItem, documents[i], buffer);
+                const result = await insertDocument(selectedItem, documents[i], buffer, boundClient);
 
                 // 'count' in result means that the result is from the buffer
                 count += result.count;
@@ -197,7 +208,7 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
 
             // Do insertion for the last batch for bulk insertion
             if (!wasCancelled && buffer && buffer.getStats().documentCount > 0) {
-                const lastBatchFlushResult = await insertDocument(selectedItem, undefined, buffer);
+                const lastBatchFlushResult = await insertDocument(selectedItem, undefined, buffer, boundClient);
 
                 count += lastBatchFlushResult.count;
                 hasErrors = hasErrors || lastBatchFlushResult.errorOccurred;
@@ -313,6 +324,7 @@ async function insertDocument(
     node: CollectionItem,
     document: unknown,
     buffer: DocumentBuffer<unknown> | undefined,
+    boundClient?: ClustersClient,
 ): Promise<{ count: number; errorOccurred: boolean }> {
     try {
         // Check for valid buffer
@@ -323,7 +335,7 @@ async function insertDocument(
 
         // Route to appropriate handler based on node type
         if (node instanceof CollectionItem) {
-            return await insertDocumentWithBufferIntoCluster(node, buffer, document as Document);
+            return await insertDocumentWithBufferIntoCluster(node, buffer, boundClient, document as Document);
         }
 
         // Should only reach here if node is neither CollectionItem nor CosmosDBContainerResourceItem
@@ -339,6 +351,7 @@ async function insertDocument(
 async function insertDocumentWithBufferIntoCluster(
     node: CollectionItem,
     buffer: DocumentBuffer<unknown>,
+    boundClient?: ClustersClient,
     document?: Document,
     // If document is undefined, it means that we are flushing the buffer
     // It is used for the last batch, and not recommended to be used for normal batches
@@ -364,7 +377,7 @@ async function insertDocumentWithBufferIntoCluster(
 
     // Documents to process could be the current document (if too large)
     // or the contents of the buffer (if it was full)
-    const client = await ClustersClient.getClient(node.cluster.clusterId);
+    const client = boundClient ?? (await ClustersClient.getClient(node.cluster.clusterId));
     try {
         const insertResult = await client.insertDocuments(
             databaseName,

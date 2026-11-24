@@ -1549,6 +1549,11 @@ behave as today.
   automatic requests while the overlay is visible. The build, 118 focused view tests, and
   66 browser harness tests passed. Default and disconnected Dashboard scenarios passed in
   dark, light, and high-contrast themes. Next: Collection View recovery and bound handoffs.
+- **Transfer command guard:** Import and export can receive the Collection View's host-only
+  binding. After the file picker, they resolve that identity before opening a stream or writing.
+  A bound import keeps its original client for every batch; tree-originated transfers keep their
+  existing behavior. The build and 91 focused tests passed, including an identity change while
+  the import picker is open. Collection View command forwarding and WI-7 task leases are separate.
 
 ---
 
