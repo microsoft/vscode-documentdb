@@ -418,6 +418,119 @@ describe('TaskService', () => {
     });
 });
 
+describe('TaskService retention of finished tasks', () => {
+    const flush = (): Promise<void> => new Promise<void>((resolve) => setImmediate(resolve));
+
+    async function finish(task: Task): Promise<void> {
+        await task.start();
+        await waitForTaskCompletion(task);
+        await flush();
+    }
+
+    it('evicts the oldest-finished task beyond the limit when a new task registers', async () => {
+        const service = createTaskService({ maxFinishedTasks: 1 });
+        const deleted: string[] = [];
+        service.onDidDeleteTask((id) => deleted.push(id));
+        const first = new TestTask('first', { workSteps: 0 });
+        const second = new TestTask('second', { workSteps: 0 });
+        service.registerTask(first);
+        service.registerTask(second);
+
+        // Finish in the opposite order of registration: eviction follows finish order.
+        await finish(second);
+        await finish(first);
+        expect(service.listTasks()).toHaveLength(2);
+
+        const next = new TestTask('next');
+        service.registerTask(next);
+        await flush();
+
+        expect(service.getTask(second.id)).toBeUndefined();
+        expect(service.getTask(first.id)).toBe(first);
+        expect(service.getTask(next.id)).toBe(next);
+        expect(deleted).toEqual([second.id]);
+    });
+
+    it('with a limit of 0 evicts every finished task at the next registration, but never unfinished ones', async () => {
+        const service = createTaskService({ maxFinishedTasks: 0 });
+        const pending = new TestTask('pending');
+        const running = new TestTask('running', { workSteps: 50, stepDuration: 20 });
+        const done = [new TestTask('done 1', { workSteps: 0 }), new TestTask('done 2', { workSteps: 0 })];
+        for (const task of [pending, running, ...done]) {
+            service.registerTask(task);
+        }
+        await Promise.all(done.map(finish));
+        await running.start();
+
+        service.registerTask(new TestTask('next'));
+
+        expect(service.listTasks().map((task) => task.name)).toEqual(['pending', 'running', 'next']);
+        running.stop();
+        await waitForTaskCompletion(running);
+    });
+
+    it('does not evict a task while its terminal state change is being delivered', async () => {
+        const service = createTaskService({ maxFinishedTasks: 0 });
+        const task = new TestTask('finishing', { workSteps: 0 });
+        service.registerTask(task);
+        const lookups: Array<Task | undefined> = [];
+        const isTerminalEventOfTask = (e: { taskId: string; newState: TaskState }): boolean =>
+            e.taskId === task.id && isTerminalState(e.newState);
+        service.onDidChangeTaskState((e) => {
+            if (isTerminalEventOfTask(e)) {
+                service.registerTask(new TestTask('registered from a service listener'));
+                lookups.push(service.getTask(task.id));
+            }
+        });
+        // Direct task listeners run after the registry's own subscription has returned.
+        task.onDidChangeState((e) => {
+            if (isTerminalEventOfTask(e)) {
+                service.registerTask(new TestTask('registered from a task listener'));
+            }
+        });
+        task.onDidChangeState((e) => {
+            if (isTerminalEventOfTask(e)) {
+                lookups.push(service.getTask(task.id));
+            }
+        });
+
+        await finish(task);
+
+        expect(lookups).toEqual([task, task]);
+        service.registerTask(new TestTask('later'));
+        expect(service.getTask(task.id)).toBeUndefined();
+    });
+
+    it('keeps finish order when a terminal-state listener synchronously finishes another task', async () => {
+        class SyncFinishTask extends TestTask {
+            public finishNow(): void {
+                this.updateStatus(TaskState.Completed);
+            }
+        }
+        const service = createTaskService({ maxFinishedTasks: 1 });
+        const first = new SyncFinishTask('first');
+        const second = new SyncFinishTask('second');
+        service.registerTask(first);
+        service.registerTask(second);
+        service.onDidChangeTaskState((e) => {
+            if (e.taskId === first.id && isTerminalState(e.newState)) {
+                second.finishNow();
+            }
+        });
+
+        first.finishNow();
+        await flush();
+        service.registerTask(new TestTask('next'));
+
+        expect(service.getTask(first.id)).toBeUndefined();
+        expect(service.getTask(second.id)).toBe(second);
+    });
+
+    it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])('rejects maxFinishedTasks = %s', (value) => {
+        expect(() => createTaskService({ maxFinishedTasks: value })).toThrow(RangeError);
+    });
+});
+
 describe('Task host options', () => {
     class HostTestTask extends Task {
         public readonly type = 'host-test';

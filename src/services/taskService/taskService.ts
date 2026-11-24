@@ -533,6 +533,10 @@ export interface TaskService {
      * Deletes a task from the service.
      * This will call the task's delete() method for cleanup.
      *
+     * The registry also evicts old finished tasks on its own (see
+     * {@link TaskServiceOptions.maxFinishedTasks}); this method stays public so that a caller,
+     * such as a future task UI, can remove a task explicitly.
+     *
      * @param id The unique identifier of the task to delete.
      * @returns A Promise that resolves when the task has been deleted.
      * @throws Error if the task is not found.
@@ -594,6 +598,30 @@ export interface TaskService {
 }
 
 /**
+ * Default for {@link TaskServiceOptions.maxFinishedTasks}: how many finished tasks the registry keeps.
+ */
+export const DEFAULT_MAX_FINISHED_TASKS = 20;
+
+/**
+ * Options for {@link createTaskService}.
+ */
+export interface TaskServiceOptions {
+    /** Overrides for the English default strings used in registry errors. */
+    readonly strings?: Partial<TaskStrings>;
+
+    /**
+     * Maximum number of finished (Completed, Failed or Stopped) tasks kept registered.
+     * When a new task registers, the oldest finished tasks beyond this number are deleted, which
+     * fires `onDidDeleteTask`. Tasks that have not finished are never evicted, and a task is never
+     * evicted while its terminal state change is still being delivered. Must be an integer >= 0;
+     * 0 evicts every finished task at the next registration.
+     *
+     * @default DEFAULT_MAX_FINISHED_TASKS
+     */
+    readonly maxFinishedTasks?: number;
+}
+
+/**
  * Private implementation of TaskService that manages long-running task operations
  * within the extension.
  *
@@ -602,8 +630,11 @@ export interface TaskService {
  */
 class TaskServiceImpl implements TaskService {
     private readonly strings: TaskStrings;
+    private readonly maxFinishedTasks: number;
     private readonly tasks = new Map<string, Task>();
     private readonly taskSubscriptions = new Map<string, Disposable[]>();
+    /** IDs of evictable finished tasks, oldest finished first (Set keeps insertion order). */
+    private readonly finishedTaskIds = new Set<string>();
 
     // Event emitters for the service events
     private readonly _onDidRegisterTask = new Emitter<Task>();
@@ -616,25 +647,44 @@ class TaskServiceImpl implements TaskService {
     public readonly onDidChangeTaskStatus = this._onDidChangeTaskStatus.event;
     public readonly onDidChangeTaskState = this._onDidChangeTaskState.event;
 
-    constructor(options?: { strings?: Partial<TaskStrings> }) {
+    constructor(options?: TaskServiceOptions) {
         this.strings = mergeStrings(defaultTaskStrings, options?.strings);
+        const maxFinishedTasks = options?.maxFinishedTasks ?? DEFAULT_MAX_FINISHED_TASKS;
+        if (!Number.isInteger(maxFinishedTasks) || maxFinishedTasks < 0) {
+            throw new RangeError(`maxFinishedTasks must be an integer >= 0, got ${String(maxFinishedTasks)}`);
+        }
+        this.maxFinishedTasks = maxFinishedTasks;
     }
 
     public registerTask(task: Task): void {
         if (this.tasks.has(task.id)) {
             throw new Error(this.strings.taskAlreadyExists(task.id));
-        } // Subscribe to task events and aggregate them
+        }
+
+        // Evict before adding, so a task registered already finished is not evicted by its own registration.
+        this.evictFinishedTasks();
+
+        // Subscribe to task events and aggregate them
         const subscriptions: Disposable[] = [
             task.onDidChangeStatus((status) => {
                 this._onDidChangeTaskStatus.fire({ taskId: task.id, status });
             }),
             task.onDidChangeState((e) => {
+                // Schedule before forwarding: a listener may synchronously finish another task, whose
+                // bookkeeping must queue after this one to keep the finish order.
+                if (isTerminalState(e.newState)) {
+                    this.markFinished(task);
+                }
                 this._onDidChangeTaskState.fire(e);
             }),
         ];
 
         this.tasks.set(task.id, task);
-        this.taskSubscriptions.set(task.id, subscriptions); // Notify listeners about the new task
+        this.taskSubscriptions.set(task.id, subscriptions);
+        if (isTerminalState(task.getStatus().state)) {
+            this.markFinished(task);
+        }
+        // Notify listeners about the new task
         this._onDidRegisterTask.fire(task);
     }
 
@@ -652,19 +702,57 @@ class TaskServiceImpl implements TaskService {
             throw new Error(this.strings.taskNotFound(id));
         }
 
-        // Clean up event subscriptions
-        const subscriptions = this.taskSubscriptions.get(id);
-        if (subscriptions) {
-            subscriptions.forEach((sub) => {
-                sub.dispose(); // Explicitly ignore the return value
-            });
-            this.taskSubscriptions.delete(id);
-        }
+        await this.removeTask(task);
+    }
 
-        // Delete the task (this will stop it if needed)
+    /**
+     * Removes the task from the registry synchronously, then awaits its cleanup and fires
+     * `onDidDeleteTask`. Removing first keeps the registry consistent while `onDelete` runs.
+     */
+    private async removeTask(task: Task): Promise<void> {
+        const id = task.id;
+        this.taskSubscriptions.get(id)?.forEach((sub) => sub.dispose());
+        this.taskSubscriptions.delete(id);
+        this.finishedTaskIds.delete(id);
+        this.tasks.delete(id);
+
+        // Delete the task (this will stop it if needed); Task.delete() swallows onDelete errors
         await task.delete();
-        this.tasks.delete(id); // Notify listeners
         this._onDidDeleteTask.fire(id);
+    }
+
+    /**
+     * Makes a finished task evictable once the current synchronous event delivery is over.
+     * Emitter delivery is synchronous, but a fire from inside a listener is queued until the outer
+     * delivery has reached every listener, so returning from `fire()` does not mean the terminal
+     * event was delivered. A microtask runs only after the whole delivery, including the task's own
+     * direct listeners, so a listener that registers a new task cannot evict the finishing one.
+     */
+    private markFinished(task: Task): void {
+        queueMicrotask(() => {
+            if (this.tasks.get(task.id) === task) {
+                this.finishedTaskIds.add(task.id);
+            }
+        });
+    }
+
+    /**
+     * Evicts the oldest finished tasks until at most `maxFinishedTasks` remain.
+     * Non-terminal tasks are never evicted.
+     */
+    private evictFinishedTasks(): void {
+        for (const id of this.finishedTaskIds) {
+            if (this.finishedTaskIds.size <= this.maxFinishedTasks) {
+                return;
+            }
+            const task = this.tasks.get(id);
+            if (!task) {
+                this.finishedTaskIds.delete(id);
+                continue;
+            }
+            // removeTask drops the entry synchronously; Task.delete() already swallows onDelete errors.
+            void this.removeTask(task).catch(() => undefined);
+        }
     }
 
     public getConflictingTasks(resource: ResourceDefinition): TaskInfo[] {
@@ -758,6 +846,6 @@ class TaskServiceImpl implements TaskService {
 /**
  * Creates a TaskService instance for managing long-running tasks.
  */
-export function createTaskService(options?: { strings?: Partial<TaskStrings> }): TaskService {
+export function createTaskService(options?: TaskServiceOptions): TaskService {
     return new TaskServiceImpl(options);
 }
