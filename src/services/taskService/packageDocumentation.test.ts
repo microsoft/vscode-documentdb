@@ -119,6 +119,53 @@ describe('Task package documentation', () => {
         expect(second.state).toBe(TaskState.Failed);
     });
 
+    it('does not mutate the target when a later ID in the batch is invalid', async () => {
+        const target = new Map<string, unknown>([['existing', 'unchanged']]);
+        const documents: DocumentDetails[] = [
+            { id: 'one', documentContent: 1 },
+            { id: 2, documentContent: 2 },
+        ];
+        const writer = new MemoryWriter(target);
+
+        await expect(
+            writer.streamDocuments(new MemoryReader(documents).streamDocuments(), {
+                conflictResolutionStrategy: ConflictResolutionStrategy.Abort,
+            }),
+        ).rejects.toMatchObject({
+            name: 'StreamingWriterError',
+            cause: { message: 'Expected a string document ID' },
+            partialStats: { totalProcessed: 0, insertedCount: undefined },
+        });
+        expect([...target]).toEqual([['existing', 'unchanged']]);
+    });
+
+    it('reports previous batches without inserting part of an invalid batch', async () => {
+        const target = new Map<string, unknown>();
+        const documents: DocumentDetails[] = [
+            { id: 'one', documentContent: 1 },
+            { id: 'two', documentContent: 2 },
+            { id: 'three', documentContent: 3 },
+            { id: 4, documentContent: 4 },
+        ];
+        const writer = new MemoryWriter(target, {
+            batching: { ruLimited: { initialBatchSize: 2, maxBatchSize: 2 } },
+        });
+
+        await expect(
+            writer.streamDocuments(new MemoryReader(documents).streamDocuments(), {
+                conflictResolutionStrategy: ConflictResolutionStrategy.Abort,
+            }),
+        ).rejects.toMatchObject({
+            name: 'StreamingWriterError',
+            cause: { message: 'Expected a string document ID' },
+            partialStats: { totalProcessed: 2, insertedCount: 2, flushCount: 1 },
+        });
+        expect([...target]).toEqual([
+            ['one', 1],
+            ['two', 2],
+        ]);
+    });
+
     it.each(['returned', 'thrown'] as const)('retries %s partial writes and honors server waits', async (route) => {
         const documents: DocumentDetails[] = [
             { id: 'one', documentContent: 1 },

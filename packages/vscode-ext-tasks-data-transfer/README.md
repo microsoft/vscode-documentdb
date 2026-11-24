@@ -11,7 +11,8 @@ snippets match the example files.
 
 This in-memory adapter supports only the Abort conflict strategy. Real adapters use their database
 SDK for counting, streaming, target creation, and writes. The writer demonstrates adapter defaults
-and caller settings.
+and caller settings. It validates every ID in a batch before writing, so invalid IDs cannot leave
+unreported partial inserts.
 
 <!-- example:memory-adapters -->
 ```typescript
@@ -70,11 +71,14 @@ export class MemoryWriter extends StreamingDocumentWriter<string> {
         if (strategy !== ConflictResolutionStrategy.Abort) {
             throw new Error('Unsupported conflict strategy');
         }
-        let insertedCount = 0;
-        for (const document of documents) {
-            if (typeof document.id !== 'string') {
+        const validDocuments = documents.map(({ id, documentContent }) => {
+            if (typeof id !== 'string') {
                 throw new Error('Expected a string document ID');
             }
+            return { id, documentContent };
+        });
+        let insertedCount = 0;
+        for (const document of validDocuments) {
             if (this.target.has(document.id)) {
                 return {
                     processedCount: insertedCount + 1,
