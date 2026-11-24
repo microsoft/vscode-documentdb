@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.1
 
 - The default `productName` is now `DocumentDB` (was `DocumentDB for VS Code`). It only appears on the OIDC browser sign-in page.
 

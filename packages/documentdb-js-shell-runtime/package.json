@@ -1,6 +1,6 @@
 {
   "name": "@documentdb-js/shell-runtime",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Sandboxed JavaScript evaluation engine for DocumentDB — shell command handling, result transformation, and help generation",
   "type": "module",
   "main": "dist/index.js",

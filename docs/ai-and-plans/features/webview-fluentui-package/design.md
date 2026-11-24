@@ -46,7 +46,7 @@ needs no cast and the package needs no Monaco dependency.
 | Tier       | API                                                        | For                                         |
 | ---------- | ---------------------------------------------------------- | ------------------------------------------- |
 | Facade     | `<VSCodeFluentProvider>`                                   | greenfield consumers and the starter kit    |
-| Composable | `useActiveVSCodeThemeKind()` + `createVSCodeFluentTheme()` | consumers owning their own `FluentProvider` |
+| Composable | `useActiveVSCodeTheme()` + `createVSCodeFluentTheme()` | consumers owning their own `FluentProvider` |
 | Primitive  | `generateAdaptiveDarkTheme()` and friends                  | consumers post-processing the theme object  |
 
 All three tiers are Fluent-bound - the generators return a Fluent `Theme`. The genuinely
@@ -205,6 +205,10 @@ This is the first real divergence from the sibling package, whose entire build i
 | `@fluentui/react-components` | `~9.74` | `~9.74.4`      | `~9.74.1`       |
 | `@fluentui/react-icons`      | `~2.0`  | `~2.0.320`     | `~2.0.313`      |
 
+Version `1.3.0` adds `@fluentui/react-motion-components-preview` (`^0.15.6`) as a
+peer for `StatusListItem` disclosure motion. Consumers adopting this version must provide it
+alongside the peers above. The `@fluentui/react-components` peer remains `~9.74`.
+
 `devDependencies`: `sass` (the style build), `@fluentui/react-progress` - the latter because
 `fluentOverrides.test.ts` does `require.resolve('@fluentui/react-progress')` and currently works only
 by npm hoisting - and `monaco-editor`, which the colour-id generator reads and the type-level
@@ -221,12 +225,13 @@ applying, with no build error. The `fluentOverrides` test suite is the tripwire.
 English default when the consumer does not supply one. A consumer that ships translations passes a
 localized builder because the repo's `npm run l10n` extractor does not scan `node_modules`.
 
-The workspace manifest now declares `version: 1.1.0`, prepared for release by this branch. The
-operator confirmed on 2026-09-10 that the package is already being published, so the absence of
-`private: true` is intentional. Decision 0027 replaces the original workspace-only restriction.
+The workspace manifest now declares `version: 1.3.0`, prepared for release; `1.2.0` is the latest
+published version. The operator confirmed on 2026-09-10 that the package is already being published,
+so the absence of `private: true` is intentional. Decision 0027 replaces the original workspace-only restriction.
 Registry versions and the publication status of individual commits must be checked separately.
-The operator also confirmed there are no external consumers; decision 0029 records the resulting
-latitude to finalize the API before wider adoption.
+Decision 0029 records the operator's confirmation that there were no external consumers during
+extraction and the resulting latitude to finalize the API before 1.0.0, not permission to break
+the published 1.x API.
 
 ## 8. Testing
 
