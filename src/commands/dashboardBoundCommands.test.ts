@@ -115,13 +115,27 @@ it.each([
     });
     const context = createContext();
 
-    await expect(drop(context)).rejects.toMatchObject({ reason: 'credentialsChanged' });
+    await expect(drop(context)).rejects.toMatchObject({ reason: 'identityChanged' });
 
-    expect(ClustersClient.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(binding, undefined);
+    expect(ClustersClient.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(binding, { trigger: 'clusterDashboard' });
     expect(context.errorHandling).toMatchObject({ rethrow: true, suppressDisplay: true });
     expect(ClustersClient.getClient).not.toHaveBeenCalled();
     expect(replacement.dropDatabase).not.toHaveBeenCalled();
     expect(replacement.dropCollection).not.toHaveBeenCalled();
+});
+
+it('reports a rejected Dashboard drop on the client that ran it without retrying', async (): Promise<void> => {
+    const failure = new MongoServerError({ code: 18, errmsg: 'Authentication failed' });
+    const client = { binding: { ...binding, generation: 2 }, dropCollection: vi.fn().mockRejectedValue(failure) };
+    vi.mocked(getConfirmationAsInSettings).mockResolvedValueOnce(true);
+    vi.mocked(ClustersClient.resolveBoundClient).mockResolvedValueOnce(client as unknown as ClustersClient);
+    vi.mocked(ClustersClient.reportFailure).mockReturnValueOnce('credentialsRejected');
+
+    await expect(deleteCollection(createContext(), collection, undefined, { binding })).rejects.toMatchObject({
+        reason: 'credentialsRejected',
+    });
+    expect(ClustersClient.reportFailure).toHaveBeenCalledExactlyOnceWith(client.binding, failure);
+    expect(client.dropCollection).toHaveBeenCalledOnce();
 });
 
 it('does not export with a different connection after the save dialog', async () => {
