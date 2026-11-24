@@ -38,6 +38,7 @@ export async function deleteDatabase(
     options?: DeleteDatabaseCommandOptions,
 ): Promise<void> {
     context.telemetry.properties.experience = node.experience.api;
+    const confirmationEpoch = options?.binding ? ClustersClient.getEpoch(node.cluster.clusterId) : undefined;
 
     // Check if any running tasks are using this database
     const canProceed = await checkCanProceedAndInformUser(
@@ -71,7 +72,7 @@ export async function deleteDatabase(
         const drop = (client: ClustersClient): Promise<boolean> => client.dropDatabase(databaseId);
         const binding = options?.binding;
         const runDrop = binding
-            ? (): Promise<boolean> => runBoundNamespaceCommand(clusterId, binding, drop)
+            ? (): Promise<boolean> => runBoundNamespaceCommand(clusterId, binding, drop, confirmationEpoch)
             : drop.bind(undefined, await ClustersClient.getClient(clusterId));
 
         let success = false;

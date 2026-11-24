@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type AzExtInputBoxOptions, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { UserCancelledError, type AzExtInputBoxOptions, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { MongoNetworkError, MongoServerError } from 'mongodb';
 import { beforeEach, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
@@ -43,7 +43,7 @@ vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
     },
 }));
 vi.mock('../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: vi.fn(), resolveBoundClient: vi.fn(), reportFailure: vi.fn() },
+    ClustersClient: { getClient: vi.fn(), getEpoch: vi.fn(() => 0), resolveBoundClient: vi.fn(), reportFailure: vi.fn() },
 }));
 vi.mock('../documentdb/CredentialCache', () => ({
     CredentialCache: { getCredentials: vi.fn(), hasCredentials: vi.fn(() => true) },
@@ -102,6 +102,7 @@ function changeIdentity(): void {
 
 beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(ClustersClient.getEpoch).mockReturnValue(0);
     vi.mocked(ClustersClient.getClient).mockResolvedValue(replacement as unknown as ClustersClient);
 });
 
@@ -136,6 +137,19 @@ it('reports a rejected Dashboard drop on the client that ran it without retrying
     });
     expect(ClustersClient.reportFailure).toHaveBeenCalledExactlyOnceWith(client.binding, failure);
     expect(client.dropCollection).toHaveBeenCalledOnce();
+});
+
+it.each([
+    ['database', (context: IActionContext) => deleteAzureDatabase(context, database, undefined, { binding })],
+    ['collection', (context: IActionContext) => deleteCollection(context, collection, undefined, { binding })],
+] as const)('cancels a confirmed %s deletion after same-identity reconnect', async (_name, drop) => {
+    vi.mocked(getConfirmationAsInSettings).mockImplementationOnce(async () => {
+        vi.mocked(ClustersClient.getEpoch).mockReturnValue(2);
+        return true;
+    });
+
+    await expect(drop(createContext())).rejects.toBeInstanceOf(UserCancelledError);
+    expect(ClustersClient.resolveBoundClient).not.toHaveBeenCalled();
 });
 
 it('does not export with a different connection after the save dialog', async () => {

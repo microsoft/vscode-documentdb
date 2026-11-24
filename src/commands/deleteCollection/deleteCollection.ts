@@ -26,6 +26,7 @@ export async function deleteCollection(
     }
 
     context.telemetry.properties.experience = node.experience.api;
+    const confirmationEpoch = options?.binding ? ClustersClient.getEpoch(node.cluster.clusterId) : undefined;
 
     // Check if any running tasks are using this collection
     const canProceed = await checkCanProceedAndInformUser(
@@ -65,7 +66,7 @@ export async function deleteCollection(
             client.dropCollection(node.databaseInfo.name, node.collectionInfo.name);
         const binding = options?.binding;
         const runDrop = binding
-            ? (): Promise<boolean> => runBoundNamespaceCommand(clusterId, binding, drop)
+            ? (): Promise<boolean> => runBoundNamespaceCommand(clusterId, binding, drop, confirmationEpoch)
             : drop.bind(undefined, await ClustersClient.getClient(clusterId));
 
         let success = false;
