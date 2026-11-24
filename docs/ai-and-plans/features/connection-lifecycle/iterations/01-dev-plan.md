@@ -1373,7 +1373,7 @@ webview as a structured unavailable result, not a generic query error.
 
 - Collection View (all tabs), Document View and the Cluster Dashboard resolve their client per operation
   through a binding.
-- They show an unavailable state (C-5) with a banner and one action.
+- They show an unavailable state (C-5) with a full-view overlay, Close, and a repair action when supported.
 - They keep all user state.
 - They never apply stale results.
 - They never run under another identity.
@@ -1448,17 +1448,18 @@ approved plan allows; the webview half then stacks on the host half without wait
 ### Webviews
 
 1. **Shared UI.**
-   - A `DisconnectedBanner` component: a Fluent `MessageBar` with intent `warning`, the host-provided
-     reason text and **one** action button. It uses `role="status"` and `aria-live="polite"`.
+   - A feature-local `DisconnectedOverlay` shades the webview and shows the host-provided reason
+     text in the center. Show **Close** and at most one supported repair action (decision 0016).
+     Announce the reason politely and give keyboard focus to an overlay action, not the disabled content.
    - It shows when a procedure returns `unavailable`, or when the host's `disable(reason)` sends its one
      message to the panel over the existing webview channel.
    - Put it in the shared webview components folder, and run the detecting-accessibility-issues skill on
      it.
 2. **Disabling.**
-   - While the banner shows, every action that talks to the server is disabled: run query, paging,
+   - While the overlay shows, every action that talks to the server is disabled: run query, paging,
      refresh, save, delete, insert, index actions, Query Insights stages and AI calls.
-   - Editors stay **editable**. The user can keep typing.
-   - A response that arrives while the banner shows is ignored.
+   - The underlying view is inert. Editors stay mounted and retain their contents and dirty state.
+   - A response that arrives while the overlay shows is ignored.
    - **A reply never overwrites a newer edit.** The Document View applies a save or load reply to the editor
      only if the editor content has not changed since the request was sent; otherwise it keeps the edit and
      stays dirty. Today's save handler (`documentView.tsx`) replaces the content and clears `isDirty`
@@ -1470,14 +1471,15 @@ approved plan allows; the webview half then stacks on the host half without wait
    - **Dashboard:** the last data (WI-8 stops the polling).
 4. **Actions.**
    - **Reconnect** (same fingerprint): clear the latch if one is set, and resolve again. On success,
-     remove the banner and re-enable the actions; the live region announces "Reconnected". The query is
+     remove the overlay and re-enable the actions; the live region announces "Reconnected". The query is
      not run automatically, and there is **no** "out of date" notice (decision 0010; see #1106). After a
      Disconnect the credentials are still cached (0011), so this is silent.
    - **Reconnect after an identity change:** an explicit rebind to the new fingerprint, then show "Now
      connected as {label}" (OT-3).
    - **Sign in again:** the WI-5 command.
    - **Update credentials:** the existing command.
-   - **Close:** dispose the panel.
+   - **Close:** dispose the panel only through an explicit action. When no supported repair is
+     available in the tab, Close is the only action.
 5. **L2-dev scenarios** (`scenarios.ts` and `fixtures.ts`):
    - `collectionView/disconnected-signInRequired`: query text kept, Run disabled, no host calls when
      Run is clicked;
@@ -1501,7 +1503,7 @@ behave as today.
 - `ClusterSession` no longer stores a client (a type-level or structural test);
 - a stale result is dropped before any host-side mutation, including a reply that started before a
   Disconnect and arrives after a Reconnect as the same user;
-- the webview ignores a response that arrives while the banner shows;
+- the webview ignores a response that arrives while the overlay shows;
 - one submission for a write whose reply is lost;
 - an import started from Collection View as identity A, with its file picker left open while the cluster
   moves to B, writes nothing until the user starts it again;
@@ -1526,13 +1528,11 @@ behave as today.
   Check the epoch, latch, and identity before applying results to session caches. Build
   and 193 focused tests passed. Procedure response shapes are unchanged for now; structured
   unavailable results and the remaining panels are subsequent WI-6 slices.
-- **Webview design review:** A fresh Claude Opus 5.5 pass recommended one warning banner
-  using the existing MessageBlock and polite Announcer. Keep the editor and results in
-  place, do not move focus when the banner appears, and offer one explicit action. The
-  shared banner and its focused tests are in place, but not yet wired to panels. Keep
-  both planned stale-reply browser scenarios; adding the small harness support they need
-  is preferable to reducing coverage. Host action selection for a view with no credential
-  repair command is pending operator agreement.
+- **Webview design decision:** After the advisor's banner draft, the operator chose the
+  full-view disabled overlay in [decision 0016](../decisions.md#0016-keep-disconnected-webviews-open-under-a-full-view-overlay).
+  It keeps the content mounted and inert, uses a polite announcement, and shows only Close
+  when there is no supported repair. The shared component builds and passed its focused
+  test; panels are not yet wired. Keep both planned stale-reply browser scenarios.
 
 ---
 
@@ -1709,7 +1709,7 @@ behave as today.
 
 ## WI-8: Cluster Dashboard health polling (PR 6)
 
-**Outcome:** the poll stops when the cluster is unavailable, shows the banner, and resumes with exactly
+**Outcome:** the poll stops when the cluster is unavailable, shows the overlay, and resumes with exactly
 one loop.
 
 **Steps:**
@@ -1720,18 +1720,18 @@ one loop.
      of a failed command long enough to classify it. A terminal kind (auth, closed client) is rethrown so
      that `runWithClient` returns `unavailable`. An unsupported command, such as `serverStatus` on some
      servers, stays an ordinary partial sample with its entry in `errors`.
-2. The webview poll effect depends on the banner state: it stops on `unavailable` or on a `disable`
+2. The webview poll effect depends on the overlay state: it stops on `unavailable` or on a `disable`
    message, and starts again after Reconnect. React's effect cleanup keeps it to one loop; no extra loop
    token.
-3. A ping that resolves while the banner shows is ignored (the WI-6 webview rule), so it cannot clear the
-   banner.
+3. A ping that resolves while the overlay shows is ignored (the WI-6 webview rule), so it cannot clear the
+   overlay.
 4. Visibility pause and backoff are the rest of #1091. Do them here only if they are trivial; otherwise
    leave them to #1091.
 
 **Tests** (fake timers):
 
 - no client lookups on ticks or on reveal after Disconnect;
-- a late success does not clear the banner;
+- a late success does not clear the overlay;
 - reconnecting starts exactly one loop;
 - `signInRequired` and `credentialsRejected` stop the loop after one tick, including when they happen
   **inside** the sampler's ping with the tree untouched;

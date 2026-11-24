@@ -384,10 +384,11 @@ The largest item. Host side first, then each view.
     internally; test one application submission when the server accepts a write but its reply is lost.
 
 - **Webviews:**
-  - Push one connection-state channel per view over tRPC: connected, reconnecting, or disconnected
-    with a reason. Follow the webview-trpc-messaging and react-webview-architecture skills.
-  - Disconnected disables every action that talks to the server and shows a banner with the reason
-    and one action: Reconnect, Sign in again, Update credentials, or Close.
+  - Return unavailable results from operations and use the existing webview message channel for
+    teardown. Do not add a connection-state subscription (decision 0012).
+  - Disconnected dims the entire webview, disables the underlying content, and shows the reason
+    with **Close** and a supported repair (Reconnect, Retry sign-in, or Update credentials), if
+    available. The tab never closes automatically (decision 0016).
   - It **keeps** the editor contents, filter, sort, projection, page position and unsaved document
     edits.
   - Views: Collection View (query, documents, indexes and Query Insights tabs), Document View
@@ -399,7 +400,7 @@ The largest item. Host side first, then each view.
   is not permission to restart a transfer under another identity.
 - **Tests:**
   - router tests for the three binding outcomes;
-  - a Collection View scenario: disconnected banner with the query text kept;
+  - a Collection View scenario: disconnected overlay with the query text kept;
   - a Document View scenario: dirty edit kept;
   - inject a disconnect after typing, then deliver a stale page or document read; neither applied
     results nor drafts may be overwritten, and disabled actions must issue no server calls;
@@ -460,12 +461,12 @@ Coordinate with #1091. The minimum for this plan:
 
 - the poll uses the WI-6 binding;
 - after a `signInRequired`, `credentialsRejected` or disconnected outcome, polling **stops** and the
-  dashboard shows the WI-6 banner instead of starting a connection every 5 s.
+  dashboard shows the WI-6 overlay instead of starting a connection every 5 s.
 
 Visibility pause and backoff are the rest of #1091 and may ship separately.
 Existing visibility and in-flight guards do not distinguish a missing ping sample from terminal
 auth failure. With fake timers, verify no client lookups on ticks or reveal after Disconnect,
-that a late successful ping cannot clear the banner, and that reconnect starts only one poll loop.
+that a late successful ping cannot clear the overlay, and that reconnect starts only one poll loop.
 
 ## WI-9: Measure token renewal and recovery after release
 

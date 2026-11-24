@@ -1,0 +1,31 @@
+.disconnectedOverlayBackground {
+    display: contents;
+}
+
+.disconnectedOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: grid;
+    place-content: safe center;
+    justify-items: center;
+    gap: 10px;
+    overflow: auto;
+    padding: 20px;
+    background: var(--vscode-editor-background);
+    background: color-mix(in srgb, var(--vscode-editor-background) 90%, transparent);
+    color: var(--vscode-editor-foreground);
+    text-align: center;
+
+    p {
+        max-width: 40ch;
+        margin: 0;
+    }
+}
+
+.disconnectedOverlayActions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+}

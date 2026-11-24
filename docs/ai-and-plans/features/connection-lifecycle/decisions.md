@@ -27,6 +27,7 @@ created: 2026-11-19
 | 0013 | Correct the minimal design where it lost edits, identity or recovery: latch before save, epoch checks      | Accepted (modifies 0012)    | Operator: "update the plan" after the omissions review      | 2026-11-19 | —                                                                |
 | 0014 | Keep in-memory connection settings after a rejection for a verified Entra identity                         | Accepted                    | Operator selected A to make sign-in recovery smoother       | 2026-11-23 | Yes; WI-5 previously said to delete the entry                    |
 | 0015 | Use the existing latch to block startup after authentication rejection                                     | Accepted                    | Operator selected A; keep the approach simple and pragmatic | 2026-11-23 | Yes; expands the existing latch rather than adding a second hold |
+| 0016 | Keep disconnected webviews open under a full-view overlay                                                  | Accepted                    | Operator chose a simple disabled state with explicit actions | 2026-11-24 | Yes; replaces the inline banner and single-action layout |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -424,3 +425,15 @@ the epoch still matches. It cannot clear a latch set by Disconnect, Remove or a 
 The operator chose to reuse the existing latch rather than introduce a separate authentication
 hold, keeping one place to check for an unavailable connection. The rejection latch uses the
 existing epoch and does not add a subscription, new persistence, or a retry loop.
+
+## 0016. Keep disconnected webviews open under a full-view overlay
+
+The operator chose a simple disabled state instead of the planned warning banner. Keep the
+webview and its contents mounted, but make the background unavailable for interaction. Shade
+the whole view and show a calm, centered explanation with a row of actions.
+
+Always offer **Close**. If the connection has a supported recovery action, offer it alongside
+Close. If there is no repair the tab can perform, show only **Close** and leave the tab open
+until the user chooses it. Do not retry rejected credentials or navigate away automatically.
+Keep this component local to the lifecycle webviews for now rather than adding a general
+feature to the webview framework.
