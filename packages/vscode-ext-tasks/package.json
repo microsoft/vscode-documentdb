@@ -32,6 +32,7 @@
   "scripts": {
     "build": "tsc -p . && tsc -p type-tests",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
+    "pretest": "npm run build",
     "test": "vitest run --config ../../vitest.config.ts --project vscode-ext-tasks",
     "typecheck:tests": "tsc -p tsconfig.test.json"
   },
