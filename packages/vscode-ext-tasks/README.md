@@ -149,11 +149,11 @@ the resulting status.
 - The default finished-task retention limit is 20. Oldest finished tasks beyond the limit are
   evicted on a later registration, after terminal events are delivered; active tasks are not
   evicted. `deleteTask` also permits explicit removal; it requests a stop for an active task but
-  does not wait for its work to finish before cleanup and event disposal. Wait for a terminal
-  state before deletion if the caller needs to observe that state.
+  does not wait for its work to finish before cleanup. Task events remain active until the terminal
+  state, so `whenTerminal()` can still observe it after deletion.
 - `stop()` requests cancellation and returns before a running or initializing task reaches
-  `Stopped`; use `whenTerminal()` to wait for it. Subclasses should check the supplied signal
-  and release task-owned resources in `onDelete` when needed.
+  `Stopped`; use `whenTerminal()` to wait for it. An unstarted task stops immediately. Subclasses
+  should check the supplied signal and release task-owned resources in `onDelete` when needed.
 - Supply `TaskOptions` for the logger, telemetry runner, and localized task strings. The default
   logger is a no-op and default strings are English. Registry, progress, and conflict strings
   are supplied separately; `showOutput` controls whether failures offer an output button.
