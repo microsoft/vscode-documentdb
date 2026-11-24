@@ -207,6 +207,7 @@ export class QueryInsightsAIService {
         signal?: AbortSignal,
         staticAnalysisSummary?: string,
     ): Promise<AIOptimizationStreamHandle> {
+        let unavailable: ConnectionUnavailableError | undefined;
         const result = await callWithTelemetryAndErrorHandling(
             'vscode-documentdb.queryInsights.getOptimizationRecommendationsStreaming',
             async (context: IActionContext): Promise<AIOptimizationStreamHandle> => {
@@ -235,7 +236,13 @@ export class QueryInsightsAIService {
                     };
                 }
 
-                const streamHandle = await optimizeQueryStreaming(context, queryContext);
+                const streamHandle = await optimizeQueryStreaming(context, queryContext).catch((error: unknown) => {
+                    if (error instanceof ConnectionUnavailableError) {
+                        context.errorHandling.suppressDisplay = true;
+                        unavailable = error;
+                    }
+                    throw error;
+                });
 
                 // Final parse + per-action counts happen once at completion time.
                 // The dedicated Stage 3 completion event (plan §7 / WI-10) will
@@ -264,6 +271,9 @@ export class QueryInsightsAIService {
             },
         );
 
+        if (unavailable) {
+            throw unavailable;
+        }
         if (!result) {
             if (signal?.aborted) {
                 throw new UserCancelledError('AbortSignal');
@@ -425,6 +435,7 @@ export class QueryInsightsAIService {
                     }
                 } catch (error) {
                     if (error instanceof ConnectionUnavailableError) {
+                        context.errorHandling.suppressDisplay = true;
                         unavailable = error;
                     }
                     throw error;

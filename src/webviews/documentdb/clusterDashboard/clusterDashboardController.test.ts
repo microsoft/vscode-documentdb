@@ -508,6 +508,26 @@ describe('cluster dashboard native context menu commands', () => {
         controller.dispose();
     });
 
+    it('restores the recovery dialog for a row action when its client is no longer cached', async () => {
+        const { handlers, controller } = registerAndOpen();
+        vi.mocked(ClustersClient.getBinding).mockReturnValueOnce(undefined);
+
+        await handlers.get(CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.exportDocuments)?.({
+            clusterDashboardClusterId: CLUSTER,
+            clusterDashboardSelectedDatabase: 'sales',
+            clusterDashboardDatabase: 'sales',
+            clusterDashboardCollection: 'orders',
+        });
+
+        expect(controller.panel.webview.postMessage).toHaveBeenCalledWith({
+            type: 'clusterDashboard.connectionUnavailable',
+            unavailable: expect.objectContaining({ reason: 'unreachable', action: 'retry' }),
+        });
+        expect(resolveNamespaceNode).not.toHaveBeenCalled();
+        expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+        controller.dispose();
+    });
+
     it('asks the panel to step into a database, the one action the host cannot take', async () => {
         const { handlers, controller } = registerAndOpen();
 

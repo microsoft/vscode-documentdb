@@ -6,7 +6,6 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { ClustersClient, type ConnectionBinding } from '../../documentdb/ClustersClient';
-import { resolveTransferClient } from '../../documentdb/resolveTransferClient';
 import { SchemaStore } from '../../documentdb/SchemaStore';
 import { ext } from '../../extensionVariables';
 import { checkCanProceedAndInformUser } from '../../services/taskService/resourceUsageHelper';
@@ -14,6 +13,7 @@ import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { rethrowBoundCommandUnavailable } from '../rethrowBoundCommandUnavailable';
+import { runBoundNamespaceCommand } from '../runBoundNamespaceCommand';
 
 interface DeleteDatabaseCommandOptions {
     readonly binding?: ConnectionBinding;
@@ -38,6 +38,7 @@ export async function deleteDatabase(
     options?: DeleteDatabaseCommandOptions,
 ): Promise<void> {
     context.telemetry.properties.experience = node.experience.api;
+    const confirmationEpoch = options?.binding ? ClustersClient.getEpoch(node.cluster.clusterId) : undefined;
 
     // Check if any running tasks are using this database
     const canProceed = await checkCanProceedAndInformUser(
@@ -67,12 +68,20 @@ export async function deleteDatabase(
     }
 
     try {
-        const client = options?.binding ? undefined : await ClustersClient.getClient(node.cluster.clusterId);
+        const { clusterId } = node.cluster;
+        const drop = (client: ClustersClient): Promise<boolean> => client.dropDatabase(databaseId);
+        const binding = options?.binding;
+        let runDrop: () => Promise<boolean>;
+        if (binding) {
+            runDrop = () => runBoundNamespaceCommand(clusterId, binding, drop, confirmationEpoch);
+        } else {
+            const client = await ClustersClient.getClient(clusterId);
+            runDrop = () => drop(client);
+        }
 
         let success = false;
         await ext.state.showDeleting(node.id, async () => {
-            const resolvedClient = client ?? (await resolveTransferClient(node.cluster.clusterId, options?.binding));
-            success = await resolvedClient.dropDatabase(node.databaseInfo.name);
+            success = await runDrop();
         });
 
         if (success) {

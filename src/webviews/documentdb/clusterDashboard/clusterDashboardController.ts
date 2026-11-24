@@ -15,7 +15,7 @@ import { type DeepLinkTelemetry } from '../../../deepLinks/deepLinkTelemetry';
 
 import { copyNamespaceReference } from '../../../commands/copyReference/copyReference';
 import { openCollectionViewInternal } from '../../../commands/openCollectionView/openCollectionView';
-import { type ConnectionBinding } from '../../../documentdb/ClustersClient';
+import { ClustersClient, type ConnectionBinding } from '../../../documentdb/ClustersClient';
 import { registerConnectionSurface } from '../../../documentdb/connectionSurfaces';
 import {
     ConnectionUnavailableError,
@@ -26,7 +26,7 @@ import { ext } from '../../../extensionVariables';
 import { type ConnectionUnavailableMessage } from '../../_integration/connectionUnavailable';
 import { describeUnavailableConnection } from '../../_integration/describeUnavailableConnection';
 import { openAppWebview, type AppWebviewController } from '../../_integration/openAppWebview';
-import { guardBoundViewOperation, isBoundViewOperationCurrent, recoverBoundView } from '../boundViewOperations';
+import { guardBoundViewOperation, recoverBoundView } from '../boundViewOperations';
 import {
     CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS,
     type ClusterDashboardContextMenuContext,
@@ -283,6 +283,9 @@ async function runRowAction(
         }
         assertBound();
     };
+    if (!ClustersClient.getBinding(panel.binding.clusterId)) {
+        throw new ConnectionUnavailableError(ClustersClient.getLatchReason(panel.binding.clusterId) ?? 'unreachable');
+    }
     assertCurrent();
 
     if (action.kind === 'showCollections') {
@@ -345,7 +348,7 @@ async function runRowAction(
             await postInventoryChanged(panel, databaseName);
         }
     } finally {
-        if (action.reportsBusy && !panel.controller.isDisposed && isBoundViewOperationCurrent(assertCurrent)) {
+        if (action.reportsBusy && !panel.controller.isDisposed && !panel.getUnavailable()) {
             await postNamespaceBusy(panel, databaseName, collectionName, 'delete', false);
         }
     }

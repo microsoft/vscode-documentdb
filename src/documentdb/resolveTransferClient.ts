@@ -5,6 +5,7 @@
 
 import { ClustersClient, type ConnectionBinding } from './ClustersClient';
 import { ConnectionUnavailableError } from './ConnectionUnavailableError';
+import { runWithClient } from './runWithClient';
 
 export async function resolveTransferClient(clusterId: string, binding?: ConnectionBinding): Promise<ClustersClient> {
     if (!binding) {
@@ -13,12 +14,10 @@ export async function resolveTransferClient(clusterId: string, binding?: Connect
     if (binding.clusterId !== clusterId) {
         throw new ConnectionUnavailableError('credentialsChanged');
     }
-    try {
-        return await ClustersClient.resolveBoundClient(binding);
-    } catch (error) {
-        if (error instanceof ConnectionUnavailableError && error.reason === 'identityChanged') {
-            throw new ConnectionUnavailableError('credentialsChanged', { cause: error });
-        }
-        throw error;
+    const result = await runWithClient(binding, async (client) => ({ client }));
+    if ('unavailable' in result) {
+        const { reason } = result.unavailable;
+        throw new ConnectionUnavailableError(reason === 'identityChanged' ? 'credentialsChanged' : reason);
     }
+    return result.client;
 }

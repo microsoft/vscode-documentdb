@@ -7,13 +7,14 @@ import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext
 import * as l10n from '@vscode/l10n';
 import { type Document, type Filter } from 'mongodb';
 import * as vscode from 'vscode';
-import { ClustersClient, type IndexItemModel } from '../../documentdb/ClustersClient';
+import { type ClustersClient, type IndexItemModel } from '../../documentdb/ClustersClient';
 import { ClusterSession } from '../../documentdb/ClusterSession';
 import { type CollectionStats, type IndexStats } from '../../documentdb/LlmEnhancedFeatureApis';
 import { type ClusterMetadata } from '../../documentdb/utils/getClusterMetadata';
 import { ext } from '../../extensionVariables';
 import { CopilotService, type CopilotTokenUsage } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
+import { throwIfBoundViewUnavailable } from '../../webviews/documentdb/boundViewOperations';
 import { getLastPromptSource, type FilledPromptResult } from './promptTemplates';
 
 /**
@@ -688,7 +689,7 @@ async function prepareBoundOptimizationRequest(
         if (error instanceof UserCancelledError) {
             throw error;
         }
-        ClustersClient.reportFailure(client.binding, error);
+        throwIfBoundViewUnavailable(client.binding, error);
 
         // They are not critical errors, we can continue without index stats and collection stats
         // If the API calls failed, collectionStats and indexes remain undefined (safe to continue)

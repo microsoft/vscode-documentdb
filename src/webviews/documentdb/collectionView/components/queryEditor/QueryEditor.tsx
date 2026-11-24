@@ -537,6 +537,8 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
     useEffect(() => {
         if (currentContext.lifecycle.unavailable) {
             aiGenerationAbortControllerRef.current?.abort();
+            aiGenerationAbortControllerRef.current = null;
+            setIsAiActive(false);
         }
     }, [currentContext.lifecycle.unavailable]);
 

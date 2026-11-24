@@ -4,18 +4,20 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { readFile } from 'node:fs/promises';
 import { beforeEach, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { ClustersClient, type ConnectionBinding } from '../../documentdb/ClustersClient';
 import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
 import { DocumentDBExperience } from '../../DocumentDBExperiences';
+import { ext } from '../../extensionVariables';
 import { TaskService } from '../../services/taskService/taskService';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { exportQueryResults } from '../exportDocuments/exportDocuments';
 import { importDocuments } from './importDocuments';
 
 vi.mock('../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: vi.fn(), getLatchReason: vi.fn(), resolveBoundClient: vi.fn() },
+    ClustersClient: { getClient: vi.fn(), getLatchReason: vi.fn(), resolveBoundClient: vi.fn(), reportFailure: vi.fn() },
     isBulkWriteError: vi.fn(() => false),
 }));
 vi.mock('node:fs/promises', () => ({
@@ -32,6 +34,8 @@ vi.mock('../../extensionVariables', () => ({
 }));
 vi.mock('../../utils/workspacUtils', () => ({ getRootPath: vi.fn() }));
 vi.mock('../../utils/fs/appendToFile', () => ({ appendToFile: vi.fn() }));
+
+const binding: ConnectionBinding = { clusterId: 'cluster', fingerprint: 'original', generation: 1 };
 
 function createSource(): CollectionItem {
     return new CollectionItem(
@@ -55,8 +59,8 @@ function createContext(showOpenDialog: () => Promise<vscode.Uri[]> = async () =>
         valuesToMask: [],
     } as unknown as IActionContext;
 }
-
 beforeEach(() => {
+    vi.clearAllMocks();
     vi.mocked(ClustersClient.getClient).mockReset();
     vi.mocked(ClustersClient.resolveBoundClient).mockReset();
     vi.mocked(ClustersClient.getLatchReason).mockReset().mockReturnValue(undefined);
@@ -67,25 +71,20 @@ beforeEach(() => {
 });
 
 it('does not import using a different identity selected while the file picker was open', async (): Promise<void> => {
-    const binding: ConnectionBinding = { clusterId: 'cluster', fingerprint: 'original', generation: 1 };
     const insertDocuments = vi.fn();
     const replacement = { insertDocuments, getConnectionString: () => 'mongodb://example.test' };
     vi.mocked(ClustersClient.getClient).mockResolvedValue(replacement as unknown as ClustersClient);
-
-    const source = createSource();
     const showOpenDialog = vi.fn(async () => {
         vi.mocked(ClustersClient.resolveBoundClient).mockRejectedValueOnce(
             new ConnectionUnavailableError('identityChanged'),
         );
         return [vscode.Uri.file('/fixture/documents.json')];
     });
-    const context = createContext(showOpenDialog);
-
-    await expect(importDocuments(context, source, undefined, { binding })).rejects.toMatchObject({
-        reason: 'credentialsChanged',
-    });
+    await expect(
+        importDocuments(createContext(showOpenDialog), createSource(), undefined, { binding }),
+    ).rejects.toMatchObject({ reason: 'credentialsChanged' });
     expect(showOpenDialog).toHaveBeenCalledOnce();
-    expect(ClustersClient.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(binding);
+    expect(ClustersClient.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(binding, undefined);
     expect(ClustersClient.getClient).not.toHaveBeenCalled();
     expect(insertDocuments).not.toHaveBeenCalled();
 });
@@ -167,4 +166,26 @@ it('holds an export lease before client resolution and releases it on failure', 
     rejectClient(new Error('client resolution failed'));
     await expect(exportOperation).rejects.toThrow('client resolution failed');
     expect(TaskService.getConflictingTasks({ clusterId: 'cluster' })).toEqual([]);
+});
+
+it('stops a bound import after rejection and reports only confirmed inserts', async (): Promise<void> => {
+    const failure = new Error('Rejected fixture credentials');
+    const insertDocuments = vi.fn().mockResolvedValueOnce({ insertedCount: 1 }).mockRejectedValueOnce(failure);
+    const client = {
+        binding: { ...binding, generation: 2 },
+        insertDocuments,
+        getConnectionString: () => 'mongodb://fixture.mongo.cosmos.azure.com',
+    };
+    vi.mocked(readFile).mockResolvedValueOnce('[{"n":1},{"n":2},{"n":3},{"n":4}]');
+    vi.mocked(ClustersClient.resolveBoundClient).mockResolvedValueOnce(client as unknown as ClustersClient);
+    vi.mocked(ClustersClient.reportFailure).mockReturnValueOnce('credentialsRejected');
+    const context = createContext(async () => [vscode.Uri.file('/fixture/documents.json')]);
+
+    await expect(importDocuments(context, createSource(), undefined, { binding })).rejects.toMatchObject({
+        reason: 'credentialsRejected',
+    });
+    expect(insertDocuments).toHaveBeenCalledTimes(2);
+    expect(ClustersClient.reportFailure).toHaveBeenCalledExactlyOnceWith(client.binding, failure);
+    expect(ext.outputChannel.warn).toHaveBeenCalledWith('Inserted 1 document(s).');
+    expect(TaskService.getConflictingTasks({ clusterId: binding.clusterId })).toEqual([]);
 });

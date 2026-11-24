@@ -3,12 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type AzExtInputBoxOptions, type IActionContext } from '@microsoft/vscode-azext-utils';
-import { MongoNetworkError } from 'mongodb';
+import { UserCancelledError, type AzExtInputBoxOptions, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { MongoNetworkError, MongoServerError } from 'mongodb';
 import { beforeEach, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import { AuthMethodId } from '../documentdb/auth/AuthMethodId';
 import { ClustersClient, type ConnectionBinding } from '../documentdb/ClustersClient';
 import { ConnectionUnavailableError } from '../documentdb/ConnectionUnavailableError';
+import { CredentialCache } from '../documentdb/CredentialCache';
 import { DocumentDBExperience } from '../DocumentDBExperiences';
 import { type ClusterItemBase } from '../tree/documentdb/ClusterItemBase';
 import { type CollectionItem } from '../tree/documentdb/CollectionItem';
@@ -41,7 +43,13 @@ vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
     },
 }));
 vi.mock('../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: vi.fn(), getLatchReason: vi.fn(), resolveBoundClient: vi.fn(), reportFailure: vi.fn() },
+    ClustersClient: {
+        getClient: vi.fn(),
+        getEpoch: vi.fn(() => 0),
+        getLatchReason: vi.fn(),
+        resolveBoundClient: vi.fn(),
+        reportFailure: vi.fn(),
+    },
 }));
 vi.mock('../documentdb/CredentialCache', () => ({
     CredentialCache: { getCredentials: vi.fn(), hasCredentials: vi.fn(() => true) },
@@ -100,6 +108,7 @@ function changeIdentity(): void {
 
 beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(ClustersClient.getEpoch).mockReturnValue(0);
     vi.mocked(ClustersClient.getClient).mockResolvedValue(replacement as unknown as ClustersClient);
 });
 
@@ -113,13 +122,40 @@ it.each([
     });
     const context = createContext();
 
-    await expect(drop(context)).rejects.toMatchObject({ reason: 'credentialsChanged' });
+    await expect(drop(context)).rejects.toMatchObject({ reason: 'identityChanged' });
 
-    expect(ClustersClient.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(binding);
+    expect(ClustersClient.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(binding, { trigger: 'clusterDashboard' });
     expect(context.errorHandling).toMatchObject({ rethrow: true, suppressDisplay: true });
     expect(ClustersClient.getClient).not.toHaveBeenCalled();
     expect(replacement.dropDatabase).not.toHaveBeenCalled();
     expect(replacement.dropCollection).not.toHaveBeenCalled();
+});
+
+it('reports a rejected Dashboard drop on the client that ran it without retrying', async (): Promise<void> => {
+    const failure = new MongoServerError({ code: 18, errmsg: 'Authentication failed' });
+    const client = { binding: { ...binding, generation: 2 }, dropCollection: vi.fn().mockRejectedValue(failure) };
+    vi.mocked(getConfirmationAsInSettings).mockResolvedValueOnce(true);
+    vi.mocked(ClustersClient.resolveBoundClient).mockResolvedValueOnce(client as unknown as ClustersClient);
+    vi.mocked(ClustersClient.reportFailure).mockReturnValueOnce('credentialsRejected');
+
+    await expect(deleteCollection(createContext(), collection, undefined, { binding })).rejects.toMatchObject({
+        reason: 'credentialsRejected',
+    });
+    expect(ClustersClient.reportFailure).toHaveBeenCalledExactlyOnceWith(client.binding, failure);
+    expect(client.dropCollection).toHaveBeenCalledOnce();
+});
+
+it.each([
+    ['database', (context: IActionContext) => deleteAzureDatabase(context, database, undefined, { binding })],
+    ['collection', (context: IActionContext) => deleteCollection(context, collection, undefined, { binding })],
+] as const)('cancels a confirmed %s deletion after same-identity reconnect', async (_name, drop) => {
+    vi.mocked(getConfirmationAsInSettings).mockImplementationOnce(async () => {
+        vi.mocked(ClustersClient.getEpoch).mockReturnValue(2);
+        return true;
+    });
+
+    await expect(drop(createContext())).rejects.toBeInstanceOf(UserCancelledError);
+    expect(ClustersClient.resolveBoundClient).not.toHaveBeenCalled();
 });
 
 it('does not export with a different connection after the save dialog', async () => {
@@ -133,9 +169,27 @@ it('does not export with a different connection after the save dialog', async ()
         reason: 'credentialsChanged',
     });
 
-    expect(ClustersClient.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(binding);
+    expect(ClustersClient.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(binding, undefined);
     expect(context.errorHandling).toMatchObject({ rethrow: true, suppressDisplay: true });
     expect(ClustersClient.getClient).not.toHaveBeenCalled();
+    expect(replacement.streamDocumentsWithQuery).not.toHaveBeenCalled();
+});
+
+it('reports a rejected export startup as unavailable', async () => {
+    vi.mocked(CredentialCache.getCredentials).mockReturnValueOnce({
+        clusterId: binding.clusterId,
+        authMechanism: AuthMethodId.NativeAuth,
+        connectionString: 'mongodb://localhost/',
+        connectionStringWithPassword: 'mongodb://localhost/',
+    });
+    vi.mocked(vscode.window.showSaveDialog).mockResolvedValue(vscode.Uri.file('/fixture/export.json'));
+    vi.mocked(ClustersClient.resolveBoundClient).mockRejectedValue(
+        new MongoServerError({ code: 18, errmsg: 'Authentication failed' }),
+    );
+
+    await expect(exportEntireCollection(createContext(), collection, undefined, { binding })).rejects.toMatchObject({
+        reason: 'credentialsRejected',
+    });
     expect(replacement.streamDocumentsWithQuery).not.toHaveBeenCalled();
 });
 

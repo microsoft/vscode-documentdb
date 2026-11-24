@@ -385,12 +385,11 @@ export const DocumentView = (): JSX.Element => {
                     showUnavailable(response.unavailable);
                     return;
                 }
+                configuration.documentId = response.documentId;
+                pendingDocumentIdRef.current = response.documentId;
                 if (editorRevision !== editorRevisionRef.current) {
                     return;
                 }
-                // Update the configuration for potential refreshes of the document
-                configuration.documentId = response.documentId;
-                pendingDocumentIdRef.current = response.documentId;
                 setContent(response.documentStringified);
                 setIsLoading(false);
                 updateDirty(false);

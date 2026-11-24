@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ClustersClient, type ConnectionBinding } from '../documentdb/ClustersClient';
+import { UserCancelledError } from '@microsoft/vscode-azext-utils';
+import { ClustersClient, type ConnectionBinding } from '../documentdb/ClustersClient';
 import { classifyConnectionFailure } from '../documentdb/connectionFailures';
 import { ConnectionUnavailableError } from '../documentdb/ConnectionUnavailableError';
 import { runWithClient } from '../documentdb/runWithClient';
@@ -12,15 +13,28 @@ export async function runBoundNamespaceCommand<T>(
     clusterId: string,
     binding: ConnectionBinding,
     operation: (client: ClustersClient) => Promise<T>,
+    confirmationEpoch?: number,
 ): Promise<T> {
     if (clusterId !== binding.clusterId) {
         throw new ConnectionUnavailableError('identityChanged');
     }
 
+    const assertConfirmationCurrent = (): void => {
+        if (confirmationEpoch !== undefined && ClustersClient.getEpoch(clusterId) !== confirmationEpoch) {
+            throw new UserCancelledError('staleDeleteConfirmation');
+        }
+    };
+    assertConfirmationCurrent();
+
     try {
-        const result = await runWithClient(binding, async (client) => ({ value: await operation(client) }), {
-            trigger: 'clusterDashboard',
-        });
+        const result = await runWithClient(
+            binding,
+            async (client) => {
+                assertConfirmationCurrent();
+                return { value: await operation(client) };
+            },
+            { trigger: 'clusterDashboard' },
+        );
         if ('unavailable' in result) {
             throw new ConnectionUnavailableError(result.unavailable.reason);
         }
