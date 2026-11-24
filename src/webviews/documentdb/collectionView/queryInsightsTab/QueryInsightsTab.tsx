@@ -37,6 +37,7 @@ import { MetricGrid } from '@microsoft/vscode-ext-webview-fluentui/components';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type JSX } from 'react';
+import { isConnectionUnavailableResponse } from '../../../_integration/connectionUnavailable';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
 import { CollectionViewContext } from '../collectionViewContext';
 import { type CollectionViewWebviewConfigurationType } from '../collectionViewController';
@@ -93,6 +94,7 @@ export const QueryInsightsMain = (): JSX.Element => {
     const trpcClient = useTrpcClient();
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
     const pipeline = currentContext.queryInsights;
+    const { beginOperation, isOperationCurrent, showUnavailable, unavailable } = currentContext.lifecycle;
 
     /** Apply a pipeline transition. Wraps the global setState helper. */
     const dispatch = useCallback(
@@ -231,6 +233,15 @@ export const QueryInsightsMain = (): JSX.Element => {
         // eslint-disable-next-line react-hooks/exhaustive-deps -- mount/unmount only; dispatch is stable
     }, []);
 
+    useEffect(() => {
+        if (!unavailable) {
+            return;
+        }
+        stage3SubscriptionRef.current?.unsubscribe();
+        stage3SubscriptionRef.current = null;
+        dispatch(cancelStage3);
+    }, [unavailable, dispatch]);
+
     /**
      * Display error message to user for the given stage.
      * Dedupes via `displayedErrorsRef` so the same error doesn't fire a
@@ -317,13 +328,27 @@ export const QueryInsightsMain = (): JSX.Element => {
     // IMPORTANT: wait for query execution (isLoading=false) before fetching.
     useEffect(() => {
         if (!currentContext.isLoading && pipeline.kind === 'idle') {
+            const lifecycleRevision = beginOperation();
+            if (lifecycleRevision === undefined) {
+                return;
+            }
             dispatch(startStage1Load);
             void trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage1
                 .query()
                 .then((data) => {
+                    if (!isOperationCurrent(lifecycleRevision)) {
+                        return;
+                    }
+                    if (isConnectionUnavailableResponse(data)) {
+                        showUnavailable(data.unavailable);
+                        return;
+                    }
                     dispatch((prev) => stage1Succeeded(prev, data));
                 })
                 .catch((error) => {
+                    if (!isOperationCurrent(lifecycleRevision)) {
+                        return;
+                    }
                     const errorMessage = error instanceof Error ? error.message : String(error);
                     const errorCode = extractErrorCode(error);
                     dispatch((prev) => stage1Failed(prev, errorMessage, errorCode));
@@ -331,7 +356,16 @@ export const QueryInsightsMain = (): JSX.Element => {
                     displayStageError(1, errorMessage);
                 });
         }
-    }, [currentContext.isLoading, pipeline.kind, trpcClient, dispatch, displayStageError]);
+    }, [
+        currentContext.isLoading,
+        pipeline.kind,
+        trpcClient,
+        dispatch,
+        displayStageError,
+        beginOperation,
+        isOperationCurrent,
+        showUnavailable,
+    ]);
 
     // ---------- Surface errors as VS Code notifications -------------------
     //
@@ -364,6 +398,10 @@ export const QueryInsightsMain = (): JSX.Element => {
     const stage2InFlightRef = useRef(false);
     useEffect(() => {
         if (pipeline.kind === 's2Loading' && !stage2InFlightRef.current) {
+            const lifecycleRevision = beginOperation();
+            if (lifecycleRevision === undefined) {
+                return;
+            }
             stage2InFlightRef.current = true;
 
             // Track start time to ensure minimum duration for better UX.
@@ -380,10 +418,20 @@ export const QueryInsightsMain = (): JSX.Element => {
                 .query()
                 .then(async (data) => {
                     await ensureMinDuration();
+                    if (!isOperationCurrent(lifecycleRevision)) {
+                        return;
+                    }
+                    if (isConnectionUnavailableResponse(data)) {
+                        showUnavailable(data.unavailable);
+                        return;
+                    }
                     dispatch((prev) => stage2Succeeded(prev, data));
                 })
                 .catch(async (error) => {
                     await ensureMinDuration();
+                    if (!isOperationCurrent(lifecycleRevision)) {
+                        return;
+                    }
                     const errorMessage = error instanceof Error ? error.message : String(error);
                     const errorCode = extractErrorCode(error);
                     dispatch((prev) => stage2Failed(prev, errorMessage, errorCode));
@@ -392,7 +440,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                     stage2InFlightRef.current = false;
                 });
         }
-    }, [pipeline.kind, trpcClient, dispatch]);
+    }, [pipeline.kind, trpcClient, dispatch, beginOperation, isOperationCurrent, showUnavailable]);
 
     // Debug logging for pipeline state changes
     useEffect(() => {
@@ -479,6 +527,10 @@ export const QueryInsightsMain = (): JSX.Element => {
     }, [trpcClient]);
 
     const handleGetAISuggestions = (): void => {
+        const lifecycleRevision = beginOperation();
+        if (lifecycleRevision === undefined) {
+            return;
+        }
         // PRECONDITION (review item M8): this handler only ever runs from the
         // "Get AI Performance Insights" button, which is rendered solely in the
         // `s3Idle` state (and the retry affordances in `s3Error` / `s3Cancelled`)
@@ -543,9 +595,19 @@ export const QueryInsightsMain = (): JSX.Element => {
             { requestKey },
             {
                 onData(event) {
+                    if (!isOperationCurrent(lifecycleRevision)) {
+                        return;
+                    }
+                    if (event.type === 'unavailable') {
+                        showUnavailable(event.unavailable);
+                        return;
+                    }
                     dispatch((prev) => applyStage3Event(prev, requestKey, event));
                 },
                 onError(error) {
+                    if (!isOperationCurrent(lifecycleRevision)) {
+                        return;
+                    }
                     const errorMessage = error instanceof Error ? error.message : String(error);
                     const errorCode = extractErrorCode(error);
                     dispatch((prev) => failStage3(prev, requestKey, errorMessage, errorCode));
@@ -582,22 +644,48 @@ export const QueryInsightsMain = (): JSX.Element => {
 
     const handlePrimaryAction = useCallback(
         async (actionId: string, payload: unknown): Promise<{ success: boolean; message?: string }> => {
-            return await trpcClient.mongoClusters.collectionView.queryInsights.executeQueryInsightsAction.mutate({
+            const lifecycleRevision = beginOperation();
+            if (lifecycleRevision === undefined) {
+                return { success: false };
+            }
+            const result =
+                await trpcClient.mongoClusters.collectionView.queryInsights.executeQueryInsightsAction.mutate({
                 actionId,
                 payload,
             });
+            if (!isOperationCurrent(lifecycleRevision)) {
+                return { success: false };
+            }
+            if (isConnectionUnavailableResponse(result)) {
+                showUnavailable(result.unavailable);
+                return { success: false };
+            }
+            return result;
         },
-        [],
+        [trpcClient, beginOperation, isOperationCurrent, showUnavailable],
     );
 
     const handleSecondaryAction = useCallback(
         async (actionId: string, payload: unknown): Promise<{ success: boolean; message?: string }> => {
-            return await trpcClient.mongoClusters.collectionView.queryInsights.executeQueryInsightsAction.mutate({
+            const lifecycleRevision = beginOperation();
+            if (lifecycleRevision === undefined) {
+                return { success: false };
+            }
+            const result =
+                await trpcClient.mongoClusters.collectionView.queryInsights.executeQueryInsightsAction.mutate({
                 actionId,
                 payload,
             });
+            if (!isOperationCurrent(lifecycleRevision)) {
+                return { success: false };
+            }
+            if (isConnectionUnavailableResponse(result)) {
+                showUnavailable(result.unavailable);
+                return { success: false };
+            }
+            return result;
         },
-        [],
+        [trpcClient, beginOperation, isOperationCurrent, showUnavailable],
     );
 
     // ---------- Build the animated card list ------------------------------

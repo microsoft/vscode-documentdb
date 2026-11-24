@@ -39,7 +39,8 @@
 
 import * as l10n from '@vscode/l10n';
 import { z } from 'zod';
-import { ClustersClient, type IndexItemModel } from '../../../../documentdb/ClustersClient';
+import { ClusterSession } from '../../../../documentdb/ClusterSession';
+import { type IndexItemModel } from '../../../../documentdb/ClustersClient';
 import { PlaygroundCommandIds } from '../../../../documentdb/playground/constants';
 import { SchemaStore } from '../../../../documentdb/SchemaStore';
 import { ShellCommandIds } from '../../../../documentdb/shell/constants';
@@ -49,6 +50,8 @@ import { confirmIndexAction } from '../../../../utils/dialogs/confirmIndexAction
 import { readOnlyJsonDocumentProvider } from '../../../../utils/readOnlyJsonDocumentProvider';
 import { type BaseRouterContext } from '../../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../../_integration/trpc';
+import { throwIfBoundViewUnavailable } from '../../boundViewOperations';
+import { runCollectionViewOperation, type RouterContext as CollectionViewRouterContext } from '../collectionViewRouter';
 import { FIELD_SUGGESTION_LIMIT } from './constants';
 import { buildCreateIndexShellCommand, buildIndexSpec, CreateIndexInputSchema, isWildcardKey } from './indexCreation';
 import { isVectorCreateIndexInput, type IndexRow } from './types';
@@ -64,6 +67,8 @@ export type RouterContext = BaseRouterContext & {
     databaseName: string;
     collectionName: string;
 };
+
+type IndexRouterContext = WithTelemetry<RouterContext & Pick<CollectionViewRouterContext, 'sessionId' | 'describeUnavailable'>>;
 
 /** Convert a raw IndexItemModel to the IndexRow shape used by the webview. */
 function toIndexRow(
@@ -147,48 +152,53 @@ export const indexViewRouter = router({
      * state. NEVER return null — the UI does not handle it.
      */
     listIndexes: publicProcedureWithTelemetry.query(async ({ ctx }) => {
-        const myCtx = ctx as WithTelemetry<RouterContext>;
-        const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'collectionView');
+        const myCtx = ctx as IndexRouterContext;
+        return runCollectionViewOperation(myCtx, async () => {
+            const session = ClusterSession.getSession(myCtx.sessionId);
+            return session.runWithClient(async (client) => {
+                const rawIndexes = await client.listIndexes(myCtx.databaseName, myCtx.collectionName);
 
-        const rawIndexes = await client.listIndexes(myCtx.databaseName, myCtx.collectionName);
-
-        let indexSizes: Record<string, number> = {};
-        try {
-            const stats = await client.getCollectionStats(myCtx.databaseName, myCtx.collectionName);
-            indexSizes = stats.indexSizes ?? {};
-        } catch {
-            meterSilentCatch('indexView_getCollectionStats');
-        }
-
-        const usageByName = new Map<string, { ops: number; since: string }>();
-        const buildingNames = new Set<string>();
-        try {
-            const indexStats = await client.getIndexStats(myCtx.databaseName, myCtx.collectionName);
-            for (const stat of indexStats) {
-                if (stat.building === true) {
-                    buildingNames.add(stat.name);
+                let indexSizes: Record<string, number> = {};
+                try {
+                    const stats = await client.getCollectionStats(myCtx.databaseName, myCtx.collectionName);
+                    indexSizes = stats.indexSizes ?? {};
+                } catch (error) {
+                    throwIfBoundViewUnavailable(session.getBinding(), error);
+                    meterSilentCatch('indexView_getCollectionStats');
                 }
-                if (stat.accesses === 'N/A') {
-                    continue;
+
+                const usageByName = new Map<string, { ops: number; since: string }>();
+                const buildingNames = new Set<string>();
+                try {
+                    const indexStats = await client.getIndexStats(myCtx.databaseName, myCtx.collectionName);
+                    for (const stat of indexStats) {
+                        if (stat.building === true) {
+                            buildingNames.add(stat.name);
+                        }
+                        if (stat.accesses === 'N/A') {
+                            continue;
+                        }
+                        usageByName.set(stat.name, {
+                            ops: stat.accesses.ops,
+                            since:
+                                stat.accesses.since instanceof Date
+                                    ? stat.accesses.since.toISOString()
+                                    : new Date(stat.accesses.since).toISOString(),
+                        });
+                    }
+                } catch (error) {
+                    throwIfBoundViewUnavailable(session.getBinding(), error);
+                    meterSilentCatch('indexView_getIndexStats');
                 }
-                usageByName.set(stat.name, {
-                    ops: stat.accesses.ops,
-                    since:
-                        stat.accesses.since instanceof Date
-                            ? stat.accesses.since.toISOString()
-                            : new Date(stat.accesses.since).toISOString(),
-                });
-            }
-        } catch {
-            meterSilentCatch('indexView_getIndexStats');
-        }
 
-        const rows: IndexRow[] = rawIndexes.map((idx) =>
-            toIndexRow(idx, indexSizes[idx.name], usageByName.get(idx.name), buildingNames.has(idx.name)),
-        );
+                const rows: IndexRow[] = rawIndexes.map((idx) =>
+                    toIndexRow(idx, indexSizes[idx.name], usageByName.get(idx.name), buildingNames.has(idx.name)),
+                );
 
-        myCtx.actionContext.telemetry.measurements.indexCount = rows.length;
-        return rows;
+                myCtx.actionContext.telemetry.measurements.indexCount = rows.length;
+                return rows;
+            });
+        });
     }),
 
     /**
@@ -201,15 +211,19 @@ export const indexViewRouter = router({
      * getCollectionStats; swap to `db.command({ count })` if cheaper.
      */
     getCollectionDocumentCount: publicProcedureWithTelemetry.query(async ({ ctx }) => {
-        const myCtx = ctx as WithTelemetry<RouterContext>;
-        try {
-            const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'collectionView');
-            const stats = await client.getCollectionStats(myCtx.databaseName, myCtx.collectionName);
-            return stats.count;
-        } catch {
-            meterSilentCatch('indexView_getDocumentCount');
-            return 0;
-        }
+        const myCtx = ctx as IndexRouterContext;
+        return runCollectionViewOperation(myCtx, async () => {
+            const session = ClusterSession.getSession(myCtx.sessionId);
+            try {
+                return await session.runWithClient(
+                    async (client) => (await client.getCollectionStats(myCtx.databaseName, myCtx.collectionName)).count,
+                );
+            } catch (error) {
+                throwIfBoundViewUnavailable(session.getBinding(), error);
+                meterSilentCatch('indexView_getDocumentCount');
+                return 0;
+            }
+        });
     }),
 
     /**
@@ -256,8 +270,9 @@ export const indexViewRouter = router({
      * with a localised user-facing message; the drawer stays open.
      */
     createIndex: publicProcedureWithTelemetry.input(CreateIndexInputSchema).mutation(async ({ input, ctx }) => {
-        const myCtx = ctx as WithTelemetry<RouterContext>;
-        const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'collectionView');
+        const myCtx = ctx as IndexRouterContext;
+        const session = ClusterSession.getSession(myCtx.sessionId);
+        const epoch = session.getEpoch();
         const spec = buildIndexSpec(input);
 
         if (isVectorCreateIndexInput(input)) {
@@ -291,13 +306,18 @@ export const indexViewRouter = router({
             myCtx.actionContext.telemetry.measurements.fieldCount = input.fields.length;
         }
 
-        const result = await client.createIndex(myCtx.databaseName, myCtx.collectionName, spec);
-        if (result.ok === 0 || result.note) {
-            const message = typeof result.note === 'string' ? result.note : l10n.t('Failed to create index.');
-            throw new Error(message);
-        }
-        recordSurveyActivityWithInvitation('dataManagement');
-        return { ok: true, indexName: result.indexName };
+        return runCollectionViewOperation(myCtx, async () => {
+            const result = await session.runWithClient(
+                (client) => client.createIndex(myCtx.databaseName, myCtx.collectionName, spec),
+                epoch,
+            );
+            if (result.ok === 0 || result.note) {
+                const message = typeof result.note === 'string' ? result.note : l10n.t('Failed to create index.');
+                throw new Error(message);
+            }
+            recordSurveyActivityWithInvitation('dataManagement');
+            return { ok: true, indexName: result.indexName };
+        });
     }),
 
     /**
@@ -310,18 +330,24 @@ export const indexViewRouter = router({
     openCreateInPlayground: publicProcedureWithTelemetry
         .input(CreateIndexInputSchema)
         .mutation(async ({ input, ctx }) => {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
+            const myCtx = ctx as IndexRouterContext;
+            const session = ClusterSession.getSession(myCtx.sessionId);
+            const epoch = session.getEpoch();
             myCtx.actionContext.telemetry.properties.activationSource = 'indexViewCreateDrawer';
             const content = buildCreateIndexShellCommand(myCtx.collectionName, input);
-            const vscode = await import('vscode');
-            await vscode.commands.executeCommand(PlaygroundCommandIds.newWithContent, {
-                clusterId: myCtx.clusterId,
-                clusterDisplayName: myCtx.clusterDisplayName,
-                databaseName: myCtx.databaseName,
-                content,
-                viewId: myCtx.viewId,
+            return runCollectionViewOperation(myCtx, async () => {
+                await session.getClient();
+                session.assertCurrent(epoch, myCtx.signal);
+                const vscode = await import('vscode');
+                await vscode.commands.executeCommand(PlaygroundCommandIds.newWithContent, {
+                    clusterId: myCtx.clusterId,
+                    clusterDisplayName: myCtx.clusterDisplayName,
+                    databaseName: myCtx.databaseName,
+                    content,
+                    viewId: myCtx.viewId,
+                });
+                return { ok: true };
             });
-            return { ok: true };
         }),
 
     /**
@@ -331,18 +357,24 @@ export const indexViewRouter = router({
      * shell, mirroring the collection view's "open in shell" hand-off.
      */
     openCreateInShell: publicProcedureWithTelemetry.input(CreateIndexInputSchema).mutation(async ({ input, ctx }) => {
-        const myCtx = ctx as WithTelemetry<RouterContext>;
+        const myCtx = ctx as IndexRouterContext;
+        const session = ClusterSession.getSession(myCtx.sessionId);
+        const epoch = session.getEpoch();
         myCtx.actionContext.telemetry.properties.activationSource = 'indexViewCreateDrawer';
         const initialInput = buildCreateIndexShellCommand(myCtx.collectionName, input);
-        const vscode = await import('vscode');
-        await vscode.commands.executeCommand(ShellCommandIds.openWithInput, {
-            clusterId: myCtx.clusterId,
-            clusterDisplayName: myCtx.clusterDisplayName,
-            databaseName: myCtx.databaseName,
-            viewId: myCtx.viewId,
-            initialInput,
+        return runCollectionViewOperation(myCtx, async () => {
+            await session.getClient();
+            session.assertCurrent(epoch, myCtx.signal);
+            const vscode = await import('vscode');
+            await vscode.commands.executeCommand(ShellCommandIds.openWithInput, {
+                clusterId: myCtx.clusterId,
+                clusterDisplayName: myCtx.clusterDisplayName,
+                databaseName: myCtx.databaseName,
+                viewId: myCtx.viewId,
+                initialInput,
+            });
+            return { ok: true };
         });
-        return { ok: true };
     }),
 
     /**
@@ -364,7 +396,9 @@ export const indexViewRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
+            const myCtx = ctx as IndexRouterContext;
+            const session = ClusterSession.getSession(myCtx.sessionId);
+            const epoch = session.getEpoch();
             setIndexActionTelemetry(myCtx, 'drop', input);
             if (input.indexName === '_id_') {
                 throw new Error(l10n.t('The "_id_" index cannot be deleted.'));
@@ -386,13 +420,17 @@ export const indexViewRouter = router({
                 return { ok: true, cancelled: true };
             }
 
-            const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'collectionView');
-            const result = await client.dropIndex(myCtx.databaseName, myCtx.collectionName, input.indexName);
-            if (result.ok === 0 || result.note) {
-                const message = typeof result.note === 'string' ? result.note : l10n.t('Failed to delete index.');
-                throw new Error(message);
-            }
-            return { ok: true, cancelled: false };
+            return runCollectionViewOperation(myCtx, async () => {
+                const result = await session.runWithClient(
+                    (client) => client.dropIndex(myCtx.databaseName, myCtx.collectionName, input.indexName),
+                    epoch,
+                );
+                if (result.ok === 0 || result.note) {
+                    const message = typeof result.note === 'string' ? result.note : l10n.t('Failed to delete index.');
+                    throw new Error(message);
+                }
+                return { ok: true, cancelled: false };
+            });
         }),
 
     /**
@@ -407,26 +445,28 @@ export const indexViewRouter = router({
     openIndexDefinition: publicProcedureWithTelemetry
         .input(z.object({ indexName: z.string().min(1) }))
         .mutation(async ({ input, ctx }) => {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
-            const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'collectionView');
-            const rawIndexes = await client.listIndexes(myCtx.databaseName, myCtx.collectionName);
-            const match = rawIndexes.find((idx) => idx.name === input.indexName);
-            if (!match) {
-                throw new Error(l10n.t('Index "{0}" was not found.', input.indexName));
-            }
+            const myCtx = ctx as IndexRouterContext;
+            return runCollectionViewOperation(myCtx, async () => {
+                const session = ClusterSession.getSession(myCtx.sessionId);
+                const rawIndexes = await session.runWithClient((client) =>
+                    client.listIndexes(myCtx.databaseName, myCtx.collectionName),
+                );
+                const match = rawIndexes.find((idx) => idx.name === input.indexName);
+                if (!match) {
+                    throw new Error(l10n.t('Index "{0}" was not found.', input.indexName));
+                }
 
-            // Strip our synthetic `type` discriminator so only the real,
-            // server-reported fields are shown.
-            const definition: Record<string, unknown> = { ...match };
-            delete definition.type;
-            const prettyJson = JSON.stringify(definition, null, 4);
+                const definition: Record<string, unknown> = { ...match };
+                delete definition.type;
+                const prettyJson = JSON.stringify(definition, null, 4);
 
-            await readOnlyJsonDocumentProvider.openDocument(
-                l10n.t('{0} Index Definition', input.indexName),
-                prettyJson,
-            );
+                await readOnlyJsonDocumentProvider.openDocument(
+                    l10n.t('{0} Index Definition', input.indexName),
+                    prettyJson,
+                );
 
-            return { ok: true };
+                return { ok: true };
+            });
         }),
 
     /**
@@ -447,7 +487,9 @@ export const indexViewRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
+            const myCtx = ctx as IndexRouterContext;
+            const session = ClusterSession.getSession(myCtx.sessionId);
+            const epoch = session.getEpoch();
             setIndexActionTelemetry(myCtx, 'hide', input);
             if (input.indexName === '_id_') {
                 throw new Error(l10n.t('The "_id_" index cannot be hidden.'));
@@ -462,13 +504,17 @@ export const indexViewRouter = router({
             if (!confirmed) {
                 return { ok: true, cancelled: true };
             }
-            const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'collectionView');
-            const result = await client.hideIndex(myCtx.databaseName, myCtx.collectionName, input.indexName);
-            if (result.ok === 0 || result.errmsg) {
-                const message = typeof result.errmsg === 'string' ? result.errmsg : l10n.t('Failed to hide index.');
-                throw new Error(message);
-            }
-            return { ok: true, cancelled: false };
+            return runCollectionViewOperation(myCtx as IndexRouterContext, async () => {
+                const result = await session.runWithClient(
+                    (client) => client.hideIndex(myCtx.databaseName, myCtx.collectionName, input.indexName),
+                    epoch,
+                );
+                if (result.ok === 0 || result.errmsg) {
+                    const message = typeof result.errmsg === 'string' ? result.errmsg : l10n.t('Failed to hide index.');
+                    throw new Error(message);
+                }
+                return { ok: true, cancelled: false };
+            });
         }),
 
     unhideIndex: publicProcedureWithTelemetry
@@ -480,7 +526,9 @@ export const indexViewRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
+            const myCtx = ctx as IndexRouterContext;
+            const session = ClusterSession.getSession(myCtx.sessionId);
+            const epoch = session.getEpoch();
             setIndexActionTelemetry(myCtx, 'unhide', input);
             if (input.indexName === '_id_') {
                 throw new Error(l10n.t('The "_id_" index visibility cannot be changed.'));
@@ -495,12 +543,17 @@ export const indexViewRouter = router({
             if (!confirmed) {
                 return { ok: true, cancelled: true };
             }
-            const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'collectionView');
-            const result = await client.unhideIndex(myCtx.databaseName, myCtx.collectionName, input.indexName);
-            if (result.ok === 0 || result.errmsg) {
-                const message = typeof result.errmsg === 'string' ? result.errmsg : l10n.t('Failed to unhide index.');
-                throw new Error(message);
-            }
-            return { ok: true, cancelled: false };
+            return runCollectionViewOperation(myCtx as IndexRouterContext, async () => {
+                const result = await session.runWithClient(
+                    (client) => client.unhideIndex(myCtx.databaseName, myCtx.collectionName, input.indexName),
+                    epoch,
+                );
+                if (result.ok === 0 || result.errmsg) {
+                    const message =
+                        typeof result.errmsg === 'string' ? result.errmsg : l10n.t('Failed to unhide index.');
+                    throw new Error(message);
+                }
+                return { ok: true, cancelled: false };
+            });
         }),
 });

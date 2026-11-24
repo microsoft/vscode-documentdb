@@ -31,7 +31,6 @@ import { z } from 'zod';
 
 import * as l10n from '@vscode/l10n';
 import { ClusterSession } from '../../../../documentdb/ClusterSession';
-import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import {
     ExplainPlanAnalyzer,
     type ExecutionStatsAnalysis,
@@ -46,7 +45,8 @@ import {
 import { ext } from '../../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../../services/ai/QueryInsightsAIService';
 import { mergeRouters, publicProcedureWithTelemetry, router, type WithTelemetry } from '../../../_integration/trpc';
-import { type RouterContext } from '../collectionViewRouter';
+import { throwIfBoundViewUnavailable } from '../../boundViewOperations';
+import { runCollectionViewOperation, type RouterContext } from '../collectionViewRouter';
 import { queryInsightsEventsRouter } from './queryInsightsEventsRouter';
 
 /**
@@ -108,7 +108,8 @@ export const queryInsightsQueriesRouter = router({
      */
     getQueryInsightsStage1: publicProcedureWithTelemetry.query(async ({ ctx }) => {
         const myCtx = ctx as WithTelemetry<RouterContext>;
-        const { sessionId, databaseName, collectionName } = myCtx;
+        return runCollectionViewOperation(myCtx, async () => {
+            const { sessionId, databaseName, collectionName } = myCtx;
 
         ext.outputChannel.trace(
             l10n.t('[Query Insights Stage 1] Started for {db}.{collection}', {
@@ -178,7 +179,8 @@ export const queryInsightsQueriesRouter = router({
             }),
         );
 
-        return transformed;
+            return transformed;
+        });
     }),
 
     /**
@@ -195,7 +197,8 @@ export const queryInsightsQueriesRouter = router({
      */
     getQueryInsightsStage2: publicProcedureWithTelemetry.query(async ({ ctx }) => {
         const myCtx = ctx as WithTelemetry<RouterContext>;
-        const { sessionId, databaseName, collectionName } = myCtx;
+        return runCollectionViewOperation(myCtx, async () => {
+            const { sessionId, databaseName, collectionName } = myCtx;
 
         ext.outputChannel.trace(
             l10n.t('[Query Insights Stage 2] Started for {db}.{collection}', {
@@ -253,7 +256,7 @@ export const queryInsightsQueriesRouter = router({
                         totalCollectionDocs = await client.estimateDocumentCount(databaseName, collectionName);
                     } catch (error) {
                         // Non-critical — advisories and selectivity can be omitted.
-                        ClustersClient.reportFailure(client.binding, error);
+                        throwIfBoundViewUnavailable(client.binding, error);
                     }
                     return { explainResult, queryFilter: queryParams.filterObj, totalCollectionDocs };
                 },
@@ -362,7 +365,8 @@ export const queryInsightsQueriesRouter = router({
                 },
             ),
         );
-        return transformed;
+            return transformed;
+        });
     }),
 
     /**
@@ -387,9 +391,9 @@ export const queryInsightsQueriesRouter = router({
             const aiService = new QueryInsightsAIService();
 
             // Execute the recommendation action
-            const result = await aiService.executeQueryInsightsAction(clusterId, sessionId, actionId, payload);
-
-            return result;
+            return runCollectionViewOperation(myCtx, () =>
+                aiService.executeQueryInsightsAction(clusterId, sessionId, actionId, payload),
+            );
         }),
 });
 

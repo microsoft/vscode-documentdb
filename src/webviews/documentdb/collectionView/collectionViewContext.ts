@@ -5,6 +5,7 @@
 
 import { createContext } from 'react';
 import { type AIIndexRecommendation } from '../../../services/ai/types';
+import { type ConnectionUnavailableDetails } from '../../_integration/connectionUnavailable';
 import { type QueryInsightsStage1Response, type QueryInsightsStage2Response } from './types/queryInsights';
 import { type QueryInsightsStreamUsage } from './types/queryInsightsStream';
 
@@ -329,6 +330,12 @@ export type CollectionViewContextType = {
     isAiRowVisible: boolean; // Controls visibility of the AI prompt row in QueryEditor
     /** See {@link QueryInsightsState} for the pipeline shape and usage rules. */
     queryInsights: QueryInsightsState;
+    readonly lifecycle: {
+        readonly unavailable?: ConnectionUnavailableDetails;
+        readonly beginOperation: () => number | undefined;
+        readonly isOperationCurrent: (revision: number) => boolean;
+        readonly showUnavailable: (unavailable: ConnectionUnavailableDetails) => void;
+    };
 };
 
 export const DefaultCollectionViewContext: CollectionViewContextType = {
@@ -361,6 +368,11 @@ export const DefaultCollectionViewContext: CollectionViewContextType = {
     // query; flipping `s1Loading` again from elsewhere is the dedupe
     // signal the QueryInsightsTab fallback fetch uses to short-circuit.
     queryInsights: { kind: 'idle' },
+    lifecycle: {
+        beginOperation: () => 0,
+        isOperationCurrent: () => true,
+        showUnavailable: () => undefined,
+    },
 };
 
 export const CollectionViewContext = createContext<

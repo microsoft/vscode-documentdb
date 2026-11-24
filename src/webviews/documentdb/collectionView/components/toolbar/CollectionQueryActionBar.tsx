@@ -37,6 +37,7 @@ import {
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { useContext, type JSX } from 'react';
+import { isConnectionUnavailableResponse } from '../../../../_integration/connectionUnavailable';
 import { useTrpcClient } from '../../../../_integration/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { type CollectionViewWebviewConfigurationType } from '../../collectionViewController';
@@ -66,6 +67,9 @@ const QueryExecutionToolbar = ({ variant }: CollectionQueryActionBarProps): JSX.
     const hideScrollbarsTemporarily = useHideScrollbarsDuringResize();
 
     const handleExecuteQuery = () => {
+        if (currentContext.lifecycle.beginOperation() === undefined) {
+            return;
+        }
         // return to the root level
         setCurrentContext((prev) => ({
             ...prev,
@@ -115,6 +119,9 @@ const QueryExecutionToolbar = ({ variant }: CollectionQueryActionBarProps): JSX.
     };
 
     const handleRefreshResults = () => {
+        if (currentContext.lifecycle.beginOperation() === undefined) {
+            return;
+        }
         // basically, do not modify the query at all, do not use the input from the editor
         setCurrentContext((prev) => ({
             ...prev,
@@ -217,6 +224,7 @@ const QueryExecutionToolbar = ({ variant }: CollectionQueryActionBarProps): JSX.
 const QuerySecondaryActions = ({ variant }: CollectionQueryActionBarProps): JSX.Element => {
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
     const trpcClient = useTrpcClient();
+    const { beginOperation, isOperationCurrent, showUnavailable } = currentContext.lifecycle;
 
     // ─── Handlers ───────────────────────────────────────────────────────────────
 
@@ -308,25 +316,45 @@ const QuerySecondaryActions = ({ variant }: CollectionQueryActionBarProps): JSX.
     };
 
     const handleOpenQueryInPlayground = (): void => {
+        const lifecycleRevision = beginOperation();
+        if (lifecycleRevision === undefined) {
+            return;
+        }
         const query = getCurrentQuery();
-        void trpcClient.mongoClusters.collectionView.openQueryInPlayground.mutate({
-            filter: query.filter,
-            project: query.project,
-            sort: query.sort,
-            skip: query.skip,
-            limit: query.limit,
-        });
+        void trpcClient.mongoClusters.collectionView.openQueryInPlayground
+            .mutate({
+                filter: query.filter,
+                project: query.project,
+                sort: query.sort,
+                skip: query.skip,
+                limit: query.limit,
+            })
+            .then((result) => {
+                if (isOperationCurrent(lifecycleRevision) && isConnectionUnavailableResponse(result)) {
+                    showUnavailable(result.unavailable);
+                }
+            });
     };
 
     const handleOpenQueryInShell = (): void => {
+        const lifecycleRevision = beginOperation();
+        if (lifecycleRevision === undefined) {
+            return;
+        }
         const query = getCurrentQuery();
-        void trpcClient.mongoClusters.collectionView.openQueryInShell.mutate({
-            filter: query.filter,
-            project: query.project,
-            sort: query.sort,
-            skip: query.skip,
-            limit: query.limit,
-        });
+        void trpcClient.mongoClusters.collectionView.openQueryInShell
+            .mutate({
+                filter: query.filter,
+                project: query.project,
+                sort: query.sort,
+                skip: query.skip,
+                limit: query.limit,
+            })
+            .then((result) => {
+                if (isOperationCurrent(lifecycleRevision) && isConnectionUnavailableResponse(result)) {
+                    showUnavailable(result.unavailable);
+                }
+            });
     };
 
     return (

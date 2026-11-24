@@ -35,7 +35,15 @@ import { escapeJsString } from '../../../utils/escapeJsString';
 import { toFieldCompletionItems } from '../../../utils/json/data-api/autocomplete/toFieldCompletionItems';
 import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumentProvider';
 import { type BaseRouterContext } from '../../_integration/appRouter';
+import {
+    connectionRecoveryActions,
+    connectionUnavailableReasons,
+    type ConnectionRecoveryRequest,
+    type ConnectionRecoveryResponse,
+    type ConnectionUnavailableResponse,
+} from '../../_integration/connectionUnavailable';
 import { queryInsightsRouter } from './queryInsights/queryInsightsRouter';
+import { ConnectionUnavailableError, type ConnectionUnavailableReason } from '../../../documentdb/ConnectionUnavailableError';
 
 export type RouterContext = BaseRouterContext & {
     sessionId: string;
@@ -64,29 +72,49 @@ export type RouterContext = BaseRouterContext & {
     viewId: string;
     databaseName: string;
     collectionName: string;
+    readonly describeUnavailable: (reason: ConnectionUnavailableReason) => ConnectionUnavailableResponse;
+    readonly recoverUnavailable: (
+        request: ConnectionRecoveryRequest,
+    ) => Promise<ConnectionUnavailableResponse | ConnectionRecoveryResponse>;
 };
+
+export async function runCollectionViewOperation<T>(
+    ctx: Pick<RouterContext, 'describeUnavailable'>,
+    operation: () => Promise<T>,
+): Promise<T | ConnectionUnavailableResponse> {
+    try {
+        return await operation();
+    } catch (error) {
+        if (error instanceof ConnectionUnavailableError) {
+            return ctx.describeUnavailable(error.reason);
+        }
+        throw error;
+    }
+}
 
 async function openBoundDocument(
     ctx: RouterContext,
     mode: 'add' | 'view' | 'edit',
     documentId?: string,
-): Promise<void> {
-    const session = ClusterSession.getSession(ctx.sessionId);
-    const epoch = session.getEpoch();
-    const client = await session.getClient();
-    session.assertCurrent(epoch, ctx.signal);
-    await vscode.commands.executeCommand(
-        'vscode-documentdb.command.internal.documentView.open',
-        {
-            clusterId: ctx.clusterId,
-            viewId: ctx.viewId,
-            databaseName: ctx.databaseName,
-            collectionName: ctx.collectionName,
-            documentId,
-            mode,
-        },
-        client.binding,
-    );
+): Promise<void | ConnectionUnavailableResponse> {
+    return runCollectionViewOperation(ctx, async () => {
+        const session = ClusterSession.getSession(ctx.sessionId);
+        const epoch = session.getEpoch();
+        const client = await session.getClient();
+        session.assertCurrent(epoch, ctx.signal);
+        await vscode.commands.executeCommand(
+            'vscode-documentdb.command.internal.documentView.open',
+            {
+                clusterId: ctx.clusterId,
+                viewId: ctx.viewId,
+                databaseName: ctx.databaseName,
+                collectionName: ctx.collectionName,
+                documentId,
+                mode,
+            },
+            client.binding,
+        );
+    });
 }
 
 /**
@@ -250,83 +278,80 @@ export const collectionsViewRouter = router({
         // procedure type
         .query(async ({ input, ctx }) => {
             const myCtx = ctx as RouterContext;
+            return runCollectionViewOperation(myCtx, async () => {
+                const executionIntent = input.executionIntent ?? 'pagination';
+                const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
+                const size = await session.runFindQueryWithCache(
+                    myCtx.databaseName,
+                    myCtx.collectionName,
+                    {
+                        filter: input.filter,
+                        project: input.project,
+                        sort: input.sort,
+                        skip: input.skip,
+                        limit: input.limit,
+                    },
+                    input.pageNumber,
+                    input.pageSize,
+                    executionIntent,
+                    myCtx.signal,
+                );
 
-            // Track execution intent for telemetry
-            const executionIntent = input.executionIntent ?? 'pagination';
+                void callWithTelemetryAndErrorHandling('documentDB.query.executionIntent', (telemetryCtx) => {
+                    telemetryCtx.errorHandling.suppressDisplay = true;
+                    telemetryCtx.telemetry.properties.intent = executionIntent;
+                    telemetryCtx.telemetry.measurements.pageNumber = input.pageNumber;
+                    telemetryCtx.telemetry.measurements.documentCount = size;
+                });
 
-            // run query
-            const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
-            const size = await session.runFindQueryWithCache(
-                myCtx.databaseName,
-                myCtx.collectionName,
-                {
-                    filter: input.filter,
-                    project: input.project,
-                    sort: input.sort,
-                    skip: input.skip,
-                    limit: input.limit,
-                },
-                input.pageNumber,
-                input.pageSize,
-                executionIntent,
-                myCtx.signal,
-            );
-
-            // Report execution intent for analytics
-            void callWithTelemetryAndErrorHandling('documentDB.query.executionIntent', (telemetryCtx) => {
-                telemetryCtx.errorHandling.suppressDisplay = true;
-                telemetryCtx.telemetry.properties.intent = executionIntent;
-                telemetryCtx.telemetry.measurements.pageNumber = input.pageNumber;
-                telemetryCtx.telemetry.measurements.documentCount = size;
+                if (executionIntent === 'initial' && !myCtx.signal?.aborted) {
+                    recordSurveyActivityWithInvitation('dataBrowsing');
+                }
+                return { documentCount: size };
             });
-
-            if (executionIntent === 'initial' && !myCtx.signal?.aborted) {
-                recordSurveyActivityWithInvitation('dataBrowsing');
-            }
-            return { documentCount: size };
         }),
     getFieldCompletionData: publicProcedureWithTelemetry
         // procedure type
-        .query(({ ctx }) => {
+        .query(async ({ ctx }) => {
             const myCtx = ctx as RouterContext;
-
-            const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
-
-            const fieldEntries: FieldEntry[] = session.getKnownFields();
-
-            return toFieldCompletionItems(fieldEntries);
+            return runCollectionViewOperation(myCtx, async () => {
+                const session = ClusterSession.getSession(myCtx.sessionId);
+                session.assertAvailable(myCtx.signal);
+                const fieldEntries: FieldEntry[] = session.getKnownFields();
+                return toFieldCompletionItems(fieldEntries);
+            });
         }),
     getCurrentPageAsTable: publicProcedureWithTelemetry
         // parameters
         .input(z.array(z.string()))
         // procedure type
-        .query(({ input, ctx }) => {
+        .query(async ({ input, ctx }) => {
             const myCtx = ctx as RouterContext;
-
-            const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
-            const tableData = session.getCurrentPageAsTable(input);
-
-            return tableData;
+            return runCollectionViewOperation(myCtx, async () => {
+                const session = ClusterSession.getSession(myCtx.sessionId);
+                session.assertAvailable(myCtx.signal);
+                return session.getCurrentPageAsTable(input);
+            });
         }),
     getCurrentPageAsTree: publicProcedureWithTelemetry
         // procedure type
-        .query(({ ctx }) => {
+        .query(async ({ ctx }) => {
             const myCtx = ctx as RouterContext;
-
-            const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
-            const treeData = session.getCurrentPageAsTree();
-
-            return treeData;
+            return runCollectionViewOperation(myCtx, async () => {
+                const session = ClusterSession.getSession(myCtx.sessionId);
+                session.assertAvailable(myCtx.signal);
+                return session.getCurrentPageAsTree();
+            });
         }),
     getCurrentPageAsJson: publicProcedureWithTelemetry
         // procedure type
-        .query(({ ctx }) => {
+        .query(async ({ ctx }) => {
             const myCtx = ctx as RouterContext;
-
-            const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
-            const jsonData = session.getCurrentPageAsJson();
-
-            return jsonData;
+            return runCollectionViewOperation(myCtx, async () => {
+                const session = ClusterSession.getSession(myCtx.sessionId);
+                session.assertAvailable(myCtx.signal);
+                return session.getCurrentPageAsJson();
+            });
         }),
     addDocument: publicProcedureWithTelemetry
         // procedure type
@@ -347,34 +372,43 @@ export const collectionsViewRouter = router({
         // procedure type
         .mutation(async ({ input, ctx }) => {
             const myCtx = ctx as RouterContext;
-            const session = ClusterSession.getSession(myCtx.sessionId);
-            const epoch = session.getEpoch();
+            return runCollectionViewOperation(myCtx, async () => {
+                const session = ClusterSession.getSession(myCtx.sessionId);
+                const epoch = session.getEpoch();
 
-            const confirmed = await getConfirmationAsInSettings(
-                l10n.t('Are you sure?'),
-                l10n.t('Delete {count} documents?', { count: input.length }) + '\n' + l10n.t('This cannot be undone.'),
-                'delete',
-            );
-
-            if (!confirmed || myCtx.signal?.aborted) {
-                return false;
-            }
-
-            const acknowledged = await session.deleteDocuments(myCtx.databaseName, myCtx.collectionName, input, epoch);
-
-            if (acknowledged) {
-                showConfirmationAsInSettings(
-                    input.length > 1
-                        ? l10n.t('{countMany} documents have been deleted.', { countMany: input.length })
-                        : l10n.t('{countOne} document has been deleted.', { countOne: input.length }),
+                const confirmed = await getConfirmationAsInSettings(
+                    l10n.t('Are you sure?'),
+                    l10n.t('Delete {count} documents?', { count: input.length }) +
+                        '\n' +
+                        l10n.t('This cannot be undone.'),
+                    'delete',
                 );
-            } else {
-                void vscode.window.showErrorMessage(l10n.t('Failed to delete documents. Unknown error.'), {
-                    modal: true,
-                });
-            }
 
-            return acknowledged;
+                if (!confirmed || myCtx.signal?.aborted) {
+                    return false;
+                }
+
+                const acknowledged = await session.deleteDocuments(
+                    myCtx.databaseName,
+                    myCtx.collectionName,
+                    input,
+                    epoch,
+                );
+
+                if (acknowledged) {
+                    showConfirmationAsInSettings(
+                        input.length > 1
+                            ? l10n.t('{countMany} documents have been deleted.', { countMany: input.length })
+                            : l10n.t('{countOne} document has been deleted.', { countOne: input.length }),
+                    );
+                } else {
+                    void vscode.window.showErrorMessage(l10n.t('Failed to delete documents. Unknown error.'), {
+                        modal: true,
+                    });
+                }
+
+                return acknowledged;
+            });
         }),
     exportDocuments: publicProcedureWithTelemetry
         // parameters
@@ -390,6 +424,9 @@ export const collectionsViewRouter = router({
         //procedure type
         .query(async ({ input, ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
+            const session = ClusterSession.getSession(myCtx.sessionId);
+            const binding = session.getBinding();
+            const epoch = session.getEpoch();
 
             // TODO: remove the dependency on the tree node, in the end it was here only to show progress on the 'tree item'
             const collectionTreeNode = await findCollectionNodeInTree(
@@ -400,6 +437,7 @@ export const collectionsViewRouter = router({
             );
 
             if (collectionTreeNode) {
+                session.assertCurrent(epoch, myCtx.signal);
                 vscode.commands.executeCommand(
                     'vscode-documentdb.command.internal.exportDocuments',
                     collectionTreeNode,
@@ -412,6 +450,7 @@ export const collectionsViewRouter = router({
                             limit: input.limit,
                         },
                         source: 'webview;collectionView',
+                        binding,
                     },
                 );
             } else {
@@ -423,6 +462,9 @@ export const collectionsViewRouter = router({
 
     importDocuments: publicProcedureWithTelemetry.query(async ({ ctx }) => {
         const myCtx = ctx as WithTelemetry<RouterContext>;
+        const session = ClusterSession.getSession(myCtx.sessionId);
+        const binding = session.getBinding();
+        const epoch = session.getEpoch();
 
         // TODO: remove the dependency on the tree node, in the end it was here only to show progress on the 'tree item'
         const collectionTreeNode = await findCollectionNodeInTree(
@@ -433,8 +475,10 @@ export const collectionsViewRouter = router({
         );
 
         if (collectionTreeNode) {
+            session.assertCurrent(epoch, myCtx.signal);
             vscode.commands.executeCommand('vscode-documentdb.command.importDocuments', collectionTreeNode, null, {
                 source: 'webview;collectionView',
+                binding,
             });
         } else {
             myCtx.actionContext.telemetry.properties.failureReason = 'collectionNodeNotFound';
@@ -551,24 +595,24 @@ export const collectionsViewRouter = router({
      */
     viewRawExplainOutput: publicProcedureWithTelemetry.mutation(async ({ ctx }) => {
         const myCtx = ctx as RouterContext;
-        const { sessionId, databaseName, collectionName } = myCtx;
+        return runCollectionViewOperation(myCtx, async () => {
+            const { sessionId, databaseName, collectionName } = myCtx;
 
-        // Get ClusterSession
-        const session: ClusterSession = ClusterSession.getSession(sessionId);
+            const session = ClusterSession.getSession(sessionId);
+            session.assertAvailable(myCtx.signal);
 
-        // Get the cached execution stats (raw explain output)
-        const rawExplainOutput = session.getRawExplainOutput(databaseName, collectionName);
+            const rawExplainOutput = session.getRawExplainOutput(databaseName, collectionName);
 
-        if (!rawExplainOutput) {
-            throw new Error('No explain output available. Please run a query first.');
-        }
+            if (!rawExplainOutput) {
+                throw new Error('No explain output available. Please run a query first.');
+            }
 
-        // Pretty-print the JSON
-        const prettyJson = JSON.stringify(rawExplainOutput, null, 4);
+            const prettyJson = JSON.stringify(rawExplainOutput, null, 4);
 
-        await readOnlyJsonDocumentProvider.openDocument(l10n.t('Raw Explain Output'), prettyJson);
+            await readOnlyJsonDocumentProvider.openDocument(l10n.t('Raw Explain Output'), prettyJson);
 
-        return { success: true };
+            return { success: true };
+        });
     }),
 
     openQueryInPlayground: publicProcedureWithTelemetry
@@ -583,6 +627,11 @@ export const collectionsViewRouter = router({
         )
         .mutation(async ({ input, ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
+            return runCollectionViewOperation(myCtx, async () => {
+                const session = ClusterSession.getSession(myCtx.sessionId);
+                const epoch = session.getEpoch();
+                await session.getClient();
+                session.assertCurrent(epoch, myCtx.signal);
 
             // ── Telemetry: activation source for cross-feature analytics ──
             myCtx.actionContext.telemetry.properties.activationSource = 'collectionViewToolbar';
@@ -598,12 +647,13 @@ export const collectionsViewRouter = router({
                 input.limit,
             );
 
-            await vscode.commands.executeCommand('vscode-documentdb.command.playground.new.withContent', {
-                clusterId: myCtx.clusterId,
-                clusterDisplayName: myCtx.clusterDisplayName,
-                databaseName: myCtx.databaseName,
-                content: query,
-                viewId: myCtx.viewId,
+                await vscode.commands.executeCommand('vscode-documentdb.command.playground.new.withContent', {
+                    clusterId: myCtx.clusterId,
+                    clusterDisplayName: myCtx.clusterDisplayName,
+                    databaseName: myCtx.databaseName,
+                    content: query,
+                    viewId: myCtx.viewId,
+                });
             });
         }),
 
@@ -619,6 +669,11 @@ export const collectionsViewRouter = router({
         )
         .mutation(async ({ input, ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
+            return runCollectionViewOperation(myCtx, async () => {
+                const session = ClusterSession.getSession(myCtx.sessionId);
+                const epoch = session.getEpoch();
+                await session.getClient();
+                session.assertCurrent(epoch, myCtx.signal);
 
             // ── Telemetry: activation source for cross-feature analytics ──
             myCtx.actionContext.telemetry.properties.activationSource = 'collectionViewToolbar';
@@ -632,12 +687,13 @@ export const collectionsViewRouter = router({
                 input.limit,
             );
 
-            await vscode.commands.executeCommand(ShellCommandIds.openWithInput, {
-                clusterId: myCtx.clusterId,
-                clusterDisplayName: myCtx.clusterDisplayName,
-                databaseName: myCtx.databaseName,
-                viewId: myCtx.viewId,
-                initialInput: query,
+                await vscode.commands.executeCommand(ShellCommandIds.openWithInput, {
+                    clusterId: myCtx.clusterId,
+                    clusterDisplayName: myCtx.clusterDisplayName,
+                    databaseName: myCtx.databaseName,
+                    viewId: myCtx.viewId,
+                    initialInput: query,
+                });
             });
         }),
 
@@ -725,4 +781,7 @@ export const collectionsViewRouter = router({
                 sample.measurements[`cat_${input.category}_src_${CompletionSources.CollectionView}`] = 1;
             });
         }),
+    recoverUnavailable: publicProcedureWithTelemetry
+        .input(z.object({ reason: z.enum(connectionUnavailableReasons), action: z.enum(connectionRecoveryActions) }))
+        .mutation(({ input, ctx }) => (ctx as RouterContext).recoverUnavailable(input)),
 });

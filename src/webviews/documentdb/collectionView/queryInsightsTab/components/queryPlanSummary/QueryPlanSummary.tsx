@@ -19,11 +19,13 @@ import {
 import { ArrowUpFilled, EyeRegular, WarningRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import * as React from 'react';
+import { isConnectionUnavailableResponse } from '../../../../../_integration/connectionUnavailable';
 import { useTrpcClient } from '../../../../../_integration/useTrpcClient';
 import {
     type QueryInsightsStage1Response,
     type QueryInsightsStage2Response,
 } from '../../../../../documentdb/collectionView/types/queryInsights';
+import { CollectionViewContext } from '../../../collectionViewContext';
 import '../../queryInsights.scss';
 import './QueryPlanSummary.scss';
 import { StageDetailCard, type StageType } from './StageDetailCard';
@@ -44,6 +46,8 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
     hasError,
 }) => {
     const trpcClient = useTrpcClient();
+    const [currentContext] = React.useContext(CollectionViewContext);
+    const { beginOperation, isOperationCurrent, showUnavailable } = currentContext.lifecycle;
 
     const handleStageDetailsToggle = (isExpanded: boolean) => {
         trpcClient.common.reportEvent
@@ -60,9 +64,19 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
     };
 
     const handleViewRawExplain = async () => {
+        const lifecycleRevision = beginOperation();
+        if (lifecycleRevision === undefined) {
+            return;
+        }
         try {
-            await trpcClient.mongoClusters.collectionView.viewRawExplainOutput.mutate();
+            const result = await trpcClient.mongoClusters.collectionView.viewRawExplainOutput.mutate();
+            if (isOperationCurrent(lifecycleRevision) && isConnectionUnavailableResponse(result)) {
+                showUnavailable(result.unavailable);
+            }
         } catch (error) {
+            if (!isOperationCurrent(lifecycleRevision)) {
+                return;
+            }
             void trpcClient.common.displayErrorMessage.mutate({
                 message: l10n.t('Failed to open raw execution stats'),
                 modal: false,

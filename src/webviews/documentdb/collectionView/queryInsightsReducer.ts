@@ -372,6 +372,9 @@ export function applyStage3Event(
                 },
             });
 
+        case 'unavailable':
+            return prev;
+
         default:
             // Exhaustiveness: the switch must cover every event kind.
             // Cast-to-never trick gives a compile error if a new event type

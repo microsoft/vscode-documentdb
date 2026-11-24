@@ -23,6 +23,7 @@ import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microso
 import * as l10n from '@vscode/l10n';
 import { type QueryObject } from '../../../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import { ClusterSession } from '../../../../documentdb/ClusterSession';
+import { ConnectionUnavailableError } from '../../../../documentdb/ConnectionUnavailableError';
 import { buildStaticAnalysisSummary } from '../../../../documentdb/queryInsights/staticAnalysisSummary';
 import { StreamingResponseParser } from '../../../../documentdb/queryInsights/streamingResponseParser';
 import { ext } from '../../../../extensionVariables';
@@ -596,6 +597,10 @@ export const queryInsightsEventsRouter = router({
                 // the `finally` runs cleanup.
                 outcome = 'success';
             } catch (err) {
+                if (err instanceof ConnectionUnavailableError) {
+                    yield { type: 'unavailable', unavailable: myCtx.describeUnavailable(err.reason).unavailable };
+                    return;
+                }
                 // F7: the dedicated completion event is the canonical
                 // Stage 3 telemetry source (the auto rpc event has ~0
                 // duration), so error metadata MUST be recorded here.

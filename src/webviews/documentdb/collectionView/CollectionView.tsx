@@ -7,11 +7,20 @@ import { Button, ProgressBar, Tab, TabList } from '@fluentui/react-components';
 import { EmojiRegular } from '@fluentui/react-icons';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
-import { type JSX, useEffect, useRef, useState } from 'react';
+import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { type TableDataEntry } from '../../../documentdb/ClusterSession';
+import {
+    type ConnectionRecoveryAction,
+    type ConnectionRecoveryResponse,
+    type ConnectionUnavailableDetails,
+    type ConnectionUnavailableResponse,
+    isConnectionUnavailableMessage,
+    isConnectionUnavailableResponse,
+} from '../../_integration/connectionUnavailable';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { useViewLoadTelemetry } from '../../_integration/useViewLoadTelemetry';
 import { Announcer } from '../../components/accessibility';
+import { DisconnectedOverlay } from '../../components/DisconnectedOverlay';
 import { useSelectiveContextMenuPrevention } from '../../components/useSelectiveContextMenuPrevention';
 import { setCompletionContext } from '../../query-language-support';
 import './collectionView.scss';
@@ -159,11 +168,55 @@ export const CollectionView = (): JSX.Element => {
     // keep Refs updated with the current state
     const currentQueryResultsRef = useRef(currentQueryResults);
     const currentContextRef = useRef(currentContext);
+    const unavailableRef = useRef<ConnectionUnavailableDetails | undefined>(undefined);
+    const lifecycleRevisionRef = useRef(0);
+    const queryRequestRef = useRef(0);
+    const pageRequestRef = useRef(0);
+    const disposedRef = useRef(false);
+    const [unavailable, setUnavailable] = useState<ConnectionUnavailableDetails>();
+    const [recovering, setRecovering] = useState(false);
+    const [recoveryAnnouncement, setRecoveryAnnouncement] = useState<string>();
+
+    const showUnavailable = useCallback((failure: ConnectionUnavailableDetails): void => {
+        lifecycleRevisionRef.current += 1;
+        unavailableRef.current = failure;
+        setUnavailable(failure);
+        setRecoveryAnnouncement(undefined);
+        setCurrentContext((prev) => ({ ...prev, isLoading: false }));
+    }, []);
+
+    const beginOperation = useCallback((): number | undefined => {
+        if (unavailableRef.current) {
+            return undefined;
+        }
+        return lifecycleRevisionRef.current;
+    }, []);
+
+    const isOperationCurrent = useCallback(
+        (revision: number): boolean =>
+            !disposedRef.current &&
+            unavailableRef.current === undefined &&
+            revision === lifecycleRevisionRef.current,
+        [],
+    );
 
     useEffect(() => {
         currentQueryResultsRef.current = currentQueryResults;
         currentContextRef.current = currentContext;
     }, [currentQueryResults, currentContext]);
+
+    useEffect(() => {
+        const handleMessage = (event: MessageEvent<unknown>): void => {
+            if (isConnectionUnavailableMessage(event.data)) {
+                showUnavailable(event.data.unavailable);
+            }
+        };
+        window.addEventListener('message', handleMessage);
+        return () => {
+            window.removeEventListener('message', handleMessage);
+            disposedRef.current = true;
+        };
+    }, [showUnavailable]);
 
     /**
      * Reset query insights when query changes (not on pagination)
@@ -198,6 +251,10 @@ export const CollectionView = (): JSX.Element => {
      * `startStage1Load` in `queryInsightsReducer.ts`.
      */
     const prefetchQueryInsights = (): void => {
+        const lifecycleRevision = beginOperation();
+        if (lifecycleRevision === undefined) {
+            return;
+        }
         // Claim the Stage 1 load from inside the functional updater so the
         // gate reads React's latest queued state via `prev`, never the render
         // closure or a ref. The reset effect's `queryInsights → idle` is
@@ -222,6 +279,13 @@ export const CollectionView = (): JSX.Element => {
         void trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage1
             .query()
             .then((stage1Data) => {
+                if (!isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
+                if (isConnectionUnavailableResponse(stage1Data)) {
+                    showUnavailable(stage1Data.unavailable);
+                    return;
+                }
                 // The reducer auto-chains `s1Loading → s2Loading` so the
                 // Stage 2 fetch effect in QueryInsightsTab picks up
                 // immediately when the user lands on the tab.
@@ -242,6 +306,9 @@ export const CollectionView = (): JSX.Element => {
                 console.debug('Stage 1 data prefetched:', stage1Data);
             })
             .catch((error) => {
+                if (!isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
                 const errorCode = extractErrorCode(error);
                 const message = error instanceof Error ? error.message : String(error);
                 setCurrentContext((prev) => {
@@ -278,6 +345,14 @@ export const CollectionView = (): JSX.Element => {
      */
 
     function getDataForView(selectedView: Views, onSettled?: (loaded: boolean) => void): void {
+        const lifecycleRevision = beginOperation();
+        if (lifecycleRevision === undefined) {
+            onSettled?.(false);
+            return;
+        }
+        const requestRevision = ++pageRequestRef.current;
+        const isCurrent = (): boolean =>
+            requestRevision === pageRequestRef.current && isOperationCurrent(lifecycleRevision);
         switch (selectedView) {
             case Views.TABLE: {
                 const path = currentContext.currentViewState?.currentPath ?? [];
@@ -285,6 +360,13 @@ export const CollectionView = (): JSX.Element => {
                 trpcClient.mongoClusters.collectionView.getCurrentPageAsTable
                     .query(path)
                     .then((result) => {
+                        if (!isCurrent()) {
+                            return;
+                        }
+                        if (isConnectionUnavailableResponse(result)) {
+                            showUnavailable(result.unavailable);
+                            return;
+                        }
                         let tableHeaders: string[];
 
                         /*
@@ -306,6 +388,9 @@ export const CollectionView = (): JSX.Element => {
                         onSettled?.(true);
                     })
                     .catch((error) => {
+                        if (!isCurrent()) {
+                            return;
+                        }
                         onSettled?.(false);
                         void trpcClient.common.displayErrorMessage.mutate({
                             message: l10n.t('Error while loading the data'),
@@ -319,6 +404,13 @@ export const CollectionView = (): JSX.Element => {
                 trpcClient.mongoClusters.collectionView.getCurrentPageAsTree
                     .query()
                     .then((result) => {
+                        if (!isCurrent()) {
+                            return;
+                        }
+                        if (isConnectionUnavailableResponse(result)) {
+                            showUnavailable(result.unavailable);
+                            return;
+                        }
                         setCurrentQueryResults((prev) => ({
                             ...prev,
                             treeData: result,
@@ -326,6 +418,9 @@ export const CollectionView = (): JSX.Element => {
                         onSettled?.(true);
                     })
                     .catch((error) => {
+                        if (!isCurrent()) {
+                            return;
+                        }
                         onSettled?.(false);
                         void trpcClient.common.displayErrorMessage.mutate({
                             message: l10n.t('Error while loading the data'),
@@ -338,6 +433,13 @@ export const CollectionView = (): JSX.Element => {
                 trpcClient.mongoClusters.collectionView.getCurrentPageAsJson
                     .query()
                     .then((result) => {
+                        if (!isCurrent()) {
+                            return;
+                        }
+                        if (isConnectionUnavailableResponse(result)) {
+                            showUnavailable(result.unavailable);
+                            return;
+                        }
                         setCurrentQueryResults((prev) => ({
                             ...prev,
                             jsonDocuments: result,
@@ -345,6 +447,9 @@ export const CollectionView = (): JSX.Element => {
                         onSettled?.(true);
                     })
                     .catch((error) => {
+                        if (!isCurrent()) {
+                            return;
+                        }
                         onSettled?.(false);
                         void trpcClient.common.displayErrorMessage.mutate({
                             message: l10n.t('Error while loading the data'),
@@ -359,13 +464,26 @@ export const CollectionView = (): JSX.Element => {
         }
     }
 
-    function updateAutoCompletionData(): void {
+    function updateAutoCompletionData(queryRevision: number): void {
+        const lifecycleRevision = beginOperation();
+        if (lifecycleRevision === undefined) {
+            return;
+        }
         trpcClient.mongoClusters.collectionView.getFieldCompletionData
             .query()
             .then((fields) => {
-                setCompletionContext(configuration.sessionId, { fields });
+                if (queryRevision === queryRequestRef.current && isOperationCurrent(lifecycleRevision)) {
+                    if (isConnectionUnavailableResponse(fields)) {
+                        showUnavailable(fields.unavailable);
+                        return;
+                    }
+                    setCompletionContext(configuration.sessionId, { fields });
+                }
             })
             .catch((error) => {
+                if (queryRevision !== queryRequestRef.current || !isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
                 console.debug('Failed to update field completion data:', error);
                 // Non-blocking — completion will work without fields
                 trpcClient.common.reportEvent
@@ -382,7 +500,14 @@ export const CollectionView = (): JSX.Element => {
     }
 
     useEffect(() => {
+        const lifecycleRevision = beginOperation();
+        if (lifecycleRevision === undefined) {
+            return;
+        }
+        const requestRevision = ++queryRequestRef.current;
         setCurrentContext((prev) => ({ ...prev, isLoading: true }));
+        const isCurrent = (): boolean =>
+            requestRevision === queryRequestRef.current && isOperationCurrent(lifecycleRevision);
 
         const isFirstLoad = !firstLoadClaimedRef.current;
         if (isFirstLoad) {
@@ -412,6 +537,13 @@ export const CollectionView = (): JSX.Element => {
                 executionIntent: currentContext.activeQuery.executionIntent ?? 'pagination',
             })
             .then((response) => {
+                if (!isCurrent()) {
+                    return;
+                }
+                if (isConnectionUnavailableResponse(response)) {
+                    showUnavailable(response.unavailable);
+                    return;
+                }
                 // Store document count for screen reader announcements (skip pagination)
                 if (currentContext.activeQuery.executionIntent !== 'pagination') {
                     setCurrentQueryResults((prev) => ({ ...prev, documentCount: response.documentCount }));
@@ -419,7 +551,7 @@ export const CollectionView = (): JSX.Element => {
 
                 // 2. This is the time to update the auto-completion data
                 //    Since now we do know more about the data returned from the query
-                updateAutoCompletionData();
+                updateAutoCompletionData(requestRevision);
 
                 // 3. Load the data for the current view
                 getDataForView(currentContext.currentView, (loaded) =>
@@ -440,9 +572,15 @@ export const CollectionView = (): JSX.Element => {
                 setCurrentContext((prev) => ({ ...prev, isLoading: false, isFirstTimeLoad: false }));
             })
             .catch(async (error) => {
+                if (!isCurrent()) {
+                    return;
+                }
                 settleFirstLoad('failed');
                 const cause = error instanceof Error ? error.message : String(error);
                 const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
+                if (!isCurrent()) {
+                    return;
+                }
                 void trpcClient.common.displayErrorMessage.mutate({
                     message: explained ?? l10n.t('Error while running the query'),
                     modal: true,
@@ -450,7 +588,9 @@ export const CollectionView = (): JSX.Element => {
                 });
             })
             .finally(() => {
-                setCurrentContext((prev) => ({ ...prev, isLoading: false, isFirstTimeLoad: false }));
+                if (isCurrent()) {
+                    setCurrentContext((prev) => ({ ...prev, isLoading: false, isFirstTimeLoad: false }));
+                }
             });
     }, [currentContext.activeQuery]);
 
@@ -461,6 +601,9 @@ export const CollectionView = (): JSX.Element => {
     }, [currentContext.currentViewState?.currentPath]);
 
     const handleViewChanged = (_optionValue: string) => {
+        if (unavailableRef.current) {
+            return;
+        }
         let selection: Views;
 
         switch (_optionValue) {
@@ -494,9 +637,20 @@ export const CollectionView = (): JSX.Element => {
     };
 
     function handleDeleteDocumentRequest(): void {
+        const lifecycleRevision = beginOperation();
+        if (lifecycleRevision === undefined) {
+            return;
+        }
         trpcClient.mongoClusters.collectionView.deleteDocumentsById
             .mutate(currentContext.dataSelection.selectedDocumentObjectIds)
             .then((acknowledged) => {
+                if (!isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
+                if (isConnectionUnavailableResponse(acknowledged)) {
+                    showUnavailable(acknowledged.unavailable);
+                    return;
+                }
                 if (!acknowledged) {
                     return;
                 }
@@ -526,6 +680,9 @@ export const CollectionView = (): JSX.Element => {
                 }));
             })
             .catch((error) => {
+                if (!isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
                 void trpcClient.common.displayErrorMessage.mutate({
                     message: l10n.t('Error deleting selected documents'),
                     modal: false,
@@ -535,9 +692,21 @@ export const CollectionView = (): JSX.Element => {
     }
 
     function handleViewDocumentRequest(): void {
+        const lifecycleRevision = beginOperation();
+        if (lifecycleRevision === undefined) {
+            return;
+        }
         trpcClient.mongoClusters.collectionView.viewDocumentById
             .mutate(currentContext.dataSelection.selectedDocumentObjectIds[0])
+            .then((response) => {
+                if (isOperationCurrent(lifecycleRevision) && isConnectionUnavailableResponse(response)) {
+                    showUnavailable(response.unavailable);
+                }
+            })
             .catch((error) => {
+                if (!isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
                 void trpcClient.common.displayErrorMessage.mutate({
                     message: l10n.t('Error opening the document view'),
                     modal: false,
@@ -547,9 +716,21 @@ export const CollectionView = (): JSX.Element => {
     }
 
     function handleEditDocumentRequest(): void {
+        const lifecycleRevision = beginOperation();
+        if (lifecycleRevision === undefined) {
+            return;
+        }
         trpcClient.mongoClusters.collectionView.editDocumentById
             .mutate(currentContext.dataSelection.selectedDocumentObjectIds[0])
+            .then((response) => {
+                if (isOperationCurrent(lifecycleRevision) && isConnectionUnavailableResponse(response)) {
+                    showUnavailable(response.unavailable);
+                }
+            })
             .catch((error) => {
+                if (!isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
                 void trpcClient.common.displayErrorMessage.mutate({
                     message: l10n.t('Error opening the document view'),
                     modal: false,
@@ -559,13 +740,27 @@ export const CollectionView = (): JSX.Element => {
     }
 
     function handleAddDocumentRequest(): void {
-        trpcClient.mongoClusters.collectionView.addDocument.mutate().catch((error) => {
-            void trpcClient.common.displayErrorMessage.mutate({
-                message: l10n.t('Error opening the document view'),
-                modal: false,
-                cause: error instanceof Error ? error.message : String(error),
+        const lifecycleRevision = beginOperation();
+        if (lifecycleRevision === undefined) {
+            return;
+        }
+        trpcClient.mongoClusters.collectionView.addDocument
+            .mutate()
+            .then((response) => {
+                if (isOperationCurrent(lifecycleRevision) && isConnectionUnavailableResponse(response)) {
+                    showUnavailable(response.unavailable);
+                }
+            })
+            .catch((error) => {
+                if (!isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
+                void trpcClient.common.displayErrorMessage.mutate({
+                    message: l10n.t('Error opening the document view'),
+                    modal: false,
+                    cause: error instanceof Error ? error.message : String(error),
+                });
             });
-        });
     }
 
     function handleStepInRequest(row: number, cell: number): void {
@@ -631,9 +826,68 @@ export const CollectionView = (): JSX.Element => {
             });
     }
 
+    const handleUnavailableAction = (action: ConnectionRecoveryAction): void => {
+        const current = unavailableRef.current;
+        if (!current || recovering) {
+            return;
+        }
+
+        const revision = ++lifecycleRevisionRef.current;
+        setRecovering(true);
+        void trpcClient.mongoClusters.collectionView.recoverUnavailable
+            .mutate({ reason: current.reason, action })
+            .then((response: ConnectionUnavailableResponse | ConnectionRecoveryResponse) => {
+                if (disposedRef.current || revision !== lifecycleRevisionRef.current || action === 'close') {
+                    return;
+                }
+                if ('unavailable' in response) {
+                    unavailableRef.current = response.unavailable;
+                    setUnavailable(response.unavailable);
+                    return;
+                }
+                lifecycleRevisionRef.current += 1;
+                unavailableRef.current = undefined;
+                setUnavailable(undefined);
+                setRecoveryAnnouncement(response.recovered.text);
+            })
+            .catch(async (error) => {
+                if (disposedRef.current || revision !== lifecycleRevisionRef.current) {
+                    return;
+                }
+                const cause = error instanceof Error ? error.message : String(error);
+                const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
+                if (!disposedRef.current && revision === lifecycleRevisionRef.current) {
+                    void trpcClient.common.displayErrorMessage.mutate({
+                        message: explained ?? l10n.t('Unable to recover the connection'),
+                        modal: false,
+                        cause,
+                    });
+                }
+            })
+            .finally(() => {
+                if (!disposedRef.current) {
+                    setRecovering(false);
+                }
+            });
+    };
+
     return (
-        <CollectionViewContext.Provider value={[currentContext, setCurrentContext]}>
-            <div className="collectionView">
+        <DisconnectedOverlay unavailable={unavailable} onAction={handleUnavailableAction} recovering={recovering}>
+            <CollectionViewContext.Provider
+                value={[
+                    {
+                        ...currentContext,
+                        lifecycle: {
+                            unavailable,
+                            beginOperation,
+                            isOperationCurrent,
+                            showUnavailable,
+                        },
+                    },
+                    setCurrentContext,
+                ]}
+            >
+                <div className="collectionView">
                 {currentContext.isLoading && (
                     <ProgressBar thickness="large" shape="square" className="progressBar" aria-hidden={true} />
                 )}
@@ -655,6 +909,9 @@ export const CollectionView = (): JSX.Element => {
                         className="collectionTabList"
                         selectedValue={selectedTab}
                         onTabSelect={(_event, data) => {
+                            if (unavailableRef.current) {
+                                return;
+                            }
                             const newTab = data.value as 'tab_result' | 'tab_indexes' | 'tab_queryInsights';
 
                             // Report tab switching telemetry
@@ -716,6 +973,9 @@ export const CollectionView = (): JSX.Element => {
                     {selectedTab !== 'tab_indexes' && (
                         <QueryEditor
                             onExecuteRequest={() => {
+                            if (unavailableRef.current) {
+                                return;
+                            }
                                 // Get all query values from the editor at once
                                 const query = currentContext.queryEditor?.getCurrentQuery() ?? {
                                     filter: '{  }',
@@ -804,6 +1064,8 @@ export const CollectionView = (): JSX.Element => {
                     {selectedTab === 'tab_queryInsights' && <QueryInsightsMain />}
                 </div>
             </div>
-        </CollectionViewContext.Provider>
+            </CollectionViewContext.Provider>
+            <Announcer when={recoveryAnnouncement !== undefined} message={recoveryAnnouncement ?? ''} />
+        </DisconnectedOverlay>
     );
 };

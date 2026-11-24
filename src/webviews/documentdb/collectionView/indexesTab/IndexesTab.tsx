@@ -5,10 +5,12 @@
 
 import { ProgressBar } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
-import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, type JSX } from 'react';
+import { isConnectionUnavailableResponse } from '../../../_integration/connectionUnavailable';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
 import { Announcer } from '../../../components/accessibility';
 import { useFilterUsageReporter } from '../../../components/useFilterUsageReporter';
+import { CollectionViewContext } from '../collectionViewContext';
 import { CreateIndexDrawer } from './components/CreateIndexDrawer';
 import { IndexList, type IndexListState } from './components/indexList';
 import { IndexManagementToolbar } from './components/IndexManagementToolbar';
@@ -138,6 +140,8 @@ type ModalState = { kind: 'none' } | { kind: 'create' };
  */
 export const IndexesTab = (): JSX.Element => {
     const trpcClient = useTrpcClient();
+    const [currentContext] = useContext(CollectionViewContext);
+    const { beginOperation, isOperationCurrent, showUnavailable } = currentContext.lifecycle;
 
     // Whether the index list's filter box and Hidden / Unused toggles are used, and on how many indexes.
     const [listState, setListState] = useState<IndexListState | undefined>(undefined);
@@ -274,6 +278,10 @@ export const IndexesTab = (): JSX.Element => {
      * background reconciliation keeps the current rows visible. */
     const refresh = useCallback(
         async (source: 'background' | 'manual' = 'background'): Promise<void> => {
+            const lifecycleRevision = beginOperation();
+            if (lifecycleRevision === undefined) {
+                return;
+            }
             const generation = ++refreshGenerationRef.current;
             const initial = !hasLoadedRef.current;
             // Only user-initiated loads announce; the 5s build poll must stay silent.
@@ -291,7 +299,11 @@ export const IndexesTab = (): JSX.Element => {
             }
             try {
                 const rows = await trpcClient.mongoClusters.indexView.listIndexes.query();
-                if (generation !== refreshGenerationRef.current) {
+                if (generation !== refreshGenerationRef.current || !isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
+                if (isConnectionUnavailableResponse(rows)) {
+                    showUnavailable(rows.unavailable);
                     return;
                 }
                 setIndexes(rows);
@@ -302,7 +314,7 @@ export const IndexesTab = (): JSX.Element => {
                     announce(l10n.t('Indexes updated.'));
                 }
             } catch (error) {
-                if (generation === refreshGenerationRef.current) {
+                if (generation === refreshGenerationRef.current && isOperationCurrent(lifecycleRevision)) {
                     setLoadFailed(true);
                     // Only surface the toast for initial / manual loads. The 5s build
                     // poll re-arms while a row is building, so a sustained outage would
@@ -326,7 +338,7 @@ export const IndexesTab = (): JSX.Element => {
                 }
             }
         },
-        [trpcClient, showError, announce],
+        [trpcClient, showError, announce, beginOperation, isOperationCurrent, showUnavailable],
     );
 
     // Initial load. `refresh` is stable across renders because its only
@@ -352,6 +364,10 @@ export const IndexesTab = (): JSX.Element => {
      * result.
      */
     const openCreateDialog = useCallback((): void => {
+        const lifecycleRevision = beginOperation();
+        if (lifecycleRevision === undefined) {
+            return;
+        }
         // Start each create session from a clean form unless the previous close
         // asked to preserve it (an accidental cancel, or a failed submit the
         // user can retry). A successful create leaves the flag clear, so the
@@ -363,13 +379,26 @@ export const IndexesTab = (): JSX.Element => {
         setModal({ kind: 'create' });
         void trpcClient.mongoClusters.indexView.getFieldSuggestions
             .query()
-            .then(setFieldSuggestions)
+            .then((fields) => {
+                if (isOperationCurrent(lifecycleRevision)) {
+                    setFieldSuggestions(fields);
+                }
+            })
             .catch(() => setFieldSuggestions([]));
         void trpcClient.mongoClusters.indexView.getCollectionDocumentCount
             .query()
-            .then(setDocumentCount)
+            .then((count) => {
+                if (!isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
+                if (isConnectionUnavailableResponse(count)) {
+                    showUnavailable(count.unavailable);
+                    return;
+                }
+                setDocumentCount(count);
+            })
             .catch(() => setDocumentCount(0));
-    }, [trpcClient]);
+    }, [trpcClient, beginOperation, isOperationCurrent, showUnavailable]);
 
     // The list shown to the user = the real indexes plus any optimistic
     // "Creating…" rows whose index has not yet appeared in a fetch. IndexTable
@@ -417,7 +446,7 @@ export const IndexesTab = (): JSX.Element => {
         let cancelled = false;
         const timer = setTimeout(() => {
             void refresh().finally(() => {
-                if (!cancelled) {
+                if (!cancelled && beginOperation() !== undefined) {
                     setPollGeneration((generation) => generation + 1);
                 }
             });
@@ -426,7 +455,7 @@ export const IndexesTab = (): JSX.Element => {
             cancelled = true;
             clearTimeout(timer);
         };
-    }, [displayIndexes, pollGeneration, refresh]);
+    }, [displayIndexes, pollGeneration, refresh, beginOperation]);
 
     /**
      * Submit handler for the Create Index dialog.
@@ -439,6 +468,10 @@ export const IndexesTab = (): JSX.Element => {
      */
     const handleCreateSubmit = useCallback(
         async (input: CreateIndexInput): Promise<void> => {
+            const lifecycleRevision = beginOperation();
+            if (lifecycleRevision === undefined) {
+                return;
+            }
             // Show an optimistic "Creating…" row immediately so the action feels
             // responsive while the server builds the index.
             const pending = pendingCreateFromInput(input);
@@ -450,6 +483,13 @@ export const IndexesTab = (): JSX.Element => {
             // close right away below.
             void mutation.then(
                 (result) => {
+                    if (!isOperationCurrent(lifecycleRevision)) {
+                        return;
+                    }
+                    if (isConnectionUnavailableResponse(result)) {
+                        showUnavailable(result.unavailable);
+                        return;
+                    }
                     const finalName = result.indexName ?? pending.name;
                     if (result.indexName && result.indexName !== pending.name) {
                         setPendingCreates((prev) =>
@@ -469,6 +509,9 @@ export const IndexesTab = (): JSX.Element => {
                     preserveFormRef.current = false;
                 },
                 (error) => {
+                    if (!isOperationCurrent(lifecycleRevision)) {
+                        return;
+                    }
                     // Drop the optimistic row and surface the failure in a modal.
                     // The drawer keeps its form data, so re-opening it pre-fills the
                     // form. We add an explicit "Edit and retry" button to the modal
@@ -500,12 +543,24 @@ export const IndexesTab = (): JSX.Element => {
             // Close the drawer immediately; the create continues in the background.
             setModal({ kind: 'none' });
         },
-        [trpcClient, refresh, openCreateDialog, showOperationSummary],
+        [
+            trpcClient,
+            refresh,
+            openCreateDialog,
+            showOperationSummary,
+            beginOperation,
+            isOperationCurrent,
+            showUnavailable,
+        ],
     );
 
     /** Delete an index. Confirmation happens on the extension host (modal). */
     const handleDelete = useCallback(
         async (index: IndexRow): Promise<void> => {
+            const lifecycleRevision = beginOperation();
+            if (lifecycleRevision === undefined) {
+                return;
+            }
             const indexName = index.name;
             // Set the row's processing visual up front (before the mutation) so it
             // covers the *actual* server operation, not just a post-hoc hold. The
@@ -520,6 +575,13 @@ export const IndexesTab = (): JSX.Element => {
                     sizeBytes: index.sizeBytes,
                     usageOps: index.usageOps,
                 });
+                if (!isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
+                if (isConnectionUnavailableResponse(result)) {
+                    showUnavailable(result.unavailable);
+                    return;
+                }
                 if (result.cancelled) {
                     return;
                 }
@@ -527,17 +589,34 @@ export const IndexesTab = (): JSX.Element => {
                 showOperationSummary(l10n.t('Index "{0}" deleted.', indexName));
                 await refresh();
             } catch (error) {
+                if (!isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
                 showError(l10n.t('Failed to delete index "{0}".', indexName), error, { modal: true });
             } finally {
                 removeBusy(indexName);
             }
         },
-        [trpcClient, refresh, showError, showOperationSummary, addBusy, removeBusy],
+        [
+            trpcClient,
+            refresh,
+            showError,
+            showOperationSummary,
+            addBusy,
+            removeBusy,
+            beginOperation,
+            isOperationCurrent,
+            showUnavailable,
+        ],
     );
 
     /** Hide / unhide toggle. Confirmation happens on the extension host (modal). */
     const handleToggleHidden = useCallback(
         async (index: IndexRow): Promise<void> => {
+            const lifecycleRevision = beginOperation();
+            if (lifecycleRevision === undefined) {
+                return;
+            }
             const details = { sizeBytes: index.sizeBytes, usageOps: index.usageOps };
             // Processing visual first (covers the real operation); keep it for a
             // short tail on success so a quick toggle is still perceptible. See
@@ -553,6 +632,13 @@ export const IndexesTab = (): JSX.Element => {
                           indexName: index.name,
                           ...details,
                       });
+                if (!isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
+                if (isConnectionUnavailableResponse(result)) {
+                    showUnavailable(result.unavailable);
+                    return;
+                }
                 if (result.cancelled) {
                     return;
                 }
@@ -567,6 +653,9 @@ export const IndexesTab = (): JSX.Element => {
                 );
                 await refresh();
             } catch (error) {
+                if (!isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
                 showError(
                     index.hidden
                         ? l10n.t('Failed to unhide index "{0}".', index.name)
@@ -578,7 +667,17 @@ export const IndexesTab = (): JSX.Element => {
                 removeBusy(index.name);
             }
         },
-        [trpcClient, refresh, showError, showOperationSummary, addBusy, removeBusy],
+        [
+            trpcClient,
+            refresh,
+            showError,
+            showOperationSummary,
+            addBusy,
+            removeBusy,
+            beginOperation,
+            isOperationCurrent,
+            showUnavailable,
+        ],
     );
 
     /**
@@ -588,19 +687,32 @@ export const IndexesTab = (): JSX.Element => {
      */
     const handlePrepareInTarget = useCallback(
         async (target: 'playground' | 'shell', input: CreateIndexInput): Promise<void> => {
+            const lifecycleRevision = beginOperation();
+            if (lifecycleRevision === undefined) {
+                return;
+            }
             try {
-                if (target === 'playground') {
-                    await trpcClient.mongoClusters.indexView.openCreateInPlayground.mutate(input);
-                } else {
-                    await trpcClient.mongoClusters.indexView.openCreateInShell.mutate(input);
+                const result =
+                    target === 'playground'
+                        ? await trpcClient.mongoClusters.indexView.openCreateInPlayground.mutate(input)
+                        : await trpcClient.mongoClusters.indexView.openCreateInShell.mutate(input);
+                if (!isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
+                if (isConnectionUnavailableResponse(result)) {
+                    showUnavailable(result.unavailable);
+                    return;
                 }
                 setModal({ kind: 'none' });
             } catch (error) {
+                if (!isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
                 showError(l10n.t('Failed to prepare the index command.'), error, { modal: true });
                 throw error;
             }
         },
-        [trpcClient, showError],
+        [trpcClient, showError, beginOperation, isOperationCurrent, showUnavailable],
     );
 
     return (

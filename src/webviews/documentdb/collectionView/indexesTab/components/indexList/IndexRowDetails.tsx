@@ -7,8 +7,10 @@ import { Button, Card, Tooltip } from '@fluentui/react-components';
 import { EyeRegular } from '@fluentui/react-icons';
 import { FocusableBadge } from '@microsoft/vscode-ext-webview-fluentui/components';
 import * as l10n from '@vscode/l10n';
-import { type JSX } from 'react';
+import { type JSX, useContext } from 'react';
+import { isConnectionUnavailableResponse } from '../../../../../_integration/connectionUnavailable';
 import { useTrpcClient } from '../../../../../_integration/useTrpcClient';
+import { CollectionViewContext } from '../../../collectionViewContext';
 import { type IndexRow } from '../../types';
 import { formatDate, formatOps, formatShellJson } from '../../utils/format';
 import { formatVectorAlgorithm } from '../../utils/vectorIndex';
@@ -81,11 +83,25 @@ export interface IndexRowDetailsProps {
  */
 export const IndexRowDetails = ({ index }: IndexRowDetailsProps): JSX.Element => {
     const trpcClient = useTrpcClient();
+    const [currentContext] = useContext(CollectionViewContext);
+    const { beginOperation, isOperationCurrent, showUnavailable } = currentContext.lifecycle;
 
     const openRawDefinition = (): void => {
+        const lifecycleRevision = beginOperation();
+        if (lifecycleRevision === undefined) {
+            return;
+        }
         void trpcClient.mongoClusters.indexView.openIndexDefinition
             .mutate({ indexName: index.name })
+            .then((result) => {
+                if (isOperationCurrent(lifecycleRevision) && isConnectionUnavailableResponse(result)) {
+                    showUnavailable(result.unavailable);
+                }
+            })
             .catch((error: unknown) => {
+                if (!isOperationCurrent(lifecycleRevision)) {
+                    return;
+                }
                 const message = error instanceof Error ? error.message : String(error);
                 // A failed *user action* is surfaced modally (house rule): the user
                 // explicitly asked to open this definition, so the failure must not be

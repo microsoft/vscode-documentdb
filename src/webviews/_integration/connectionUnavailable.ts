@@ -47,7 +47,10 @@ export interface ConnectionRecoveryResponse {
 }
 
 export interface ConnectionUnavailableMessage {
-    readonly type: 'documentView.connectionUnavailable' | 'clusterDashboard.connectionUnavailable';
+    readonly type:
+        | 'documentView.connectionUnavailable'
+        | 'clusterDashboard.connectionUnavailable'
+        | 'collectionView.connectionUnavailable';
     readonly unavailable: ConnectionUnavailableDetails;
 }
 
@@ -77,7 +80,8 @@ export function isConnectionUnavailableMessage(value: unknown): value is Connect
         value !== null &&
         'type' in value &&
         (value.type === 'documentView.connectionUnavailable' ||
-            value.type === 'clusterDashboard.connectionUnavailable') &&
+            value.type === 'clusterDashboard.connectionUnavailable' ||
+            value.type === 'collectionView.connectionUnavailable') &&
         isConnectionUnavailableResponse(value)
     );
 }

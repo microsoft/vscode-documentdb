@@ -73,7 +73,18 @@ export class ClusterSession {
      * Private constructor to enforce the use of `initNewSession` for creating new sessions.
      * This ensures that sessions are properly initialized and managed.
      */
-    private constructor(private readonly binding: ConnectionBinding) {}
+    private constructor(private binding: ConnectionBinding) {}
+
+    public getBinding(): ConnectionBinding {
+        return this.binding;
+    }
+
+    public rebind(binding: ConnectionBinding): void {
+        if (binding.clusterId !== this.binding.clusterId) {
+            throw new Error('Cannot rebind a collection session to another cluster.');
+        }
+        this.binding = binding;
+    }
 
     public async getClient(): Promise<ClustersClient> {
         return ClustersClient.resolveBoundClient(this.binding, { trigger: 'collectionView' });
@@ -95,6 +106,20 @@ export class ClusterSession {
     public assertCurrent(epoch: number, signal?: AbortSignal): void {
         if (signal?.aborted || !this.isCurrent(epoch)) {
             throw new UserCancelledError('staleCollectionViewOperation');
+        }
+    }
+
+    public assertAvailable(signal?: AbortSignal): void {
+        if (signal?.aborted) {
+            throw new UserCancelledError('staleCollectionViewOperation');
+        }
+        const reason = ClustersClient.getLatchReason(this.binding.clusterId);
+        if (reason) {
+            throw new ConnectionUnavailableError(reason);
+        }
+        const current = ClustersClient.getBinding(this.binding.clusterId);
+        if (current?.fingerprint !== this.binding.fingerprint) {
+            throw new ConnectionUnavailableError(current ? 'identityChanged' : 'unreachable');
         }
     }
 
