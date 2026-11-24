@@ -346,7 +346,7 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
     getTreeItem(): vscode.TreeItem {
         return {
             id: this.id,
-            contextValue: this.contextValue,
+            contextValue: this.getClusterTreeItemContextValue(),
             label: this.cluster.name,
             description: this.buildDescription(),
             tooltip: this.buildTooltip(),

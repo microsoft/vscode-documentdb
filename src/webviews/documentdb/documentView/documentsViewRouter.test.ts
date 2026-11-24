@@ -28,7 +28,7 @@ vi.mock('../../../utils/dialogs/showConfirmation', () => ({ showConfirmationAsIn
 vi.mock('../../_integration/trpc', async () => {
     const { initWebviewTrpc } = await import('@microsoft/vscode-ext-webview');
     const { createCallerFactory, publicProcedure, router } = initWebviewTrpc();
-    return { createCallerFactory, publicProcedureWithTelemetry: publicProcedure, router };
+    return { createCallerFactory, publicProcedure, publicProcedureWithTelemetry: publicProcedure, router };
 });
 
 const binding = { clusterId: 'cluster', fingerprint: 'host-only-fingerprint', generation: 1 };
@@ -36,6 +36,7 @@ const newerBinding = { ...binding, generation: 2 };
 const upsertDocument = vi.fn<ClustersClient['upsertDocument']>();
 const pointRead = vi.fn<ClustersClient['pointRead']>();
 const viewPanelTitleSetter = vi.fn();
+const setDirty = vi.fn();
 const describeUnavailable = vi.fn((reason: ConnectionUnavailableError['reason']) => ({
     unavailable: { reason, title: 'Connection unavailable', detail: 'Close this view.', action: 'close' as const },
 }));
@@ -57,6 +58,7 @@ function createCaller(signal?: AbortSignal): ReturnType<typeof callDocumentView>
         collectionName: 'collection',
         documentId: 'id',
         binding,
+        setDirty,
         describeUnavailable,
         recoverUnavailable,
         signal,
@@ -86,6 +88,14 @@ describe('Document View bound operations', () => {
         expect(info).toContain('"clusterId":"cluster"');
         expect(info).not.toContain('binding');
         expect(info).not.toContain(binding.fingerprint);
+    });
+
+    it('reports dirty state to its owning panel without resolving a connection', async () => {
+        const view = createCaller();
+        await view.reportDirty(true);
+        await view.reportDirty(false);
+        expect(setDirty.mock.calls).toEqual([[true], [false]]);
+        expect(mocks.resolveBoundClient).not.toHaveBeenCalled();
     });
 
     it('uses the captured identity and preserves the successful save and read shapes', async () => {

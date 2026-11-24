@@ -22,6 +22,7 @@ import {
     recordEntraTokenFailure,
     resetEntraTokenFailuresForTests,
 } from '../auth/entraErrors/entraTokenFailures';
+import { ClustersClient } from '../ClustersClient';
 import { CredentialCache } from '../CredentialCache';
 import { PlaygroundEvaluator } from '../playground/PlaygroundEvaluator';
 import { type WorkerSessionCallbacks } from '../playground/WorkerSessionManager';
@@ -104,6 +105,18 @@ vi.mock('../playground/WorkerSessionManager', () => ({
 
 describe('ShellSessionManager', () => {
     const clusterId = 'test-cluster-id';
+
+    it('does not initialize or evaluate a worker while the cluster is disconnected', async () => {
+        const manager = new ShellSessionManager({ clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' });
+        ClustersClient.latch(clusterId, 'userDisconnected');
+        try {
+            await expect(manager.initialize()).rejects.toMatchObject({ reason: 'userDisconnected' });
+            await expect(manager.evaluate('db.stats()')).rejects.toMatchObject({ reason: 'userDisconnected' });
+        } finally {
+            ClustersClient.unlatch(clusterId);
+            manager.dispose();
+        }
+    });
 
     beforeEach(() => {
         vi.clearAllMocks();

@@ -527,6 +527,11 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
      * @returns A list of databases in the cluster or a single element to create a new database.
      */
     async getChildren(): Promise<TreeElement[]> {
+        const clusterId = this.cluster.clusterId;
+        const disconnected = (): boolean => ClustersClient.getLatchReason(clusterId) === 'userDisconnected';
+        if (disconnected()) {
+            return this.createDisconnectedChildren();
+        }
         ext.outputChannel.appendLine(l10n.t('Loading cluster details for "{cluster}"', { cluster: this.cluster.name }));
 
         const wasConnected = ClustersClient.exists(this.cluster.clusterId);
@@ -538,7 +543,6 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
 
         // Check if credentials are cached, and return the cached client if available
         // Use clusterId for cache lookups - stable across folder moves
-        const clusterId = this.cluster.clusterId;
         if (CredentialCache.hasCredentials(clusterId) || ClustersClient.getLatchReason(clusterId)) {
             ext.outputChannel.appendLine(
                 l10n.t('Reusing active connection for "{cluster}".', {
@@ -556,6 +560,9 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                     reusedClient = client;
                 });
             } catch (error) {
+                if (disconnected()) {
+                    return this.createDisconnectedChildren();
+                }
                 return this.renderExpansionFailure(error, 'cachedClientConnect', reusedClient, acquisitionEpoch);
             }
         } else {
@@ -563,6 +570,9 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             clustersClient = await this.authenticateAndConnect();
         }
 
+        if (disconnected()) {
+            return this.createDisconnectedChildren();
+        }
         // If authentication failed or cancelled, return the error element
         if (!clustersClient) {
             this.lastConnectionOutcome ??= 'failed';
@@ -584,6 +594,9 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
         try {
             databases = await connectedClient.listDatabases();
         } catch (error) {
+            if (disconnected()) {
+                return this.createDisconnectedChildren();
+            }
             return this.renderExpansionFailure(error, 'listDatabases', connectedClient);
         }
         const binding = connectedClient.binding;
@@ -591,7 +604,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             !ClustersClient.getLatchReason(clusterId) &&
             (!binding || ClustersClient.getExistingClient(clusterId)?.fingerprint === binding.fingerprint);
         if (!isCurrentIdentity()) {
-            return [];
+            return disconnected() ? this.createDisconnectedChildren() : [];
         }
 
         // A deep link that opens the dashboard itself suppresses the automatic open; that is not a skip.
@@ -601,7 +614,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                     activationSource: 'autoOpenOnConnect',
                 });
                 if (!isCurrentIdentity()) {
-                    return [];
+                    return disconnected() ? this.createDisconnectedChildren() : [];
                 }
             } else {
                 // The counterpart of an automatic open: without it, people who turned automatic
@@ -612,6 +625,10 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                     context.telemetry.properties.experience = this.experience.api;
                 });
             }
+        }
+
+        if (!wasConnected && ClustersClient.exists(clusterId)) {
+            ext.state.notifyChildrenChanged(this.id);
         }
 
         if (databases.length === 0) {
@@ -638,6 +655,26 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             databaseItem.loadCollectionCount();
             return databaseItem;
         });
+    }
+
+    private createDisconnectedChildren(): TreeElement[] {
+        return [
+            createGenericElementWithContext({
+                id: `${this.id}/connect`,
+                contextValue: 'treeItem_connectDisconnected',
+                label: vscode.l10n.t('Connect'),
+                iconPath: new vscode.ThemeIcon('plug'),
+                commandId: 'vscode-documentdb.command.internal.connectDisconnected',
+                commandArgs: [this],
+            }),
+        ];
+    }
+
+    protected getClusterTreeItemContextValue(): string {
+        const clusterId = this.cluster.clusterId;
+        return ClustersClient.exists(clusterId) && !ClustersClient.getLatchReason(clusterId)
+            ? createContextValue([this.contextValue, 'connected'])
+            : this.contextValue;
     }
 
     /**
@@ -668,7 +705,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
 
         return {
             id: this.id,
-            contextValue: this.contextValue,
+            contextValue: this.getClusterTreeItemContextValue(),
             label: this.cluster.name,
             description: this.descriptionOverride
                 ? this.descriptionOverride

@@ -37,6 +37,7 @@ import { createMongoDocument } from '../commands/createDocument/createDocument';
 import { deleteCollection } from '../commands/deleteCollection/deleteCollection';
 import { deleteAzureDatabase } from '../commands/deleteDatabase/deleteDatabase';
 import { diagnoseConnection } from '../commands/diagnoseConnection/diagnoseConnection';
+import { connectDisconnected, disconnect } from '../commands/disconnect/disconnect';
 import { filterProviderContent } from '../commands/discoveryService.filterProviderContent/filterProviderContent';
 import { manageCredentials } from '../commands/discoveryService.manageCredentials/manageCredentials';
 import { exportEntireCollection, exportQueryResults } from '../commands/exportDocuments/exportDocuments';
@@ -1013,6 +1014,11 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.internal.retry',
                     withTreeNodeCommandCorrelation(retryAuthentication),
+                );
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.disconnect', disconnect);
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.internal.connectDisconnected',
+                    withTreeNodeCommandCorrelation(connectDisconnected),
                 );
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.signInAgain',

@@ -603,6 +603,11 @@
         "title": "Diagnose Connection…"
       },
       {
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.disconnect",
+        "title": "%connections.disconnect%"
+      },
+      {
         "//": "[DiscoveryView] Rename Kubernetes kubeconfig source",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.discoveryView.kubernetes.renameSource",
@@ -1347,6 +1352,11 @@
           "group": "2@2"
         },
         {
+          "command": "vscode-documentdb.command.disconnect",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\bconnected\\b/ && !listMultiSelection",
+          "group": "2@3"
+        },
+        {
           "//": "[Account] Open Interactive Shell",
           "command": "vscode-documentdb.command.shell.open",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
@@ -1571,6 +1581,10 @@
       ],
       "explorer/context": [],
       "commandPalette": [
+        {
+          "command": "vscode-documentdb.command.disconnect",
+          "when": "false"
+        },
         {
           "command": "vscode-documentdb.debug.survey.showInvitation",
           "when": "documentdb-development-mode"
@@ -2019,6 +2033,22 @@
               }
             },
             "additionalProperties": false
+          },
+          "documentDB.connections.openTabsOnDisconnect": {
+            "order": 6,
+            "type": "string",
+            "default": "ask",
+            "description": "Choose what happens to open tabs when you disconnect or remove a connection. Closing tabs with unsaved document changes always requires confirmation.",
+            "enum": [
+              "ask",
+              "closeAll",
+              "keepOpenDisabled"
+            ],
+            "enumDescriptions": [
+              "Ask whether to close or keep open tabs.",
+              "Close all tabs for the connection.",
+              "Keep tabs open but disable database operations."
+            ]
           }
         }
       },

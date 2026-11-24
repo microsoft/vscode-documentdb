@@ -296,6 +296,10 @@ export class ClustersClient {
         return ClustersClient._lastVerifiedIdentities.get(clusterId);
     }
 
+    public static clearLastVerifiedIdentity(clusterId: string): void {
+        ClustersClient._lastVerifiedIdentities.delete(clusterId);
+    }
+
     /** A saved, explicit tenant change must not silently use the previous tenant's pin. */
     public static discardEntraPinForDifferentTenant(clusterId: string, tenantId: string | undefined): void {
         const identity = ClustersClient.getEntraPin(clusterId);
@@ -1178,13 +1182,22 @@ export class ClustersClient {
         return ClustersClient._clients.get(clusterId)?._srvResolution;
     }
 
-    public static async deleteClient(clusterId: string): Promise<void> {
-        ClustersClient.invalidate(clusterId);
+    public static async deleteClient(
+        clusterId: string,
+        options?: { readonly alreadyInvalidated: boolean },
+    ): Promise<void> {
+        if (!options?.alreadyInvalidated) {
+            ClustersClient.invalidate(clusterId);
+        }
         const client = ClustersClient._clients.get(clusterId);
         if (client) {
             ClustersClient._clients.delete(clusterId);
-            SchemaStore.getInstance().clearCluster(clusterId);
             client._closed = true;
+        }
+        if (client || options?.alreadyInvalidated) {
+            SchemaStore.getInstance().clearCluster(clusterId);
+        }
+        if (client) {
             await client._mongoClient.close(true);
         }
     }

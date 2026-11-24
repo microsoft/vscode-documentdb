@@ -39,7 +39,7 @@ const originalBinding = { clusterId, fingerprint: 'identity-a', generation: 1 };
 const newerBinding = { clusterId, fingerprint: 'identity-b', generation: 2 };
 const opened: { readonly dispose: () => void; readonly context: RouterContext }[] = [];
 
-function openPanel(binding = originalBinding): RouterContext {
+function openPanel(binding = originalBinding, mode: 'add' | 'edit' = 'edit'): RouterContext {
     const config: DocumentsViewWebviewConfigurationType = {
         id: 'document',
         clusterId,
@@ -47,7 +47,7 @@ function openPanel(binding = originalBinding): RouterContext {
         databaseName: 'database',
         collectionName: 'collection',
         documentId: '{"$oid":"000000000000000000000001"}',
-        mode: 'edit',
+        mode,
     };
     openDocumentWebview(config, binding);
     return opened.at(-1)?.context as RouterContext;
@@ -88,6 +88,18 @@ beforeEach((): void => {
             dispose,
         } as unknown as AppWebviewController<T>;
     });
+});
+
+it('treats a new document as dirty before reports, and tracks edits per panel', (): void => {
+    const first = openPanel(originalBinding, 'add');
+    const second = openPanel();
+    const [draft, existing] = getConnectionSurfaces(clusterId);
+    expect(draft.isDirty?.()).toBe(true);
+    expect(existing.isDirty?.()).toBe(false);
+    first.setDirty(false);
+    second.setDirty(true);
+    expect(draft.isDirty?.()).toBe(false);
+    expect(existing.isDirty?.()).toBe(true);
 });
 
 it('registers the panel, sends typed disable payloads and unregisters on dispose', (): void => {

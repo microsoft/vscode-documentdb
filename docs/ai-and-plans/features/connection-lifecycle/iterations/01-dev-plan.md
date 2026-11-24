@@ -1752,6 +1752,11 @@ behave as today.
   completion. Task admission checks the same latch as client startup. Existing conflict queries
   see leases, including the folder-delete check. The task, transfer and Dashboard-bound command
   test suites passed together (18 tests).
+- **WI-7 S2a:** Disconnect now checks task conflicts and dirty views before teardown, with a
+  synchronous conflict recheck before latching. It stops matching Shell and Playground workers,
+  keeps credentials and the verified identity, and refreshes the same tree node with one
+  **Connect** action. The integrated build and 225 focused tests passed. Remove and saved edits
+  are not wired into teardown yet.
 - **Carry-forward from WI-4d:** An explicit Update Credentials that changes the tenant must
   replace or clear the old verified Entra identity so the next connect can use the saved
   tenant (decision 0011). Automatic reconnect remains pinned until that explicit update.

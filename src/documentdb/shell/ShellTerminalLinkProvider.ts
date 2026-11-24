@@ -39,7 +39,10 @@ export interface ShellTerminalInfo {
  * Populated by the shell command handler when a terminal is created,
  * queried by the link provider to build navigation actions.
  */
-const shellTerminalRegistry = new Map<vscode.Terminal, ShellTerminalInfoProvider>();
+const shellTerminalRegistry = new Map<
+    vscode.Terminal,
+    { readonly infoProvider: ShellTerminalInfoProvider; readonly disconnect?: () => void }
+>();
 
 /**
  * A function that returns the current {@link ShellTerminalInfo} for a shell terminal.
@@ -51,8 +54,12 @@ export type ShellTerminalInfoProvider = () => ShellTerminalInfo;
  * Register a shell terminal in the link provider registry.
  * Call this after `vscode.window.createTerminal()` in the command handler.
  */
-export function registerShellTerminal(terminal: vscode.Terminal, infoProvider: ShellTerminalInfoProvider): void {
-    shellTerminalRegistry.set(terminal, infoProvider);
+export function registerShellTerminal(
+    terminal: vscode.Terminal,
+    infoProvider: ShellTerminalInfoProvider,
+    disconnect?: () => void,
+): void {
+    shellTerminalRegistry.set(terminal, { infoProvider, disconnect });
 }
 
 /**
@@ -70,10 +77,12 @@ export function unregisterShellTerminal(terminal: vscode.Terminal): void {
 export function getRegisteredShellTerminals(): ReadonlyArray<{
     terminal: vscode.Terminal;
     info: ShellTerminalInfo;
+    disconnect?: () => void;
 }> {
-    return Array.from(shellTerminalRegistry.entries()).map(([terminal, provider]) => ({
+    return Array.from(shellTerminalRegistry.entries()).map(([terminal, { infoProvider, disconnect }]) => ({
         terminal,
-        info: provider(),
+        info: infoProvider(),
+        disconnect,
     }));
 }
 
@@ -213,7 +222,7 @@ type ShellTerminalLink = CollectionViewTerminalLink | PlaygroundTerminalLink | S
  */
 export class ShellTerminalLinkProvider implements vscode.TerminalLinkProvider<ShellTerminalLink> {
     provideTerminalLinks(context: vscode.TerminalLinkContext): ShellTerminalLink[] {
-        const infoProvider = shellTerminalRegistry.get(context.terminal);
+        const infoProvider = shellTerminalRegistry.get(context.terminal)?.infoProvider;
         if (!infoProvider) {
             // Not a shell terminal — no links
             return [];

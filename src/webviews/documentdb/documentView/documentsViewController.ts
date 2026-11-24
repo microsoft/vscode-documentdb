@@ -49,6 +49,7 @@ export function openDocumentWebview(
     // exists after openAppWebview returns. The setter is only invoked at runtime
     // (in response to a tRPC call), well after the handle is assigned below.
     const handle: { controller?: AppWebviewController<DocumentsViewWebviewConfigurationType> } = {};
+    let dirty = initialData.mode === 'add';
 
     const postUnavailable = (reason: ConnectionUnavailableReason): void => {
         const message: ConnectionUnavailableMessage = {
@@ -69,6 +70,9 @@ export function openDocumentWebview(
         collectionName: initialData.collectionName,
         documentId: initialData.documentId,
         binding,
+        setDirty: (value: boolean): void => {
+            dirty = value;
+        },
         describeUnavailable: describeUnavailableConnection,
         recoverUnavailable: (request) => recoverBoundView(binding, 'documentView', () => controller.dispose(), request),
         viewPanelTitleSetter: (title: string) => {
@@ -112,6 +116,7 @@ export function openDocumentWebview(
         kind: 'documentView',
         disable: postUnavailable,
         dispose: () => controller.dispose(),
+        isDirty: () => dirty,
     });
     controller.onDisposed((): void => {
         registration.dispose();

@@ -73,6 +73,7 @@ export const DocumentView = (): JSX.Element => {
     const [editorContent] = useState(initialContent);
     const [isLoading, setIsLoading] = useState(configuration.mode !== 'add');
     const [isDirty, setIsDirty] = useState(configuration.mode === 'add');
+    const dirtyRef = useRef(configuration.mode === 'add');
     const [documentLoaded, setDocumentLoaded] = useState(configuration.mode === 'add');
     const [unavailable, setUnavailable] = useState<ConnectionUnavailableDetails>();
     const [recovering, setRecovering] = useState(false);
@@ -92,6 +93,17 @@ export const DocumentView = (): JSX.Element => {
     const unavailableRef = useRef<ConnectionUnavailableDetails | undefined>(undefined);
     const disposedRef = useRef(false);
     const pendingDocumentIdRef = useRef(configuration.documentId || undefined);
+    const updateDirty = (dirty: boolean): void => {
+        if (dirtyRef.current === dirty) {
+            return;
+        }
+        dirtyRef.current = dirty;
+        setIsDirty(dirty);
+        // Only report transitions, without editor contents or connection material.
+        void trpcClient.mongoClusters.documentView.reportDirty.mutate(dirty).catch(() => {
+            // The panel may have closed before the host received the report.
+        });
+    };
     // Falls back to pending/initial content if called before Monaco has mounted,
     // so callers (e.g. Save) never operate on an empty string.
     const getCurrentContent = () => editorRef.current?.getValue() ?? pendingContentRef.current ?? editorContent;
@@ -164,7 +176,7 @@ export const DocumentView = (): JSX.Element => {
                     }
                     if (editorRevision === editorRevisionRef.current) {
                         setContent(response);
-                        setIsDirty(false);
+                        updateDirty(false);
                     }
                     setDocumentLoaded(true);
                     // A document deleted since it was listed reads back as `null`.
@@ -306,7 +318,7 @@ export const DocumentView = (): JSX.Element => {
                 documentLength = response.length ?? 0;
                 if (editorRevision === editorRevisionRef.current) {
                     setContent(response);
-                    setIsDirty(false);
+                    updateDirty(false);
                 }
                 setDocumentLoaded(true);
             })
@@ -381,7 +393,7 @@ export const DocumentView = (): JSX.Element => {
                 pendingDocumentIdRef.current = response.documentId;
                 setContent(response.documentStringified);
                 setIsLoading(false);
-                setIsDirty(false);
+                updateDirty(false);
             })
             .catch(async (error) => {
                 if (!isCurrentOperation(revision)) {
@@ -508,7 +520,7 @@ export const DocumentView = (): JSX.Element => {
                         onChange={() => {
                             if (!settingContentRef.current) {
                                 editorRevisionRef.current += 1;
-                                setIsDirty(true);
+                                updateDirty(true);
                             }
                         }}
                     />

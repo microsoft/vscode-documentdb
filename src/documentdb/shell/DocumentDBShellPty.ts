@@ -122,6 +122,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     /** Unique session ID for correlating all events within this shell session. */
     private readonly _shellSessionId: string = randomUUID();
+    private _disconnectRevision = 0;
     /** Extension client whose metadata describes this cluster, captured once when the shell is created. */
     private readonly _connectionCorrelationId?: string;
     /** Running count of commands evaluated in this session (for commandIndex measurement). */
@@ -261,6 +262,16 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             unregisterShellTerminal(this._terminal);
             this._terminal = undefined;
         }
+    }
+
+    /** Keep the terminal and its scrollback, but stop the database worker. */
+    public disconnect(): void {
+        this._disconnectRevision += 1;
+        this._spinner?.stop();
+        this._spinner = undefined;
+        this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Disconnected')));
+        this._sessionManager.killWorker();
+        this._inputHandler.setEnabled(true);
     }
 
     /**
@@ -484,6 +495,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     // ─── Private: Session initialization ─────────────────────────────────────
 
     private async initializeSession(): Promise<void> {
+        const disconnectRevision = this._disconnectRevision;
         try {
             const metadata = await callWithTelemetryAndErrorHandling('shell.sessionStart', async (context) => {
                 context.errorHandling.suppressDisplay = true;
@@ -502,6 +514,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 Object.assign(context.telemetry.properties, domainProps);
                 return metadata;
             });
+            if (disconnectRevision !== this._disconnectRevision) {
+                return;
+            }
             if (!metadata) {
                 throw new UserCancelledError('shell.sessionStart');
             }
@@ -605,6 +620,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 this._initialInput = undefined;
             }
         } catch (error: unknown) {
+            if (disconnectRevision !== this._disconnectRevision) {
+                return;
+            }
             // Stop the connection spinner on failure
             this._spinner?.stop();
             this._spinner = undefined;
@@ -666,6 +684,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     // ─── Private: Line handling ──────────────────────────────────────────────
 
     private async handleLineInput(line: string): Promise<void> {
+        if (ClustersClient.getLatchReason(this._connectionInfo.clusterId)) {
+            this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Disconnected')));
+            return;
+        }
         const trimmed = line.trim();
 
         // Empty line — just show a new prompt
@@ -714,6 +736,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     }
 
     private async evaluateInput(input: string): Promise<void> {
+        const disconnectRevision = this._disconnectRevision;
         this._commandCount++;
         const commandIndex = this._commandCount;
         const commandCategory = classifyCommand(input);
@@ -754,7 +777,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
             // If this eval was cancelled by Ctrl+C, skip output — the interrupt
             // handler already showed ^C and a new prompt.
-            if (this._interrupted) {
+            if (this._interrupted || disconnectRevision !== this._disconnectRevision) {
                 return;
             }
 
