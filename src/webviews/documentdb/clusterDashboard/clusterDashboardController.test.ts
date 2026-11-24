@@ -9,14 +9,16 @@ vi.mock('@vscode/l10n', () => ({
     t: vi.fn((message: string) => message),
 }));
 
-vi.mock('vscode', () => ({
+vi.mock('vscode', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('vscode')>()),
     ViewColumn: { One: 1 },
     Uri: { joinPath: vi.fn((base: unknown, ...parts: string[]) => ({ base, parts })) },
     commands: { registerCommand: vi.fn(), executeCommand: vi.fn() },
     window: { showErrorMessage: vi.fn() },
 }));
 
-vi.mock('@microsoft/vscode-azext-utils', () => ({
+vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@microsoft/vscode-azext-utils')>()),
     callWithTelemetryAndErrorHandling: vi.fn(async (_eventId: string, callback: (context: unknown) => Promise<void>) =>
         callback({ telemetry: { properties: {}, measurements: {} }, errorHandling: {} }),
     ),
@@ -34,6 +36,11 @@ vi.mock('../../../commands/openCollectionView/openCollectionView', () => ({
     openCollectionViewInternal: vi.fn(async () => undefined),
 }));
 
+vi.mock('../../../documentdb/ClustersClient', () => ({
+    ClustersClient: { getBinding: vi.fn(), getEpoch: vi.fn(), getLatchReason: vi.fn() },
+}));
+vi.mock('../../../documentdb/CredentialCache', () => ({ CredentialCache: { getCredentials: vi.fn() } }));
+
 vi.mock('./resolveNamespaceNode', () => ({
     resolveNamespaceNode: vi.fn(async () => ({ id: 'tree-node' })),
     describeMissingNamespace: vi.fn(() => 'missing-namespace-explanation'),
@@ -41,6 +48,7 @@ vi.mock('./resolveNamespaceNode', () => ({
 
 import * as vscode from 'vscode';
 import { openCollectionViewInternal } from '../../../commands/openCollectionView/openCollectionView';
+import { ClustersClient } from '../../../documentdb/ClustersClient';
 import { openAppWebview } from '../../_integration/openAppWebview';
 import { CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS } from './clusterDashboardContextMenu';
 import { openClusterDashboardWebview, registerClusterDashboardContextMenuCommands } from './clusterDashboardController';
@@ -80,16 +88,20 @@ function createFakeController(): FakeController {
 }
 
 const CLUSTER = 'cluster-under-test';
+const binding = { clusterId: CLUSTER, fingerprint: 'host-only-dashboard-fingerprint', generation: 1 };
 
 function open(clusterId: string, selectedDatabaseName?: string): FakeController {
-    return openClusterDashboardWebview({
-        clusterId,
-        clusterDisplayName: clusterId,
-        viewId: 'connectionsView',
-        refreshIntervalMs: 5_000,
-        showDashboardOnConnect: false,
-        selectedDatabaseName,
-    }) as unknown as FakeController;
+    return openClusterDashboardWebview(
+        {
+            clusterId,
+            clusterDisplayName: clusterId,
+            viewId: 'connectionsView',
+            refreshIntervalMs: 5_000,
+            showDashboardOnConnect: false,
+            selectedDatabaseName,
+        },
+        { ...binding, clusterId },
+    ) as unknown as FakeController;
 }
 
 describe('openClusterDashboardWebview panel lifecycle', () => {
@@ -102,16 +114,19 @@ describe('openClusterDashboardWebview panel lifecycle', () => {
             refreshIntervalMs: 5000,
             showDashboardOnConnect: false,
         };
+        const firstBinding = { ...binding, clusterId: config.clusterId };
         const firstLink = { deepLinkCorrelationId: 'first-click', deepLinkSource: 'portal' };
-        const first = openClusterDashboardWebview(config, firstLink);
-        const second = openClusterDashboardWebview(config, {
-            deepLinkCorrelationId: 'second-click',
-            deepLinkSource: 'docs',
-        });
+        const first = openClusterDashboardWebview(config, firstBinding, firstLink);
+        const second = openClusterDashboardWebview(
+            config,
+            { ...firstBinding, fingerprint: 'replacement' },
+            { deepLinkCorrelationId: 'second-click', deepLinkSource: 'docs' },
+        );
         expect(second).toBe(first);
         expect(openAppWebview).toHaveBeenCalledExactlyOnceWith(
             expect.objectContaining({
-                context: expect.objectContaining(firstLink),
+                context: expect.objectContaining({ ...firstLink, binding: firstBinding }),
+                config: expect.not.objectContaining({ binding: expect.anything() }),
             }),
         );
         first.dispose();
@@ -156,6 +171,9 @@ describe('cluster dashboard native context menu commands', () => {
         controller: FakeController;
     } {
         vi.clearAllMocks();
+        vi.mocked(ClustersClient.getBinding).mockReturnValue(binding);
+        vi.mocked(ClustersClient.getEpoch).mockReturnValue(0);
+        vi.mocked(ClustersClient.getLatchReason).mockReturnValue(undefined);
         const handlers = new Map<string, (context: unknown) => Promise<void>>();
         vi.mocked(vscode.commands.registerCommand).mockImplementation((commandId, handler) => {
             handlers.set(commandId, handler as (context: unknown) => Promise<void>);
@@ -226,6 +244,27 @@ describe('cluster dashboard native context menu commands', () => {
             busy: false,
         });
 
+        controller.dispose();
+    });
+
+    it('does not forward a delete if the connection latches during its busy message', async () => {
+        const { handlers, controller } = registerAndOpen();
+        controller.panel.webview.postMessage.mockImplementationOnce(async () => {
+            vi.mocked(ClustersClient.getLatchReason).mockReturnValue('userDisconnected');
+            return true;
+        });
+
+        await expect(
+            handlers.get(CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.deleteCollection)?.({
+                clusterDashboardClusterId: CLUSTER,
+                clusterDashboardSelectedDatabase: 'sales',
+                clusterDashboardDatabase: 'sales',
+                clusterDashboardCollection: 'orders',
+            }),
+        ).rejects.toMatchObject({ reason: 'userDisconnected' });
+
+        expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+        expect(controller.panel.webview.postMessage).toHaveBeenCalledOnce();
         controller.dispose();
     });
 

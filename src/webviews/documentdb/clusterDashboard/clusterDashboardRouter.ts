@@ -3,13 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type BaseRouterContext as FrameworkRouterContext } from '@microsoft/vscode-ext-webview';
 import * as l10n from '@vscode/l10n';
 import { type Document, type MongoClient } from 'mongodb';
 import * as vscode from 'vscode';
 import { z } from 'zod';
 
 import { openCollectionViewInternal } from '../../../commands/openCollectionView/openCollectionView';
-import { ClustersClient } from '../../../documentdb/ClustersClient';
+import { type ClustersClient, type ConnectionBinding } from '../../../documentdb/ClustersClient';
 import { ShellCommandIds } from '../../../documentdb/shell/constants';
 import { getHostsFromConnectionString } from '../../../documentdb/utils/connectionStringHelpers';
 import {
@@ -27,6 +28,7 @@ import { settingsKeys } from '../../../settingsKeys';
 import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumentProvider';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
+import { guardBoundViewOperation, isBoundViewOperationCurrent, runBoundViewOperation } from '../boundViewOperations';
 import { describeMissingNamespace, resolveClusterNode, resolveNamespaceNode } from './resolveNamespaceNode';
 
 /**
@@ -81,11 +83,10 @@ export async function collectRawCommandReplies(client: MongoClient): Promise<Raw
 
 export type RouterContext = BaseRouterContext & {
     /**
-     * Stable cluster identifier for cache/client lookups.
-     * Use this for ClustersClient.getClient() and CredentialCache operations,
-     * never the tree id (which changes when a connection is moved into a folder).
+     * Stable cluster identifier for tree lookups; DB operations use the host-only binding.
      */
     clusterId: string;
+    readonly binding: ConnectionBinding;
     /** Human-readable cluster display name shown in the dashboard header. */
     clusterDisplayName: string;
     /**
@@ -110,7 +111,7 @@ export type RouterContext = BaseRouterContext & {
  * same for all of them; setting them in one place keeps a new procedure from silently
  * dropping out of per-panel aggregation.
  */
-function dashboardContext(ctx: unknown): WithTelemetry<RouterContext> {
+function dashboardContext(ctx: FrameworkRouterContext): WithTelemetry<RouterContext> {
     const myCtx = ctx as WithTelemetry<RouterContext>;
     const telemetry = myCtx.actionContext.telemetry;
 
@@ -123,6 +124,14 @@ function dashboardContext(ctx: unknown): WithTelemetry<RouterContext> {
     }
 
     return myCtx;
+}
+
+function runDashboardOperation<T>(
+    ctx: RouterContext,
+    operation: (client: ClustersClient) => Promise<T>,
+    assertCurrent = guardBoundViewOperation(ctx.binding, ctx.signal),
+): Promise<T> {
+    return runBoundViewOperation(ctx.binding, assertCurrent, operation, { trigger: 'clusterDashboard' });
 }
 
 /** Flat string map produced by `getClusterMetadata` (e.g. `serverInfo_version`). */
@@ -174,20 +183,27 @@ export const clusterDashboardRouter = router({
     getClusterInfo: publicProcedureWithTelemetry.query(async ({ ctx }): Promise<ClusterDashboardInfo> => {
         const myCtx = dashboardContext(ctx);
 
-        const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'clusterDashboard');
-        const metadata = await client.getClusterMetadata();
+        const assertCurrent = guardBoundViewOperation(myCtx.binding, myCtx.signal);
+        const { metadata, hosts } = await runDashboardOperation(
+            myCtx,
+            async (client) => {
+                const metadata = await client.getClusterMetadata();
+                assertCurrent();
 
-        // Best effort: a connection restored from a session without cached credentials has
-        // no connection string to parse, and the header simply omits the subtitle.
-        let hosts: string[] = [];
-        try {
-            const connectionString = client.getCredentials()?.connectionString;
-            if (connectionString) {
-                hosts = getHostsFromConnectionString(connectionString);
-            }
-        } catch {
-            hosts = [];
-        }
+                // Best effort: without a usable connection string, omit the subtitle.
+                let hosts: string[] = [];
+                try {
+                    const connectionString = client.getCredentials()?.connectionString;
+                    if (connectionString) {
+                        hosts = getHostsFromConnectionString(connectionString);
+                    }
+                } catch {
+                    hosts = [];
+                }
+                return { metadata, hosts };
+            },
+            assertCurrent,
+        );
 
         // The header renders nothing without a subtitle, and a metadata read that returns an
         // empty map is the shape behind an otherwise blank set of facts.
@@ -204,11 +220,11 @@ export const clusterDashboardRouter = router({
             const myCtx = dashboardContext(ctx);
             myCtx.actionContext.telemetry.properties.loadReason = input.loadReason ?? 'initial';
 
-            const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'clusterDashboard');
-
             // Expanding a row can fan out to 100 `collStats`; the panel is often collapsed or the
             // dashboard closed long before they finish.
-            const result = await getDatabaseCollections(client.getMongoClient(), input.databaseName, myCtx.signal);
+            const result = await runDashboardOperation(myCtx, (client) =>
+                getDatabaseCollections(client.getMongoClient(), input.databaseName, myCtx.signal),
+            );
 
             myCtx.actionContext.telemetry.measurements.collectionCount = result.collections.length;
             myCtx.actionContext.telemetry.measurements.omittedCollectionCount = result.omittedCollectionCount;
@@ -222,11 +238,12 @@ export const clusterDashboardRouter = router({
         const myCtx = ctx as WithTelemetry<RouterContext>;
         myCtx.actionContext.telemetry.suppressAll = true;
 
-        const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'clusterDashboardPoll', {
-            background: true,
-        });
-
-        return sampleClusterHealth(client.getMongoClient());
+        return runBoundViewOperation(
+            myCtx.binding,
+            guardBoundViewOperation(myCtx.binding, myCtx.signal),
+            (client) => sampleClusterHealth(client.getMongoClient()),
+            { trigger: 'clusterDashboardPoll', background: true },
+        );
     }),
 
     /** Storage breakdown for the inventory list. */
@@ -236,9 +253,12 @@ export const clusterDashboardRouter = router({
             const myCtx = dashboardContext(ctx);
             myCtx.actionContext.telemetry.properties.loadReason = input?.loadReason ?? 'initial';
 
-            const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'clusterDashboard');
-
-            const stats = await getStorageStats(client.getMongoClient(), myCtx.signal);
+            const assertCurrent = guardBoundViewOperation(myCtx.binding, myCtx.signal);
+            const stats = await runDashboardOperation(
+                myCtx,
+                (client) => getStorageStats(client.getMongoClient(), myCtx.signal),
+                assertCurrent,
+            );
 
             // How large the estates being looked at actually are, and how often the read is only
             // partially answerable — a cluster whose stats are half errors renders a table of
@@ -250,6 +270,7 @@ export const clusterDashboardRouter = router({
             myCtx.actionContext.telemetry.measurements.statsErrorCount = stats.errors.length;
 
             if ((input?.loadReason ?? 'initial') === 'initial' && stats.databases !== null && !myCtx.signal?.aborted) {
+                assertCurrent();
                 recordSurveyActivityWithInvitation('clusterDashboard');
             }
             return stats;
@@ -267,6 +288,7 @@ export const clusterDashboardRouter = router({
             const myCtx = dashboardContext(ctx);
             myCtx.actionContext.telemetry.properties.activationSource = 'clusterDashboard:clusterToolbar';
 
+            guardBoundViewOperation(myCtx.binding, myCtx.signal)();
             await vscode.commands.executeCommand(ShellCommandIds.openWithInput, {
                 clusterId: myCtx.clusterId,
                 clusterDisplayName: myCtx.clusterDisplayName,
@@ -278,7 +300,10 @@ export const clusterDashboardRouter = router({
     copyConnectionString: publicProcedureWithTelemetry.mutation(async ({ ctx }): Promise<void> => {
         const myCtx = dashboardContext(ctx);
         myCtx.actionContext.telemetry.properties.activationSource = 'clusterDashboard:clusterToolbar';
+        const assertCurrent = guardBoundViewOperation(myCtx.binding, myCtx.signal);
+        assertCurrent();
         const clusterNode = await resolveClusterNode(myCtx.viewId, myCtx.clusterId);
+        assertCurrent();
 
         if (!clusterNode) {
             myCtx.actionContext.telemetry.properties.failureReason = 'clusterNodeNotFound';
@@ -292,7 +317,10 @@ export const clusterDashboardRouter = router({
     openDataMigration: publicProcedureWithTelemetry.mutation(async ({ ctx }): Promise<void> => {
         const myCtx = dashboardContext(ctx);
         myCtx.actionContext.telemetry.properties.activationSource = 'clusterDashboard:clusterToolbar';
+        const assertCurrent = guardBoundViewOperation(myCtx.binding, myCtx.signal);
+        assertCurrent();
         const clusterNode = await resolveClusterNode(myCtx.viewId, myCtx.clusterId);
+        assertCurrent();
 
         if (!clusterNode) {
             myCtx.actionContext.telemetry.properties.failureReason = 'clusterNodeNotFound';
@@ -310,7 +338,10 @@ export const clusterDashboardRouter = router({
             const activationSource = describeActivationSource(input.activationSource);
             myCtx.actionContext.telemetry.properties.activationSource = activationSource;
 
+            const assertCurrent = guardBoundViewOperation(myCtx.binding, myCtx.signal);
+            assertCurrent();
             const clusterNode = await resolveClusterNode(myCtx.viewId, myCtx.clusterId);
+            assertCurrent();
 
             if (!clusterNode) {
                 myCtx.actionContext.telemetry.properties.failureReason = 'clusterNodeNotFound';
@@ -323,12 +354,14 @@ export const clusterDashboardRouter = router({
                     source: 'webview;clusterDashboard',
                     activationSource,
                     onNameResolved: async (name: string): Promise<void> => {
+                        assertCurrent();
                         databaseName = name;
                         await myCtx.onNamespaceBusy?.(name, undefined, true);
+                        assertCurrent();
                     },
                 });
             } catch (error) {
-                if (databaseName !== undefined) {
+                if (databaseName !== undefined && isBoundViewOperationCurrent(assertCurrent)) {
                     await myCtx.onNamespaceBusy?.(databaseName, undefined, false);
                 }
                 throw error;
@@ -337,6 +370,7 @@ export const clusterDashboardRouter = router({
             // The wizard is cancellable and swallows its own cancellation, so a resolved call is
             // not the same as a name having been confirmed. Without this the event counts every
             // abandoned dialog as a create.
+            assertCurrent();
             myCtx.actionContext.telemetry.properties.nameConfirmed = databaseName === undefined ? 'false' : 'true';
         }),
 
@@ -348,7 +382,10 @@ export const clusterDashboardRouter = router({
             const activationSource = describeActivationSource(input.activationSource);
             myCtx.actionContext.telemetry.properties.activationSource = activationSource;
 
+            const assertCurrent = guardBoundViewOperation(myCtx.binding, myCtx.signal);
+            assertCurrent();
             const databaseNode = await resolveNamespaceNode(myCtx.viewId, myCtx.clusterId, input.databaseName);
+            assertCurrent();
 
             if (!databaseNode) {
                 myCtx.actionContext.telemetry.properties.failureReason = 'namespaceNodeNotFound';
@@ -361,17 +398,20 @@ export const clusterDashboardRouter = router({
                     source: 'webview;clusterDashboard',
                     activationSource,
                     onNameResolved: async (name: string): Promise<void> => {
+                        assertCurrent();
                         collectionName = name;
                         await myCtx.onNamespaceBusy?.(input.databaseName, name, true);
+                        assertCurrent();
                     },
                 });
             } catch (error) {
-                if (collectionName !== undefined) {
+                if (collectionName !== undefined && isBoundViewOperationCurrent(assertCurrent)) {
                     await myCtx.onNamespaceBusy?.(input.databaseName, collectionName, false);
                 }
                 throw error;
             }
 
+            assertCurrent();
             myCtx.actionContext.telemetry.properties.nameConfirmed = collectionName === undefined ? 'false' : 'true';
         }),
 
@@ -397,6 +437,7 @@ export const clusterDashboardRouter = router({
                 myCtx.actionContext.telemetry.properties.isFiltered = input.isFiltered ? 'true' : 'false';
             }
 
+            guardBoundViewOperation(myCtx.binding, myCtx.signal)();
             await openCollectionViewInternal(myCtx.actionContext, {
                 clusterId: myCtx.clusterId,
                 clusterDisplayName: myCtx.clusterDisplayName,
@@ -427,6 +468,8 @@ export const clusterDashboardRouter = router({
     exportDiagnostics: publicProcedureWithTelemetry.mutation(async ({ ctx }): Promise<void> => {
         const myCtx = dashboardContext(ctx);
         myCtx.actionContext.telemetry.properties.activationSource = 'clusterDashboard:moreActionsMenu';
+        const assertCurrent = guardBoundViewOperation(myCtx.binding, myCtx.signal);
+        assertCurrent();
 
         const confirmed = await vscode.window.showWarningMessage(
             l10n.t('Export diagnostics for this cluster?'),
@@ -444,16 +487,22 @@ export const clusterDashboardRouter = router({
             return;
         }
         myCtx.actionContext.telemetry.properties.exportConfirmed = 'true';
+        assertCurrent();
 
-        const client = await ClustersClient.getClient(myCtx.clusterId, undefined, undefined, 'clusterDashboard');
-        const mongoClient = client.getMongoClient();
-        const storageCommands: RawCommandDiagnostic[] = [];
-
-        const [storage, commands, health] = await Promise.all([
-            getStorageStats(mongoClient, undefined, storageCommands),
-            collectRawCommandReplies(mongoClient),
-            sampleClusterHealth(mongoClient),
-        ]);
+        const { storage, commands, health, storageCommands } = await runDashboardOperation(
+            myCtx,
+            async (client) => {
+                const mongoClient = client.getMongoClient();
+                const storageCommands: RawCommandDiagnostic[] = [];
+                const [storage, commands, health] = await Promise.all([
+                    getStorageStats(mongoClient, undefined, storageCommands),
+                    collectRawCommandReplies(mongoClient),
+                    sampleClusterHealth(mongoClient),
+                ]);
+                return { storage, commands, health, storageCommands };
+            },
+            assertCurrent,
+        );
 
         const diagnostics = {
             generatedAt: new Date().toISOString(),
@@ -477,6 +526,7 @@ export const clusterDashboardRouter = router({
             myCtx.actionContext.telemetry.measurements.databaseCount = storage.databases.length;
         }
 
+        assertCurrent();
         await readOnlyJsonDocumentProvider.openDocument(
             l10n.t('Cluster diagnostics'),
             JSON.stringify(diagnostics, null, 4),

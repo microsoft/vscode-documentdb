@@ -5,10 +5,11 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { ClustersClient, type ConnectionBinding } from '../../documentdb/ClustersClient';
 import { Views } from '../../documentdb/Views';
 import { openDocumentWebview } from '../../webviews/documentdb/documentView/documentsViewController';
 
-export function openDocumentView(
+export async function openDocumentView(
     _context: IActionContext,
     props: {
         id: string;
@@ -26,18 +27,27 @@ export function openDocumentView(
 
         mode: string;
     },
-): void {
-    const view = openDocumentWebview({
-        id: props.id,
+    sourceBinding?: ConnectionBinding,
+): Promise<void> {
+    const binding =
+        sourceBinding ??
+        ClustersClient.getBinding(props.clusterId) ??
+        (await ClustersClient.getClient(props.clusterId, undefined, undefined, 'documentView')).binding;
 
-        clusterId: props.clusterId,
-        viewId: props.viewId ?? Views.ConnectionsView, // fallback for backward compatibility
-        databaseName: props.databaseName,
-        collectionName: props.collectionName,
-        documentId: props.documentId,
+    const view = openDocumentWebview(
+        {
+            id: props.id,
 
-        mode: props.mode,
-    });
+            clusterId: props.clusterId,
+            viewId: props.viewId ?? Views.ConnectionsView, // fallback for backward compatibility
+            databaseName: props.databaseName,
+            collectionName: props.collectionName,
+            documentId: props.documentId,
+
+            mode: props.mode,
+        },
+        binding,
+    );
 
     view.revealToForeground(vscode.ViewColumn.Active);
 }

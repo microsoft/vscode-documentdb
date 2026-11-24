@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { type ConnectionBinding } from '../../../documentdb/ClustersClient';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
@@ -28,6 +29,7 @@ export type DocumentsViewWebviewConfigurationType = {
 
 export function openDocumentWebview(
     initialData: DocumentsViewWebviewConfigurationType,
+    binding: ConnectionBinding,
 ): AppWebviewController<DocumentsViewWebviewConfigurationType> {
     let title: string = `${initialData.databaseName}/${initialData.collectionName}/*new*`;
     switch (initialData.mode) {
@@ -51,8 +53,9 @@ export function openDocumentWebview(
         databaseName: initialData.databaseName,
         collectionName: initialData.collectionName,
         documentId: initialData.documentId,
+        binding,
         viewPanelTitleSetter: (title: string) => {
-            if (handle.controller) {
+            if (handle.controller && !handle.controller.isDisposed) {
                 handle.controller.panel.title = title;
             }
         },

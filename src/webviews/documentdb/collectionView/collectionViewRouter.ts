@@ -66,6 +66,29 @@ export type RouterContext = BaseRouterContext & {
     collectionName: string;
 };
 
+async function openBoundDocument(
+    ctx: RouterContext,
+    mode: 'add' | 'view' | 'edit',
+    documentId?: string,
+): Promise<void> {
+    const session = ClusterSession.getSession(ctx.sessionId);
+    const epoch = session.getEpoch();
+    const client = await session.getClient();
+    session.assertCurrent(epoch, ctx.signal);
+    await vscode.commands.executeCommand(
+        'vscode-documentdb.command.internal.documentView.open',
+        {
+            clusterId: ctx.clusterId,
+            viewId: ctx.viewId,
+            databaseName: ctx.databaseName,
+            collectionName: ctx.collectionName,
+            documentId,
+            mode,
+        },
+        client.binding,
+    );
+}
+
 /**
  * Build a `db.getCollection('name').find(filter, project).sort(sort)` expression
  * from the Collection View's current query state. Used by cross-feature navigation
@@ -307,49 +330,17 @@ export const collectionsViewRouter = router({
         }),
     addDocument: publicProcedureWithTelemetry
         // procedure type
-        .mutation(({ ctx }) => {
-            const myCtx = ctx as RouterContext;
-
-            vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {
-                clusterId: myCtx.clusterId,
-                viewId: myCtx.viewId,
-                databaseName: myCtx.databaseName,
-                collectionName: myCtx.collectionName,
-                mode: 'add',
-            });
-        }),
+        .mutation(({ ctx }) => openBoundDocument(ctx as RouterContext, 'add')),
     viewDocumentById: publicProcedureWithTelemetry
         // parameters
         .input(z.string())
         // procedure type
-        .mutation(({ input, ctx }) => {
-            const myCtx = ctx as RouterContext;
-
-            vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {
-                clusterId: myCtx.clusterId,
-                viewId: myCtx.viewId,
-                databaseName: myCtx.databaseName,
-                collectionName: myCtx.collectionName,
-                documentId: input,
-                mode: 'view',
-            });
-        }),
+        .mutation(({ input, ctx }) => openBoundDocument(ctx as RouterContext, 'view', input)),
     editDocumentById: publicProcedureWithTelemetry
         // parameters
         .input(z.string())
         // procedure type
-        .mutation(({ input, ctx }) => {
-            const myCtx = ctx as RouterContext;
-
-            vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {
-                clusterId: myCtx.clusterId,
-                viewId: myCtx.viewId,
-                databaseName: myCtx.databaseName,
-                collectionName: myCtx.collectionName,
-                documentId: input,
-                mode: 'edit',
-            });
-        }),
+        .mutation(({ input, ctx }) => openBoundDocument(ctx as RouterContext, 'edit', input)),
     deleteDocumentsById: publicProcedureWithTelemetry
         // parameters
         .input(z.array(z.string())) // stands for string[]

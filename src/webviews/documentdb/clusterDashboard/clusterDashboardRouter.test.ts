@@ -12,15 +12,16 @@ import { type Document, type MongoClient } from 'mongodb';
 import * as vscode from 'vscode';
 
 import { ClustersClient } from '../../../documentdb/ClustersClient';
+import { ConnectionUnavailableError } from '../../../documentdb/ConnectionUnavailableError';
 import { API } from '../../../DocumentDBExperiences';
 
 const mockResolveClusterNode = vi.fn();
 const mockResolveNamespaceNode = vi.fn();
 const mockUpdateGlobalSetting = vi.fn();
 
-vi.mock('vscode', () => ({
+vi.mock('vscode', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('vscode')>()),
     commands: { executeCommand: vi.fn() },
-    l10n: { t: vi.fn((message: string) => message) },
 }));
 
 vi.mock('../../../commands/openCollectionView/openCollectionView', () => ({
@@ -28,8 +29,14 @@ vi.mock('../../../commands/openCollectionView/openCollectionView', () => ({
 }));
 
 vi.mock('../../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: vi.fn() },
+    ClustersClient: {
+        resolveBoundClient: vi.fn(),
+        getBinding: vi.fn(),
+        getEpoch: vi.fn(),
+        getLatchReason: vi.fn(),
+    },
 }));
+vi.mock('../../../documentdb/CredentialCache', () => ({ CredentialCache: { getCredentials: vi.fn() } }));
 
 vi.mock('../../../extensionVariables', () => ({
     ext: { settingsKeys: { showDashboardOnConnect: 'documentDB.userInterface.showDashboardOnConnect' } },
@@ -64,6 +71,8 @@ vi.mock('../../_integration/trpc', async () => {
 import { createCallerFactory, type WithTelemetry } from '../../_integration/trpc';
 import { clusterDashboardRouter, collectRawCommandReplies, type RouterContext } from './clusterDashboardRouter';
 
+const binding = { clusterId: 'cluster-id', fingerprint: 'dashboard-fingerprint', generation: 1 };
+
 // The suite swaps `publicProcedureWithTelemetry` for a plain procedure, so the action context
 // the telemetry middleware would inject has to be supplied here instead.
 function createContext(
@@ -74,6 +83,7 @@ function createContext(
         dbExperience: API.DocumentDB,
         webviewName: 'clusterDashboard',
         clusterId: 'cluster-id',
+        binding,
         clusterDisplayName: 'Test cluster',
         viewId: 'connectionsView',
         dashboardSessionId: 'dashboard-session',
@@ -129,21 +139,21 @@ describe('collectRawCommandReplies', () => {
 describe('clusterDashboardRouter create actions', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.mocked(ClustersClient.getBinding).mockReturnValue(binding);
+        vi.mocked(ClustersClient.getEpoch).mockReturnValue(0);
+        vi.mocked(ClustersClient.getLatchReason).mockReturnValue(undefined);
     });
 
     describe('clusterDashboardRouter health poll', () => {
         it('requests a background client for the sampled cluster', async () => {
             const unavailable = new Error('test connection unavailable');
-            vi.mocked(ClustersClient.getClient).mockRejectedValueOnce(unavailable);
+            vi.mocked(ClustersClient.resolveBoundClient).mockRejectedValueOnce(unavailable);
             const caller = createCallerFactory(clusterDashboardRouter)(createContext());
 
             await expect(caller.measureRtt()).rejects.toMatchObject({ cause: unavailable });
-            expect(ClustersClient.getClient).toHaveBeenCalledExactlyOnceWith(
-                'cluster-id',
-                undefined,
-                undefined,
-                'clusterDashboardPoll',
-                { background: true },
+            expect(ClustersClient.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(
+                binding,
+                { trigger: 'clusterDashboardPoll', background: true },
             );
         });
     });
@@ -185,11 +195,25 @@ describe('clusterDashboardRouter create actions', () => {
     });
 
     it('persists the dashboard-on-connect preference globally', async () => {
+        vi.mocked(ClustersClient.getLatchReason).mockReturnValue('userDisconnected');
         const caller = createCallerFactory(clusterDashboardRouter)(createContext());
 
         await caller.setShowDashboardOnConnect(true);
 
         expect(mockUpdateGlobalSetting).toHaveBeenCalledWith('documentDB.userInterface.showDashboardOnConnect', true);
+    });
+
+    it('does not forward a command when the tree lookup returns under a changed identity', async () => {
+        mockResolveClusterNode.mockImplementationOnce(async () => {
+            vi.mocked(ClustersClient.getBinding).mockReturnValue({ ...binding, fingerprint: 'replacement' });
+            return { id: 'cluster-tree-id' };
+        });
+        const caller = createCallerFactory(clusterDashboardRouter)(createContext());
+
+        await expect(caller.copyConnectionString()).rejects.toMatchObject({
+            cause: expect.any(ConnectionUnavailableError),
+        });
+        expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
     });
 
     it('runs the existing copy-connection-string command against the resolved cluster node', async () => {

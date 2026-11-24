@@ -10,9 +10,11 @@ import * as vscode from 'vscode';
 import { type DeepLinkTelemetry } from '../../../deepLinks/deepLinkTelemetry';
 
 import { openCollectionViewInternal } from '../../../commands/openCollectionView/openCollectionView';
+import { type ConnectionBinding } from '../../../documentdb/ClustersClient';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { openAppWebview, type AppWebviewController } from '../../_integration/openAppWebview';
+import { guardBoundViewOperation, isBoundViewOperationCurrent } from '../boundViewOperations';
 import {
     CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS,
     type ClusterDashboardContextMenuContext,
@@ -103,6 +105,7 @@ const openPanels = new Map<string, OpenPanel>();
 interface OpenPanel {
     readonly controller: AppWebviewController<ClusterDashboardWebviewConfigurationType>;
     readonly config: ClusterDashboardWebviewConfigurationType;
+    readonly binding: ConnectionBinding;
 }
 
 /**
@@ -243,6 +246,8 @@ async function runRowAction(
 ): Promise<void> {
     const databaseName = menuContext.clusterDashboardDatabase;
     const collectionName = menuContext.clusterDashboardCollection;
+    const assertCurrent = guardBoundViewOperation(panel.binding);
+    assertCurrent();
 
     actionContext.telemetry.properties.namespaceLevel = collectionName === undefined ? 'database' : 'collection';
 
@@ -271,6 +276,10 @@ async function runRowAction(
     actionContext.telemetry.properties.namespaceCommand = action.commandId;
 
     const node = await resolveNamespaceNode(panel.config.viewId, panel.config.clusterId, databaseName, collectionName);
+    if (panel.controller.isDisposed) {
+        return;
+    }
+    assertCurrent();
 
     if (!node) {
         actionContext.telemetry.properties.failureReason = 'namespaceNodeNotFound';
@@ -288,15 +297,20 @@ async function runRowAction(
     }
 
     try {
+        if (panel.controller.isDisposed) {
+            return;
+        }
+        assertCurrent();
         await vscode.commands.executeCommand(action.commandId, node, null, {
             source: 'webview;clusterDashboard',
         });
 
-        if (action.invalidatesInventory) {
+        if (action.invalidatesInventory && !panel.controller.isDisposed) {
+            assertCurrent();
             await postInventoryChanged(panel, databaseName);
         }
     } finally {
-        if (action.reportsBusy) {
+        if (action.reportsBusy && !panel.controller.isDisposed && isBoundViewOperationCurrent(assertCurrent)) {
             await postNamespaceBusy(panel, databaseName, collectionName, 'delete', false);
         }
     }
@@ -339,6 +353,7 @@ export function registerClusterDashboardContextMenuCommands(context: vscode.Exte
 
 export function openClusterDashboardWebview(
     initialData: ClusterDashboardWebviewConfigurationType,
+    binding: ConnectionBinding,
     deepLink?: DeepLinkTelemetry,
 ): AppWebviewController<ClusterDashboardWebviewConfigurationType> {
     const panelKey = getPanelKey(initialData.clusterId, initialData.selectedDatabaseName);
@@ -361,13 +376,22 @@ export function openClusterDashboardWebview(
         dbExperience: API.DocumentDB,
         webviewName: 'clusterDashboard',
         clusterId: initialData.clusterId,
+        binding,
         clusterDisplayName: initialData.clusterDisplayName,
         viewId: initialData.viewId,
         dashboardSessionId: initialData.dashboardSessionId,
         journeyCorrelationId: initialData.journeyCorrelationId,
         selectedDatabaseName: initialData.selectedDatabaseName,
         onNamespaceBusy: async (databaseName, collectionName, busy): Promise<void> => {
-            await postNamespaceBusy({ controller, config: initialData }, databaseName, collectionName, 'create', busy);
+            if (!controller.isDisposed) {
+                await postNamespaceBusy(
+                    { controller, config: initialData, binding },
+                    databaseName,
+                    collectionName,
+                    'create',
+                    busy,
+                );
+            }
         },
     };
 
@@ -399,7 +423,7 @@ export function openClusterDashboardWebview(
         },
     });
 
-    openPanels.set(panelKey, { controller, config: initialData });
+    openPanels.set(panelKey, { controller, config: initialData, binding });
     const session = initialData;
     trackDashboardLifetime(controller, (lifetime) => reportDashboardClosed(lifetime, session));
     controller.onDisposed(() => {

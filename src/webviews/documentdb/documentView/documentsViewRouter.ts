@@ -7,18 +7,16 @@ import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import { type Document } from 'mongodb';
 import { z } from 'zod';
-import { ClustersClient } from '../../../documentdb/ClustersClient';
+import { type ConnectionBinding } from '../../../documentdb/ClustersClient';
 import { recordSurveyActivity } from '../../../services/survey/SurveyService';
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
+import { guardBoundViewOperation, runBoundViewOperation } from '../boundViewOperations';
 
 export type RouterContext = BaseRouterContext & {
-    /**
-     * Stable cluster identifier for cache/client lookups.
-     * Use this for ClustersClient.getClient() and CredentialCache operations.
-     */
     clusterId: string;
+    readonly binding: ConnectionBinding;
     /**
      * Identifies which tree view this cluster belongs to.
      *
@@ -39,9 +37,9 @@ export type RouterContext = BaseRouterContext & {
 
 export const documentsViewRouter = router({
     getInfo: publicProcedureWithTelemetry.query(({ ctx }) => {
-        const myCtx = ctx as WithTelemetry<RouterContext>;
+        const { binding: _binding, ...info } = ctx as WithTelemetry<RouterContext>;
 
-        return l10n.t('Info from the webview: ') + JSON.stringify(myCtx);
+        return l10n.t('Info from the webview: ') + JSON.stringify(info);
     }),
     getDocumentById: publicProcedureWithTelemetry
         // parameters
@@ -49,15 +47,13 @@ export const documentsViewRouter = router({
         // procedure type
         .query(async ({ input, ctx }) => {
             const myCtx = ctx as RouterContext;
-
-            // run query
-            const client: ClustersClient = await ClustersClient.getClient(
-                myCtx.clusterId,
-                undefined,
-                undefined,
-                'documentView',
+            const assertCurrent = guardBoundViewOperation(myCtx.binding, myCtx.signal);
+            const documentContent = await runBoundViewOperation(
+                myCtx.binding,
+                assertCurrent,
+                (client) => client.pointRead(myCtx.databaseName, myCtx.collectionName, input),
+                { trigger: 'documentView' },
             );
-            const documentContent = await client.pointRead(myCtx.databaseName, myCtx.collectionName, input);
 
             /**
              * Please note, the document is a 'Document' object, which is a BSON object.
@@ -76,32 +72,23 @@ export const documentsViewRouter = router({
         // procedure type
         .mutation(async ({ input, ctx }) => {
             const myCtx = ctx as RouterContext;
+            const assertCurrent = guardBoundViewOperation(myCtx.binding, myCtx.signal);
 
             // eslint-disable-next-line
             const documentBson: Document = EJSON.parse(input.documentContent);
+            const documentId: unknown = documentBson['_id'];
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            let documentId: any;
-            if (documentBson['_id']) {
-                // eslint-disable-next-line , @typescript-eslint/no-unsafe-assignment
-                documentId = documentBson['_id'];
-            }
-
-            // run query
-            const client: ClustersClient = await ClustersClient.getClient(
-                myCtx.clusterId,
-                undefined,
-                undefined,
-                'documentView',
-            );
-
-            // when a document is saved and is missing an _id field, the _id field is added on the server
-            // or by the mongodb driver.
-            const upsertResult = await client.upsertDocument(
-                myCtx.databaseName,
-                myCtx.collectionName,
-                documentId ? EJSON.stringify(documentId) : '',
-                documentBson,
+            const upsertResult = await runBoundViewOperation(
+                myCtx.binding,
+                assertCurrent,
+                (client) =>
+                    client.upsertDocument(
+                        myCtx.databaseName,
+                        myCtx.collectionName,
+                        documentId ? EJSON.stringify(documentId) : '',
+                        documentBson,
+                    ),
+                { trigger: 'documentView' },
             );
 
             // extract the _id field from the document
@@ -115,6 +102,7 @@ export const documentsViewRouter = router({
             const extendedJson = EJSON.serialize(upsertResult.document);
             const newDocumentStringified = JSON.stringify(extendedJson, null, 4);
 
+            assertCurrent();
             myCtx.viewPanelTitleSetter(`${myCtx.databaseName}/${myCtx.collectionName}/${newDocumentId}`);
 
             showConfirmationAsInSettings(l10n.t('The document with the _id "{0}" has been saved.', newDocumentId));

@@ -1533,6 +1533,11 @@ behave as today.
   It keeps the content mounted and inert, uses a polite announcement, and shows only Close
   when there is no supported repair. The shared component builds and passed its focused
   test; panels are not yet wired. Keep both planned stale-reply browser scenarios.
+- **Document View and Dashboard host slice:** Both capture their binding on the host.
+  Document reads and saves resolve per operation, and a stale save cannot update the tab
+  title or show confirmation. Dashboard database calls use the binding; forwarded commands
+  check it before dispatch. Build and 35 focused host and overlay tests passed together.
+  Next: structured unavailable replies, overlay wiring, and the remaining command handoffs.
 
 ---
 
