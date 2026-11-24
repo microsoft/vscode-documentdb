@@ -407,7 +407,7 @@ export abstract class Task {
     /**
      * Requests a graceful stop of the task.
      * This method signals the task to stop via AbortSignal and updates the state accordingly.
-     * The final state transition to Stopped will be handled by runWork() when it detects the abort signal.
+     * An unstarted task stops immediately; otherwise initialization or work must finish first.
      *
      * This method returns immediately after signaling the stop request. The actual stopping
      * is handled asynchronously by the running task when it detects the abort signal.
@@ -416,16 +416,19 @@ export abstract class Task {
         if (this.isFinalState()) {
             return;
         }
+        const wasPending = this._status.state === TaskState.Pending;
         this.updateStatus(TaskState.Stopping, this.strings.stoppingTask);
         this.abortController.abort();
 
-        // Note: The actual state transition to Stopped will be handled by runWork()
-        // when it detects the abort signal and completes gracefully
+        if (wasPending && !this.isFinalState()) {
+            this.updateStatus(TaskState.Stopped, this.strings.taskStopped);
+        }
     }
 
     /**
      * Performs cleanup for the task.
      * This should be called when the task is no longer needed.
+     * Cleanup does not wait for running work, but task events remain active until it stops.
      *
      * @returns A Promise that resolves when cleanup is complete.
      */ public async delete(): Promise<void> {
@@ -440,9 +443,11 @@ export abstract class Task {
         } catch (error) {
             // Log but don't throw
             console.error('Error during task deletion:', error);
-        } // Dispose of event emitter resources
-        this._onDidChangeState.dispose();
-        this._onDidChangeStatus.dispose();
+        }
+        void whenTerminal(this).then(() => {
+            this._onDidChangeState.dispose();
+            this._onDidChangeStatus.dispose();
+        });
     }
 
     /**

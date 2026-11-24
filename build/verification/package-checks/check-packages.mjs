@@ -421,14 +421,15 @@ try {
     assert.equal(testControlFailure, 'packed-test-control: packed test files are forbidden: dist/x.test.js');
     report.packedTestControl = { status: 'expected failure', failure: testControlFailure };
 
-    // Control: without inlining, Vitest hands both packages to Node, which must fail exactly as
-    // documented (Fluent's named exports; the host entry's bare `vscode` import).
+    // Control: hand only these two packages to Node, which must fail exactly as documented
+    // (Fluent's named exports; the host entry's bare `vscode` import).
     if (!CONTROL_INLINE.every((name) => inline.includes(name))) {
         report.vitestWithoutInline = `not applicable: needs ${CONTROL_INLINE.join(' and ')}`;
     } else {
+        const controlInline = inline.filter((name) => !CONTROL_INLINE.includes(name));
         const control = run(process.execPath, vitestArgs, {
             cwd: vitestConsumer,
-            env: { ...probeEnv, PROBE_INLINE: '', CI: 'true' },
+            env: { ...probeEnv, PROBE_INLINE: controlInline.join(','), CI: 'true' },
         });
         const controlOutput = `${control.stdout}${control.stderr}`;
         const controlFailures = {
