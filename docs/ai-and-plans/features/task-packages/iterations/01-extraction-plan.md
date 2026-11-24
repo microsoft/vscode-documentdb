@@ -24,7 +24,8 @@ described in [design.md](../design.md) and the reasoning in [decisions.md](../de
   and any deviation with its rejected alternatives.
 
 Phases 0 to 3 can land as separate PRs in this order. Phase 4 needs the other team. Phase 5 moves
-the code.
+the code; steps 5.1 and 5.2 may start before Phase 4, and only publishing (5.4) waits for it
+(decision 0019).
 
 ---
 
@@ -323,6 +324,27 @@ ships as its own PR and must land before Phase 5.
 > `taskService.taskInitialization`, so the Failed notification is the only one. Tests:
 > `taskService.test.ts`, `extension/extensionTaskOptions.test.ts`.
 
+### 3.4 Presentation layer receives its strings and host services
+
+`UI/**` and `resourceUsageHelper.ts` call `vscode.l10n.t` and use `ext` (see Outcome, "Found while
+working"). Give them injected strings with English defaults and injected host services, so they
+can move to the package's `./vscode` subpath in step 5.2 (decision 0006). Behaviour-neutral: the
+extension passes the same localized strings.
+
+> **Done (2026-11-23),** in the stacked PR "[task engine pr3.4]" on top of pr3.1-3.2.
+> `createTaskProgressReportingService({ strings, showOutput })` takes `Partial<TaskProgressStrings>`
+> and a `showOutput` callback, which replaces `ext.outputChannel.show()`; the Failed notification
+> compares the choice against the same injected label it shows, and offers the button only when
+> `showOutput` is set. `checkCanProceedAndInformUser` takes `Partial<ResourceUsageStrings>` as a
+> fourth argument. The extension's values live in `extension/extensionPresentationStrings.ts`, with
+> the same l10n keys and English text (the bundle is unchanged); the singleton in
+> `extension/taskServiceInstance.ts` is created with them, so activation still only calls
+> `attach(TaskService)`. `unknownError` keeps its English default, as before. A boundary test
+> (`packageBoundary.test.ts`) fails when a package-bound file calls `l10n.t` or imports outside the
+> folder or from `extension/`; the DocumentDB adapters, `CopyIndexesTask` and `DemoTask` are
+> allowlisted because they stay in `src/`. Tests: `UI/taskProgressReportingService.test.ts`,
+> `resourceUsageHelper.test.ts`.
+
 ---
 
 ## Phase 4: Contract review with the NoSQL team
@@ -336,10 +358,14 @@ Walk the writer contract through with the Azure Cosmos DB for NoSQL team before 
 - optional batch sizing from the request charge.
 
 Record the outcomes as new decisions. Until this review, the packages ship as 0.x (decision 0013).
+Steps 5.1 and 5.2 do not wait for this review; publishing (5.4) does (decision 0019).
 
 ---
 
 ## Phase 5: Extraction
+
+Steps 5.1 and 5.2 may proceed before Phase 4; the packages stay 0.x and unpublished until then, so
+contract changes after the review remain cheap. Step 5.4 waits for Phase 4 (decision 0019).
 
 ### 5.1 Create the packages
 
@@ -397,7 +423,7 @@ describes only the extension-side code.
 ### 5.4 Publishing
 
 Decide how the `@microsoft/vscode-ext-*` packages are published; there is no workflow for them
-today.
+today. Publishing waits for the Phase 4 review (decision 0019).
 
 ---
 
@@ -406,11 +432,13 @@ today.
 **In progress (2026-11-05).** Phases 0, 1 and 2 landed in place on `dev/tnaum/npm-task-engine`,
 except 1.5, which landed later as a lazy client provider in the stacked PR #1112 (see its note). 3.3 landed
 in the stacked PR "[task engine pr3.3]" on top of #1112, and 3.1 and 3.2 in "[task engine pr3.1-3.2]"
-on top of it. All steps are
-behaviour-neutral for the DocumentDB path. After this round, the code that will move imports
-`vscode` or `ext` only in `UI/**` and `resourceUsageHelper.ts`, as planned. Phase 3 is done
-(3.1 and 3.3 change behaviour; 3.2 needed no code). Phase 4 (the NoSQL team's review) and Phase 5
-(extraction, which waits for Phase 4) have not started.
+on top of it, and 3.4 in "[task engine pr3.4]" on top of that. All steps are
+behaviour-neutral for the DocumentDB path. After 3.4, the code that will move no longer calls
+`vscode.l10n.t` or uses `ext`; the presentation code in `UI/**` and `resourceUsageHelper.ts`
+imports only `vscode` itself, as the `./vscode` subpath allows, and a boundary test keeps it that
+way. Phase 3 is done (3.1 and 3.3 change behaviour; 3.2 needed no code; 3.4 is behaviour-neutral).
+Phase 4 (the NoSQL team's review) has not started. Under decision 0019, steps 5.1 and 5.2 may start
+before it; only publishing (5.4) waits.
 
 Found while working, not changed:
 
@@ -421,4 +449,5 @@ Found while working, not changed:
 - `TaskProgressReportingService.detach()` destructures task-ID strings and uses only their first
   character. Fixed in pr3.1-3.2 (test: `UI/taskProgressReportingService.test.ts`).
 - `UI/**` and `resourceUsageHelper.ts` still call `vscode.l10n.t` and use `ext`. Under decision
-  0006 they need injected strings before they move to `./vscode` in step 5.2.
+  0006 they need injected strings before they move to `./vscode` in step 5.2. Fixed in pr3.4 (see
+  3.4).

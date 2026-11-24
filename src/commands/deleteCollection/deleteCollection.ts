@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { SchemaStore } from '../../documentdb/SchemaStore';
 import { ext } from '../../extensionVariables';
+import { getExtensionResourceUsageStrings } from '../../services/taskService/extension/extensionPresentationStrings';
 import { TaskService } from '../../services/taskService/extension/taskServiceInstance';
 import { checkCanProceedAndInformUser } from '../../services/taskService/resourceUsageHelper';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
@@ -30,6 +31,7 @@ export async function deleteCollection(context: IActionContext, node: Collection
             collectionName: node.collectionInfo.name,
         },
         l10n.t('delete this collection'),
+        getExtensionResourceUsageStrings(),
     );
 
     if (!canProceed) {

@@ -4,8 +4,42 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { ext } from '../../../extensionVariables';
+import { mergeStrings } from '../taskHost';
 import { isTerminalState, TaskState, type Task, type TaskService } from '../taskService';
+
+/**
+ * User-facing strings of the progress notifications. Defaults are English; a consumer that
+ * localizes passes its own values (decision 0006).
+ */
+export interface TaskProgressStrings {
+    stoppingTask: string;
+    stoppingTitle: (taskName: string) => string;
+    completedSuccessfully: (taskName: string) => string;
+    wasStopped: (taskName: string) => string;
+    failed: (taskName: string, errorMessage: string) => string;
+    /** Used in `failed` when the task's error is not an `Error`. */
+    unknownError: string;
+    showOutput: string;
+}
+
+export const defaultTaskProgressStrings: TaskProgressStrings = {
+    stoppingTask: 'Stopping task...',
+    stoppingTitle: (taskName: string): string => `Stopping ${taskName}`,
+    completedSuccessfully: (taskName: string): string => `${taskName} completed successfully`,
+    wasStopped: (taskName: string): string => `${taskName} was stopped`,
+    failed: (taskName: string, errorMessage: string): string => `${taskName} failed: ${errorMessage}`,
+    unknownError: 'Unknown error',
+    showOutput: 'Show Output',
+};
+
+export interface TaskProgressReportingOptions {
+    strings?: Partial<TaskProgressStrings>;
+    /**
+     * Reveals the consumer's output (for example its output channel). When set, the Failed
+     * notification offers a button labelled `strings.showOutput` that calls it.
+     */
+    showOutput?: () => void;
+}
 
 /**
  * Interface for managing progress reporting of tasks.
@@ -51,6 +85,11 @@ class TaskProgressReportingServiceImpl implements TaskProgressReportingService {
     private taskService?: TaskService;
     private activeReports = new Map<string, ProgressContext>();
     private subscriptions: vscode.Disposable[] = [];
+    private readonly strings: TaskProgressStrings;
+
+    constructor(private readonly options: TaskProgressReportingOptions = {}) {
+        this.strings = mergeStrings(defaultTaskProgressStrings, options.strings);
+    }
 
     public attach(taskService: TaskService): void {
         if (this.taskService) {
@@ -188,7 +227,7 @@ class TaskProgressReportingServiceImpl implements TaskProgressReportingService {
             // If not cancelled by user, just update the existing progress
             if (context) {
                 context.progress.report({
-                    message: vscode.l10n.t('Stopping task...'),
+                    message: this.strings.stoppingTask,
                 });
                 // Clear any running intervals since we're stopping
                 if (context.interval) {
@@ -217,7 +256,7 @@ class TaskProgressReportingServiceImpl implements TaskProgressReportingService {
     private showStoppingProgress(task: Task): void {
         const progressOptions: vscode.ProgressOptions = {
             location: vscode.ProgressLocation.Notification,
-            title: vscode.l10n.t('Stopping {0}', task.name),
+            title: this.strings.stoppingTitle(task.name),
             cancellable: false,
         };
 
@@ -235,7 +274,7 @@ class TaskProgressReportingServiceImpl implements TaskProgressReportingService {
 
                 // Show stopping message
                 progress.report({
-                    message: vscode.l10n.t('Stopping task...'),
+                    message: this.strings.stoppingTask,
                 });
 
                 // No polling needed - wait for the final state
@@ -316,27 +355,29 @@ class TaskProgressReportingServiceImpl implements TaskProgressReportingService {
 
         switch (state) {
             case TaskState.Completed:
-                void vscode.window.showInformationMessage(vscode.l10n.t('{0} completed successfully', task.name));
+                void vscode.window.showInformationMessage(this.strings.completedSuccessfully(task.name));
                 break;
             case TaskState.Stopped:
-                void vscode.window.showInformationMessage(vscode.l10n.t('{0} was stopped', task.name));
+                void vscode.window.showInformationMessage(this.strings.wasStopped(task.name));
                 break;
-            case TaskState.Failed:
-                void vscode.window
-                    .showErrorMessage(
-                        vscode.l10n.t(
-                            '{0} failed: {1}',
-                            task.name,
-                            status.error instanceof Error ? status.error.message : 'Unknown error',
-                        ),
-                        vscode.l10n.t('Show Output'),
-                    )
-                    .then((choice) => {
-                        if (choice === vscode.l10n.t('Show Output')) {
-                            ext.outputChannel.show();
-                        }
-                    });
+            case TaskState.Failed: {
+                const message = this.strings.failed(
+                    task.name,
+                    status.error instanceof Error ? status.error.message : this.strings.unknownError,
+                );
+                const showOutput = this.options.showOutput;
+                if (!showOutput) {
+                    void vscode.window.showErrorMessage(message);
+                    break;
+                }
+                const showOutputLabel = this.strings.showOutput;
+                void vscode.window.showErrorMessage(message, showOutputLabel).then((choice) => {
+                    if (choice === showOutputLabel) {
+                        showOutput();
+                    }
+                });
                 break;
+            }
         }
     }
 }
@@ -344,6 +385,8 @@ class TaskProgressReportingServiceImpl implements TaskProgressReportingService {
 /**
  * Creates a TaskProgressReportingService instance for managing task progress notifications.
  */
-export function createTaskProgressReportingService(): TaskProgressReportingService {
-    return new TaskProgressReportingServiceImpl();
+export function createTaskProgressReportingService(
+    options?: TaskProgressReportingOptions,
+): TaskProgressReportingService {
+    return new TaskProgressReportingServiceImpl(options);
 }
