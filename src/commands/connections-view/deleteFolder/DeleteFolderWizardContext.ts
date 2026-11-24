@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { type ConnectionType } from '../../../services/connectionStorageService';
 import { type TaskInfo } from '@microsoft/vscode-ext-tasks';
+import { type ConnectionType } from '../../../services/connectionStorageService';
 
 export interface DeleteFolderWizardContext extends IActionContext {
     /** The folder being deleted */

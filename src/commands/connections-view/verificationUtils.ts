@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type TaskInfo } from '@microsoft/vscode-ext-tasks';
 import * as l10n from '@vscode/l10n';
 import { ext } from '../../extensionVariables';
 import {
@@ -12,7 +13,6 @@ import {
     type StoredItem,
 } from '../../services/connectionStorageService';
 import { TaskService } from '../../services/taskService/extension/taskServiceInstance';
-import { type TaskInfo } from '@microsoft/vscode-ext-tasks';
 
 /**
  * Custom error to signal that conflict verification completed with no conflicts.

@@ -12,11 +12,11 @@ import {
 } from '@microsoft/vscode-ext-tasks';
 import { type CollectionIndexCopier, type IndexCopyResult } from '../../data-api/indexes/CollectionIndexCopier.js';
 import { type DocumentReader } from '../../data-api/types.js';
-import { type StreamingDocumentWriter, StreamingWriterError } from '../../data-api/writers/StreamingDocumentWriter.js';
+import { StreamingWriterError, type StreamingDocumentWriter } from '../../data-api/writers/StreamingDocumentWriter.js';
 import {
+    defaultCopyCollectionStrings,
     type CopyCollectionStrings,
     type CopyPasteCollectionTaskOptions,
-    defaultCopyCollectionStrings,
 } from './copyCollectionStrings.js';
 import { type CopyPasteConfig } from './copyPasteConfig.js';
 

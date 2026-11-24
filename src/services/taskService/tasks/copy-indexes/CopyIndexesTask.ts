@@ -3,7 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Task, type ResourceDefinition, type ResourceTrackingTask, type TaskTelemetryContext } from '@microsoft/vscode-ext-tasks';
+import {
+    Task,
+    type ResourceDefinition,
+    type ResourceTrackingTask,
+    type TaskTelemetryContext,
+} from '@microsoft/vscode-ext-tasks';
 import * as vscode from 'vscode';
 import { ext } from '../../../../extensionVariables';
 import {

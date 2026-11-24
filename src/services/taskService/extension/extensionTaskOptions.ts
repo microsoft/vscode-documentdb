@@ -4,9 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
+import {
+    type TaskOptions,
+    type TaskStrings,
+    type TaskTelemetryContext,
+    type TaskTelemetryRunner,
+} from '@microsoft/vscode-ext-tasks';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
-import { type TaskOptions, type TaskStrings, type TaskTelemetryContext, type TaskTelemetryRunner } from '@microsoft/vscode-ext-tasks';
 
 export const extensionTaskTelemetryRunner: TaskTelemetryRunner = <T>(
     eventName: string,

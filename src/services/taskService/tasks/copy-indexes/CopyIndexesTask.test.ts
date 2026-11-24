@@ -6,9 +6,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { ext } from '../../../../extensionVariables';
-import { type CollectionIndexCopier, type CopyIndexesOptions } from '@microsoft/vscode-ext-tasks-data-transfer';
 import { TaskState } from '@microsoft/vscode-ext-tasks';
+import { type CollectionIndexCopier, type CopyIndexesOptions } from '@microsoft/vscode-ext-tasks-data-transfer';
+import { ext } from '../../../../extensionVariables';
 import { CopyIndexesTask, type CopyIndexesConfig } from './CopyIndexesTask';
 
 vi.mock('../../../../extensionVariables', () => ({

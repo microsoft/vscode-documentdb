@@ -4,9 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { checkCanProceedAndInformUser } from './resourceUsageHelper.js';
 import { type TaskService } from '../taskService.js';
 import { type TaskInfo } from '../taskServiceResourceTracking.js';
+import { checkCanProceedAndInformUser } from './resourceUsageHelper.js';
 
 const { showErrorMessage } = vi.hoisted(() => ({
     showErrorMessage: vi.fn((..._args: unknown[]): Promise<undefined> => Promise.resolve(undefined)),

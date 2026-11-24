@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { describe, expect, it, vi } from 'vitest';
 import { type TaskLogger } from '@microsoft/vscode-ext-tasks';
+import { describe, expect, it, vi } from 'vitest';
 import { type DataTransferOptions } from './dataTransferHost.js';
 import { BaseDocumentReader } from './readers/BaseDocumentReader.js';
 import {
