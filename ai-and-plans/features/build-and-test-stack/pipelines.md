@@ -260,18 +260,22 @@ actual ADO run remain operator verification.
   OIDC permission. It checks out the dispatch commit, selects Node from `.nvmrc`, installs npm
   **11.20.0** and runs `npm ci`, `npm run build --workspaces --if-present`, `npm run typecheck:tests`,
   `npm run test --workspaces --if-present`, and `npm run verify:packages`. The latter packs all
-  six workspaces and checks packed-test rejection, exports/types and representative consumer
+  eight workspaces and checks packed-test rejection, exports/types and representative consumer
   calls (including rejection controls).
 - It then runs `npm publish --dry-run --workspace <package>` for each selected
-  `@documentdb-js/*` package. With `dry_run=true` and no package selected, it dry-runs **all four**.
+  `@documentdb-js/*` package. With `dry_run=true` and no package selected, it dry-runs **all six
+  selectable packages**: operator registry, schema analyzer, shell API types, shell runtime,
+  SRV resolver and connection diagnostics.
   A dry-run never requires a reviewer to approve an environment, never requests `id-token: write`,
   and never schedules the publish job.
 - **Publish to npmjs.com** has `needs: verify` and `if: ${{ !inputs.dry_run }}`. A real-publish
   dispatch must select at least one package; otherwise verification fails before environment
   approval can be requested. The publish job preserves the protected
   `npm-publish-documentdb-js-scope` environment, `id-token: write`, Trusted Publishing and
-  per-package `--provenance` publication. It installs/builds again in its own checkout; the
-  verifier does not transfer the exact checked tarballs into that job.
+  per-package `--provenance` publication. The verify job packs the selected packages with
+  lifecycle scripts disabled and records their SHA-256 hashes. The publish job downloads
+  those tarballs, checks their hashes and package names, and publishes them with
+  `--ignore-scripts`; it never installs repository dependencies, builds or runs package scripts.
 - The ADO route for `@microsoft/vscode-ext-webview*` checks the exact archives it ships (Stage 8,
   W3): after `pack-npm-packages.ps1`, `build-npm-packages.yml` runs
   `check-packages.mjs --archives "$(ob_outputDirectory)\npm-packages"` and fails the build on any
@@ -300,6 +304,20 @@ package's npm Trusted Publisher configuration matches this repository, workflow 
 Dry-run success cannot validate OIDC authentication or npm-side publisher settings. Nothing in
 this change modifies those settings or environment policy. This closes PR-F02's missing
 verification gate for this GitHub publish path, **not** the ADO `@microsoft/*` path or general PR CI.
+
+**SRV resolver:** select `publish_srv_resolver` in this GitHub workflow, first with
+`dry_run=true`, then with `dry_run=false` for the approved release. The selector is wired through
+input validation, dry-run, packing and publication. It is not in the ADO release dropdown:
+that route supports only the two `@microsoft/vscode-ext-webview*` packages.
+Publish `@documentdb-js/srv-resolver@1.1.0` before the first
+`@documentdb-js/connection-diagnostics@0.1.0` release, which depends on `^1.1.0`.
+
+**Connection diagnostics:** `publish_connection_diagnostics` is wired the same way. When both
+are selected, the workflow publishes it after the SRV resolver. npm accepts a Trusted Publisher
+only for a package that already exists, so the operator publishes `0.1.0` manually. Afterwards,
+configure the package's Trusted Publisher on npmjs.com (this repository,
+`npm-publish-documentdb-js.yml`, the `npm-publish-documentdb-js-scope` environment) and allow
+`npm publish`, not only staged publishing. Later versions then publish through this workflow.
 
 **Validation (2026-10-07):** branch dry-run
 [37618213760](https://github.com/microsoft/vscode-documentdb/actions/runs/37618213760), at
