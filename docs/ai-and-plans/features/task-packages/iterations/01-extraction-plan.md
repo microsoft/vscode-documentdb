@@ -427,10 +427,12 @@ shipped in the npm tarball and has these parts:
 The implementation READMEs in `src/services/taskService/` move or shrink accordingly; what remains
 describes only the extension-side code.
 
-> **In progress:** the stacked pr5.3 draft adds the package guides and type-checked examples.
-> Reference links temporarily use the immutable extraction commit: no release tag containing the
-> extracted code exists yet. Replace them with a release tag before publishing, as decision 0014
-> requires; this does not change the accepted decision.
+> **In progress (2026-11-24), draft #1127, commit `adc538c7f`:** the package guides, type-checked
+> examples, and snippet/behavior checks are in the stack. The build and 13 focused tests passed;
+> full Case 2 checks are deferred for the draft. Reference links temporarily use the immutable
+> extraction commit: no release tag containing the extracted code exists yet. Replace them with a
+> release tag before publishing, as decision 0014 requires; this does not change the accepted
+> decision.
 
 ### 5.4 Publishing
 
