@@ -69,6 +69,9 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
 
     // Local state for query fields (survives show/hide of enhanced query section)
     const [filterValue, setFilterValue] = useState('{  }');
+    // Read when Monaco mounts, which can be after a query handed in on open was applied.
+    const filterValueRef = useRef(filterValue);
+    filterValueRef.current = filterValue;
     const [projectValue, setProjectValue] = useState('{  }');
     const [sortValue, setSortValue] = useState('{  }');
     const [skipValue, setSkipValue] = useState(0);
@@ -245,7 +248,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
         );
 
         // Create model with URI scheme for contextual completions
-        const model = createEditorModel(editor, monaco, EditorType.Filter, '{  }');
+        const model = createEditorModel(editor, monaco, EditorType.Filter, filterValueRef.current);
 
         // Set up debounced validation
         filterValidationCleanupRef.current = setupValidation(editor, monaco, model);
