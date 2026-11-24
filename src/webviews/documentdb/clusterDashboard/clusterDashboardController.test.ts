@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type * as azextUtils from '@microsoft/vscode-azext-utils';
+import { type callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 import { describe, expect, it, vi, type Mock } from 'vitest';
 
 vi.mock('@vscode/l10n', () => ({
@@ -19,7 +19,7 @@ vi.mock('vscode', async (importOriginal) => ({
 }));
 
 vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
-    ...(await importOriginal<typeof azextUtils>()),
+    ...(await importOriginal<{ callWithTelemetryAndErrorHandling: typeof callWithTelemetryAndErrorHandling }>()),
     callWithTelemetryAndErrorHandling: vi.fn(async (_eventId: string, callback: (context: unknown) => Promise<void>) =>
         callback({ telemetry: { properties: {}, measurements: {} }, errorHandling: {} }),
     ),

@@ -113,7 +113,9 @@ export function openDocumentWebview(
         disable: postUnavailable,
         dispose: () => controller.dispose(),
     });
-    controller.onDisposed(() => registration.dispose());
+    controller.onDisposed((): void => {
+        registration.dispose();
+    });
 
     return controller;
 }
