@@ -2,6 +2,7 @@
 
 ## 1.3.0
 
+- The `@fluentui/react-components` peer accepts both 9.74.x and 9.75.1 through 9.75.x.
 - Added a `skipped` status to `StatusListItem`, for a stage that does not apply or did not run because an earlier stage failed. It shows a neutral `SubtractCircleRegular` glyph and a dimmed label, and screen readers hear "skipped" after the label, overridable through `statusLabels`. Put the reason in `detail`. Code with an exhaustive `switch` over `StatusListItemStatus` needs a case for the new value.
 - Added an optional `disclosure` to `StatusListItem`: a **Details**-style toggle right after the label, on the label's line, and a labelled region below the detail line, for rows that have more to say than one line. The toggle is a real button with `aria-expanded` and `aria-controls`, and the region is named by it. Collapsed rows keep their height; expanding never moves focus. It can be controlled (`expanded`, `onExpandedChange`) or left to the row (`defaultExpanded`). Rows without it render exactly as before.
 - Added `placement` to `StatusListItem`'s `disclosure`. `label` (the default) keeps the toggle after the label; `detail` puts it inline at the end of the detail line, in that line's type size and line height, so the label line stays a plain heading. A long detail line wraps around the toggle like a word, and a row with an empty detail line still shows it there.

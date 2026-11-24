@@ -149,11 +149,14 @@ On 2026-09-10 the operator confirmed that the requested increment 4 acceptance t
 and satisfactory. The review of `b4aee678` also passed `npm run build` and all 18 focused tests
 across the badge, metric-card and components-entry suites. Detailed browser evidence is in the
 increment 4 work log; no screen-reader transcript or exact operator test matrix was supplied.
+On 2026-11-24 the operator confirmed a successful extension debug review with Fluent components
+9.75.2 and icons 2.0.345.
 
 The package manifest is now `1.3.0`; the latest published version is `1.2.0`.
 The prepared `1.3.0` adds the `StatusList` skipped state, expandable disclosures with motion,
 details-content components, an aside slot and optional row highlighting. It also adds
-`@fluentui/react-motion-components-preview` (`^0.15.6`) as a peer. See the
+`@fluentui/react-motion-components-preview` (`^0.15.6`) as a peer and widens the
+`@fluentui/react-components` peer to `~9.74 || ~9.75.1`. See the
 [package changelog](../../../../packages/vscode-ext-webview-fluentui/CHANGELOG.md#130).
 
 The earlier `1.1.0` changes include:

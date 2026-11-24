@@ -43,11 +43,11 @@ needs no cast and the package needs no Monaco dependency.
 
 ### Three front doors, one implementation
 
-| Tier       | API                                                        | For                                         |
-| ---------- | ---------------------------------------------------------- | ------------------------------------------- |
-| Facade     | `<VSCodeFluentProvider>`                                   | greenfield consumers and the starter kit    |
+| Tier       | API                                                    | For                                         |
+| ---------- | ------------------------------------------------------ | ------------------------------------------- |
+| Facade     | `<VSCodeFluentProvider>`                               | greenfield consumers and the starter kit    |
 | Composable | `useActiveVSCodeTheme()` + `createVSCodeFluentTheme()` | consumers owning their own `FluentProvider` |
-| Primitive  | `generateAdaptiveDarkTheme()` and friends                  | consumers post-processing the theme object  |
+| Primitive  | `generateAdaptiveDarkTheme()` and friends              | consumers post-processing the theme object  |
 
 All three tiers are Fluent-bound - the generators return a Fluent `Theme`. The genuinely
 design-system-neutral pieces, the palette math and the VS Code colour reader, are internal (0008,
@@ -197,17 +197,19 @@ This is the first real divergence from the sibling package, whose entire build i
 
 ## 7. Dependencies
 
-`peerDependencies`, chosen to satisfy both known consumers simultaneously:
+`peerDependencies`, chosen so consumers can upgrade Fluent independently:
 
-| Peer                         | Range   | This extension | vscode-cosmosdb |
-| ---------------------------- | ------- | -------------- | --------------- |
-| `react`                      | `>=19`  | `~19.2.4`      | `~19.2.1`       |
-| `@fluentui/react-components` | `~9.74` | `~9.74.4`      | `~9.74.1`       |
-| `@fluentui/react-icons`      | `~2.0`  | `~2.0.320`     | `~2.0.313`      |
+| Peer                                        | Range                | This extension      |
+| ------------------------------------------- | -------------------- | ------------------- |
+| `react`                                     | `>=19`               | `~19.2.4`           |
+| `@fluentui/react-components`                | `~9.74 \|\| ~9.75.1` | `~9.75.1`           |
+| `@fluentui/react-icons`                     | `~2.0`               | `~2.0.345`          |
+| `@fluentui/react-motion-components-preview` | `^0.15.6`            | installed as a peer |
 
 Version `1.3.0` adds `@fluentui/react-motion-components-preview` (`^0.15.6`) as a
 peer for `StatusListItem` disclosure motion. Consumers adopting this version must provide it
-alongside the peers above. The `@fluentui/react-components` peer remains `~9.74`.
+alongside the peers above. It also widens the `@fluentui/react-components` peer to
+`~9.74 || ~9.75.1`.
 
 `devDependencies`: `sass` (the style build), `@fluentui/react-progress` - the latter because
 `fluentOverrides.test.ts` does `require.resolve('@fluentui/react-progress')` and currently works only

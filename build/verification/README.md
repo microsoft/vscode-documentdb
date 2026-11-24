@@ -491,11 +491,12 @@ SHA-256 and runs:
   [`vscode-stub.cjs`](./package-checks/vscode-stub.cjs) and runs the Fluent calls under jsdom. A
   package with no calls in `calls.mjs` fails.
 
-Expected and enforced: plain Node cannot load `vscode-ext-webview-fluentui` and its `/components`
-entry, because of Fluent UI's own packaging (see that package's README), so the Node probes require
-exactly that failure. A control run of the Vitest probe without inlining must fail for the same
-reason and for the host entry's bare `vscode` import. Rerun this after any change to a package's
-`package.json`, `tsconfig` or entry points.
+Expected and enforced with the extension's locked Fluent UI 9.75 and
+`@fluentui/react-icons` 2.0.345: every entry point, including `vscode-ext-webview-fluentui`, loads in
+plain Node. The Vitest probe inlines only `vscode-ext-webview`, so this combination is proven to
+work without Fluent inlining. Older supported peers may need inlining; see the package README. A
+control run of the Vitest probe without inlining must fail on the host entry's bare `vscode`
+import. Rerun this after any change to a package's `package.json`, `tsconfig` or entry points.
 
 **Archive mode (offline).** `--archives <dir-or-.tgz>` (repeatable; a directory means every `.tgz`
 in it) checks tarballs that were already packed, instead of building and packing. It never runs
@@ -504,7 +505,7 @@ npm, npx or any tool other than Node, and reads the tarballs with
 Windows agent with only `npm ci` behind it. It runs every check above except `publint` and
 `@arethetypeswrong/cli`, which are not in the lockfile, and says so in its output. The probes cover
 only the archives' entry points (`PROBE_PACKAGES`); the Vitest control without inlining runs when
-both inlined packages are among the archives. The packed-test control writes its tarball directly
+`vscode-ext-webview` is among the archives. The packed-test control writes its tarball directly
 instead of running `npm pack`. The output and `--report` record the checkout commit and each
 archive's SHA-256. [`package-archives.test.cjs`](./package-checks/package-archives.test.cjs) packs
 `vscode-ext-webview` and requires archive mode to pass it, and to reject it with a planted
