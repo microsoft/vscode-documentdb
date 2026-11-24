@@ -10,11 +10,12 @@ import { type ConnectionUnavailableResponse } from './connectionUnavailable';
 interface RecoveryCapabilities {
     readonly canRetrySignIn: boolean;
     readonly canUpdateCredentials: boolean;
+    readonly canReconnect: boolean;
 }
 
 export function describeUnavailableConnection(
     reason: ConnectionUnavailableReason,
-    { canRetrySignIn, canUpdateCredentials }: RecoveryCapabilities,
+    { canRetrySignIn, canUpdateCredentials, canReconnect }: RecoveryCapabilities,
 ): ConnectionUnavailableResponse {
     switch (reason) {
         case 'signInRequired':
@@ -47,14 +48,26 @@ export function describeUnavailableConnection(
                 unavailable: {
                     reason,
                     text: l10n.t('The connection identity or settings have changed.'),
-                    action: 'reconnect',
+                    action: canReconnect ? 'reconnect' : 'close',
                 },
             };
         case 'userDisconnected':
-            return { unavailable: { reason, text: l10n.t('The connection is disconnected.'), action: 'reconnect' } };
+            return {
+                unavailable: {
+                    reason,
+                    text: l10n.t('The connection is disconnected.'),
+                    action: canReconnect ? 'reconnect' : 'close',
+                },
+            };
         case 'connectionRemoved':
             return { unavailable: { reason, text: l10n.t('The connection was removed.'), action: 'close' } };
         case 'unreachable':
-            return { unavailable: { reason, text: l10n.t('Connection lost.'), action: 'reconnect' } };
+            return {
+                unavailable: {
+                    reason,
+                    text: l10n.t('Connection lost.'),
+                    action: canReconnect ? 'reconnect' : 'close',
+                },
+            };
     }
 }

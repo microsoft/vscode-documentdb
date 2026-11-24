@@ -1537,7 +1537,11 @@ behave as today.
   Document reads and saves resolve per operation, and a stale save cannot update the tab
   title or show confirmation. Dashboard database calls use the binding; forwarded commands
   check it before dispatch. Build and 35 focused host and overlay tests passed together.
-  Next: structured unavailable replies, overlay wiring, and the remaining command handoffs.
+- **Document View overlay:** The panel receives structured unavailable replies or a typed
+  disable message. It stays open with the draft intact and offers explicit Close and supported
+  repairs. Dismissing sign-in does not report recovery; a different account requires an explicit
+  rebind. A stale Reconnect cannot clear a Remove latch. Build and 26 focused tests passed.
+  The remaining panels and browser scenarios are still in progress.
 
 ---
 

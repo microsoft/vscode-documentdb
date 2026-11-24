@@ -10,8 +10,18 @@ import * as l10n from '@vscode/l10n';
 import { debounce } from 'es-toolkit';
 import * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api'; // eslint-disable-line import/no-internal-modules
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
+import {
+    type ConnectionRecoveryAction,
+    type ConnectionRecoveryResponse,
+    type ConnectionUnavailableDetails,
+    type ConnectionUnavailableResponse,
+    isConnectionUnavailableMessage,
+    isConnectionUnavailableResponse,
+} from '../../_integration/connectionUnavailable';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { useViewLoadTelemetry } from '../../_integration/useViewLoadTelemetry';
+import { Announcer } from '../../components/accessibility';
+import { DisconnectedOverlay } from '../../components/DisconnectedOverlay';
 import { MonacoEditor } from '../../components/MonacoEditor';
 import { useSelectiveContextMenuPrevention } from '../../components/useSelectiveContextMenuPrevention';
 import { ToolbarDocuments } from './components/toolbarDocuments';
@@ -40,6 +50,12 @@ const monacoOptions = {
     ariaLabel: l10n.t('Document Editor: Edit the document in JSON format'),
 };
 
+function createObjectId(): string {
+    const bytes = crypto.getRandomValues(new Uint8Array(12));
+    const hex = [...bytes].map((value) => value.toString(16).padStart(2, '0')).join('');
+    return JSON.stringify({ $oid: hex });
+}
+
 export const DocumentView = (): JSX.Element => {
     /**
      * Use the configuration object to access the data passed to the webview at its creation.
@@ -56,7 +72,11 @@ export const DocumentView = (): JSX.Element => {
     const initialContent = configuration.mode === 'add' ? '{  }' : '{ "loading…": true }';
     const [editorContent] = useState(initialContent);
     const [isLoading, setIsLoading] = useState(configuration.mode !== 'add');
-    const [isDirty, setIsDirty] = useState(true);
+    const [isDirty, setIsDirty] = useState(configuration.mode === 'add');
+    const [documentLoaded, setDocumentLoaded] = useState(configuration.mode === 'add');
+    const [unavailable, setUnavailable] = useState<ConnectionUnavailableDetails>();
+    const [recovering, setRecovering] = useState(false);
+    const [recoveryAnnouncement, setRecoveryAnnouncement] = useState<string>();
 
     // Ref for the Save button to manage focus
     const saveButtonRef = useRef<HTMLButtonElement>(null);
@@ -66,23 +86,68 @@ export const DocumentView = (): JSX.Element => {
     // responses beat Monaco's async module load), so we stash the value here and flush it
     // in handleMonacoEditorMount instead of silently dropping it.
     const pendingContentRef = useRef<string | null>(null);
+    const settingContentRef = useRef(false);
+    const editorRevisionRef = useRef(0);
+    const operationRevisionRef = useRef(0);
+    const unavailableRef = useRef<ConnectionUnavailableDetails | undefined>(undefined);
+    const disposedRef = useRef(false);
+    const pendingDocumentIdRef = useRef(configuration.documentId || undefined);
     // Falls back to pending/initial content if called before Monaco has mounted,
     // so callers (e.g. Save) never operate on an empty string.
     const getCurrentContent = () => editorRef.current?.getValue() ?? pendingContentRef.current ?? editorContent;
     const setContent = (newValue: string) => {
+        settingContentRef.current = true;
         if (editorRef.current) {
             editorRef.current.setValue(newValue);
         } else {
             pendingContentRef.current = newValue;
         }
+        settingContentRef.current = false;
+    };
+    const showUnavailable = useCallback((failure: ConnectionUnavailableDetails): void => {
+        operationRevisionRef.current += 1;
+        unavailableRef.current = failure;
+        setUnavailable(failure);
+        setRecoveryAnnouncement(undefined);
+        setIsLoading(false);
+    }, []);
+    const isCurrentOperation = (revision: number): boolean =>
+        !disposedRef.current &&
+        revision === operationRevisionRef.current &&
+        unavailableRef.current === undefined;
+    const startOperation = (): number | undefined => {
+        if (unavailableRef.current) {
+            return undefined;
+        }
+        operationRevisionRef.current += 1;
+        setIsLoading(true);
+        return operationRevisionRef.current;
     };
 
     useSelectiveContextMenuPrevention();
 
+    useEffect(() => {
+        const handleMessage = (event: MessageEvent<unknown>): void => {
+            if (isConnectionUnavailableMessage(event.data)) {
+                showUnavailable(event.data.unavailable);
+            }
+        };
+        window.addEventListener('message', handleMessage);
+        return () => {
+            window.removeEventListener('message', handleMessage);
+            disposedRef.current = true;
+        };
+    }, [showUnavailable]);
+
     // a useEffect without a dependency runs only once after the first render only
     useEffect(() => {
         if (configuration.mode !== 'add') {
-            const documentId: string = configuration.documentId;
+            const documentId = configuration.documentId;
+            if (documentId === undefined) {
+                return;
+            }
+            const revision = ++operationRevisionRef.current;
+            const editorRevision = editorRevisionRef.current;
 
             // eslint-disable-next-line react-hooks/set-state-in-effect -- Setting loading state before async document fetch
             setIsLoading(true);
@@ -91,7 +156,18 @@ export const DocumentView = (): JSX.Element => {
             void trpcClient.mongoClusters.documentView.getDocumentById
                 .query(documentId)
                 .then((response) => {
-                    setContent(response);
+                    if (!isCurrentOperation(revision)) {
+                        return;
+                    }
+                    if (isConnectionUnavailableResponse(response)) {
+                        showUnavailable(response.unavailable);
+                        return;
+                    }
+                    if (editorRevision === editorRevisionRef.current) {
+                        setContent(response);
+                        setIsDirty(false);
+                    }
+                    setDocumentLoaded(true);
                     // A document deleted since it was listed reads back as `null`.
                     viewLoad.reportFirstData(
                         response === 'null' ? 'empty' : 'dataShown',
@@ -99,9 +175,15 @@ export const DocumentView = (): JSX.Element => {
                     );
                 })
                 .catch(async (error) => {
+                    if (!isCurrentOperation(revision)) {
+                        return;
+                    }
                     viewLoad.reportFirstData('failed', performance.now() - loadStartedAt);
                     const cause = error instanceof Error ? error.message : String(error);
                     const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
+                    if (!isCurrentOperation(revision)) {
+                        return;
+                    }
                     void trpcClient.common.displayErrorMessage.mutate({
                         message: explained ?? l10n.t('Error while loading the document'),
                         modal: false,
@@ -109,7 +191,9 @@ export const DocumentView = (): JSX.Element => {
                     });
                 })
                 .finally(() => {
-                    setIsLoading(false);
+                    if (isCurrentOperation(revision)) {
+                        setIsLoading(false);
+                    }
                 });
         }
     }, []);
@@ -129,8 +213,10 @@ export const DocumentView = (): JSX.Element => {
 
         // Flush any content that arrived before the editor finished mounting
         if (pendingContentRef.current !== null) {
+            settingContentRef.current = true;
             editor.setValue(pendingContentRef.current);
             pendingContentRef.current = null;
+            settingContentRef.current = false;
         }
 
         handleResize();
@@ -196,23 +282,44 @@ export const DocumentView = (): JSX.Element => {
     // }
 
     function handleOnRefreshRequest(): void {
-        if (configuration.documentId === undefined) {
+        if (configuration.documentId === undefined || unavailableRef.current) {
             return;
         }
 
-        setIsLoading(true);
+        const revision = startOperation();
+        if (revision === undefined) {
+            return;
+        }
+        const editorRevision = editorRevisionRef.current;
 
         let documentLength = 0;
 
         void trpcClient.mongoClusters.documentView.getDocumentById
             .query(configuration.documentId)
             .then((response) => {
+                if (!isCurrentOperation(revision)) {
+                    return;
+                }
+                if (isConnectionUnavailableResponse(response)) {
+                    showUnavailable(response.unavailable);
+                    return;
+                }
                 documentLength = response.length ?? 0;
-                setContent(response);
+                if (editorRevision === editorRevisionRef.current) {
+                    setContent(response);
+                    setIsDirty(false);
+                }
+                setDocumentLoaded(true);
             })
             .catch(async (error) => {
+                if (!isCurrentOperation(revision)) {
+                    return;
+                }
                 const cause = error instanceof Error ? error.message : String(error);
                 const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
+                if (!isCurrentOperation(revision)) {
+                    return;
+                }
                 void trpcClient.common.displayErrorMessage.mutate({
                     message: explained ?? l10n.t('Error while refreshing the document'),
                     modal: false,
@@ -220,7 +327,9 @@ export const DocumentView = (): JSX.Element => {
                 });
             })
             .finally(() => {
-                setIsLoading(false);
+                if (isCurrentOperation(revision)) {
+                    setIsLoading(false);
+                }
             });
 
         trpcClient.common.reportEvent
@@ -241,27 +350,49 @@ export const DocumentView = (): JSX.Element => {
     function handleOnSaveRequest(): void {
         const editorContent = getCurrentContent();
 
-        if (editorContent === undefined) {
+        if (editorContent === undefined || unavailableRef.current || !documentLoaded || isLoading) {
             return;
         }
 
-        setIsLoading(true);
+        const revision = startOperation();
+        if (revision === undefined) {
+            return;
+        }
+        const editorRevision = editorRevisionRef.current;
+        pendingDocumentIdRef.current ??= createObjectId();
+        const documentId = pendingDocumentIdRef.current;
 
-        // we're not sending the ID over becasue it has to be extracted from the document being sent over
-        // TODO: how to handle the case when one is editing a document and actually changing the _id field?
-        // this needs to be addressed, we do have to transmit the orignal _id field as well!
+        // A new document keeps one preallocated ID across retries, so a reply lost after an
+        // acknowledged upsert cannot turn an explicit later save into a second insert.
         void trpcClient.mongoClusters.documentView.saveDocument
-            .mutate({ documentContent: editorContent })
+            .mutate({ documentContent: editorContent, documentId })
             .then((response) => {
+                if (!isCurrentOperation(revision)) {
+                    return;
+                }
+                if (isConnectionUnavailableResponse(response)) {
+                    showUnavailable(response.unavailable);
+                    return;
+                }
+                if (editorRevision !== editorRevisionRef.current) {
+                    return;
+                }
                 // Update the configuration for potential refreshes of the document
                 configuration.documentId = response.documentId;
+                pendingDocumentIdRef.current = response.documentId;
                 setContent(response.documentStringified);
                 setIsLoading(false);
                 setIsDirty(false);
             })
             .catch(async (error) => {
+                if (!isCurrentOperation(revision)) {
+                    return;
+                }
                 const cause = error instanceof Error ? error.message : String(error);
                 const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
+                if (!isCurrentOperation(revision)) {
+                    return;
+                }
                 void trpcClient.common.displayErrorMessage.mutate({
                     message: explained ?? l10n.t('Error saving the document'),
                     modal: true, // we want to show the error in a modal dialog as it's an important one, failed to save the document
@@ -269,7 +400,9 @@ export const DocumentView = (): JSX.Element => {
                 });
             })
             .finally(() => {
-                setIsLoading(false);
+                if (isCurrentOperation(revision)) {
+                    setIsLoading(false);
+                }
             });
 
         trpcClient.common.reportEvent
@@ -289,38 +422,98 @@ export const DocumentView = (): JSX.Element => {
 
     function handleOnValidateRequest(): void {}
 
+    const handleUnavailableAction = (action: ConnectionRecoveryAction): void => {
+        const current = unavailableRef.current;
+        if (!current || recovering) {
+            return;
+        }
+
+        const revision = ++operationRevisionRef.current;
+        setRecovering(true);
+        void trpcClient.mongoClusters.documentView.recoverUnavailable
+            .mutate({ reason: current.reason, action })
+            .then((response: ConnectionUnavailableResponse | ConnectionRecoveryResponse) => {
+                if (disposedRef.current || revision !== operationRevisionRef.current || action === 'close') {
+                    return;
+                }
+                if ('unavailable' in response) {
+                    unavailableRef.current = response.unavailable;
+                    setUnavailable(response.unavailable);
+                    return;
+                }
+                unavailableRef.current = undefined;
+                setUnavailable(undefined);
+                setRecoveryAnnouncement(response.recovered.text);
+            })
+            .catch(async (error) => {
+                if (disposedRef.current || revision !== operationRevisionRef.current) {
+                    return;
+                }
+                const cause = error instanceof Error ? error.message : String(error);
+                const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
+                if (!disposedRef.current && revision === operationRevisionRef.current) {
+                    void trpcClient.common.displayErrorMessage.mutate({
+                        message: explained ?? l10n.t('Unable to recover the connection'),
+                        modal: false,
+                        cause,
+                    });
+                }
+            })
+            .finally(() => {
+                if (!disposedRef.current) {
+                    setRecovering(false);
+                }
+            });
+    };
+
     // Accessibility: Handle Escape key to exit Monaco editor
     const handleEscapeEditor = useCallback(() => {
         saveButtonRef.current?.focus();
     }, []);
 
     return (
-        <div className="documentView">
-            <div className="toolbarContainer">
-                {isLoading && <ProgressBar thickness="large" shape="square" className="progressBar" />}
-                <ToolbarDocuments
-                    disableSaveButton={configuration.mode === 'view' || !isDirty || isLoading}
-                    disableRefreshButton={isLoading}
-                    onSaveRequest={handleOnSaveRequest}
-                    onValidateRequest={handleOnValidateRequest}
-                    onRefreshRequest={handleOnRefreshRequest}
-                    saveButtonRef={saveButtonRef}
-                />
+        <DisconnectedOverlay
+            unavailable={unavailable}
+            onAction={handleUnavailableAction}
+            recovering={recovering}
+        >
+            <div className="documentView">
+                <div className="toolbarContainer">
+                    {isLoading && <ProgressBar thickness="large" shape="square" className="progressBar" />}
+                    <ToolbarDocuments
+                        disableSaveButton={
+                            configuration.mode === 'view' ||
+                            !isDirty ||
+                            isLoading ||
+                            !documentLoaded ||
+                            unavailable !== undefined
+                        }
+                        disableRefreshButton={isLoading || unavailable !== undefined}
+                        onSaveRequest={handleOnSaveRequest}
+                        onValidateRequest={handleOnValidateRequest}
+                        onRefreshRequest={handleOnRefreshRequest}
+                        saveButtonRef={saveButtonRef}
+                    />
+                </div>
+                <div className="monacoContainer">
+                    <MonacoEditor
+                        height={'100%'}
+                        width={'100%'}
+                        language="json"
+                        options={{ ...monacoOptions, readOnly: configuration.mode === 'view' }}
+                        value={editorContent}
+                        onMount={handleMonacoEditorMount}
+                        onEscapeEditor={handleEscapeEditor}
+                        onChange={() => {
+                            if (!settingContentRef.current) {
+                                editorRevisionRef.current += 1;
+                                setIsDirty(true);
+                            }
+                        }}
+                    />
+                </div>
+                <Announcer when={recoveryAnnouncement !== undefined} message={recoveryAnnouncement ?? ''} />
             </div>
-            <div className="monacoContainer">
-                <MonacoEditor
-                    height={'100%'}
-                    width={'100%'}
-                    language="json"
-                    options={monacoOptions}
-                    value={editorContent}
-                    onMount={handleMonacoEditorMount}
-                    onEscapeEditor={handleEscapeEditor}
-                    onChange={() => {
-                        setIsDirty(true);
-                    }}
-                />
-            </div>
-        </div>
+        </DisconnectedOverlay>
     );
 };

@@ -12,6 +12,7 @@ it.each(['signInRequired', 'credentialsRejected', 'credentialsMissing'] as const
         const { unavailable } = describeUnavailableConnection(reason, {
             canRetrySignIn: false,
             canUpdateCredentials: false,
+            canReconnect: false,
         });
 
         expect(unavailable).toMatchObject({ reason, action: 'close' });
@@ -24,12 +25,27 @@ it('offers the available credential repair without clearing the rejection', (): 
         describeUnavailableConnection('credentialsRejected', {
             canRetrySignIn: true,
             canUpdateCredentials: true,
+            canReconnect: true,
         }).unavailable.action,
     ).toBe('signInAgain');
     expect(
         describeUnavailableConnection('credentialsRejected', {
             canRetrySignIn: false,
             canUpdateCredentials: true,
+            canReconnect: true,
         }).unavailable.action,
     ).toBe('updateCredentials');
 });
+
+it.each(['identityChanged', 'credentialsChanged', 'userDisconnected', 'unreachable'] as const)(
+    'does not offer an unsupported reconnect for %s',
+    (reason): void => {
+        expect(
+            describeUnavailableConnection(reason, {
+                canRetrySignIn: false,
+                canUpdateCredentials: false,
+                canReconnect: false,
+            }).unavailable.action,
+        ).toBe('close');
+    },
+);

@@ -36,6 +36,10 @@ const newerBinding = { ...binding, generation: 2 };
 const upsertDocument = vi.fn<ClustersClient['upsertDocument']>();
 const pointRead = vi.fn<ClustersClient['pointRead']>();
 const viewPanelTitleSetter = vi.fn();
+const describeUnavailable = vi.fn((reason: ConnectionUnavailableError['reason']) => ({
+    unavailable: { reason, text: 'Connection unavailable.', action: 'close' as const },
+}));
+const recoverUnavailable = vi.fn();
 const id = new ObjectId('000000000000000000000001');
 const document = { _id: id, field: 'value' };
 const serializedId = EJSON.stringify(id);
@@ -52,7 +56,9 @@ function createCaller(signal?: AbortSignal): ReturnType<typeof callDocumentView>
         databaseName: 'database',
         collectionName: 'collection',
         documentId: 'id',
-        binding,
+        binding: { current: binding },
+        describeUnavailable,
+        recoverUnavailable,
         signal,
         viewPanelTitleSetter,
     };
@@ -62,6 +68,9 @@ function createCaller(signal?: AbortSignal): ReturnType<typeof callDocumentView>
 describe('Document View bound operations', () => {
     beforeEach(() => {
         vi.resetAllMocks();
+        describeUnavailable.mockImplementation((reason: ConnectionUnavailableError['reason']) => ({
+            unavailable: { reason, text: 'Connection unavailable.', action: 'close' as const },
+        }));
         mocks.getBinding.mockReturnValue(newerBinding);
         mocks.getEpoch.mockReturnValue(3);
         mocks.resolveBoundClient.mockResolvedValue({ binding: newerBinding, upsertDocument, pointRead });
@@ -108,8 +117,8 @@ describe('Document View bound operations', () => {
     it('rejects a changed identity before calling the driver', async () => {
         const unavailable = new ConnectionUnavailableError('identityChanged');
         mocks.resolveBoundClient.mockRejectedValueOnce(unavailable);
-        await expect(createCaller().saveDocument(input)).rejects.toMatchObject({
-            cause: expect.objectContaining({ reason: 'identityChanged' }),
+        await expect(createCaller().saveDocument(input)).resolves.toEqual({
+            unavailable: { reason: 'identityChanged', text: 'Connection unavailable.', action: 'close' },
         });
         expect(upsertDocument).not.toHaveBeenCalled();
     });
@@ -119,12 +128,46 @@ describe('Document View bound operations', () => {
         upsertDocument.mockRejectedValueOnce(failure);
         mocks.reportFailure.mockReturnValueOnce('credentialsRejected');
 
-        await expect(createCaller().saveDocument(input)).rejects.toMatchObject({
-            cause: expect.objectContaining({ reason: 'credentialsRejected' }),
+        await expect(createCaller().saveDocument(input)).resolves.toEqual({
+            unavailable: { reason: 'credentialsRejected', text: 'Connection unavailable.', action: 'close' },
         });
         expect(mocks.reportFailure).toHaveBeenCalledExactlyOnceWith(newerBinding, failure);
         expect(upsertDocument).toHaveBeenCalledOnce();
         expect(showConfirmationAsInSettings).not.toHaveBeenCalled();
+    });
+
+    it('returns structured read unavailability without reclassifying it', async (): Promise<void> => {
+        pointRead.mockRejectedValueOnce(new ConnectionUnavailableError('signInRequired'));
+        mocks.reportFailure.mockReturnValueOnce('signInRequired');
+
+        await expect(createCaller().getDocumentById(serializedId)).resolves.toEqual({
+            unavailable: { reason: 'signInRequired', text: 'Connection unavailable.', action: 'close' },
+        });
+    });
+
+    it('returns save unavailability before attempting unrelated document validation', async (): Promise<void> => {
+        mocks.resolveBoundClient.mockRejectedValueOnce(new ConnectionUnavailableError('userDisconnected'));
+
+        await expect(
+            createCaller().saveDocument({ documentContent: '{"invalid"' }),
+        ).resolves.toEqual({
+            unavailable: { reason: 'userDisconnected', text: 'Connection unavailable.', action: 'close' },
+        });
+        expect(upsertDocument).not.toHaveBeenCalled();
+    });
+
+    it('routes save retries through the preallocated identity so one insert target is reused', async (): Promise<void> => {
+        const preallocatedId = '{"$oid":"000000000000000000000099"}';
+        upsertDocument.mockResolvedValue({ documentId: id, document });
+
+        await createCaller().saveDocument({ documentContent: EJSON.stringify({ field: 'value' }), documentId: preallocatedId });
+
+        expect(upsertDocument).toHaveBeenCalledExactlyOnceWith(
+            'database',
+            'collection',
+            preallocatedId,
+            { field: 'value' },
+        );
     });
 
     it('does not turn a nonterminal write failure into unavailability', async () => {
