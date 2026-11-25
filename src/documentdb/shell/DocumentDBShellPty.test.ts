@@ -1549,6 +1549,32 @@ describe('DocumentDBShellPty', () => {
             expect(mockEvaluate).toHaveBeenNthCalledWith(1, 'show dbs', 80);
             expect(mockEvaluate).toHaveBeenNthCalledWith(2, 'use newdb', 80);
         });
+
+        it('should discard queued pasted commands when Disconnect cancels evaluation', async () => {
+            let rejectEvaluation: (error: Error) => void = () => {
+                throw new Error('Expected evaluation to be pending');
+            };
+            mockEvaluate
+                .mockImplementationOnce(
+                    () =>
+                        new Promise((_resolve, reject) => {
+                            rejectEvaluation = reject;
+                        }),
+                )
+                .mockResolvedValue({
+                    type: null,
+                    printable: '"done"',
+                    durationMs: 1,
+                });
+
+            pty.handleInput('show dbs\nuse newdb\n');
+            pty.disconnect();
+            rejectEvaluation(new Error('Worker terminated'));
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(mockEvaluate).toHaveBeenCalledExactlyOnceWith('show dbs', 80);
+            expect(written.split('testdb> ')).toHaveLength(2);
+        });
     });
 
     describe('multi-line paste dialog', () => {

@@ -269,9 +269,14 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         this._disconnectRevision += 1;
         this._spinner?.stop();
         this._spinner = undefined;
+        this._evaluating = false;
+        this._inputHandler.clearPendingInput();
         this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Disconnected')));
         this._sessionManager.killWorker();
         this._inputHandler.setEnabled(true);
+        if (!this._closed) {
+            this.showPrompt();
+        }
     }
 
     /**
@@ -684,6 +689,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     // ─── Private: Line handling ──────────────────────────────────────────────
 
     private async handleLineInput(line: string): Promise<void> {
+        const disconnectRevision = this._disconnectRevision;
         if (ClustersClient.getLatchReason(this._connectionInfo.clusterId)) {
             this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Disconnected')));
             return;
@@ -709,29 +715,32 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         try {
             await this.evaluateInput(trimmed);
         } catch (error: unknown) {
-            await this.handleEvalError(error);
-        } finally {
-            // Stop the spinner before writing results or the next prompt.
-            this._spinner?.stop();
-            this._spinner = undefined;
-
-            this._evaluating = false;
-
-            // If Ctrl+C was pressed, the interrupt handler already re-enabled
-            // input and showed a prompt — don't duplicate.
-            if (!this._interrupted) {
-                this._inputHandler.setEnabled(true);
-
-                if (!this._closed) {
-                    this.showPrompt();
-
-                    // Process any input that was queued during execution
-                    // (e.g., remaining lines from a multi-line paste).
-                    this._inputHandler.processPendingInput();
-                }
+            if (disconnectRevision === this._disconnectRevision) {
+                await this.handleEvalError(error);
             }
+        } finally {
+            if (disconnectRevision === this._disconnectRevision) {
+                this._spinner?.stop();
+                this._spinner = undefined;
 
-            this._interrupted = false;
+                this._evaluating = false;
+
+                // If Ctrl+C was pressed, the interrupt handler already re-enabled
+                // input and showed a prompt — don't duplicate.
+                if (!this._interrupted) {
+                    this._inputHandler.setEnabled(true);
+
+                    if (!this._closed) {
+                        this.showPrompt();
+
+                        // Process any input that was queued during execution
+                        // (e.g., remaining lines from a multi-line paste).
+                        this._inputHandler.processPendingInput();
+                    }
+                }
+
+                this._interrupted = false;
+            }
         }
     }
 
@@ -771,16 +780,16 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 throw evalError;
             }
 
-            // Stop the spinner before writing any output so the spinner
-            // character doesn't collide with the result text.
-            this._spinner?.stop();
-            this._spinner = undefined;
-
             // If this eval was cancelled by Ctrl+C, skip output — the interrupt
             // handler already showed ^C and a new prompt.
             if (this._interrupted || disconnectRevision !== this._disconnectRevision) {
                 return;
             }
+
+            // Stop the spinner before writing any output so the spinner
+            // character doesn't collide with the result text.
+            this._spinner?.stop();
+            this._spinner = undefined;
 
             // ── Post-eval telemetry ──────────────────────────────────────
             context.telemetry.properties.resultType = result.type ?? 'null';
