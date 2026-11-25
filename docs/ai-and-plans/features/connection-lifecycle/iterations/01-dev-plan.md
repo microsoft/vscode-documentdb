@@ -1772,6 +1772,9 @@ behave as today.
   by automated tests. Operator feedback: label the tree action **Reconnect**, use the
   default Fluent layout with an instant backdrop, and clarify that an old view is bound
   to its previous connection settings.
+- **PR6 review:** The operator kept the single dirty check at **Close all** confirmation
+  ([review thread](https://github.com/microsoft/vscode-documentdb/pull/1130#discussion_r4694258852)).
+  In a batch removal, a view edited after that check still closes; there is no second prompt.
 - **Carry-forward from WI-4d:** An explicit Update Credentials that changes the tenant must
   replace or clear the old verified Entra identity so the next connect can use the saved
   tenant (decision 0011). Automatic reconnect remains pinned until that explicit update.
