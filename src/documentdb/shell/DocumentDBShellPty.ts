@@ -122,6 +122,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     /** Unique session ID for correlating all events within this shell session. */
     private readonly _shellSessionId: string = randomUUID();
+    private _disconnectRevision = 0;
     /** Extension client whose metadata describes this cluster, captured once when the shell is created. */
     private readonly _connectionCorrelationId?: string;
     /** Running count of commands evaluated in this session (for commandIndex measurement). */
@@ -260,6 +261,21 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         if (this._terminal) {
             unregisterShellTerminal(this._terminal);
             this._terminal = undefined;
+        }
+    }
+
+    /** Keep the terminal and its scrollback, but stop the database worker. */
+    public disconnect(): void {
+        this._disconnectRevision += 1;
+        this._spinner?.stop();
+        this._spinner = undefined;
+        this._evaluating = false;
+        this._inputHandler.clearPendingInput();
+        this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Disconnected')));
+        this._sessionManager.killWorker();
+        this._inputHandler.setEnabled(true);
+        if (!this._closed) {
+            this.showPrompt();
         }
     }
 
@@ -484,6 +500,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     // ─── Private: Session initialization ─────────────────────────────────────
 
     private async initializeSession(): Promise<void> {
+        const disconnectRevision = this._disconnectRevision;
         try {
             const metadata = await callWithTelemetryAndErrorHandling('shell.sessionStart', async (context) => {
                 context.errorHandling.suppressDisplay = true;
@@ -502,6 +519,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 Object.assign(context.telemetry.properties, domainProps);
                 return metadata;
             });
+            if (disconnectRevision !== this._disconnectRevision) {
+                return;
+            }
             if (!metadata) {
                 throw new UserCancelledError('shell.sessionStart');
             }
@@ -605,6 +625,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 this._initialInput = undefined;
             }
         } catch (error: unknown) {
+            if (disconnectRevision !== this._disconnectRevision) {
+                return;
+            }
             // Stop the connection spinner on failure
             this._spinner?.stop();
             this._spinner = undefined;
@@ -666,6 +689,14 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     // ─── Private: Line handling ──────────────────────────────────────────────
 
     private async handleLineInput(line: string): Promise<void> {
+        const disconnectRevision = this._disconnectRevision;
+        if (ClustersClient.getLatchReason(this._connectionInfo.clusterId)) {
+            this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Disconnected')));
+            if (!this._closed) {
+                this.showPrompt();
+            }
+            return;
+        }
         const trimmed = line.trim();
 
         // Empty line — just show a new prompt
@@ -687,33 +718,37 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         try {
             await this.evaluateInput(trimmed);
         } catch (error: unknown) {
-            await this.handleEvalError(error);
-        } finally {
-            // Stop the spinner before writing results or the next prompt.
-            this._spinner?.stop();
-            this._spinner = undefined;
-
-            this._evaluating = false;
-
-            // If Ctrl+C was pressed, the interrupt handler already re-enabled
-            // input and showed a prompt — don't duplicate.
-            if (!this._interrupted) {
-                this._inputHandler.setEnabled(true);
-
-                if (!this._closed) {
-                    this.showPrompt();
-
-                    // Process any input that was queued during execution
-                    // (e.g., remaining lines from a multi-line paste).
-                    this._inputHandler.processPendingInput();
-                }
+            if (disconnectRevision === this._disconnectRevision) {
+                await this.handleEvalError(error);
             }
+        } finally {
+            if (disconnectRevision === this._disconnectRevision) {
+                this._spinner?.stop();
+                this._spinner = undefined;
 
-            this._interrupted = false;
+                this._evaluating = false;
+
+                // If Ctrl+C was pressed, the interrupt handler already re-enabled
+                // input and showed a prompt — don't duplicate.
+                if (!this._interrupted) {
+                    this._inputHandler.setEnabled(true);
+
+                    if (!this._closed) {
+                        this.showPrompt();
+
+                        // Process any input that was queued during execution
+                        // (e.g., remaining lines from a multi-line paste).
+                        this._inputHandler.processPendingInput();
+                    }
+                }
+
+                this._interrupted = false;
+            }
         }
     }
 
     private async evaluateInput(input: string): Promise<void> {
+        const disconnectRevision = this._disconnectRevision;
         this._commandCount++;
         const commandIndex = this._commandCount;
         const commandCategory = classifyCommand(input);
@@ -739,24 +774,25 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             try {
                 result = await this._sessionManager.evaluate(input, this._columns);
             } catch (evalError) {
-                // Ctrl+C kills the worker, producing a "Worker terminated" error.
-                // Re-classify as user cancellation for accurate telemetry.
-                if (this._interrupted) {
+                // Ctrl+C and Disconnect both kill the worker, producing a
+                // "Worker terminated" error. Re-classify intentional
+                // cancellation for accurate telemetry and UI behavior.
+                if (this._interrupted || disconnectRevision !== this._disconnectRevision) {
                     throw new UserCancelledError('shell.eval');
                 }
                 throw evalError;
+            }
+
+            // If this eval was cancelled by Ctrl+C, skip output — the interrupt
+            // handler already showed ^C and a new prompt.
+            if (this._interrupted || disconnectRevision !== this._disconnectRevision) {
+                return;
             }
 
             // Stop the spinner before writing any output so the spinner
             // character doesn't collide with the result text.
             this._spinner?.stop();
             this._spinner = undefined;
-
-            // If this eval was cancelled by Ctrl+C, skip output — the interrupt
-            // handler already showed ^C and a new prompt.
-            if (this._interrupted) {
-                return;
-            }
 
             // ── Post-eval telemetry ──────────────────────────────────────
             context.telemetry.properties.resultType = result.type ?? 'null';
@@ -794,9 +830,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         this._spinner?.stop();
         this._spinner = undefined;
 
-        // Suppress errors from intentional Ctrl+C cancellation — the interrupt
-        // handler already showed ^C and a new prompt.
-        if (this._interrupted) {
+        // Suppress errors from intentional cancellation. Ctrl+C renders its own
+        // prompt, while Disconnect renders its own terminal status.
+        if (this._interrupted || error instanceof UserCancelledError) {
             return;
         }
 

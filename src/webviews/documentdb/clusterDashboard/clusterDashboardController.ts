@@ -404,11 +404,19 @@ export function openClusterDashboardWebview(
     initialData: ClusterDashboardWebviewConfigurationType,
     binding: ConnectionBinding,
     deepLink?: DeepLinkTelemetry,
+    autoOpenOnConnect = false,
 ): AppWebviewController<ClusterDashboardWebviewConfigurationType> {
     const panelKey = getPanelKey(initialData.clusterId, initialData.selectedDatabaseName);
     const existingPanel = openPanels.get(panelKey);
     if (existingPanel && !existingPanel.controller.isDisposed) {
         existingPanel.controller.revealToForeground();
+        if (
+            autoOpenOnConnect &&
+            existingPanel.getUnavailable()?.reason === 'userDisconnected' &&
+            existingPanel.binding.fingerprint === binding.fingerprint
+        ) {
+            void existingPanel.controller.panel.webview.postMessage({ type: 'clusterDashboard.retryAfterReconnect' });
+        }
         return existingPanel.controller;
     }
 

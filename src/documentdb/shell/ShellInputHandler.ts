@@ -214,6 +214,13 @@ export class ShellInputHandler {
     }
 
     /**
+     * Discard input queued behind an evaluation that will no longer resume.
+     */
+    clearPendingInput(): void {
+        this._pendingInput = '';
+    }
+
+    /**
      * Get the current line buffer content.
      */
     getBuffer(): string {

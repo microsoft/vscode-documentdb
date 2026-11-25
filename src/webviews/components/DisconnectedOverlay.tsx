@@ -86,10 +86,13 @@ export function DisconnectedOverlay({
                         }
                     }}
                 >
-                    <DialogSurface className="disconnectedOverlay" aria-describedby={descriptionId}>
+                    <DialogSurface
+                        className="disconnectedOverlay"
+                        aria-describedby={descriptionId}
+                        backdropMotion={null}
+                    >
                         <DialogBody>
                             <DialogTitle
-                                className="disconnectedOverlayTitle"
                                 action={
                                     <DialogTrigger action="close" disableButtonEnhancement>
                                         <Button
@@ -103,14 +106,14 @@ export function DisconnectedOverlay({
                             >
                                 {unavailable.title}
                             </DialogTitle>
-                            <DialogContent id={descriptionId} className="disconnectedOverlayDetail">
-                                <p>{unavailable.detail}</p>
+                            <DialogContent id={descriptionId}>
+                                {unavailable.detail}
                                 {warnOnClose && <p>{l10n.t('Closing this view discards unsaved changes.')}</p>}
                                 {confirmationFailed && (
                                     <p role="alert">{l10n.t('Unable to confirm closing the view. Try again.')}</p>
                                 )}
                             </DialogContent>
-                            <DialogActions fluid className="disconnectedOverlayActions">
+                            <DialogActions>
                                 {unavailable.action !== 'close' && (
                                     <Button
                                         appearance="primary"

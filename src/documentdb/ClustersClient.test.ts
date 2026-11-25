@@ -322,6 +322,25 @@ describe('regular connection startup diagnostics', () => {
         expect(ClustersClient.getBinding(clusterId)).toBe(current.binding);
     });
 
+    it('does not let a retired view use a new client with the same fingerprint', async (): Promise<void> => {
+        const old = await ClustersClient.connectInteractive(clusterId);
+        const session = ClusterSession.getSession(await ClusterSession.initNewSession(clusterId));
+        ClustersClient.latch(clusterId, 'credentialsUpdating');
+        ClustersClient.retireBoundViews(clusterId);
+        await ClustersClient.deleteClient(clusterId, { alreadyInvalidated: true });
+        ClustersClient.unlatch(clusterId);
+
+        await expect(ClustersClient.resolveBoundClient(old.binding)).rejects.toMatchObject({
+            reason: 'credentialsChanged',
+        });
+        expect(mockConnect).toHaveBeenCalledOnce();
+        const current = await ClustersClient.getClient(clusterId);
+        expect(current.binding.fingerprint).toBe(old.binding.fingerprint);
+        expect(current.generation).toBeGreaterThan(old.generation);
+        expect(() => session.assertAvailable()).toThrow(expect.objectContaining({ reason: 'credentialsChanged' }));
+        await expect(ClustersClient.resolveBoundClient(current.binding)).resolves.toBe(current);
+    });
+
     it('keeps session paging and schema accumulation on a same-identity replacement', async (): Promise<void> => {
         const original = await ClustersClient.connectInteractive(clusterId);
         const session = ClusterSession.getSession(await ClusterSession.initNewSession(clusterId));
@@ -1050,6 +1069,23 @@ describe('regular connection startup diagnostics', () => {
         expect(mockClose).toHaveBeenCalledTimes(1);
         expect(mockClose.mock.contexts[0]).toBe(old.getMongoClient());
         expect(ClustersClient.getBinding(clusterId)).toBe(replacement.binding);
+    });
+
+    it('closes a fenced client without advancing the epoch again or discarding the identity pin', async () => {
+        await ClustersClient.connectInteractive(clusterId);
+        const identity = ClustersClient.getLastVerifiedIdentity(clusterId);
+        expect(identity).toBeDefined();
+        const epoch = ClustersClient.getEpoch(clusterId);
+
+        ClustersClient.latch(clusterId, 'userDisconnected');
+        await ClustersClient.deleteClient(clusterId, { alreadyInvalidated: true });
+
+        expect(ClustersClient.getEpoch(clusterId)).toBe(epoch + 1);
+        expect(ClustersClient.getLastVerifiedIdentity(clusterId)).toBe(identity);
+        await expect(ClustersClient.getClient(clusterId)).rejects.toMatchObject({ reason: 'userDisconnected' });
+
+        ClustersClient.unlatch(clusterId);
+        await expect(ClustersClient.getClient(clusterId)).resolves.toBeDefined();
     });
 
     it.each([false, true])('a stale replacement waiter has only one retry (latched: %s)', async (latch) => {

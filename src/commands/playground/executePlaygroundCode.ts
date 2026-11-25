@@ -53,6 +53,13 @@ export function shutdownEvaluator(clusterId: string): void {
     }
 }
 
+/** Stop an evaluator immediately without changing the open documents or their bindings. */
+export function stopPlaygroundEvaluator(clusterId: string): void {
+    const evaluator = evaluators.get(clusterId);
+    evaluators.delete(clusterId);
+    evaluator?.dispose();
+}
+
 /**
  * Shut down all evaluators that have no remaining open playground documents.
  * Called when playground documents close or state changes.
@@ -113,6 +120,14 @@ export async function executePlaygroundCode(
         if (!connection) {
             return; // user cancelled the connection picker
         }
+    }
+
+    const { clusterId } = connection;
+    if (ClustersClient.getLatchReason(clusterId)) {
+        void vscode.window.showWarningMessage(
+            l10n.t('This connection is unavailable. Reconnect from the tree to run this playground.'),
+        );
+        return;
     }
 
     // Prevent concurrent runs on the same cluster — no queuing
@@ -196,10 +211,16 @@ export async function executePlaygroundCode(
                 const sourceUri = documentUri;
 
                 try {
+                    if (evaluators.get(clusterId) !== evaluator) {
+                        throw new UserCancelledError('playground.execute');
+                    }
                     const result = await evaluator!.evaluate(connection, code, (message) => {
                         progress.report({ message });
                     });
 
+                    if (evaluators.get(clusterId) !== evaluator) {
+                        return;
+                    }
                     // ── Post-execution telemetry (known after success) ────
                     context.telemetry.properties.resultType = result.type ?? 'null';
                     context.telemetry.measurements.initDurationMs = evaluator!.lastInitDurationMs;
@@ -226,13 +247,16 @@ export async function executePlaygroundCode(
                     }
                     // result: 'Succeeded' is set automatically by the framework
                 } catch (error: unknown) {
+                    if (error instanceof UserCancelledError) {
+                        throw error;
+                    }
                     // Update session telemetry even on failure (worker may have spawned before failing)
                     context.telemetry.properties.sessionId = evaluator!.sessionId ?? 'none';
                     context.telemetry.measurements.sessionEvalCount = evaluator!.sessionEvalCount;
                     context.telemetry.properties.authMethod = evaluator!.sessionAuthMethod ?? 'unknown';
                     context.telemetry.measurements.initDurationMs = evaluator!.lastInitDurationMs;
 
-                    if (cancelled) {
+                    if (cancelled || evaluators.get(clusterId) !== evaluator) {
                         // Throw UserCancelledError so framework marks result as 'Canceled'
                         throw new UserCancelledError('playground.execute');
                     }

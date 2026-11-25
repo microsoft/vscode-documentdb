@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
     explainOperationFailure: vi.fn(),
     displayErrorMessage: vi.fn(),
     reportEvent: vi.fn(),
+    reportDirty: vi.fn<(dirty: boolean) => Promise<void>>().mockResolvedValue(undefined),
 }));
 
 vi.mock('@microsoft/vscode-ext-webview/react', () => ({
@@ -31,6 +32,7 @@ vi.mock('../../_integration/useTrpcClient', () => ({
                 getDocumentById: { query: mocks.getDocumentById },
                 saveDocument: { mutate: mocks.saveDocument },
                 recoverUnavailable: { mutate: mocks.recoverUnavailable },
+                reportDirty: { mutate: mocks.reportDirty },
             },
         },
         common: {
@@ -156,6 +158,17 @@ async function save(): Promise<void> {
     expect(button?.disabled).toBe(false);
     await act(async () => button?.click());
 }
+
+it('reports only dirty transitions, not editor contents', async (): Promise<void> => {
+    mocks.getDocumentById.mockResolvedValueOnce('{"field":"saved"}');
+    mocks.saveDocument.mockResolvedValueOnce({ documentId: 'id', documentStringified: '{"field":"edited"}' });
+    await render(config('edit'));
+    expect(mocks.reportDirty).not.toHaveBeenCalled();
+    await edit('{"field":"draft"}');
+    await edit('{"field":"edited"}');
+    await save();
+    expect(mocks.reportDirty.mock.calls).toEqual([[true], [false]]);
+});
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

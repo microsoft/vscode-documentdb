@@ -52,6 +52,7 @@ import { EntraSignInRequiredError } from './auth/entraErrors/entraCallbackErrors
 import { getAzureHostSuffix } from './auth/oidcAllowedHosts';
 import { readJwtTimes } from './auth/tokenExpiry';
 import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
+import { isRetiredConnectionBinding, retireConnectionBindings } from './connectionBindingRetirement';
 import { classifyConnectionFailure, type ConnectionFailure } from './connectionFailures';
 import { computeConnectionFingerprint, type ConnectionPrincipal } from './connectionFingerprint';
 import { ConnectionUnavailableError, type ConnectionUnavailableReason } from './ConnectionUnavailableError';
@@ -294,6 +295,10 @@ export class ClustersClient {
     /** Last successfully published identity, retained when the client is evicted. */
     public static getLastVerifiedIdentity(clusterId: string): VerifiedIdentity | undefined {
         return ClustersClient._lastVerifiedIdentities.get(clusterId);
+    }
+
+    public static clearLastVerifiedIdentity(clusterId: string): void {
+        ClustersClient._lastVerifiedIdentities.delete(clusterId);
     }
 
     /** A saved, explicit tenant change must not silently use the previous tenant's pin. */
@@ -839,11 +844,14 @@ export class ClustersClient {
     }
 
     /** A surface can follow new generations, but never start or use a client for a different identity. */
-    public static resolveBoundClient(
+    public static async resolveBoundClient(
         binding: ConnectionBinding,
         options?: { readonly background?: boolean; readonly trigger?: ClientStartupTrigger },
     ): Promise<ClustersClient> {
-        return ClustersClient.acquireClient(
+        if (isRetiredConnectionBinding(binding)) {
+            throw new ConnectionUnavailableError('credentialsChanged');
+        }
+        const client = await ClustersClient.acquireClient(
             binding.clusterId,
             undefined,
             undefined,
@@ -852,6 +860,14 @@ export class ClustersClient {
             options?.background === true,
             binding.fingerprint,
         );
+        if (isRetiredConnectionBinding(binding)) {
+            throw new ConnectionUnavailableError('credentialsChanged');
+        }
+        return client;
+    }
+
+    public static retireBoundViews(clusterId: string): void {
+        retireConnectionBindings(clusterId, ClustersClient._generations.get(clusterId) ?? 0);
     }
 
     /** Publish only after explicit sign-in and database startup succeed. The prior pin stays intact until then. */
@@ -1178,13 +1194,22 @@ export class ClustersClient {
         return ClustersClient._clients.get(clusterId)?._srvResolution;
     }
 
-    public static async deleteClient(clusterId: string): Promise<void> {
-        ClustersClient.invalidate(clusterId);
+    public static async deleteClient(
+        clusterId: string,
+        options?: { readonly alreadyInvalidated: boolean },
+    ): Promise<void> {
+        if (!options?.alreadyInvalidated) {
+            ClustersClient.invalidate(clusterId);
+        }
         const client = ClustersClient._clients.get(clusterId);
         if (client) {
             ClustersClient._clients.delete(clusterId);
-            SchemaStore.getInstance().clearCluster(clusterId);
             client._closed = true;
+        }
+        if (client || options?.alreadyInvalidated) {
+            SchemaStore.getInstance().clearCluster(clusterId);
+        }
+        if (client) {
             await client._mongoClient.close(true);
         }
     }

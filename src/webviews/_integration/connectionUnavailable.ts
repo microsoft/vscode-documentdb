@@ -12,6 +12,7 @@ export const connectionUnavailableReasons = [
     'signInRequired',
     'credentialsRejected',
     'credentialsMissing',
+    'credentialsUpdating',
     'credentialsChanged',
     'identityChanged',
     'userDisconnected',

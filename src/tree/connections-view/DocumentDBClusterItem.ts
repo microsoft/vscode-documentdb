@@ -482,6 +482,10 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
      * @returns The TreeItem object.
      */
     getTreeItem(): vscode.TreeItem {
-        return buildClusterTreeItem({ id: this.id, contextValue: this.contextValue, cluster: this.cluster });
+        return buildClusterTreeItem({
+            id: this.id,
+            contextValue: this.getClusterTreeItemContextValue(),
+            cluster: this.cluster,
+        });
     }
 }

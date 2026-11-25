@@ -18,12 +18,13 @@ import {
     type ConnectionRecoveryResponse,
     type ConnectionUnavailableResponse,
 } from '../../_integration/connectionUnavailable';
-import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
+import { publicProcedure, publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
 import { guardBoundViewOperation, runBoundViewOperation } from '../boundViewOperations';
 
 export type RouterContext = BaseRouterContext & {
     clusterId: string;
     readonly binding: ConnectionBinding;
+    readonly setDirty: (dirty: boolean) => void;
     readonly describeUnavailable: (reason: ConnectionUnavailableError['reason']) => ConnectionUnavailableResponse;
     readonly recoverUnavailable: (
         request: ConnectionRecoveryRequest,
@@ -61,6 +62,9 @@ async function runDocumentViewOperation<T>(
 }
 
 export const documentsViewRouter = router({
+    reportDirty: publicProcedure.input(z.boolean()).mutation(({ input, ctx }) => {
+        (ctx as RouterContext).setDirty(input);
+    }),
     getInfo: publicProcedureWithTelemetry.query(({ ctx }) => {
         const info = Object.fromEntries(
             Object.entries(ctx as WithTelemetry<RouterContext>).filter(([key]) => key !== 'binding'),

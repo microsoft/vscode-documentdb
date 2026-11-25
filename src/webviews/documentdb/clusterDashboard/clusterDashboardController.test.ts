@@ -66,7 +66,11 @@ import { ConnectionUnavailableError } from '../../../documentdb/ConnectionUnavai
 import { CredentialCache } from '../../../documentdb/CredentialCache';
 import { openAppWebview } from '../../_integration/openAppWebview';
 import { CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS } from './clusterDashboardContextMenu';
-import { openClusterDashboardWebview, registerClusterDashboardContextMenuCommands } from './clusterDashboardController';
+import {
+    openClusterDashboardWebview,
+    registerClusterDashboardContextMenuCommands,
+    type ClusterDashboardWebviewConfigurationType,
+} from './clusterDashboardController';
 import { type RouterContext } from './clusterDashboardRouter';
 import { resolveNamespaceNode } from './resolveNamespaceNode';
 
@@ -158,6 +162,38 @@ describe('openClusterDashboardWebview panel lifecycle', () => {
 
         first.dispose();
     });
+
+    it.each([
+        ['userDisconnected', binding, true, true],
+        ['userDisconnected', { ...binding, fingerprint: 'other-identity' }, true, false],
+        ['credentialsChanged', binding, true, false],
+        ['userDisconnected', binding, false, false],
+    ] as const)(
+        'resumes only the auto-opened Dashboard after an explicit same-identity reconnect (%s, %j, %s)',
+        (reason, connectedBinding, autoOpen, resumes): void => {
+            vi.clearAllMocks();
+            const panel = open(CLUSTER);
+            const { context, config } = vi.mocked(openAppWebview).mock.calls[0][0];
+            (context as RouterContext).describeUnavailable(reason);
+
+            openClusterDashboardWebview(
+                config as ClusterDashboardWebviewConfigurationType,
+                { ...connectedBinding, generation: 2 },
+                undefined,
+                autoOpen,
+            );
+
+            expect(panel.revealToForeground).toHaveBeenCalledOnce();
+            if (resumes) {
+                expect(panel.panel.webview.postMessage).toHaveBeenCalledExactlyOnceWith({
+                    type: 'clusterDashboard.retryAfterReconnect',
+                });
+            } else {
+                expect(panel.panel.webview.postMessage).not.toHaveBeenCalled();
+            }
+            panel.dispose();
+        },
+    );
 
     it('opens separate panels for different databases in the same cluster', () => {
         const first = open(CLUSTER, 'sales');

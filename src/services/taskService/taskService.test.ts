@@ -6,6 +6,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Task, TaskService, TaskState, type TaskStatus } from './taskService';
+import { type ResourceDefinition, type ResourceTrackingTask } from './taskServiceResourceTracking';
+
+const { latchReasons } = vi.hoisted(() => ({
+    latchReasons: new Map<string, string>(),
+}));
+
+vi.mock('../../documentdb/ClustersClient', () => ({
+    ClustersClient: {
+        getLatchReason: (clusterId: string): string | undefined => latchReasons.get(clusterId),
+    },
+}));
 
 // Mock extensionVariables (ext) module
 vi.mock('../../extensionVariables', () => ({
@@ -75,13 +86,14 @@ vi.mock('vscode', () => ({
 /**
  * Simple test task implementation
  */
-class TestTask extends Task {
+class TestTask extends Task implements ResourceTrackingTask {
     public readonly type = 'test';
     public readonly name: string;
     private readonly workSteps: number;
     private readonly stepDuration: number;
     private readonly shouldFail: boolean;
     private readonly failAtStep?: number;
+    private readonly resources: ResourceDefinition[];
 
     constructor(
         name: string,
@@ -90,6 +102,7 @@ class TestTask extends Task {
             stepDuration?: number;
             shouldFail?: boolean;
             failAtStep?: number;
+            resources?: ResourceDefinition[];
         } = {},
     ) {
         super();
@@ -98,6 +111,11 @@ class TestTask extends Task {
         this.stepDuration = options.stepDuration ?? 20;
         this.shouldFail = options.shouldFail ?? false;
         this.failAtStep = options.failAtStep;
+        this.resources = options.resources ?? [];
+    }
+
+    public getUsedResources(): ResourceDefinition[] {
+        return this.resources;
     }
 
     protected async doWork(signal: AbortSignal): Promise<void> {
@@ -160,6 +178,7 @@ describe('TaskService', () => {
     let taskService: typeof TaskService;
 
     beforeEach(() => {
+        latchReasons.clear();
         // Clear the singleton state between tests
         taskService = TaskService;
         // Clear any existing tasks
@@ -175,6 +194,75 @@ describe('TaskService', () => {
 
         expect(taskService.getTask(task.id)).toBe(task);
         expect(taskService.listTasks()).toContain(task);
+    });
+
+    it('exposes active resource leases to collection and folder conflict queries', () => {
+        const lease = taskService.acquireResourceLease(
+            {
+                clusterId: 'lease-cluster',
+                databaseName: 'database',
+                collectionName: 'collection',
+            },
+            'Export documents',
+        );
+
+        try {
+            expect(
+                taskService.getConflictingTasks({
+                    clusterId: 'lease-cluster',
+                    databaseName: 'database',
+                    collectionName: 'collection',
+                }),
+            ).toEqual([
+                expect.objectContaining({
+                    taskName: 'Export documents',
+                    taskType: 'resource-lease',
+                }),
+            ]);
+            expect(taskService.getConflictingTasks({ clusterId: 'lease-cluster' })).toHaveLength(1);
+            expect(taskService.findConflictingTasksForConnections(['lease-cluster'])).toHaveLength(1);
+            expect(taskService.findConflictingTasksForConnections(['other-cluster'])).toEqual([]);
+            expect(
+                taskService.getConflictingTasks({
+                    clusterId: 'lease-cluster',
+                    databaseName: 'database',
+                    collectionName: 'other-collection',
+                }),
+            ).toEqual([]);
+        } finally {
+            lease.dispose();
+            lease.dispose();
+        }
+
+        expect(taskService.getConflictingTasks({ clusterId: 'lease-cluster' })).toEqual([]);
+        expect(taskService.findConflictingTasksForConnections(['lease-cluster'])).toEqual([]);
+    });
+
+    it('refuses task and lease admission with the cluster latch reason', async () => {
+        const resource = {
+            clusterId: 'latched-cluster',
+            databaseName: 'database',
+            collectionName: 'collection',
+        };
+        const task = new TestTask('Blocked Task', { resources: [resource] });
+        latchReasons.set(resource.clusterId, 'credentialsChanged');
+
+        expect(() => taskService.registerTask(task)).toThrowError(
+            expect.objectContaining({ name: 'ConnectionUnavailableError', reason: 'credentialsChanged' }),
+        );
+        expect(() => taskService.acquireResourceLease(resource, 'Blocked transfer')).toThrowError(
+            expect.objectContaining({ name: 'ConnectionUnavailableError', reason: 'credentialsChanged' }),
+        );
+
+        latchReasons.delete(resource.clusterId);
+        taskService.registerTask(task);
+        latchReasons.set(resource.clusterId, 'connectionRemoved');
+
+        await expect(task.start()).rejects.toMatchObject({
+            name: 'ConnectionUnavailableError',
+            reason: 'connectionRemoved',
+        });
+        expect(task.getStatus().state).toBe(TaskState.Pending);
     });
 
     it('should track task progress and state transitions in correct order', async () => {

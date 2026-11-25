@@ -17,6 +17,7 @@ import {
     hasDomainSuffix,
 } from '../../documentdb/utils/connectionStringHelpers';
 import { ext } from '../../extensionVariables';
+import { TaskService } from '../../services/taskService/taskService';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { BufferErrorCode, createMongoDbBuffer, type DocumentBuffer } from '../../utils/documentBuffer';
 import { getRootPath } from '../../utils/workspacUtils';
@@ -157,84 +158,97 @@ export async function importDocumentsWithProgress(
             const countDocuments = documents.length;
             const incrementDocuments = 75 / (countDocuments || 1);
             let count = 0;
-            let buffer: DocumentBuffer<unknown> | undefined;
-            let boundClient: ClustersClient | undefined;
-            if (selectedItem instanceof CollectionItem) {
-                // Get the connection string from the ClustersClient, not from the cluster model.
-                // For Discovery View items, the cluster model may not have connectionString populated,
-                // but the ClustersClient will have it after authentication.
-                const client = await resolveTransferClient(selectedItem.cluster.clusterId, binding);
-                if (binding) {
-                    // A bound import must not switch clients between batches.
-                    boundClient = client;
-                }
-                const connectionString = client.getConnectionString();
+            const lease = TaskService.acquireResourceLease(
+                {
+                    clusterId: selectedItem.cluster.clusterId,
+                    databaseName: selectedItem.databaseInfo.name,
+                    collectionName: selectedItem.collectionInfo.name,
+                },
+                l10n.t('Import documents'),
+            );
 
-                // Determine if this is an Azure MongoDB RU resource
-                // Fall back to non-RU buffer if connection string is unavailable
-                let isRuResource = false;
-                if (connectionString) {
-                    const hosts = getHostsFromConnectionString(connectionString);
-                    isRuResource = hasDomainSuffix(AzureDomains.RU, ...hosts);
-                }
-
-                if (isRuResource) {
-                    // For Azure MongoDB RU, we use a buffer with maxDocumentCount = 1
-                    buffer = createMongoDbBuffer<unknown>({
-                        maxDocumentCount: 1,
-                    });
-                } else {
-                    buffer = createMongoDbBuffer<unknown>();
-                }
-            }
-
-            let wasCancelled = false;
-            const insertBatch = async (document: unknown): Promise<{ count: number; errorOccurred: boolean }> => {
-                try {
-                    return await insertDocument(selectedItem, document, buffer, boundClient);
-                } catch (error) {
-                    if (error instanceof ConnectionUnavailableError) {
-                        ext.outputChannel.warn(l10n.t('Inserted {0} document(s).', count));
+            try {
+                let buffer: DocumentBuffer<unknown> | undefined;
+                let boundClient: ClustersClient | undefined;
+                if (selectedItem instanceof CollectionItem) {
+                    // Get the connection string from the ClustersClient, not from the cluster model.
+                    // For Discovery View items, the cluster model may not have connectionString populated,
+                    // but the ClustersClient will have it after authentication.
+                    const client = await resolveTransferClient(selectedItem.cluster.clusterId, binding);
+                    if (binding) {
+                        // A bound import must not switch clients between batches.
+                        boundClient = client;
                     }
-                    throw error;
+                    const connectionString = client.getConnectionString();
+
+                    // Determine if this is an Azure MongoDB RU resource
+                    // Fall back to non-RU buffer if connection string is unavailable
+                    let isRuResource = false;
+                    if (connectionString) {
+                        const hosts = getHostsFromConnectionString(connectionString);
+                        isRuResource = hasDomainSuffix(AzureDomains.RU, ...hosts);
+                    }
+
+                    if (isRuResource) {
+                        // For Azure MongoDB RU, we use a buffer with maxDocumentCount = 1
+                        buffer = createMongoDbBuffer<unknown>({
+                            maxDocumentCount: 1,
+                        });
+                    } else {
+                        buffer = createMongoDbBuffer<unknown>();
+                    }
                 }
-            };
 
-            for (let i = 0; i < countDocuments; i++) {
-                if (cancellationToken.isCancellationRequested) {
-                    wasCancelled = true;
-                    ext.outputChannel.warn(l10n.t('Import operation was canceled after {0} document(s).', count));
-                    break;
+                let wasCancelled = false;
+                const insertBatch = async (document: unknown): Promise<{ count: number; errorOccurred: boolean }> => {
+                    try {
+                        return await insertDocument(selectedItem, document, buffer, boundClient);
+                    } catch (error) {
+                        if (error instanceof ConnectionUnavailableError) {
+                            ext.outputChannel.warn(l10n.t('Inserted {0} document(s).', count));
+                        }
+                        throw error;
+                    }
+                };
+
+                for (let i = 0; i < countDocuments; i++) {
+                    if (cancellationToken.isCancellationRequested) {
+                        wasCancelled = true;
+                        ext.outputChannel.warn(l10n.t('Import operation was canceled after {0} document(s).', count));
+                        break;
+                    }
+
+                    progress.report({
+                        increment: incrementDocuments,
+                        message: l10n.t('Importing document {num} of {countDocuments}', {
+                            num: i + 1,
+                            countDocuments,
+                        }),
+                    });
+
+                    const result = await insertBatch(documents[i]);
+
+                    // 'count' in result means that the result is from the buffer
+                    count += result.count;
+                    // check if error occurred as partial failure would happen in bulk insertion
+                    hasErrors = hasErrors || result.errorOccurred;
                 }
 
-                progress.report({
-                    increment: incrementDocuments,
-                    message: l10n.t('Importing document {num} of {countDocuments}', {
-                        num: i + 1,
-                        countDocuments,
-                    }),
-                });
+                // Do insertion for the last batch for bulk insertion
+                if (!wasCancelled && buffer && buffer.getStats().documentCount > 0) {
+                    const lastBatchFlushResult = await insertBatch(undefined);
 
-                const result = await insertBatch(documents[i]);
+                    count += lastBatchFlushResult.count;
+                    hasErrors = hasErrors || lastBatchFlushResult.errorOccurred;
+                }
 
-                // 'count' in result means that the result is from the buffer
-                count += result.count;
-                // check if error occurred as partial failure would happen in bulk insertion
-                hasErrors = hasErrors || result.errorOccurred;
+                // let's make sure we reach 100% progress, useful in case of errors etc.
+                progress.report({ increment: 100, message: l10n.t('Finished importing') });
+
+                return { hasErrors, count, wasCancelled };
+            } finally {
+                lease.dispose();
             }
-
-            // Do insertion for the last batch for bulk insertion
-            if (!wasCancelled && buffer && buffer.getStats().documentCount > 0) {
-                const lastBatchFlushResult = await insertBatch(undefined);
-
-                count += lastBatchFlushResult.count;
-                hasErrors = hasErrors || lastBatchFlushResult.errorOccurred;
-            }
-
-            // let's make sure we reach 100% progress, useful in case of errors etc.
-            progress.report({ increment: 100, message: l10n.t('Finished importing') });
-
-            return { hasErrors, count, wasCancelled };
         },
     );
 

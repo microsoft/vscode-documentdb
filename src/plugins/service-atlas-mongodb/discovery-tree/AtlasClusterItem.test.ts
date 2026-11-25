@@ -112,6 +112,7 @@ vi.mock('../../../documentdb/ClustersClient', () => ({
     ClustersClient: {
         connectInteractive: vi.fn(),
         deleteClient: vi.fn(),
+        exists: vi.fn(() => false),
         getEpoch: vi.fn(() => 0),
         getLatchReason: vi.fn(),
     },

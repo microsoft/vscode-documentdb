@@ -10,6 +10,7 @@ import * as vscode from 'vscode';
 import { type ConnectionBinding, type FindQueryParams } from '../../documentdb/ClustersClient';
 import { resolveTransferClient } from '../../documentdb/resolveTransferClient';
 import { ext } from '../../extensionVariables';
+import { TaskService } from '../../services/taskService/taskService';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { appendToFile } from '../../utils/fs/appendToFile';
 import { getRootPath } from '../../utils/workspacUtils';
@@ -53,46 +54,59 @@ export async function exportQueryResults(
         return;
     }
 
-    const client = await resolveTransferClient(node.cluster.clusterId, props?.binding);
-
-    const docStreamAbortController = new AbortController();
-
-    // Convert legacy queryText to queryParams if needed
-    const queryParams: FindQueryParams = props?.queryParams ?? {
-        filter: props?.queryText ?? '{}',
-    };
-
-    const docStream = client.streamDocumentsWithQuery(
-        node.databaseInfo.name,
-        node.collectionInfo.name,
-        docStreamAbortController.signal,
-        queryParams,
+    const lease = TaskService.acquireResourceLease(
+        {
+            clusterId: node.cluster.clusterId,
+            databaseName: node.databaseInfo.name,
+            collectionName: node.collectionInfo.name,
+        },
+        l10n.t('Export documents'),
     );
 
-    const filePath = targetUri.fsPath; // Convert `vscode.Uri` to a regular file path
-    ext.outputChannel.info(l10n.t('Starting export to: {filePath}', { filePath }));
+    try {
+        const client = await resolveTransferClient(node.cluster.clusterId, props?.binding);
 
-    let documentCount = 0;
+        const docStreamAbortController = new AbortController();
 
-    // Wrap the export process inside a progress reporting function
-    await callWithTelemetryAndErrorHandling('exportDocuments', async (actionContext) => {
-        await runExportWithProgressAndDescription(node.id, async (progress, cancellationToken) => {
-            documentCount = await exportDocumentsToFile(
-                docStream,
-                filePath,
-                progress,
-                cancellationToken,
-                docStreamAbortController,
-            );
+        // Convert legacy queryText to queryParams if needed
+        const queryParams: FindQueryParams = props?.queryParams ?? {
+            filter: props?.queryText ?? '{}',
+        };
+
+        const docStream = client.streamDocumentsWithQuery(
+            node.databaseInfo.name,
+            node.collectionInfo.name,
+            docStreamAbortController.signal,
+            queryParams,
+        );
+
+        const filePath = targetUri.fsPath; // Convert `vscode.Uri` to a regular file path
+        ext.outputChannel.info(l10n.t('Starting export to: {filePath}', { filePath }));
+
+        let documentCount = 0;
+
+        // Wrap the export process inside a progress reporting function
+        await callWithTelemetryAndErrorHandling('exportDocuments', async (actionContext) => {
+            await runExportWithProgressAndDescription(node.id, async (progress, cancellationToken) => {
+                documentCount = await exportDocumentsToFile(
+                    docStream,
+                    filePath,
+                    progress,
+                    cancellationToken,
+                    docStreamAbortController,
+                );
+            });
+
+            actionContext.telemetry.properties.source = props?.source;
+            actionContext.telemetry.measurements.queryLength =
+                props?.queryParams?.filter?.length ?? props?.queryText?.length;
+            actionContext.telemetry.measurements.documentCount = documentCount;
         });
 
-        actionContext.telemetry.properties.source = props?.source;
-        actionContext.telemetry.measurements.queryLength =
-            props?.queryParams?.filter?.length ?? props?.queryText?.length;
-        actionContext.telemetry.measurements.documentCount = documentCount;
-    });
-
-    ext.outputChannel.info(l10n.t('Export complete. Exported document count: {documentCount}', { documentCount }));
+        ext.outputChannel.info(l10n.t('Export complete. Exported document count: {documentCount}', { documentCount }));
+    } finally {
+        lease.dispose();
+    }
 }
 
 async function runExportWithProgressAndDescription(

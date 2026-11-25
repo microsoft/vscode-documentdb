@@ -6,7 +6,6 @@
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { ClustersClient } from '../../documentdb/ClustersClient';
-import { CredentialCache } from '../../documentdb/CredentialCache';
 import { maskSensitiveValuesInTelemetry } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
@@ -15,6 +14,7 @@ import { ConnectionStorageService } from '../../services/connectionStorageServic
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
 import { resolveStorageZone } from '../../tree/connections-view/models/ConnectionClusterModel';
 import { refreshView } from '../refreshView/refreshView';
+import { offerShellDisconnect, saveConnectionEdit } from '../saveConnectionEdit';
 import { ConnectionStringStep } from './ConnectionStringStep';
 import { ExecuteStep } from './ExecuteStep';
 import { type UpdateCSWizardContext } from './UpdateCSWizardContext';
@@ -29,8 +29,7 @@ import { type UpdateCSWizardContext } from './UpdateCSWizardContext';
  * 3. ExecuteStep: Saves updated connection string to storage
  * 4. Post-wizard: Refreshes the view
  *
- * Only a successful destination-rejection recovery edit clears cached connection and error state.
- * Other edits retain the existing connection lifecycle.
+ * A changed value retires views tied to the previous settings.
  */
 export async function updateConnectionString(context: IActionContext, node: DocumentDBClusterItem): Promise<void> {
     if (!node) {
@@ -38,7 +37,7 @@ export async function updateConnectionString(context: IActionContext, node: Docu
     }
     const recoveringRejectedDestination = node.lastConnectionFailureReason === 'entraDestinationRejected';
     const clusterId = node.cluster.clusterId;
-    let epoch = ClustersClient.getEpoch(clusterId);
+    const epoch = ClustersClient.getEpoch(clusterId);
     const recoveringRejectedCredentials = ClustersClient.getLatchReason(clusterId) === 'credentialsRejected';
     const recovering = recoveringRejectedDestination || recoveringRejectedCredentials;
     const isRecoveryCurrent = recovering ? (): boolean => ClustersClient.getEpoch(clusterId) === epoch : undefined;
@@ -84,26 +83,27 @@ export async function updateConnectionString(context: IActionContext, node: Docu
     if (isRecoveryCurrent?.() === false) {
         return;
     }
-    await wizard.execute();
-    if (isRecoveryCurrent?.() === false) {
-        return;
-    }
-
-    if (recovering && wizardContext.connectionStringSaved) {
-        const closing = ClustersClient.deleteClient(clusterId);
-        epoch = ClustersClient.getEpoch(clusterId);
-        await closing;
-        if (isRecoveryCurrent?.() === false) {
-            return;
-        }
-        CredentialCache.deleteCredentials(clusterId);
-        if (recoveringRejectedCredentials) {
-            ClustersClient.clearCredentialRejection(clusterId, epoch);
-        }
+    const changed =
+        wizardContext.newConnectionString &&
+        wizardContext.newConnectionString !== wizardContext.originalConnectionString
+            ? await saveConnectionEdit(
+                  node,
+                  async (isCurrent) => {
+                      wizardContext.isRecoveryCurrent = isCurrent;
+                      await wizard.execute();
+                      return wizardContext.connectionStringSaved === true;
+                  },
+                  { canStart: isRecoveryCurrent },
+              )
+            : false;
+    if (recovering && changed && wizardContext.connectionStringSaved) {
         ext.connectionsBranchDataProvider.resetNodeErrorState(node.id);
         node.lastConnectionFailureReason = undefined;
         node.lastConnectionOutcome = undefined;
     }
 
     await refreshView(context, Views.ConnectionsView);
+    if (changed) {
+        await offerShellDisconnect(node);
+    }
 }

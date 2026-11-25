@@ -426,6 +426,31 @@ describe('DocumentDBShellPty', () => {
             expect(written).toContain('test result');
         });
 
+        it('should reset rejected input before the connection can reconnect', async () => {
+            const getLatchReason = vi
+                .spyOn(ClustersClient, 'getLatchReason')
+                .mockReturnValueOnce('userDisconnected')
+                .mockReturnValue(undefined);
+            mockEvaluate.mockResolvedValue({
+                type: null,
+                printable: '"done"',
+                durationMs: 1,
+            });
+
+            pty.handleInput('rejected');
+            pty.handleInput('\r');
+            expect(written).toContain('Disconnected');
+            expect(written).toContain('testdb> ');
+
+            written = '';
+            pty.handleInput('accepted');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(mockEvaluate).toHaveBeenCalledExactlyOnceWith('accepted', 80);
+            expect(getLatchReason).toHaveBeenCalled();
+        });
+
         it('should display error message on evaluation failure', async () => {
             mockEvaluate.mockRejectedValue(new Error('Syntax error'));
 
@@ -434,6 +459,27 @@ describe('DocumentDBShellPty', () => {
             await new Promise((resolve) => setTimeout(resolve, 10));
 
             expect(written).toContain('Syntax error');
+        });
+
+        it('should suppress the worker termination error when Disconnect cancels evaluation', async () => {
+            let rejectEvaluation: (error: Error) => void = () => {
+                throw new Error('Expected evaluation to be pending');
+            };
+            mockEvaluate.mockImplementation(
+                () =>
+                    new Promise((_resolve, reject) => {
+                        rejectEvaluation = reject;
+                    }),
+            );
+
+            pty.handleInput('db.test.find()');
+            pty.handleInput('\r');
+            pty.disconnect();
+            rejectEvaluation(new Error('Worker terminated'));
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(written).toContain('Disconnected');
+            expect(written).not.toContain('Worker terminated');
         });
 
         it('should normalize bare \\n in multi-line error messages to \\r\\n', async () => {
@@ -1527,6 +1573,32 @@ describe('DocumentDBShellPty', () => {
             expect(mockEvaluate).toHaveBeenCalledTimes(2);
             expect(mockEvaluate).toHaveBeenNthCalledWith(1, 'show dbs', 80);
             expect(mockEvaluate).toHaveBeenNthCalledWith(2, 'use newdb', 80);
+        });
+
+        it('should discard queued pasted commands when Disconnect cancels evaluation', async () => {
+            let rejectEvaluation: (error: Error) => void = () => {
+                throw new Error('Expected evaluation to be pending');
+            };
+            mockEvaluate
+                .mockImplementationOnce(
+                    () =>
+                        new Promise((_resolve, reject) => {
+                            rejectEvaluation = reject;
+                        }),
+                )
+                .mockResolvedValue({
+                    type: null,
+                    printable: '"done"',
+                    durationMs: 1,
+                });
+
+            pty.handleInput('show dbs\nuse newdb\n');
+            pty.disconnect();
+            rejectEvaluation(new Error('Worker terminated'));
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(mockEvaluate).toHaveBeenCalledExactlyOnceWith('show dbs', 80);
+            expect(written.split('testdb> ')).toHaveLength(2);
         });
     });
 

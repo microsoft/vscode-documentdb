@@ -46,6 +46,7 @@ vi.mock('../documentdb/ClustersClient', () => ({
     ClustersClient: {
         getClient: vi.fn(),
         getEpoch: vi.fn(() => 0),
+        getLatchReason: vi.fn(),
         resolveBoundClient: vi.fn(),
         reportFailure: vi.fn(),
     },

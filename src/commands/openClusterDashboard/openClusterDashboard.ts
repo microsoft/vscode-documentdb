@@ -157,6 +157,7 @@ export async function openClusterDashboard(
         },
         client.binding,
         options?.deepLink,
+        options?.activationSource === 'autoOpenOnConnect',
     );
 
     context.telemetry.properties.viewId = viewId;

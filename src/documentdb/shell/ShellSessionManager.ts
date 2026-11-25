@@ -9,6 +9,8 @@ import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { traceAuthFlow, traceAuthOperation, traceEntraDestination, type AuthTraceContext } from '../../utils/authTrace';
 import { getBatchSizeSetting, getConnectionTimeoutMs } from '../../utils/workspacUtils';
+import { ClustersClient } from '../ClustersClient';
+import { ConnectionUnavailableError } from '../ConnectionUnavailableError';
 import { CredentialCache } from '../CredentialCache';
 import { AuthMethodId } from '../auth/AuthMethod';
 import {
@@ -197,6 +199,7 @@ export class ShellSessionManager implements vscode.Disposable {
      * @throws Error if initialization exceeds the configured timeout.
      */
     async initialize(): Promise<ShellConnectionMetadata> {
+        this.assertConnectionAvailable();
         const initMsg = this.buildInitMessage();
         if (!this._initialized || !this._workerManager.isAlive) {
             this._sessionInitMessage = initMsg;
@@ -248,6 +251,7 @@ export class ShellSessionManager implements vscode.Disposable {
      * @returns The serializable execution result from the worker.
      */
     async evaluate(code: string, terminalColumns?: number): Promise<SerializableExecutionResult> {
+        this.assertConnectionAvailable();
         // Reconnect if the worker is not alive — handles all cases:
         // timeout kills, Ctrl+C cancellation, unexpected worker crashes.
         if (!this._initialized || !this._workerManager.isAlive) {
@@ -259,6 +263,7 @@ export class ShellSessionManager implements vscode.Disposable {
                 });
             }
             await this._initPromise;
+            this.assertConnectionAvailable();
             this._callbacks?.onReconnected?.();
         }
 
@@ -294,6 +299,13 @@ export class ShellSessionManager implements vscode.Disposable {
     dispose(): void {
         this._workerManager.dispose();
         this._initialized = false;
+    }
+
+    private assertConnectionAvailable(): void {
+        const reason = ClustersClient.getLatchReason(this._connectionInfo.clusterId);
+        if (reason) {
+            throw new ConnectionUnavailableError(reason);
+        }
     }
 
     // ─── Private: Init message ───────────────────────────────────────────────

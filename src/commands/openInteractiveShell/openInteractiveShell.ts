@@ -84,7 +84,11 @@ export async function openInteractiveShell(
     });
 
     pty.setTerminal(terminal);
-    registerShellTerminal(terminal, () => pty.getTerminalInfo());
+    registerShellTerminal(
+        terminal,
+        () => pty.getTerminalInfo(),
+        () => pty.disconnect(),
+    );
 
     terminal.show();
     return { opened: true, shellSessionId: pty.shellSessionId };
@@ -133,7 +137,11 @@ export async function openInteractiveShellWithInput(
     });
 
     pty.setTerminal(terminal);
-    registerShellTerminal(terminal, () => pty.getTerminalInfo());
+    registerShellTerminal(
+        terminal,
+        () => pty.getTerminalInfo(),
+        () => pty.disconnect(),
+    );
 
     terminal.show();
 }

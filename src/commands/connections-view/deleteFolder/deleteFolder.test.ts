@@ -59,10 +59,17 @@ vi.mock('../verificationUtils', async () => ({
 }));
 
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
+import { type withConnectionRemoval } from '../../../documentdb/connectionTeardown';
 import { ConnectionType, ItemType, type ConnectionItem } from '../../../services/connectionStorageService';
 import { type DeleteFolderWizardContext } from './DeleteFolderWizardContext';
 import { ExecuteStep } from './ExecuteStep';
 import { VerifyNoConflictsStep } from './VerifyNoConflictsStep';
+
+vi.mock('../../../documentdb/connectionTeardown', () => ({
+    withConnectionRemoval: vi.fn(async (_ids: string[], remove: Parameters<typeof withConnectionRemoval>[1]) => {
+        await remove(async (_id, deleteStored) => deleteStored());
+    }),
+}));
 
 // Mock vscode-azext-utils
 vi.mock('@microsoft/vscode-azext-utils', () => ({

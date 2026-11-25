@@ -11,14 +11,17 @@ import {
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { connectDisconnected, disconnect } from '../../commands/disconnect/disconnect';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { EntraDestinationRejectedError } from '../../documentdb/auth/oidcAllowedHosts';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
+import { teardownConnection } from '../../documentdb/connectionTeardown';
 import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { Views } from '../../documentdb/Views';
 import { type Experience } from '../../DocumentDBExperiences';
+import { ext } from '../../extensionVariables';
 import { containsRetryNode, RETRY_NODE_ID_SUFFIX } from '../api/retryNode';
 import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
@@ -83,12 +86,16 @@ vi.mock('../../documentdb/ClustersClient', () => ({
         exists: vi.fn().mockReturnValue(false),
         getExistingClient: vi.fn(),
         getLatchReason: vi.fn(),
+        unlatch: vi.fn(),
         getEpoch: vi.fn(() => 0),
         getLastVerifiedIdentity: vi.fn(),
         reportFailure: vi.fn(),
     },
 }));
 
+vi.mock('../../documentdb/connectionTeardown', () => ({ teardownConnection: vi.fn() }));
+
+const notifyChildrenChanged = vi.fn();
 vi.mock('../../extensionVariables', () => ({
     ext: {
         settingsKeys: {
@@ -98,6 +105,11 @@ vi.mock('../../extensionVariables', () => ({
             appendLine: vi.fn(),
             debug: vi.fn(),
         },
+        state: { notifyChildrenChanged: (...args: unknown[]) => notifyChildrenChanged(...args) },
+        connectionsBranchDataProvider: { resetNodeErrorState: vi.fn(), refresh: vi.fn() },
+        discoveryBranchDataProvider: { resetNodeErrorState: vi.fn(), refresh: vi.fn() },
+        azureResourcesRUBranchDataProvider: { resetNodeErrorState: vi.fn(), refresh: vi.fn() },
+        azureResourcesVCoreBranchDataProvider: { resetNodeErrorState: vi.fn(), refresh: vi.fn() },
     },
 }));
 
@@ -449,6 +461,72 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
                 ) => unknown,
             ) => task({ report: vi.fn() }, { isCancellationRequested: false, onCancellationRequested: vi.fn() }),
         );
+    });
+
+    it('shows only Connect while user-disconnected and uses cached settings on the same node after the click', async () => {
+        const node = new TestClusterItem({ ...makeCluster(), treeId: 'connectionsView/folder/cluster-1' }, null);
+        const context = {} as IActionContext;
+        const stableId = node.cluster.clusterId;
+        const treeId = node.id;
+        ClustersClientMock.exists.mockReturnValue(true);
+        expect(node.getTreeItem().contextValue?.split(';')).toContain('connected');
+        ClustersClientMock.exists.mockReturnValue(false);
+        ClustersClientMock.getLatchReason.mockReturnValue('userDisconnected');
+
+        try {
+            expect(await node.getChildren()).toEqual([
+                expect.objectContaining({ label: 'Reconnect', id: `${treeId}/connect`, commandArgs: [node] }),
+            ]);
+            expect(node.getTreeItem().contextValue?.split(';')).not.toContain('connected');
+            expect(mockHasCredentials).not.toHaveBeenCalled();
+            expect(ClustersClientMock.connectInteractive).not.toHaveBeenCalled();
+            expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+
+            connectDisconnected(context, node);
+            expect(ClustersClientMock.unlatch).toHaveBeenCalledExactlyOnceWith(stableId);
+            expect(notifyChildrenChanged).toHaveBeenCalledExactlyOnceWith(treeId);
+
+            ClustersClientMock.getLatchReason.mockReturnValue(undefined);
+            ClustersClientMock.connectInteractive.mockResolvedValueOnce(
+                makeClient(vi.fn().mockResolvedValue([{ name: 'database' }])),
+            );
+            expect(await node.getChildren()).toEqual([expect.objectContaining({ id: 'database' })]);
+            expect(ClustersClientMock.connectInteractive).toHaveBeenCalledExactlyOnceWith(
+                stableId,
+                expect.any(AbortSignal),
+                expect.any(Function),
+                'treeConnect',
+            );
+            expect(node.getTreeItem().id).toBe(treeId);
+
+            ClustersClientMock.getLatchReason.mockReturnValue('connectionRemoved');
+            connectDisconnected(context, node);
+            expect(ClustersClientMock.unlatch).toHaveBeenCalledOnce();
+        } finally {
+            ClustersClientMock.getLatchReason.mockReturnValue(undefined);
+        }
+    });
+
+    it('clears and refreshes only the owning discovery provider after Disconnect', async () => {
+        const node = new TestClusterItem({ ...makeCluster(), treeId: 'discoveryView/custom-source/cluster-1' }, null);
+        const context = { telemetry: { suppressAll: false } } as IActionContext;
+        ClustersClientMock.exists.mockReturnValue(true);
+        ClustersClientMock.getLatchReason.mockReturnValue(undefined);
+
+        await disconnect(context, node);
+
+        expect(teardownConnection).toHaveBeenCalledExactlyOnceWith(
+            node.cluster.clusterId,
+            'userDisconnected',
+            expect.any(Function),
+        );
+        const refreshTree = vi.mocked(teardownConnection).mock.calls[0][2];
+        refreshTree();
+
+        expect(ext.discoveryBranchDataProvider.resetNodeErrorState).toHaveBeenCalledExactlyOnceWith(node.id);
+        expect(ext.discoveryBranchDataProvider.refresh).toHaveBeenCalledExactlyOnceWith(node);
+        expect(ext.connectionsBranchDataProvider.resetNodeErrorState).not.toHaveBeenCalled();
+        expect(ext.connectionsBranchDataProvider.refresh).not.toHaveBeenCalled();
     });
 
     it.each(['signInRequired', 'credentialsRejected'] as const)(

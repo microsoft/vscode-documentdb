@@ -1581,8 +1581,9 @@ behave as today.
 
 **Outcome:**
 
-- One teardown serves Disconnect, Remove and identity-changing credential updates.
-- It is guarded by task conflicts and dirty editors.
+- Disconnect and Remove share teardown. Saved edits share the task fence and resource cleanup,
+  but keep old views locked without asking to close them (decision 0018).
+- Task conflicts block teardown or saving an edit. Dirty editors are checked before Close all.
 - It covers every per-cluster resource.
 - **What it guarantees** (F-22: closing a client cancels nothing already sent):
   - no **new** submission under the old binding after the latch is set;
@@ -1636,9 +1637,8 @@ behave as today.
         the teardown.
    - **`latchForTeardown(clusterId, reason)`**, synchronous: recheck conflicts with `getConflictingTasks`,
      because a copy, export or import may have started while a prompt was open; on a conflict return
-     `false` and change nothing. Otherwise set the latch (C-6) and call `ClustersClient.invalidate`, which
-     increases the epoch, with no `await` in between, and return `true`. From here on no new task, lease or
-     client can start.
+     `false` and change nothing. Otherwise set the latch (C-6), which already increases the epoch,
+     with no `await` in between, and return `true`. From here on no new task, lease or client can start.
    - **`commitTeardown(clusterId, { reason, choice, dropCredentials })`**, which has no prompts:
      1. Call `latchForTeardown` unless the caller already did (step 5). On a conflict, stop and inform the
         user; nothing has changed.
@@ -1648,7 +1648,7 @@ behave as today.
         worker. **Playground:** stop the worker. The latch keeps both from respawning (F-15).
      4. Close the client (`deleteClient`). Clear the Entra failure registry and `SchemaStore.clearCluster`.
         Clear the `CredentialCache` entry and `lastVerifiedIdentity` **only** when `dropCredentials` is
-        set (Remove). Disconnect keeps both (A3, decision 0011), so tree Connect and then tab Retry
+        set (Remove). Disconnect keeps both (A3, decision 0011), so tree Reconnect and then tab Retry
         can reuse the same identity.
      5. Refresh the tree (T-2).
    - **Never touched:** VS Code auth sessions, the managed identity cache, the ARM cache.
@@ -1675,7 +1675,9 @@ behave as today.
      - The setting never skips the unsaved-edits confirmation: when Close all is chosen and an editor is
        dirty, that confirmation still appears.
      - Skip the modal when no surfaces are registered.
-   - Add a disconnected cluster node child action, "Connect" (T-2). It clears the latch and connects.
+   - Add a disconnected cluster node child action, "Reconnect" (T-2). Check the `userDisconnected`
+     latch before reusing cached credentials when building the children. The action clears only
+     that latch and refreshes the node without changing its ID; normal expansion connects.
 4. **Remove Connection and folder deletion.**
    - Remove Connection: teardown with reason `connectionRemoved` and `dropCredentials: true`, then delete
      the stored connection and clear the schema, as today. Keep the existing confirmation.
@@ -1711,7 +1713,7 @@ behave as today.
   cluster is not blocked; Disconnect succeeds once the task is done or stopped;
 - a token response that arrives after Disconnect is ignored;
 - Reconnect uses the current credentials and cloud settings;
-- after Disconnect, tree Connect followed by tab Retry succeeds without the tree reloading
+- after Disconnect, tree Reconnect followed by tab Retry succeeds without the tree reloading
   credentials and without a prompt (native, Entra and discovery with a typed password); after Remove,
   the `CredentialCache` entry and `lastVerifiedIdentity` are gone;
 - Remove reuses the same teardown;
@@ -1737,6 +1739,42 @@ behave as today.
 
 **Progress:**
 
+- **CP-4 verdict:** Opus 5.5 approved the teardown order, T-2 and A5 at about 85% confidence.
+  Register tasks and acquire export/import leases synchronously against the latch. Take a lease
+  before client resolution, release it in `finally`, and include it in folder-delete conflict
+  queries. Recheck conflicts immediately before latching; use the epoch bump already in
+  `ClustersClient.latch`. For saved edits, keep the fence through persistence and retirement,
+  then restore only the applicable prior hold. Enforce retirement on the host as well as in the
+  dialog: a password-only edit does not change the fingerprint. The proposed per-cluster
+  generation watermark is an implementation candidate to validate in the saved-edit slice,
+  not a new public contract. No operator decision is needed for the lease slice.
+- **WI-7 S1:** Import and export hold a collection lease from client resolution through
+  completion. Task admission checks the same latch as client startup. Existing conflict queries
+  see leases, including the folder-delete check. The task, transfer and Dashboard-bound command
+  test suites passed together (18 tests).
+- **WI-7 S2a:** Disconnect now checks task conflicts and dirty views before teardown, with a
+  synchronous conflict recheck before latching. It stops matching Shell and Playground workers,
+  keeps credentials and the verified identity, and refreshes the same tree node with one
+  **Connect** action. The integrated build and 225 focused tests passed. Remove and saved edits
+  are not wired into teardown yet.
+- **WI-7 S2b:** Remove and folder deletion keep their existing deletion confirmation and share
+  one tab choice for the affected connections. The batch rechecks and fences the entire set
+  before disposal or deletion. A failed storage delete leaves the surviving connection
+  disconnected rather than stuck in the removed state. Build and 30 focused tests passed.
+- **WI-7 S3:** The save fence reports a retryable update-in-progress state; only a changed
+  stored value permanently retires the older generations. This also covers password-only and
+  partial secret writes without adding passwords to the fingerprint. Existing views remain
+  copyable. Same-settings reconnect can still follow a newer generation. Build and 196
+  focused tests passed.
+- **OP-5 (`1.1.1-alpha.4`):** The operator reported that Keep open, Close all with a dirty
+  draft, Remove, and the saved-edit lock passed. Disconnect during import or export was
+  not tested live; it is checked in the real transfer-lease and teardown preflight paths
+  by automated tests. Operator feedback: label the tree action **Reconnect**, use the
+  default Fluent layout with an instant backdrop, and clarify that an old view is bound
+  to its previous connection settings.
+- **PR6 review:** The operator kept the single dirty check at **Close all** confirmation
+  ([review thread](https://github.com/microsoft/vscode-documentdb/pull/1130#discussion_r4694258852)).
+  In a batch removal, a view edited after that check still closes; there is no second prompt.
 - **Carry-forward from WI-4d:** An explicit Update Credentials that changes the tenant must
   replace or clear the old verified Entra identity so the next connect can use the saved
   tenant (decision 0011). Automatic reconnect remains pinned until that explicit update.
@@ -1756,9 +1794,9 @@ one loop.
      of a failed command long enough to classify it. A terminal kind (auth, closed client) is rethrown so
      that `runWithClient` returns `unavailable`. An unsupported command, such as `serverStatus` on some
      servers, stays an ordinary partial sample with its entry in `errors`.
-2. The webview poll effect depends on the overlay state: it stops on `unavailable` or on a `disable`
-   message, and starts again after Reconnect. React's effect cleanup keeps it to one loop; no extra loop
-   token.
+2. The webview poll effect stops on `unavailable` or a `disable` message, even when the dialog is
+   dismissed to copy contents. It starts again only after Retry succeeds. React's effect cleanup
+   keeps it to one loop; no extra loop token.
 3. A ping that resolves while the overlay shows is ignored (the WI-6 webview rule), so it cannot clear the
    overlay.
 4. Visibility pause and backoff are the rest of #1091. Do them here only if they are trivial; otherwise
@@ -1774,6 +1812,12 @@ one loop.
 - an unsupported `serverStatus` still yields a partial sample and keeps polling.
 
 **Progress:**
+
+- The Dashboard polls with a background-only binding. Auth and closed-client errors from
+  inside the sampler return an unavailable result; unsupported `serverStatus` still returns a
+  partial sample. Build and 131 focused tests passed. The browser fixture showed no polls
+  during disconnect, copy mode or reveal; Retry restarted one loop. A held ping released
+  after disconnect did not clear the dialog.
 
 ---
 
