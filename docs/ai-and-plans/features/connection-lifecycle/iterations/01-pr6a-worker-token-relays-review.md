@@ -21,7 +21,8 @@ by that sign-in is still current and that the same surface owns the action. Do n
 arbitrary newer epochs or remove the fence. Test a successful epoch change and a superseding
 invalidation without replaying the old operation.
 
-**Author decision:** Pending.
+**Author decision:** Approved as recommended. Use the confirmed post-sign-in epoch without
+loosening the ownership checks or replaying the operation.
 
 ## F2. Re-picking a Playground connection leaves Run blocked (medium)
 
@@ -37,7 +38,8 @@ document would be more complex without removing the need to replace the failed w
 Test successful re-pick and Run, preservation of the old binding's identity, and a second
 document's in-flight run.
 
-**Author decision:** Pending.
+**Author decision:** Approved as recommended. Apply the explicit re-pick on the next Run
+without interrupting another document.
 
 ## F3. A no-op saved edit can discard healthy Shell state (medium)
 
@@ -51,7 +53,7 @@ epoch fence for startup and token replies, and keep the latch and fingerprint ch
 respawn. Do not add a separate epoch counter. Test that a no-op edit does not respawn the
 healthy worker, while explicit Disconnect still stops it.
 
-**Author decision:** Pending.
+**Author decision:** Approved as recommended. Preserve healthy Shell state on an unchanged save.
 
 ## F4. A stale token request can hang a worker that is still attached (medium)
 
@@ -66,7 +68,8 @@ update diagnostics, or replay the evaluation. Adding a timeout alone would leave
 request running until the timeout and would not express why it was interrupted. Test
 invalidation with an attached worker and no stale token or diagnostics.
 
-**Author decision:** Pending.
+**Author decision:** Approved as recommended. Cancel the obsolete request without returning a
+stale token or recording a stale failure.
 
 ## Scope clarification
 
