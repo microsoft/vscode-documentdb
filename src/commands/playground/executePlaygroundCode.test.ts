@@ -16,7 +16,7 @@ const { evaluate, dispose, setExecuting, showResult } = vi.hoisted(() => ({
 }));
 
 vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@microsoft/vscode-azext-utils')>()),
+    ...(await importOriginal<{ UserCancelledError: typeof UserCancelledError }>()),
     callWithTelemetryAndErrorHandling: (
         _name: string,
         run: (context: IActionContext) => Promise<void>,
