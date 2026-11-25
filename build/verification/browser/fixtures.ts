@@ -9,6 +9,7 @@ import {
     type DockerStatusResult,
     type InstanceStatusUpdate,
 } from '../../../src/services/localQuickStart/quickStartTypes';
+import { type WishExampleScope } from '../../../src/services/wishingWell/wishEngine';
 import { type CellValue } from '../../../src/utils/slickgrid/CellValue';
 import { type WebviewName } from '../../../src/webviews/_integration/WebviewRegistry';
 import { type AtlasCredentialsWebviewConfig } from '../../../src/webviews/documentdb/atlasCredentials/atlasCredentialsController';
@@ -18,6 +19,10 @@ import { type ConnectionDiagnosticsConfiguration } from '../../../src/webviews/d
 import { panelRowIds } from '../../../src/webviews/documentdb/connectionDiagnostics/panelTypes';
 import { type DocumentsViewWebviewConfigurationType } from '../../../src/webviews/documentdb/documentView/documentsViewController';
 import { type LocalQuickStartConfigurationType } from '../../../src/webviews/documentdb/localQuickStart/localQuickStartController';
+import {
+    type WishingWellWebviewConfig,
+    type WishOutcome,
+} from '../../../src/webviews/documentdb/wishingWell/wishingWellTypes';
 import { type FixtureInputs, type FixtureOutputs, type RpcFixture, type RpcFixtures } from './core/fixtures';
 
 type Inputs = FixtureInputs;
@@ -91,6 +96,183 @@ const quickStartConfig: LocalQuickStartConfigurationType = {
     initialInstanceState: InstanceState.NotInstalled,
 };
 const atlasConfig: AtlasCredentialsWebviewConfig = { mode: 'add', authMethod: 'apikey' };
+const wishingWellConfig: WishingWellWebviewConfig = {};
+// The line a well opened without a connection shows under the wish box.
+export const wishUnscopedHint =
+    'Not scoped to a connection. To ask about your data, open Make a Wish from a connection, database or collection in the DocumentDB side bar.';
+export const wishPlaygroundOutcome: WishOutcome = {
+    id: 'stage0-wish',
+    kind: 'playground',
+    title: 'Twenty sample customers',
+    message: 'This script inserts 20 customers, named Customer 1 to Customer 20.',
+    detail: "db.getCollection('customers').insertMany(\n  Array.from({ length: 20 }, (_, i) => ({ name: `Customer ${i + 1}` }))\n)",
+    actionLabel: 'Open in a playground',
+    actionHint: 'Nothing runs until you run it in the playground.',
+    wish: 'Add 20 sample customers',
+    status: 'proposed',
+    interpretedBy: 'copilot',
+};
+export const wishFortuneOutcome: WishOutcome = {
+    id: 'stage0-lucky',
+    kind: 'fortune',
+    title: 'Your fortune',
+    message: 'Your next query returns in under ten milliseconds.',
+    status: 'info',
+    interpretedBy: 'well',
+};
+export const wishCopilotScope: WishExampleScope = { connected: false };
+// What wishExamples returns for wishCopilotScope with Copilot; scenarios.test.ts checks it.
+export const wishCopilotExamples = [
+    'Run DocumentDB on my laptop',
+    'Explain what an index does',
+    'Draft a script to insert 20 sample customers',
+    'Add a connection from a connection string',
+    'Write a README for this project',
+];
+export const wishKeywordConfig: WishingWellWebviewConfig = {
+    clusterDisplayName: 'Stage 0 fixture cluster',
+    databaseName: 'shop',
+};
+// A database whose only collection is orders.
+export const wishKeywordScope: WishExampleScope = {
+    connected: true,
+    databaseName: wishKeywordConfig.databaseName,
+    collectionNames: ['orders'],
+};
+// What wishExamples returns for wishKeywordScope without Copilot; scenarios.test.ts checks it.
+export const wishKeywordExamples = [
+    'Show the documents in orders',
+    'How many documents are in each collection?',
+    'Add sample documents to orders',
+    'Show the indexes of orders',
+    'Open the shell',
+];
+export const wishKeywordOutcome: WishOutcome = {
+    id: 'stage0-keyword',
+    kind: 'view',
+    title: 'Documents in orders',
+    message: 'Copilot is not available, so the well matched your words to a tool.',
+    actionLabel: 'Open in collection view',
+    actionHint: 'Opens orders in the collection view.',
+    wish: 'Show the documents in orders',
+    status: 'proposed',
+    interpretedBy: 'well',
+};
+// The third document did not fit the card: the detail holds two of the three the read returned.
+export const wishAnsweredOutcome: WishOutcome = {
+    id: 'stage0-answered',
+    kind: 'query',
+    title: 'Orders over 300',
+    message: 'Found 3 documents in orders. Only the first 2 are shown; the rest did not fit.',
+    query: 'filter: {"total":{"$gt":300}}',
+    readerNote: 'Reads "over 300" as a total above 300, so an order of exactly 300 is left out.',
+    detail: '[\n  { "_id": 1, "total": 320 },\n  { "_id": 2, "total": 415 }\n]',
+    resultCount: 3,
+    truncated: true,
+    capped: false,
+    actionLabel: 'Open in collection view',
+    actionHint: 'Opens orders in the collection view with this query.',
+    wish: 'orders over 300',
+    status: 'answered',
+    interpretedBy: 'copilot',
+};
+// The read hit its 50-row cap, and all 50 rows fit the card.
+export const wishCappedOutcome: WishOutcome = {
+    ...wishAnsweredOutcome,
+    id: 'stage0-capped',
+    title: 'Every order',
+    message: 'The first 50 documents in orders; there are more.',
+    query: 'filter: {}',
+    detail: JSON.stringify(
+        Array.from({ length: 50 }, (_, index) => ({ _id: index + 1 })),
+        undefined,
+        2,
+    ),
+    resultCount: 50,
+    truncated: false,
+    capped: true,
+    // The note belongs to the "over 300" read this fixture copies, not to an unfiltered one.
+    readerNote: undefined,
+    wish: 'every order',
+};
+// The read hit its cap, and only two of those 50 rows fit the card.
+export const wishCappedCutOutcome: WishOutcome = {
+    ...wishCappedOutcome,
+    id: 'stage0-capped-cut',
+    message: 'The first 50 documents in orders; there are more. Only the first 2 are shown; the rest did not fit.',
+    detail: wishAnsweredOutcome.detail,
+    truncated: true,
+};
+// A read that matched nothing: no rows, so the query is what the user checks.
+export const wishZeroRowsOutcome: WishOutcome = {
+    id: 'stage0-zero-rows',
+    kind: 'query',
+    title: 'Customers who joined after March 2024',
+    message: 'No documents in customers matched.',
+    query: 'filter: {"joinedAt":{"$gt":ISODate("2024-03-01T00:00:00.000Z")}}',
+    resultCount: 0,
+    actionLabel: 'Open in collection view',
+    actionHint: 'Opens customers in the collection view with this query.',
+    wish: 'customers who joined after 1 March 2024',
+    status: 'answered',
+    interpretedBy: 'copilot',
+};
+// A wizard: granting it opens steps the user finishes in VS Code.
+export const wishToolOutcome: WishOutcome = {
+    id: 'stage0-tool',
+    kind: 'tool',
+    title: 'Export orders',
+    message: 'The export steps save the documents in orders to a JSON file.',
+    actionLabel: 'Export documents',
+    actionHint: 'Exports the whole of orders as JSON to a file you pick.',
+    wish: 'export the orders',
+    status: 'proposed',
+    interpretedBy: 'copilot',
+};
+// What the well says when it cannot match a wish without Copilot.
+export const wishCannotGrantOutcome: WishOutcome = {
+    id: 'stage0-cannot-grant',
+    kind: 'answer',
+    title: 'The well could not grant this',
+    message: 'Without Copilot the well understands simple wishes only, and it could not match this one.',
+    wish: 'paint my house blue',
+    status: 'refused',
+    interpretedBy: 'well',
+};
+export const wishAgentOutcome: WishOutcome = {
+    id: 'stage0-agent',
+    kind: 'agent',
+    title: 'A job for Copilot',
+    message: 'Copilot agent mode can do this. It opens in Chat with your wish, ready to run.',
+    detail: 'Set up a nightly backup of the shop database',
+    actionLabel: 'Hand to Copilot',
+    actionHint: 'Opens Copilot Chat in agent mode with this request.',
+    wish: 'Set up a nightly backup of the shop database',
+    status: 'proposed',
+    interpretedBy: 'copilot',
+};
+export const wishCommandOutcome: WishOutcome = {
+    id: 'stage0-command',
+    kind: 'command',
+    title: 'Zoom in',
+    message: 'VS Code can make everything bigger.',
+    actionLabel: 'Zoom in',
+    actionHint: 'Runs "Zoom in".',
+    wish: 'make the text bigger',
+    status: 'proposed',
+    interpretedBy: 'copilot',
+};
+// A read the server stopped: the well refuses it and keeps the query to check.
+export const wishRefusedOutcome: WishOutcome = {
+    id: 'stage0-refused',
+    kind: 'query',
+    title: 'Orders by note',
+    message: 'The well could not read this: The read ran longer than 20 seconds, so the server stopped it.',
+    query: 'filter: {"note":{"$regex":"late"}}',
+    wish: 'orders whose note mentions late',
+    status: 'refused',
+    interpretedBy: 'copilot',
+};
 const diagnosticsConfig: ConnectionDiagnosticsConfiguration = {
     connectionName: 'Stage 0 fixture connection',
     diagnosticsSessionId: 'stage0-diagnostics-session',
@@ -647,6 +829,33 @@ export const fixtures = {
             ...common,
             'atlasCredentials.submitApiKey': reply<Outputs['atlasCredentials']['submitApiKey']>('mutation', {
                 success: true,
+            }),
+        },
+    },
+    wishingWell: {
+        config: wishingWellConfig,
+        monaco: false,
+        content: [
+            'Wishing Well',
+            wishUnscopedHint,
+            'Copilot reads your wishes, so almost anything goes.',
+            'Try:',
+            ...wishCopilotExamples,
+        ],
+        styles: [{ selector: '.wishing-well', property: 'display', expected: 'flex' }],
+        rpc: {
+            ...common,
+            'wishingWell.status': reply<Outputs['wishingWell']['status']>('query', {
+                copilotAvailable: true,
+                examples: wishCopilotExamples,
+            }),
+            'wishingWell.makeWish': reply<Outputs['wishingWell']['makeWish']>('mutation', wishPlaygroundOutcome),
+            'wishingWell.feelingLucky': reply<Outputs['wishingWell']['feelingLucky']>('mutation', wishFortuneOutcome),
+            'wishingWell.grant': reply<Outputs['wishingWell']['grant']>('mutation', {
+                granted: true,
+                opened: false,
+                waiting: false,
+                declined: false,
             }),
         },
     },

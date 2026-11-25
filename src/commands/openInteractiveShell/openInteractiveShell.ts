@@ -12,6 +12,7 @@ import {
     type DeepLinkOpenResult,
 } from '../../deepLinks/deepLinkTelemetry';
 import { CredentialCache } from '../../documentdb/CredentialCache';
+import { inferViewIdFromTreeId } from '../../documentdb/Views';
 import { DocumentDBShellPty } from '../../documentdb/shell/DocumentDBShellPty';
 import { type ShellConnectionInfo } from '../../documentdb/shell/ShellSessionManager';
 import { registerShellTerminal } from '../../documentdb/shell/ShellTerminalLinkProvider';
@@ -27,6 +28,8 @@ export interface OpenShellWithInputParams {
     readonly clusterId: string;
     readonly clusterDisplayName: string;
     readonly databaseName: string;
+    /** Tree view the cluster lives in; the Connections view when absent. */
+    readonly viewId?: string;
     /** Optional command to pre-fill in the shell input line (not executed). */
     readonly initialInput?: string;
 }
@@ -108,6 +111,7 @@ export async function openInteractiveShellWithInput(
         clusterId: params.clusterId,
         clusterDisplayName: params.clusterDisplayName,
         databaseName: params.databaseName,
+        viewId: params.viewId,
     };
 
     // Verify credentials are available before opening the terminal
@@ -144,12 +148,15 @@ export async function openInteractiveShellWithInput(
  * Uses `clusterId` (stable) for cache lookups, NOT `treeId` (changes on folder move).
  */
 function extractConnectionInfo(node: ClusterItemBase | DatabaseItem | CollectionItem): ShellConnectionInfo {
+    const viewId = node.cluster.viewId ?? inferViewIdFromTreeId(node.cluster.treeId);
+
     // Database and collection nodes have `databaseInfo`
     if ('databaseInfo' in node) {
         return {
             clusterId: node.cluster.clusterId,
             clusterDisplayName: node.cluster.name,
             databaseName: node.databaseInfo.name,
+            viewId,
         };
     }
 
@@ -158,6 +165,7 @@ function extractConnectionInfo(node: ClusterItemBase | DatabaseItem | Collection
         clusterId: node.cluster.clusterId,
         clusterDisplayName: node.cluster.name,
         databaseName: 'test',
+        viewId,
     };
 }
 

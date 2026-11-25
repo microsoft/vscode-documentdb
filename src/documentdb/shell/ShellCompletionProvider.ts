@@ -106,6 +106,7 @@ const TOP_LEVEL_COMMANDS: readonly CompletionCandidate[] = [
     { label: 'cls', insertText: 'cls', kind: 'command', detail: 'Clear screen' },
     { label: 'clear', insertText: 'clear', kind: 'command', detail: 'Clear screen' },
     { label: 'help', insertText: 'help', kind: 'command', detail: 'Show help' },
+    { label: 'wish', insertText: 'wish ', kind: 'command', detail: 'Make a wish at the Wishing Well' },
     { label: 'it', insertText: 'it', kind: 'command', detail: 'Iterate cursor' },
     { label: 'db', insertText: 'db', kind: 'command', detail: 'Current database' },
 ];

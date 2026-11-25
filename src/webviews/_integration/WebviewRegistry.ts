@@ -55,6 +55,9 @@ export const WebviewRegistry = {
             default: module.AtlasCredentialsView,
         })),
     ),
+    wishingWell: React.lazy(() =>
+        import('../documentdb/wishingWell/WishingWell').then((module) => ({ default: module.WishingWell })),
+    ),
 } as const;
 
 /**

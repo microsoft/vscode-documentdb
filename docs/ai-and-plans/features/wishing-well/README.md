@@ -1,0 +1,46 @@
+---
+feature: wishing-well
+kind: overview
+status: active
+prs: [1122]
+created: 2026-11-23
+code:
+  - src/services/wishingWell/**
+  - src/webviews/documentdb/wishingWell/**
+  - src/commands/openWishingWell/**
+  - src/documentdb/shell/shellWish.ts
+---
+
+# Wishing Well (side project)
+
+A fun side project, not on the roadmap and not an official feature. It exists to try out how
+far one free-text box can reach into the extension's own tools, and how agents outside VS Code
+could use them.
+
+A wish is read by Copilot and turned into one action: a read-only query, the collection view
+with a query, the shell, a playground, the dashboard, import or export, diagnostics, an
+allowlisted VS Code command, or a hand-off to Copilot agent mode. Without Copilot the well is a
+tool launcher: keywords open the right tool and say what they did not apply, and a change opens a
+playground that lists the calls to choose from rather than a guessed write. "I'm feeling lucky"
+draws a random document, trivia, a tip or a fortune.
+
+The same well is reachable from the tab, from `wish …` in the interactive shell, from Copilot
+agent mode as language-model tools, and from any MCP client through a local endpoint the user
+turns on.
+
+Rules the code keeps:
+
+- Wishes never write data. Changes come back as a playground script the user runs.
+- Read-only queries run when the wish is made and show the query that ran; the rest waits for a grant.
+- Wizards and commands are opened, not completed: the well is not told how they end. Export writes
+  the whole collection, as JSON only.
+- Only allowlisted VS Code commands run. Anything else goes to Copilot agent mode.
+- A shell wish prints its card; nothing opens until the user types `wish open`.
+- Outside agents get answered, proposed or refused replies; they never trigger a sign-in prompt,
+  and links, Copilot hand-offs and non-DocumentDB commands need a confirmation in VS Code.
+- The MCP endpoint is off until the user turns it on, listens on 127.0.0.1 only, needs a bearer
+  token and rejects browser origins.
+- Telemetry records the kind of action, never the wish text.
+
+Screenshots of the demo are in [images/](images/). The review rounds, what was decided and the
+questions left for the team are in [iterations/01-review.md](iterations/01-review.md).

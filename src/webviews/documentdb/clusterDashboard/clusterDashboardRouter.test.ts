@@ -139,7 +139,20 @@ describe('clusterDashboardRouter create actions', () => {
             clusterId: 'cluster-id',
             clusterDisplayName: 'Test cluster',
             databaseName: 'test',
+            viewId: 'connectionsView',
         });
+    });
+
+    it("opens the shell in the dashboard's own tree view", async () => {
+        const context: WithTelemetry<RouterContext> = { ...createContext(), viewId: 'discoveryView' };
+        const caller = createCallerFactory(clusterDashboardRouter)(context);
+
+        await caller.openShell({ databaseName: 'test' });
+
+        expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+            'vscode-documentdb.command.shell.open.withInput',
+            expect.objectContaining({ viewId: 'discoveryView' }),
+        );
     });
 
     it('opens the shell on the database currently shown, even from a cluster dashboard', async () => {
@@ -151,6 +164,7 @@ describe('clusterDashboardRouter create actions', () => {
             clusterId: 'cluster-id',
             clusterDisplayName: 'Test cluster',
             databaseName: 'catalog',
+            viewId: 'connectionsView',
         });
     });
 
@@ -163,6 +177,7 @@ describe('clusterDashboardRouter create actions', () => {
             clusterId: 'cluster-id',
             clusterDisplayName: 'Test cluster',
             databaseName: 'test',
+            viewId: 'connectionsView',
         });
     });
 

@@ -6,8 +6,17 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { wishExamples } from '../../../src/services/wishingWell/wishEngine';
 import { type TypedRpcFixtures } from './core/fixtures';
-import { diagnosticsRowLabels, fixtures, type DiagnosticsRow } from './fixtures';
+import {
+    diagnosticsRowLabels,
+    fixtures,
+    wishCopilotExamples,
+    wishCopilotScope,
+    wishKeywordExamples,
+    wishKeywordScope,
+    type DiagnosticsRow,
+} from './fixtures';
 import { parseScenarioRoute, runnerRoutes, scenarioHtml, scenarioIndex, scenarioRunner } from './scenario-server';
 import {
     diagnosticsEntraRuleIds,
@@ -32,8 +41,8 @@ describe('L2-dev manifest and routes', (): void => {
 
     it('round-trips every scenario and theme, without duplicate routes', (): void => {
         const routes = scenarioRoutes();
-        expect(routes).toHaveLength(171);
-        expect(new Set(routes.map((route): string => route.path)).size).toBe(171);
+        expect(routes).toHaveLength(213);
+        expect(new Set(routes.map((route): string => route.path)).size).toBe(213);
         for (const route of routes) expect(parseScenarioRoute(route.path)).toEqual(route);
     });
 
@@ -71,7 +80,7 @@ describe('L2-dev manifest and routes', (): void => {
     });
 
     it('provides path-only all/view/theme helpers and rejects unknown subsets', (): void => {
-        expect(runnerRoutes('/scenarios/run-all.js')).toHaveLength(171);
+        expect(runnerRoutes('/scenarios/run-all.js')).toHaveLength(213);
         expect(runnerRoutes('/scenarios/run-all/connectionDiagnostics.js')).toHaveLength(84);
         expect(runnerRoutes('/scenarios/run-all/localQuickStart.js')).toHaveLength(75);
         expect(runnerRoutes('/scenarios/run-all/localQuickStart/dark.js')).toHaveLength(25);
@@ -610,5 +619,12 @@ describe('L2-dev manifest and routes', (): void => {
         } as const satisfies Scenario<'localQuickStart'>;
         expect(valid['localQuickStart.checkPort'].results).toEqual(['available']);
         expect([unknownPath, wrongOutput, invalidAssertion]).toHaveLength(3);
+    });
+});
+
+describe('Wishing Well fixtures', (): void => {
+    it('list the examples the well really offers in their scopes', (): void => {
+        expect(wishExamples(wishCopilotScope, true)).toEqual(wishCopilotExamples);
+        expect(wishExamples(wishKeywordScope, false)).toEqual(wishKeywordExamples);
     });
 });

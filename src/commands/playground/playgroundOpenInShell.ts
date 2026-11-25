@@ -49,6 +49,7 @@ export async function playgroundOpenQueryInShell(
         clusterId: connection.clusterId,
         clusterDisplayName: connection.clusterDisplayName,
         databaseName: connection.databaseName,
+        viewId: connection.viewId,
         initialInput: blockText,
     });
 }

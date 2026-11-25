@@ -351,7 +351,10 @@ The serve-only [Vite plugin](../vite/webview-scenarios.mjs) lists every
 No scenario or helper URL uses query strings, which remote port forwarding mangles.
 Nothing is added to production bundles or the packaged-VSIX L2 gate.
 
-[Scenarios](./browser/scenarios.ts) import all six L2 fixtures as `default`, plus nine Local Quick
+[Scenarios](./browser/scenarios.ts) import all seven L2 fixtures as `default`, plus thirteen Wishing Well states
+(`granted`, `command-opened`, `opened`, `handed-off`, `waiting`, `lucky`, `keywords`, `answered`, `zero-rows`, `capped`,
+`capped-cut`, `refused`, `cannot-grant`; replies are fixtures, not live Copilot; the Wishing Well `default` is
+opened without a connection and shows that hint), nine Local Quick
 Start states: `introduction`, `configure`, `provisioning`, `success`, `failed-port-in-use`,
 `failed-timeout`, and `docker-missing-windows`, `docker-missing-mac`, `docker-missing-linux`; and
 nineteen connection diagnosis states beside its connected `default`: `running` (rows 1–3

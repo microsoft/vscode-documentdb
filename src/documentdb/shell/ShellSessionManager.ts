@@ -45,6 +45,8 @@ export interface ShellConnectionInfo {
     readonly clusterDisplayName: string;
     /** Initial database name for the session. */
     readonly databaseName: string;
+    /** Tree view the cluster lives in, so a wish can find its node. Connections view when absent. */
+    readonly viewId?: string;
 }
 
 /**

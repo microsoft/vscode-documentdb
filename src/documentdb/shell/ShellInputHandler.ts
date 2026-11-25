@@ -36,6 +36,8 @@ export interface ShellInputHandlerCallbacks {
     onBufferChange?: (buffer: string, cursor: number) => void;
     /** Called when the user presses Right Arrow at end of buffer with ghost text visible. */
     onAcceptGhostText?: () => string | undefined;
+    /** Optional: a line the PTY reads itself, such as `wish what's here?`, is complete even when it is not JavaScript. */
+    isCompleteLine?: (line: string) => boolean;
 }
 
 /** Word character pattern for word navigation (Ctrl+Left/Right). */
@@ -211,6 +213,13 @@ export class ShellInputHandler {
             this._pendingInput = '';
             this.handleInput(data);
         }
+    }
+
+    /** Drops input queued while a command ran; `true` if there was any. */
+    discardPendingInput(): boolean {
+        const had = this._pendingInput.length > 0;
+        this._pendingInput = '';
+        return had;
     }
 
     /**
@@ -412,8 +421,11 @@ export class ShellInputHandler {
         const allLines = [...this._multiLineBuffer, currentLine];
         const fullText = allLines.join('\n');
 
+        const completeAsIs =
+            this._multiLineBuffer.length === 0 && this._callbacks.isCompleteLine?.(currentLine) === true;
+
         // Check if the expression is incomplete (unclosed brackets, strings, etc.)
-        if (isExpressionIncomplete(fullText)) {
+        if (!completeAsIs && isExpressionIncomplete(fullText)) {
             // Accumulate: push current line, show continuation prompt
             this._multiLineBuffer.push(currentLine);
             this._buffer = '';

@@ -165,7 +165,7 @@ describe('Stage 0 L2 production browser harness', (): void => {
         }
     });
 
-    it('covers all six registry keys with populated fixture contracts', (): void => {
+    it('covers all seven registry keys with populated fixture contracts', (): void => {
         expect(Object.keys(fixtures).sort()).toEqual([
             'atlasCredentials',
             'clusterDashboard',
@@ -173,6 +173,7 @@ describe('Stage 0 L2 production browser harness', (): void => {
             'connectionDiagnostics',
             'documentView',
             'localQuickStart',
+            'wishingWell',
         ]);
         for (const fixture of Object.values(fixtures)) {
             expect(fixture.content.length).toBeGreaterThan(0);

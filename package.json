@@ -766,6 +766,26 @@
         "icon": "$(graph)"
       },
       {
+        "//": "Wishing Well",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.wishingWell.open",
+        "title": "Make a Wish",
+        "icon": "$(sparkle)"
+      },
+      {
+        "//": "Wishing Well: let outside agents make wishes over MCP",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.wishingWell.connectAgent",
+        "title": "Connect an Agent to the Wishing Well",
+        "icon": "$(plug)"
+      },
+      {
+        "//": "Wishing Well: stop the MCP endpoint",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.wishingWell.disconnectAgents",
+        "title": "Disconnect Agents from the Wishing Well"
+      },
+      {
         "command": "vscode-documentdb.command.clusterDashboard.context.viewCollections",
         "title": "View Collections"
       },
@@ -1395,6 +1415,24 @@
           "command": "vscode-documentdb.command.clusterDashboard.open",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && !listMultiSelection",
           "group": "1@3"
+        },
+        {
+          "//": "[Account] Wishing Well",
+          "command": "vscode-documentdb.command.wishingWell.open",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
+          "group": "1@9"
+        },
+        {
+          "//": "[Database] Wishing Well",
+          "command": "vscode-documentdb.command.wishingWell.open",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && !listMultiSelection",
+          "group": "1@9"
+        },
+        {
+          "//": "[Collection] Wishing Well",
+          "command": "vscode-documentdb.command.wishingWell.open",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && !listMultiSelection",
+          "group": "1@9"
         },
         {
           "//": "[Database] Open Interactive Shell",
@@ -2280,6 +2318,110 @@
             }
           }
         ]
+      }
+    ],
+    "languageModelTools": [
+      {
+        "name": "documentdb_list_connections",
+        "displayName": "List DocumentDB connections",
+        "toolReferenceName": "documentdbConnections",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(database)",
+        "userDescription": "List the DocumentDB connections saved in VS Code",
+        "modelDescription": "Lists the DocumentDB and MongoDB API connections saved in the VS Code DocumentDB extension and whether each is connected. No secrets. Pass a connected connection to list its databases, and a database too to list its collections. Never signs in: for a connection that is not connected, ask the user to sign in from the DocumentDB side bar.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "connection": {
+              "type": "string",
+              "description": "Optional. Name or id of a saved connection, to list its databases."
+            },
+            "database": {
+              "type": "string",
+              "description": "Optional. A database of \"connection\", to list its collections."
+            }
+          }
+        }
+      },
+      {
+        "name": "documentdb_make_wish",
+        "displayName": "Make a wish",
+        "toolReferenceName": "wish",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(sparkle)",
+        "userDescription": "Make a wish at the DocumentDB Wishing Well",
+        "modelDescription": "Make a wish at the DocumentDB Wishing Well in VS Code. Describe what you want in plain words; the well answers questions about the data by running read-only queries, drafts scripts for changes, and opens the extension's own tools (collection view with a query, interactive shell, query playground, cluster dashboard, index advice, import and export, connection diagnostics, DocumentDB Local). Nothing changes data: writes come back as a playground script for the user to run. A read comes back answered with the query that ran and its rows, at most 50 of them. Without Copilot in VS Code, plain words only pick a tool: pass \"spell\" to run a query. A reply that proposes an action has a wishId: call documentdb_grant_wish only when the user wants that to happen in VS Code.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "wish": {
+              "type": "string",
+              "description": "What you want, in plain words."
+            },
+            "spell": {
+              "type": "object",
+              "description": "Optional. Pass one spell when you know exactly what to do; the well checks it like any wish. find and aggregate run read-only at once; every other spell waits for documentdb_grant_wish. Spells (\"?\" marks an optional field; collection and database default to this tool's own arguments; filter, project, sort and pipeline are JSON, with dates as {\"$date\":\"2024-01-01T00:00:00Z\"} and ids as {\"$oid\":\"…\"}): answer {message} where message is the answer itself; find {collection?, database?, filter?, project?, sort?, limit?}; aggregate {collection?, database?, pipeline}, never $out or $merge; collectionView {collection?, database?, filter?, project?, sort?, tab?: documents|indexes|insights}, where insights explains a slow query; shell {command?} types one command into the interactive shell; playground {script} for anything that changes data; dashboard {}; newDocument {collection?, database?}; tool {tool: import|export|diagnose|createCollection|createDatabase, collection?, database?}, where export writes the whole collection to a JSON file (no filter, no CSV), import loads a JSON file the user picks, and the create tools ask the user for the name; command {commandId, argument?} with commandId one of vscode-documentdb.command.localQuickStart.open, vscode-documentdb.command.connectionsView.newConnection, vscode-documentdb.command.discoveryView.addRegistry, workbench.view.extension.documentDB, workbench.action.selectTheme, workbench.action.toggleZenMode, workbench.action.zoomIn, workbench.action.zoomOut, workbench.action.terminal.new, workbench.action.openSettings, workbench.action.openGlobalKeybindings, workbench.extensions.search, workbench.action.quickOpen, workbench.action.showCommands; \"argument\" is search text, only for workbench.action.openSettings, workbench.action.openGlobalKeybindings, workbench.extensions.search, workbench.action.quickOpen; agent {prompt} hands work outside the database to Copilot agent mode; link {url}, https only. Every spell also takes \"title\" and \"message\". Example: {\"spell\":\"aggregate\",\"collection\":\"orders\",\"pipeline\":[{\"$count\":\"n\"}]}"
+            },
+            "connection": {
+              "type": "string",
+              "description": "Name or id of a saved DocumentDB connection from documentdb_list_connections. Omit for wishes that need no database."
+            },
+            "database": {
+              "type": "string",
+              "description": "Database to wish on. Needs \"connection\"."
+            },
+            "collection": {
+              "type": "string",
+              "description": "Collection to wish on. Needs \"database\"."
+            }
+          },
+          "required": [
+            "wish"
+          ]
+        }
+      },
+      {
+        "name": "documentdb_grant_wish",
+        "displayName": "Grant a wish",
+        "toolReferenceName": "grantWish",
+        "canBeReferencedInPrompt": false,
+        "icon": "$(sparkle-filled)",
+        "userDescription": "Carry out a wish the Wishing Well proposed",
+        "modelDescription": "Carries out a wish that documentdb_make_wish proposed, in the user’s VS Code window: opens the view, playground, shell, command, link or Copilot Chat it named. Links, Copilot hand-offs and non-DocumentDB commands ask the user first. Tools (import, export, create, diagnose) and commands only open their steps: the result is \"opened\", the user finishes them, and it is not done until they say so. Never runs a write.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "wishId": {
+              "type": "string",
+              "description": "The wishId from documentdb_make_wish."
+            }
+          },
+          "required": [
+            "wishId"
+          ]
+        }
+      },
+      {
+        "name": "documentdb_feeling_lucky",
+        "displayName": "I am feeling lucky",
+        "toolReferenceName": "feelingLucky",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(sparkle)",
+        "userDescription": "Draw a surprise from the Wishing Well",
+        "modelDescription": "Draws a surprise from the DocumentDB Wishing Well: a random document or trivia from the given connection, a feature tip, or a fortune.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "connection": {
+              "type": "string",
+              "description": "Name or id of a saved DocumentDB connection from documentdb_list_connections. Omit for wishes that need no database."
+            },
+            "database": {
+              "type": "string",
+              "description": "Database to wish on. Needs \"connection\"."
+            }
+          }
+        }
       }
     ]
   },
