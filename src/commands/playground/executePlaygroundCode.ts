@@ -256,7 +256,7 @@ export async function executePlaygroundCode(
                     context.telemetry.properties.authMethod = evaluator!.sessionAuthMethod ?? 'unknown';
                     context.telemetry.measurements.initDurationMs = evaluator!.lastInitDurationMs;
 
-                    if (cancelled) {
+                    if (cancelled || evaluators.get(clusterId) !== evaluator) {
                         // Throw UserCancelledError so framework marks result as 'Canceled'
                         throw new UserCancelledError('playground.execute');
                     }
