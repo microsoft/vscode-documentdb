@@ -426,6 +426,31 @@ describe('DocumentDBShellPty', () => {
             expect(written).toContain('test result');
         });
 
+        it('should reset rejected input before the connection can reconnect', async () => {
+            const getLatchReason = vi
+                .spyOn(ClustersClient, 'getLatchReason')
+                .mockReturnValueOnce('userDisconnected')
+                .mockReturnValue(undefined);
+            mockEvaluate.mockResolvedValue({
+                type: null,
+                printable: '"done"',
+                durationMs: 1,
+            });
+
+            pty.handleInput('rejected');
+            pty.handleInput('\r');
+            expect(written).toContain('Disconnected');
+            expect(written).toContain('testdb> ');
+
+            written = '';
+            pty.handleInput('accepted');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(mockEvaluate).toHaveBeenCalledExactlyOnceWith('accepted', 80);
+            expect(getLatchReason).toHaveBeenCalled();
+        });
+
         it('should display error message on evaluation failure', async () => {
             mockEvaluate.mockRejectedValue(new Error('Syntax error'));
 

@@ -692,6 +692,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         const disconnectRevision = this._disconnectRevision;
         if (ClustersClient.getLatchReason(this._connectionInfo.clusterId)) {
             this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Disconnected')));
+            if (!this._closed) {
+                this.showPrompt();
+            }
             return;
         }
         const trimmed = line.trim();
