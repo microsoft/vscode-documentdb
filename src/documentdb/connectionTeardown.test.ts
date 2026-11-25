@@ -42,6 +42,10 @@ vi.mock('@microsoft/vscode-azext-utils', () => ({
         const telemetry = { properties: {}, measurements: {} };
         try {
             await callback({ telemetry, errorHandling: {} });
+        } catch (error) {
+            if (!(error instanceof UserCancelledError)) {
+                throw error;
+            }
         } finally {
             mocks.event(event, telemetry);
         }
@@ -91,20 +95,26 @@ describe('connection teardown', () => {
         vi.restoreAllMocks();
     });
 
-    it('does not close views or delete stored connections when the combined tab choice is cancelled', async () => {
-        const draft = register('documentView', true);
-        const deleteStored = vi.fn<() => Promise<void>>();
+    it.each([false, true])(
+        'does not remove connections when the user cancels (chose Close all: %s)',
+        async (choseClose) => {
+            const draft = register('documentView', true);
+            const remove = vi.fn();
+            if (choseClose) {
+                showWarning.mockImplementationOnce(async (_title, _options, ...items) => items[0]);
+            }
 
-        await expect(
-            withConnectionRemoval([clusterId, otherId], async (remove) => remove(clusterId, deleteStored)),
-        ).rejects.toBeInstanceOf(UserCancelledError);
+            await expect(withConnectionRemoval([clusterId, otherId], remove)).rejects.toBeInstanceOf(
+                UserCancelledError,
+            );
 
-        expect(showWarning).toHaveBeenCalledOnce();
-        expect(mocks.latch).not.toHaveBeenCalled();
-        expect(draft.dispose).not.toHaveBeenCalled();
-        expect(draft.disable).not.toHaveBeenCalled();
-        expect(deleteStored).not.toHaveBeenCalled();
-    });
+            expect(showWarning).toHaveBeenCalledTimes(choseClose ? 2 : 1);
+            expect(mocks.latch).not.toHaveBeenCalled();
+            expect(draft.dispose).not.toHaveBeenCalled();
+            expect(draft.disable).not.toHaveBeenCalled();
+            expect(remove).not.toHaveBeenCalled();
+        },
+    );
 
     it('fences the whole batch before removal and leaves a surviving connection reconnectable', async () => {
         const latches = new Map<string, string>();

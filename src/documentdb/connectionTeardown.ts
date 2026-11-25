@@ -262,6 +262,7 @@ async function reportTeardown(
     reason: TeardownReason,
     operation: (context: IActionContext) => Promise<void>,
 ): Promise<void> {
+    let cancellation: UserCancelledError | undefined;
     await callWithTelemetryAndErrorHandling('connection.disconnect', async (context) => {
         context.errorHandling.suppressDisplay = true;
         context.errorHandling.rethrow = true;
@@ -283,8 +284,19 @@ async function reportTeardown(
         ).length;
         const playgrounds = getPlaygroundEvaluators();
         context.telemetry.measurements.playgroundCount = [...targets].filter((id) => playgrounds.has(id)).length;
-        await operation(context);
+        try {
+            await operation(context);
+        } catch (error) {
+            if (error instanceof UserCancelledError) {
+                cancellation = error;
+            }
+            throw error;
+        }
     });
+    // The telemetry wrapper records cancellation but does not propagate it, even with rethrow set.
+    if (cancellation) {
+        throw cancellation;
+    }
 }
 
 /** The single-cluster confirm/commit path, with one event covering both phases. */
