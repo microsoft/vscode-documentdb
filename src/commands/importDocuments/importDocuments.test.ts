@@ -9,6 +9,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { ClustersClient, type ConnectionBinding } from '../../documentdb/ClustersClient';
 import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
+import { confirmTeardown } from '../../documentdb/connectionTeardown';
 import { DocumentDBExperience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { TaskService } from '../../services/taskService/taskService';
@@ -127,6 +128,8 @@ it('holds an import lease through client resolution and the final flush', async 
         }),
     ).toHaveLength(1);
     expect(TaskService.getConflictingTasks({ clusterId: 'unrelated' })).toEqual([]);
+    await expect(confirmTeardown('cluster', 'userDisconnected')).resolves.toEqual({ outcome: 'blockedByTask' });
+    expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
 
     resolveClient({
         getConnectionString: () => 'mongodb://example.test',
@@ -167,6 +170,8 @@ it('holds an export lease before client resolution and releases it on failure', 
         }),
     ).toHaveLength(1);
     expect(TaskService.getConflictingTasks({ clusterId: 'unrelated' })).toEqual([]);
+    await expect(confirmTeardown('cluster', 'userDisconnected')).resolves.toEqual({ outcome: 'blockedByTask' });
+    expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
 
     rejectClient(new Error('client resolution failed'));
     await expect(exportOperation).rejects.toThrow('client resolution failed');

@@ -57,7 +57,7 @@ it('dismisses without closing, and only closes a dirty view after confirmation',
         });
         const dialog = (): HTMLElement | null => document.querySelector('.disconnectedOverlay[aria-modal="true"]');
         const buttons = (): HTMLButtonElement[] => [
-            ...(dialog()?.querySelectorAll<HTMLButtonElement>('.disconnectedOverlayActions button') ?? []),
+            ...(dialog()?.querySelectorAll<HTMLButtonElement>('.fui-DialogActions button') ?? []),
         ];
         expect(host.querySelector('[inert] textarea')).toBe(draft);
         expect(draft?.value).toBe('unsaved edit');

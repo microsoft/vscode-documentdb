@@ -662,7 +662,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             createGenericElementWithContext({
                 id: `${this.id}/connect`,
                 contextValue: 'treeItem_connectDisconnected',
-                label: vscode.l10n.t('Connect'),
+                label: vscode.l10n.t('Reconnect'),
                 iconPath: new vscode.ThemeIcon('plug'),
                 commandId: 'vscode-documentdb.command.internal.connectDisconnected',
                 commandArgs: [this],

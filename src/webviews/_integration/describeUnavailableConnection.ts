@@ -33,7 +33,10 @@ export function describeUnavailableConnection(reason: ConnectionUnavailableReaso
                 unavailable: {
                     reason,
                     title: l10n.t('Disconnected'),
-                    detail: l10n.t('Connect from the connection tree, then click Retry.'),
+                    detail:
+                        reason === 'userDisconnected'
+                            ? l10n.t('Reconnect from the connection tree, then click Retry.')
+                            : l10n.t('Connect from the connection tree, then click Retry.'),
                     action: 'retry',
                 },
             };
@@ -53,7 +56,7 @@ export function describeUnavailableConnection(reason: ConnectionUnavailableReaso
                     reason,
                     title: l10n.t('Connection changed'),
                     detail: l10n.t(
-                        'This view is tied to the previous connection. Close it and reopen it from the tree.',
+                        'This view is tied to the previous connection settings. Close it and reopen it from the tree.',
                     ),
                     action: 'close',
                 },

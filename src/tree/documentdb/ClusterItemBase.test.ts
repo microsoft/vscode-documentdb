@@ -469,7 +469,7 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
 
         try {
             expect(await node.getChildren()).toEqual([
-                expect.objectContaining({ label: 'Connect', id: `${treeId}/connect`, commandArgs: [node] }),
+                expect.objectContaining({ label: 'Reconnect', id: `${treeId}/connect`, commandArgs: [node] }),
             ]);
             expect(node.getTreeItem().contextValue?.split(';')).not.toContain('connected');
             expect(mockHasCredentials).not.toHaveBeenCalled();
