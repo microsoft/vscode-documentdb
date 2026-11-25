@@ -15,7 +15,16 @@ import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
 import { traceAuthFlow, type AuthTraceContext } from '../../utils/authTrace';
 import { AuthMethodId } from '../auth/AuthMethod';
+import * as tokenResource from '../auth/documentdbTokenResource';
+import {
+    getRecentEntraTokenFailure,
+    recordEntraTokenFailure,
+    resetEntraTokenFailuresForTests,
+} from '../auth/entraErrors/entraTokenFailures';
+import * as managedIdentityProvider from '../auth/managedIdentityTokenProvider';
 import { EntraDestinationRejectedError } from '../auth/oidcAllowedHosts';
+import { WorkerTokenRelay } from '../auth/WorkerTokenRelay';
+import { ClustersClient } from '../ClustersClient';
 import { CredentialCache } from '../CredentialCache';
 import { ShellSessionManager } from '../shell/ShellSessionManager';
 import {
@@ -821,6 +830,102 @@ describe('WorkerSessionManager', () => {
                 await expect(evaluating).rejects.toSatisfy((error: unknown) => getWorkerAuthReason(error) === reason);
                 expect(active.manager.authFailure).toBe(reason);
                 active.manager.dispose();
+            },
+        );
+
+        it.each(['returned', 'failed'] as const)(
+            'cancels a still-attached worker when an invalidated token lookup %s',
+            async (outcome): Promise<void> => {
+                const clusterId = 'test-cluster';
+                const connectionString = 'mongodb://cluster.mongocluster.cosmos.azure.com/';
+                const resolver = vi.spyOn(tokenResource, 'resolveManagedIdentityTokenResource').mockResolvedValue({
+                    cloudCategory: 'public',
+                    reason: 'host',
+                    resource: 'https://ossrdbms-aad.database.windows.net',
+                    scope: 'https://ossrdbms-aad.database.windows.net/.default',
+                    details: {},
+                });
+                type Token = Awaited<ReturnType<typeof managedIdentityProvider.getManagedIdentityAccessToken>>;
+                let signalStarted!: () => void;
+                const started = new Promise<void>((resolve) => {
+                    signalStarted = resolve;
+                });
+                let finishLookup!: () => void;
+                const lookup = new Promise<Token>((resolve, reject) => {
+                    finishLookup = (): void => {
+                        if (outcome === 'returned') {
+                            resolve({ accessToken: 'must-not-send', expiresOnTimestamp: 0 });
+                        } else {
+                            reject(new Error('obsolete provider failure'));
+                        }
+                    };
+                });
+                const provider = vi
+                    .spyOn(managedIdentityProvider, 'getManagedIdentityAccessToken')
+                    .mockImplementation(() => {
+                        signalStarted();
+                        return lookup;
+                    });
+                const relay = new WorkerTokenRelay(
+                    clusterId,
+                    {
+                        type: 'init',
+                        requestId: '',
+                        connectionString,
+                        clientOptions: {},
+                        databaseName: 'test',
+                        authMechanism: AuthMethodId.ManagedIdentity,
+                    },
+                    ClustersClient.getEpoch(clusterId),
+                    'relay-id',
+                    undefined,
+                );
+                callbacks.onTokenRequest = relay.relay.bind(relay);
+                const manager = new WorkerSessionManager(callbacks);
+                try {
+                    const active = await startWorker(true, {}, manager);
+                    active.worker._emit('message', { type: 'initResult', requestId: active.requestId, success: true });
+                    await active.initPromise;
+                    const evalMessage = {
+                        type: 'eval',
+                        requestId: '',
+                        code: '1',
+                        databaseName: 'test',
+                        displayBatchSize: 20,
+                    } as const;
+                    const evaluating = manager.sendEval(evalMessage);
+                    const canceled = expect(evaluating).rejects.toBeInstanceOf(UserCancelledError);
+                    active.worker._emit('message', { type: 'tokenRequest', requestId: 'obsolete-token' });
+                    await started;
+                    ClustersClient.invalidate(clusterId);
+                    resetEntraTokenFailuresForTests();
+                    if (outcome === 'returned') {
+                        recordEntraTokenFailure(clusterId, { cloudCategory: 'china', authMethod: 'interactive' });
+                    }
+                    const newerFailure = getRecentEntraTokenFailure(clusterId);
+                    finishLookup();
+                    await canceled;
+                    expect(manager.isAlive).toBe(false);
+                    expect(manager.authFailure).toBeUndefined();
+                    expect(getRecentEntraTokenFailure(clusterId)).toBe(newerFailure);
+
+                    const replacement = await startWorker(true, {}, manager);
+                    replacement.worker._emit('message', {
+                        type: 'initResult',
+                        requestId: replacement.requestId,
+                        success: true,
+                    });
+                    await replacement.initPromise;
+                    const worker = vi.mocked(Worker).mock.results.at(-1)?.value as { postMessage: Mock };
+                    const messages = worker.postMessage.mock.calls as [MainToWorkerMessage][];
+                    expect(messages.map(([message]) => message.type)).toEqual(['init', 'eval', 'init']);
+                    expect(manager.isAlive).toBe(true);
+                } finally {
+                    manager.dispose();
+                    resetEntraTokenFailuresForTests();
+                    provider.mockRestore();
+                    resolver.mockRestore();
+                }
             },
         );
 

@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { traceAuthFlow, traceEntraDestination, type AuthTraceContext } from '../../utils/authTrace';
 import { ClustersClient } from '../ClustersClient';
 import {
@@ -69,11 +70,21 @@ export class WorkerTokenRelay {
         trace?: AuthTraceContext,
         epoch = this.epoch,
     ): Promise<void> {
-        const isCurrent = (): boolean =>
-            isCurrentWorker() &&
+        const isCurrentEpoch = (): boolean =>
             !ClustersClient.getLatchReason(this.clusterId) &&
             ClustersClient.getEpoch(this.clusterId) === epoch;
-        const activeTrace = (): AuthTraceContext | undefined => (isCurrent() ? trace : undefined);
+        const canReply = (): boolean => {
+            if (!isCurrentWorker()) {
+                return false;
+            }
+            if (!isCurrentEpoch()) {
+                // The driver is still waiting. Cancel via the supervisor, not an authentication error.
+                throw new UserCancelledError('workerTokenRelay');
+            }
+            return true;
+        };
+        const activeTrace = (): AuthTraceContext | undefined =>
+            isCurrentWorker() && isCurrentEpoch() ? trace : undefined;
         const { connectionString, authMechanism, tenantId, managedIdentityClientId } = this.init;
         const managed = authMechanism === AuthMethodId.ManagedIdentity;
         const assertDestination = (): void => {
@@ -84,7 +95,7 @@ export class WorkerTokenRelay {
             }
         };
         const run = async (): Promise<void> => {
-            if (!isCurrent()) {
+            if (!canReply()) {
                 return;
             }
             let mode: 'managedIdentity' | 'silent' | 'interactive' | undefined;
@@ -115,7 +126,7 @@ export class WorkerTokenRelay {
                     (managed
                         ? await resolveManagedIdentityTokenResource(connectionString)
                         : await resolveInteractiveTokenResource(connectionString));
-                if (!isCurrent()) {
+                if (!canReply()) {
                     return;
                 }
                 this.resource = resolved;
@@ -126,7 +137,7 @@ export class WorkerTokenRelay {
                 acquiring = true;
                 if (managed) {
                     const { getManagedIdentityAccessToken } = await import('./managedIdentityTokenProvider');
-                    if (!isCurrent()) {
+                    if (!canReply()) {
                         return;
                     }
                     assertDestination();
@@ -153,7 +164,7 @@ export class WorkerTokenRelay {
                             mode: pin ? 'silent' : 'interactive',
                         }),
                     );
-                    if (!isCurrent()) {
+                    if (!canReply()) {
                         return;
                     }
                     assertEnvironment();
@@ -175,7 +186,7 @@ export class WorkerTokenRelay {
                     };
                     accessToken = session.accessToken;
                 }
-                if (!isCurrent()) {
+                if (!canReply()) {
                     return;
                 }
                 assertDestination();
@@ -192,7 +203,7 @@ export class WorkerTokenRelay {
                 traceAuthFlow('workerTokenRelay.completed', { mode, outcome: 'returned' }, requestId, activeTrace());
                 postResponse({ type: 'tokenResponse', requestId, accessToken });
             } catch (error) {
-                if (!isCurrent()) {
+                if (!canReply()) {
                     return;
                 }
                 const reason = getWorkerAuthReason(error) ?? 'refreshFailed';

@@ -93,7 +93,8 @@ export interface WorkerSessionCallbacks {
     /**
      * Called when the worker requests an OIDC token (Entra ID auth).
      * The implementation must acquire the token via VS Code auth APIs
-     * and post it back to the worker.
+     * and post it back to the worker, or throw UserCancelledError if the
+     * still-attached worker's request was invalidated.
      */
     onTokenRequest?: (
         msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
@@ -711,27 +712,7 @@ export class WorkerSessionManager implements vscode.Disposable {
             }
 
             case 'tokenRequest': {
-                const isCurrent = (): boolean => this._worker === worker && this._shuttingDownWorker !== worker;
-                if (isCurrent() && this._callbacks.onTokenRequest) {
-                    void this._callbacks.onTokenRequest(
-                        msg,
-                        (response) => {
-                            if (isCurrent()) {
-                                if (response.type === 'tokenError') {
-                                    this._authFailure ??= isWorkerAuthReason(response.reason)
-                                        ? response.reason
-                                        : response.errorName === 'EntraDestinationRejectedError'
-                                          ? 'destinationRejected'
-                                          : 'refreshFailed';
-                                }
-                                worker.postMessage(response);
-                            }
-                        },
-                        isCurrent,
-                        this._startup?.costTimings,
-                        connection,
-                    );
-                }
+                void this.handleTokenRequest(msg, connection, worker);
                 break;
             }
 
@@ -747,12 +728,48 @@ export class WorkerSessionManager implements vscode.Disposable {
         }
     }
 
+    private async handleTokenRequest(
+        msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
+        connection: AuthTraceContext,
+        worker: Worker,
+    ): Promise<void> {
+        const isCurrent = (): boolean => this._worker === worker && this._shuttingDownWorker !== worker;
+        if (!isCurrent()) {
+            return;
+        }
+        try {
+            await this._callbacks.onTokenRequest?.(
+                msg,
+                (response) => {
+                    if (isCurrent()) {
+                        if (response.type === 'tokenError') {
+                            this._authFailure ??= isWorkerAuthReason(response.reason)
+                                ? response.reason
+                                : response.errorName === 'EntraDestinationRejectedError'
+                                  ? 'destinationRejected'
+                                  : 'refreshFailed';
+                        }
+                        worker.postMessage(response);
+                    }
+                },
+                isCurrent,
+                this._startup?.costTimings,
+                connection,
+            );
+        } catch (error) {
+            if (isCurrent()) {
+                // Reject the pending startup/eval and discard the driver blocked in its callback.
+                this.terminateWorker('intentional', error instanceof UserCancelledError ? error : undefined);
+            }
+        }
+    }
+
     // ─── Private: Worker cleanup ─────────────────────────────────────────────
 
-    private terminateWorker(reason: 'intentional' | 'forced'): void {
+    private terminateWorker(reason: 'intentional' | 'forced', cancellation?: UserCancelledError): void {
         this.revokeOidcDestinationPolicy();
         this._startupAbortController?.abort();
-        this.finishStartup('terminated');
+        this.finishStartup(cancellation ? 'canceled' : 'terminated');
         const wasAlive = !!this._worker;
 
         if (this._worker) {
@@ -768,7 +785,7 @@ export class WorkerSessionManager implements vscode.Disposable {
 
         // Reject all pending requests
         for (const [, entry] of this._pendingRequests) {
-            entry.reject(new Error('Worker terminated'));
+            entry.reject(cancellation ?? new Error('Worker terminated'));
         }
         this._pendingRequests.clear();
 
