@@ -1353,7 +1353,7 @@
         },
         {
           "command": "vscode-documentdb.command.disconnect",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\bconnected\\b/ && !listMultiSelection",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && viewItem =~ /\\bconnected\\b/ && !listMultiSelection",
           "group": "2@3"
         },
         {
