@@ -726,49 +726,52 @@ export const ClusterDashboard = (): JSX.Element => {
         ],
     );
 
-    const handleUnavailableAction = useCallback((action: ConnectionRecoveryAction): void => {
-        const current = unavailableRef.current;
-        if (!current || recovering) {
-            return;
-        }
+    const handleUnavailableAction = useCallback(
+        (action: ConnectionRecoveryAction): void => {
+            const current = unavailableRef.current;
+            if (!current || recovering) {
+                return;
+            }
 
-        const revision = ++operationRevisionRef.current;
-        setRecovering(true);
-        void trpcClient.clusterDashboard.recoverUnavailable
-            .mutate({ action })
-            .then((response: ConnectionUnavailableResponse | ConnectionRecoveryResponse) => {
-                if (disposedRef.current || revision !== operationRevisionRef.current || action === 'close') {
-                    return;
-                }
-                if ('unavailable' in response) {
-                    unavailableRef.current = response.unavailable;
-                    setUnavailable(response.unavailable);
-                    return;
-                }
-                unavailableRef.current = undefined;
-                setUnavailable(undefined);
-                setRecoveryAnnouncement(response.recovered.text);
-            })
-            .catch(async (error: unknown) => {
-                if (disposedRef.current || revision !== operationRevisionRef.current) {
-                    return;
-                }
-                const cause = error instanceof Error ? error.message : String(error);
-                const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
-                if (!disposedRef.current && revision === operationRevisionRef.current) {
-                    void trpcClient.common.displayErrorMessage.mutate({
-                        message: explained ?? l10n.t('Unable to recover the connection'),
-                        modal: false,
-                        cause,
-                    });
-                }
-            })
-            .finally(() => {
-                if (!disposedRef.current && revision === operationRevisionRef.current) {
-                    setRecovering(false);
-                }
-            });
-    }, [recovering, trpcClient]);
+            const revision = ++operationRevisionRef.current;
+            setRecovering(true);
+            void trpcClient.clusterDashboard.recoverUnavailable
+                .mutate({ action })
+                .then((response: ConnectionUnavailableResponse | ConnectionRecoveryResponse) => {
+                    if (disposedRef.current || revision !== operationRevisionRef.current || action === 'close') {
+                        return;
+                    }
+                    if ('unavailable' in response) {
+                        unavailableRef.current = response.unavailable;
+                        setUnavailable(response.unavailable);
+                        return;
+                    }
+                    unavailableRef.current = undefined;
+                    setUnavailable(undefined);
+                    setRecoveryAnnouncement(response.recovered.text);
+                })
+                .catch(async (error: unknown) => {
+                    if (disposedRef.current || revision !== operationRevisionRef.current) {
+                        return;
+                    }
+                    const cause = error instanceof Error ? error.message : String(error);
+                    const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
+                    if (!disposedRef.current && revision === operationRevisionRef.current) {
+                        void trpcClient.common.displayErrorMessage.mutate({
+                            message: explained ?? l10n.t('Unable to recover the connection'),
+                            modal: false,
+                            cause,
+                        });
+                    }
+                })
+                .finally(() => {
+                    if (!disposedRef.current && revision === operationRevisionRef.current) {
+                        setRecovering(false);
+                    }
+                });
+        },
+        [recovering, trpcClient],
+    );
 
     useEffect(() => {
         const retryAfterReconnect = ({ data }: MessageEvent<unknown>): void => {
