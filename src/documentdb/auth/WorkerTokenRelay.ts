@@ -67,11 +67,12 @@ export class WorkerTokenRelay {
         isCurrentWorker: () => boolean,
         timings?: ConnectionStartupTimings,
         trace?: AuthTraceContext,
+        epoch = this.epoch,
     ): Promise<void> {
         const isCurrent = (): boolean =>
             isCurrentWorker() &&
             !ClustersClient.getLatchReason(this.clusterId) &&
-            ClustersClient.getEpoch(this.clusterId) === this.epoch;
+            ClustersClient.getEpoch(this.clusterId) === epoch;
         const activeTrace = (): AuthTraceContext | undefined => (isCurrent() ? trace : undefined);
         const { connectionString, authMechanism, tenantId, managedIdentityClientId } = this.init;
         const managed = authMechanism === AuthMethodId.ManagedIdentity;

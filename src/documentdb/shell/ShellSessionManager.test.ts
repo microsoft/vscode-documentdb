@@ -186,6 +186,41 @@ describe('ShellSessionManager', () => {
         manager.dispose();
     });
 
+    it('keeps a healthy Shell and its pinned relay across a no-op save, but honors Disconnect', async (): Promise<void> => {
+        const onReconnecting = vi.fn();
+        const manager = new ShellSessionManager(
+            { clusterId, clusterDisplayName: 'Cluster', databaseName: 'test' },
+            { onReconnecting },
+        );
+        requestTokenOnInit = true;
+        const account = { id: 'account-a', label: 'Account A' };
+        mockGetSessionFromVSCode.mockResolvedValue({ accessToken: 'private-token', account });
+        await manager.initialize();
+        await manager.evaluate('let keep = 1');
+
+        ClustersClient.latch(clusterId, 'credentialsUpdating');
+        await expect(manager.evaluate('keep')).rejects.toMatchObject({ reason: 'credentialsUpdating' });
+        ClustersClient.unlatch(clusterId);
+        await manager.evaluate('keep');
+        const reply = vi.fn();
+        await workerCallbacks.onTokenRequest?.({ type: 'tokenRequest', requestId: 'refresh' }, reply, () => true);
+        expect(reply).toHaveBeenCalledWith({ type: 'tokenResponse', requestId: 'refresh', accessToken: 'private-token' });
+        expect(mockGetSessionFromVSCode.mock.calls[1][2]).toEqual({ silent: true, account });
+        expect(killWorker).not.toHaveBeenCalled();
+        expect(onReconnecting).not.toHaveBeenCalled();
+
+        ClustersClient.latch(clusterId, 'userDisconnected');
+        try {
+            manager.killWorker();
+            await expect(manager.evaluate('keep')).rejects.toMatchObject({ reason: 'userDisconnected' });
+            expect(killWorker).toHaveBeenCalledOnce();
+            expect(sendEval).toHaveBeenCalledTimes(2);
+        } finally {
+            ClustersClient.unlatch(clusterId);
+            manager.dispose();
+        }
+    });
+
     it('holds a silent miss until the same account explicitly signs in and never replays the command', async (): Promise<void> => {
         const manager = new ShellSessionManager({ clusterId, clusterDisplayName: 'Cluster', databaseName: 'test' });
         requestTokenOnInit = true;

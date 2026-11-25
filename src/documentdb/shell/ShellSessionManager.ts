@@ -142,7 +142,10 @@ export class ShellSessionManager implements vscode.Disposable {
             },
             onTokenRequest: async (request, post, isCurrent, timings, trace) => {
                 const relay = this._relay;
-                await relay?.relay(request, post, () => this._relay === relay && isCurrent(), timings, trace);
+                // Warm Shells survive host-only invalidation. Fence each refresh at receipt;
+                // startup still uses the epoch captured before opening the connection.
+                const epoch = this._initialized ? ClustersClient.getEpoch(this._connectionInfo.clusterId) : relay?.epoch;
+                await relay?.relay(request, post, () => this._relay === relay && isCurrent(), timings, trace, epoch);
             },
             onWorkerExit: callbacks?.onWorkerExit,
         };
@@ -234,8 +237,8 @@ export class ShellSessionManager implements vscode.Disposable {
             throw new ConnectionUnavailableError('credentialsChanged');
         }
         const initMsg = this.buildInitMessage();
-        if (!this.isInitialized || this._relay?.epoch !== epoch) {
-            if (this._initialized && (this._authFailure || this._relay?.epoch !== epoch)) {
+        if (!this.isInitialized) {
+            if (this._initialized && this._authFailure) {
                 this._workerManager.killWorker();
             }
             this._initialized = false;
@@ -317,7 +320,7 @@ export class ShellSessionManager implements vscode.Disposable {
         this.assertConnectionAvailable();
         // Reconnect if the worker is not alive — handles all cases:
         // timeout kills, Ctrl+C cancellation, unexpected worker crashes.
-        if (!this.isInitialized || this._relay?.epoch !== ClustersClient.getEpoch(this._connectionInfo.clusterId)) {
+        if (!this.isInitialized) {
             this.assertAuthRecovery();
             this._callbacks?.onReconnecting?.();
             await this.initialize();
@@ -335,12 +338,13 @@ export class ShellSessionManager implements vscode.Disposable {
         };
 
         const relay = this._relay;
+        const epoch = ClustersClient.getEpoch(this._connectionInfo.clusterId);
         try {
             return (await this._workerManager.sendEval(evalMsg)).result;
         } catch (error) {
             if (
                 relay === this._relay &&
-                relay?.epoch === ClustersClient.getEpoch(this._connectionInfo.clusterId) &&
+                epoch === ClustersClient.getEpoch(this._connectionInfo.clusterId) &&
                 !ClustersClient.getLatchReason(this._connectionInfo.clusterId)
             ) {
                 this._authFailure ??= getWorkerAuthReason(error);
