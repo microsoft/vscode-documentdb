@@ -130,6 +130,7 @@ describe('connection teardown', () => {
         });
         mocks.getSetting.mockReturnValue('keepOpenDisabled');
         const draft = register('documentView', true);
+        const untouchedView = register('documentView', true, otherId);
         const failedDelete = new Error('Storage write failed');
 
         await expect(
@@ -143,7 +144,10 @@ describe('connection teardown', () => {
         ).rejects.toBe(failedDelete);
 
         expect(latches.get(clusterId)).toBe('userDisconnected');
+        expect(draft.disable).toHaveBeenLastCalledWith('userDisconnected');
+        expect(draft.dispose).not.toHaveBeenCalled();
         expect(latches.has(otherId)).toBe(false);
+        expect(untouchedView.disable).not.toHaveBeenCalled();
     });
 
     it('skips the choice modal when there are no surfaces and leaves preflight read-only', async () => {

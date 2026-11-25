@@ -248,6 +248,11 @@ async function removeConnections(
             if (target.started) {
                 // A failed storage delete must not leave the surviving connection locked as removed.
                 ClustersClient.latch(id, 'userDisconnected');
+                if (confirmed.choice === 'keepOpenDisabled') {
+                    for (const surface of getConnectionSurfaces(id)) {
+                        surface.disable('userDisconnected');
+                    }
+                }
             } else if (target.previous) {
                 ClustersClient.latch(id, target.previous);
             } else {
