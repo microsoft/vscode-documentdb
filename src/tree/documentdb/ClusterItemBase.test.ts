@@ -15,8 +15,8 @@ import { connectDisconnected, disconnect } from '../../commands/disconnect/disco
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { EntraDestinationRejectedError } from '../../documentdb/auth/oidcAllowedHosts';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
-import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
 import { teardownConnection } from '../../documentdb/connectionTeardown';
+import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { Views } from '../../documentdb/Views';
@@ -508,10 +508,7 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
     });
 
     it('clears and refreshes only the owning discovery provider after Disconnect', async () => {
-        const node = new TestClusterItem(
-            { ...makeCluster(), treeId: 'discoveryView/custom-source/cluster-1' },
-            null,
-        );
+        const node = new TestClusterItem({ ...makeCluster(), treeId: 'discoveryView/custom-source/cluster-1' }, null);
         const context = { telemetry: { suppressAll: false } } as IActionContext;
         ClustersClientMock.exists.mockReturnValue(true);
         ClustersClientMock.getLatchReason.mockReturnValue(undefined);
