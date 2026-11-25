@@ -12,6 +12,7 @@ import { type PlaygroundConnection } from './types';
 import * as vscode from 'vscode';
 
 import { CredentialCache } from '../CredentialCache';
+import { ClustersClient } from '../ClustersClient';
 
 vi.mock('../CredentialCache', () => ({
     CredentialCache: { hasCredentials: vi.fn() },
@@ -31,6 +32,7 @@ describe('PlaygroundService', () => {
 
     afterEach(() => {
         service.dispose();
+        vi.restoreAllMocks();
     });
 
     describe('singleton', () => {
@@ -108,6 +110,48 @@ describe('PlaygroundService', () => {
             expect(service.getConnection(uri2)).toBe(connection2);
             expect(service.getDisplayName(mockUri)).toBe('MyCluster / orders');
             expect(service.getDisplayName(uri2)).toBe('OtherCluster / products');
+        });
+
+        it('captures the host binding when a tree selection is bound', () => {
+            const identity = {
+                kind: 'entra',
+                providerId: 'microsoft',
+                accountId: 'account',
+                accountLabel: 'Account',
+                tenantId: 'tenant',
+            } as const;
+            vi.spyOn(ClustersClient, 'getBinding').mockReturnValue({
+                clusterId: connection.clusterId,
+                fingerprint: 'fingerprint',
+                generation: 1,
+            });
+            vi.spyOn(ClustersClient, 'getLastVerifiedIdentity').mockReturnValue(identity);
+
+            const bound = service.setConnectionFromHost(mockUri, connection);
+
+            expect(bound).toEqual({
+                ...connection,
+                fingerprint: 'fingerprint',
+                entraIdentity: identity,
+            });
+            expect(service.getConnection(mockUri)).toBe(bound);
+        });
+
+        it('captures a worker binding only while the original document binding is current', () => {
+            service.setConnection(mockUri, connection);
+            const replacement = { ...connection, databaseName: 'replacement' };
+            const captured = service.captureWorkerBinding(mockUri, connection, {
+                fingerprint: 'worker-fingerprint',
+            });
+            expect(captured?.fingerprint).toBe('worker-fingerprint');
+
+            service.setConnection(mockUri, replacement);
+            expect(
+                service.captureWorkerBinding(mockUri, connection, {
+                    fingerprint: 'stale-fingerprint',
+                }),
+            ).toBeUndefined();
+            expect(service.getConnection(mockUri)).toBe(replacement);
         });
 
         it('getActiveClusterIds returns all unique cluster IDs', () => {

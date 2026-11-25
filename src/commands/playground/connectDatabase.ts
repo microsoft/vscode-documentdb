@@ -120,8 +120,7 @@ export async function promptAndConnectPlayground(
     context.telemetry.properties.outcome = 'connected';
     context.telemetry.properties.experience = node instanceof DatabaseItem ? node.experience?.api : undefined;
 
-    PlaygroundService.getInstance().setConnection(uri, connection);
-    return connection;
+    return PlaygroundService.getInstance().setConnectionFromHost(uri, connection);
 }
 
 /**

@@ -144,7 +144,7 @@ async function createPlaygroundWithContent(
     await vscode.window.showTextDocument(doc, { preview: true });
 
     // Bind connection to this specific document
-    service.setConnection(doc.uri, connection);
+    service.setConnectionFromHost(doc.uri, connection);
 }
 
 function isCollectionItem(node: DatabaseItem | CollectionItem | undefined): node is CollectionItem {

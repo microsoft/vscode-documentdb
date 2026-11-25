@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { executePlaygroundCode, stopPlaygroundEvaluator } from './executePlaygroundCode';
 
@@ -49,6 +49,10 @@ vi.mock('../../extensionVariables', () => ({
 }));
 
 describe('executePlaygroundCode', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
     it('cancels a stopped worker without replacing the retained result or showing an error', async () => {
         let stopEvaluation: (error: Error) => void = () => {};
         evaluate.mockImplementation(
@@ -80,6 +84,42 @@ describe('executePlaygroundCode', () => {
         } finally {
             progress.mockRestore();
             showError.mockRestore();
+            stopPlaygroundEvaluator('cluster');
+        }
+    });
+
+    it('writes one actionable result for a bounded worker failure without an unsolicited modal', async () => {
+        const failure = Object.assign(new Error('private callback details'), {
+            name: 'TokenCallbackError',
+        });
+        evaluate.mockRejectedValueOnce(failure);
+        const showError = vi.spyOn(vscode.window, 'showErrorMessage');
+        const showWarning = vi.spyOn(vscode.window, 'showWarningMessage');
+        const progress = vi
+            .spyOn(vscode.window, 'withProgress')
+            .mockImplementation((_options, task) =>
+                Promise.resolve(
+                    task({ report: vi.fn() }, { isCancellationRequested: false, onCancellationRequested: vi.fn() }),
+                ),
+            );
+
+        try {
+            await expect(
+                executePlaygroundCode('db.stats()', 'runAll', vscode.Uri.file('test.documentdb.js')),
+            ).rejects.toBe(failure);
+            expect(showResult).toHaveBeenCalledExactlyOnceWith(
+                expect.anything(),
+                expect.stringContaining(
+                    'The sign-in token could not be refreshed. Run the query again to reconnect with the same connection.',
+                ),
+            );
+            expect(showResult.mock.calls[0][1]).not.toContain('private callback details');
+            expect(showError).not.toHaveBeenCalled();
+            expect(showWarning).not.toHaveBeenCalled();
+        } finally {
+            progress.mockRestore();
+            showError.mockRestore();
+            showWarning.mockRestore();
             stopPlaygroundEvaluator('cluster');
         }
     });

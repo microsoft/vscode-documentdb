@@ -6,9 +6,10 @@
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
+import { ClustersClient } from '../ClustersClient';
 import { CredentialCache } from '../CredentialCache';
 import { PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './constants';
-import { type PlaygroundConnection } from './types';
+import { type PlaygroundConnection, type PlaygroundWorkerBinding } from './types';
 
 /**
  * Normalize playground text for content correlation across an untitled→file save.
@@ -152,12 +153,61 @@ export class PlaygroundService implements vscode.Disposable {
     // ── Connection management ──────────────────────────────────────────
 
     setConnection(uri: vscode.Uri, connection: PlaygroundConnection): void {
+        connection = this.captureHostBinding(connection);
         ext.outputChannel?.trace(
             `[PlaygroundService] setConnection: ${uri.toString()} → cluster=${connection.clusterId}, db=${connection.databaseName}`,
         );
         this._connections.set(uri.toString(), connection);
         this._lastBindingByPath.set(uri.toString(), connection);
         this._onDidChangeState.fire();
+    }
+
+    /** Bind a newly selected playground to the current connected host identity, when available. */
+    setConnectionFromHost(uri: vscode.Uri, connection: PlaygroundConnection): PlaygroundConnection {
+        this.setConnection(uri, connection);
+        return this._connections.get(uri.toString()) ?? connection;
+    }
+
+    private captureHostBinding(connection: PlaygroundConnection): PlaygroundConnection {
+        const binding = ClustersClient.getBinding(connection.clusterId);
+        const verifiedIdentity = ClustersClient.getLastVerifiedIdentity(connection.clusterId);
+        const hostIdentityIsCompatible =
+            connection.fingerprint === undefined || connection.fingerprint === binding?.fingerprint;
+        return (
+            binding === undefined
+                ? connection
+                : {
+                      ...connection,
+                      fingerprint: connection.fingerprint ?? binding.fingerprint,
+                      entraIdentity:
+                          connection.entraIdentity ??
+                          (hostIdentityIsCompatible && verifiedIdentity?.kind === 'entra'
+                              ? verifiedIdentity
+                              : undefined),
+                  }
+        );
+    }
+
+    /** Capture a worker-learned binding only while the document still holds the originating connection. */
+    captureWorkerBinding(
+        uri: vscode.Uri,
+        expectedConnection: PlaygroundConnection,
+        binding: PlaygroundWorkerBinding,
+    ): PlaygroundConnection | undefined {
+        const key = uri.toString();
+        const current = this._connections.get(key);
+        if (current !== expectedConnection) {
+            return undefined;
+        }
+        const bound = {
+            ...current,
+            fingerprint: binding.fingerprint,
+            entraIdentity: binding.entraIdentity,
+        };
+        this._connections.set(key, bound);
+        this._lastBindingByPath.set(key, bound);
+        this._onDidChangeState.fire();
+        return bound;
     }
 
     removeConnection(uri: vscode.Uri): void {

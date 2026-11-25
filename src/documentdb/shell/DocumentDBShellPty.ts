@@ -7,6 +7,10 @@ import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsof
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
+import {
+    canSignInAgainForWorker,
+    signInAgainForWorker,
+} from '../../commands/signInAgain/signInAgain';
 import { type DeepLinkTelemetry, trackDeepLinkTelemetry } from '../../deepLinks/deepLinkTelemetry';
 import { ext } from '../../extensionVariables';
 import { ErrorExplanationService } from '../../services/errorExplanationService';
@@ -17,9 +21,14 @@ import { COMPLETION_OFFERED_EVENT, type CompletionCategory } from '../../telemet
 import { accumulateTelemetry } from '../../utils/accumulatingTelemetry';
 import { classifyCommand, extractRunCommandName } from '../../utils/classifyCommand';
 import { ClustersClient } from '../ClustersClient';
+import { ConnectionUnavailableError } from '../ConnectionUnavailableError';
 import { CredentialCache } from '../CredentialCache';
 import { deserializeResultForSchema, feedResultToSchemaStore } from '../feedResultToSchemaStore';
-import { type SerializableExecutionResult } from '../playground/workerTypes';
+import {
+    getWorkerAuthReason,
+    type SerializableExecutionResult,
+    type WorkerAuthReason,
+} from '../playground/workerTypes';
 import { SchemaStore } from '../SchemaStore';
 import { getHostsFromConnectionString } from '../utils/connectionStringHelpers';
 import { addDomainInfoToProperties } from '../utils/getClusterMetadata';
@@ -632,6 +641,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             this._spinner?.stop();
             this._spinner = undefined;
 
+            if (this.handleWorkerFailure(error)) {
+                this._inputHandler.setEnabled(true);
+                this.showPrompt();
+                return;
+            }
+
             const rawMessage = error instanceof Error ? error.message : String(error);
             // Strip technical error codes for clean user-facing output;
             // the extracted code is preserved for future telemetry.
@@ -690,8 +705,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     private async handleLineInput(line: string): Promise<void> {
         const disconnectRevision = this._disconnectRevision;
-        if (ClustersClient.getLatchReason(this._connectionInfo.clusterId)) {
-            this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Disconnected')));
+        const latchReason = ClustersClient.getLatchReason(this._connectionInfo.clusterId);
+        if (latchReason) {
+            this.handleWorkerFailure(new ConnectionUnavailableError(latchReason));
             if (!this._closed) {
                 this.showPrompt();
             }
@@ -836,6 +852,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             return;
         }
 
+        if (this.handleWorkerFailure(error)) {
+            return;
+        }
+
         const rawMessage = error instanceof Error ? error.message : String(error);
         // Strip technical error codes for clean user-facing output;
         // the extracted code is preserved for future telemetry.
@@ -867,6 +887,108 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 ),
             );
         }
+    }
+
+    private handleWorkerFailure(error: unknown): boolean {
+        const authReason = getWorkerAuthReason(error);
+        if (authReason) {
+            this.writeBoundedWorkerFailure(authReason);
+            return true;
+        }
+        if (error instanceof ConnectionUnavailableError) {
+            const message =
+                error.reason === 'userDisconnected'
+                    ? l10n.t('Disconnected. Reconnect from the tree, then open a new shell.')
+                    : error.reason === 'credentialsChanged' || error.reason === 'identityChanged'
+                    ? l10n.t('This shell is bound to the previous connection. Open a new shell from the tree.')
+                    : l10n.t('This connection is unavailable. Reconnect from the tree, then open a new shell.');
+            this.writeLine(this._outputFormatter.formatError(message));
+            return true;
+        }
+        return false;
+    }
+
+    private writeBoundedWorkerFailure(reason: WorkerAuthReason): void {
+        const pin = this._sessionManager.pinnedEntraIdentity;
+        if (reason === 'signInRequired' && pin && canSignInAgainForWorker(this._connectionInfo.clusterId, pin)) {
+            const message = l10n.t('Microsoft sign-in expired for this shell. Sign in again to continue.');
+            this.writeLine(this._outputFormatter.formatError(message));
+            this.offerShellSignInAgain(pin, message);
+            return;
+        }
+
+        let message: string;
+        switch (reason) {
+            case 'signInRequired':
+                message = l10n.t('Microsoft sign-in expired for this shell. Open a new shell from the tree.');
+                break;
+            case 'identityMismatch':
+                message = l10n.t(
+                    'This shell is bound to a different Microsoft account. Open a new shell from the tree.',
+                );
+                break;
+            case 'destinationRejected':
+                message = l10n.t(
+                    'This shell is not allowed to sign in to this connection. Review the trusted server settings, then reconnect from the tree.',
+                );
+                break;
+            case 'refreshFailed':
+                message = l10n.t(
+                    'The sign-in token could not be refreshed. Run the next command to reconnect with the same connection.',
+                );
+                break;
+        }
+        this.writeLine(this._outputFormatter.formatError(message));
+    }
+
+    private offerShellSignInAgain(
+        identity: NonNullable<ShellSessionManager['pinnedEntraIdentity']>,
+        message: string,
+    ): void {
+        const action = l10n.t('Sign in again');
+        const revision = this._disconnectRevision;
+        const epoch = ClustersClient.getEpoch(this._connectionInfo.clusterId);
+        void vscode.window.showWarningMessage(message, action).then(async (choice) => {
+            if (choice !== action) {
+                return;
+            }
+            try {
+                await callWithTelemetryAndErrorHandling('shell.signInAgain', async (context) => {
+                    context.errorHandling.suppressDisplay = true;
+                    context.errorHandling.rethrow = true;
+                    context.telemetry.properties.shellSessionId = this._shellSessionId;
+                    const result = await signInAgainForWorker(
+                        context,
+                        this._connectionInfo.clusterId,
+                        identity,
+                    );
+                    if (
+                        !result ||
+                        this._closed ||
+                        revision !== this._disconnectRevision ||
+                        result.epoch !== epoch ||
+                        ClustersClient.getEpoch(this._connectionInfo.clusterId) !== epoch
+                    ) {
+                        return;
+                    }
+                    this._sessionManager.resetAfterSignIn(result.identity, result.epoch);
+                    this.writeLine(
+                        this._outputFormatter.formatSystemMessage(
+                            l10n.t('Sign-in restored. Run your command again.'),
+                        ),
+                    );
+                });
+            } catch (error) {
+                if (error instanceof UserCancelledError) {
+                    return;
+                }
+                if (!this._closed && revision === this._disconnectRevision) {
+                    void vscode.window.showWarningMessage(
+                        l10n.t('Could not sign in again. Open a new shell from the tree.'),
+                    );
+                }
+            }
+        });
     }
 
     /**

@@ -7,12 +7,15 @@ import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
-import { EntraSignInRequiredError } from '../../documentdb/auth/entraErrors/entraCallbackErrors';
+import {
+    EntraIdentityMismatchError,
+    EntraSignInRequiredError,
+} from '../../documentdb/auth/entraErrors/entraCallbackErrors';
 import { getEntraSession } from '../../documentdb/auth/entraSession';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { showClusterConnectFailure } from '../../documentdb/showClusterConnectFailure';
-import { signInAgain } from './signInAgain';
+import { signInAgain, signInAgainForWorker } from './signInAgain';
 
 const pin = {
     kind: 'entra',
@@ -147,6 +150,41 @@ describe('signInAgain', () => {
                 modal: true,
                 detail: 'Restore "microsoft-sovereign-cloud.environment" to the setting used when this connection was established, then choose Retry sign-in. If it used the Azure public cloud, reset the setting.',
             },
+        );
+    });
+
+    it('never installs a different-label account during worker recovery', async (): Promise<void> => {
+        vi.mocked(ClustersClient.getLatchReason).mockReturnValue(undefined);
+        vi.mocked(getEntraSession).mockResolvedValueOnce({
+            account: { id: 'different-account', label: 'Different label' },
+        } as vscode.AuthenticationSession);
+
+        await expect(signInAgainForWorker(actionContext(), clusterId, pin)).rejects.toBeInstanceOf(
+            EntraIdentityMismatchError,
+        );
+
+        expect(ClustersClient.startAfterSignIn).not.toHaveBeenCalled();
+        expect(showClusterConnectFailure).not.toHaveBeenCalled();
+        expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+    });
+
+    it('recovers the exact worker pin without requiring the host to retain it', async (): Promise<void> => {
+        vi.mocked(ClustersClient.getLatchReason).mockReturnValue(undefined);
+        vi.mocked(ClustersClient.getLastVerifiedIdentity).mockReturnValue(undefined);
+        vi.mocked(getEntraSession).mockResolvedValueOnce({
+            account: { id: pin.accountId, label: pin.accountLabel },
+        } as vscode.AuthenticationSession);
+        vi.mocked(ClustersClient.startAfterSignIn).mockResolvedValueOnce({} as ClustersClient);
+
+        const result = await signInAgainForWorker(actionContext(), clusterId, pin);
+
+        expect(result).toEqual({ identity: pin, epoch: 1 });
+        expect(getEntraSession).toHaveBeenCalledWith(
+            expect.objectContaining({
+                providerId: pin.providerId,
+                tenantId: pin.tenantId,
+                account: { id: pin.accountId, label: pin.accountLabel },
+            }),
         );
     });
 });
