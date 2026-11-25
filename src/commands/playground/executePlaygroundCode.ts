@@ -393,25 +393,27 @@ function offerPlaygroundRecovery(
         return;
     }
     const identity = connection.entraIdentity;
+    const { clusterId } = connection;
+    const service = PlaygroundService.getInstance();
+    const evaluator = evaluators.get(clusterId);
+    const epoch = ClustersClient.getEpoch(clusterId);
+    const stillOwnsAction = (): boolean =>
+        service.getConnection(documentUri) === connection &&
+        evaluators.get(clusterId) === evaluator &&
+        !service.isExecuting(clusterId);
     const action = l10n.t('Sign in again');
     void vscode.window.showWarningMessage(recovery.message, action).then(async (choice) => {
-        if (choice !== action) {
+        if (choice !== action || ClustersClient.getEpoch(clusterId) !== epoch || !stillOwnsAction()) {
             return;
         }
-        const epoch = ClustersClient.getEpoch(connection.clusterId);
         try {
-            const result = await signInAgainForWorker(context, connection.clusterId, identity);
-            if (
-                !result ||
-                result.epoch !== epoch ||
-                ClustersClient.getEpoch(connection.clusterId) !== epoch ||
-                PlaygroundService.getInstance().getConnection(documentUri) !== connection
-            ) {
+            const result = await signInAgainForWorker(context, clusterId, identity);
+            if (!result || ClustersClient.getEpoch(clusterId) !== result.epoch || !stillOwnsAction()) {
                 return;
             }
-            stopPlaygroundEvaluator(connection.clusterId);
+            stopPlaygroundEvaluator(clusterId);
         } catch (error) {
-            if (error instanceof UserCancelledError) {
+            if (error instanceof UserCancelledError || !stillOwnsAction()) {
                 return;
             }
             void vscode.window.showWarningMessage(

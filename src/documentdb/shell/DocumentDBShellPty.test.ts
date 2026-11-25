@@ -195,47 +195,61 @@ describe('DocumentDBShellPty', () => {
     });
 
     describe('open', () => {
-        it('offers one non-modal recovery for a pinned shell sign-in miss', async (): Promise<void> => {
-            workerSignIn.pin = {
-                kind: 'entra',
-                providerId: 'microsoft',
-                accountId: 'account',
-                accountLabel: 'Account',
-                tenantId: 'tenant',
-            };
-            workerSignIn.canRecover.mockReturnValue(true);
-            workerSignIn.recover.mockResolvedValue({ identity: workerSignIn.pin, epoch: 0 });
-            pty = new DocumentDBShellPty(defaultOptions);
-            pty.onDidWrite((data) => {
-                written += data;
-            });
-            pty.open(undefined);
-            await new Promise((resolve) => setTimeout(resolve, 10));
-            written = '';
-            mockEvaluate.mockRejectedValueOnce(
-                Object.assign(new Error('private session miss'), { name: 'EntraSignInRequiredError' }),
-            );
-            const action = vi
-                .spyOn(vscode.window, 'showWarningMessage')
-                .mockResolvedValue('Sign in again' as unknown as vscode.MessageItem);
-            const modal = vi.spyOn(vscode.window, 'showErrorMessage');
+        it.each([false, true])(
+            'offers one non-modal pinned recovery, respecting a superseding epoch (%s)',
+            async (superseded): Promise<void> => {
+                workerSignIn.pin = {
+                    kind: 'entra',
+                    providerId: 'microsoft',
+                    accountId: 'account',
+                    accountLabel: 'Account',
+                    tenantId: 'tenant',
+                };
+                workerSignIn.canRecover.mockReturnValue(true);
+                let epoch = 0;
+                vi.spyOn(ClustersClient, 'getEpoch').mockImplementation(() => epoch);
+                workerSignIn.recover.mockImplementationOnce(async () => {
+                    const signInEpoch = ++epoch;
+                    if (superseded) {
+                        epoch++;
+                    }
+                    return { identity: workerSignIn.pin, epoch: signInEpoch };
+                });
+                pty = new DocumentDBShellPty(defaultOptions);
+                pty.onDidWrite((data) => {
+                    written += data;
+                });
+                pty.open(undefined);
+                await new Promise((resolve) => setTimeout(resolve, 10));
+                written = '';
+                mockEvaluate.mockRejectedValueOnce(
+                    Object.assign(new Error('private session miss'), { name: 'EntraSignInRequiredError' }),
+                );
+                const action = vi
+                    .spyOn(vscode.window, 'showWarningMessage')
+                    .mockResolvedValue('Sign in again' as unknown as vscode.MessageItem);
+                const modal = vi.spyOn(vscode.window, 'showErrorMessage');
 
-            pty.handleInput('db.stats()');
-            pty.handleInput('\r');
-            await new Promise((resolve) => setTimeout(resolve, 20));
+                pty.handleInput('db.stats()');
+                pty.handleInput('\r');
+                await new Promise((resolve) => setTimeout(resolve, 20));
 
-            expect(written).toContain(
-                'Microsoft sign-in expired for this shell. Sign in again to continue.',
-            );
-            expect(written).not.toContain('private session miss');
-            expect(action).toHaveBeenCalledExactlyOnceWith(
-                'Microsoft sign-in expired for this shell. Sign in again to continue.',
-                'Sign in again',
-            );
-            expect(modal).not.toHaveBeenCalled();
-            expect(workerSignIn.recover).toHaveBeenCalledOnce();
-            expect(mockResetAfterSignIn).toHaveBeenCalledWith(workerSignIn.pin, 0);
-        });
+                expect(written).toContain('Microsoft sign-in expired for this shell. Sign in again to continue.');
+                expect(written).not.toContain('private session miss');
+                expect(action).toHaveBeenCalledExactlyOnceWith(
+                    'Microsoft sign-in expired for this shell. Sign in again to continue.',
+                    'Sign in again',
+                );
+                expect(modal).not.toHaveBeenCalled();
+                expect(workerSignIn.recover).toHaveBeenCalledOnce();
+                expect(mockEvaluate).toHaveBeenCalledOnce();
+                if (superseded) {
+                    expect(mockResetAfterSignIn).not.toHaveBeenCalled();
+                } else {
+                    expect(mockResetAfterSignIn).toHaveBeenCalledExactlyOnceWith(workerSignIn.pin, 1);
+                }
+            },
+        );
 
         it('carries URL attribution into actual shell startup', async (): Promise<void> => {
             const deepLink = { deepLinkCorrelationId: 'link-attempt', deepLinkSource: 'docs' };

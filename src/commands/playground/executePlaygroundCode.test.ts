@@ -6,13 +6,18 @@
 import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import { type PlaygroundConnection } from '../../documentdb/playground/types';
 import { executePlaygroundCode, stopPlaygroundEvaluator } from './executePlaygroundCode';
 
-const { evaluate, dispose, setExecuting, showResult } = vi.hoisted(() => ({
+const { evaluate, dispose, setExecuting, showResult, getConnection, getEpoch, canRecover, recover } = vi.hoisted(() => ({
     evaluate: vi.fn(),
     dispose: vi.fn(),
     setExecuting: vi.fn(),
     showResult: vi.fn(),
+    getConnection: vi.fn<() => PlaygroundConnection | undefined>(),
+    getEpoch: vi.fn<() => number>(),
+    canRecover: vi.fn(),
+    recover: vi.fn(),
 }));
 
 vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
@@ -24,7 +29,12 @@ vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
 }));
 
 vi.mock('../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getLatchReason: vi.fn(), getExistingClient: vi.fn() },
+    ClustersClient: { getLatchReason: vi.fn(), getExistingClient: vi.fn(), getEpoch },
+}));
+
+vi.mock('../signInAgain/signInAgain', () => ({
+    canSignInAgainForWorker: canRecover,
+    signInAgainForWorker: recover,
 }));
 
 vi.mock('../../documentdb/playground/PlaygroundEvaluator', () => ({
@@ -37,7 +47,7 @@ vi.mock('../../documentdb/playground/PlaygroundEvaluator', () => ({
 vi.mock('../../documentdb/playground/PlaygroundService', () => ({
     PlaygroundService: {
         getInstance: () => ({
-            getConnection: () => ({ clusterId: 'cluster', clusterDisplayName: 'Cluster', databaseName: 'test' }),
+            getConnection,
             isExecuting: () => false,
             setExecuting,
         }),
@@ -51,6 +61,9 @@ vi.mock('../../extensionVariables', () => ({
 describe('executePlaygroundCode', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        getConnection.mockReturnValue({ clusterId: 'cluster', clusterDisplayName: 'Cluster', databaseName: 'test' });
+        getEpoch.mockReturnValue(0);
+        canRecover.mockReturnValue(false);
     });
 
     it('cancels a stopped worker without replacing the retained result or showing an error', async () => {
@@ -92,6 +105,7 @@ describe('executePlaygroundCode', () => {
         const failure = Object.assign(new Error('private callback details'), {
             name: 'TokenCallbackError',
         });
+
         evaluate.mockRejectedValueOnce(failure);
         const showError = vi.spyOn(vscode.window, 'showErrorMessage');
         const showWarning = vi.spyOn(vscode.window, 'showWarningMessage');
@@ -120,6 +134,52 @@ describe('executePlaygroundCode', () => {
             progress.mockRestore();
             showError.mockRestore();
             showWarning.mockRestore();
+            stopPlaygroundEvaluator('cluster');
+        }
+    });
+
+    it.each([false, true])('honors the sign-in epoch unless superseded (%s)', async (superseded) => {
+        const identity: NonNullable<PlaygroundConnection['entraIdentity']> = {
+            kind: 'entra',
+            providerId: 'microsoft',
+            accountId: 'account',
+            accountLabel: 'Account',
+            tenantId: 'tenant',
+        };
+        getConnection.mockReturnValue({
+            clusterId: 'cluster',
+            clusterDisplayName: 'Cluster',
+            databaseName: 'test',
+            entraIdentity: identity,
+        });
+        canRecover.mockReturnValue(true);
+        recover.mockImplementationOnce(async () => {
+            getEpoch.mockReturnValue(superseded ? 2 : 1);
+            return { identity, epoch: 1 };
+        });
+        const failure = Object.assign(new Error('private session miss'), { name: 'EntraSignInRequiredError' });
+        evaluate.mockRejectedValueOnce(failure);
+        const warning = vi
+            .spyOn(vscode.window, 'showWarningMessage')
+            .mockResolvedValue('Sign in again' as unknown as vscode.MessageItem);
+        const progress = vi
+            .spyOn(vscode.window, 'withProgress')
+            .mockImplementation((_options, task) =>
+                Promise.resolve(
+                    task({ report: vi.fn() }, { isCancellationRequested: false, onCancellationRequested: vi.fn() }),
+                ),
+            );
+
+        try {
+            await expect(
+                executePlaygroundCode('db.stats()', 'runAll', vscode.Uri.file('test.documentdb.js')),
+            ).rejects.toBe(failure);
+            expect(recover).toHaveBeenCalledExactlyOnceWith(expect.anything(), 'cluster', identity);
+            expect(evaluate).toHaveBeenCalledOnce();
+            expect(dispose).toHaveBeenCalledTimes(superseded ? 0 : 1);
+        } finally {
+            progress.mockRestore();
+            warning.mockRestore();
             stopPlaygroundEvaluator('cluster');
         }
     });

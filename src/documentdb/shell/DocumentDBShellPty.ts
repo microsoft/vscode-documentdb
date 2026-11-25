@@ -946,10 +946,16 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         message: string,
     ): void {
         const action = l10n.t('Sign in again');
+        const { clusterId } = this._connectionInfo;
         const revision = this._disconnectRevision;
-        const epoch = ClustersClient.getEpoch(this._connectionInfo.clusterId);
+        const epoch = ClustersClient.getEpoch(clusterId);
         void vscode.window.showWarningMessage(message, action).then(async (choice) => {
-            if (choice !== action) {
+            if (
+                choice !== action ||
+                this._closed ||
+                revision !== this._disconnectRevision ||
+                ClustersClient.getEpoch(clusterId) !== epoch
+            ) {
                 return;
             }
             try {
@@ -957,17 +963,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                     context.errorHandling.suppressDisplay = true;
                     context.errorHandling.rethrow = true;
                     context.telemetry.properties.shellSessionId = this._shellSessionId;
-                    const result = await signInAgainForWorker(
-                        context,
-                        this._connectionInfo.clusterId,
-                        identity,
-                    );
+                    const result = await signInAgainForWorker(context, clusterId, identity);
                     if (
                         !result ||
                         this._closed ||
                         revision !== this._disconnectRevision ||
-                        result.epoch !== epoch ||
-                        ClustersClient.getEpoch(this._connectionInfo.clusterId) !== epoch
+                        ClustersClient.getEpoch(clusterId) !== result.epoch
                     ) {
                         return;
                     }
