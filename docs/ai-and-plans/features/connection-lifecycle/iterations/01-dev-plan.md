@@ -1648,7 +1648,7 @@ behave as today.
         worker. **Playground:** stop the worker. The latch keeps both from respawning (F-15).
      4. Close the client (`deleteClient`). Clear the Entra failure registry and `SchemaStore.clearCluster`.
         Clear the `CredentialCache` entry and `lastVerifiedIdentity` **only** when `dropCredentials` is
-        set (Remove). Disconnect keeps both (A3, decision 0011), so tree Connect and then tab Retry
+        set (Remove). Disconnect keeps both (A3, decision 0011), so tree Reconnect and then tab Retry
         can reuse the same identity.
      5. Refresh the tree (T-2).
    - **Never touched:** VS Code auth sessions, the managed identity cache, the ARM cache.
@@ -1675,7 +1675,7 @@ behave as today.
      - The setting never skips the unsaved-edits confirmation: when Close all is chosen and an editor is
        dirty, that confirmation still appears.
      - Skip the modal when no surfaces are registered.
-   - Add a disconnected cluster node child action, "Connect" (T-2). Check the `userDisconnected`
+   - Add a disconnected cluster node child action, "Reconnect" (T-2). Check the `userDisconnected`
      latch before reusing cached credentials when building the children. The action clears only
      that latch and refreshes the node without changing its ID; normal expansion connects.
 4. **Remove Connection and folder deletion.**
@@ -1713,7 +1713,7 @@ behave as today.
   cluster is not blocked; Disconnect succeeds once the task is done or stopped;
 - a token response that arrives after Disconnect is ignored;
 - Reconnect uses the current credentials and cloud settings;
-- after Disconnect, tree Connect followed by tab Retry succeeds without the tree reloading
+- after Disconnect, tree Reconnect followed by tab Retry succeeds without the tree reloading
   credentials and without a prompt (native, Entra and discovery with a typed password); after Remove,
   the `CredentialCache` entry and `lastVerifiedIdentity` are gone;
 - Remove reuses the same teardown;
@@ -1766,6 +1766,12 @@ behave as today.
   partial secret writes without adding passwords to the fingerprint. Existing views remain
   copyable. Same-settings reconnect can still follow a newer generation. Build and 196
   focused tests passed.
+- **OP-5 (`1.1.1-alpha.4`):** The operator reported that Keep open, Close all with a dirty
+  draft, Remove, and the saved-edit lock passed. Disconnect during import or export was
+  not tested live; it is checked in the real transfer-lease and teardown preflight paths
+  by automated tests. Operator feedback: label the tree action **Reconnect**, use the
+  default Fluent layout with an instant backdrop, and clarify that an old view is bound
+  to its previous connection settings.
 - **Carry-forward from WI-4d:** An explicit Update Credentials that changes the tenant must
   replace or clear the old verified Entra identity so the next connect can use the saved
   tenant (decision 0011). Automatic reconnect remains pinned until that explicit update.

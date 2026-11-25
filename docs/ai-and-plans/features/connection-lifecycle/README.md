@@ -55,6 +55,9 @@ Evidence, telemetry and source pointers: [research-findings.md](./research-findi
   the available credentials. Credential repair stays in the tree. Dismissing the dialog with
   its **X** exposes the existing contents for copying without resuming database operations.
   Trying another operation shows the dialog again. **Close view** asks for confirmation.
+- After an explicit Disconnect, the tree offers **Reconnect**. If reconnecting automatically
+  opens the existing Dashboard for the same identity, it retries that view without replaying
+  an operation. Other retained views still require **Retry**.
 - A pending Dashboard delete confirmation does not survive Disconnect, even when the
   user reconnects as the same identity. Dashboard **Copy Collection** keeps a tree reference;
   **Paste Collection** stays in the tree and uses the current connection.

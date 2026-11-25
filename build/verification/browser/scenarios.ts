@@ -2435,7 +2435,7 @@ const saveDocumentPath = 'mongoClusters.documentView.saveDocument';
 const disconnectedDocument = {
     reason: 'userDisconnected',
     title: 'Disconnected',
-    detail: 'Connect from the connection tree, then click Retry.',
+    detail: 'Reconnect from the connection tree, then click Retry.',
     action: 'retry',
 } as const;
 const documentEditorName = 'Document Editor: Edit the document in JSON format';
@@ -2600,6 +2600,26 @@ const clusterDashboardScenarios = {
                 selector: 'input[aria-label="Filter databases by name"]',
                 attribute: 'value',
                 expected: 'stage0',
+            },
+            {
+                kind: 'calls',
+                name: 'tree reconnect resumes the retained Dashboard through Retry',
+                path: 'clusterDashboard.recoverUnavailable',
+                count: 1,
+                checkInput: true,
+                input: { action: 'retry' },
+                steps: [
+                    {
+                        action: 'post',
+                        name: 'reveal the Dashboard after reconnecting in the tree',
+                        message: { type: 'clusterDashboard.retryAfterReconnect' },
+                    },
+                    {
+                        action: 'waitFor',
+                        name: 'Dashboard is enabled again',
+                        selector: '.disconnectedOverlayBackground:not([inert])',
+                    },
+                ],
             },
         ],
     },

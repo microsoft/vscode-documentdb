@@ -726,7 +726,7 @@ export const ClusterDashboard = (): JSX.Element => {
         ],
     );
 
-    const handleUnavailableAction = (action: ConnectionRecoveryAction): void => {
+    const handleUnavailableAction = useCallback((action: ConnectionRecoveryAction): void => {
         const current = unavailableRef.current;
         if (!current || recovering) {
             return;
@@ -768,7 +768,24 @@ export const ClusterDashboard = (): JSX.Element => {
                     setRecovering(false);
                 }
             });
-    };
+    }, [recovering, trpcClient]);
+
+    useEffect(() => {
+        const retryAfterReconnect = ({ data }: MessageEvent<unknown>): void => {
+            if (
+                unavailableRef.current?.reason === 'userDisconnected' &&
+                typeof data === 'object' &&
+                data !== null &&
+                'type' in data &&
+                data.type === 'clusterDashboard.retryAfterReconnect'
+            ) {
+                handleUnavailableAction('retry');
+            }
+        };
+
+        window.addEventListener('message', retryAfterReconnect);
+        return () => window.removeEventListener('message', retryAfterReconnect);
+    }, [handleUnavailableAction]);
 
     const connectionState: ConnectionState =
         consecutiveFailures >= FAILURE_THRESHOLD
