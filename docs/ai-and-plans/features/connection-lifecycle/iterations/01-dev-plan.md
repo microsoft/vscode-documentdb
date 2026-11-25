@@ -768,9 +768,9 @@ verdict exists, do not start the work it gates. The fingerprint table (formerly 
   intact after WI-4's verified identity and fingerprint and WI-7's disconnect latch exist,
   retaining the planned **Sign in again** action. Do not implement the partial relay option.
 - **PR6a ([#1133](https://github.com/microsoft/vscode-documentdb/pull/1133)):** The complete relay
-  and recovery flow is in a draft stacked on PR6. The initial Case 1 build and 310 focused tests
-  passed. The [AI pre-review](./01-pr6a-worker-token-relays-review.md) found four issues and
-  awaits author decisions. Live Shell and Playground verification stays at OP-6.
+  and recovery flow is in a draft stacked on PR6. The operator approved all four fixes in the
+  [AI pre-review](./01-pr6a-worker-token-relays-review.md). All four are implemented; the combined
+  Case 1 build and 534 focused tests passed. Live Shell and Playground verification stays at OP-6.
 
 ---
 

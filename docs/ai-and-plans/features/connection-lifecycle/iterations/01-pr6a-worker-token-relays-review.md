@@ -24,6 +24,10 @@ invalidation without replaying the old operation.
 **Author decision:** Approved as recommended. Use the confirmed post-sign-in epoch without
 loosening the ownership checks or replaying the operation.
 
+**Fixed:** [`8faa1ba8f`](https://github.com/microsoft/vscode-documentdb/commit/8faa1ba8f).
+Shell and Playground use the confirmed epoch and reject stale or superseded recovery
+actions. The two surface suites passed 99 tests, including no replay.
+
 ## F2. Re-picking a Playground connection leaves Run blocked (medium)
 
 The [connection picker](../../../../../src/commands/playground/connectDatabase.ts#L120) updates
@@ -41,6 +45,11 @@ document's in-flight run.
 **Author decision:** Approved as recommended. Apply the explicit re-pick on the next Run
 without interrupting another document.
 
+**Fixed:** [`f5b79a3e9`](https://github.com/microsoft/vscode-documentdb/commit/f5b79a3e9).
+The re-pick is scoped to that document and used on its next Run. The picker never stops
+an active worker, and other documents cannot inherit the new binding. The two focused
+Playground suites passed 51 tests.
+
 ## F3. A no-op saved edit can discard healthy Shell state (medium)
 
 The [Shell manager](../../../../../src/documentdb/shell/ShellSessionManager.ts#L227) kills a
@@ -54,6 +63,10 @@ respawn. Do not add a separate epoch counter. Test that a no-op edit does not re
 healthy worker, while explicit Disconnect still stops it.
 
 **Author decision:** Approved as recommended. Preserve healthy Shell state on an unchanged save.
+
+**Fixed:** [`72fb52da6`](https://github.com/microsoft/vscode-documentdb/commit/72fb52da6).
+A host-only invalidation no longer restarts a healthy Shell. The startup, latch and
+explicit Disconnect checks remain in effect.
 
 ## F4. A stale token request can hang a worker that is still attached (medium)
 
@@ -71,6 +84,10 @@ invalidation with an attached worker and no stale token or diagnostics.
 **Author decision:** Approved as recommended. Cancel the obsolete request without returning a
 stale token or recording a stale failure.
 
+**Fixed:** [`25e686f93`](https://github.com/microsoft/vscode-documentdb/commit/25e686f93).
+The supervisor cancels an obsolete operation and discards its attached worker. Detached
+replies remain ignored. The combined F3 and F4 focused suites passed 114 tests.
+
 ## Scope clarification
 
 [Decision 0018](../decisions.md#0018-saved-connection-edits-permanently-lock-existing-views)
@@ -79,3 +96,8 @@ or Playground documents Close-only. WI-2 and
 [D12](../../sovereign-clouds/decisions.md#d12-open-sessions-keep-what-they-started-with)
 allow a needed same-identity respawn after a password-only edit, but do not require a healthy
 Shell worker to restart.
+
+## Verification after the fixes
+
+Case 1 passed on `f5b79a3e9`: `npm run build` and 534 focused tests across 18 suites.
+Case 2 is deferred until formal handoff. The packaged live checks remain at OP-6.
