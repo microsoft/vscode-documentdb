@@ -436,6 +436,27 @@ describe('DocumentDBShellPty', () => {
             expect(written).toContain('Syntax error');
         });
 
+        it('should suppress the worker termination error when Disconnect cancels evaluation', async () => {
+            let rejectEvaluation: (error: Error) => void = () => {
+                throw new Error('Expected evaluation to be pending');
+            };
+            mockEvaluate.mockImplementation(
+                () =>
+                    new Promise((_resolve, reject) => {
+                        rejectEvaluation = reject;
+                    }),
+            );
+
+            pty.handleInput('db.test.find()');
+            pty.handleInput('\r');
+            pty.disconnect();
+            rejectEvaluation(new Error('Worker terminated'));
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(written).toContain('Disconnected');
+            expect(written).not.toContain('Worker terminated');
+        });
+
         it('should normalize bare \\n in multi-line error messages to \\r\\n', async () => {
             // Many driver / server error messages embed bare LFs to delimit
             // a multi-line explanation. Without normalization the terminal

@@ -762,9 +762,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             try {
                 result = await this._sessionManager.evaluate(input, this._columns);
             } catch (evalError) {
-                // Ctrl+C kills the worker, producing a "Worker terminated" error.
-                // Re-classify as user cancellation for accurate telemetry.
-                if (this._interrupted) {
+                // Ctrl+C and Disconnect both kill the worker, producing a
+                // "Worker terminated" error. Re-classify intentional
+                // cancellation for accurate telemetry and UI behavior.
+                if (this._interrupted || disconnectRevision !== this._disconnectRevision) {
                     throw new UserCancelledError('shell.eval');
                 }
                 throw evalError;
@@ -817,9 +818,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         this._spinner?.stop();
         this._spinner = undefined;
 
-        // Suppress errors from intentional Ctrl+C cancellation — the interrupt
-        // handler already showed ^C and a new prompt.
-        if (this._interrupted) {
+        // Suppress errors from intentional cancellation. Ctrl+C renders its own
+        // prompt, while Disconnect renders its own terminal status.
+        if (this._interrupted || error instanceof UserCancelledError) {
             return;
         }
 
