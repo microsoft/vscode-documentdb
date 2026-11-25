@@ -137,6 +137,30 @@ describe('PlaygroundService', () => {
             expect(service.getConnection(mockUri)).toBe(bound);
         });
 
+        it('marks only the explicitly re-picked document for one failed-worker replacement', () => {
+            const uri2 = { toString: () => 'untitled:playground-2.documentdb.js' } as vscode.Uri;
+            vi.spyOn(ClustersClient, 'getBinding').mockReturnValue({
+                clusterId: connection.clusterId,
+                fingerprint: 'new-fingerprint',
+                generation: 2,
+            });
+            vi.spyOn(ClustersClient, 'getLastVerifiedIdentity').mockReturnValue(undefined);
+            service.setConnection(mockUri, connection);
+            service.setConnection(uri2, connection);
+
+            const repicked = service.setConnectionFromHost(mockUri, {
+                ...connection,
+                databaseName: 'replacement',
+            });
+
+            expect(repicked.workerReplacement).toEqual({ fingerprint: 'new-fingerprint' });
+            expect(service.getConnection(uri2)).toEqual({
+                ...connection,
+                fingerprint: 'new-fingerprint',
+            });
+            expect(service.getConnection(uri2)?.workerReplacement).toBeUndefined();
+        });
+
         it('captures a worker binding only while the original document binding is current', () => {
             service.setConnection(mockUri, connection);
             const replacement = { ...connection, databaseName: 'replacement' };

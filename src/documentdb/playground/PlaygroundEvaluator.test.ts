@@ -304,6 +304,89 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
         mocks.getCredentials.mockClear();
     });
 
+    it('lets a re-picked document replace one failed worker without moving its old identity', async (): Promise<void> => {
+        const oldIdentity = {
+            kind: 'entra',
+            providerId: 'microsoft',
+            tenantId: 'interactive-tenant',
+            accountId: 'account-a',
+            accountLabel: 'Account A',
+        } as const;
+        const newIdentity = {
+            ...oldIdentity,
+            accountId: 'account-b',
+            accountLabel: 'Account B',
+        } as const;
+        const identity = vi.spyOn(ClustersClient, 'getLastVerifiedIdentity').mockReturnValue(oldIdentity);
+        try {
+            await initializeSession(AuthMethodId.MicrosoftEntraID);
+            mocks.worker.isConnectedTo.mockReturnValue(true);
+            const capture = vi.fn();
+            await evaluator.evaluate(connection, '2', undefined, capture);
+            const oldBinding = {
+                ...connection,
+                ...(capture.mock.calls[0][0] as { fingerprint: string; entraIdentity?: typeof oldIdentity }),
+            };
+            mocks.worker.sendEval.mockRejectedValueOnce(
+                Object.assign(new Error('sign in required'), { name: 'EntraSignInRequiredError' }),
+            );
+            await expect(evaluator.evaluate(oldBinding, 'failed')).rejects.toSatisfy(
+                (error: unknown) => getWorkerAuthReason(error) === 'signInRequired',
+            );
+
+            mocks.getCredentials.mockReturnValue({
+                clusterId,
+                connectionString: originalConnection,
+                authMechanism: AuthMethodId.MicrosoftEntraID,
+                entraIdConfig: { tenantId: 'interactive-tenant' },
+            });
+            identity.mockReturnValue(newIdentity);
+            vi.spyOn(ClustersClient, 'getBinding').mockReturnValue({
+                clusterId,
+                fingerprint: 'fingerprint-b',
+                generation: 2,
+            });
+            const expected = vi
+                .spyOn(ClustersClient, 'getExpectedFingerprint')
+                .mockReturnValue('fingerprint-b');
+
+            await expect(evaluator.evaluate(oldBinding, 'old-document')).rejects.toMatchObject({
+                reason: 'credentialsChanged',
+            });
+            const replacement = { fingerprint: 'fingerprint-b' };
+            const repicked = {
+                ...connection,
+                fingerprint: 'fingerprint-b',
+                entraIdentity: newIdentity,
+                workerReplacement: replacement,
+            };
+            await evaluator.evaluate(repicked, 'replacement');
+            await expect(evaluator.evaluate(oldBinding, 'still-old')).rejects.toMatchObject({
+                reason: 'credentialsChanged',
+            });
+            mocks.worker.sendEval.mockRejectedValueOnce(
+                Object.assign(new Error('sign in required again'), { name: 'EntraSignInRequiredError' }),
+            );
+            await expect(evaluator.evaluate(repicked, 'second-failure')).rejects.toSatisfy(
+                (error: unknown) => getWorkerAuthReason(error) === 'signInRequired',
+            );
+            await expect(evaluator.evaluate(repicked, 'already-consumed')).rejects.toMatchObject({
+                name: 'EntraSignInRequiredError',
+            });
+            expect(expected).toHaveBeenCalled();
+            expect(mocks.worker.sendEval.mock.calls.map(([message]) => message.type === 'eval' && message.code)).toEqual([
+                '1',
+                '2',
+                'failed',
+                'replacement',
+                'second-failure',
+            ]);
+            mocks.getCredentials.mockClear();
+        } finally {
+            vi.restoreAllMocks();
+        }
+    });
+
     it.each([AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity])(
         'restarts %s at the next Run after refresh fails, without replaying the failed query',
         async (authMechanism): Promise<void> => {

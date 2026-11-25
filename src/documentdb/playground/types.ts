@@ -11,6 +11,11 @@ export interface PlaygroundWorkerBinding {
     readonly entraIdentity?: VerifiedEntraIdentity;
 }
 
+/** One-shot activation created only by an explicit, successful connection re-pick. */
+export interface PlaygroundWorkerReplacement {
+    readonly fingerprint: string;
+}
+
 /**
  * Represents a query playground connection bound to a specific document.
  * Each playground document has its own connection to a cluster/database.
@@ -24,6 +29,7 @@ export interface PlaygroundConnection {
     readonly databaseName: string;
     readonly fingerprint?: string;
     readonly entraIdentity?: VerifiedEntraIdentity;
+    readonly workerReplacement?: PlaygroundWorkerReplacement;
     /**
      * Identifies which tree view this cluster belongs to.
      * Used by cross-feature navigation to open the correct branch data provider.

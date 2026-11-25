@@ -32,6 +32,8 @@ import {
     type WorkerAuthReason,
 } from './workerTypes';
 
+const consumedWorkerReplacements = new WeakSet<object>();
+
 /**
  * Evaluates query playground code in a persistent worker thread.
  *
@@ -201,21 +203,48 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         const reason =
             (this._authFailure?.clusterId === clusterId ? this._authFailure.reason : undefined) ??
             (sameCluster ? this._workerManager.authFailure : undefined);
+        const replacement = connection.workerReplacement;
+        let replaceFailedWorker = false;
+        let replacementFingerprint: string | undefined;
+        if (
+            replacement &&
+            !consumedWorkerReplacements.has(replacement) &&
+            replacement.fingerprint === fingerprint &&
+            (reason === 'signInRequired' || reason === 'identityMismatch')
+        ) {
+            replacementFingerprint = ClustersClient.getExpectedFingerprint(clusterId, connection.entraIdentity);
+            const currentFingerprint = ClustersClient.getBinding(clusterId)?.fingerprint;
+            if (
+                replacementFingerprint === undefined ||
+                fingerprint !== replacementFingerprint ||
+                (currentFingerprint !== undefined && currentFingerprint !== fingerprint)
+            ) {
+                throw new ConnectionUnavailableError('credentialsChanged');
+            }
+            replaceFailedWorker = true;
+        }
         if (sameCluster && this._relay?.epoch === epoch) {
             const currentFingerprint = ClustersClient.getBinding(clusterId)?.fingerprint;
             if (
                 (fingerprint !== undefined &&
-                    (fingerprint !== this._workerFingerprint ||
+                    ((!replaceFailedWorker && fingerprint !== this._workerFingerprint) ||
                         (currentFingerprint !== undefined && fingerprint !== currentFingerprint))) ||
-                (pin && entraPin && !sameEntraIdentity(pin, entraPin))
+                (!replaceFailedWorker && pin && entraPin && !sameEntraIdentity(pin, entraPin))
             ) {
                 throw new ConnectionUnavailableError('credentialsChanged');
             }
         }
-        if ((pin || fingerprint) && (reason === 'signInRequired' || reason === 'identityMismatch')) {
+        if (
+            !replaceFailedWorker &&
+            (pin || fingerprint) &&
+            (reason === 'signInRequired' || reason === 'identityMismatch')
+        ) {
             throw createWorkerAuthError(reason);
         }
-        const needsSpawn = !sameCluster || !!reason || this._relay?.epoch !== epoch;
+        if (replaceFailedWorker && replacement) {
+            consumedWorkerReplacements.add(replacement);
+        }
+        const needsSpawn = replaceFailedWorker || !sameCluster || !!reason || this._relay?.epoch !== epoch;
 
         const initStartTime = Date.now();
         let initMsg: Extract<MainToWorkerMessage, { type: 'init' }>;
@@ -223,7 +252,8 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             onProgress?.(l10n.t('Initializing…'));
             this.assertConnectionAvailable(clusterId);
             const pinned = connection.entraIdentity ?? pin;
-            const expected = ClustersClient.getExpectedFingerprint(clusterId, pinned);
+            const expected =
+                replacementFingerprint ?? ClustersClient.getExpectedFingerprint(clusterId, pinned);
             if (fingerprint !== undefined && fingerprint !== expected) {
                 throw new ConnectionUnavailableError('credentialsChanged');
             }

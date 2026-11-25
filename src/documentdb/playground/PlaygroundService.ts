@@ -164,8 +164,15 @@ export class PlaygroundService implements vscode.Disposable {
 
     /** Bind a newly selected playground to the current connected host identity, when available. */
     setConnectionFromHost(uri: vscode.Uri, connection: PlaygroundConnection): PlaygroundConnection {
-        this.setConnection(uri, connection);
-        return this._connections.get(uri.toString()) ?? connection;
+        const key = uri.toString();
+        const isRepick = this._connections.has(key);
+        const bound = this.captureHostBinding(connection);
+        const activated =
+            isRepick && bound.fingerprint !== undefined
+                ? { ...bound, workerReplacement: { fingerprint: bound.fingerprint } }
+                : bound;
+        this.setConnection(uri, activated);
+        return this._connections.get(key) ?? activated;
     }
 
     private captureHostBinding(connection: PlaygroundConnection): PlaygroundConnection {
