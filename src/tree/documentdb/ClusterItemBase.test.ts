@@ -11,15 +11,17 @@ import {
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
-import { connectDisconnected } from '../../commands/disconnect/disconnect';
+import { connectDisconnected, disconnect } from '../../commands/disconnect/disconnect';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { EntraDestinationRejectedError } from '../../documentdb/auth/oidcAllowedHosts';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
+import { teardownConnection } from '../../documentdb/connectionTeardown';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { Views } from '../../documentdb/Views';
 import { type Experience } from '../../DocumentDBExperiences';
+import { ext } from '../../extensionVariables';
 import { containsRetryNode, RETRY_NODE_ID_SUFFIX } from '../api/retryNode';
 import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
@@ -104,6 +106,10 @@ vi.mock('../../extensionVariables', () => ({
             debug: vi.fn(),
         },
         state: { notifyChildrenChanged: (...args: unknown[]) => notifyChildrenChanged(...args) },
+        connectionsBranchDataProvider: { resetNodeErrorState: vi.fn(), refresh: vi.fn() },
+        discoveryBranchDataProvider: { resetNodeErrorState: vi.fn(), refresh: vi.fn() },
+        azureResourcesRUBranchDataProvider: { resetNodeErrorState: vi.fn(), refresh: vi.fn() },
+        azureResourcesVCoreBranchDataProvider: { resetNodeErrorState: vi.fn(), refresh: vi.fn() },
     },
 }));
 
@@ -499,6 +505,31 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
         } finally {
             ClustersClientMock.getLatchReason.mockReturnValue(undefined);
         }
+    });
+
+    it('clears and refreshes only the owning discovery provider after Disconnect', async () => {
+        const node = new TestClusterItem(
+            { ...makeCluster(), treeId: 'discoveryView/custom-source/cluster-1' },
+            null,
+        );
+        const context = { telemetry: { suppressAll: false } } as IActionContext;
+        ClustersClientMock.exists.mockReturnValue(true);
+        ClustersClientMock.getLatchReason.mockReturnValue(undefined);
+
+        await disconnect(context, node);
+
+        expect(teardownConnection).toHaveBeenCalledExactlyOnceWith(
+            node.cluster.clusterId,
+            'userDisconnected',
+            expect.any(Function),
+        );
+        const refreshTree = vi.mocked(teardownConnection).mock.calls[0][2];
+        refreshTree();
+
+        expect(ext.discoveryBranchDataProvider.resetNodeErrorState).toHaveBeenCalledExactlyOnceWith(node.id);
+        expect(ext.discoveryBranchDataProvider.refresh).toHaveBeenCalledExactlyOnceWith(node);
+        expect(ext.connectionsBranchDataProvider.resetNodeErrorState).not.toHaveBeenCalled();
+        expect(ext.connectionsBranchDataProvider.refresh).not.toHaveBeenCalled();
     });
 
     it.each(['signInRequired', 'credentialsRejected'] as const)(

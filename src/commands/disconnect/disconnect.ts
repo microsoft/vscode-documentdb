@@ -9,6 +9,7 @@ import { teardownConnection } from '../../documentdb/connectionTeardown';
 import { ext } from '../../extensionVariables';
 import { ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { type TreeElement } from '../../tree/TreeElement';
+import { refreshAuthenticationNode } from '../retryAuthentication/retryAuthentication';
 
 function isClusterNode(node: TreeElement | undefined): node is ClusterItemBase {
     return node instanceof ClusterItemBase;
@@ -25,7 +26,7 @@ export async function disconnect(context: IActionContext, node?: TreeElement): P
         throw new UserCancelledError();
     }
 
-    await teardownConnection(clusterId, 'userDisconnected', () => ext.state.notifyChildrenChanged(node.id));
+    await teardownConnection(clusterId, 'userDisconnected', () => refreshAuthenticationNode(node));
 }
 
 export function connectDisconnected(_context: IActionContext, node?: TreeElement): void {
