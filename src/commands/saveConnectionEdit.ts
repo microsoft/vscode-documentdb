@@ -63,6 +63,7 @@ export async function saveConnectionEdit(
     const epoch = ClustersClient.getEpoch(clusterId);
     const isCurrent = (): boolean => ClustersClient.getEpoch(clusterId) === epoch;
     let changed = false;
+    let saved = false;
     try {
         const before = await ConnectionStorageService.get(node.storageId, zone);
         const originalSettings = structuredClone(storedSettings(before));
@@ -70,7 +71,6 @@ export async function saveConnectionEdit(
             void vscode.window.showErrorMessage(vscode.l10n.t('The connection could not be read from storage.'));
             return false;
         }
-        let saved = false;
         try {
             if (!isCurrent()) {
                 throw new UserCancelledError();
@@ -122,7 +122,8 @@ export async function saveConnectionEdit(
         }
     } finally {
         if (isCurrent()) {
-            if (previous && (!changed || previous === 'userDisconnected')) {
+            const recovered = previous === 'credentialsRejected' && saved;
+            if (previous && !recovered && (!changed || previous === 'userDisconnected')) {
                 ClustersClient.latch(clusterId, previous);
             } else {
                 ClustersClient.unlatch(clusterId);

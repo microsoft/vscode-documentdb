@@ -7,9 +7,11 @@ import { type AzureWizard, type IActionContext } from '@microsoft/vscode-azext-u
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { SelectEntraTokenSourceStep } from '../../documentdb/wizards/authenticate/SelectEntraTokenSourceStep';
 import { API } from '../../DocumentDBExperiences';
+import { ext } from '../../extensionVariables';
 import type * as storageModule from '../../services/connectionStorageService';
 import { ItemType } from '../../services/connectionStorageService';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
@@ -55,7 +57,7 @@ vi.mock('../../documentdb/ClustersClient', () => ({
         deleteClient: (...args: unknown[]): unknown => mockDeleteClient(...args),
         getLastFailedStartupCorrelationId: (): undefined => undefined,
         getEpoch: (): number => mockGetEpoch(),
-        getLatchReason: (): undefined => undefined,
+        getLatchReason: vi.fn(),
         latch: vi.fn(),
         unlatch: vi.fn(),
         retireBoundViews: mockRetireBoundViews,
@@ -73,7 +75,7 @@ vi.mock('../refreshView/refreshView', () => ({ refreshView: vi.fn() }));
 vi.mock('../../utils/dialogs/showConfirmation', () => ({ showConfirmationAsInSettings: vi.fn() }));
 vi.mock('../../extensionVariables', () => ({
     ext: {
-        connectionsBranchDataProvider: { hasNodeErrorState: vi.fn(() => false) },
+        connectionsBranchDataProvider: { hasNodeErrorState: vi.fn(), resetNodeErrorState: vi.fn() },
         outputChannel: { error: vi.fn(), warn: vi.fn() },
     },
 }));
@@ -82,6 +84,8 @@ beforeEach(() => {
     CredentialCache.deleteCredentials('stable-cluster-id');
     vi.clearAllMocks();
     mockGetEpoch.mockReturnValue(0);
+    vi.mocked(ClustersClient.getLatchReason).mockReturnValue(undefined);
+    vi.mocked(ext.connectionsBranchDataProvider.hasNodeErrorState).mockReturnValue(false);
     mockGetRegisteredShellTerminals.mockReturnValue([]);
     capturedContexts.length = 0;
 });
@@ -251,6 +255,31 @@ describe('updateCredentials post-wizard updates', () => {
         expect(mockDeleteClient).toHaveBeenCalledExactlyOnceWith(node.cluster.clusterId, { alreadyInvalidated: true });
         expect(mockShutdownEvaluator).toHaveBeenCalledExactlyOnceWith(node.cluster.clusterId);
     });
+
+    it.each([true, false])(
+        'only clears rejection and refreshes the recovery node when an unchanged edit saves (%s)',
+        async (saved) => {
+            vi.mocked(ClustersClient.getLatchReason).mockReturnValue('credentialsRejected');
+            vi.mocked(ext.connectionsBranchDataProvider.hasNodeErrorState).mockReturnValue(true);
+            mockExecute.mockImplementationOnce((wizardContext) => {
+                wizardContext.reconnectAfterError = true;
+                wizardContext.credentialsSaved = saved;
+                return Promise.resolve();
+            });
+
+            await updateCredentials(context, node);
+
+            expect(mockRetireBoundViews).not.toHaveBeenCalled();
+            if (saved) {
+                expect(ClustersClient.unlatch).toHaveBeenCalledExactlyOnceWith(node.cluster.clusterId);
+                expect(ext.connectionsBranchDataProvider.resetNodeErrorState).toHaveBeenCalledExactlyOnceWith(node.id);
+            } else {
+                expect(ClustersClient.latch).toHaveBeenLastCalledWith(node.cluster.clusterId, 'credentialsRejected');
+                expect(ClustersClient.unlatch).not.toHaveBeenCalled();
+                expect(ext.connectionsBranchDataProvider.resetNodeErrorState).not.toHaveBeenCalled();
+            }
+        },
+    );
 
     it('retires old views if the secret write persisted but the edit reported failure', async (): Promise<void> => {
         const stored = structuredClone(originalConnection);

@@ -184,7 +184,7 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
 
     // When the node is in an error state, only clear it if the user chose to reconnect.
     // Clearing the error state triggers a fresh connection attempt on refresh.
-    if (changed && wizardContext.credentialsSaved && node.id && wizardContext.isErrorState) {
+    if (wizardContext.credentialsSaved && node.id && wizardContext.isErrorState) {
         if (wizardContext.reconnectAfterError) {
             ext.connectionsBranchDataProvider.resetNodeErrorState(node.id);
             context.telemetry.properties.reconnected = 'true';
