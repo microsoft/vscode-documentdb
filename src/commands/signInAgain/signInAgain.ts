@@ -12,8 +12,9 @@ import {
     EntraSignInRequiredError,
 } from '../../documentdb/auth/entraErrors/entraCallbackErrors';
 import { getEntraSession } from '../../documentdb/auth/entraSession';
-import { sameEntraIdentity } from '../../documentdb/auth/WorkerTokenRelay';
 import { MicrosoftEntraIDAuthHandler } from '../../documentdb/auth/MicrosoftEntraIDAuthHandler';
+import { emitTokenRenewal } from '../../documentdb/auth/tokenRenewalTelemetry';
+import { sameEntraIdentity } from '../../documentdb/auth/WorkerTokenRelay';
 import { addEstablishedConnectionContext, ClustersClient } from '../../documentdb/ClustersClient';
 import { classifyConnectionFailure } from '../../documentdb/connectionFailures';
 import { CredentialCache } from '../../documentdb/CredentialCache';
@@ -129,10 +130,13 @@ async function signInAgainInternal(
     };
 
     let starting = false;
+    let established: { client: ClustersClient; epoch: number } | undefined;
     try {
         const handler = new MicrosoftEntraIDAuthHandler(credentials, {
             interactive: false,
             pinnedEntraIdentity: identity,
+            canObserveTokenLookup: () => established?.client.isCurrentForTokenRenewal(established.epoch) ?? false,
+            onTokenLookup: (observation) => emitTokenRenewal('extension', observation),
         });
         const auth = await handler.configureAuth(undefined, undefined, async (request) => {
             if (!isCurrent()) {
@@ -176,6 +180,7 @@ async function signInAgainInternal(
             reportClosed();
             return undefined;
         }
+        established = { client, epoch: startupEpoch };
         if (
             ClustersClient.getExistingClient(clusterId) === client &&
             !ClustersClient.getLatchReason(clusterId) &&

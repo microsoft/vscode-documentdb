@@ -168,9 +168,9 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                         break;
                 }
             },
-            onTokenRequest: async (request, post, isCurrent, timings, trace) => {
+            onTokenRequest: async (request, post, isCurrent, timings, trace, postStartup) => {
                 const relay = this._relay;
-                await relay?.relay(request, post, () => this._relay === relay && isCurrent(), timings, trace);
+                await relay?.relay(request, post, () => this._relay === relay && isCurrent(), timings, trace, postStartup);
             },
             onWorkerExit: (exitCode: number) => {
                 ext.outputChannel.debug(`${logPrefix} Worker exited with code ${String(exitCode)}`);

@@ -20,11 +20,13 @@ import { traceAuthFlow, type AuthTraceContext } from '../utils/authTrace';
 import { type VerifiedEntraIdentity } from './auth/AuthHandler';
 import { AuthMethodId } from './auth/AuthMethod';
 import * as authHandlerFactory from './auth/createAuthHandler';
+import * as tokenResource from './auth/documentdbTokenResource';
 import {
     EntraIdentityMismatchError,
     EntraSignInRequiredError,
     TokenCallbackError,
 } from './auth/entraErrors/entraCallbackErrors';
+import * as entraSession from './auth/entraSession';
 import { ManagedIdentityAuthHandler } from './auth/ManagedIdentityAuthHandler';
 import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
 import { NativeAuthHandler } from './auth/NativeAuthHandler';
@@ -170,6 +172,7 @@ describe('regular connection startup diagnostics', () => {
     const mockToArray = vi.fn<() => Promise<Mongodb.WithId<Mongodb.Document & { _id: string }>[]>>();
     const mockDeleteMany = vi.fn<() => Promise<Mongodb.DeleteResult>>();
     let poolEvents: EventEmitter;
+    const configureEntraAuth = MicrosoftEntraIDAuthHandler.prototype.configureAuth;
 
     function pauseNextConnect(): { started: Promise<void>; resolve: () => void; reject: (error: Error) => void } {
         const started = deferred();
@@ -565,7 +568,7 @@ describe('regular connection startup diagnostics', () => {
         expect(authHandlerFactory.createAuthHandler).toHaveBeenLastCalledWith(
             AuthMethodId.MicrosoftEntraID,
             expect.objectContaining({ clusterId }),
-            { interactive: true },
+            expect.objectContaining({ interactive: true }),
         );
         expect(ClustersClient.getLastVerifiedIdentity(clusterId)).toEqual(verifiedIdentity);
     });
@@ -598,7 +601,7 @@ describe('regular connection startup diagnostics', () => {
             expect(authHandlerFactory.createAuthHandler).toHaveBeenLastCalledWith(
                 AuthMethodId.MicrosoftEntraID,
                 expect.objectContaining({ clusterId }),
-                { interactive: false, pinnedEntraIdentity: currentIdentity },
+                expect.objectContaining({ interactive: false, pinnedEntraIdentity: currentIdentity }),
             );
             expect(ClustersClient.getLastVerifiedIdentity(clusterId)).toBe(published);
         }
@@ -1436,15 +1439,83 @@ describe('regular connection startup diagnostics', () => {
 
             const factory = vi.mocked(authHandlerFactory.createAuthHandler);
             expect(factory).toHaveBeenCalledTimes(1);
-            expect(factory).toHaveBeenCalledWith(authMethod, expect.objectContaining({ clusterId }), {
+            const policy = {
                 interactive,
-            });
+                ...(interactive
+                    ? { canObserveTokenLookup: expect.any(Function), onTokenLookup: expect.any(Function) }
+                    : {}),
+            };
+            expect(factory).toHaveBeenCalledWith(authMethod, expect.objectContaining({ clusterId }), policy);
             const handler = factory.mock.results[0]?.value as unknown;
             expect(handler).toBeInstanceOf(handlerClass);
-            expect(handler).toHaveProperty('policy', { interactive });
+            expect(handler).toHaveProperty('policy', policy);
             expect(handlerClass.prototype.configureAuth).toHaveBeenCalledTimes(1);
         },
     );
+
+    it('counts completed Entra lookups only after startup, independent of database acceptance', async () => {
+        CredentialCache.setAuthCredentials(
+            clusterId,
+            AuthMethodId.MicrosoftEntraID,
+            'mongodb://example.mongocluster.cosmos.azure.com/',
+        );
+        vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockImplementation(configureEntraAuth);
+        vi.spyOn(tokenResource, 'resolveInteractiveTokenResource').mockResolvedValue({
+            cloudCategory: 'public', reason: 'host', scope: 'test-scope', resource: 'test-resource', details: {},
+        });
+        vi.spyOn(entraSession, 'readEntraSignInEnvironment').mockReturnValue({
+            providerId: 'microsoft', cloudName: 'AzureCloud', authority: 'https://login.microsoftonline.com/',
+        });
+        const now = 1_800_000_000;
+        vi.setSystemTime(now * 1000);
+        const timedToken = `header.${Buffer.from(JSON.stringify({ iat: now - 600, exp: now + 3000 })).toString('base64url')}.signature`;
+        const account = { id: 'test-account', label: 'Test account' };
+        const session = { id: 'test-session', account, accessToken: timedToken, scopes: [] };
+        const getSession = vi.spyOn(entraSession, 'getEntraSession').mockResolvedValue(session);
+        const signal = new AbortController();
+        const lookup = async (timeoutContext = signal.signal): Promise<Mongodb.OIDCResponse> => {
+            const options = vi.mocked(MongoClient).mock.lastCall?.[1];
+            const callback = options?.authMechanismProperties?.OIDC_CALLBACK;
+            if (!callback) {
+                throw new Error('Expected an OIDC callback');
+            }
+            return await callback({ version: 1, timeoutContext });
+        };
+        const renewalEvents = (): RecordedTelemetry[] =>
+            mockTelemetryEvents.filter(({ eventName }) => eventName === 'connection.tokenRenewal');
+        const serverRejection = new MongoServerError({ code: 18, message: 'test server rejection' });
+
+        mockConnect.mockImplementationOnce(async () => {
+            await lookup();
+            await lookup();
+            throw serverRejection;
+        });
+        await expect(ClustersClient.connectInteractive(clusterId)).rejects.toBe(serverRejection);
+        expect(renewalEvents()).toEqual([]);
+
+        // Startup itself succeeds without calling the callback. Its first later callback counts.
+        const client = await ClustersClient.connectInteractive(clusterId);
+        expect(renewalEvents()).toEqual([]);
+        mockListDatabases.mockImplementationOnce(async () => {
+            expect(await lookup()).toEqual({ accessToken: timedToken, expiresInSeconds: 2999 });
+            throw serverRejection;
+        });
+        await expect(client.listDatabases()).rejects.toBe(serverRejection);
+
+        vi.advanceTimersByTime(600_000);
+        getSession.mockResolvedValueOnce({ ...session, accessToken: 'opaque-test-token' });
+        await expect(lookup()).resolves.toEqual({ accessToken: 'opaque-test-token' });
+        getSession.mockResolvedValueOnce(undefined);
+        await expect(lookup()).rejects.toBeInstanceOf(EntraSignInRequiredError);
+
+        signal.abort();
+        await lookup();
+        expect(renewalEvents().map(({ telemetry, error }) => [telemetry.properties, telemetry.measurements, error])).toEqual([
+            [{ surface: 'extension', renewalOutcome: 'returned', result: 'Succeeded' }, { tokenLifetimeSeconds: 3600, duration: 0 }, undefined],
+            [{ surface: 'extension', renewalOutcome: 'returned', result: 'Succeeded' }, { duration: 0 }, undefined],
+            [{ surface: 'extension', renewalOutcome: 'noSession', result: 'Succeeded' }, { duration: 0 }, undefined],
+        ]);
+    });
 
     it('passes its startup ID to auth configuration', async (): Promise<void> => {
         let traceContext: AuthTraceContext | undefined;

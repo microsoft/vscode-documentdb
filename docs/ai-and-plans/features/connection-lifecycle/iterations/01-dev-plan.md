@@ -1872,6 +1872,12 @@ one loop.
 
 **Progress:**
 
+- The WI-9 commit records only checked post-startup Entra database lookups. Host lookup eligibility
+  follows the published client; worker eligibility is captured when the ready or executing worker
+  requests the token. Neither uses the first callback as a startup proxy.
+- Case 1 passed: `npm run build` and 349 focused tests in 8 files. Ingestion is **pending**; the
+  [telemetry queries](../telemetry.md) and dashboard scope/volume checks are for the operator.
+
 ---
 
 ## WI-10: Documentation (PR 7)

@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { isUserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import { type OIDCCallbackParams, type OIDCResponse } from 'mongodb';
@@ -31,16 +32,8 @@ import { clearEntraTokenFailure, recordEntraTokenFailure } from './entraErrors/e
 import { getEntraSession, readEntraSignInEnvironment, type EntraSignInEnvironment } from './entraSession';
 import { EntraDestinationRejectedError } from './oidcAllowedHosts';
 import { buildOidcClientConfiguration, createOidcDestinationPolicy } from './oidcClientOptions';
-import { readJwtTimes } from './tokenExpiry';
-
-interface EntraTokenLookupObservation {
-    readonly outcome: 'returned' | 'noSession' | 'identityMismatch' | 'failed';
-    readonly lifetimeSeconds?: number;
-}
-
-interface EntraCallerPolicy extends AuthCallerPolicy {
-    readonly onTokenLookup?: (observation: EntraTokenLookupObservation) => void;
-}
+import { jwtLifetimeSeconds, readJwtTimes } from './tokenExpiry';
+import { type EntraTokenLookupObservation } from './tokenRenewalTelemetry';
 
 function assertEntraSignInEnvironment(expected: EntraSignInEnvironment | undefined): EntraSignInEnvironment {
     let current: EntraSignInEnvironment;
@@ -69,11 +62,19 @@ function assertEntraSignInEnvironment(expected: EntraSignInEnvironment | undefin
 export class MicrosoftEntraIDAuthHandler implements AuthHandler {
     constructor(
         private readonly clusterCredentials: CachedClusterCredentials,
-        public readonly policy: EntraCallerPolicy = { interactive: true },
+        public readonly policy: AuthCallerPolicy = { interactive: true },
     ) {}
 
     private notify(notify: (observer: AuthPhaseObserver) => void): void {
         notifyAuthPhaseObserver(this.policy.observer, notify);
+    }
+
+    private canObserveTokenLookup(): boolean {
+        try {
+            return this.policy.onTokenLookup !== undefined && (this.policy.canObserveTokenLookup?.() ?? true);
+        } catch {
+            return false;
+        }
     }
 
     public async configureAuth(
@@ -232,7 +233,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
             callbackAuthMethod: AuthMethodId.MicrosoftEntraID,
             oidcCallback: async (_params: OIDCCallbackParams): Promise<OIDCResponse> => {
                 const currentInvocation = ++invocation;
-                let observation: EntraTokenLookupObservation = { outcome: 'failed' };
+                let returned = false;
                 try {
                     assertEntraSignInEnvironment(signInEnvironment);
                     let renewed: vscode.AuthenticationSession | undefined;
@@ -246,27 +247,20 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                         throw new EntraSignInRequiredError('noSession');
                     }
                     if (renewed.account.id !== accountId) {
-                        observation = { outcome: 'identityMismatch' };
                         throw new EntraIdentityMismatchError();
                     }
                     const { accessToken } = renewed;
-                    const { iatSec, expSec } = readJwtTimes(accessToken);
-                    const lifetimeSeconds = iatSec !== undefined && expSec !== undefined ? expSec - iatSec : undefined;
-                    observation = {
-                        outcome: 'returned',
-                        ...(lifetimeSeconds !== undefined && Number.isFinite(lifetimeSeconds)
-                            ? { lifetimeSeconds }
-                            : {}),
-                    };
+                    const { expSec } = readJwtTimes(accessToken);
+                    returned = true;
                     return expSec === undefined
                         ? { accessToken }
                         : { accessToken, expiresInSeconds: Math.max(0, Math.floor(expSec - Date.now() / 1000)) };
                 } catch (error) {
-                    if (error instanceof EntraSignInRequiredError) {
-                        observation = { outcome: 'noSession' };
-                        throw error;
-                    }
-                    if (error instanceof EntraIdentityMismatchError || error instanceof EntraDestinationRejectedError) {
+                    if (
+                        error instanceof EntraSignInRequiredError ||
+                        error instanceof EntraIdentityMismatchError ||
+                        error instanceof EntraDestinationRejectedError
+                    ) {
                         throw error;
                     }
                     recordEntraTokenFailure(clusterId, {
@@ -280,26 +274,38 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                         'interactiveEntra.oidcCallback',
                         {
                             invocation: currentInvocation,
-                            outcome: observation.outcome === 'returned' ? 'returned' : 'threw',
+                            outcome: returned ? 'returned' : 'threw',
                         },
                         authCorrelationId,
                         traceContext,
                     );
-                    try {
-                        this.policy.onTokenLookup?.(observation);
-                    } catch {
-                        // Observers never change the auth flow.
-                    }
                 }
             },
         });
         const properties = configuration.options.authMechanismProperties;
         const callback = properties?.OIDC_CALLBACK;
-        if (this.policy.observer?.onCallbackTokenObserved && properties && callback) {
+        if ((this.policy.onTokenLookup || this.policy.observer?.onCallbackTokenObserved) && properties && callback) {
             properties.OIDC_CALLBACK = async (params): Promise<OIDCResponse> => {
+                const observe = this.canObserveTokenLookup();
+                const notifyLookup = (observation: EntraTokenLookupObservation): void => {
+                    if (observe && !params.timeoutContext?.aborted && this.canObserveTokenLookup()) {
+                        try {
+                            this.policy.onTokenLookup?.(observation);
+                        } catch {
+                            // Observers never change the auth flow.
+                        }
+                    }
+                };
                 try {
                     // Report acquisition only after the configured callback re-checks destination trust.
                     const response = await callback(params);
+                    if (observe) {
+                        const lifetimeSeconds = jwtLifetimeSeconds(readJwtTimes(response.accessToken));
+                        notifyLookup({
+                            outcome: 'returned',
+                            ...(lifetimeSeconds !== undefined ? { lifetimeSeconds } : {}),
+                        });
+                    }
                     this.notify((observer) =>
                         observer.onCallbackTokenObserved?.({
                             outcome: 'acquired',
@@ -309,6 +315,18 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                     );
                     return response;
                 } catch (error) {
+                    if (
+                        !isUserCancelledError(error) &&
+                        !(error instanceof TokenCallbackError && isUserCancelledError(error.cause))
+                    ) {
+                        let outcome: EntraTokenLookupObservation['outcome'] = 'failed';
+                        if (error instanceof EntraSignInRequiredError) {
+                            outcome = 'noSession';
+                        } else if (error instanceof EntraIdentityMismatchError) {
+                            outcome = 'identityMismatch';
+                        }
+                        notifyLookup({ outcome });
+                    }
                     if (
                         error instanceof EntraSignInRequiredError ||
                         error instanceof EntraIdentityMismatchError ||

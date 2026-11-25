@@ -229,6 +229,8 @@ export type WorkerToMainMessage =
           readonly source?: 'vscode' | 'managedIdentity';
           /** Client ID of a user-assigned managed identity, when `source` is 'managedIdentity'. */
           readonly clientId?: string;
+          /** One shared Int32 set to 1 if the driver stops waiting for this Entra lookup. Telemetry only. */
+          readonly driverAbortFlag?: SharedArrayBuffer;
       }
     | {
           readonly type: 'log';

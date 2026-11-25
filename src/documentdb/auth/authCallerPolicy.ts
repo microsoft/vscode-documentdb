@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type VerifiedEntraIdentity } from './AuthHandler';
+import { type EntraTokenLookupObservation } from './tokenRenewalTelemetry';
 
 /**
  * Host-only callbacks that report the authentication phases in the order they really happen.
@@ -44,6 +45,9 @@ export interface AuthCallerPolicy {
     readonly interactive: boolean;
     readonly pinnedEntraIdentity?: VerifiedEntraIdentity;
     readonly observer?: AuthPhaseObserver;
+    /** Entra only. Check at callback entry and completion to exclude startup and obsolete clients. */
+    readonly canObserveTokenLookup?: () => boolean;
+    readonly onTokenLookup?: (observation: EntraTokenLookupObservation) => void;
 }
 
 /**
