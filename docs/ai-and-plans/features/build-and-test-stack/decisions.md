@@ -29,7 +29,7 @@ created: 2026-10-14
 | 0014 | CI jobs run in parallel where safe, under descriptive names        | Accepted (modified) | Accepted as proposed; prompted by the operator's comparison with PR #963; 0015 changes its `Merge gate` timing | 2026-10-14 | #880  |
 | 0015 | Rename the required check to `Merge gate` on #880                  | Accepted            | Operator's call; reverses the order in 0014                                                                    | 2026-10-14 | #880  |
 | 0016 | Prepare a version branch and an assigned issue instead of a bot PR | Accepted            | Operator approved the issue and prefilled-link alternative after bot PR creation was blocked                   | 2026-10-21 | #1043 |
-| 0017 | Feature branches require checks, not approving reviews             | Accepted            | Keeps PR and check protection while moving required human approval to the final merge into `main`               | 2026-11-25 | —     |
+| 0017 | Feature branches require checks, not approving reviews             | Accepted            | Keeps PR and check protection while moving required human approval to the final merge into `main`               | 2026-11-25 | #1132 |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old
 > ones, and record reversals as a new entry plus a status change above. Heading text is frozen
