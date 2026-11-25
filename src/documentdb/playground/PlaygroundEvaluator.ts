@@ -14,24 +14,23 @@ import { randomUUID } from 'crypto';
 import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
-import { traceAuthFlow, traceAuthOperation, traceEntraDestination, type AuthTraceContext } from '../../utils/authTrace';
 import { getBatchSizeSetting, getConnectionTimeoutMs } from '../../utils/workspacUtils';
-import { AuthMethodId } from '../auth/AuthMethod';
-import {
-    resolveInteractiveTokenResource,
-    resolveManagedIdentityTokenResource,
-    TokenResourceResolutionError,
-    type ResolvedTokenResource,
-} from '../auth/documentdbTokenResource';
-import { evaluateEntraDestinationFromSettings } from '../auth/entraDestinationSettings';
-import { clearEntraTokenFailure, recordEntraTokenFailure } from '../auth/entraErrors/entraTokenFailures';
-import { EntraDestinationRejectedError } from '../auth/oidcAllowedHosts';
+import { type VerifiedEntraIdentity } from '../auth/AuthHandler';
+import { AuthMethodId } from '../auth/AuthMethodId';
+import { createWorkerAuthError, sameEntraIdentity, WorkerTokenRelay } from '../auth/WorkerTokenRelay';
+import { ClustersClient } from '../ClustersClient';
+import { computeConnectionFingerprint } from '../connectionFingerprint';
+import { ConnectionUnavailableError } from '../ConnectionUnavailableError';
 import { CredentialCache } from '../CredentialCache';
-import { withTokenAcquisitionTiming, type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
-import { type ExecutionResult, type PlaygroundConnection } from './types';
+import { type ExecutionResult, type PlaygroundConnection, type PlaygroundWorkerBinding } from './types';
 import { WorkerSessionManager } from './WorkerSessionManager';
-import { type MainToWorkerMessage, type SerializableMongoClientOptions, type WorkerToMainMessage } from './workerTypes';
+import {
+    getWorkerAuthReason,
+    type MainToWorkerMessage,
+    type SerializableMongoClientOptions,
+    type WorkerAuthReason,
+} from './workerTypes';
 
 /**
  * Evaluates query playground code in a persistent worker thread.
@@ -78,7 +77,12 @@ import { type MainToWorkerMessage, type SerializableMongoClientOptions, type Wor
 export class PlaygroundEvaluator implements vscode.Disposable {
     private readonly _workerManager: WorkerSessionManager;
     private _sessionInitMessage: Extract<MainToWorkerMessage, { type: 'init' }> | undefined;
-    private _resolvedTokenResource: ResolvedTokenResource | undefined;
+    private _relay: WorkerTokenRelay | undefined;
+    /** A worker snapshot, not a document binding. */
+    private _workerFingerprint: string | undefined;
+    private _pinContext: { clusterId: string; identity: VerifiedEntraIdentity } | undefined;
+    private _authFailure: { clusterId: string; reason: WorkerAuthReason } | undefined;
+    private _disposed = false;
 
     /**
      * Telemetry session ID — generated on worker spawn, stable across evals within the
@@ -162,13 +166,10 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                         break;
                 }
             },
-            onTokenRequest: (
-                msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
-                postResponse: (response: MainToWorkerMessage) => void,
-                isCurrent: () => boolean,
-                timings?: ConnectionStartupTimings,
-                traceContext?: AuthTraceContext,
-            ) => this.handleTokenRequest(msg, postResponse, isCurrent, timings, traceContext),
+            onTokenRequest: async (request, post, isCurrent, timings, trace) => {
+                const relay = this._relay;
+                await relay?.relay(request, post, () => this._relay === relay && isCurrent(), timings, trace);
+            },
             onWorkerExit: (exitCode: number) => {
                 ext.outputChannel.debug(`${logPrefix} Worker exited with code ${String(exitCode)}`);
                 this.resetSession();
@@ -188,28 +189,84 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         connection: PlaygroundConnection,
         code: string,
         onProgress?: (message: string) => void,
+        onFirstBinding?: (binding: PlaygroundWorkerBinding) => void,
     ): Promise<ExecutionResult> {
-        // Ensure worker is alive and connected to the right cluster
-        const needsSpawn = !this._workerManager.isConnectedTo(connection.clusterId);
-        if (needsSpawn) {
-            onProgress?.(l10n.t('Initializing…'));
-            ext.outputChannel?.trace(
-                `[PlaygroundEvaluator] Spawning new worker for cluster=${connection.clusterId}, db=${connection.databaseName}`,
-            );
+        const { clusterId, fingerprint } = connection;
+        this.assertConnectionAvailable(clusterId);
+        const epoch = ClustersClient.getEpoch(clusterId);
+        const sameCluster = this._workerManager.isConnectedTo(clusterId);
+        const pin = this._pinContext?.clusterId === clusterId ? this._pinContext.identity : undefined;
+        const verified = ClustersClient.getLastVerifiedIdentity(clusterId);
+        const entraPin = verified?.kind === 'entra' ? verified : undefined;
+        const reason =
+            (this._authFailure?.clusterId === clusterId ? this._authFailure.reason : undefined) ??
+            (sameCluster ? this._workerManager.authFailure : undefined);
+        if (sameCluster && this._relay?.epoch === epoch) {
+            const currentFingerprint = ClustersClient.getBinding(clusterId)?.fingerprint;
+            if (
+                (fingerprint !== undefined &&
+                    (fingerprint !== this._workerFingerprint ||
+                        (currentFingerprint !== undefined && fingerprint !== currentFingerprint))) ||
+                (pin && entraPin && !sameEntraIdentity(pin, entraPin))
+            ) {
+                throw new ConnectionUnavailableError('credentialsChanged');
+            }
         }
+        if ((pin || fingerprint) && (reason === 'signInRequired' || reason === 'identityMismatch')) {
+            throw createWorkerAuthError(reason);
+        }
+        const needsSpawn = !sameCluster || !!reason || this._relay?.epoch !== epoch;
 
         const initStartTime = Date.now();
-        const initMsg = this.buildInitMessage(connection);
-
-        // Start a new telemetry session if we're spawning a new worker
-        if (needsSpawn) {
+        let initMsg: Extract<MainToWorkerMessage, { type: 'init' }>;
+        if (needsSpawn || !this._sessionInitMessage) {
+            onProgress?.(l10n.t('Initializing…'));
+            this.assertConnectionAvailable(clusterId);
+            const pinned = connection.entraIdentity ?? pin;
+            const expected = ClustersClient.getExpectedFingerprint(clusterId, pinned);
+            if (fingerprint !== undefined && fingerprint !== expected) {
+                throw new ConnectionUnavailableError('credentialsChanged');
+            }
+            if (pin && entraPin && !sameEntraIdentity(pin, entraPin) && !fingerprint) {
+                throw new ConnectionUnavailableError('credentialsChanged');
+            }
+            initMsg = this.buildInitMessage(connection);
+            if (this._workerManager.isAlive || this._workerManager.workerState === 'spawning') {
+                this._workerManager.killWorker();
+            }
+            this.resetSession();
+            const workerPin = initMsg.authMechanism === AuthMethodId.MicrosoftEntraID ? entraPin ?? pinned : undefined;
+            this._pinContext = workerPin && { clusterId, identity: workerPin };
             this._sessionInitMessage = initMsg;
-            this._resolvedTokenResource = undefined;
+            this._workerFingerprint = expected;
             this._sessionId = randomUUID();
-            this._sessionEvalCount = 0;
             this._sessionAuthMethod = initMsg.authMechanism;
+            const originalUri = initMsg.connectionString;
+            this._relay = new WorkerTokenRelay(
+                clusterId,
+                initMsg,
+                epoch,
+                this._sessionId,
+                workerPin,
+                (identity) => {
+                    this._pinContext = { clusterId, identity };
+                    this._workerFingerprint = computeConnectionFingerprint({
+                        connectionString: originalUri,
+                        principal: identity,
+                    });
+                },
+            );
+        } else {
+            initMsg = this._sessionInitMessage;
         }
 
+        const relay = this._relay;
+        const assertCurrent = (): void => {
+            this.assertConnectionAvailable(clusterId);
+            if (relay !== this._relay || epoch !== ClustersClient.getEpoch(clusterId)) {
+                throw new ConnectionUnavailableError('credentialsChanged');
+            }
+        };
         onProgress?.(l10n.t('Authenticating…'));
         let originalFailure: { error: unknown } | undefined;
         try {
@@ -219,7 +276,8 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                 context.telemetry.properties.authMethod = initMsg.authMechanism;
                 context.telemetry.properties.needsSpawn = needsSpawn ? 'true' : 'false';
                 try {
-                    await this._workerManager.ensureWorker(connection.clusterId, initMsg, getConnectionTimeoutMs(), {
+                    assertCurrent();
+                    await this._workerManager.ensureWorker(clusterId, initMsg, getConnectionTimeoutMs(), {
                         sessionId: this._sessionId,
                     });
                 } catch (error) {
@@ -228,11 +286,17 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                 }
             });
         } catch (error) {
-            throw originalFailure ? originalFailure.error : error;
+            originalFailure ??= { error };
         }
         // The telemetry wrapper swallows cancellation even when rethrow is enabled.
         if (originalFailure) {
+            this.recordWorkerFailure(clusterId, relay, originalFailure.error);
             throw originalFailure.error;
+        }
+        assertCurrent();
+        this._authFailure = undefined;
+        if (fingerprint === undefined && this._workerFingerprint !== undefined) {
+            onFirstBinding?.({ fingerprint: this._workerFingerprint, entraIdentity: this._pinContext?.identity });
         }
         this._lastInitDurationMs = needsSpawn ? Date.now() - initStartTime : 0;
 
@@ -241,6 +305,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
 
         // Send eval message and await result
         onProgress?.(l10n.t('Running query…'));
+        assertCurrent();
 
         this._sessionEvalCount++;
 
@@ -252,8 +317,13 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             displayBatchSize: getBatchSizeSetting(),
         };
 
-        const workerResult = await this._workerManager.sendEval(evalMsg);
-        return this.deserializeResult(workerResult.result);
+        try {
+            const workerResult = await this._workerManager.sendEval(evalMsg);
+            return this.deserializeResult(workerResult.result);
+        } catch (error) {
+            this.recordWorkerFailure(clusterId, relay, error);
+            throw error;
+        }
     }
 
     /**
@@ -262,8 +332,10 @@ export class PlaygroundEvaluator implements vscode.Disposable {
      */
     async shutdown(): Promise<void> {
         ext.outputChannel?.trace('[PlaygroundEvaluator] Shutting down worker');
-        await this._workerManager.shutdown();
         this.resetSession();
+        this._pinContext = undefined;
+        this._authFailure = undefined;
+        await this._workerManager.shutdown();
     }
 
     /**
@@ -271,13 +343,40 @@ export class PlaygroundEvaluator implements vscode.Disposable {
      * Used for infinite loop recovery (timeout) and cancellation.
      */
     killWorker(): void {
+        const clusterId = this._workerManager.workerClusterId;
+        const reason = this._workerManager.authFailure;
+        if (clusterId && reason) {
+            this._authFailure ??= { clusterId, reason };
+        }
         this._workerManager.killWorker();
         this.resetSession();
     }
 
     dispose(): void {
+        this._disposed = true;
         this._workerManager.dispose();
         this.resetSession();
+        this._pinContext = undefined;
+        this._authFailure = undefined;
+    }
+
+    private assertConnectionAvailable(clusterId: string): void {
+        const reason = ClustersClient.getLatchReason(clusterId);
+        if (reason || this._disposed) {
+            throw new ConnectionUnavailableError(reason ?? 'connectionRemoved');
+        }
+    }
+
+    private recordWorkerFailure(clusterId: string, relay: WorkerTokenRelay | undefined, error: unknown): void {
+        const reason = getWorkerAuthReason(error);
+        if (
+            reason &&
+            relay === this._relay &&
+            relay?.epoch === ClustersClient.getEpoch(clusterId) &&
+            !ClustersClient.getLatchReason(clusterId)
+        ) {
+            this._authFailure = { clusterId, reason };
+        }
     }
 
     // ─── Private: Init message ───────────────────────────────────────────────
@@ -374,149 +473,6 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         };
     }
 
-    // ─── Private: Token handling ─────────────────────────────────────────────
-
-    /**
-     * Handle a token request from the worker (Entra ID OIDC).
-     * Token acquisition stays on the main thread so there is one credential and one cache per window.
-     */
-    private async handleTokenRequest(
-        msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
-        postResponse: (response: MainToWorkerMessage) => void,
-        isCurrent: () => boolean,
-        timings?: ConnectionStartupTimings,
-        traceContext?: AuthTraceContext,
-    ): Promise<void> {
-        try {
-            const clusterId = this._workerManager.workerClusterId;
-            const sessionInit = this._sessionInitMessage;
-            if (
-                !clusterId ||
-                !sessionInit ||
-                (sessionInit.authMechanism !== 'MicrosoftEntraID' && sessionInit.authMechanism !== 'ManagedIdentity')
-            ) {
-                throw new Error(l10n.t('No credentials found for the query playground connection.'));
-            }
-            if (!isCurrent()) {
-                return;
-            }
-            const connectionString = sessionInit.connectionString;
-            const decision = evaluateEntraDestinationFromSettings(connectionString);
-            traceEntraDestination(decision, msg.requestId, traceContext);
-            if (!decision.allowed) {
-                throw new EntraDestinationRejectedError(decision);
-            }
-            const usesManagedIdentity = sessionInit.authMechanism === 'ManagedIdentity';
-            let resolved: ResolvedTokenResource;
-            try {
-                resolved =
-                    this._resolvedTokenResource ??
-                    (usesManagedIdentity
-                        ? await resolveManagedIdentityTokenResource(connectionString)
-                        : await resolveInteractiveTokenResource(connectionString));
-                if (isCurrent()) {
-                    this._resolvedTokenResource = resolved;
-                }
-                traceAuthFlow('entraCloud.resolved', resolved.details, msg.requestId, traceContext);
-            } catch (error) {
-                if (error instanceof TokenResourceResolutionError) {
-                    traceAuthFlow('entraCloud.unresolved', error.details, msg.requestId, traceContext);
-                }
-                throw error;
-            }
-            let accessToken: string;
-
-            if (usesManagedIdentity) {
-                const { getManagedIdentityAccessToken } = await import('../auth/managedIdentityTokenProvider');
-                this._sessionId ??= randomUUID();
-                try {
-                    accessToken = (
-                        await withTokenAcquisitionTiming(timings, () =>
-                            getManagedIdentityAccessToken(
-                                [resolved.scope],
-                                sessionInit.managedIdentityClientId,
-                                sessionInit.tenantId,
-                                this._sessionId,
-                                traceContext,
-                            ),
-                        )
-                    ).accessToken;
-                } catch (error) {
-                    if (traceContext?.startupProperties) {
-                        traceContext.startupProperties.entraFailureKind = 'tokenAcquisitionFailed';
-                    }
-                    if (isCurrent()) {
-                        recordEntraTokenFailure(clusterId, {
-                            cloudCategory: resolved.cloudCategory,
-                            authMethod: 'managedIdentity',
-                        });
-                    }
-                    throw error;
-                }
-            } else {
-                const { getSessionFromVSCode } = await import('@microsoft/vscode-azext-azureauth');
-                let session: vscode.AuthenticationSession | undefined;
-                try {
-                    session = await traceAuthOperation(
-                        'interactiveEntra.getSession',
-                        () =>
-                            withTokenAcquisitionTiming(timings, () =>
-                                getSessionFromVSCode([resolved.scope], sessionInit.tenantId, { createIfNone: true }),
-                            ),
-                        {
-                            tenantSpecified: !!sessionInit.tenantId,
-                            createIfNone: true,
-                            cloudCategory: resolved.cloudCategory,
-                            tokenResourceReason: resolved.reason,
-                        },
-                        msg.requestId,
-                        traceContext,
-                    );
-
-                    if (!session) {
-                        throw new Error(l10n.t('Failed to obtain Entra ID token.'));
-                    }
-                } catch (error) {
-                    if (traceContext?.startupProperties) {
-                        traceContext.startupProperties.entraFailureKind = 'tokenAcquisitionFailed';
-                    }
-                    if (isCurrent()) {
-                        recordEntraTokenFailure(clusterId, {
-                            cloudCategory: resolved.cloudCategory,
-                            authMethod: 'interactive',
-                        });
-                    }
-                    throw error;
-                }
-
-                accessToken = session.accessToken;
-            }
-
-            const currentDecision = evaluateEntraDestinationFromSettings(connectionString);
-            traceEntraDestination(currentDecision, msg.requestId, traceContext);
-            if (!currentDecision.allowed) {
-                throw new EntraDestinationRejectedError(currentDecision);
-            }
-            if (isCurrent()) {
-                clearEntraTokenFailure(clusterId);
-            }
-            postResponse({
-                type: 'tokenResponse',
-                requestId: msg.requestId,
-                accessToken,
-            });
-        } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            postResponse({
-                type: 'tokenError',
-                requestId: msg.requestId,
-                error: errorMessage,
-                ...(error instanceof EntraDestinationRejectedError
-                    ? { errorName: 'EntraDestinationRejectedError' as const }
-                    : {}),
-            });
-        }
-    }
 
     // ─── Private: Session telemetry ──────────────────────────────────────────
 
@@ -533,7 +489,8 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         }
 
         this._sessionInitMessage = undefined;
-        this._resolvedTokenResource = undefined;
+        this._relay = undefined;
+        this._workerFingerprint = undefined;
         this._sessionId = undefined;
         this._sessionEvalCount = 0;
         this._sessionAuthMethod = undefined;

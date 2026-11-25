@@ -22,11 +22,12 @@ import {
     recordEntraTokenFailure,
     resetEntraTokenFailuresForTests,
 } from '../auth/entraErrors/entraTokenFailures';
+import { ClustersClient } from '../ClustersClient';
 import { type getManagedIdentityAccessToken } from '../auth/managedIdentityTokenProvider';
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { PlaygroundEvaluator } from './PlaygroundEvaluator';
 import { type WorkerSessionCallbacks } from './WorkerSessionManager';
-import { type MainToWorkerMessage, type WorkerToMainMessage } from './workerTypes';
+import { getWorkerAuthReason, type MainToWorkerMessage, type WorkerToMainMessage } from './workerTypes';
 
 type InitMessage = Extract<MainToWorkerMessage, { type: 'init' }>;
 type TokenRequest = Extract<WorkerToMainMessage, { type: 'tokenRequest' }>;
@@ -37,17 +38,23 @@ const mocks = vi.hoisted(() => ({
     interactiveToken:
         vi.fn<
             (
-                scopes?: string | string[],
-                tenantId?: string,
+                provider: string,
+                scopes: readonly string[],
                 options?: vscode.AuthenticationGetSessionOptions,
             ) => Promise<vscode.AuthenticationSession | undefined>
         >(),
+    configuredProvider: vi.fn<() => string>(),
     managedIdentityToken: vi.fn<typeof getManagedIdentityAccessToken>(),
     resolveInteractive: vi.fn<typeof resolveInteractiveTokenResource>(),
     resolveManagedIdentity: vi.fn<typeof resolveManagedIdentityTokenResource>(),
     callbacks: undefined as WorkerSessionCallbacks | undefined,
     initMessage: undefined as InitMessage | undefined,
     clusterId: undefined as string | undefined,
+    worker: {
+        isConnectedTo: vi.fn<(clusterId: string) => boolean>(),
+        sendEval: vi.fn<(message: MainToWorkerMessage) => Promise<{ result: { type: string; printable: string; durationMs: number } }>>(),
+        killWorker: vi.fn(),
+    },
 }));
 
 vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
@@ -83,7 +90,13 @@ vi.mock('../CredentialCache', () => ({
 
 vi.mock('@microsoft/vscode-azext-azureauth', async (importOriginal) => ({
     ...(await importOriginal<typeof azureAuth>()),
-    getSessionFromVSCode: mocks.interactiveToken,
+    getConfiguredAuthProviderId: mocks.configuredProvider,
+    getConfiguredAzureEnv: () => ({ name: 'AzureCloud' }),
+}));
+
+vi.mock('vscode', async (importOriginal) => ({
+    ...(await importOriginal<typeof vscode>()),
+    authentication: { getSession: mocks.interactiveToken },
 }));
 
 vi.mock('../auth/managedIdentityTokenProvider', () => ({
@@ -100,7 +113,7 @@ vi.mock('./WorkerSessionManager', () => ({
     WorkerSessionManager: vi.fn().mockImplementation(function (callbacks: WorkerSessionCallbacks) {
         mocks.callbacks = callbacks;
         return {
-            isConnectedTo: vi.fn(() => false),
+            ...mocks.worker,
             ensureWorker: vi.fn(async (clusterId: string, initMessage: InitMessage): Promise<void> => {
                 mocks.clusterId = clusterId;
                 mocks.initMessage = initMessage;
@@ -108,7 +121,7 @@ vi.mock('./WorkerSessionManager', () => ({
             get workerClusterId(): string | undefined {
                 return mocks.clusterId;
             },
-            sendEval: vi.fn().mockResolvedValue({ result: { type: 'number', printable: '1', durationMs: 0 } }),
+            shutdown: vi.fn(),
             dispose: vi.fn(),
         };
     }),
@@ -139,6 +152,9 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
         mocks.callbacks = undefined;
         mocks.initMessage = undefined;
         mocks.clusterId = undefined;
+        mocks.configuredProvider.mockReturnValue('microsoft');
+        mocks.worker.isConnectedTo.mockReturnValue(false);
+        mocks.worker.sendEval.mockResolvedValue({ result: { type: 'number', printable: '1', durationMs: 0 } });
         customSuffix = undefined;
         vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
             get: vi.fn((_key: string, defaultValue: unknown): unknown => defaultValue),
@@ -179,7 +195,7 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
         if (!init) {
             throw new Error('Expected the evaluator to initialize its worker');
         }
-        expect(mocks.getCredentials).toHaveBeenCalledExactlyOnceWith(clusterId);
+        expect(mocks.getCredentials).toHaveBeenCalledWith(clusterId);
         // Token relays must never consult credentials changed since worker initialization.
         mocks.getCredentials.mockClear().mockImplementation((): never => {
             throw new Error('Live credential-cache reads are forbidden during token relay');
@@ -209,6 +225,115 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
         expect(mocks.interactiveToken).not.toHaveBeenCalled();
         expect(mocks.managedIdentityToken).not.toHaveBeenCalled();
     }
+
+    const connection = { clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' };
+
+    it('uses a verified cluster identity silently on the first relay', async (): Promise<void> => {
+        const verified = vi.spyOn(ClustersClient, 'getLastVerifiedIdentity').mockReturnValue({
+            kind: 'entra',
+            providerId: 'microsoft',
+            tenantId: 'interactive-tenant',
+            accountId: 'private-account',
+            accountLabel,
+        });
+        try {
+            await initializeSession(AuthMethodId.MicrosoftEntraID);
+            const response = await requestToken({ type: 'tokenRequest', requestId: 'first-silent' });
+            expect(response).toHaveBeenCalledWith(expect.objectContaining({ type: 'tokenResponse' }));
+            expect(mocks.interactiveToken).toHaveBeenCalledExactlyOnceWith(
+                'microsoft',
+                [resolution.scope, 'VSCODE_TENANT:interactive-tenant'],
+                { silent: true, account: { id: 'private-account', label: accountLabel } },
+            );
+        } finally {
+            verified.mockRestore();
+        }
+    });
+
+    it('fails closed for a changed account or provider and does not return either token', async (): Promise<void> => {
+        await initializeSession(AuthMethodId.MicrosoftEntraID);
+        await requestToken({ type: 'tokenRequest', requestId: 'first' });
+        mocks.interactiveToken.mockResolvedValueOnce({
+            id: 'other-session',
+            account: { id: 'other-account', label: 'other-account' },
+            scopes: [resolution.scope],
+            accessToken: 'other-token',
+        });
+        const mismatch = await requestToken({ type: 'tokenRequest', requestId: 'different-account' });
+        expect(mismatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'tokenError', reason: 'identityMismatch' }));
+        mocks.configuredProvider.mockReturnValue('microsoft-sovereign-cloud');
+        const changed = await requestToken({ type: 'tokenRequest', requestId: 'different-provider' });
+        expect(changed).toHaveBeenCalledWith(expect.objectContaining({ type: 'tokenError', reason: 'signInRequired' }));
+        expect(mocks.interactiveToken).toHaveBeenCalledTimes(2);
+        expect(getRecentEntraTokenFailure(clusterId)).toBeUndefined();
+    });
+
+    it('checks a document fingerprint on warm runs without consulting the credentials cache', async (): Promise<void> => {
+        await initializeSession(AuthMethodId.NoAuth);
+        mocks.worker.isConnectedTo.mockReturnValue(true);
+        const capture = vi.fn();
+        await evaluator.evaluate(connection, '2', undefined, capture);
+        const binding = capture.mock.calls[0][0] as { fingerprint: string };
+        await evaluator.evaluate({ ...connection, ...binding }, '3');
+        await expect(evaluator.evaluate({ ...connection, fingerprint: 'old-binding' }, '4')).rejects.toMatchObject({
+            reason: 'credentialsChanged',
+        });
+        expect(mocks.worker.sendEval).toHaveBeenCalledTimes(3);
+    });
+
+    it('rejects a latched Run or an old document binding after evaluator recreation', async (): Promise<void> => {
+        await initializeSession(AuthMethodId.NoAuth);
+        mocks.worker.isConnectedTo.mockReturnValue(true);
+        const capture = vi.fn();
+        await evaluator.evaluate(connection, '1', undefined, capture);
+        const binding = capture.mock.calls[0][0] as { fingerprint: string };
+        const oldDocument = { ...connection, ...binding };
+        evaluator.dispose();
+        evaluator = new PlaygroundEvaluator();
+        mocks.worker.isConnectedTo.mockReturnValue(false);
+        ClustersClient.latch(clusterId, 'userDisconnected');
+        try {
+            await expect(evaluator.evaluate(oldDocument, '2')).rejects.toMatchObject({ reason: 'userDisconnected' });
+        } finally {
+            ClustersClient.unlatch(clusterId);
+        }
+        mocks.getCredentials.mockReturnValue({ clusterId, connectionString: 'mongodb://other.example.com/', authMechanism: AuthMethodId.NoAuth });
+        await evaluator.evaluate(connection, '3');
+        mocks.worker.isConnectedTo.mockReturnValue(true);
+        await expect(evaluator.evaluate(oldDocument, '4')).rejects.toMatchObject({ reason: 'credentialsChanged' });
+        mocks.getCredentials.mockClear();
+    });
+
+    it.each([AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity])(
+        'restarts %s at the next Run after refresh fails, without replaying the failed query',
+        async (authMechanism): Promise<void> => {
+            await initializeSession(authMechanism);
+            await requestToken({ type: 'tokenRequest', requestId: 'first' });
+            mocks.worker.isConnectedTo.mockReturnValue(true);
+            const capture = vi.fn();
+            await evaluator.evaluate(connection, '2', undefined, capture);
+            const binding = capture.mock.calls[0][0] as { fingerprint: string };
+            const bound = { ...connection, ...binding };
+            const failure = new Error('outer driver error', { cause: Object.assign(new Error('private broker'), { name: 'TokenCallbackError' }) });
+            mocks.worker.sendEval.mockRejectedValueOnce(failure);
+            await expect(evaluator.evaluate(bound, 'failed')).rejects.toSatisfy((error: unknown) => getWorkerAuthReason(error) === 'refreshFailed');
+            mocks.worker.isConnectedTo.mockReturnValue(false);
+            mocks.getCredentials.mockReturnValue({
+                clusterId,
+                connectionString: originalConnection,
+                authMechanism,
+                entraIdConfig: { tenantId: 'interactive-tenant' },
+                managedIdentityConfig: { tenantId: 'managed-tenant', clientId: 'managed-client' },
+            });
+            await evaluator.evaluate(bound, 'next');
+            mocks.worker.isConnectedTo.mockReturnValue(true);
+            mocks.getCredentials.mockClear();
+            await evaluator.evaluate(bound, 'after');
+            expect(mocks.worker.sendEval.mock.calls.map(([message]) => message.type === 'eval' && message.code)).toEqual([
+                '1', '2', 'failed', 'next', 'after',
+            ]);
+        },
+    );
 
     it.each([AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity])(
         'uses the captured %s identity and original connection despite forged request fields',
@@ -249,9 +374,12 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
                 expect(mocks.resolveManagedIdentity).not.toHaveBeenCalled();
                 expect(mocks.managedIdentityToken).not.toHaveBeenCalled();
                 expect(mocks.interactiveToken).toHaveBeenCalledTimes(2);
-                for (const call of mocks.interactiveToken.mock.calls) {
-                    expect(call).toEqual([[resolution.scope], init.tenantId, { createIfNone: true }]);
-                }
+                const scopes = [resolution.scope, `VSCODE_TENANT:${init.tenantId}`];
+                expect(mocks.interactiveToken).toHaveBeenNthCalledWith(1, 'microsoft', scopes, { createIfNone: true });
+                expect(mocks.interactiveToken).toHaveBeenNthCalledWith(2, 'microsoft', scopes, {
+                    silent: true,
+                    account: { id: 'private-account', label: accountLabel },
+                });
             }
             expect(response).toHaveBeenCalledExactlyOnceWith({
                 type: 'tokenResponse',
@@ -293,6 +421,7 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
                 requestId: 'refresh',
                 error: "Microsoft Entra ID isn't allowed for this server.",
                 errorName: 'EntraDestinationRejectedError',
+                reason: 'destinationRejected',
             });
             const output = JSON.stringify([
                 response.mock.calls,
@@ -348,6 +477,7 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
                 requestId: 'pending',
                 error: "Microsoft Entra ID isn't allowed for this server.",
                 errorName: 'EntraDestinationRejectedError',
+                reason: 'destinationRejected',
             });
             expect(getRecentEntraTokenFailure(clusterId)).toBe(failure);
             expect(startupProperties.entraFailureKind).not.toBe('tokenAcquisitionFailed');
@@ -382,7 +512,8 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
         expect(response).toHaveBeenCalledExactlyOnceWith({
             type: 'tokenError',
             requestId: 'native',
-            error: 'No credentials found for the query playground connection.',
+            error: 'Failed to obtain a Microsoft Entra ID token.',
+            reason: 'refreshFailed',
         });
     });
 
@@ -402,6 +533,7 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
                 requestId: 'rejected',
                 error: "Microsoft Entra ID isn't allowed for this server.",
                 errorName: 'EntraDestinationRejectedError',
+                reason: 'destinationRejected',
             });
         },
     );

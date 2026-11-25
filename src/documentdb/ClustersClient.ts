@@ -314,6 +314,29 @@ export class ClustersClient {
         return identity?.kind === 'entra' ? identity : undefined;
     }
 
+    /** Compute from current credentials, not from a possibly stale cached client. */
+    public static getExpectedFingerprint(clusterId: string, entraFallback?: VerifiedEntraIdentity): string | undefined {
+        const credentials = CredentialCache.getCredentials(clusterId);
+        if (!credentials) {
+            return undefined;
+        }
+        const method = credentials.authMechanism ?? AuthMethodId.NativeAuth;
+        const pin = ClustersClient.getEntraPin(clusterId) ?? entraFallback;
+        const tenantId = credentials.entraIdConfig?.tenantId;
+        if (method === AuthMethodId.MicrosoftEntraID && (!pin || pin.tenantId !== tenantId)) {
+            return undefined;
+        }
+        return computeConnectionFingerprint({
+            connectionString: credentials.connectionString,
+            principal: getVerifiedIdentity(
+                method,
+                credentials,
+                credentials.connectionStringWithPassword ?? credentials.connectionString,
+                pin,
+            ),
+        });
+    }
+
     public static getEpoch(clusterId: string): number {
         return ClustersClient._epochs.get(clusterId) ?? 0;
     }
