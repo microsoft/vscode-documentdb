@@ -107,7 +107,7 @@ Shared branches are collaboration surfaces, so an uncoordinated force push can d
 
 - **`dev/*`** (personal working branches): force pushes are **allowed**. This is where individuals work, so rebasing, squashing, and history cleanup are expected.
 - **`feature/*`** and **`release/*`** (collaboration branches): force pushes are blocked by rulesets. If an authorized maintainer genuinely needs to bypass that protection to clean up history, it MUST be coordinated with everyone working on that branch first.
-- **`main`**: protected. No force pushes or bypass. PRs only.
+- **`main`**: protected. No force pushes. PRs only.
 
 **After a PR receives human review, do not force-push its head branch for routine rebasing, squashing, or history cleanup**, regardless of branch type. Add follow-up commits instead so reviewers can see what is new without re-reviewing work they have already checked. If a force-push is genuinely necessary, coordinate with the reviewers first. Afterward, leave a brief PR comment identifying what previously reviewed changes stayed unchanged, what changed while resolving conflicts, and what is new since the review.
 
