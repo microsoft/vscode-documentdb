@@ -90,7 +90,7 @@ export class WorkerTokenRelay {
         const activeTrace = (): AuthTraceContext | undefined =>
             isCurrentWorker() && isCurrentEpoch() ? trace : undefined;
         const { connectionString, authMechanism, tenantId, managedIdentityClientId } = this.init;
-        const managed = authMechanism === AuthMethodId.ManagedIdentity;
+        const managed = authMechanism === 'ManagedIdentity';
         const assertDestination = (): void => {
             const decision = evaluateEntraDestinationFromSettings(connectionString);
             traceEntraDestination(decision, requestId, activeTrace());
@@ -105,7 +105,7 @@ export class WorkerTokenRelay {
             let mode: 'managedIdentity' | 'silent' | 'interactive' | undefined;
             let acquiring = false;
             try {
-                if (!managed && authMechanism !== AuthMethodId.MicrosoftEntraID) {
+                if (!managed && authMechanism !== 'MicrosoftEntraID') {
                     throw new Error('Token request from a non-OIDC worker');
                 }
                 assertDestination();
@@ -158,8 +158,7 @@ export class WorkerTokenRelay {
                 if (!canReply()) {
                     return;
                 }
-                const { tokenResource: _resource, ...details } = resolved.details;
-                traceAuthFlow('entraCloud.resolved', details, requestId, activeTrace());
+                traceAuthFlow('entraCloud.resolved', resolved.details, requestId, activeTrace());
                 let identity: VerifiedEntraIdentity | undefined;
                 let accessToken: string;
                 acquiring = true;

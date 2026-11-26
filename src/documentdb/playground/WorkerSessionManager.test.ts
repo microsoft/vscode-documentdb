@@ -914,7 +914,7 @@ describe('WorkerSessionManager', () => {
                     (response) => responses.push(response),
                     () => true,
                     undefined,
-                    { startupProperties },
+                    { startupCorrelationId: 'relay-startup', surface: 'playground', startupProperties },
                 );
 
                 expect(responses).toEqual([
