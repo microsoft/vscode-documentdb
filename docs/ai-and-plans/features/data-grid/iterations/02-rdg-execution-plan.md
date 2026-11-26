@@ -101,16 +101,16 @@ Browser and the operator's pin decision.
 | Choice | Operator feedback |
 | --- | --- |
 | Scope, execution and models | Keep the M/K/D rows and accept C1–C8 and the assigned models as written. |
-| Pin | Selected `7.0.0-beta.64` after the built-in browser retest. Raise the support floor to the earliest stable VS Code release verified to work with beta.64; no compatibility shim. [Candidate: VS Code 1.123.0](#candidate-minimum-for-beta64); exact workbench verification is pending. |
+| Pin | Selected `7.0.0-beta.64` after the built-in browser retest. Raise the support floor to **VS Code 1.123.0**, based on the [accepted release evidence](#candidate-minimum-for-beta64); no compatibility shim. |
 | Playwright checks | On demand only. |
 | Gestures | Accept the proposed row gestures and Enter. Include Shift+arrows only if already in scope; it is listed for future cell-range selection (F-3), not as a row-selection gesture in this migration. Do not add it. |
 | O1–O3 | Keep today's nested `_id` display and field-name tree ordering; withhold document actions for unreliable IDs. |
 | O4 | Browsable rows are always selectable, even when they have no safe action target. Selection does not confer action eligibility. |
 | O5 | Cross-page/shard duplicate handling is out of scope. Keep existing error handling when the database reports an error. This is not a guarantee that a duplicate ID will trigger one: `ClustersClient.deleteDocuments` uses `deleteMany` and currently checks acknowledgement, not match uniqueness. |
 
-The [built-in browser retest](#built-in-browser-retest) is complete. The operator selected
-beta.64 and approved raising the minimum after verification. The release field was left blank;
-the specified `G1 released` signal is still pending. No manifest change has been made.
+The [built-in browser retest](#built-in-browser-retest) is complete. On 2026-11-26 the operator
+accepted the release evidence for 1.123.0, authorized the manifest bump, and directed the leader
+to record G1 released after the bump.
 
 ### G2: hands-on direction check (operator test gate)
 
@@ -487,11 +487,13 @@ pins Electron 42.3.0 with
 [Chromium 148.0.7778.180](https://releases.electronjs.org/release/v42.3.0), past Chromium 145's
 upsert threshold. These are shipped-release mappings, not a run of RDG in the stable workbench.
 
-Before changing the manifest, open both beta.64 scratch routes in **stable 1.123.0's Integrated
-Browser**, not the current Insiders tab or a 1.123 patch release. Confirm the reported runtime,
-`WeakMap.prototype.getOrInsertComputed`, the mounted grid and row 500 on scroll. No stable 1.123.0
-build was present in the workspace/scratch cache; no new instance was launched. The floor lookup
-used `mai-code-2-flash` (1.0 AIU, 11 requests, 1m39s summed model time).
+**Operator decision (2026-11-26):** Accept VS Code **1.123.0** as the minimum based on the
+shipped-release evidence. Electron 42.3.0 ships Chromium 148, and the
+[Chromium 145 release notes](https://developer.chrome.com/release-notes/145#upsert) establish
+that it includes beta.64's required `WeakMap.prototype.getOrInsertComputed` API. Beta.64 also
+passed the standalone Chromium 148 smoke. The operator accepted this evidence in lieu of
+running the smoke inside the exact stable 1.123.0 workbench; that workbench run was not done.
+The floor lookup used `mai-code-2-flash` (1.0 AIU, 11 requests, 1m39s summed model time).
 
 > **Done (2026-11-26), commit `4f8ef192`:** `gpt-6.1-sol` compared exact artifacts and prepared
 > the isolated smoke; `mai-code-2-flash` ran the checks and fixed a scratch-only React alias
