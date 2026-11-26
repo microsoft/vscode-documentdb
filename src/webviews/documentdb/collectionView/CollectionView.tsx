@@ -10,10 +10,6 @@ import * as l10n from '@vscode/l10n';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { type TableDataEntry } from '../../../documentdb/ClusterSession';
 import {
-    type ConnectionRecoveryAction,
-    type ConnectionRecoveryResponse,
-    type ConnectionUnavailableDetails,
-    type ConnectionUnavailableResponse,
     isConnectionUnavailableMessage,
     isConnectionUnavailableResponse,
 } from '../../_integration/connectionUnavailable';
@@ -23,6 +19,7 @@ import { Announcer } from '../../components/accessibility';
 import { DisconnectedOverlay } from '../../components/DisconnectedOverlay';
 import { useSelectiveContextMenuPrevention } from '../../components/useSelectiveContextMenuPrevention';
 import { setCompletionContext } from '../../query-language-support';
+import { useBoundViewRecovery } from '../useBoundViewRecovery';
 import './collectionView.scss';
 import {
     CollectionViewContext,
@@ -168,27 +165,33 @@ export const CollectionView = (): JSX.Element => {
     // keep Refs updated with the current state
     const currentQueryResultsRef = useRef(currentQueryResults);
     const currentContextRef = useRef(currentContext);
-    const unavailableRef = useRef<ConnectionUnavailableDetails | undefined>(undefined);
-    const lifecycleRevisionRef = useRef(0);
     const queryRequestRef = useRef(0);
     const pageRequestRef = useRef(0);
-    const disposedRef = useRef(false);
-    // Dismissing the dialog clears only its render state. The ref still blocks submissions.
-    const [unavailable, setUnavailable] = useState<ConnectionUnavailableDetails>();
-    const [recovering, setRecovering] = useState(false);
-    const [recoveryAnnouncement, setRecoveryAnnouncement] = useState<string>();
 
-    const showUnavailable = useCallback((failure: ConnectionUnavailableDetails): void => {
-        lifecycleRevisionRef.current += 1;
-        unavailableRef.current = failure;
-        setUnavailable(failure);
-        setRecoveryAnnouncement(undefined);
+    const onShowUnavailable = useCallback((): void => {
         setCurrentContext((prev) => ({
             ...prev,
             isLoading: false,
             queryInsights: cancelStages12(prev.queryInsights),
         }));
     }, []);
+    const {
+        unavailable,
+        setUnavailable,
+        unavailableRef,
+        revisionRef: lifecycleRevisionRef,
+        disposedRef,
+        recovering,
+        recoveryAnnouncement,
+        showUnavailable,
+        isOperationCurrent,
+        handleUnavailableAction,
+    } = useBoundViewRecovery({
+        recovery: trpcClient.mongoClusters.collectionView.recoverUnavailable,
+        common: trpcClient.common,
+        onShowUnavailable,
+        advanceRevisionAfterRecovery: true,
+    });
 
     const beginOperation = useCallback((revealUnavailable = true): number | undefined => {
         if (unavailableRef.current) {
@@ -199,12 +202,6 @@ export const CollectionView = (): JSX.Element => {
         }
         return lifecycleRevisionRef.current;
     }, []);
-
-    const isOperationCurrent = useCallback(
-        (revision: number): boolean =>
-            !disposedRef.current && unavailableRef.current === undefined && revision === lifecycleRevisionRef.current,
-        [],
-    );
 
     useEffect(() => {
         currentQueryResultsRef.current = currentQueryResults;
@@ -831,51 +828,6 @@ export const CollectionView = (): JSX.Element => {
                 console.debug('Failed to report an event:', error);
             });
     }
-
-    const handleUnavailableAction = (action: ConnectionRecoveryAction): void => {
-        const current = unavailableRef.current;
-        if (!current || recovering) {
-            return;
-        }
-
-        const revision = ++lifecycleRevisionRef.current;
-        setRecovering(true);
-        void trpcClient.mongoClusters.collectionView.recoverUnavailable
-            .mutate({ action })
-            .then((response: ConnectionUnavailableResponse | ConnectionRecoveryResponse) => {
-                if (disposedRef.current || revision !== lifecycleRevisionRef.current || action === 'close') {
-                    return;
-                }
-                if ('unavailable' in response) {
-                    unavailableRef.current = response.unavailable;
-                    setUnavailable(response.unavailable);
-                    return;
-                }
-                lifecycleRevisionRef.current += 1;
-                unavailableRef.current = undefined;
-                setUnavailable(undefined);
-                setRecoveryAnnouncement(response.recovered.text);
-            })
-            .catch(async (error) => {
-                if (disposedRef.current || revision !== lifecycleRevisionRef.current) {
-                    return;
-                }
-                const cause = error instanceof Error ? error.message : String(error);
-                const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
-                if (!disposedRef.current && revision === lifecycleRevisionRef.current) {
-                    void trpcClient.common.displayErrorMessage.mutate({
-                        message: explained ?? l10n.t('Unable to recover the connection'),
-                        modal: false,
-                        cause,
-                    });
-                }
-            })
-            .finally(() => {
-                if (!disposedRef.current) {
-                    setRecovering(false);
-                }
-            });
-    };
 
     return (
         <DisconnectedOverlay
