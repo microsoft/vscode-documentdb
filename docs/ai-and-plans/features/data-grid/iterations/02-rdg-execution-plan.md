@@ -610,6 +610,13 @@ would strengthen with round-trip/payload evidence and weaken if G1 rejects the i
 selection constraints. A1 reviews the **proposal**, not approval of O1–O5 or proof of runtime
 parity.
 
+> **Done (2026-11-26), commit `373373a0`:** advised (`claude-opus-5.5`, 86%): field keys
+> and row identities have separate namespaces; the host alone shapes neutral results; the
+> webview resolves actions against a current page. The proposal documents why a merely
+> serializable `_id` is insufficient and leaves the visible/host-boundary choices to G1/E5.
+> No tests added (spec only); whitespace check passed. Advisor usage: 336.7 AIU, 52 requests,
+> 10m39s summed model time (host log).
+
 **WI-0b: record the confirmed scope** · `gpt-6-luna` · after G1
 
 - Owns: `decisions.md` entry 0003 (the confirmed M/K/D list, the gestures, the pin, the CI choice),
