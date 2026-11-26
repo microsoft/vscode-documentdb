@@ -83,6 +83,16 @@ Rules that apply to every gate:
 - **Blocks:** all code on the feature branch.
 - **May continue:** nothing except answering questions about the evidence.
 
+**G1 pending (2026-11-26).** Step 0 evidence is ready: [proposed decisions](../decisions.md),
+[M/K/D scope tables](./01-rdg-migration-plan.md#scope-what-the-migration-replicates),
+[pin report](#wi-1-pin-report) and [interface spec and O1–O5](#wi-1c-interface-spec). Recommended:
+beta.61, on-demand Playwright checks, the scope rows as proposed, and the gestures above with
+Enter for step-in. Preserve current nested `_id` and tree sibling presentation; confirm fail-closed
+identity and non-actionable-row selection behavior. O5 does not authorize host changes: if K2 is
+expected to cover collections without globally unique `_id` values, resolve the safe action policy
+before implementing it. Release only on the operator's `G1 released` with any per-row changes.
+WI-0b has not started.
+
 ### G2: hands-on direction check (operator test gate)
 
 - **When:** A2–A8 have passed (WI-5 to WI-9 done) and the VSIX for G2 is built (A9).
@@ -132,6 +142,10 @@ Rules that apply to every gate:
 | A9   | Before G2              | `npm run package` succeeds; L1 and L3 checks green; a VSIX path is in the G2 message.                                                                                                                                   |
 | A10  | WI-10                  | Sweep report written with "verified" and "not verified" lists; no console errors or CSP violations in any Collection View route.                                                                                        |
 | A11  | Before G3b             | Full Case 2 list from `.github/copilot-instructions.md` ran and passed, each result reported separately.                                                                                                                |
+
+**A1 passed (2026-11-26).** Leader applied the ≥80% gate to the baseline spec at `373373a0`:
+`claude-opus-5.5` approved it at 86% (see the [WI-1c verdict](#wi-1c-interface-spec)). This is a
+read-only design gate, not runtime verification or release of G1. The operator choices remain open.
 
 ### Escalations
 
@@ -425,6 +439,15 @@ retained all 12 native calls and restored correct forced colors in Chromium 142;
 injected stylesheet and no CSP violations. This diagnostic is not a recommendation to disable
 minification globally. Verify the planned VS Code token/theme mapping under packaged output;
 high-contrast and the installed minimum VS Code workbench were not run.
+
+> **Done (2026-11-26), commit `4f8ef192`:** `gpt-6.1-sol` compared exact artifacts and prepared
+> the isolated smoke; `mai-code-2-flash` ran the checks and fixed a scratch-only React alias
+> issue on the follow-up. The leader recommends beta.61 (99% confidence): beta.64's ordinary
+> sizing actually fails on Chromium 142 and beta.61 mounts in both modes. The operator still
+> owns the pin. The CSS A/B confirmed a theme caveat, not a production change. No product tests
+> added; scratch type check, four Vite builds, two Chromium smoke runs and the CSS A/B ran as
+> described above. Investigation usage: 66.7 AIU, 16 requests, 7m08s summed model time.
+> Checks usage across both turns: 3.7 AIU, 48 requests, 6m16s summed model time (host log).
 
 **WI-1c: interface spec** · advisor `claude-opus-5.5`, read-only
 
@@ -947,4 +970,9 @@ Later sessions keep everything after the first paragraph and replace it with:
 
 # Outcome
 
-Not started. Record progress inline against each work item as it lands.
+Step 0 complete; stopped at **G1**, not released. Only documentation was committed, on
+`dev/tnaum/table-redesign`. `feature/rdg-migration` remains at its local `main` base, with no
+product code changes. Verified: published artifacts, scratch Chromium 142/148 behavior, Vite
+CSS delivery and the packaged-theme caveat. Not verified: installed VS Code 1.109.0, a real
+collection, screen readers and high-contrast. The package pin, final scope and operator-visible
+behavior have not been approved. No Step 1 work has begun.
