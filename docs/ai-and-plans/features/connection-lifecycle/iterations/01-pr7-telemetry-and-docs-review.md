@@ -21,7 +21,12 @@ counts visible and label tree data as descriptive, not comparable. If no compara
 cohort has enough exposure, report insufficient evidence. Do not change runtime
 telemetry or relax redaction.
 
-**Author decision:** Pending.
+**Author decision:** Approved as recommended. Limit the rate comparison to stable RPC
+scopes; do not add a telemetry field or change redaction.
+
+**Fixed:** [`fe91067a8`](https://github.com/microsoft/vscode-documentdb/commit/fe91067a8)
+limits the classified comparison to two database RPCs and uses `causeType` alone. Tree
+events stay descriptive, and unclassified failures remain visible.
 
 ## F2. Disconnect does not wait behind an active task (medium)
 
@@ -33,7 +38,10 @@ both the task and the connection running.
 **Recommendation:** State in both pages that the user must try Disconnect again after
 the task finishes or is stopped. No command change.
 
-**Author decision:** Pending.
+**Author decision:** Approved as recommended. Clarify that the user must retry Disconnect.
+
+**Fixed:** [`f7607d039`](https://github.com/microsoft/vscode-documentdb/commit/f7607d039)
+explains in both pages that the task and connection keep running and the user must retry.
 
 ## F3. Recovery rows can inflate replacement success counts (medium)
 
@@ -44,7 +52,12 @@ already carry the replacement generation at that point.
 **Recommendation:** Exclude both first-time and cached recovery rows. Count confirmed
 recovery only for operations whose success indicates that database work succeeded.
 
-**Author decision:** Pending.
+**Author decision:** Approved as recommended. Do not count first-time or cached recovery
+rows as successful replacement operations.
+
+**Fixed:** [`fe91067a8`](https://github.com/microsoft/vscode-documentdb/commit/fe91067a8)
+counts only successful cluster expansions on a replacement generation, excluding both
+first-time and cached recovery rows.
 
 ## F4. A retained Dashboard can still require Retry (medium)
 
@@ -56,4 +69,19 @@ bound panel. Auto-open can be disabled.
 **Recommendation:** Describe the conditional automatic retry and tell users to select
 **Retry** if the Dashboard stays disabled. No behavior change.
 
-**Author decision:** Pending.
+**Author decision:** Approved as recommended. Clarify when a retained Dashboard still
+needs Retry.
+
+**Fixed:** [`f7607d039`](https://github.com/microsoft/vscode-documentdb/commit/f7607d039)
+explains that the existing Dashboard retries automatically only when Reconnect opens it.
+If it stays disabled, select **Retry**.
+
+## Remaining handoff requirements
+
+A second validation attempt could not verify its context tier or vendor and did not
+review the changes. PR7 remains in draft until standard-context validation is confirmed.
+Live query and ingestion verification remains pending for CP-5.
+
+Local Case 2 passed: formatting, localization check, lint, build, strict workspace
+test type-checking, 9,963 tests across 444 suites (one skipped), and VSIX packaging.
+No localization strings changed in PR7.
