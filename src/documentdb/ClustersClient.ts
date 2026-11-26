@@ -762,16 +762,26 @@ export class ClustersClient {
     ): Promise<void> {
         const authProperties = options.authMechanismProperties;
         const callback = authProperties?.OIDC_CALLBACK;
-        if (interactiveEntra && callback) {
+        if (callback) {
             options = {
                 ...options,
                 authMechanismProperties: {
                     ...authProperties,
                     OIDC_CALLBACK: async (params): Promise<OIDCResponse> => {
-                        const response = await callback(params);
-                        const { expSec } = readJwtTimes(response.accessToken);
-                        this._lastEntraTokenExpiresAt =
-                            expSec === undefined ? undefined : (new Date(expSec * 1000).toJSON() ?? undefined);
+                        let response: OIDCResponse;
+                        try {
+                            response = await callback(params);
+                        } catch (error) {
+                            if (this._binding) {
+                                this._replacement ??= 'replaceOnNextForeground';
+                            }
+                            throw error;
+                        }
+                        if (interactiveEntra) {
+                            const { expSec } = readJwtTimes(response.accessToken);
+                            this._lastEntraTokenExpiresAt =
+                                expSec === undefined ? undefined : (new Date(expSec * 1000).toJSON() ?? undefined);
+                        }
                         return response;
                     },
                 },
