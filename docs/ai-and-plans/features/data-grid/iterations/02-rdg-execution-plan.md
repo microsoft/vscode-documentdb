@@ -101,7 +101,7 @@ Browser and the operator's pin decision.
 | Choice | Operator feedback |
 | --- | --- |
 | Scope, execution and models | Keep the M/K/D rows and accept C1–C8 and the assigned models as written. |
-| Pin | Selected `7.0.0-beta.64` after the built-in browser retest. The choice does not by itself change VS Code's minimum supported version. |
+| Pin | Selected `7.0.0-beta.64` after the built-in browser retest. Raise the support floor to the earliest stable VS Code release verified to work with beta.64; no compatibility shim. The exact floor is not yet verified. |
 | Playwright checks | On demand only. |
 | Gestures | Accept the proposed row gestures and Enter. Include Shift+arrows only if already in scope; it is listed for future cell-range selection (F-3), not as a row-selection gesture in this migration. Do not add it. |
 | O1–O3 | Keep today's nested `_id` display and field-name tree ordering; withhold document actions for unreliable IDs. |
@@ -109,8 +109,8 @@ Browser and the operator's pin decision.
 | O5 | Cross-page/shard duplicate handling is out of scope. Keep existing error handling when the database reports an error. This is not a guarantee that a duplicate ID will trigger one: `ClustersClient.deleteDocuments` uses `deleteMany` and currently checks acknowledgement, not match uniqueness. |
 
 The [built-in browser retest](#built-in-browser-retest) is complete. The operator selected
-beta.64 and said G1 was approved. The specified `G1 released` signal and the minimum-version
-policy are still pending. No change to `engines.vscode` or compatibility shim was authorized.
+beta.64 and approved raising the minimum after verification. The release field was left blank;
+the specified `G1 released` signal is still pending. No manifest change has been made.
 
 ### G2: hands-on direction check (operator test gate)
 
