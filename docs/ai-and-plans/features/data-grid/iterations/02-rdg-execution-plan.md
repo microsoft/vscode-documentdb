@@ -117,7 +117,7 @@ is recorded in `a15d509f`; the manifest bump is committed as `a81d40fc`. The cho
 above are binding and override the initial recommendations and the interface sketch where they
 differ. In particular, O4 allows selection even without a safe action target; O5 adds no host-side
 cross-page uniqueness policy. The exact stable 1.123.0 workbench smoke was not run and is not a
-G1 requirement. Next: WI-0b records these decisions in `decisions.md`.
+G1 requirement. WI-0b recorded these decisions in [`decisions.md`](../decisions.md).
 
 After each work item completes, report what is complete, in progress, planned and blocked, and
 identify the current and upcoming gates and what they block.
@@ -773,6 +773,12 @@ parity.
 
 - Owns: `decisions.md` entry 0003 (the confirmed M/K/D list, the gestures, the pin, the CI choice),
   and status of 0001–0002 set to "Accepted".
+
+> **Done (2026-11-26), commit `38b013b7`:** `gpt-6-luna` transcribed the operator's G1
+> decisions and accepted 0001–0003. Leader review confirmed (100%) that the record matches the
+> agreed scope, pin/minimum, on-demand verification, provisional gestures and O1–O5.
+> No tests added (documentation only); whitespace check passed. Coding usage: 1.1 AIU,
+> 6 requests, 52s summed model time.
 
 ### Step 1
 

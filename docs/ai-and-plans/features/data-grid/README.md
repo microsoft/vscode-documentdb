@@ -36,13 +36,11 @@ Preparation for [#1101](https://github.com/microsoft/vscode-documentdb/issues/11
 - [React Data Grid capabilities](./react-data-grid-capabilities.md): current releases, cheap
   additions, integration costs and runtime/API caveats.
 
-The current recommendation is to **migrate to React Data Grid, exact-pinned to a beta**, because
-accessibility (keyboard navigation in particular) is a hard requirement and RDG passes that gate on
-its own foundation, while SlickGrid 11 needs our additions to reach it. Range selection with Excel
-copy is buildable on RDG beta.64's public APIs without a fork (about 2–3 developer-weeks). Both
-projects have one dominant maintainer; RDG has been in 7.0 pre-release since 2019, so expect to
-budget for API renames on upgrades. The final decision is not yet approved; record it in
-`decisions.md` once taken.
+The [accepted decision](./decisions.md) is to **migrate to React Data Grid, exact-pinned to
+7.0.0-beta.64**, with VS Code **1.123.0** as the new minimum. Accessible keyboard navigation
+remains a release requirement. Range selection with Excel copy is possible on beta.64's public
+APIs, but it is outside this migration. Both projects have one dominant maintainer, and RDG has
+been in 7.0 pre-release since 2019, so allow for API changes when upgrading the pin.
 
 ## Current architecture
 
@@ -50,11 +48,9 @@ The current table and tree use SlickGrid. Modernization deliberately kept that i
 moving the webviews to Vite and the tests to Vitest. SlickGrid now has its own lazy JavaScript chunk,
 which gives the replacement iteration a size baseline without mixing two changes in Collection View.
 
-The replacement iteration will first make host-side result shapes grid-neutral, define an internal
-table and tree interface, and capture current behavior in Vitest and browser fixtures. Candidate
-grids are evaluated only after those contracts exist. The final choice must preserve selection,
-step-in behavior, BSON type display, tree expansion, keyboard use, virtualization, resizing, and
-loading behavior.
+The replacement iteration starts with grid-neutral result types, host shaping, and the contracts
+for the selected grid. Those contracts cover selection, step-in behavior, BSON type display,
+tree expansion, keyboard use, virtualization, resizing, and loading behavior as scoped at G1.
 
 ## Plan
 
@@ -62,7 +58,7 @@ loading behavior.
 ordered work items for the React Data Grid migration (high level; detailed interfaces follow in the
 next iteration).
 
-**Execution plan (proposed):** [iterations/02-rdg-execution-plan.md](./iterations/02-rdg-execution-plan.md),
+**Execution plan (G1 released):** [iterations/02-rdg-execution-plan.md](./iterations/02-rdg-execution-plan.md),
 the same scope as work items with owned files, parallel lanes, operator and automated gates,
 interfaces, a model per item, and the choice between `/lead` and Copilot Fusion.
 
