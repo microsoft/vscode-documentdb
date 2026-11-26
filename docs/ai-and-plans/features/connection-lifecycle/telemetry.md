@@ -147,6 +147,14 @@ measurements when the SDK skips an account or tenant but returns a listing. Sign
 are not counted. Callers coalesced onto one SDK listing share a single event. The event does not
 contain account, tenant or subscription identifiers. It does not mean that the whole listing failed.
 
+## Webview explanation fallback
+
+`documentDB.webview.event.<view>.explainOperationFailureFailed` records a rejected explanation
+request in the shared recovery flow or on Document View Save. The event adds no error text or
+connection identifiers. The fallback notification keeps the original operation failure as its
+detail. If the reporting request also fails, the webview logs a fixed diagnostic without the
+original error.
+
 ## ARM challenge versus final operation result
 
 Use the existing Azure SDK challenge dimensions and the final framework `result` on the **same**

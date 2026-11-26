@@ -427,6 +427,14 @@ becomes a single fix.
 - If O1 lands first, fix the Retry chains once, in the shared hook.
 - Fix the Document View **Save** chain separately; it is not part of the Retry flow.
 
+> **Done (2026-11-26), commit `47e1a93c1`, `gpt-6-luna`:** Retry and Save use
+> their existing fallback wording and original operation error if explanation fails.
+> Operator decision: restrict the fix to these chains. Leader review (98%): report
+> the explanation failure through the existing webview event pipe without error
+> text or identifiers and without waiting for delivery before showing feedback.
+> Added one focused regression for each path; both passed. No change to Save
+> wording or write behavior.
+
 ## F8. Collection View shows a generic error modal for a client marked for replacement (Low)
 
 **Evidence**
@@ -506,6 +514,14 @@ unavailable/revision/Retry flow. Make it a hook, not a manager.
 - Keep the hook local to the lifecycle webviews (decision 0016). Make no change to the webview
   framework.
 
+> **Done (2026-11-26), commit `42d23a082`, `gpt-6.1-sol`:** The views share
+> recovery state and the Retry/Close flow. Dashboard keeps its reconnect listener
+> and reset policy; Collection keeps its extra revision advance; per-view busy
+> state, dismissal and dirty-document protection remain local. Operator decision:
+> share plumbing only. Advised (`claude-opus-5.5`, 90%) that guards, announcements
+> and listener identities are preserved. Added 13 hook cases; 18 focused tests
+> passed. Actual workbench behavior is pending verification.
+
 ### O2. `retryAuthentication` decides policy by looking at view IDs (Low)
 
 - The `credentialsRejected` branch
@@ -522,6 +538,16 @@ unavailable/revision/Retry flow. Make it a hook, not a manager.
 
 - Keep behavior the same: the same nodes may clear the latch.
 - Add no new messages, and do not change the existing silent returns.
+
+> **Done (2026-11-26), commit `95def372a`, `mai-code-2`:** The node exposes typed
+> retry eligibility using its model view and `clusterId`; the command keeps its
+> distinct key-read and refresh behavior. Operator decision: preserve recovery
+> eligibility and silent returns; advised at planning (`claude-opus-5.5`), with
+> leader parity review (98%). Added four characterization cases: native Azure
+> Resources, implicit native Discovery, missing Discovery credentials, and
+> unsupported Azure Workspace. All 60 focused cases passed before and after the
+> refactor. An isolated mock reset fixed a leaked fixture value without changing
+> assertions. Live tree recovery remains unverified.
 
 ### O3. `ClustersClient` is the home for all lifecycle state (Low)
 
@@ -590,8 +616,34 @@ stays a possible later follow-up and is not scheduled.
 4. CP-5 ingestion check, including the new property.
 5. Case 2 checks and the remaining CONTRIBUTING §6.1 standard-context verification.
 
+**Draft verification (Case 1, 2026-11-26):** `npm run build` passed for the final
+production changes. The final focused Vitest run passed 430 tests in 15 files;
+no `TDD:` contract failed. The initial Azure build errors were test typing and
+were fixed before push. The final first run had one non-`TDD:` fixture-isolation
+failure; both the focused retry suites and the full focused batch passed after
+resetting the fixture between cases. Case 2 was not run. Generate localization
+for the new Azure warning and Collection View retry guidance in Case 2.
+
 F1–F8, O1 and O2 land in the dedicated PR described under
 [Operator decisions](#operator-decisions-2026-11-26). F9 and O3 need no code change.
+
+### Pending operator checks in the workbench
+
+- **Bound views:** Open Collection View, a modified Document View, and Dashboard. Disconnect the
+  cluster, choose **Keep open**, dismiss the overlay with **X**, and try an operation. The
+  existing contents remain copyable and the overlay returns without submitting the operation.
+  Reconnect in the tree and use **Retry** in retained views; check the recovery announcement,
+  Dashboard's automatic Retry when reopened for the same identity, and the dirty Document View's
+  confirmation on **Close view**.
+- **Collection query:** With a client that must be replaced, run a query and check the error
+  detail says to retry without asserting that reconnection succeeded. Run the query again and
+  check the result. Do not count the guidance itself as a recovery.
+- **Azure Discovery:** With an account or tenant that cannot be listed, expand or refresh the
+  provider. Check that available subscriptions remain visible, one warning appears for the
+  partial listing, and **Show Output** opens the sanitized diagnostic.
+- **Tree recovery:** With rejected credentials, check **Retry** for Quick Start and native
+  Discovery, and **Update credentials** on the saved connection. For a key-reading Azure
+  node, check that Retry obtains one fresh key and does not start another read automatically.
 
 ## Rubber-duck adjustments
 
