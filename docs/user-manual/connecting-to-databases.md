@@ -40,8 +40,8 @@ used for that connection. The old view is not moved to a different account.
 ## Disconnect and reconnect
 
 Right-click a connected cluster and select **Disconnect** to end its live connections. If a copy,
-export, or import is using the cluster, the operation continues and Disconnect is blocked until that
-task finishes or you stop it.
+export, or import is using the cluster, both the task and connection keep running. Select
+**Disconnect** again after the task finishes or you stop it.
 
 When open connection views exist and the setting `documentDB.connections.openTabsOnDisconnect` is
 `ask`, the **Disconnect?** modal offers:
@@ -67,8 +67,9 @@ why it is unavailable:
 - Use the **X** to dismiss the dialog when you need to copy from the view. Database operations stay
   disabled, and the next operation shows the dialog again.
 
-Use the cluster's **Reconnect** action in the tree to restore the same connection. The Dashboard can
-resume after that reconnect; other retained webviews require **Retry**. An Interactive Shell prints
+Use the cluster's **Reconnect** action in the tree to restore the same connection. If reconnect
+automatically opens the retained Dashboard for that connection, it retries on its own. If it
+stays disabled, select **Retry**, as you would in other retained webviews. An Interactive Shell prints
 **Disconnected** and stops its worker, then requires a new shell from the tree. A retained Query
 Playground requires you to reconnect and re-pick its connection before running it again.
 
