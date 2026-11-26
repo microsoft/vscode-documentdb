@@ -168,23 +168,11 @@ describe('signInAgain', () => {
         expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
     });
 
-    it('recovers the exact worker pin without requiring the host to retain it', async (): Promise<void> => {
+    it('does not prompt when only the worker retains the identity pin', async (): Promise<void> => {
         vi.mocked(ClustersClient.getLatchReason).mockReturnValue(undefined);
         vi.mocked(ClustersClient.getLastVerifiedIdentity).mockReturnValue(undefined);
-        vi.mocked(getEntraSession).mockResolvedValueOnce({
-            account: { id: pin.accountId, label: pin.accountLabel },
-        } as vscode.AuthenticationSession);
-        vi.mocked(ClustersClient.startAfterSignIn).mockResolvedValueOnce({} as ClustersClient);
-
-        const result = await signInAgainForWorker(actionContext(), clusterId, pin);
-
-        expect(result).toEqual({ identity: pin, epoch: 1 });
-        expect(getEntraSession).toHaveBeenCalledWith(
-            expect.objectContaining({
-                providerId: pin.providerId,
-                tenantId: pin.tenantId,
-                account: { id: pin.accountId, label: pin.accountLabel },
-            }),
-        );
+        await expect(signInAgainForWorker(actionContext(), clusterId, pin)).resolves.toBeUndefined();
+        expect(getEntraSession).not.toHaveBeenCalled();
+        expect(ClustersClient.startAfterSignIn).not.toHaveBeenCalled();
     });
 });

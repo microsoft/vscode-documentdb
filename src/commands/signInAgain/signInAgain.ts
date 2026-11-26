@@ -33,8 +33,8 @@ export function canSignInAgainForWorker(clusterId: string, expectedIdentity: Ver
         ClustersClient.getLatchReason(clusterId) === undefined &&
         credentials?.authMechanism === AuthMethodId.MicrosoftEntraID &&
         credentials.entraIdConfig?.tenantId === expectedIdentity.tenantId &&
-        (hostIdentity === undefined ||
-            (hostIdentity.kind === 'entra' && sameEntraIdentity(hostIdentity, expectedIdentity)))
+        hostIdentity?.kind === 'entra' &&
+        sameEntraIdentity(hostIdentity, expectedIdentity)
     );
 }
 
@@ -109,10 +109,7 @@ async function signInAgainInternal(
             return true;
         }
         const currentIdentity = ClustersClient.getLastVerifiedIdentity(clusterId);
-        return (
-            currentIdentity === undefined ||
-            (currentIdentity.kind === 'entra' && sameEntraIdentity(currentIdentity, expectedIdentity))
-        );
+        return currentIdentity?.kind === 'entra' && sameEntraIdentity(currentIdentity, expectedIdentity);
     };
     const reportClosed = (): void => {
         if (!expectedIdentity) {
