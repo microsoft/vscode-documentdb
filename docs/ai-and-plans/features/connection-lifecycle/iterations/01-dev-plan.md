@@ -1872,6 +1872,16 @@ one loop.
 
 **Progress:**
 
+- The WI-9 commit records only checked post-startup Entra database lookups. Host lookup eligibility
+  follows the published client; worker eligibility is captured when the ready or executing worker
+  requests the token. Neither uses the first callback as a startup proxy.
+- Case 1 passed: `npm run build` and 349 focused tests in 8 files. Ingestion is **pending**; the
+  [telemetry queries](../telemetry.md) are ready to run. The dashboard worktree has unrelated
+  changes in progress and was left untouched.
+- PR7 review superseded the before/after comparison in items 2 and 5. Auth and closed-client
+  unavailability are not measured equivalently across releases. The operator deferred the
+  comparison and kept descriptive telemetry for CP-5 ([decision 0020](../decisions.md#0020-defer-the-cross-release-comparison-of-late-failures)).
+
 ---
 
 ## WI-10: Documentation (PR 7)
@@ -1895,6 +1905,11 @@ one loop.
 5. **Preview** the docs site locally (previewing-docs-site skill).
 
 **Progress:**
+
+- The operator chose text-only 1.2.0 release notes. The user manual extends
+  `connecting-to-databases.md` rather than adding a second page.
+- The local GitHub Pages build rendered the manual and draft release notes. The three
+  manual links and the release index link resolve, and the internal feature docs stay excluded.
 
 ---
 
@@ -1920,4 +1935,6 @@ one loop.
 
 # Outcome
 
-_To be written at hand-over._
+- **WI-9 telemetry: pending ingestion.** Run the [feature queries](../telemetry.md) on
+  pre-release data before CP-5. The cross-release trend is unmeasured for 1.2.0. Record the
+  packaged operator validation here at OP-6.

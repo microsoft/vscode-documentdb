@@ -13,6 +13,7 @@ import {
 } from '../../documentdb/auth/entraErrors/entraCallbackErrors';
 import { getEntraSession } from '../../documentdb/auth/entraSession';
 import { MicrosoftEntraIDAuthHandler } from '../../documentdb/auth/MicrosoftEntraIDAuthHandler';
+import { emitTokenRenewal } from '../../documentdb/auth/tokenRenewalTelemetry';
 import { sameEntraIdentity } from '../../documentdb/auth/WorkerTokenRelay';
 import { addEstablishedConnectionContext, ClustersClient } from '../../documentdb/ClustersClient';
 import { classifyConnectionFailure } from '../../documentdb/connectionFailures';
@@ -120,10 +121,13 @@ async function signInAgainInternal(
     };
 
     let starting = false;
+    let establishedClient: ClustersClient | undefined;
     try {
         const handler = new MicrosoftEntraIDAuthHandler(credentials, {
             interactive: false,
             pinnedEntraIdentity: identity,
+            getTokenLookupEpoch: () => establishedClient?.getTokenLookupEpoch(),
+            onTokenLookup: (observation) => emitTokenRenewal('extension', observation),
         });
         const auth = await handler.configureAuth(undefined, undefined, async (request) => {
             if (!isCurrent()) {
@@ -166,6 +170,7 @@ async function signInAgainInternal(
             reportClosed();
             return undefined;
         }
+        establishedClient = client;
         if (
             ClustersClient.getExistingClient(clusterId) === client &&
             !ClustersClient.getLatchReason(clusterId) &&

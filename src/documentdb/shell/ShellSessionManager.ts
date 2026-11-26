@@ -140,14 +140,22 @@ export class ShellSessionManager implements vscode.Disposable {
                         break;
                 }
             },
-            onTokenRequest: async (request, post, isCurrent, timings, trace) => {
+            onTokenRequest: async (request, post, isCurrent, timings, trace, postStartup) => {
                 const relay = this._relay;
                 // Warm Shells survive host-only invalidation. Fence each refresh at receipt;
                 // startup still uses the epoch captured before opening the connection.
                 const epoch = this._initialized
                     ? ClustersClient.getEpoch(this._connectionInfo.clusterId)
                     : relay?.epoch;
-                await relay?.relay(request, post, () => this._relay === relay && isCurrent(), timings, trace, epoch);
+                await relay?.relay(
+                    request,
+                    post,
+                    () => this._relay === relay && isCurrent(),
+                    timings,
+                    trace,
+                    postStartup,
+                    epoch,
+                );
             },
             onWorkerExit: callbacks?.onWorkerExit,
         };

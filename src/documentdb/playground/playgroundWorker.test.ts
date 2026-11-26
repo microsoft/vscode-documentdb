@@ -128,11 +128,21 @@ describe('playground worker OIDC configuration at the driver boundary', () => {
             if (!callback) {
                 throw new Error('Expected the OIDC callback');
             }
-            const token = callback({ version: 1, timeoutContext: new AbortController().signal });
+            const controller = new AbortController();
+            const token = callback({ version: 1, timeoutContext: controller.signal });
             const request = transport.postMessage.mock.calls
                 .map((call) => call[0] as WorkerToMainMessage)
                 .find((message) => message.type === 'tokenRequest');
             expect(request).toBeDefined();
+            if (authMechanism === 'MicrosoftEntraID') {
+                expect(request?.driverAbortFlag).toBeInstanceOf(SharedArrayBuffer);
+                const abortFlag = new Int32Array(request!.driverAbortFlag!);
+                expect(Atomics.load(abortFlag, 0)).toBe(0);
+                controller.abort();
+                expect(Atomics.load(abortFlag, 0)).toBe(1);
+            } else {
+                expect(request?.driverAbortFlag).toBeUndefined();
+            }
             receive({ type: 'tokenResponse', requestId: request!.requestId, accessToken: 'dummy-token' });
             await expect(token).resolves.toMatchObject({ accessToken: 'dummy-token', expiresInSeconds: 3500 });
         },

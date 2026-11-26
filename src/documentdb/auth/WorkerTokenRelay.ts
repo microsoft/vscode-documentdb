@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { UserCancelledError } from '@microsoft/vscode-azext-utils';
+import { isUserCancelledError, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { traceAuthFlow, traceEntraDestination, type AuthTraceContext } from '../../utils/authTrace';
 import { ClustersClient } from '../ClustersClient';
 import {
@@ -30,6 +30,8 @@ import {
 import { clearEntraTokenFailure, recordEntraTokenFailure } from './entraErrors/entraTokenFailures';
 import { getEntraSession, readEntraSignInEnvironment, type EntraSignInEnvironment } from './entraSession';
 import { EntraDestinationRejectedError } from './oidcAllowedHosts';
+import { jwtLifetimeSeconds, readJwtTimes } from './tokenExpiry';
+import { emitTokenRenewal } from './tokenRenewalTelemetry';
 
 export function sameEntraIdentity(a: VerifiedEntraIdentity, b: VerifiedEntraIdentity): boolean {
     return a.providerId === b.providerId && a.accountId === b.accountId && a.tenantId === b.tenantId;
@@ -64,11 +66,12 @@ export class WorkerTokenRelay {
     ) {}
 
     async relay(
-        { requestId }: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
+        { requestId, driverAbortFlag }: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
         postResponse: (response: MainToWorkerMessage) => void,
         isCurrentWorker: () => boolean,
         timings?: ConnectionStartupTimings,
         trace?: AuthTraceContext,
+        postStartup = false,
         epoch = this.epoch,
     ): Promise<void> {
         const isCurrentEpoch = (): boolean =>
@@ -85,8 +88,15 @@ export class WorkerTokenRelay {
         };
         const activeTrace = (): AuthTraceContext | undefined =>
             isCurrentWorker() && isCurrentEpoch() ? trace : undefined;
-        const { connectionString, authMechanism, tenantId, managedIdentityClientId } = this.init;
+        const { connectionString, authMechanism, tenantId, managedIdentityClientId, persistent } = this.init;
         const managed = authMechanism === 'ManagedIdentity';
+        const abortFlag =
+            driverAbortFlag instanceof SharedArrayBuffer && driverAbortFlag.byteLength === Int32Array.BYTES_PER_ELEMENT
+                ? new Int32Array(driverAbortFlag)
+                : undefined;
+        const shouldObserve = (): boolean =>
+            postStartup && authMechanism === 'MicrosoftEntraID' && (!abortFlag || Atomics.load(abortFlag, 0) === 0);
+        const surface = persistent ? 'shell' : 'playground';
         const assertDestination = (): void => {
             const decision = evaluateEntraDestinationFromSettings(connectionString);
             traceEntraDestination(decision, requestId, activeTrace());
@@ -234,6 +244,12 @@ export class WorkerTokenRelay {
                 clearEntraTokenFailure(this.clusterId);
                 traceAuthFlow('workerTokenRelay.completed', { mode, outcome: 'returned' }, requestId, activeTrace());
                 postResponse({ type: 'tokenResponse', requestId, accessToken });
+                if (shouldObserve()) {
+                    emitTokenRenewal(surface, {
+                        outcome: 'returned',
+                        lifetimeSeconds: jwtLifetimeSeconds(readJwtTimes(accessToken)),
+                    });
+                }
             } catch (error) {
                 if (!canReply()) {
                     return;
@@ -266,6 +282,15 @@ export class WorkerTokenRelay {
                         ? { errorName: 'EntraDestinationRejectedError' as const }
                         : {}),
                 });
+                if (shouldObserve() && !isUserCancelledError(error)) {
+                    let outcome: 'noSession' | 'identityMismatch' | 'failed' = 'failed';
+                    if (reason === 'signInRequired') {
+                        outcome = 'noSession';
+                    } else if (reason === 'identityMismatch') {
+                        outcome = 'identityMismatch';
+                    }
+                    emitTokenRenewal(surface, { outcome });
+                }
             }
         };
 

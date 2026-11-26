@@ -51,6 +51,7 @@ import { createAuthHandler } from './auth/createAuthHandler';
 import { EntraSignInRequiredError } from './auth/entraErrors/entraCallbackErrors';
 import { getAzureHostSuffix } from './auth/oidcAllowedHosts';
 import { readJwtTimes } from './auth/tokenExpiry';
+import { emitTokenRenewal } from './auth/tokenRenewalTelemetry';
 import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
 import { isRetiredConnectionBinding, retireConnectionBindings } from './connectionBindingRetirement';
 import { classifyConnectionFailure, type ConnectionFailure } from './connectionFailures';
@@ -633,6 +634,12 @@ export class ClustersClient {
         const authHandler = createAuthHandler(authMethod, credentials, {
             interactive: allowInteractive && !pinnedEntraIdentity,
             ...(pinnedEntraIdentity ? { pinnedEntraIdentity } : {}),
+            ...(authMethod === AuthMethodId.MicrosoftEntraID
+                ? {
+                      getTokenLookupEpoch: () => this.getTokenLookupEpoch(),
+                      onTokenLookup: (observation) => emitTokenRenewal('extension', observation),
+                  }
+                : {}),
         });
 
         // Configure auth and get connection options
@@ -1133,6 +1140,17 @@ export class ClustersClient {
 
     private canReuse(): boolean {
         return !this._closed && this._replacement === undefined;
+    }
+
+    public getTokenLookupEpoch(): number | undefined {
+        if (
+            !this.canReuse() ||
+            ClustersClient.getExistingClient(this.clusterId) !== this ||
+            ClustersClient.getLatchReason(this.clusterId)
+        ) {
+            return undefined;
+        }
+        return ClustersClient.getEpoch(this.clusterId);
     }
 
     public static hasReusableClient(clusterId: string): boolean {

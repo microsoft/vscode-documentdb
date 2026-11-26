@@ -1053,6 +1053,124 @@ describe('WorkerSessionManager', () => {
             return { manager, initPromise, requestId: initMessage.requestId, worker };
         }
 
+        it.each([true, false])(
+            'counts only checked post-startup Entra relay outcomes (persistent=%s)',
+            async (persistent) => {
+                const clusterId = 'test-cluster';
+                const environment = {
+                    providerId: 'microsoft',
+                    cloudName: 'AzureCloud',
+                    authority: 'https://login.microsoftonline.com/',
+                };
+                const readEnvironment = vi
+                    .spyOn(entraSession, 'readEntraSignInEnvironment')
+                    .mockReturnValue(environment);
+                const resolveResource = vi.spyOn(tokenResource, 'resolveInteractiveTokenResource').mockResolvedValue({
+                    cloudCategory: 'public',
+                    reason: 'host',
+                    scope: 'test-scope',
+                    resource: 'test-resource',
+                    details: {},
+                });
+                const account = { id: 'test-account', label: 'Test account' };
+                const now = 1_800_000_000;
+                vi.setSystemTime(now * 1000);
+                const accessToken = `header.${Buffer.from(JSON.stringify({ iat: now - 60, exp: now + 3540 })).toString('base64url')}.signature`;
+                const session = { id: 'test-session', account, accessToken, scopes: [] };
+                const getSession = vi.spyOn(entraSession, 'getEntraSession').mockResolvedValue(session);
+                const relay = new WorkerTokenRelay(
+                    clusterId,
+                    {
+                        type: 'init',
+                        requestId: '',
+                        connectionString: 'mongodb://example.mongocluster.cosmos.azure.com/',
+                        clientOptions: {},
+                        databaseName: 'test',
+                        authMechanism: AuthMethodId.MicrosoftEntraID,
+                        persistent,
+                    },
+                    ClustersClient.getEpoch(clusterId),
+                    'relay-id',
+                    undefined,
+                );
+                const onTokenRequest = vi.fn<NonNullable<WorkerSessionCallbacks['onTokenRequest']>>(
+                    relay.relay.bind(relay),
+                );
+                callbacks.onTokenRequest = onTokenRequest;
+                const manager = new WorkerSessionManager(callbacks);
+                try {
+                    const active = await startWorker(persistent, {}, manager);
+                    const request = async (requestId: string): Promise<void> => {
+                        active.worker._emit('message', { type: 'tokenRequest', requestId });
+                        await onTokenRequest.mock.results.at(-1)?.value;
+                    };
+                    const renewalEvents = (): RecordedTelemetry[] =>
+                        mockTelemetryEvents.filter(({ eventName }) => eventName === 'connection.tokenRenewal');
+                    await request('startup-lookup');
+                    await request('another-startup-lookup');
+                    expect(renewalEvents()).toEqual([]);
+                    active.worker._emit('message', { type: 'initResult', requestId: active.requestId, success: true });
+                    await active.initPromise;
+
+                    await request('renewal-with-lifetime');
+                    getSession.mockResolvedValueOnce({ ...session, accessToken: 'opaque-test-token' });
+                    await request('opaque-renewal');
+                    getSession.mockResolvedValueOnce(undefined);
+                    await request('missing-session');
+                    getSession.mockResolvedValueOnce({ ...session, account: { ...account, id: 'different-account' } });
+                    await request('identity-mismatch');
+                    readEnvironment.mockReturnValueOnce({ ...environment, providerId: 'microsoft-sovereign-cloud' });
+                    await request('provider-changed');
+                    getSession.mockRejectedValueOnce(new Error('test provider failure'));
+                    await request('refresh-failed');
+                    getSession.mockRejectedValueOnce(new UserCancelledError());
+                    await request('canceled-lookup');
+                    const driverAbortFlag = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT);
+                    getSession.mockImplementationOnce(async () => {
+                        Atomics.store(new Int32Array(driverAbortFlag), 0, 1);
+                        return session;
+                    });
+                    active.worker._emit('message', {
+                        type: 'tokenRequest',
+                        requestId: 'driver-stopped-waiting',
+                        driverAbortFlag,
+                    });
+                    await onTokenRequest.mock.results.at(-1)?.value;
+                    ClustersClient.invalidate(clusterId);
+                    await expect(request('stale-lookup')).rejects.toBeInstanceOf(UserCancelledError);
+
+                    const surface = persistent ? 'shell' : 'playground';
+                    expect(
+                        renewalEvents().map(({ telemetry, error }) => [
+                            telemetry.properties,
+                            telemetry.measurements,
+                            error,
+                        ]),
+                    ).toEqual([
+                        [
+                            { surface, renewalOutcome: 'returned', result: 'Succeeded' },
+                            { tokenLifetimeSeconds: 3600, duration: 0 },
+                            undefined,
+                        ],
+                        [{ surface, renewalOutcome: 'returned', result: 'Succeeded' }, { duration: 0 }, undefined],
+                        [{ surface, renewalOutcome: 'noSession', result: 'Succeeded' }, { duration: 0 }, undefined],
+                        [
+                            { surface, renewalOutcome: 'identityMismatch', result: 'Succeeded' },
+                            { duration: 0 },
+                            undefined,
+                        ],
+                        [{ surface, renewalOutcome: 'noSession', result: 'Succeeded' }, { duration: 0 }, undefined],
+                        [{ surface, renewalOutcome: 'failed', result: 'Succeeded' }, { duration: 0 }, undefined],
+                    ]);
+                } finally {
+                    manager.dispose();
+                    getSession.mockRestore();
+                    resolveResource.mockRestore();
+                    readEnvironment.mockRestore();
+                }
+            },
+        );
+
         it.each(['signInRequired', 'identityMismatch', 'destinationRejected', 'refreshFailed'] as const)(
             'reconstructs %s at both boundaries and marks a warm worker broken',
             async (reason): Promise<void> => {

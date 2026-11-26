@@ -18,7 +18,7 @@ created: 2026-11-19
 | 0004 | Disconnect lets the user choose: close all affected tabs, or keep them open and disabled                   | Accepted                    | Operator position; the default is still open (Q2)                                    | 2026-11-19 | —                                                                |
 | 0005 | Fix stale ARM credentials by upgrading azureauth to v6 (#990), not with a local shim                       | Accepted                    | Operator: open to updating dependencies                                              | 2026-11-19 | —                                                                |
 | 0006 | Deliver through `feature/connection-lifecycle` with stacked sub-PRs, ship once                             | Accepted (amended)          | Operator removed the intermediate merge wait                                         | 2026-11-19 | —                                                                |
-| 0007 | The Disconnect choice is a VS Code modal with nothing remembered; a setting can set the default            | Accepted                    | Operator: modal cannot pre-select; no remembering                                    | 2026-11-19 | —                                                                |
+| 0007 | The Disconnect choice is a VS Code modal with nothing remembered; a setting can set the default            | Accepted (modified by 0018) | Operator: modal cannot pre-select; saved edits are close-only                        | 2026-11-19 | —                                                                |
 | 0008 | Upgrade the azext stack as high as viable without breaking workflows, using Azure Resources as reference   | Accepted                    | Operator: replaces the "minimal versions" proposal                                   | 2026-11-19 | —                                                                |
 | 0009 | Kubernetes tunnel recovery, cluster ID case handling and wider network-resilience testing move to #1105    | Accepted                    | Operator: keep 1.2.0 focused; schedule after release                                 | 2026-11-19 | —                                                                |
 | 0010 | Rely on the server to reject expired tokens; replacing a client for the same identity is transparent       | Accepted                    | Operator: no rotation, no out-of-date notices                                        | 2026-11-19 | —                                                                |
@@ -30,6 +30,8 @@ created: 2026-11-19
 | 0016 | Keep disconnected webviews open under a full-view overlay                                                  | Accepted (modified by 0017) | Operator chose a simple disabled state with explicit actions                         | 2026-11-24 | Yes; replaces the inline banner and single-action layout         |
 | 0017 | Limit unavailable webview recovery to Retry and Close view                                                 | Accepted (modified by 0018) | Operator wants credential repair in the tree and no extra recovery workflow in a tab | 2026-11-24 | Yes; removes in-view credential repair                           |
 | 0018 | Saved connection edits permanently lock existing views                                                     | Accepted                    | Operator prefers simple reconnect for unchanged settings over recovery after edits   | 2026-11-24 | Yes; removes same-identity recovery after a saved edit           |
+| 0019 | Require a fresh Dashboard delete after Disconnect and keep Paste Collection in the tree                    | Accepted                    | Operator: a lifecycle change cancels the pending delete and never replays it         | 2026-11-24 | —                                                                |
+| 0020 | Defer the cross-release comparison of late failures                                                        | Accepted                    | Operator: keep descriptive telemetry and defer the comparison                        | 2026-11-26 | Yes; removes the WI-9 before/after comparison for 1.2.0          |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -199,7 +201,9 @@ operator input on the dev plan's provisional answer A2.
 - The choice is **not remembered** between uses.
 - A setting lets users pick a default: `ask` (the default) shows the modal; `closeAll` or
   `keepOpenDisabled` skips it. The setting never skips the unsaved-edits confirmation.
-- The choice applies to Disconnect, Remove Connection and credential updates that change identity.
+- The choice applies to Disconnect and Remove Connection. Decision 0018 makes a saved identity or
+  settings edit close-only instead: existing views keep their contents but are not moved to the
+  new connection.
 
 Rejected:
 
@@ -487,3 +491,14 @@ in the tree only. Copy stores a tree reference, not a snapshot of the data or
 credentials. The later tree Paste uses the current connection; it does not resume
 a Dashboard operation. Binding the whole clipboard and index-copy flow was not
 part of this change.
+
+## 0020. Defer the cross-release comparison of late failures
+
+The operator chose to keep descriptive telemetry and defer the WI-9 before/after comparison
+for 1.2.0. Auth and closed-client unavailability can now be returned as normal RPC responses,
+which the SDK records as successes without a failure signature. An apparent drop across releases
+could be a reporting change rather than improved recovery.
+
+Keep renewal, client age and entry generation, and ARM challenge queries for a single version.
+Do not add an instrumentation path or keep a socket-only comparison in this release. CP-5 still
+checks pre-release ingestion and records that the late-failure trend is unmeasured.

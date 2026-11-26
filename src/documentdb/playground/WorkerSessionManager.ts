@@ -102,6 +102,7 @@ export interface WorkerSessionCallbacks {
         isCurrent: () => boolean,
         timings?: ConnectionStartupTimings,
         traceContext?: AuthTraceContext,
+        postStartup?: boolean,
     ) => Promise<void>;
     /** Called when the worker exits (crash or termination). */
     onWorkerExit?: (exitCode: number) => void;
@@ -757,6 +758,8 @@ export class WorkerSessionManager implements vscode.Disposable {
                 isCurrent,
                 this._startup?.costTimings,
                 connection,
+                // Snapshot at receipt: time spent queued in the relay cannot make a startup lookup a renewal.
+                this._workerState === 'ready' || this._workerState === 'executing',
             );
         } catch (error) {
             if (isCurrent()) {

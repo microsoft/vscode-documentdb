@@ -27,6 +27,12 @@ export function readJwtTimes(token: string): { iatSec?: number; expSec?: number 
     }
 }
 
+/** The JWT's full lifetime, not its remaining validity or an opaque-token fallback. */
+export function jwtLifetimeSeconds({ iatSec, expSec }: ReturnType<typeof readJwtTimes>): number | undefined {
+    const lifetime = iatSec !== undefined && expSec !== undefined ? expSec - iatSec : undefined;
+    return lifetime !== undefined && Number.isFinite(lifetime) && lifetime > 0 ? lifetime : undefined;
+}
+
 /**
  * Seconds until an absolute expiry timestamp (milliseconds since the epoch), floored at zero.
  *

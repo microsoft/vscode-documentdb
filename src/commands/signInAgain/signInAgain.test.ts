@@ -6,6 +6,7 @@
 import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import { type AuthCallerPolicy } from '../../documentdb/auth/authCallerPolicy';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import {
     EntraIdentityMismatchError,
@@ -25,7 +26,10 @@ const pin = {
     tenantId: 'tenant',
 } as const;
 const clusterId = 'cluster';
-const mocks = vi.hoisted(() => ({ configureAuth: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+    configureAuth: vi.fn(),
+    capturePolicy: vi.fn<(policy: AuthCallerPolicy) => void>(),
+}));
 
 vi.mock('../../documentdb/ClustersClient', () => ({
     addEstablishedConnectionContext: vi.fn(),
@@ -40,6 +44,10 @@ vi.mock('../../documentdb/ClustersClient', () => ({
 vi.mock('../../documentdb/auth/entraSession', () => ({ getEntraSession: vi.fn() }));
 vi.mock('../../documentdb/auth/MicrosoftEntraIDAuthHandler', () => ({
     MicrosoftEntraIDAuthHandler: class {
+        constructor(_credentials: unknown, policy: AuthCallerPolicy) {
+            mocks.capturePolicy(policy);
+        }
+
         public async configureAuth(
             _timings: undefined,
             _trace: undefined,
@@ -104,6 +112,28 @@ describe('signInAgain', () => {
             CredentialCache.getCredentials(clusterId),
             { verifiedIdentity: expect.objectContaining({ accountId: account.id }) },
         );
+    });
+
+    it('observes renewal only for the client established by this sign-in', async (): Promise<void> => {
+        vi.mocked(getEntraSession).mockResolvedValueOnce({
+            account: { id: pin.accountId, label: pin.accountLabel },
+        } as vscode.AuthenticationSession);
+        const getTokenLookupEpoch = vi.fn<() => number | undefined>(() => 1);
+        vi.mocked(ClustersClient.startAfterSignIn).mockImplementationOnce(async () => {
+            const [policy] = mocks.capturePolicy.mock.lastCall!;
+            expect(policy.getTokenLookupEpoch?.()).toBeUndefined();
+            return { getTokenLookupEpoch } as unknown as ClustersClient;
+        });
+
+        await signInAgain(actionContext(), { clusterId });
+
+        const [policy] = mocks.capturePolicy.mock.lastCall!;
+        expect(policy.onTokenLookup).toBeTypeOf('function');
+        expect(policy.getTokenLookupEpoch?.()).toBe(1);
+        getTokenLookupEpoch.mockReturnValue(2);
+        expect(policy.getTokenLookupEpoch?.()).toBe(2);
+        getTokenLookupEpoch.mockReturnValue(undefined);
+        expect(policy.getTokenLookupEpoch?.()).toBeUndefined();
     });
 
     it.each([undefined, new Error('User did not consent to login.')])(

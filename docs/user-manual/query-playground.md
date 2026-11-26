@@ -38,6 +38,8 @@ There are several ways to open a new Query Playground:
 The three inline icons next to each collection node are (from left to right): Open Collection View, **New Query Playground**, and Open Interactive Shell.
 
 When a playground opens, a CodeLens header at the top displays the connection status, showing which cluster and database the file is connected to.
+If the connection expires or is disconnected, see [Keep connections usable](./connecting-to-databases#keep-connections-usable)
+for the exact sign-in and reconnect behavior.
 
 ## Writing Queries
 
@@ -206,4 +208,4 @@ or use `.maxTimeMS()` on a supported query to set a server-side limit.
 
 ---
 
-> **Related**: [Interactive Shell](./interactive-shell) | [How It Works Behind the Scenes](./query-runtime)
+> **Related**: [Interactive Shell](./interactive-shell) | [Connection lifecycle](./connecting-to-databases#keep-connections-usable) | [How It Works Behind the Scenes](./query-runtime)

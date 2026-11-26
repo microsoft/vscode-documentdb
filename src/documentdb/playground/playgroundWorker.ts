@@ -208,17 +208,32 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
             connectionString,
             policy,
             baseOptions: options,
-            oidcCallback: async (): Promise<{ accessToken: string; expiresInSeconds: number }> => {
+            oidcCallback: async ({ timeoutContext }): Promise<{ accessToken: string; expiresInSeconds: number }> => {
                 const requestId = randomUUID();
                 const tokenPromise = new Promise<string>((resolve, reject) => {
                     pendingTokenRequests.set(requestId, { resolve, reject });
                 });
+                const driverAbortFlag =
+                    !usesManagedIdentity && timeoutContext
+                        ? new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT)
+                        : undefined;
+                const abortFlag = driverAbortFlag && new Int32Array(driverAbortFlag);
+                const markAborted = (): void => {
+                    if (abortFlag) Atomics.store(abortFlag, 0, 1);
+                };
+                if (abortFlag) {
+                    timeoutContext.addEventListener('abort', markAborted, { once: true });
+                    if (timeoutContext.aborted) {
+                        markAborted();
+                    }
+                }
                 const tokenRequest: WorkerToMainMessage = {
                     type: 'tokenRequest',
                     requestId,
                     tenantId: msg.tenantId,
                     source: usesManagedIdentity ? 'managedIdentity' : 'vscode',
                     clientId: usesManagedIdentity ? msg.managedIdentityClientId : undefined,
+                    ...(driverAbortFlag ? { driverAbortFlag } : {}),
                 };
                 reportProgress('acquiringToken');
                 reportTiming('tokenWait', requestId, true);
@@ -227,6 +242,9 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
                 try {
                     accessToken = await tokenPromise;
                 } finally {
+                    if (abortFlag) {
+                        timeoutContext.removeEventListener('abort', markAborted);
+                    }
                     reportTiming('tokenWait', requestId, false);
                 }
                 reportProgress('authenticating');

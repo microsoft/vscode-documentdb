@@ -85,6 +85,7 @@ The User Manual provides guidance on using the extension. It contains detailed d
 
 Explore the history of updates and improvements to the extension. Each release brings new features, enhancements, and fixes to improve your experience.
 
+- [1.2 (unpublished draft)](./release-notes/1.2)
 - [1.1](./release-notes/1.1)
 - [1.0](./release-notes/1.0), [1.0.1](./release-notes/1.0#patch-release-v101), [1.0.2](./release-notes/1.0#patch-release-v102)
 - [0.11](./release-notes/0.11), [0.11.1](./release-notes/0.11#patch-release-v0111), [0.11.2](./release-notes/0.11#patch-release-v0112)
