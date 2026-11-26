@@ -7,9 +7,9 @@ import type * as azureAuth from '@microsoft/vscode-azext-azureauth';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import {
+    UserCancelledError,
     type callWithTelemetryAndErrorHandling,
     type IActionContext,
-    UserCancelledError,
 } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';

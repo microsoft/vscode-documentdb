@@ -9,8 +9,8 @@ import * as vscode from 'vscode';
 import { type PlaygroundConnection } from '../../documentdb/playground/types';
 import { executePlaygroundCode, stopPlaygroundEvaluator } from './executePlaygroundCode';
 
-const { evaluate, dispose, setExecuting, showResult, getConnection, getEpoch, canRecover, recover, contexts } = vi.hoisted(
-    () => ({
+const { evaluate, dispose, setExecuting, showResult, getConnection, getEpoch, canRecover, recover, contexts } =
+    vi.hoisted(() => ({
         evaluate: vi.fn(),
         dispose: vi.fn(),
         setExecuting: vi.fn(),
@@ -20,8 +20,7 @@ const { evaluate, dispose, setExecuting, showResult, getConnection, getEpoch, ca
         canRecover: vi.fn(),
         recover: vi.fn(),
         contexts: new Map<string, IActionContext>(),
-    }),
-);
+    }));
 
 vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
     ...(await importOriginal<{ UserCancelledError: typeof UserCancelledError }>()),
@@ -150,11 +149,13 @@ describe('executePlaygroundCode', () => {
     it('keeps the worker destination properties on a warm run', async () => {
         const failure = Object.assign(new Error('token unavailable'), { name: 'TokenCallbackError' });
         evaluate.mockRejectedValueOnce(failure).mockRejectedValueOnce(failure);
-        const progress = vi.spyOn(vscode.window, 'withProgress').mockImplementation((_options, task) =>
-            Promise.resolve(
-                task({ report: vi.fn() }, { isCancellationRequested: false, onCancellationRequested: vi.fn() }),
-            ),
-        );
+        const progress = vi
+            .spyOn(vscode.window, 'withProgress')
+            .mockImplementation((_options, task) =>
+                Promise.resolve(
+                    task({ report: vi.fn() }, { isCancellationRequested: false, onCancellationRequested: vi.fn() }),
+                ),
+            );
         try {
             const uri = vscode.Uri.file('test.documentdb.js');
             await expect(executePlaygroundCode('db.stats()', 'runAll', uri)).rejects.toBe(failure);

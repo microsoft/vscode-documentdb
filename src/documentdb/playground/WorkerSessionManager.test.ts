@@ -805,7 +805,9 @@ describe('WorkerSessionManager', () => {
             const environmentSpy = vi
                 .spyOn(entraSession, 'readEntraSignInEnvironment')
                 .mockImplementation(() => environment);
-            const resolver = vi.spyOn(tokenResource, 'resolveInteractiveTokenResource').mockResolvedValue(resolvedResource);
+            const resolver = vi
+                .spyOn(tokenResource, 'resolveInteractiveTokenResource')
+                .mockResolvedValue(resolvedResource);
             const lookup = vi.spyOn(entraSession, 'getEntraSession').mockResolvedValue({
                 id: 'session-id',
                 accessToken: 'access-token',
@@ -852,7 +854,9 @@ describe('WorkerSessionManager', () => {
                 }
                 return originalEnvironment;
             });
-            const resolver = vi.spyOn(tokenResource, 'resolveInteractiveTokenResource').mockResolvedValue(resolvedResource);
+            const resolver = vi
+                .spyOn(tokenResource, 'resolveInteractiveTokenResource')
+                .mockResolvedValue(resolvedResource);
             const lookup = vi.spyOn(entraSession, 'getEntraSession').mockResolvedValue({
                 id: 'session-id',
                 accessToken: 'access-token',
@@ -895,7 +899,9 @@ describe('WorkerSessionManager', () => {
             const environmentSpy = vi
                 .spyOn(entraSession, 'readEntraSignInEnvironment')
                 .mockImplementation(() => environment);
-            const resolver = vi.spyOn(tokenResource, 'resolveInteractiveTokenResource').mockResolvedValue(resolvedResource);
+            const resolver = vi
+                .spyOn(tokenResource, 'resolveInteractiveTokenResource')
+                .mockResolvedValue(resolvedResource);
             const lookup = vi.spyOn(entraSession, 'getEntraSession').mockImplementation(async () => {
                 environment = {
                     ...environment,
@@ -969,9 +975,7 @@ describe('WorkerSessionManager', () => {
                         () => current,
                     );
                     const outcome =
-                        staleBy === 'epoch'
-                            ? expect(relaying).rejects.toBeInstanceOf(UserCancelledError)
-                            : relaying;
+                        staleBy === 'epoch' ? expect(relaying).rejects.toBeInstanceOf(UserCancelledError) : relaying;
                     await started;
                     const readsBeforeRejection = environmentSpy.mock.calls.length;
                     if (staleBy === 'oldWorker') {

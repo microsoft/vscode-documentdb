@@ -28,11 +28,7 @@ import {
     TokenCallbackError,
 } from './entraErrors/entraCallbackErrors';
 import { clearEntraTokenFailure, recordEntraTokenFailure } from './entraErrors/entraTokenFailures';
-import {
-    getEntraSession,
-    readEntraSignInEnvironment,
-    type EntraSignInEnvironment,
-} from './entraSession';
+import { getEntraSession, readEntraSignInEnvironment, type EntraSignInEnvironment } from './entraSession';
 import { EntraDestinationRejectedError } from './oidcAllowedHosts';
 
 export function sameEntraIdentity(a: VerifiedEntraIdentity, b: VerifiedEntraIdentity): boolean {
