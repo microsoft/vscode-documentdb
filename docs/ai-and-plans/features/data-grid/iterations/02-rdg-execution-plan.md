@@ -187,6 +187,13 @@ a type-only fixture correction, `npm run package` and `npm run verify:vsix` pass
 `npx vitest run src/utils/documentGrid` passed all 22 tests. The scoped SlickGrid grep found no
 tracked matches. The package graph still limits React Data Grid to Collection View.
 
+**A3 passed (2026-11-26), leader decision.** In the Integrated Browser, all 54 Collection View
+routes were ready, with no reported harness or console/CSP failures. Per theme, all 110
+`TDD:` assertions were red for missing accessible implementations (96 table, 14 tree).
+No `TDD:` assertion passed against a placeholder. The separate Table return check also
+expects rows the placeholder does not render. Browser TypeScript and 107 focused Vitest
+tests passed. Cross-collection panel isolation is a G2 workbench check, per the operator.
+
 **A4 passed (2026-11-26), leader decision.** The beta.64 scratch treegrid passed all 17
 keyboard, focus and ARIA checks in the VS Code Insiders Integrated Browser. The spike verifies
 browser behavior, not screen reader announcements or the shipped UI.
@@ -942,6 +949,18 @@ parity.
 > **Verification placement (2026-11-26), operator decision:** Cross-collection isolation moves
 > to the two-panel workbench check at G2. It is not removed from scope or claimed by A3.
 
+> **Done (2026-11-26), commit `799c509f`:** `gpt-6.1-sol` added M1–M7/K1–K11 contracts,
+> named regressions and test-only input-specific replies and controlled acknowledgement release.
+> No masked harness failure counts as an expected red assertion. The leader selected these
+> deterministic harness mechanics (98%) and released A3 (99%) on the evidence above.
+> Corrective turns fixed draft syntax, mock types and jsdom text handling; no accepted
+> contract was weakened. Thirty-seven focused cases added; browser type check, 107 focused
+> tests and whitespace checks passed. All 330 TDD executions were expected red. Paging
+> controls in the harness use repeated data; distinct server pages, cross-collection panel
+> isolation and assistive-technology behavior remain for the real workbench check.
+> Usage: coding 237.7 AIU (56 requests, 22m04s); shared A3/A4 checks 3.9 AIU (50 requests,
+> 4m47s summed, including prior attempts).
+
 **WI-9a: tree keyboard spike** · `gpt-6.1-sol` · scratch worktree, throwaway
 
 - Build the smallest treegrid on RDG at the pinned version over `TreeNode[]`: flattened visible rows,
@@ -1145,3 +1164,8 @@ and behavior listed at G1; the RDG dependency is not yet in the product manifest
 published artifacts, scratch Chromium 142/148 and Insiders behavior, Vite CSS delivery and the
 packaged-theme caveat. The operator accepted release metadata for the support floor; the exact
 stable workbench smoke, a real collection, screen readers and high-contrast were not run.
+
+Step 1 is complete. A2, A3 and A4 passed. Product Table and Tree are still placeholders;
+the behavior contracts provide the red baseline for Step 2. Resume with WI-5, WI-6 and WI-9
+in the documented lanes; WI-6's integration waits for WI-5. Do not reopen G1 decisions or
+claim placeholder behavior as implementation. G2 remains the next operator gate.
