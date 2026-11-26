@@ -26,10 +26,7 @@ import { ext } from '../../extensionVariables';
 import { ErrorExplanationService } from '../../services/errorExplanationService';
 import { recordSurveyActivity } from '../../services/survey/SurveyService';
 import { classifyCodeBlock } from '../../utils/classifyCommand';
-import {
-    canSignInAgainForWorker,
-    signInAgainForWorker,
-} from '../signInAgain/signInAgain';
+import { canSignInAgainForWorker, signInAgainForWorker } from '../signInAgain/signInAgain';
 import { promptAndConnectPlayground } from './connectDatabase';
 
 /** Per-cluster evaluator pool — one worker per cluster, lazily created. */
@@ -322,10 +319,7 @@ interface PlaygroundRecovery {
     readonly authReason?: WorkerAuthReason;
 }
 
-function getPlaygroundRecovery(
-    error: unknown,
-    connection: PlaygroundConnection,
-): PlaygroundRecovery | undefined {
+function getPlaygroundRecovery(error: unknown, connection: PlaygroundConnection): PlaygroundRecovery | undefined {
     const authReason = getWorkerAuthReason(error);
     if (authReason) {
         switch (authReason) {

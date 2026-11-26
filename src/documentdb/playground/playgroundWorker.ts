@@ -417,7 +417,9 @@ function handleTokenError(msg: Extract<MainToWorkerMessage, { type: 'tokenError'
     if (pending) {
         const reason = isWorkerAuthReason(msg.reason)
             ? msg.reason
-            : msg.errorName === 'EntraDestinationRejectedError' ? 'destinationRejected' : 'refreshFailed';
+            : msg.errorName === 'EntraDestinationRejectedError'
+              ? 'destinationRejected'
+              : 'refreshFailed';
         pending.reject(relayError(reason));
         pendingTokenRequests.delete(msg.requestId);
     }

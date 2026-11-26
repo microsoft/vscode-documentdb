@@ -172,7 +172,8 @@ describe('ShellSessionManager', () => {
         const manager = new ShellSessionManager({ clusterId, clusterDisplayName: 'Cluster', databaseName: 'test' });
         const setNative = (connectionUser: string, connectionPassword: string): void =>
             CredentialCache.setAuthCredentials(clusterId, AuthMethodId.NativeAuth, 'mongodb://native.example.com/', {
-                connectionUser, connectionPassword,
+                connectionUser,
+                connectionPassword,
             });
         setNative('account-a', 'first');
         await manager.initialize();
@@ -204,7 +205,11 @@ describe('ShellSessionManager', () => {
         await manager.evaluate('keep');
         const reply = vi.fn();
         await workerCallbacks.onTokenRequest?.({ type: 'tokenRequest', requestId: 'refresh' }, reply, () => true);
-        expect(reply).toHaveBeenCalledWith({ type: 'tokenResponse', requestId: 'refresh', accessToken: 'private-token' });
+        expect(reply).toHaveBeenCalledWith({
+            type: 'tokenResponse',
+            requestId: 'refresh',
+            accessToken: 'private-token',
+        });
         expect(mockGetSessionFromVSCode.mock.calls[1][2]).toEqual({ silent: true, account });
         expect(killWorker).not.toHaveBeenCalled();
         expect(onReconnecting).not.toHaveBeenCalled();
@@ -225,13 +230,16 @@ describe('ShellSessionManager', () => {
         const manager = new ShellSessionManager({ clusterId, clusterDisplayName: 'Cluster', databaseName: 'test' });
         requestTokenOnInit = true;
         mockGetSessionFromVSCode.mockResolvedValue({
-            accessToken: 'private-token', account: { id: 'account-a', label: 'Account A' },
+            accessToken: 'private-token',
+            account: { id: 'account-a', label: 'Account A' },
         });
         await manager.initialize();
         const identity = manager.pinnedEntraIdentity!;
         const epoch = ClustersClient.getEpoch(clusterId);
         sendEval.mockRejectedValueOnce(Object.assign(new Error('miss'), { name: 'EntraSignInRequiredError' }));
-        await expect(manager.evaluate('first')).rejects.toSatisfy((error: unknown) => getWorkerAuthReason(error) === 'signInRequired');
+        await expect(manager.evaluate('first')).rejects.toSatisfy(
+            (error: unknown) => getWorkerAuthReason(error) === 'signInRequired',
+        );
         await expect(manager.evaluate('blocked')).rejects.toMatchObject({ name: 'EntraSignInRequiredError' });
         expect(() => manager.resetAfterSignIn({ ...identity, accountId: 'account-b' }, epoch)).toThrow(
             expect.objectContaining({ name: 'EntraIdentityMismatchError' }),
@@ -241,7 +249,8 @@ describe('ShellSessionManager', () => {
         await manager.evaluate('next');
         expect(sendEval.mock.calls.map(([message]) => message.code)).toEqual(['first', 'next']);
         expect(mockGetSessionFromVSCode.mock.calls[1][2]).toEqual({
-            silent: true, account: { id: 'account-a', label: 'Account A' },
+            silent: true,
+            account: { id: 'account-a', label: 'Account A' },
         });
         manager.dispose();
     });
@@ -353,7 +362,10 @@ describe('ShellSessionManager', () => {
                     authMethod === AuthMethodId.ManagedIdentity
                         ? mockGetManagedIdentityAccessToken
                         : mockGetSessionFromVSCode;
-                provider.mockResolvedValue({ accessToken: 'private-token', account: { id: 'account', label: 'private-account' } });
+                provider.mockResolvedValue({
+                    accessToken: 'private-token',
+                    account: { id: 'account', label: 'private-account' },
+                });
                 const postResponse = vi.fn();
                 const forged = {
                     type: 'tokenRequest',
@@ -447,7 +459,10 @@ describe('ShellSessionManager', () => {
                     authMethod === AuthMethodId.ManagedIdentity
                         ? mockGetManagedIdentityAccessToken
                         : mockGetSessionFromVSCode;
-                provider.mockResolvedValue({ accessToken: 'private-token', account: { id: 'account', label: 'private-account' } });
+                provider.mockResolvedValue({
+                    accessToken: 'private-token',
+                    account: { id: 'account', label: 'private-account' },
+                });
                 const postResponse = vi.fn();
                 await workerCallbacks.onTokenRequest?.(
                     { type: 'tokenRequest', requestId: 'first' },
@@ -709,7 +724,10 @@ describe('ShellSessionManager', () => {
             },
         });
         const provider = source === 'vscode' ? mockGetSessionFromVSCode : mockGetManagedIdentityAccessToken;
-        provider.mockResolvedValueOnce({ accessToken: 'private-token', account: { id: 'account', label: 'private-account' } });
+        provider.mockResolvedValueOnce({
+            accessToken: 'private-token',
+            account: { id: 'account', label: 'private-account' },
+        });
         const manager =
             surface === 'shell'
                 ? new ShellSessionManager({ clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' })
@@ -734,7 +752,9 @@ describe('ShellSessionManager', () => {
         });
         expect(resolver).toHaveBeenCalledWith(connectionString);
         const args = provider.mock.calls.at(-1);
-        expect(args?.[source === 'vscode' ? 1 : 0]).toEqual(['https://ossrdbms-aad.database.usgovcloudapi.net/.default']);
+        expect(args?.[source === 'vscode' ? 1 : 0]).toEqual([
+            'https://ossrdbms-aad.database.usgovcloudapi.net/.default',
+        ]);
         expect(postResponse).toHaveBeenCalledWith({
             type: 'tokenResponse',
             requestId: 'token-request',

@@ -71,8 +71,7 @@ export class WorkerTokenRelay {
         epoch = this.epoch,
     ): Promise<void> {
         const isCurrentEpoch = (): boolean =>
-            !ClustersClient.getLatchReason(this.clusterId) &&
-            ClustersClient.getEpoch(this.clusterId) === epoch;
+            !ClustersClient.getLatchReason(this.clusterId) && ClustersClient.getEpoch(this.clusterId) === epoch;
         const canReply = (): boolean => {
             if (!isCurrentWorker()) {
                 return false;
@@ -230,7 +229,9 @@ export class WorkerTokenRelay {
                     requestId,
                     error: createWorkerAuthError(reason, authMechanism as AuthMethodId).message,
                     reason,
-                    ...(reason === 'destinationRejected' ? { errorName: 'EntraDestinationRejectedError' as const } : {}),
+                    ...(reason === 'destinationRejected'
+                        ? { errorName: 'EntraDestinationRejectedError' as const }
+                        : {}),
                 });
             }
         };

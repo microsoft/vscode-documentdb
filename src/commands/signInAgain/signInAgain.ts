@@ -12,8 +12,8 @@ import {
     EntraSignInRequiredError,
 } from '../../documentdb/auth/entraErrors/entraCallbackErrors';
 import { getEntraSession } from '../../documentdb/auth/entraSession';
-import { sameEntraIdentity } from '../../documentdb/auth/WorkerTokenRelay';
 import { MicrosoftEntraIDAuthHandler } from '../../documentdb/auth/MicrosoftEntraIDAuthHandler';
+import { sameEntraIdentity } from '../../documentdb/auth/WorkerTokenRelay';
 import { addEstablishedConnectionContext, ClustersClient } from '../../documentdb/ClustersClient';
 import { classifyConnectionFailure } from '../../documentdb/connectionFailures';
 import { CredentialCache } from '../../documentdb/CredentialCache';
@@ -26,10 +26,7 @@ interface WorkerSignInResult {
     readonly epoch: number;
 }
 
-export function canSignInAgainForWorker(
-    clusterId: string,
-    expectedIdentity: VerifiedEntraIdentity,
-): boolean {
+export function canSignInAgainForWorker(clusterId: string, expectedIdentity: VerifiedEntraIdentity): boolean {
     const credentials = CredentialCache.getCredentials(clusterId);
     const hostIdentity = ClustersClient.getLastVerifiedIdentity(clusterId);
     return (
@@ -105,10 +102,7 @@ async function signInAgainInternal(
     context.errorHandling.suppressDisplay = true;
     addEstablishedConnectionContext(context.telemetry, clusterId);
     const isCurrent = (): boolean => {
-        if (
-            ClustersClient.getEpoch(clusterId) !== epoch ||
-            CredentialCache.getCredentials(clusterId) !== credentials
-        ) {
+        if (ClustersClient.getEpoch(clusterId) !== epoch || CredentialCache.getCredentials(clusterId) !== credentials) {
             return false;
         }
         if (!expectedIdentity) {
@@ -159,8 +153,7 @@ async function signInAgainInternal(
         });
         if (
             expectedIdentity &&
-            (auth.verifiedIdentity?.kind !== 'entra' ||
-                !sameEntraIdentity(auth.verifiedIdentity, expectedIdentity))
+            (auth.verifiedIdentity?.kind !== 'entra' || !sameEntraIdentity(auth.verifiedIdentity, expectedIdentity))
         ) {
             throw new EntraIdentityMismatchError();
         }
@@ -183,9 +176,7 @@ async function signInAgainInternal(
         ) {
             refreshAuthenticationNode(node);
         }
-        return auth.verifiedIdentity
-            ? { identity: auth.verifiedIdentity, epoch: startupEpoch }
-            : undefined;
+        return auth.verifiedIdentity ? { identity: auth.verifiedIdentity, epoch: startupEpoch } : undefined;
     } catch (error) {
         if (!starting && !isCurrent()) {
             reportClosed();

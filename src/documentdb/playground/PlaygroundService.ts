@@ -180,19 +180,15 @@ export class PlaygroundService implements vscode.Disposable {
         const verifiedIdentity = ClustersClient.getLastVerifiedIdentity(connection.clusterId);
         const hostIdentityIsCompatible =
             connection.fingerprint === undefined || connection.fingerprint === binding?.fingerprint;
-        return (
-            binding === undefined
-                ? connection
-                : {
-                      ...connection,
-                      fingerprint: connection.fingerprint ?? binding.fingerprint,
-                      entraIdentity:
-                          connection.entraIdentity ??
-                          (hostIdentityIsCompatible && verifiedIdentity?.kind === 'entra'
-                              ? verifiedIdentity
-                              : undefined),
-                  }
-        );
+        return binding === undefined
+            ? connection
+            : {
+                  ...connection,
+                  fingerprint: connection.fingerprint ?? binding.fingerprint,
+                  entraIdentity:
+                      connection.entraIdentity ??
+                      (hostIdentityIsCompatible && verifiedIdentity?.kind === 'entra' ? verifiedIdentity : undefined),
+              };
     }
 
     /** Capture a worker-learned binding only while the document still holds the originating connection. */

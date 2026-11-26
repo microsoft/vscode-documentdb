@@ -814,19 +814,32 @@ describe('WorkerSessionManager', () => {
             async (reason): Promise<void> => {
                 const failed = await startWorker();
                 failed.worker._emit('message', {
-                    type: 'initResult', requestId: failed.requestId, success: false, authReason: reason,
+                    type: 'initResult',
+                    requestId: failed.requestId,
+                    success: false,
+                    authReason: reason,
                 });
-                await expect(failed.initPromise).rejects.toSatisfy((error: unknown) => getWorkerAuthReason(error) === reason);
+                await expect(failed.initPromise).rejects.toSatisfy(
+                    (error: unknown) => getWorkerAuthReason(error) === reason,
+                );
 
                 const active = await startWorker();
                 active.worker._emit('message', { type: 'initResult', requestId: active.requestId, success: true });
                 await active.initPromise;
                 const evaluating = active.manager.sendEval({
-                    type: 'eval', requestId: '', code: '1', databaseName: 'test', displayBatchSize: 20,
+                    type: 'eval',
+                    requestId: '',
+                    code: '1',
+                    databaseName: 'test',
+                    displayBatchSize: 20,
                 });
                 const worker = vi.mocked(Worker).mock.results.at(-1)?.value as { postMessage: Mock };
                 const evaluation = worker.postMessage.mock.calls.at(-1)?.[0] as MainToWorkerMessage;
-                active.worker._emit('message', { type: 'evalError', requestId: evaluation.requestId, authReason: reason });
+                active.worker._emit('message', {
+                    type: 'evalError',
+                    requestId: evaluation.requestId,
+                    authReason: reason,
+                });
                 await expect(evaluating).rejects.toSatisfy((error: unknown) => getWorkerAuthReason(error) === reason);
                 expect(active.manager.authFailure).toBe(reason);
                 active.manager.dispose();

@@ -654,7 +654,9 @@ export class WorkerSessionManager implements vscode.Disposable {
                     this._pendingRequests.delete(msg.requestId);
                     const reason = isWorkerAuthReason(msg.authReason)
                         ? msg.authReason
-                        : (msg.errorName === 'EntraDestinationRejectedError' ? 'destinationRejected' : this._authFailure);
+                        : msg.errorName === 'EntraDestinationRejectedError'
+                          ? 'destinationRejected'
+                          : this._authFailure;
                     this._authFailure ??= reason;
                     if (msg.success && !reason) {
                         pending.resolve(undefined);

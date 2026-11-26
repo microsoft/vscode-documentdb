@@ -22,8 +22,8 @@ import {
     recordEntraTokenFailure,
     resetEntraTokenFailuresForTests,
 } from '../auth/entraErrors/entraTokenFailures';
-import { ClustersClient } from '../ClustersClient';
 import { type getManagedIdentityAccessToken } from '../auth/managedIdentityTokenProvider';
+import { ClustersClient } from '../ClustersClient';
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { PlaygroundEvaluator } from './PlaygroundEvaluator';
 import { type WorkerSessionCallbacks } from './WorkerSessionManager';
@@ -52,7 +52,12 @@ const mocks = vi.hoisted(() => ({
     clusterId: undefined as string | undefined,
     worker: {
         isConnectedTo: vi.fn<(clusterId: string) => boolean>(),
-        sendEval: vi.fn<(message: MainToWorkerMessage) => Promise<{ result: { type: string; printable: string; durationMs: number } }>>(),
+        sendEval:
+            vi.fn<
+                (
+                    message: MainToWorkerMessage,
+                ) => Promise<{ result: { type: string; printable: string; durationMs: number } }>
+            >(),
         killWorker: vi.fn(),
     },
 }));
@@ -260,7 +265,9 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
             accessToken: 'other-token',
         });
         const mismatch = await requestToken({ type: 'tokenRequest', requestId: 'different-account' });
-        expect(mismatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'tokenError', reason: 'identityMismatch' }));
+        expect(mismatch).toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'tokenError', reason: 'identityMismatch' }),
+        );
         mocks.configuredProvider.mockReturnValue('microsoft-sovereign-cloud');
         const changed = await requestToken({ type: 'tokenRequest', requestId: 'different-provider' });
         expect(changed).toHaveBeenCalledWith(expect.objectContaining({ type: 'tokenError', reason: 'signInRequired' }));
@@ -297,7 +304,11 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
         } finally {
             ClustersClient.unlatch(clusterId);
         }
-        mocks.getCredentials.mockReturnValue({ clusterId, connectionString: 'mongodb://other.example.com/', authMechanism: AuthMethodId.NoAuth });
+        mocks.getCredentials.mockReturnValue({
+            clusterId,
+            connectionString: 'mongodb://other.example.com/',
+            authMechanism: AuthMethodId.NoAuth,
+        });
         await evaluator.evaluate(connection, '3');
         mocks.worker.isConnectedTo.mockReturnValue(true);
         await expect(evaluator.evaluate(oldDocument, '4')).rejects.toMatchObject({ reason: 'credentialsChanged' });
@@ -346,9 +357,7 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
                 fingerprint: 'fingerprint-b',
                 generation: 2,
             });
-            const expected = vi
-                .spyOn(ClustersClient, 'getExpectedFingerprint')
-                .mockReturnValue('fingerprint-b');
+            const expected = vi.spyOn(ClustersClient, 'getExpectedFingerprint').mockReturnValue('fingerprint-b');
 
             await expect(evaluator.evaluate(oldBinding, 'old-document')).rejects.toMatchObject({
                 reason: 'credentialsChanged',
@@ -374,13 +383,9 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
                 name: 'EntraSignInRequiredError',
             });
             expect(expected).toHaveBeenCalled();
-            expect(mocks.worker.sendEval.mock.calls.map(([message]) => message.type === 'eval' && message.code)).toEqual([
-                '1',
-                '2',
-                'failed',
-                'replacement',
-                'second-failure',
-            ]);
+            expect(
+                mocks.worker.sendEval.mock.calls.map(([message]) => message.type === 'eval' && message.code),
+            ).toEqual(['1', '2', 'failed', 'replacement', 'second-failure']);
             mocks.getCredentials.mockClear();
         } finally {
             vi.restoreAllMocks();
@@ -397,9 +402,13 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
             await evaluator.evaluate(connection, '2', undefined, capture);
             const binding = capture.mock.calls[0][0] as { fingerprint: string };
             const bound = { ...connection, ...binding };
-            const failure = new Error('outer driver error', { cause: Object.assign(new Error('private broker'), { name: 'TokenCallbackError' }) });
+            const failure = new Error('outer driver error', {
+                cause: Object.assign(new Error('private broker'), { name: 'TokenCallbackError' }),
+            });
             mocks.worker.sendEval.mockRejectedValueOnce(failure);
-            await expect(evaluator.evaluate(bound, 'failed')).rejects.toSatisfy((error: unknown) => getWorkerAuthReason(error) === 'refreshFailed');
+            await expect(evaluator.evaluate(bound, 'failed')).rejects.toSatisfy(
+                (error: unknown) => getWorkerAuthReason(error) === 'refreshFailed',
+            );
             mocks.worker.isConnectedTo.mockReturnValue(false);
             mocks.getCredentials.mockReturnValue({
                 clusterId,
@@ -412,9 +421,9 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
             mocks.worker.isConnectedTo.mockReturnValue(true);
             mocks.getCredentials.mockClear();
             await evaluator.evaluate(bound, 'after');
-            expect(mocks.worker.sendEval.mock.calls.map(([message]) => message.type === 'eval' && message.code)).toEqual([
-                '1', '2', 'failed', 'next', 'after',
-            ]);
+            expect(
+                mocks.worker.sendEval.mock.calls.map(([message]) => message.type === 'eval' && message.code),
+            ).toEqual(['1', '2', 'failed', 'next', 'after']);
         },
     );
 

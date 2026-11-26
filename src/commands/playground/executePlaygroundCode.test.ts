@@ -9,16 +9,18 @@ import * as vscode from 'vscode';
 import { type PlaygroundConnection } from '../../documentdb/playground/types';
 import { executePlaygroundCode, stopPlaygroundEvaluator } from './executePlaygroundCode';
 
-const { evaluate, dispose, setExecuting, showResult, getConnection, getEpoch, canRecover, recover } = vi.hoisted(() => ({
-    evaluate: vi.fn(),
-    dispose: vi.fn(),
-    setExecuting: vi.fn(),
-    showResult: vi.fn(),
-    getConnection: vi.fn<() => PlaygroundConnection | undefined>(),
-    getEpoch: vi.fn<() => number>(),
-    canRecover: vi.fn(),
-    recover: vi.fn(),
-}));
+const { evaluate, dispose, setExecuting, showResult, getConnection, getEpoch, canRecover, recover } = vi.hoisted(
+    () => ({
+        evaluate: vi.fn(),
+        dispose: vi.fn(),
+        setExecuting: vi.fn(),
+        showResult: vi.fn(),
+        getConnection: vi.fn<() => PlaygroundConnection | undefined>(),
+        getEpoch: vi.fn<() => number>(),
+        canRecover: vi.fn(),
+        recover: vi.fn(),
+    }),
+);
 
 vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
     ...(await importOriginal<{ UserCancelledError: typeof UserCancelledError }>()),

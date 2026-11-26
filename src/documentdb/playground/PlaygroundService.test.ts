@@ -11,8 +11,8 @@ import { type PlaygroundConnection } from './types';
 // Access the vscode mock (aliased to test/vitest/vscode.ts)
 import * as vscode from 'vscode';
 
-import { CredentialCache } from '../CredentialCache';
 import { ClustersClient } from '../ClustersClient';
+import { CredentialCache } from '../CredentialCache';
 
 vi.mock('../CredentialCache', () => ({
     CredentialCache: { hasCredentials: vi.fn() },

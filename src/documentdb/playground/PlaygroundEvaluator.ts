@@ -252,8 +252,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             onProgress?.(l10n.t('Initializing…'));
             this.assertConnectionAvailable(clusterId);
             const pinned = connection.entraIdentity ?? pin;
-            const expected =
-                replacementFingerprint ?? ClustersClient.getExpectedFingerprint(clusterId, pinned);
+            const expected = replacementFingerprint ?? ClustersClient.getExpectedFingerprint(clusterId, pinned);
             if (fingerprint !== undefined && fingerprint !== expected) {
                 throw new ConnectionUnavailableError('credentialsChanged');
             }
@@ -265,27 +264,21 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                 this._workerManager.killWorker();
             }
             this.resetSession();
-            const workerPin = initMsg.authMechanism === AuthMethodId.MicrosoftEntraID ? entraPin ?? pinned : undefined;
+            const workerPin =
+                initMsg.authMechanism === AuthMethodId.MicrosoftEntraID ? (entraPin ?? pinned) : undefined;
             this._pinContext = workerPin && { clusterId, identity: workerPin };
             this._sessionInitMessage = initMsg;
             this._workerFingerprint = expected;
             this._sessionId = randomUUID();
             this._sessionAuthMethod = initMsg.authMechanism;
             const originalUri = initMsg.connectionString;
-            this._relay = new WorkerTokenRelay(
-                clusterId,
-                initMsg,
-                epoch,
-                this._sessionId,
-                workerPin,
-                (identity) => {
-                    this._pinContext = { clusterId, identity };
-                    this._workerFingerprint = computeConnectionFingerprint({
-                        connectionString: originalUri,
-                        principal: identity,
-                    });
-                },
-            );
+            this._relay = new WorkerTokenRelay(clusterId, initMsg, epoch, this._sessionId, workerPin, (identity) => {
+                this._pinContext = { clusterId, identity };
+                this._workerFingerprint = computeConnectionFingerprint({
+                    connectionString: originalUri,
+                    principal: identity,
+                });
+            });
         } else {
             initMsg = this._sessionInitMessage;
         }
@@ -502,7 +495,6 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             source: serResult.source,
         };
     }
-
 
     // ─── Private: Session telemetry ──────────────────────────────────────────
 

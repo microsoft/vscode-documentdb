@@ -7,10 +7,7 @@ import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsof
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
-import {
-    canSignInAgainForWorker,
-    signInAgainForWorker,
-} from '../../commands/signInAgain/signInAgain';
+import { canSignInAgainForWorker, signInAgainForWorker } from '../../commands/signInAgain/signInAgain';
 import { type DeepLinkTelemetry, trackDeepLinkTelemetry } from '../../deepLinks/deepLinkTelemetry';
 import { ext } from '../../extensionVariables';
 import { ErrorExplanationService } from '../../services/errorExplanationService';
@@ -900,8 +897,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 error.reason === 'userDisconnected'
                     ? l10n.t('Disconnected. Reconnect from the tree, then open a new shell.')
                     : error.reason === 'credentialsChanged' || error.reason === 'identityChanged'
-                    ? l10n.t('This shell is bound to the previous connection. Open a new shell from the tree.')
-                    : l10n.t('This connection is unavailable. Reconnect from the tree, then open a new shell.');
+                      ? l10n.t('This shell is bound to the previous connection. Open a new shell from the tree.')
+                      : l10n.t('This connection is unavailable. Reconnect from the tree, then open a new shell.');
             this.writeLine(this._outputFormatter.formatError(message));
             return true;
         }
@@ -974,9 +971,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                     }
                     this._sessionManager.resetAfterSignIn(result.identity, result.epoch);
                     this.writeLine(
-                        this._outputFormatter.formatSystemMessage(
-                            l10n.t('Sign-in restored. Run your command again.'),
-                        ),
+                        this._outputFormatter.formatSystemMessage(l10n.t('Sign-in restored. Run your command again.')),
                     );
                 });
             } catch (error) {

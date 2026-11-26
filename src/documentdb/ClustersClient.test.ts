@@ -331,7 +331,9 @@ describe('regular connection startup diagnostics', () => {
         expect(ClustersClient.getExpectedFingerprint(clusterId, verifiedIdentity)).toBe(
             computeConnectionFingerprint({ connectionString: uri, principal: verifiedIdentity }),
         );
-        expect(ClustersClient.getExpectedFingerprint(clusterId, { ...verifiedIdentity, tenantId: 'other' })).toBeUndefined();
+        expect(
+            ClustersClient.getExpectedFingerprint(clusterId, { ...verifiedIdentity, tenantId: 'other' }),
+        ).toBeUndefined();
     });
 
     it('does not open a changed connection for an old surface, even with no cached client', async (): Promise<void> => {
