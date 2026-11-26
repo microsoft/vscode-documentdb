@@ -14,6 +14,15 @@ code:
 
 # Removing SlickGrid from the Collection View
 
+> **2026-11-26 research update:** see [migration-research.md](./migration-research.md),
+> [migration-parity.md](./migration-parity.md) and
+> [slickgrid-update-assessment.md](./slickgrid-update-assessment.md). This document retains its
+> September snapshot and proposed sequence. SlickGrid now has relevant v10/v11 accessibility,
+> resizing and Fluent-theme improvements; Cosmos DB now exact-pins RDG beta.61 rather than the
+> beta.59 range below. Claims about current keyboard/tree accessibility still require testing.
+> The weight note saying SlickGrid loads in every webview predates the completed lazy split;
+> the README describes the current split. Use the newer documents for current facts.
+
 **Status:** guidance for a future iteration. Not scheduled. Written 2026-09-30 during the
 modernization re-review ([build-and-test-stack.md, execution plan](../build-and-test-stack/iterations/01-modernization/build-and-test-stack.md#execution-plan)).
 
