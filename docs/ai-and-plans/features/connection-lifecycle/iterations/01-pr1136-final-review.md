@@ -451,6 +451,15 @@ connection was reopened. Run the query again." Do not add an overlay for transie
   "reopened" would be inaccurate. Use truthful retry guidance rather than claiming recovery
   already succeeded; the lead and advisor specify the wording during planning.
 
+> **Done (2026-11-26), commit `5f8b5280c`, `mai-code-2`:** Only a Collection
+> View query that actually ran and left its current same-epoch client marked for
+> replacement adds “Run the query again to retry the connection.” The original message
+> and cause remain available, the overlay is unchanged, and no query is replayed.
+> Operator decision: truthful query-only guidance; advised (`claude-opus-5.5`,
+> 85% design, 88% review) to exclude startup, stale and latched failures and preserve
+> the original cause classification. Added two cases covering a marked client and a
+> startup failure. All 109 focused tests passed; workbench verification is pending.
+
 ## F9. Prerelease `azureauth` dependency (Low, accepted)
 
 `@microsoft/vscode-azext-azureauth` `6.1.0-alpha.2`
