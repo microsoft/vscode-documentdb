@@ -181,6 +181,16 @@ up yet. That should cost one operation, not leave the connection stuck.
 - Never call `reportFailure` from inside the callback.
 - Add one regression test through a direct `getClient` path.
 
+> **Done (2026-11-26), commit `6eb089ac4`, `gpt-6.1-sol`:** Both OIDC modes
+> mark a bound client for replacement if the callback rejects, without evicting it or
+> changing the thrown error. The accepted operator decision governs the scope; advised
+> (`claude-opus-5.5`, 85%) that startup, replacement precedence and recovery remain
+> intact. Added two parameterized direct `getClient` cases. Renewal assertions for
+> startup suppression, result/outcome and lifetime fields, cached identity, abort,
+> stale epoch, retired and closed clients remain; the rejecting lookup now runs last
+> on a fresh generation. Expiry and explicit recovery tests retain their original
+> assertions. Focused Case 1 run: 127 tests passed across WI-01 and WI-03.
+
 ## F2. The first write after token expiry is unverified (Medium, gate)
 
 **Evidence**
@@ -257,6 +267,14 @@ This does not need the deferred cross-release comparison.
 - The cross-release comparison stays deferred.
 - Record the amendment as a factual note under decision 0020 in
   [decisions.md](../decisions.md), citing this decision.
+
+> **Done (2026-11-26), commit `42dfc2332`, `mai-code-2`:** The RPC adapter records
+> only the validated reason from an unavailable response; it leaves the SDK outcome
+> and existing cancellation/error handling alone. Operator decision: bounded
+> amendment to 0020; leader review (99%) reused the existing response guard rather
+> than duplicating the allowlist. Added three regressions: valid reason, ordinary
+> success, and unknown reason. Focused Case 1 run: 127 tests passed across WI-01 and
+> WI-03. CP-5 ingestion has not been run; WI-11 records the decision and query.
 
 ## F4. A hung token lookup costs 60 s per operation and is classified `other` (Medium)
 
