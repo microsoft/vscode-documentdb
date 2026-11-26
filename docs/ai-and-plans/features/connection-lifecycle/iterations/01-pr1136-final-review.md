@@ -81,6 +81,34 @@ earlier instruction to commit this review to the feature branch: carry the revie
 the new PR branch instead. This review is its first commit. Do not commit or push directly to
 the feature branch. Avoiding over-engineering remains a constraint for every item.
 
+## Follow-up work plan
+
+The operator accepted the dispositions above. The planning advisor (`claude-opus-5.5`)
+checked these items against the current code and the installed MongoDB driver, tRPC and Azure
+authentication libraries. No change in scope is implied by the plan. All test and build
+executions go to `mai-code-2-flash`; use Case 1 (`npm run build` and focused Vitest) in coherent
+batches, and defer the full Case 2 suite until all work items are complete.
+
+| Item | Scope and dependencies | Acceptance and verification | Recommended → assigned model |
+| --- | --- | --- | --- |
+| WI-01 (F1) | `ClustersClient.connect()` and its tests; first in the shared client/auth sequence. | A rejected Entra or managed-identity callback rethrows unchanged and marks a bound client without evicting it or downgrading an existing state. A direct `getClient` gets a new generation. Retain all renewal telemetry assertions in a driver-realistic order. Run `ClustersClient` and connection failure tests. | `gpt-6.1-sol` → same; auth and generation lifecycle. |
+| WI-02 (F4) | Classifier and host/worker renewal timeout instrumentation; after WI-01 (shared tests). | Match only the installed driver's callback timeout; record bounded `timedOut` without introducing a timer or double-counting. Test wrapped and unrelated errors, host abort/late settlement, and worker timeout/cancellation. | `gpt-6.1-sol` → same; host/worker abort timing. |
+| WI-03 (F3) | DocumentDB tRPC telemetry adapter and its tests; independent. | Add only a bounded `unavailableReason` to validated responses. Leave SDK outcome, error and cancellation handling intact. Test typed unavailable, ordinary success, and invalid reason. | `mai-code-2` → same; self-contained middleware edit. |
+| WI-04 (F5, tenant catches in F6) | Azure subscription provider, subscription picker, and three Azure discovery roots; independent. | Keep partial results and existing sanitized output warnings. Record skipped account/tenant totals and show one non-blocking hint with **Show Output** per partial listing. Meter the four tenant-lookup catches. Test partial/full listings and verify the warning in a workbench with a failing tenant. | `mai-code-2` → same; contained provider behavior. |
+| WI-05 (rest of F6) | Only the named silent catches; after WI-02 (client and Entra overlap). | Preserve return values, control flow and UI; meter actual swallowed observer/telemetry errors, not rethrows. Run focused tree and client/auth tests in the next Case 1 batch. | `gpt-6-luna` → same; mechanical edits. |
+| WI-06 (O1) | Extract a small recovery hook from the three lifecycle webviews, retaining per-view policy. Schedule in the final implementation batch. | Preserve stale-reply and disposal guards, Retry/Close behavior, draft data and announcements. Run focused hook, Document View and overlay tests. In a workbench exercise Disconnect/Keep open, dismiss/reappear, Reconnect/Retry, Close, the Dashboard auto-retry, and the dirty Document View prompt. | `gpt-6.1-sol` → same; cross-view lifecycle and race-sensitive state. |
+| WI-07 (F7) | Shared Retry hook after WI-06, plus Document View Save. | An explanation RPC rejection does not prevent the existing fallback notification; preserve raw cause and existing telemetry. Test Retry and Save fallbacks. Other explanation chains are outside the accepted fix. | `gpt-6-luna` → same; two local fallbacks. |
+| WI-08 (F8) | Collection View query path only; after WI-02 and sequential with WI-06 if a view file is shared. | Show truthful retry guidance only when marked for replacement; retain original explanation and error evidence, no overlay or `runWithClient` changes. Test replacement/non-replacement paths and the next query in a workbench. | `mai-code-2` → same; one targeted query path. |
+| WI-09 (O2) | Retry command and node capability; final implementation batch. | A before/after characterization matrix preserves which nodes can clear rejection, ARM key-read precedence, and silent returns. Run command/tree tests and verify Quick Start, Azure discovery and stored connection recovery in a workbench. | `mai-code-2` → same; small policy move with explicit behavior parity. |
+| WI-10 (F2) | OP-6 row and PR F step 3 in the development plan. | First write after at least two hours idle, continuous use through expiry, and sleep/wake plus Shell and Playground; operator validation pending. No replay, no pre-write probe, and no Save wording change unless the first-write scenario fails. | `gpt-6-luna` recommended; docs-only leader record. |
+| WI-11 (affected documentation) | Decision 0020 and lifecycle telemetry/feature documentation; after the final WI-02–04 fields. | Record the operator's bounded F3 amendment without adding rationale; cross-release comparison stays deferred. Document renewal timeout and partial-listing data; add the new property to CP-5 verification. Check affected user documentation for drift. | `gpt-6-luna` recommended; docs-only leader record. |
+| WI-12 (F9, O3) | Inline disposition only; independent. | Retain the pinned prerelease; re-run ARM renewal when upgrading to GA. No lifecycle registry extraction or external tracking issue in this PR. | Leader record; no coding model. |
+
+OP-6, CP-5 ingestion and workbench results are recorded separately from the implementation
+items. A Save wording follow-up is conditional on an observed OP-6 failure, not a queued
+implementation item. The known out-of-scope cases are the additional explain-then-display
+chains, a new timeout mechanism, write replay or probes, and automatic retry policy changes.
+
 ---
 
 ## F1. A failed token callback leaves a dead client cached (High)
