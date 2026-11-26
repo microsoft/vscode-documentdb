@@ -41,6 +41,7 @@ interface TestOptions {
 
 const recoverUnavailable = vi.fn<(input: ConnectionRecoveryRequest) => Promise<RecoveryResponse>>();
 const explainOperationFailure = vi.fn<(input: { message: string }) => Promise<string | null>>();
+const reportEvent = vi.fn<(input: { eventName: string }) => Promise<unknown>>();
 const displayErrorMessage = vi.fn<(input: { message: string; modal: false; cause: string }) => Promise<unknown>>();
 const onShowUnavailable = vi.fn<() => void>();
 const unavailable: ConnectionUnavailableDetails = {
@@ -67,6 +68,7 @@ function TestView(options: TestOptions): JSX.Element | null {
         recovery: { mutate: recoverUnavailable },
         common: {
             explainOperationFailure: { query: explainOperationFailure },
+            reportEvent: { mutate: reportEvent },
             displayErrorMessage: { mutate: displayErrorMessage },
         },
         onShowUnavailable,
@@ -105,6 +107,7 @@ async function show(failure: ConnectionUnavailableDetails = unavailable): Promis
 beforeEach((): void => {
     vi.resetAllMocks();
     explainOperationFailure.mockResolvedValue(null);
+    reportEvent.mockResolvedValue(undefined);
     displayErrorMessage.mockResolvedValue(undefined);
     host = document.createElement('div');
     document.body.appendChild(host);
@@ -268,6 +271,29 @@ it.each([null, 'Explained failure'])(
         expect(state.recovering).toBe(false);
     },
 );
+
+it('falls back when retry explanation rejects and reports the bounded failure', async (): Promise<void> => {
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => undefined);
+    try {
+        recoverUnavailable.mockRejectedValueOnce(new Error('driver failure'));
+        explainOperationFailure.mockRejectedValueOnce(new Error('explanation transport failure'));
+        reportEvent.mockRejectedValueOnce(new Error('telemetry transport failure'));
+        await render();
+        await show();
+        await act(async () => state.handleUnavailableAction('retry'));
+
+        expect(explainOperationFailure).toHaveBeenCalledExactlyOnceWith({ message: 'driver failure' });
+        expect(displayErrorMessage).toHaveBeenCalledExactlyOnceWith({
+            message: 'Unable to recover the connection',
+            modal: false,
+            cause: 'driver failure',
+        });
+        expect(reportEvent).toHaveBeenCalledExactlyOnceWith({ eventName: 'explainOperationFailureFailed' });
+        expect(debug).toHaveBeenCalledExactlyOnceWith('Failed to report an explanation request failure');
+    } finally {
+        debug.mockRestore();
+    }
+});
 
 it('drops a retry failure invalidated while its explanation is in flight', async (): Promise<void> => {
     const explanation = deferred<string | null>();

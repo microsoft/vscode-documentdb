@@ -20,7 +20,7 @@ import { Announcer } from '../../components/accessibility';
 import { DisconnectedOverlay } from '../../components/DisconnectedOverlay';
 import { MonacoEditor } from '../../components/MonacoEditor';
 import { useSelectiveContextMenuPrevention } from '../../components/useSelectiveContextMenuPrevention';
-import { useBoundViewRecovery } from '../useBoundViewRecovery';
+import { explainRecoveryFailure, useBoundViewRecovery } from '../useBoundViewRecovery';
 import { ToolbarDocuments } from './components/toolbarDocuments';
 import { type DocumentsViewWebviewConfigurationType } from './documentsViewController';
 import './documentView.scss';
@@ -400,7 +400,7 @@ export const DocumentView = (): JSX.Element => {
                     return;
                 }
                 const cause = error instanceof Error ? error.message : String(error);
-                const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
+                const explained = await explainRecoveryFailure(trpcClient.common, cause);
                 if (!isCurrentOperation(revision)) {
                     return;
                 }

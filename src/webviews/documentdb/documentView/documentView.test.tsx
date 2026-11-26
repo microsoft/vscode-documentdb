@@ -251,3 +251,19 @@ it('ignores a load reply after disable and leaves an edit-mode placeholder unsav
         'Closing this view discards unsaved changes.',
     );
 });
+
+it('shows the Save fallback when explanation rejects and reports the bounded failure', async (): Promise<void> => {
+    mocks.saveDocument.mockRejectedValueOnce(new Error('driver failure'));
+    mocks.explainOperationFailure.mockRejectedValueOnce(new Error('explanation transport failure'));
+    await render(config('add'));
+    await edit('{"field":"draft"}');
+    await save();
+
+    expect(mocks.explainOperationFailure).toHaveBeenCalledExactlyOnceWith({ message: 'driver failure' });
+    expect(mocks.displayErrorMessage).toHaveBeenCalledExactlyOnceWith({
+        message: 'Error saving the document',
+        modal: true,
+        cause: 'driver failure',
+    });
+    expect(mocks.reportEvent).toHaveBeenCalledWith({ eventName: 'explainOperationFailureFailed' });
+});

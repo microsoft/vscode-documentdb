@@ -21,6 +21,13 @@ interface BoundViewRecoveryOptions {
         explainOperationFailure: {
             query(input: { message: string }): Promise<string | null>;
         };
+        reportEvent: {
+            mutate(input: {
+                eventName: string;
+                properties?: Record<string, string>;
+                measurements?: Record<string, number>;
+            }): Promise<unknown>;
+        };
         displayErrorMessage: {
             mutate(input: { message: string; modal: false; cause: string }): Promise<unknown>;
         };
@@ -28,6 +35,18 @@ interface BoundViewRecoveryOptions {
     onShowUnavailable: () => void;
     resetRecoveringOnUnavailable?: boolean;
     advanceRevisionAfterRecovery?: boolean;
+}
+
+export function explainRecoveryFailure(
+    common: BoundViewRecoveryOptions['common'],
+    cause: string,
+): Promise<string | null> {
+    return common.explainOperationFailure.query({ message: cause }).catch(() => {
+        void common.reportEvent.mutate({ eventName: 'explainOperationFailureFailed' }).catch(() => {
+            console.debug('Failed to report an explanation request failure');
+        });
+        return null;
+    });
 }
 
 interface BoundViewRecovery {
@@ -110,7 +129,7 @@ export function useBoundViewRecovery({
                         return;
                     }
                     const cause = error instanceof Error ? error.message : String(error);
-                    const explained = await common.explainOperationFailure.query({ message: cause });
+                    const explained = await explainRecoveryFailure(common, cause);
                     if (!disposedRef.current && revision === revisionRef.current) {
                         void common.displayErrorMessage.mutate({
                             message: explained ?? l10n.t('Unable to recover the connection'),
