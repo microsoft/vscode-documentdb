@@ -863,6 +863,19 @@ parity.
 - Check: `npx vitest run src/utils/<new folder>` and `npx tsc --noEmit -p .`
 - Advisor: logic review before commit (persisted-data and cross-module impact).
 
+> **Done (2026-11-26), commit `80200fc6`:** `gpt-6.1-sol` migrated the table/tree shapers,
+> default fixture and existing consumers to neutral shapes. The changes preserve root identity
+> and reject unsafe or lossy IDs as targets without filtering row selection. Actions resolve
+> against the current page; delete acknowledgements use a snapshot of requested IDs. Advised
+> (`claude-opus-5.5`, approve at 84%): BSON round-trip and projection checks fail closed,
+> stale targets cannot resolve to another ID, pre-delete find-response reappearance is a
+> pre-existing non-destructive race for WI-7, and O5 remains out of scope. The leader accepted
+> that verdict and kept current RPC names/inputs and telemetry. Seventeen cases added; shared
+> build, browser type check and all 22 shaping tests passed. The browser suite's only failure
+> was the concurrent WI-4b palette fixture (fixed there without changing the assertion).
+> Usage: coding 79.9 AIU (20 requests, 8m05s); advisor 80.1 AIU (12 requests, 2m06s);
+> shared checks 0.4 AIU (9 requests, 41s summed).
+
 **WI-4b: grid theme** · `mai-code-2` (fallback `gpt-6.1-terra`)
 
 - Owns: a new `src/webviews/documentdb/collectionView/components/resultsTab/dataGridTheme.scss`
