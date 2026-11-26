@@ -187,6 +187,10 @@ a type-only fixture correction, `npm run package` and `npm run verify:vsix` pass
 `npx vitest run src/utils/documentGrid` passed all 22 tests. The scoped SlickGrid grep found no
 tracked matches. The package graph still limits React Data Grid to Collection View.
 
+**A4 passed (2026-11-26), leader decision.** The beta.64 scratch treegrid passed all 17
+keyboard, focus and ARIA checks in the VS Code Insiders Integrated Browser. The spike verifies
+browser behavior, not screen reader announcements or the shipped UI.
+
 ### Escalations
 
 | ID  | Trigger                                                                                                                                    | Operator chooses                                                                                          |
@@ -945,6 +949,18 @@ parity.
   moves to its parent.
 - Output: A4 evidence (Playwright run in the dev server) and a short note of the RDG APIs used. The
   code is not committed; WI-9 may reuse it.
+
+> **Done (2026-11-26), scratch spike; no implementation commit:** `gpt-6.1-sol` used public
+> beta.64 APIs: `DataGrid` with `role="treegrid"`, `getRowKey`, `onCellKeyDown`,
+> `renderers.renderRow`/`Row`, `preventGridDefault` and `setActivePosition` with focus.
+> `mai-code-2-flash` ran the Vite spike at `/tree-spike.html` in VS Code Insiders 1.149
+> (Chromium 150). All 17 stages passed: Right expands, Left collapses, Left from a child
+> moves focus to its parent, levels are correct, `aria-expanded` is absent on leaves and
+> updated on parents, and collapsed descendants are absent without disturbing siblings.
+> No observed console, page, or CSP errors. Leader released A4 (99% confidence for that
+> measured behavior); production styling, actual screen readers, and the full WI-9
+> navigation journey remain unverified. Coding usage: 34.1 AIU (12 requests, 3m26s).
+> Shared A3/A4 checks used 1.4 AIU (20 requests, 2m02s) on the initial attempt.
 
 ### Step 2
 
