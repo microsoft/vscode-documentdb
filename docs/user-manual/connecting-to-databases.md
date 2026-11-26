@@ -78,12 +78,14 @@ variables and open cursors is lost. Interrupted commands are not replayed.
 
 ## After changing connection details
 
-Saving a change with **Update Credentials…** or **Update Connection String…** keeps the old view's
-contents available for inspection or copying, but the saved change permanently locks that existing
-view in this VS Code window. This includes a password-only edit. The dialog offers **Close view**;
-open a new view from the tree to use the saved settings.
+Saving a change with **Update Credentials…** or **Update Connection String…** permanently disables
+database operations in the existing Collection View, Document View, and Cluster Dashboard tabs.
+This includes a password-only edit. Their contents remain available for inspection or copying.
+Select **Close view** and open a new view from the tree to use the saved settings.
 
-The same rule applies to an Interactive Shell or Query Playground bound to the previous settings:
-do not continue by switching identities inside the old session. Open a new shell or re-pick the
-playground connection from the tree. Cancelling an edit, or saving without changing stored details,
-does not lock existing sessions.
+Shell and Playground follow different rules. If you choose to keep a running Shell connected when
+prompted, its worker can continue using the previous settings. After a password-only edit, a new
+worker can use the updated password in the existing terminal or Playground without a new connection
+pick. To use a different host, user, or sign-in identity, open a new Shell or explicitly select the
+connection again in the Playground. Cancelling an edit or saving unchanged settings does not lock
+the open views.
