@@ -6,7 +6,11 @@
 import type * as azureAuth from '@microsoft/vscode-azext-azureauth';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
-import { type callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
+import {
+    type callWithTelemetryAndErrorHandling,
+    type IActionContext,
+    UserCancelledError,
+} from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { type AuthTraceContext } from '../../utils/authTrace';
@@ -24,8 +28,10 @@ import {
 } from '../auth/entraErrors/entraTokenFailures';
 import { type getManagedIdentityAccessToken } from '../auth/managedIdentityTokenProvider';
 import { ClustersClient } from '../ClustersClient';
+import { computeConnectionFingerprint } from '../connectionFingerprint';
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { PlaygroundEvaluator } from './PlaygroundEvaluator';
+import { type PlaygroundWorkerBinding } from './types';
 import { type WorkerSessionCallbacks } from './WorkerSessionManager';
 import { getWorkerAuthReason, type MainToWorkerMessage, type WorkerToMainMessage } from './workerTypes';
 
@@ -50,6 +56,7 @@ const mocks = vi.hoisted(() => ({
     callbacks: undefined as WorkerSessionCallbacks | undefined,
     initMessage: undefined as InitMessage | undefined,
     clusterId: undefined as string | undefined,
+    startup: vi.fn<() => Promise<void>>(),
     worker: {
         isConnectedTo: vi.fn<(clusterId: string) => boolean>(),
         sendEval:
@@ -122,6 +129,7 @@ vi.mock('./WorkerSessionManager', () => ({
             ensureWorker: vi.fn(async (clusterId: string, initMessage: InitMessage): Promise<void> => {
                 mocks.clusterId = clusterId;
                 mocks.initMessage = initMessage;
+                await mocks.startup();
             }),
             get workerClusterId(): string | undefined {
                 return mocks.clusterId;
@@ -157,6 +165,7 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
         mocks.callbacks = undefined;
         mocks.initMessage = undefined;
         mocks.clusterId = undefined;
+        mocks.startup.mockReset();
         mocks.configuredProvider.mockReturnValue('microsoft');
         mocks.worker.isConnectedTo.mockReturnValue(false);
         mocks.worker.sendEval.mockResolvedValue({ result: { type: 'number', printable: '1', durationMs: 0 } });
@@ -232,6 +241,93 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
     }
 
     const connection = { clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' };
+    const learnedIdentity = {
+        kind: 'entra',
+        providerId: 'microsoft',
+        tenantId: 'interactive-tenant',
+        accountId: 'private-account',
+        accountLabel,
+    } as const;
+
+    function configureEntraStartup(): void {
+        mocks.getCredentials.mockReturnValue({
+            clusterId,
+            connectionString: originalConnection,
+            authMechanism: AuthMethodId.MicrosoftEntraID,
+            entraIdConfig: { tenantId: learnedIdentity.tenantId },
+        });
+    }
+
+    it('retains the first relay pin on startup failure without running the query', async (): Promise<void> => {
+        const failure = new Error('database startup failed');
+        const capture = vi.fn<(binding: PlaygroundWorkerBinding) => void>();
+        configureEntraStartup();
+        mocks.startup.mockImplementationOnce(async () => {
+            const response = await requestToken({ type: 'tokenRequest', requestId: 'startup' });
+            expect(response).toHaveBeenCalledWith(expect.objectContaining({ type: 'tokenResponse' }));
+            throw failure;
+        });
+
+        try {
+            await expect(evaluator.evaluate(connection, 'first Run', undefined, capture)).rejects.toBe(failure);
+            expect(capture).toHaveBeenCalledExactlyOnceWith({
+                fingerprint: computeConnectionFingerprint({
+                    connectionString: originalConnection,
+                    principal: learnedIdentity,
+                }),
+                entraIdentity: learnedIdentity,
+            });
+
+            evaluator.dispose();
+            evaluator = new PlaygroundEvaluator();
+            const verified = vi.spyOn(ClustersClient, 'getLastVerifiedIdentity').mockReturnValue({
+                ...learnedIdentity,
+                accountId: 'different-account',
+            });
+            try {
+                await expect(
+                    evaluator.evaluate({ ...connection, ...capture.mock.calls[0][0] }, 'next Run'),
+                ).rejects.toMatchObject({ reason: 'credentialsChanged' });
+            } finally {
+                verified.mockRestore();
+            }
+            expect(mocks.worker.sendEval).not.toHaveBeenCalled();
+        } finally {
+            mocks.getCredentials.mockClear();
+        }
+    });
+
+    it.each(['relay replaced', 'epoch changed', 'latched', 'cancelled'] as const)(
+        'does not capture a learned pin on startup failure after %s',
+        async (invalidation): Promise<void> => {
+            const failure =
+                invalidation === 'cancelled' ? new UserCancelledError('workerStartup') : new Error('startup failed');
+            const capture = vi.fn();
+            configureEntraStartup();
+            const latch = vi.spyOn(ClustersClient, 'getLatchReason');
+            mocks.startup.mockImplementationOnce(async () => {
+                const response = await requestToken({ type: 'tokenRequest', requestId: 'startup' });
+                expect(response).toHaveBeenCalledWith(expect.objectContaining({ type: 'tokenResponse' }));
+                if (invalidation === 'relay replaced') {
+                    evaluator.killWorker();
+                } else if (invalidation === 'epoch changed') {
+                    ClustersClient.invalidate(clusterId);
+                } else if (invalidation === 'latched') {
+                    latch.mockReturnValue('userDisconnected');
+                }
+                throw failure;
+            });
+
+            try {
+                await expect(evaluator.evaluate(connection, 'first Run', undefined, capture)).rejects.toBe(failure);
+                expect(capture).not.toHaveBeenCalled();
+                expect(mocks.worker.sendEval).not.toHaveBeenCalled();
+            } finally {
+                mocks.getCredentials.mockClear();
+                latch.mockRestore();
+            }
+        },
+    );
 
     it('uses a verified cluster identity silently on the first relay', async (): Promise<void> => {
         const verified = vi.spyOn(ClustersClient, 'getLastVerifiedIdentity').mockReturnValue({

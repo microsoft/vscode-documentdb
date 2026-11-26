@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 // Static or `await import('bson')`, this is the driver's CommonJS copy: vite.config.ext.mjs and
 // vitest.config.ts alias `bson` to it. Without the alias an ES-module importer gets bson's ESM
@@ -247,6 +247,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         const needsSpawn = replaceFailedWorker || !sameCluster || !!reason || this._relay?.epoch !== epoch;
 
         const initStartTime = Date.now();
+        let learnedBinding: PlaygroundWorkerBinding | undefined;
         let initMsg: Extract<MainToWorkerMessage, { type: 'init' }>;
         if (needsSpawn || !this._sessionInitMessage) {
             onProgress?.(l10n.t('Initializing…'));
@@ -264,8 +265,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                 this._workerManager.killWorker();
             }
             this.resetSession();
-            const workerPin =
-                initMsg.authMechanism === AuthMethodId.MicrosoftEntraID ? (entraPin ?? pinned) : undefined;
+            const workerPin = initMsg.authMechanism === 'MicrosoftEntraID' ? (entraPin ?? pinned) : undefined;
             this._pinContext = workerPin && { clusterId, identity: workerPin };
             this._sessionInitMessage = initMsg;
             this._workerFingerprint = expected;
@@ -278,15 +278,17 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                     connectionString: originalUri,
                     principal: identity,
                 });
+                learnedBinding = { fingerprint: this._workerFingerprint, entraIdentity: identity };
             });
         } else {
             initMsg = this._sessionInitMessage;
         }
 
         const relay = this._relay;
+        const isCurrentRelay = (): boolean => relay === this._relay && epoch === ClustersClient.getEpoch(clusterId);
         const assertCurrent = (): void => {
             this.assertConnectionAvailable(clusterId);
-            if (relay !== this._relay || epoch !== ClustersClient.getEpoch(clusterId)) {
+            if (!isCurrentRelay()) {
                 throw new ConnectionUnavailableError('credentialsChanged');
             }
         };
@@ -314,6 +316,17 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         // The telemetry wrapper swallows cancellation even when rethrow is enabled.
         if (originalFailure) {
             this.recordWorkerFailure(clusterId, relay, originalFailure.error);
+            // Startup can fail after sign-in; keep the document pinned without replaying its query.
+            if (
+                learnedBinding &&
+                fingerprint === undefined &&
+                !(originalFailure.error instanceof UserCancelledError) &&
+                isCurrentRelay() &&
+                !this._disposed &&
+                !ClustersClient.getLatchReason(clusterId)
+            ) {
+                onFirstBinding?.(learnedBinding);
+            }
             throw originalFailure.error;
         }
         assertCurrent();
