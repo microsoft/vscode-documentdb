@@ -141,12 +141,7 @@ const EVENT_CASES: readonly EventCase[] = [
         label: 'feedback route opening',
         name: 'survey.openFeedbackRoute',
         report: (telemetry): boolean =>
-            telemetry.reportOpenFeedbackRoute(
-                'reportBug',
-                'success',
-                { source: 'helpAndFeedbackView' },
-                INVITATION_ID,
-            ),
+            telemetry.reportOpenFeedbackRoute('reportBug', 'success', { source: 'helpAndFeedbackView' }, INVITATION_ID),
         properties: {
             activationSource: 'helpAndFeedbackView',
             feedbackRoute: 'reportBug',

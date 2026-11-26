@@ -11,8 +11,8 @@ import {
 import * as vscode from 'vscode';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
-import { FEEDBACK_ROUTE_URLS } from '../../utils/feedbackRoutes';
 import { isFeedbackPermitted } from '../../utils/feedbackPermission';
+import { FEEDBACK_ROUTE_URLS } from '../../utils/feedbackRoutes';
 import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
 import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue } from '../TreeElementWithContextValue';

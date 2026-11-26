@@ -127,7 +127,12 @@ describe('survey invitation HTML', (): void => {
                 cspSource: 'vscode-webview:',
                 artworkUri: 'vscode-webview://extension/icon.png',
                 artworkDarkUri: 'vscode-webview://extension/icon-dark.svg',
-                explanation: { activeDayCount: 7, requiredActiveDays: 3, isReminder: false, previousOutcome: undefined },
+                explanation: {
+                    activeDayCount: 7,
+                    requiredActiveDays: 3,
+                    isReminder: false,
+                    previousOutcome: undefined,
+                },
                 manuallyOpened,
             }),
         );
@@ -270,14 +275,17 @@ describe('survey invitation HTML', (): void => {
         h.dom.window.close();
     });
 
-    it.each(['reportBug', 'suggestFeature'])('opens the %s route without selecting the survey funnel', (action): void => {
-        const h = interactiveHtml();
-        h.dom.window.document.querySelector<HTMLInputElement>('input[value="5"]')?.click();
-        h.dom.window.document.querySelector<HTMLElement>(`[data-action="${action}"]`)?.click();
-        expect(h.messages).toEqual([{ type: 'rendered' }, { type: action }]);
-        expect(h.dom.window.document.querySelector<HTMLButtonElement>('#open-survey')?.disabled).toBe(false);
-        h.dom.window.close();
-    });
+    it.each(['reportBug', 'suggestFeature'])(
+        'opens the %s route without selecting the survey funnel',
+        (action): void => {
+            const h = interactiveHtml();
+            h.dom.window.document.querySelector<HTMLInputElement>('input[value="5"]')?.click();
+            h.dom.window.document.querySelector<HTMLElement>(`[data-action="${action}"]`)?.click();
+            expect(h.messages).toEqual([{ type: 'rendered' }, { type: action }]);
+            expect(h.dom.window.document.querySelector<HTMLButtonElement>('#open-survey')?.disabled).toBe(false);
+            h.dom.window.close();
+        },
+    );
 
     it('shows only the hovered or selected rating description, restoring or clearing it on leave', (): void => {
         const h = interactiveHtml();
