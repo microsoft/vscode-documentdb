@@ -20,8 +20,15 @@ surface, so this folder is its home.
 Preparation for [#1101](https://github.com/microsoft/vscode-documentdb/issues/1101), researched
 2026-11-26:
 
+- [Grid evaluation](./grid-scorecard.md): **current recommendation**. Our priorities, how we
+  tested while looking for a way to stay on SlickGrid (including a hands-on Narrator check of both
+  grids' demos), 1–10 ratings in 15 weighted categories with accessibility as a hard gate, feature
+  mapping, and how we could help SlickGrid close the gaps we found.
+- [Grid options evaluation](./grid-options-evaluation.md): SlickGrid 11 versus React Data Grid
+  evidence (maintainers, releases, range selection, accessibility, features); its second-pass
+  SlickGrid recommendation is superseded by the scorecard.
 - [Migration report](./migration-research.md): the Cosmos DB migration PR, subsequent fixes and
-  feature integrations, gains/losses, and recommended direction.
+  feature integrations, gains/losses (its first-pass recommendation is superseded).
 - [No-loss contract](./migration-parity.md): current DocumentDB behavior, especially object
   step-in, BSON type indicators, selection/document actions, paging and the tree.
 - [SlickGrid update assessment](./slickgrid-update-assessment.md): relevant accessibility and
@@ -29,10 +36,13 @@ Preparation for [#1101](https://github.com/microsoft/vscode-documentdb/issues/11
 - [React Data Grid capabilities](./react-data-grid-capabilities.md): current releases, cheap
   additions, integration costs and runtime/API caveats.
 
-The recommendation is to evaluate `react-data-grid` with a deliberate tree implementation, not
-to drop tree or BSON behavior. The final library/version/tree decision is not yet approved.
-Cosmos DB currently pins beta.61; the upstream latest is beta.64, so partner experience is not
-proof of compatibility with the newest beta.
+The current recommendation is to **migrate to React Data Grid, exact-pinned to a beta**, because
+accessibility (keyboard navigation in particular) is a hard requirement and RDG passes that gate on
+its own foundation, while SlickGrid 11 needs our additions to reach it. Range selection with Excel
+copy is buildable on RDG beta.64's public APIs without a fork (about 2–3 developer-weeks). Both
+projects have one dominant maintainer; RDG has been in 7.0 pre-release since 2019, so expect to
+budget for API renames on upgrades. The final decision is not yet approved; record it in
+`decisions.md` once taken.
 
 ## Current architecture
 

@@ -14,23 +14,32 @@ code:
 # Collection View grid migration research
 
 Preparation for [#1101](https://github.com/microsoft/vscode-documentdb/issues/1101).
-**Recommendation: migrate to `react-data-grid`, with a DocumentDB-specific cell renderer and an
-explicitly engineered tree implementation.** The partner's experience supports the direction,
-but copying its original migration without its follow-up fixes would reproduce avoidable issues.
-Do not trade away nested-document navigation, BSON types or selection safety to simplify the swap.
+
+> **Recommendation revised (2026-11-26):** see [grid-scorecard.md](./grid-scorecard.md) for the
+> current recommendation (third pass: migrate to React Data Grid, with accessibility as a hard
+> gate) and [grid-options-evaluation.md](./grid-options-evaluation.md) for the second-pass
+> evidence. The partner history and findings below remain valid evidence; the first-pass
+> conclusion drawn from them in §1 item 7 and §7 is superseded.
+
+**First-pass recommendation (superseded):** migrate to `react-data-grid`, with a DocumentDB-specific
+cell renderer and an explicitly engineered tree implementation. The partner's experience supports
+the direction, but copying its original migration without its follow-up fixes would reproduce
+avoidable issues. Do not trade away nested-document navigation, BSON types or selection safety to
+simplify the swap.
 
 This is a research recommendation, **not an approved implementation decision or a completed
 evaluation spike**. No production code, dependencies or remote state were changed.
 
 ## Reading guide
 
-| Document | Purpose |
-| --- | --- |
-| This report | Recommendation, partner migration/history, gains, losses and implementation implications |
-| [SlickGrid update assessment](./slickgrid-update-assessment.md) | What versions 10/11 actually fixed, and whether an upgrade remains credible |
-| [No-loss contract](./migration-parity.md) | Detailed inventory of our current features and required migration acceptance checks |
-| [React Data Grid capabilities](./react-data-grid-capabilities.md) | Current library releases, inexpensive additions, API/runtime caveats and features that are not cheap |
-| [Earlier removal plan](./slickgrid-removal.md) | Existing staged approach; its September snapshot is not the current upstream assessment |
+| Document                                                          | Purpose                                                                                                            |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| [Grid options evaluation](./grid-options-evaluation.md)           | **Current recommendation**: SlickGrid 11 vs RDG on governance, range selection, accessibility and feature coverage |
+| This report                                                       | Partner migration/history, gains, losses and implementation implications (first-pass recommendation superseded)    |
+| [SlickGrid update assessment](./slickgrid-update-assessment.md)   | What versions 10/11 actually fixed, and whether an upgrade remains credible                                        |
+| [No-loss contract](./migration-parity.md)                         | Detailed inventory of our current features and required migration acceptance checks                                |
+| [React Data Grid capabilities](./react-data-grid-capabilities.md) | Current library releases, inexpensive additions, API/runtime caveats and features that are not cheap               |
+| [Earlier removal plan](./slickgrid-removal.md)                    | Existing staged approach; its September snapshot is not the current upstream assessment                            |
 
 ## 1. Executive findings
 
@@ -64,12 +73,12 @@ evaluation spike**. No production code, dependencies or remote state were change
 
 Research date: **2026-11-26**.
 
-| Baseline | Snapshot |
-| --- | --- |
-| DocumentDB worktree | Clean at start; branch `dev/tnaum/table-redesign`, commit [`8f81840d`](https://github.com/microsoft/vscode-documentdb/tree/8f81840d5aeeccece79321699e94d4789755a1fa) |
-| Cosmos DB default branch | [`9a585583`](https://github.com/microsoft/vscode-cosmosdb/tree/9a585583e7a2b70076a2f7081045871d2170ac86), 2026-11-25 |
-| Current SlickGrid release | [11.0.0](https://github.com/ghiscoding/slickgrid-universal/releases/tag/v11.0.0), 2026-11-10 |
-| Current RDG release | [7.0.0-beta.64](https://github.com/Comcast/react-data-grid/releases/tag/v7.0.0-beta.64), 2026-11-05 |
+| Baseline                  | Snapshot                                                                                                                                                             |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DocumentDB worktree       | Clean at start; branch `dev/tnaum/table-redesign`, commit [`8f81840d`](https://github.com/microsoft/vscode-documentdb/tree/8f81840d5aeeccece79321699e94d4789755a1fa) |
+| Cosmos DB default branch  | [`9a585583`](https://github.com/microsoft/vscode-cosmosdb/tree/9a585583e7a2b70076a2f7081045871d2170ac86), 2026-11-25                                                 |
+| Current SlickGrid release | [11.0.0](https://github.com/ghiscoding/slickgrid-universal/releases/tag/v11.0.0), 2026-11-10                                                                         |
+| Current RDG release       | [7.0.0-beta.64](https://github.com/Comcast/react-data-grid/releases/tag/v7.0.0-beta.64), 2026-11-05                                                                  |
 
 Evidence comes from the original migration diff, pre/post source, subsequent component/path history,
 related feature-fix PRs, manifests/lockfiles, upstream release notes and tagged APIs.
@@ -112,15 +121,15 @@ Immutable comparison sources:
 
 ### What changed architecturally
 
-| Area | SlickGrid implementation | RDG integration |
-| --- | --- | --- |
-| Cell rendering | Imperative formatters, string/HTML output | React `renderCell`, shared string conversion and empty-value styling |
-| Selection | Built-in row selection, debounced event handler | Application-owned selected-ID set, anchor/range logic and keyboard/mouse handlers |
-| Sizing | Autosize/content estimates and imperative container resize configuration | Controlled column-width state, resizable columns, custom Fluent content-fit and numeric resize menu |
-| Accessibility | Delayed DOM ARIA patches and custom active-cell live announcements | Library grid semantics, custom keyboard handling, accessible grid names and native tree expander buttons |
-| Tree | SlickGrid flat `parentId` tree | Nested `TreeRow.children` model with custom expansion/flattened visible rows in ordinary `DataGrid` |
-| Theme | SlickGrid SCSS override layer | `--rdg-*` to `--vscode-*` mapping; still a custom grid theme |
-| Integration | Grid callbacks dispatch selected row indexes to Query Editor | Same surrounding state/action architecture, with a different selection adapter |
+| Area           | SlickGrid implementation                                                 | RDG integration                                                                                          |
+| -------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| Cell rendering | Imperative formatters, string/HTML output                                | React `renderCell`, shared string conversion and empty-value styling                                     |
+| Selection      | Built-in row selection, debounced event handler                          | Application-owned selected-ID set, anchor/range logic and keyboard/mouse handlers                        |
+| Sizing         | Autosize/content estimates and imperative container resize configuration | Controlled column-width state, resizable columns, custom Fluent content-fit and numeric resize menu      |
+| Accessibility  | Delayed DOM ARIA patches and custom active-cell live announcements       | Library grid semantics, custom keyboard handling, accessible grid names and native tree expander buttons |
+| Tree           | SlickGrid flat `parentId` tree                                           | Nested `TreeRow.children` model with custom expansion/flattened visible rows in ordinary `DataGrid`      |
+| Theme          | SlickGrid SCSS override layer                                            | `--rdg-*` to `--vscode-*` mapping; still a custom grid theme                                             |
+| Integration    | Grid callbacks dispatch selected row indexes to Query Editor             | Same surrounding state/action architecture, with a different selection adapter                           |
 
 Important details: click selects one row; Ctrl/Meta-click toggles; Shift-click selects a range;
 Space/Shift-Space and Shift-arrows implement keyboard selection. The final merged table does
@@ -130,33 +139,33 @@ the final design.
 
 ## 4. Evolution after migration
 
-| Date | Evidence | Change and consequence |
-| --- | --- | --- |
-| 2026-02-13, before migration | [microsoft/vscode-cosmosdb#2934](https://github.com/microsoft/vscode-cosmosdb/pull/2934) | Added SlickGrid ARIA row/column counts after wrong NVDA/Narrator counts. The partner was already paying an accessibility-adapter cost. |
-| 2026-03-26 | [microsoft/vscode-cosmosdb#2960](https://github.com/microsoft/vscode-cosmosdb/pull/2960) | Migrated both table and tree; kept JSON outside the grid. Added custom selection and header controls rather than relying solely on RDG defaults. |
-| 2026-03-31 | [v0.33.2 release](https://github.com/microsoft/vscode-cosmosdb/releases/tag/v0.33.2) | First verified shipped version: release notes explicitly mention the migration; tag `c90f0f11ca8e7b2133743c030cce56a17480b1f9` contains the merge and beta.59 dependency. The nearby v0.33.3 preparation PR is not the first-release evidence. |
-| 2026-05-05 / 05-13 | [microsoft/vscode-cosmosdb#3005](https://github.com/microsoft/vscode-cosmosdb/pull/3005), [microsoft/vscode-cosmosdb#3011](https://github.com/microsoft/vscode-cosmosdb/pull/3011) | String-helper import movement and minor stylesheet cleanup; not a new grid or major user-visible redesign. |
-| 2026-05-18 | [microsoft/vscode-cosmosdb#3037](https://github.com/microsoft/vscode-cosmosdb/pull/3037) | Restored packaged webview rendering after Vite migration: preserved the render export and injected emitted CSS for RDG, Monaco and the splitter. Grid styling is a packaging dependency, not just a successful development import. Not caused by the original grid migration. |
-| 2026-06-22 | [microsoft/vscode-cosmosdb#3168](https://github.com/microsoft/vscode-cosmosdb/pull/3168) | Hotkey cleanup and View/Edit/Delete fixes. A strict record guard discarded otherwise valid selected rows; selection consumers needed a less restrictive document-ID extractor. Not demonstrated to originate in RDG. |
-| 2026-08-18 | [microsoft/vscode-cosmosdb#3272](https://github.com/microsoft/vscode-cosmosdb/pull/3272), reverted by [microsoft/vscode-cosmosdb#3281](https://github.com/microsoft/vscode-cosmosdb/pull/3281) | Tried beta.61, adapting keyboard event mode from `SELECT` to `ACTIVE` and guarding absent rows. Reverted the dependency batch the same day. The revert says CI trouble was determined to be Azure DevOps-side; do not describe it as an RDG failure. |
-| 2026-09-07 | [microsoft/vscode-cosmosdb#3342](https://github.com/microsoft/vscode-cosmosdb/pull/3342) | Large Table-to-JSON switches could freeze/crash; added JSON size warning, preview cap and chunked streaming. This is a Monaco/JSON-view issue, not evidence that the new grid handles all large-result workflows automatically. |
-| 2026-09-11 | [microsoft/vscode-cosmosdb#3346](https://github.com/microsoft/vscode-cosmosdb/pull/3346) | Exactly one selected row was treated as no selection by converters, so copy/export used the entire page. A concrete selection-to-feature regression to test, but introduction at the grid migration is not established. |
-| 2026-09-16 | [microsoft/vscode-cosmosdb#3351](https://github.com/microsoft/vscode-cosmosdb/pull/3351) | Adopted the shared Fluent webview theming provider. This did not eliminate RDG's separate VS Code CSS-variable theme. |
-| 2026-09-23 | [microsoft/vscode-cosmosdb#3359](https://github.com/microsoft/vscode-cosmosdb/pull/3359) | Added table tests, restored the `ACTIVE` event-mode adaptation and prevented native Space-key scrolling. Lockfile now resolved beta.61 while manifest still said `~beta.59`. The PR title does not reveal the grid changes. |
-| 2026-09-25 | [microsoft/vscode-cosmosdb#3362](https://github.com/microsoft/vscode-cosmosdb/pull/3362) | Prevented stale results from a previous connection/container from enabling actions against another container. Double-click handling now checks connection/execution/edit state and carries the current execution ID. A crucial ownership invariant, not just a rendering detail. |
-| 2026-10-11 | [microsoft/vscode-cosmosdb#3407](https://github.com/microsoft/vscode-cosmosdb/pull/3407) | Custom column-menu trigger could receive programmatic focus while `aria-hidden`. Removed that attribute while retaining `tabIndex=-1`, and added a regression test. Accessibility work remained necessary in the migration's own components. |
-| 2026-11-03 | [microsoft/vscode-cosmosdb#3449](https://github.com/microsoft/vscode-cosmosdb/pull/3449) | Exact-pinned beta.61. Recorded concerns include newer beta header-renderer API changes and an unsupported Map method. The latter rationale needs source/runtime qualification; see the capabilities document. |
-| 2026-11-04 | [microsoft/vscode-cosmosdb#3522](https://github.com/microsoft/vscode-cosmosdb/pull/3522) | Added JSON folding controls. A surrounding results feature, not a built-in benefit of the RDG migration. |
+| Date                         | Evidence                                                                                                                                                                                       | Change and consequence                                                                                                                                                                                                                                                           |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-02-13, before migration | [microsoft/vscode-cosmosdb#2934](https://github.com/microsoft/vscode-cosmosdb/pull/2934)                                                                                                       | Added SlickGrid ARIA row/column counts after wrong NVDA/Narrator counts. The partner was already paying an accessibility-adapter cost.                                                                                                                                           |
+| 2026-03-26                   | [microsoft/vscode-cosmosdb#2960](https://github.com/microsoft/vscode-cosmosdb/pull/2960)                                                                                                       | Migrated both table and tree; kept JSON outside the grid. Added custom selection and header controls rather than relying solely on RDG defaults.                                                                                                                                 |
+| 2026-03-31                   | [v0.33.2 release](https://github.com/microsoft/vscode-cosmosdb/releases/tag/v0.33.2)                                                                                                           | First verified shipped version: release notes explicitly mention the migration; tag `c90f0f11ca8e7b2133743c030cce56a17480b1f9` contains the merge and beta.59 dependency. The nearby v0.33.3 preparation PR is not the first-release evidence.                                   |
+| 2026-05-05 / 05-13           | [microsoft/vscode-cosmosdb#3005](https://github.com/microsoft/vscode-cosmosdb/pull/3005), [microsoft/vscode-cosmosdb#3011](https://github.com/microsoft/vscode-cosmosdb/pull/3011)             | String-helper import movement and minor stylesheet cleanup; not a new grid or major user-visible redesign.                                                                                                                                                                       |
+| 2026-05-18                   | [microsoft/vscode-cosmosdb#3037](https://github.com/microsoft/vscode-cosmosdb/pull/3037)                                                                                                       | Restored packaged webview rendering after Vite migration: preserved the render export and injected emitted CSS for RDG, Monaco and the splitter. Grid styling is a packaging dependency, not just a successful development import. Not caused by the original grid migration.    |
+| 2026-06-22                   | [microsoft/vscode-cosmosdb#3168](https://github.com/microsoft/vscode-cosmosdb/pull/3168)                                                                                                       | Hotkey cleanup and View/Edit/Delete fixes. A strict record guard discarded otherwise valid selected rows; selection consumers needed a less restrictive document-ID extractor. Not demonstrated to originate in RDG.                                                             |
+| 2026-08-18                   | [microsoft/vscode-cosmosdb#3272](https://github.com/microsoft/vscode-cosmosdb/pull/3272), reverted by [microsoft/vscode-cosmosdb#3281](https://github.com/microsoft/vscode-cosmosdb/pull/3281) | Tried beta.61, adapting keyboard event mode from `SELECT` to `ACTIVE` and guarding absent rows. Reverted the dependency batch the same day. The revert says CI trouble was determined to be Azure DevOps-side; do not describe it as an RDG failure.                             |
+| 2026-09-07                   | [microsoft/vscode-cosmosdb#3342](https://github.com/microsoft/vscode-cosmosdb/pull/3342)                                                                                                       | Large Table-to-JSON switches could freeze/crash; added JSON size warning, preview cap and chunked streaming. This is a Monaco/JSON-view issue, not evidence that the new grid handles all large-result workflows automatically.                                                  |
+| 2026-09-11                   | [microsoft/vscode-cosmosdb#3346](https://github.com/microsoft/vscode-cosmosdb/pull/3346)                                                                                                       | Exactly one selected row was treated as no selection by converters, so copy/export used the entire page. A concrete selection-to-feature regression to test, but introduction at the grid migration is not established.                                                          |
+| 2026-09-16                   | [microsoft/vscode-cosmosdb#3351](https://github.com/microsoft/vscode-cosmosdb/pull/3351)                                                                                                       | Adopted the shared Fluent webview theming provider. This did not eliminate RDG's separate VS Code CSS-variable theme.                                                                                                                                                            |
+| 2026-09-23                   | [microsoft/vscode-cosmosdb#3359](https://github.com/microsoft/vscode-cosmosdb/pull/3359)                                                                                                       | Added table tests, restored the `ACTIVE` event-mode adaptation and prevented native Space-key scrolling. Lockfile now resolved beta.61 while manifest still said `~beta.59`. The PR title does not reveal the grid changes.                                                      |
+| 2026-09-25                   | [microsoft/vscode-cosmosdb#3362](https://github.com/microsoft/vscode-cosmosdb/pull/3362)                                                                                                       | Prevented stale results from a previous connection/container from enabling actions against another container. Double-click handling now checks connection/execution/edit state and carries the current execution ID. A crucial ownership invariant, not just a rendering detail. |
+| 2026-10-11                   | [microsoft/vscode-cosmosdb#3407](https://github.com/microsoft/vscode-cosmosdb/pull/3407)                                                                                                       | Custom column-menu trigger could receive programmatic focus while `aria-hidden`. Removed that attribute while retaining `tabIndex=-1`, and added a regression test. Accessibility work remained necessary in the migration's own components.                                     |
+| 2026-11-03                   | [microsoft/vscode-cosmosdb#3449](https://github.com/microsoft/vscode-cosmosdb/pull/3449)                                                                                                       | Exact-pinned beta.61. Recorded concerns include newer beta header-renderer API changes and an unsupported Map method. The latter rationale needs source/runtime qualification; see the capabilities document.                                                                    |
+| 2026-11-04                   | [microsoft/vscode-cosmosdb#3522](https://github.com/microsoft/vscode-cosmosdb/pull/3522)                                                                                                       | Added JSON folding controls. A surrounding results feature, not a built-in benefit of the RDG migration.                                                                                                                                                                         |
 
 ### Actual dependency trajectory
 
-| Point | Manifest | Lockfile |
-| --- | --- | --- |
-| Original March migration | `~7.0.0-beta.59` | beta.59 |
-| August update attempt | exact beta.61 | beta.61 |
-| August revert | `~7.0.0-beta.59` | beta.59 |
-| September 23 onward | `~7.0.0-beta.59` | beta.61 |
-| November 3 through inspected HEAD | exact `7.0.0-beta.61` | beta.61 |
+| Point                             | Manifest              | Lockfile |
+| --------------------------------- | --------------------- | -------- |
+| Original March migration          | `~7.0.0-beta.59`      | beta.59  |
+| August update attempt             | exact beta.61         | beta.61  |
+| August revert                     | `~7.0.0-beta.59`      | beta.59  |
+| September 23 onward               | `~7.0.0-beta.59`      | beta.61  |
+| November 3 through inspected HEAD | exact `7.0.0-beta.61` | beta.61  |
 
 The prerelease range allowed movement without the manifest text changing.
 For reproducible evaluation, record **both** manifest and lockfile, and exact-pin the candidate.
@@ -164,17 +173,17 @@ The partner has not established beta.64 compatibility merely by using a 7.0 beta
 
 ## 5. What they gained, and what they may have lost
 
-| Area | Evidence-backed gain | Loss, risk or qualification |
-| --- | --- | --- |
-| Accessibility | Native grid semantics replaced manual DOM patching. A reviewer [reported the relevant accessibility bugs fixed](https://github.com/microsoft/vscode-cosmosdb/pull/2960#issuecomment-4110304284): [microsoft/vscode-cosmosdb#2926](https://github.com/microsoft/vscode-cosmosdb/issues/2926), [microsoft/vscode-cosmosdb#2929](https://github.com/microsoft/vscode-cosmosdb/issues/2929), [microsoft/vscode-cosmosdb#2930](https://github.com/microsoft/vscode-cosmosdb/issues/2930). | The March 23 comment predates merge and does not specify the test environment. This is reported validation, not our own test result or a conformance claim. Custom header-menu focus still needed the October fix. |
-| React integration | Cell/header controls and selection live in ordinary React; fewer SlickGrid-specific services/formatters and delayed DOM edits. | Application selection/range logic and custom tree are now maintained by the extension. React does not make lifecycle/focus errors impossible. |
-| Resize UX | Controlled widths, pointer resize and explicit content/numeric resize controls. | Initial sizing changed: the old explicit first-load content-fit configuration is gone. Equivalent initial fit has not been demonstrated by this research. |
-| Theme control | Direct CSS-variable mapping to VS Code; native Fluent menu/dialog controls. | Still two style domains: RDG CSS and Fluent. No evidence that it automatically follows every VS Code contrast theme correctly. |
-| Selection | Familiar click/modifier/keyboard gestures implemented in the merged code. | Not a free library default. Custom key handling required an API adaptation and `preventDefault`; indexes still have to map to the correct documents. |
-| Tree | Native button expanders and a simpler React-visible-row implementation. | Old tree sort/filter configuration and bespoke level/state live announcements were removed. The new component does not declare the old hierarchy through `aria-level`/`treegrid` in that file. Actual screen-reader equivalence remains unverified. |
-| Visible columns | The bake-off described cleaner default presentation. | The migration also changed converter defaults: hide service columns; do not inject partition-key columns except for `SELECT *`. This is a real presentation reduction, not required by RDG. Do not copy it into our BSON/`_id` column policy. |
-| Performance/size | RDG supports row/column virtualization; wrapper/plugin dependencies are removed. | SlickGrid already virtualized. No extension-specific before/after timings or byte reduction were established. Expanded-tree and JSON payload costs remain application problems. |
-| Feature integration | Existing View/Edit/Delete, copy/export and external paging remained attached to Query Editor state. | Later selection-scope and result-ownership bugs show how easy it is to preserve the appearance but break the action target. Their causes must not all be attributed to migration without evidence. |
+| Area                | Evidence-backed gain                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Loss, risk or qualification                                                                                                                                                                                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Accessibility       | Native grid semantics replaced manual DOM patching. A reviewer [reported the relevant accessibility bugs fixed](https://github.com/microsoft/vscode-cosmosdb/pull/2960#issuecomment-4110304284): [microsoft/vscode-cosmosdb#2926](https://github.com/microsoft/vscode-cosmosdb/issues/2926), [microsoft/vscode-cosmosdb#2929](https://github.com/microsoft/vscode-cosmosdb/issues/2929), [microsoft/vscode-cosmosdb#2930](https://github.com/microsoft/vscode-cosmosdb/issues/2930). | The March 23 comment predates merge and does not specify the test environment. This is reported validation, not our own test result or a conformance claim. Custom header-menu focus still needed the October fix.                                  |
+| React integration   | Cell/header controls and selection live in ordinary React; fewer SlickGrid-specific services/formatters and delayed DOM edits.                                                                                                                                                                                                                                                                                                                                                       | Application selection/range logic and custom tree are now maintained by the extension. React does not make lifecycle/focus errors impossible.                                                                                                       |
+| Resize UX           | Controlled widths, pointer resize and explicit content/numeric resize controls.                                                                                                                                                                                                                                                                                                                                                                                                      | Initial sizing changed: the old explicit first-load content-fit configuration is gone. Equivalent initial fit has not been demonstrated by this research.                                                                                           |
+| Theme control       | Direct CSS-variable mapping to VS Code; native Fluent menu/dialog controls.                                                                                                                                                                                                                                                                                                                                                                                                          | Still two style domains: RDG CSS and Fluent. No evidence that it automatically follows every VS Code contrast theme correctly.                                                                                                                      |
+| Selection           | Familiar click/modifier/keyboard gestures implemented in the merged code.                                                                                                                                                                                                                                                                                                                                                                                                            | Not a free library default. Custom key handling required an API adaptation and `preventDefault`; indexes still have to map to the correct documents.                                                                                                |
+| Tree                | Native button expanders and a simpler React-visible-row implementation.                                                                                                                                                                                                                                                                                                                                                                                                              | Old tree sort/filter configuration and bespoke level/state live announcements were removed. The new component does not declare the old hierarchy through `aria-level`/`treegrid` in that file. Actual screen-reader equivalence remains unverified. |
+| Visible columns     | The bake-off described cleaner default presentation.                                                                                                                                                                                                                                                                                                                                                                                                                                 | The migration also changed converter defaults: hide service columns; do not inject partition-key columns except for `SELECT *`. This is a real presentation reduction, not required by RDG. Do not copy it into our BSON/`_id` column policy.       |
+| Performance/size    | RDG supports row/column virtualization; wrapper/plugin dependencies are removed.                                                                                                                                                                                                                                                                                                                                                                                                     | SlickGrid already virtualized. No extension-specific before/after timings or byte reduction were established. Expanded-tree and JSON payload costs remain application problems.                                                                     |
+| Feature integration | Existing View/Edit/Delete, copy/export and external paging remained attached to Query Editor state.                                                                                                                                                                                                                                                                                                                                                                                  | Later selection-scope and result-ownership bugs show how easy it is to preserve the appearance but break the action target. Their causes must not all be attributed to migration without evidence.                                                  |
 
 **Removed announcements are not automatically regressions.** Native grid semantics may make a
 custom live region redundant or noisy. Test the actual spoken outcome; do not restore the old live
@@ -245,7 +254,10 @@ string renderer and lose BSON distinctions, or use its row-index arithmetic as d
 Changing column order must use logical field keys; today's step-in callback uses column indexes
 and would otherwise navigate into the wrong field after reorder.
 
-## 7. Recommended direction and staged gates
+## 7. Recommended direction and staged gates (first pass, superseded)
+
+> Superseded by [grid-options-evaluation.md §7](./grid-options-evaluation.md#7-recommended-path-and-the-gate-that-could-reverse-it).
+> Kept because the staged gates below also apply if the accessibility gate sends us to RDG.
 
 **Prefer RDG for the table; budget real engineering for the tree.** A custom tree on `DataGrid`
 can share virtualization and cell rendering, but must implement proper arbitrary hierarchy,
@@ -297,6 +309,8 @@ serialization. Keep these out of #1101's groundwork scope.
 
 The preparation now has an upstream comparison, partner migration/follow-up history, a source-backed
 no-loss inventory and a version-aware opportunity list. **Implementation, benchmarks, packaged
-runtime compatibility and assistive-technology validation remain future work.** The evidence favors
-migration, but does not support a promise of zero regressions or universal accessibility merely
-from selecting the partner's library.
+runtime compatibility and assistive-technology validation remain future work.** The first pass
+concluded the evidence favored migration; the second pass
+([grid-options-evaluation.md](./grid-options-evaluation.md)) reverses that once range selection
+and maintainer concentration are weighed. Neither path supports a promise of zero regressions or
+universal accessibility without our own testing.
