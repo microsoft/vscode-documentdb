@@ -343,6 +343,14 @@ item may change; "Not" lists files it must leave alone. The leader re-derives ow
 - Acceptance: each entry cites the research files it rests on; no rationale the operator did not
   state.
 
+> **Done (2026-11-26), commit `50154173`:** `gpt-6-luna` drafted Proposed entries 0001–0003
+> with research links and no pin or scope approval. The operator authorized drafting only;
+> the leader confirmed (100%) that the entries leave the G1 choices open and created local
+> `feature/rdg-migration` at `main` (`8f81840d`). Step 0 records stay on the planning branch
+> `dev/tnaum/table-redesign`, where their source research and plan are tracked. No tests added
+> (documentation only); staged whitespace check passed. Coding usage: 1.5 AIU, 8 requests,
+> 59s summed model time (host log).
+
 **WI-1: pin and runtime check** · `gpt-6.1-sol` · scratch worktree, nothing committed but the report
 
 - Compare beta.64 and beta.61 from the approved registry: does either use
