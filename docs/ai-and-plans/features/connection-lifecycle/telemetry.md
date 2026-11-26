@@ -96,11 +96,13 @@ surface to check the observed volume against the telemetry budget. No lookups me
 
 ## Post-release outcomes by client age and generation
 
-The replacement count uses successful cluster expansions that did not return first-time or
-cached recovery rows. Other operations are shown for context only: for example, an RPC can
-return a typed unavailable result without reporting an SDK failure. The count is neither
-unique recoveries nor proof that renewal triggered them. Not every operation reports client
-age or generation; show missing values explicitly.
+`successfulExpansionsEnteringGen2Plus` counts successful cluster expansions that reported
+generation 2 or later **at entry** and did not return first-time or cached recovery rows. It
+does not count an expansion that enters on generation 1 and replaces it during the operation.
+Discovery expansions do not report a generation here. The count is neither unique recoveries nor
+proof that renewal triggered them. Other operations are shown for context only: an RPC can return a
+typed unavailable result without reporting an SDK failure. Missing ages and generations are shown
+explicitly.
 
 ```kusto
 Operations
@@ -111,7 +113,7 @@ Operations
     generationBand = case(isnull(generation) or generation < 1, "(missing)", generation == 1, "1", "2+"),
     lifecycleKind = coalesce(failureKind, "(missing)")
 | summarize operations = count(),
-    successfulClusterExpansionsOnReplacement = countif(
+    successfulExpansionsEnteringGen2Plus = countif(
         family == "getchildren" and tolower(parentContext) matches regex @"\btreeitem_documentdbcluster\b"
         and operationResult == "succeeded" and generation >= 2 and not(recoveryRows))
     by version, family, ageBand, generationBand, operationResult, lifecycleKind, signature
