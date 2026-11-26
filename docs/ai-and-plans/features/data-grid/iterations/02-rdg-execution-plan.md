@@ -788,6 +788,12 @@ parity.
 - Acceptance: compiles; no consumer changes.
 - Check: `npx tsc --noEmit -p .`
 
+> **Done (2026-11-26), commit `b415822b`:** `gpt-6-luna` copied the approved shared types
+> and column-key helpers into `src/utils/documentGrid/types.ts`. Leader review confirmed
+> (100%) the contract matches WI-1c, has no imports, and changes no consumers.
+> `npx tsc --noEmit -p .` and whitespace checks passed; no runtime tests added.
+> Coding usage: 0.8 AIU, 10 requests, 33s summed model time.
+
 **WI-4a: remove SlickGrid, add React Data Grid** · `mai-code-2` (fallback `gpt-6.1-terra`)
 
 - Owns: `package.json`, `package-lock.json` (exact pin, approved registry), `vite.config.views.mjs`
