@@ -290,7 +290,7 @@ export async function executePlaygroundCode(
                     }
 
                     if (recovery) {
-                        offerPlaygroundRecovery(context, sourceUri, boundConnection, recovery);
+                        offerPlaygroundRecovery(sourceUri, boundConnection, recovery);
                         throw error;
                     }
 
@@ -374,7 +374,6 @@ function getPlaygroundRecovery(error: unknown, connection: PlaygroundConnection)
 }
 
 function offerPlaygroundRecovery(
-    context: IActionContext,
     documentUri: vscode.Uri,
     connection: PlaygroundConnection,
     recovery: PlaygroundRecovery,
@@ -400,20 +399,24 @@ function offerPlaygroundRecovery(
         if (choice !== action || ClustersClient.getEpoch(clusterId) !== epoch || !stillOwnsAction()) {
             return;
         }
-        try {
-            const result = await signInAgainForWorker(context, clusterId, identity);
-            if (!result || ClustersClient.getEpoch(clusterId) !== result.epoch || !stillOwnsAction()) {
-                return;
+        await callWithTelemetryAndErrorHandling('playground.signInAgain', async (context) => {
+            context.errorHandling.suppressDisplay = true;
+            context.telemetry.properties.sessionId = evaluator?.sessionId ?? 'none';
+            try {
+                const result = await signInAgainForWorker(context, clusterId, identity);
+                if (!result || ClustersClient.getEpoch(clusterId) !== result.epoch || !stillOwnsAction()) {
+                    return;
+                }
+                stopPlaygroundEvaluator(clusterId);
+            } catch (error) {
+                if (!(error instanceof UserCancelledError) && stillOwnsAction()) {
+                    void vscode.window.showWarningMessage(
+                        l10n.t('Could not sign in again. Re-pick the playground connection from the tree.'),
+                    );
+                }
+                throw error;
             }
-            stopPlaygroundEvaluator(clusterId);
-        } catch (error) {
-            if (error instanceof UserCancelledError || !stillOwnsAction()) {
-                return;
-            }
-            void vscode.window.showWarningMessage(
-                l10n.t('Could not sign in again. Re-pick the playground connection from the tree.'),
-            );
-        }
+        });
     });
 }
 

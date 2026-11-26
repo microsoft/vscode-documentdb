@@ -9,7 +9,7 @@ import * as vscode from 'vscode';
 import { type PlaygroundConnection } from '../../documentdb/playground/types';
 import { executePlaygroundCode, stopPlaygroundEvaluator } from './executePlaygroundCode';
 
-const { evaluate, dispose, setExecuting, showResult, getConnection, getEpoch, canRecover, recover } = vi.hoisted(
+const { evaluate, dispose, setExecuting, showResult, getConnection, getEpoch, canRecover, recover, contexts } = vi.hoisted(
     () => ({
         evaluate: vi.fn(),
         dispose: vi.fn(),
@@ -19,15 +19,20 @@ const { evaluate, dispose, setExecuting, showResult, getConnection, getEpoch, ca
         getEpoch: vi.fn<() => number>(),
         canRecover: vi.fn(),
         recover: vi.fn(),
+        contexts: new Map<string, IActionContext>(),
     }),
 );
 
 vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
     ...(await importOriginal<{ UserCancelledError: typeof UserCancelledError }>()),
     callWithTelemetryAndErrorHandling: (
-        _name: string,
+        name: string,
         run: (context: IActionContext) => Promise<void>,
-    ): Promise<void> => run({ errorHandling: {}, telemetry: { measurements: {}, properties: {} } } as IActionContext),
+    ): Promise<void> => {
+        const context = { errorHandling: {}, telemetry: { measurements: {}, properties: {} } } as IActionContext;
+        contexts.set(name, context);
+        return run(context);
+    },
 }));
 
 vi.mock('../../documentdb/ClustersClient', () => ({
@@ -63,6 +68,7 @@ vi.mock('../../extensionVariables', () => ({
 describe('executePlaygroundCode', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        contexts.clear();
         getConnection.mockReturnValue({ clusterId: 'cluster', clusterDisplayName: 'Cluster', databaseName: 'test' });
         getEpoch.mockReturnValue(0);
         canRecover.mockReturnValue(false);
@@ -176,7 +182,10 @@ describe('executePlaygroundCode', () => {
             await expect(
                 executePlaygroundCode('db.stats()', 'runAll', vscode.Uri.file('test.documentdb.js')),
             ).rejects.toBe(failure);
-            expect(recover).toHaveBeenCalledExactlyOnceWith(expect.anything(), 'cluster', identity);
+            const signInContext = contexts.get('playground.signInAgain');
+            expect(signInContext).toBeDefined();
+            expect(signInContext).not.toBe(contexts.get('playground.execute'));
+            expect(recover).toHaveBeenCalledExactlyOnceWith(signInContext, 'cluster', identity);
             expect(evaluate).toHaveBeenCalledOnce();
             expect(dispose).toHaveBeenCalledTimes(superseded ? 0 : 1);
         } finally {
