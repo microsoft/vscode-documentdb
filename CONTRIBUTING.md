@@ -544,6 +544,14 @@ Case 2 is also where the AI pre-review in [§6](#6-ai-assisted-review-workflow) 
 - **`npm run typecheck:tests`** checks every participating workspace's tests with its own TypeScript configuration, including strict checks that the root build and Vitest runtime do not cover.
 - **`npm run package`** catches Vite host and webview bundling issues and missing assets that unit tests alone will not surface.
 
+### 4.4. CodeQL alert dismissals
+
+Fix valid findings. With maintainer approval, dismiss a false positive individually in GitHub
+and explain why it does not apply. Record the alert link, rule ID, affected code, rationale, and
+conditions for revisiting it in [`.github/codeql-exceptions.md`](.github/codeql-exceptions.md).
+The file is an audit record, not a CodeQL configuration file. Do not disable a rule or exclude a
+source file to handle a single false positive.
+
 ## 5. Documenting Work with AI
 
 This section is for new contributors, code maintainers, and AI agents. It describes where documentation about work done with AI lives so that decisions and reasoning stay discoverable long after a PR merges.

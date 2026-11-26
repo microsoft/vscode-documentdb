@@ -228,6 +228,9 @@ activation, such as a development-only command, must be listed with its reason i
 - Never log passwords, tokens, or connection strings
 - Use VS Code's secure storage for credentials
 - Validate all user inputs
+- Follow [the CodeQL dismissal process](../CONTRIBUTING.md#44-codeql-alert-dismissals). Only dismiss
+  individual alerts with maintainer approval, and record the rationale in
+  [the CodeQL exception register](codeql-exceptions.md).
 
 ## Cluster ID Architecture (Dual ID Pattern)
 
