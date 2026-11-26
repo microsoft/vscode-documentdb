@@ -249,7 +249,7 @@ export class ShellSessionManager implements vscode.Disposable {
             this._fingerprint ??= fingerprint;
             const verified = ClustersClient.getLastVerifiedIdentity(clusterId);
             const pin = this._pin ?? (verified?.kind === 'entra' ? verified : undefined);
-            if (initMsg.authMechanism === AuthMethodId.MicrosoftEntraID) {
+            if (initMsg.authMechanism === 'MicrosoftEntraID') {
                 this._pin = pin;
             }
             this._relay = new WorkerTokenRelay(
@@ -257,7 +257,7 @@ export class ShellSessionManager implements vscode.Disposable {
                 initMsg,
                 epoch,
                 this._managedIdentityTokenCorrelationId,
-                initMsg.authMechanism === AuthMethodId.MicrosoftEntraID ? pin : undefined,
+                initMsg.authMechanism === 'MicrosoftEntraID' ? pin : undefined,
                 (identity) => {
                     this._pin = identity;
                     this._fingerprint ??= computeConnectionFingerprint({

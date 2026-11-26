@@ -16,7 +16,7 @@ import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
 import { settingsKeys } from '../../settingsKeys';
 import { traceEntraDestination, type AuthTraceContext } from '../../utils/authTrace';
-import { AuthMethodId } from '../auth/AuthMethodId';
+import { type AuthMethodId } from '../auth/AuthMethodId';
 import { getEntraCustomHostnameSuffix } from '../auth/entraDestinationSettings';
 import { removeConflictingOidcMechanism } from '../auth/nonOidcConnectionString';
 import {
