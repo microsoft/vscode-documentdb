@@ -15,6 +15,8 @@ export interface SurveyInvitationStrings {
     readonly englishNote: string;
     readonly askLater: string;
     readonly neverAgain: string;
+    readonly reportBug: string;
+    readonly suggestFeature: string;
     readonly why: string;
     readonly usage: string;
     readonly manuallyOpened: string;
@@ -115,6 +117,7 @@ button:disabled, button[aria-disabled="true"] { opacity: .65; cursor: default; }
 .choices button { flex: 1 1 140px; }
 .secondary { color: var(--vscode-button-secondaryForeground); background: var(--vscode-button-secondaryBackground); font-weight: 400; }
 .secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
+.feedback-routes { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; margin-top: 16px; }
 details { margin-top: 24px; }
 summary { cursor: pointer; font-weight: 400; }
 details p { color: var(--vscode-descriptionForeground); font-size: 12px; line-height: 16px; }
@@ -134,6 +137,11 @@ button:focus-visible, .star:has(input:focus-visible), summary:focus-visible, a:f
 <button id="open-survey" class="primary" type="button" data-action="openForm">${text(strings.openSurvey)}</button>
 <div class="choices">
 ${choices}
+</div>
+<div class="feedback-routes">
+<a href="#" data-action="reportBug">${text(strings.reportBug)}</a>
+<span aria-hidden="true">·</span>
+<a href="#" data-action="suggestFeature">${text(strings.suggestFeature)}</a>
 </div>
 <details><summary>${text(strings.why)}</summary><p>${text(usage)}</p>${reminder}<p>${text(manuallyOpened ? strings.manualTelemetry : strings.telemetry)}</p><a href="#" data-action="privacy">${text(strings.privacy)}</a></details>
 </div>
@@ -204,7 +212,7 @@ document.querySelectorAll('[data-action]').forEach(control => {
         event.preventDefault();
         const action = control.dataset.action;
         const message = { type: action };
-        if (action !== 'privacy') {
+        if (action === 'openForm' || action === 'askLater' || action === 'neverAgain') {
             if (busy) return;
             busy = true;
             hoveredRating = undefined;

@@ -7,6 +7,7 @@ import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { readDebugOverrides } from '../../debug/debugOverrides';
 import { affectsFeedbackPermission, isFeedbackPermitted } from '../../utils/feedbackPermission';
+import { FEEDBACK_ROUTE_URLS, type FeedbackRoute } from '../../utils/feedbackRoutes';
 import { DEFAULT_SURVEY_POLICY_CONFIG, SURVEY_ENABLED, SURVEY_FORM_URL } from './surveyConfig';
 import { traceSurvey } from './surveyDiagnostics';
 import {
@@ -318,6 +319,12 @@ export class SurveyService implements vscode.Disposable {
                     }
                     return result;
                 },
+                onOpenFeedbackRoute: async (route): Promise<boolean> => {
+                    if (closed || gen !== this.generation || this.disposed) {
+                        return false;
+                    }
+                    return this.openFeedbackRoute(route, activation, request.invitationSessionId);
+                },
                 onChoice: async (): Promise<void> => close(),
             });
             if (closed || gen !== this.generation || this.disposed) {
@@ -362,6 +369,7 @@ export class SurveyService implements vscode.Disposable {
         if (gen !== this.generation) {
             return ok ? 'opened' : 'failed';
         }
+
         const enabled = this.isEnabled();
         const permitted = this.isPermitted();
         if (enabled && permitted) {
@@ -386,6 +394,21 @@ export class SurveyService implements vscode.Disposable {
             }
         }
         return ok ? 'opened' : 'failed';
+    }
+
+    private async openFeedbackRoute(
+        route: FeedbackRoute,
+        activation: SurveyActivation,
+        invitationSessionId: string,
+    ): Promise<boolean> {
+        let opened = false;
+        try {
+            opened = !!(await this.openExternal(FEEDBACK_ROUTE_URLS[route]));
+        } catch {
+            // Browser failures are returned to the presenter without changing survey lifecycle state.
+        }
+        this.telemetry.reportOpenFeedbackRoute(route, opened ? 'success' : 'failure', activation, invitationSessionId);
+        return opened;
     }
 
     /** Called when `telemetry.feedback.enabled` may have changed. Handles withdrawal. */
@@ -750,6 +773,12 @@ export class SurveyService implements vscode.Disposable {
                 }
                 await this.endInvitation(invitation, 'opened');
                 return 'opened';
+            },
+            onOpenFeedbackRoute: async (route): Promise<boolean> => {
+                if (!this.isLive(invitation)) {
+                    return false;
+                }
+                return this.openFeedbackRoute(route, invitation.activation, invitation.id);
             },
             onChoice: async (choice): Promise<void> => {
                 if (!this.isLive(invitation)) {

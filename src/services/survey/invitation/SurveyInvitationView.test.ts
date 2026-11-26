@@ -10,6 +10,7 @@ import { resolve } from 'path';
 import * as semver from 'semver';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
+import { FEEDBACK_ROUTE_URLS } from '../../../utils/feedbackRoutes';
 import { SurveyService } from '../SurveyService';
 import { SURVEY_FORM_URL, SURVEY_STATE_KEY } from '../surveyConfig';
 import { type SurveyInvitationCallbacks, type SurveyInvitationRequest } from '../surveyPresentation';
@@ -104,6 +105,7 @@ function callbacks(): SurveyInvitationCallbacks {
     return {
         onVisible: vi.fn(),
         onOpenForm: vi.fn().mockResolvedValue('failed'),
+        onOpenFeedbackRoute: vi.fn().mockResolvedValue(true),
         onChoice: vi.fn().mockResolvedValue(undefined),
     };
 }
@@ -204,6 +206,58 @@ describe('SurveyInvitationView', (): void => {
         });
         h.presenter.dispose();
         h.service.dispose();
+    });
+
+    it.each([
+        ['reportBug', FEEDBACK_ROUTE_URLS.reportBug],
+        ['suggestFeature', FEEDBACK_ROUTE_URLS.suggestFeature],
+    ] as const)('opens and tracks the %s route without closing manual feedback', async (route, url): Promise<void> => {
+        const h = harness();
+        h.open.mockResolvedValue(true);
+        expect(await h.service.showFeedbackForm('collectionView', 'documents')).toBe(true);
+        const stateBefore = { ...h.state() };
+        h.surface.message({ type: route });
+        await flush();
+        expect(h.open).toHaveBeenCalledWith(url);
+        expect(h.events.filter((event): boolean => event.name === 'survey.openFeedbackRoute')).toEqual([
+            expect.objectContaining({
+                properties: expect.objectContaining({
+                    activationSource: 'collectionView',
+                    collectionTab: 'documents',
+                    feedbackRoute: route,
+                    openResult: 'success',
+                }),
+            }),
+        ]);
+        expect(h.state()).toEqual(stateBefore);
+        expect(h.surface.view.webview.html).not.toBe('');
+        expect(h.events.filter((event): boolean => event.name === 'survey.invitationResolved')).toHaveLength(0);
+        h.service.dispose();
+        h.presenter.dispose();
+    });
+
+    it('tracks automatic-invitation feedback routes without changing the survey outcome', async (): Promise<void> => {
+        const h = harness();
+        h.open.mockResolvedValue(true);
+        h.service.recordSurveyActivityWithInvitation('connection');
+        await h.service.whenIdle();
+        h.surface.message({ type: 'rendered' });
+        await flush();
+        h.surface.message({ type: 'suggestFeature' });
+        await flush();
+        expect(h.open).toHaveBeenCalledWith(FEEDBACK_ROUTE_URLS.suggestFeature);
+        expect(h.events.find((event): boolean => event.name === 'survey.openFeedbackRoute')).toMatchObject({
+            properties: {
+                activationSource: 'automaticInvitation',
+                feedbackRoute: 'suggestFeature',
+                invitationSessionId: request.invitationSessionId,
+                openResult: 'success',
+            },
+        });
+        expect(h.state().lastOutcome).toBeUndefined();
+        expect(h.surface.view.webview.html).not.toBe('');
+        h.service.dispose();
+        h.presenter.dispose();
     });
 
     it('contributes a stable, context-gated Secondary Sidebar webview and localized command', (): void => {

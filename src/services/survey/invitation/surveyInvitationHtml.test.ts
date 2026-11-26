@@ -21,6 +21,8 @@ const strings: SurveyInvitationStrings = {
     englishNote: 'The survey is in English.',
     askLater: 'Ask me later',
     neverAgain: 'Never again',
+    reportBug: 'Report a bug',
+    suggestFeature: 'Suggest a feature',
     why: 'Why am I seeing this?',
     usage: "You've used the DocumentDB extension on {0} days with meaningful extension use. This count stays on your device.",
     manuallyOpened: "You're seeing this because you opened the feedback form.",
@@ -115,6 +117,26 @@ describe('survey invitation HTML', (): void => {
         expect(details?.textContent).not.toContain('days with meaningful extension use');
         expect(page.querySelector('[data-action="neverAgain"]')).toBeNull();
         expect(page.querySelector('[data-action="askLater"]')?.textContent).toBe('Close');
+    });
+
+    it.each([false, true])('shows GitHub feedback links before the explanation, manual=%s', (manuallyOpened): void => {
+        const page = parseHtml(
+            buildSurveyInvitationHtml({
+                strings,
+                nonce: 'test-nonce',
+                cspSource: 'vscode-webview:',
+                artworkUri: 'vscode-webview://extension/icon.png',
+                artworkDarkUri: 'vscode-webview://extension/icon-dark.svg',
+                explanation: { activeDayCount: 7, requiredActiveDays: 3, isReminder: false, previousOutcome: undefined },
+                manuallyOpened,
+            }),
+        );
+        const links = page.querySelector('.feedback-routes');
+        expect(links?.textContent).toContain(strings.reportBug);
+        expect(links?.textContent).toContain(strings.suggestFeature);
+        expect(links?.nextElementSibling?.tagName).toBe('DETAILS');
+        expect(links?.querySelectorAll('a')).toHaveLength(2);
+        expect(links?.querySelector('button')).toBeNull();
     });
 
     it('moves focus to Continue to survey when the host asks', (): void => {
@@ -245,6 +267,15 @@ describe('survey invitation HTML', (): void => {
         const h = interactiveHtml();
         h.dom.window.document.querySelector<HTMLButtonElement>('#open-survey')?.click();
         expect(h.messages).toEqual([{ type: 'rendered' }, { type: 'openForm' }]);
+        h.dom.window.close();
+    });
+
+    it.each(['reportBug', 'suggestFeature'])('opens the %s route without selecting the survey funnel', (action): void => {
+        const h = interactiveHtml();
+        h.dom.window.document.querySelector<HTMLInputElement>('input[value="5"]')?.click();
+        h.dom.window.document.querySelector<HTMLElement>(`[data-action="${action}"]`)?.click();
+        expect(h.messages).toEqual([{ type: 'rendered' }, { type: action }]);
+        expect(h.dom.window.document.querySelector<HTMLButtonElement>('#open-survey')?.disabled).toBe(false);
         h.dom.window.close();
     });
 

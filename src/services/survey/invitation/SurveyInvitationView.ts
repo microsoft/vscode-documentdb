@@ -5,6 +5,7 @@
 
 import { randomBytes } from 'crypto';
 import * as vscode from 'vscode';
+import { isFeedbackRoute } from '../../../utils/feedbackRoutes';
 import { type SurveyService } from '../SurveyService';
 import { traceSurvey } from '../surveyDiagnostics';
 import {
@@ -228,6 +229,19 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
                 }
                 return;
             }
+            case 'reportBug':
+            case 'suggestFeature': {
+                if (!isFeedbackRoute(message.type)) {
+                    return;
+                }
+                const opened = await invitation.callbacks.onOpenFeedbackRoute(message.type);
+                if (!opened) {
+                    await vscode.window.showErrorMessage(
+                        vscode.l10n.t("We couldn't open the feedback link in your browser. Please try again."),
+                    );
+                }
+                return;
+            }
             case 'openForm': {
                 if (invitation.busy) {
                     return;
@@ -356,6 +370,8 @@ export function getSurveyInvitationStrings(): SurveyInvitationStrings {
         englishNote: vscode.l10n.t('The survey is in English.'),
         askLater: vscode.l10n.t('Remind me later'),
         neverAgain: vscode.l10n.t("Don't ask again"),
+        reportBug: vscode.l10n.t('Report a bug'),
+        suggestFeature: vscode.l10n.t('Suggest a feature'),
         why: vscode.l10n.t('Why am I seeing this?'),
         usage: vscode.l10n.t(
             "You've used the DocumentDB extension on {0} days, so we'd love to hear how it's going. This count stays on your device.",
