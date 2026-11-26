@@ -9,23 +9,29 @@ import * as vscode from 'vscode';
 import { type PlaygroundConnection } from '../../documentdb/playground/types';
 import { executePlaygroundCode, stopPlaygroundEvaluator } from './executePlaygroundCode';
 
-const { evaluate, dispose, setExecuting, showResult, getConnection, getEpoch, canRecover, recover } = vi.hoisted(() => ({
-    evaluate: vi.fn(),
-    dispose: vi.fn(),
-    setExecuting: vi.fn(),
-    showResult: vi.fn(),
-    getConnection: vi.fn<() => PlaygroundConnection | undefined>(),
-    getEpoch: vi.fn<() => number>(),
-    canRecover: vi.fn(),
-    recover: vi.fn(),
-}));
+const { evaluate, dispose, setExecuting, showResult, getConnection, getEpoch, canRecover, recover, contexts } =
+    vi.hoisted(() => ({
+        evaluate: vi.fn(),
+        dispose: vi.fn(),
+        setExecuting: vi.fn(),
+        showResult: vi.fn(),
+        getConnection: vi.fn<() => PlaygroundConnection | undefined>(),
+        getEpoch: vi.fn<() => number>(),
+        canRecover: vi.fn(),
+        recover: vi.fn(),
+        contexts: new Map<string, IActionContext>(),
+    }));
 
 vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
     ...(await importOriginal<{ UserCancelledError: typeof UserCancelledError }>()),
     callWithTelemetryAndErrorHandling: (
-        _name: string,
+        name: string,
         run: (context: IActionContext) => Promise<void>,
-    ): Promise<void> => run({ errorHandling: {}, telemetry: { measurements: {}, properties: {} } } as IActionContext),
+    ): Promise<void> => {
+        const context = { errorHandling: {}, telemetry: { measurements: {}, properties: {} } } as IActionContext;
+        contexts.set(name, context);
+        return run(context);
+    },
 }));
 
 vi.mock('../../documentdb/ClustersClient', () => ({
@@ -41,6 +47,7 @@ vi.mock('../../documentdb/playground/PlaygroundEvaluator', () => ({
     PlaygroundEvaluator: class {
         evaluate = evaluate;
         dispose = dispose;
+        sessionDomainProperties = { domainInfo_isAzure: 'true' };
     },
 }));
 
@@ -61,6 +68,7 @@ vi.mock('../../extensionVariables', () => ({
 describe('executePlaygroundCode', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        contexts.clear();
         getConnection.mockReturnValue({ clusterId: 'cluster', clusterDisplayName: 'Cluster', databaseName: 'test' });
         getEpoch.mockReturnValue(0);
         canRecover.mockReturnValue(false);
@@ -138,6 +146,30 @@ describe('executePlaygroundCode', () => {
         }
     });
 
+    it('keeps the worker destination properties on a warm run', async () => {
+        const failure = Object.assign(new Error('token unavailable'), { name: 'TokenCallbackError' });
+        evaluate.mockRejectedValueOnce(failure).mockRejectedValueOnce(failure);
+        const progress = vi
+            .spyOn(vscode.window, 'withProgress')
+            .mockImplementation((_options, task) =>
+                Promise.resolve(
+                    task({ report: vi.fn() }, { isCancellationRequested: false, onCancellationRequested: vi.fn() }),
+                ),
+            );
+        try {
+            const uri = vscode.Uri.file('test.documentdb.js');
+            await expect(executePlaygroundCode('db.stats()', 'runAll', uri)).rejects.toBe(failure);
+            await expect(executePlaygroundCode('db.stats()', 'runAll', uri)).rejects.toBe(failure);
+            expect(contexts.get('playground.execute')?.telemetry.properties).toMatchObject({
+                isNewEvaluator: 'false',
+                domainInfo_isAzure: 'true',
+            });
+        } finally {
+            progress.mockRestore();
+            stopPlaygroundEvaluator('cluster');
+        }
+    });
+
     it.each([false, true])('honors the sign-in epoch unless superseded (%s)', async (superseded) => {
         const identity: NonNullable<PlaygroundConnection['entraIdentity']> = {
             kind: 'entra',
@@ -174,7 +206,10 @@ describe('executePlaygroundCode', () => {
             await expect(
                 executePlaygroundCode('db.stats()', 'runAll', vscode.Uri.file('test.documentdb.js')),
             ).rejects.toBe(failure);
-            expect(recover).toHaveBeenCalledExactlyOnceWith(expect.anything(), 'cluster', identity);
+            const signInContext = contexts.get('playground.signInAgain');
+            expect(signInContext).toBeDefined();
+            expect(signInContext).not.toBe(contexts.get('playground.execute'));
+            expect(recover).toHaveBeenCalledExactlyOnceWith(signInContext, 'cluster', identity);
             expect(evaluate).toHaveBeenCalledOnce();
             expect(dispose).toHaveBeenCalledTimes(superseded ? 0 : 1);
         } finally {

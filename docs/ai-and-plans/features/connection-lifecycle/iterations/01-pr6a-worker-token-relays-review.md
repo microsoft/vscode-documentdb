@@ -100,4 +100,41 @@ Shell worker to restart.
 ## Verification after the fixes
 
 Case 1 passed on `f5b79a3e9`: `npm run build` and 534 focused tests across 18 suites.
-Case 2 is deferred until formal handoff. The packaged live checks remain at OP-6.
+The packaged live checks remain at OP-6.
+
+## Copilot review follow-up
+
+The advisor confirmed that a worker-only account pin cannot complete host recovery.
+[`27410085f`](https://github.com/microsoft/vscode-documentdb/commit/27410085f) requires a
+matching host-verified pin before offering **Sign in again**. Otherwise, the existing
+surface guidance points to the tree; no worker-learned identity is promoted to a host pin.
+
+- A Playground document retains the account learned before a later startup failure
+  ([`a5ce99b97`](https://github.com/microsoft/vscode-documentdb/commit/a5ce99b97)).
+- Late binding capture follows the same Playground connection through Save As but not
+  through an explicit re-pick ([`1e9fc1446`](https://github.com/microsoft/vscode-documentdb/commit/1e9fc1446)).
+- Warm Playground runs retain the worker's destination metadata without reading cached
+  credentials ([`56b5143c8`](https://github.com/microsoft/vscode-documentdb/commit/56b5143c8)).
+- The notification action records its own Playground sign-in outcome rather than writing
+  to the completed Run event ([`50cb05dc3`](https://github.com/microsoft/vscode-documentdb/commit/50cb05dc3)).
+- A worker keeps its token audience and sign-in environment together and refuses cloud
+  or authority changes ([`f9dbc4ee0`](https://github.com/microsoft/vscode-documentdb/commit/f9dbc4ee0)).
+  The environment check also runs when a current token lookup rejects
+  ([`a42fa23f8`](https://github.com/microsoft/vscode-documentdb/commit/a42fa23f8)).
+
+The [configuration-guidance finding](https://github.com/microsoft/vscode-documentdb/pull/1133#discussion_r4704910161)
+is not being changed in this PR. Some cloud or managed identity configuration errors
+still receive the generic worker retry guidance. Keeping the bounded worker failure
+contract avoids expanding error transport or adding a second guidance path just for these
+failures. The tree connection and **Diagnose Connection** remain available for configuration
+troubleshooting.
+
+The operator approved the sovereign-auth integration expectations after the full test run:
+a warm Entra worker keeps the original token audience but refuses renewal if the configured
+provider, cloud or authority changes. A different destination requires a new Shell or an
+explicit Playground re-pick. Same-identity respawn and managed identity's existing audience
+snapshot are unchanged.
+
+**Case 2 handoff:** Localization, formatting, lint, build, strict workspace test
+type-checking, 9,959 tests across 444 suites (one skipped), and VSIX packaging passed.
+The VSIX was built for verification, not published as a new operator candidate.

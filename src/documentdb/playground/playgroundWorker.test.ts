@@ -308,11 +308,17 @@ describe('playground worker OIDC configuration at the driver boundary', () => {
             );
             driver.evaluate.mockImplementationOnce(rejectCallback);
             receive({
-                type: 'eval', requestId: 'warm', code: 'db.test.find()', displayBatchSize: 20, databaseName: 'test',
+                type: 'eval',
+                requestId: 'warm',
+                code: 'db.test.find()',
+                displayBatchSize: 20,
+                databaseName: 'test',
             });
-            await vi.waitFor(() => expect(transport.postMessage).toHaveBeenCalledWith(
-                expect.objectContaining({ type: 'evalError', requestId: 'warm', authReason: reason }),
-            ));
+            await vi.waitFor(() =>
+                expect(transport.postMessage).toHaveBeenCalledWith(
+                    expect.objectContaining({ type: 'evalError', requestId: 'warm', authReason: reason }),
+                ),
+            );
         },
     );
 

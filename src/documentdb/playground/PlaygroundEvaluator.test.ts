@@ -6,7 +6,11 @@
 import type * as azureAuth from '@microsoft/vscode-azext-azureauth';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
-import { type callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
+import {
+    UserCancelledError,
+    type callWithTelemetryAndErrorHandling,
+    type IActionContext,
+} from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { type AuthTraceContext } from '../../utils/authTrace';
@@ -22,10 +26,12 @@ import {
     recordEntraTokenFailure,
     resetEntraTokenFailuresForTests,
 } from '../auth/entraErrors/entraTokenFailures';
-import { ClustersClient } from '../ClustersClient';
 import { type getManagedIdentityAccessToken } from '../auth/managedIdentityTokenProvider';
+import { ClustersClient } from '../ClustersClient';
+import { computeConnectionFingerprint } from '../connectionFingerprint';
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { PlaygroundEvaluator } from './PlaygroundEvaluator';
+import { type PlaygroundWorkerBinding } from './types';
 import { type WorkerSessionCallbacks } from './WorkerSessionManager';
 import { getWorkerAuthReason, type MainToWorkerMessage, type WorkerToMainMessage } from './workerTypes';
 
@@ -50,9 +56,15 @@ const mocks = vi.hoisted(() => ({
     callbacks: undefined as WorkerSessionCallbacks | undefined,
     initMessage: undefined as InitMessage | undefined,
     clusterId: undefined as string | undefined,
+    startup: vi.fn<() => Promise<void>>(),
     worker: {
         isConnectedTo: vi.fn<(clusterId: string) => boolean>(),
-        sendEval: vi.fn<(message: MainToWorkerMessage) => Promise<{ result: { type: string; printable: string; durationMs: number } }>>(),
+        sendEval:
+            vi.fn<
+                (
+                    message: MainToWorkerMessage,
+                ) => Promise<{ result: { type: string; printable: string; durationMs: number } }>
+            >(),
         killWorker: vi.fn(),
     },
 }));
@@ -117,6 +129,7 @@ vi.mock('./WorkerSessionManager', () => ({
             ensureWorker: vi.fn(async (clusterId: string, initMessage: InitMessage): Promise<void> => {
                 mocks.clusterId = clusterId;
                 mocks.initMessage = initMessage;
+                await mocks.startup();
             }),
             get workerClusterId(): string | undefined {
                 return mocks.clusterId;
@@ -152,6 +165,7 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
         mocks.callbacks = undefined;
         mocks.initMessage = undefined;
         mocks.clusterId = undefined;
+        mocks.startup.mockReset();
         mocks.configuredProvider.mockReturnValue('microsoft');
         mocks.worker.isConnectedTo.mockReturnValue(false);
         mocks.worker.sendEval.mockResolvedValue({ result: { type: 'number', printable: '1', durationMs: 0 } });
@@ -227,6 +241,93 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
     }
 
     const connection = { clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' };
+    const learnedIdentity = {
+        kind: 'entra',
+        providerId: 'microsoft',
+        tenantId: 'interactive-tenant',
+        accountId: 'private-account',
+        accountLabel,
+    } as const;
+
+    function configureEntraStartup(): void {
+        mocks.getCredentials.mockReturnValue({
+            clusterId,
+            connectionString: originalConnection,
+            authMechanism: AuthMethodId.MicrosoftEntraID,
+            entraIdConfig: { tenantId: learnedIdentity.tenantId },
+        });
+    }
+
+    it('retains the first relay pin on startup failure without running the query', async (): Promise<void> => {
+        const failure = new Error('database startup failed');
+        const capture = vi.fn<(binding: PlaygroundWorkerBinding) => void>();
+        configureEntraStartup();
+        mocks.startup.mockImplementationOnce(async () => {
+            const response = await requestToken({ type: 'tokenRequest', requestId: 'startup' });
+            expect(response).toHaveBeenCalledWith(expect.objectContaining({ type: 'tokenResponse' }));
+            throw failure;
+        });
+
+        try {
+            await expect(evaluator.evaluate(connection, 'first Run', undefined, capture)).rejects.toBe(failure);
+            expect(capture).toHaveBeenCalledExactlyOnceWith({
+                fingerprint: computeConnectionFingerprint({
+                    connectionString: originalConnection,
+                    principal: learnedIdentity,
+                }),
+                entraIdentity: learnedIdentity,
+            });
+
+            evaluator.dispose();
+            evaluator = new PlaygroundEvaluator();
+            const verified = vi.spyOn(ClustersClient, 'getLastVerifiedIdentity').mockReturnValue({
+                ...learnedIdentity,
+                accountId: 'different-account',
+            });
+            try {
+                await expect(
+                    evaluator.evaluate({ ...connection, ...capture.mock.calls[0][0] }, 'next Run'),
+                ).rejects.toMatchObject({ reason: 'credentialsChanged' });
+            } finally {
+                verified.mockRestore();
+            }
+            expect(mocks.worker.sendEval).not.toHaveBeenCalled();
+        } finally {
+            mocks.getCredentials.mockClear();
+        }
+    });
+
+    it.each(['relay replaced', 'epoch changed', 'latched', 'cancelled'] as const)(
+        'does not capture a learned pin on startup failure after %s',
+        async (invalidation): Promise<void> => {
+            const failure =
+                invalidation === 'cancelled' ? new UserCancelledError('workerStartup') : new Error('startup failed');
+            const capture = vi.fn();
+            configureEntraStartup();
+            const latch = vi.spyOn(ClustersClient, 'getLatchReason');
+            mocks.startup.mockImplementationOnce(async () => {
+                const response = await requestToken({ type: 'tokenRequest', requestId: 'startup' });
+                expect(response).toHaveBeenCalledWith(expect.objectContaining({ type: 'tokenResponse' }));
+                if (invalidation === 'relay replaced') {
+                    evaluator.killWorker();
+                } else if (invalidation === 'epoch changed') {
+                    ClustersClient.invalidate(clusterId);
+                } else if (invalidation === 'latched') {
+                    latch.mockReturnValue('userDisconnected');
+                }
+                throw failure;
+            });
+
+            try {
+                await expect(evaluator.evaluate(connection, 'first Run', undefined, capture)).rejects.toBe(failure);
+                expect(capture).not.toHaveBeenCalled();
+                expect(mocks.worker.sendEval).not.toHaveBeenCalled();
+            } finally {
+                mocks.getCredentials.mockClear();
+                latch.mockRestore();
+            }
+        },
+    );
 
     it('uses a verified cluster identity silently on the first relay', async (): Promise<void> => {
         const verified = vi.spyOn(ClustersClient, 'getLastVerifiedIdentity').mockReturnValue({
@@ -260,7 +361,9 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
             accessToken: 'other-token',
         });
         const mismatch = await requestToken({ type: 'tokenRequest', requestId: 'different-account' });
-        expect(mismatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'tokenError', reason: 'identityMismatch' }));
+        expect(mismatch).toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'tokenError', reason: 'identityMismatch' }),
+        );
         mocks.configuredProvider.mockReturnValue('microsoft-sovereign-cloud');
         const changed = await requestToken({ type: 'tokenRequest', requestId: 'different-provider' });
         expect(changed).toHaveBeenCalledWith(expect.objectContaining({ type: 'tokenError', reason: 'signInRequired' }));
@@ -297,7 +400,11 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
         } finally {
             ClustersClient.unlatch(clusterId);
         }
-        mocks.getCredentials.mockReturnValue({ clusterId, connectionString: 'mongodb://other.example.com/', authMechanism: AuthMethodId.NoAuth });
+        mocks.getCredentials.mockReturnValue({
+            clusterId,
+            connectionString: 'mongodb://other.example.com/',
+            authMechanism: AuthMethodId.NoAuth,
+        });
         await evaluator.evaluate(connection, '3');
         mocks.worker.isConnectedTo.mockReturnValue(true);
         await expect(evaluator.evaluate(oldDocument, '4')).rejects.toMatchObject({ reason: 'credentialsChanged' });
@@ -346,9 +453,7 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
                 fingerprint: 'fingerprint-b',
                 generation: 2,
             });
-            const expected = vi
-                .spyOn(ClustersClient, 'getExpectedFingerprint')
-                .mockReturnValue('fingerprint-b');
+            const expected = vi.spyOn(ClustersClient, 'getExpectedFingerprint').mockReturnValue('fingerprint-b');
 
             await expect(evaluator.evaluate(oldBinding, 'old-document')).rejects.toMatchObject({
                 reason: 'credentialsChanged',
@@ -374,13 +479,9 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
                 name: 'EntraSignInRequiredError',
             });
             expect(expected).toHaveBeenCalled();
-            expect(mocks.worker.sendEval.mock.calls.map(([message]) => message.type === 'eval' && message.code)).toEqual([
-                '1',
-                '2',
-                'failed',
-                'replacement',
-                'second-failure',
-            ]);
+            expect(
+                mocks.worker.sendEval.mock.calls.map(([message]) => message.type === 'eval' && message.code),
+            ).toEqual(['1', '2', 'failed', 'replacement', 'second-failure']);
             mocks.getCredentials.mockClear();
         } finally {
             vi.restoreAllMocks();
@@ -397,9 +498,13 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
             await evaluator.evaluate(connection, '2', undefined, capture);
             const binding = capture.mock.calls[0][0] as { fingerprint: string };
             const bound = { ...connection, ...binding };
-            const failure = new Error('outer driver error', { cause: Object.assign(new Error('private broker'), { name: 'TokenCallbackError' }) });
+            const failure = new Error('outer driver error', {
+                cause: Object.assign(new Error('private broker'), { name: 'TokenCallbackError' }),
+            });
             mocks.worker.sendEval.mockRejectedValueOnce(failure);
-            await expect(evaluator.evaluate(bound, 'failed')).rejects.toSatisfy((error: unknown) => getWorkerAuthReason(error) === 'refreshFailed');
+            await expect(evaluator.evaluate(bound, 'failed')).rejects.toSatisfy(
+                (error: unknown) => getWorkerAuthReason(error) === 'refreshFailed',
+            );
             mocks.worker.isConnectedTo.mockReturnValue(false);
             mocks.getCredentials.mockReturnValue({
                 clusterId,
@@ -412,9 +517,9 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
             mocks.worker.isConnectedTo.mockReturnValue(true);
             mocks.getCredentials.mockClear();
             await evaluator.evaluate(bound, 'after');
-            expect(mocks.worker.sendEval.mock.calls.map(([message]) => message.type === 'eval' && message.code)).toEqual([
-                '1', '2', 'failed', 'next', 'after',
-            ]);
+            expect(
+                mocks.worker.sendEval.mock.calls.map(([message]) => message.type === 'eval' && message.code),
+            ).toEqual(['1', '2', 'failed', 'next', 'after']);
         },
     );
 

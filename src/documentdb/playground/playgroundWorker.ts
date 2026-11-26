@@ -23,7 +23,6 @@ import { EJSON } from 'bson';
 import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type MongoClient as MongoClientType } from 'mongodb';
 import { parentPort } from 'worker_threads';
-import { AuthMethodId } from '../auth/AuthMethodId';
 import { removeConflictingOidcMechanism } from '../auth/nonOidcConnectionString';
 import { EntraDestinationRejectedError, normalizeCustomHostnameSuffix } from '../auth/oidcAllowedHosts';
 import {
@@ -177,7 +176,7 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
     // differs, and both are resolved on the main thread so there is one credential and one cache
     // per window, and so the worker never needs @azure/identity.
     let connectionString = msg.connectionString;
-    if (msg.authMechanism === AuthMethodId.MicrosoftEntraID || msg.authMechanism === AuthMethodId.ManagedIdentity) {
+    if (msg.authMechanism === 'MicrosoftEntraID' || msg.authMechanism === 'ManagedIdentity') {
         const snapshot = msg.oidcDestinationPolicy;
         if (
             !snapshot ||
@@ -204,7 +203,7 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
                 originalPolicy.assertAllowed(host);
             },
         };
-        const usesManagedIdentity = msg.authMechanism === AuthMethodId.ManagedIdentity;
+        const usesManagedIdentity = msg.authMechanism === 'ManagedIdentity';
         const configuration = buildOidcClientConfiguration({
             connectionString,
             policy,
@@ -435,7 +434,9 @@ function handleTokenError(msg: Extract<MainToWorkerMessage, { type: 'tokenError'
     if (pending) {
         const reason = isWorkerAuthReason(msg.reason)
             ? msg.reason
-            : msg.errorName === 'EntraDestinationRejectedError' ? 'destinationRejected' : 'refreshFailed';
+            : msg.errorName === 'EntraDestinationRejectedError'
+              ? 'destinationRejected'
+              : 'refreshFailed';
         pending.reject(relayError(reason));
         pendingTokenRequests.delete(msg.requestId);
     }

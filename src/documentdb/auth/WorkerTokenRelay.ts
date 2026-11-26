@@ -28,7 +28,7 @@ import {
     TokenCallbackError,
 } from './entraErrors/entraCallbackErrors';
 import { clearEntraTokenFailure, recordEntraTokenFailure } from './entraErrors/entraTokenFailures';
-import { getEntraSession, readEntraSignInEnvironment } from './entraSession';
+import { getEntraSession, readEntraSignInEnvironment, type EntraSignInEnvironment } from './entraSession';
 import { EntraDestinationRejectedError } from './oidcAllowedHosts';
 import { jwtLifetimeSeconds, readJwtTimes } from './tokenExpiry';
 import { emitTokenRenewal } from './tokenRenewalTelemetry';
@@ -53,6 +53,7 @@ export function createWorkerAuthError(reason: WorkerAuthReason, method?: AuthMet
 /** Host-only token relay for a single worker. The worker cannot select its own identity or destination. */
 export class WorkerTokenRelay {
     private resource: ResolvedTokenResource | undefined;
+    private environment: EntraSignInEnvironment | undefined;
     private pending: Promise<void> = Promise.resolve();
 
     constructor(
@@ -74,8 +75,7 @@ export class WorkerTokenRelay {
         epoch = this.epoch,
     ): Promise<void> {
         const isCurrentEpoch = (): boolean =>
-            !ClustersClient.getLatchReason(this.clusterId) &&
-            ClustersClient.getEpoch(this.clusterId) === epoch;
+            !ClustersClient.getLatchReason(this.clusterId) && ClustersClient.getEpoch(this.clusterId) === epoch;
         const canReply = (): boolean => {
             if (!isCurrentWorker()) {
                 return false;
@@ -89,13 +89,13 @@ export class WorkerTokenRelay {
         const activeTrace = (): AuthTraceContext | undefined =>
             isCurrentWorker() && isCurrentEpoch() ? trace : undefined;
         const { connectionString, authMechanism, tenantId, managedIdentityClientId, persistent } = this.init;
-        const managed = authMechanism === AuthMethodId.ManagedIdentity;
+        const managed = authMechanism === 'ManagedIdentity';
         const abortFlag =
             driverAbortFlag instanceof SharedArrayBuffer && driverAbortFlag.byteLength === Int32Array.BYTES_PER_ELEMENT
                 ? new Int32Array(driverAbortFlag)
                 : undefined;
         const shouldObserve = (): boolean =>
-            postStartup && authMechanism === AuthMethodId.MicrosoftEntraID && (!abortFlag || Atomics.load(abortFlag, 0) === 0);
+            postStartup && authMechanism === 'MicrosoftEntraID' && (!abortFlag || Atomics.load(abortFlag, 0) === 0);
         const surface = persistent ? 'shell' : 'playground';
         const assertDestination = (): void => {
             const decision = evaluateEntraDestinationFromSettings(connectionString);
@@ -111,37 +111,60 @@ export class WorkerTokenRelay {
             let mode: 'managedIdentity' | 'silent' | 'interactive' | undefined;
             let acquiring = false;
             try {
-                if (!managed && authMechanism !== AuthMethodId.MicrosoftEntraID) {
+                if (!managed && authMechanism !== 'MicrosoftEntraID') {
                     throw new Error('Token request from a non-OIDC worker');
                 }
                 assertDestination();
                 const pin = this.pin;
-                const environment = managed ? undefined : readEntraSignInEnvironment();
-                const assertEnvironment = (): string => {
-                    const now = readEntraSignInEnvironment();
+                const readEnvironment = (): EntraSignInEnvironment => {
+                    try {
+                        return readEntraSignInEnvironment();
+                    } catch {
+                        throw new EntraSignInRequiredError('providerChanged');
+                    }
+                };
+                const assertEnvironment = (expected: EntraSignInEnvironment): string => {
+                    const now = readEnvironment();
                     if (
-                        !environment ||
                         (pin && (pin.providerId !== now.providerId || pin.tenantId !== tenantId)) ||
-                        environment.providerId !== now.providerId ||
-                        environment.cloudName !== now.cloudName ||
-                        environment.authority !== now.authority
+                        expected.providerId !== now.providerId ||
+                        expected.cloudName !== now.cloudName ||
+                        expected.authority !== now.authority
                     ) {
                         throw new EntraSignInRequiredError('providerChanged');
                     }
-                    return environment.providerId;
+                    return expected.providerId;
                 };
                 mode = managed ? 'managedIdentity' : pin ? 'silent' : 'interactive';
-                const resolved =
-                    this.resource ??
-                    (managed
+                let resolved = this.resource;
+                let environment = this.environment;
+                if (!resolved) {
+                    const resolutionEnvironment = managed ? undefined : readEnvironment();
+                    if (resolutionEnvironment) {
+                        assertEnvironment(resolutionEnvironment);
+                    }
+                    resolved = managed
                         ? await resolveManagedIdentityTokenResource(connectionString)
-                        : await resolveInteractiveTokenResource(connectionString));
+                        : await resolveInteractiveTokenResource(connectionString);
+                    if (!canReply()) {
+                        return;
+                    }
+                    if (resolutionEnvironment) {
+                        assertEnvironment(resolutionEnvironment);
+                    }
+                    this.resource = resolved;
+                    this.environment = resolutionEnvironment;
+                    environment = resolutionEnvironment;
+                } else if (!managed) {
+                    if (!environment) {
+                        throw new EntraSignInRequiredError('providerChanged');
+                    }
+                    assertEnvironment(environment);
+                }
                 if (!canReply()) {
                     return;
                 }
-                this.resource = resolved;
-                const { tokenResource: _resource, ...details } = resolved.details;
-                traceAuthFlow('entraCloud.resolved', details, requestId, activeTrace());
+                traceAuthFlow('entraCloud.resolved', resolved.details, requestId, activeTrace());
                 let identity: VerifiedEntraIdentity | undefined;
                 let accessToken: string;
                 acquiring = true;
@@ -164,20 +187,29 @@ export class WorkerTokenRelay {
                     ).accessToken;
                 } else {
                     assertDestination();
-                    const providerId = assertEnvironment();
-                    const session = await withTokenAcquisitionTiming(timings, () =>
-                        getEntraSession({
-                            providerId,
-                            resource: resolved.scope,
-                            tenantId,
-                            account: pin ? { id: pin.accountId, label: pin.accountLabel } : undefined,
-                            mode: pin ? 'silent' : 'interactive',
-                        }),
-                    );
+                    if (!environment) {
+                        throw new EntraSignInRequiredError('providerChanged');
+                    }
+                    const providerId = assertEnvironment(environment);
+                    let session: Awaited<ReturnType<typeof getEntraSession>>;
+                    try {
+                        session = await withTokenAcquisitionTiming(timings, () =>
+                            getEntraSession({
+                                providerId,
+                                resource: resolved.scope,
+                                tenantId,
+                                account: pin ? { id: pin.accountId, label: pin.accountLabel } : undefined,
+                                mode: pin ? 'silent' : 'interactive',
+                            }),
+                        );
+                    } finally {
+                        if (canReply()) {
+                            assertEnvironment(environment);
+                        }
+                    }
                     if (!canReply()) {
                         return;
                     }
-                    assertEnvironment();
                     if (!session && pin) {
                         throw new EntraSignInRequiredError('noSession');
                     }
@@ -246,7 +278,9 @@ export class WorkerTokenRelay {
                     requestId,
                     error: createWorkerAuthError(reason, authMechanism as AuthMethodId).message,
                     reason,
-                    ...(reason === 'destinationRejected' ? { errorName: 'EntraDestinationRejectedError' as const } : {}),
+                    ...(reason === 'destinationRejected'
+                        ? { errorName: 'EntraDestinationRejectedError' as const }
+                        : {}),
                 });
                 if (shouldObserve() && !isUserCancelledError(error)) {
                     let outcome: 'noSession' | 'identityMismatch' | 'failed' = 'failed';

@@ -8,14 +8,14 @@ import { randomUUID } from 'crypto';
 import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { getBatchSizeSetting, getConnectionTimeoutMs } from '../../utils/workspacUtils';
-import { ClustersClient } from '../ClustersClient';
-import { ConnectionUnavailableError } from '../ConnectionUnavailableError';
-import { CredentialCache } from '../CredentialCache';
 import { type VerifiedEntraIdentity } from '../auth/AuthHandler';
 import { AuthMethodId } from '../auth/AuthMethodId';
 import { EntraIdentityMismatchError } from '../auth/entraErrors/entraCallbackErrors';
 import { createWorkerAuthError, sameEntraIdentity, WorkerTokenRelay } from '../auth/WorkerTokenRelay';
+import { ClustersClient } from '../ClustersClient';
 import { computeConnectionFingerprint } from '../connectionFingerprint';
+import { ConnectionUnavailableError } from '../ConnectionUnavailableError';
+import { CredentialCache } from '../CredentialCache';
 import {
     WorkerSessionManager,
     type WorkerSessionCallbacks,
@@ -144,7 +144,9 @@ export class ShellSessionManager implements vscode.Disposable {
                 const relay = this._relay;
                 // Warm Shells survive host-only invalidation. Fence each refresh at receipt;
                 // startup still uses the epoch captured before opening the connection.
-                const epoch = this._initialized ? ClustersClient.getEpoch(this._connectionInfo.clusterId) : relay?.epoch;
+                const epoch = this._initialized
+                    ? ClustersClient.getEpoch(this._connectionInfo.clusterId)
+                    : relay?.epoch;
                 await relay?.relay(
                     request,
                     post,
@@ -165,7 +167,9 @@ export class ShellSessionManager implements vscode.Disposable {
      * Whether the shell session has been initialized (worker spawned and connected).
      */
     get isInitialized(): boolean {
-        return this._initialized && this._workerManager.isAlive && !this._authFailure && !this._workerManager.authFailure;
+        return (
+            this._initialized && this._workerManager.isAlive && !this._authFailure && !this._workerManager.authFailure
+        );
     }
 
     /**
@@ -253,7 +257,7 @@ export class ShellSessionManager implements vscode.Disposable {
             this._fingerprint ??= fingerprint;
             const verified = ClustersClient.getLastVerifiedIdentity(clusterId);
             const pin = this._pin ?? (verified?.kind === 'entra' ? verified : undefined);
-            if (initMsg.authMechanism === AuthMethodId.MicrosoftEntraID) {
+            if (initMsg.authMechanism === 'MicrosoftEntraID') {
                 this._pin = pin;
             }
             this._relay = new WorkerTokenRelay(
@@ -261,7 +265,7 @@ export class ShellSessionManager implements vscode.Disposable {
                 initMsg,
                 epoch,
                 this._managedIdentityTokenCorrelationId,
-                initMsg.authMechanism === AuthMethodId.MicrosoftEntraID ? pin : undefined,
+                initMsg.authMechanism === 'MicrosoftEntraID' ? pin : undefined,
                 (identity) => {
                     this._pin = identity;
                     this._fingerprint ??= computeConnectionFingerprint({
@@ -275,9 +279,18 @@ export class ShellSessionManager implements vscode.Disposable {
 
         const relay = this._relay;
         try {
-            await this._workerManager.ensureWorker(clusterId, initMsg, getConnectionTimeoutMs(), this._telemetryContext);
+            await this._workerManager.ensureWorker(
+                clusterId,
+                initMsg,
+                getConnectionTimeoutMs(),
+                this._telemetryContext,
+            );
         } catch (error) {
-            if (relay === this._relay && epoch === ClustersClient.getEpoch(clusterId) && !ClustersClient.getLatchReason(clusterId)) {
+            if (
+                relay === this._relay &&
+                epoch === ClustersClient.getEpoch(clusterId) &&
+                !ClustersClient.getLatchReason(clusterId)
+            ) {
                 this._authFailure ??= getWorkerAuthReason(error);
             }
             throw error;

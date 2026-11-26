@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 // Static or `await import('bson')`, this is the driver's CommonJS copy: vite.config.ext.mjs and
 // vitest.config.ts alias `bson` to it. Without the alias an ES-module importer gets bson's ESM
@@ -22,6 +22,8 @@ import { ClustersClient } from '../ClustersClient';
 import { computeConnectionFingerprint } from '../connectionFingerprint';
 import { ConnectionUnavailableError } from '../ConnectionUnavailableError';
 import { CredentialCache } from '../CredentialCache';
+import { getHostsFromConnectionString } from '../utils/connectionStringHelpers';
+import { addDomainInfoToProperties } from '../utils/getClusterMetadata';
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 import { type ExecutionResult, type PlaygroundConnection, type PlaygroundWorkerBinding } from './types';
 import { WorkerSessionManager } from './WorkerSessionManager';
@@ -98,6 +100,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
 
     /** Auth mechanism used for the current worker session (for telemetry). */
     private _sessionAuthMethod: string | undefined;
+    private _sessionDomainProperties: Record<string, string | undefined> | undefined;
 
     /** Telemetry accessors — read by the command layer for telemetry properties. */
     get sessionId(): string | undefined {
@@ -108,6 +111,9 @@ export class PlaygroundEvaluator implements vscode.Disposable {
     }
     get sessionAuthMethod(): string | undefined {
         return this._sessionAuthMethod;
+    }
+    get sessionDomainProperties(): Readonly<Record<string, string | undefined>> | undefined {
+        return this._sessionDomainProperties;
     }
 
     /** Duration of the last worker init (spawn + auth), in ms. 0 if worker was already alive. */
@@ -247,13 +253,13 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         const needsSpawn = replaceFailedWorker || !sameCluster || !!reason || this._relay?.epoch !== epoch;
 
         const initStartTime = Date.now();
+        let learnedBinding: PlaygroundWorkerBinding | undefined;
         let initMsg: Extract<MainToWorkerMessage, { type: 'init' }>;
         if (needsSpawn || !this._sessionInitMessage) {
             onProgress?.(l10n.t('Initializing…'));
             this.assertConnectionAvailable(clusterId);
             const pinned = connection.entraIdentity ?? pin;
-            const expected =
-                replacementFingerprint ?? ClustersClient.getExpectedFingerprint(clusterId, pinned);
+            const expected = replacementFingerprint ?? ClustersClient.getExpectedFingerprint(clusterId, pinned);
             if (fingerprint !== undefined && fingerprint !== expected) {
                 throw new ConnectionUnavailableError('credentialsChanged');
             }
@@ -265,35 +271,36 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                 this._workerManager.killWorker();
             }
             this.resetSession();
-            const workerPin = initMsg.authMechanism === AuthMethodId.MicrosoftEntraID ? entraPin ?? pinned : undefined;
+            const workerPin = initMsg.authMechanism === 'MicrosoftEntraID' ? (entraPin ?? pinned) : undefined;
             this._pinContext = workerPin && { clusterId, identity: workerPin };
             this._sessionInitMessage = initMsg;
             this._workerFingerprint = expected;
             this._sessionId = randomUUID();
             this._sessionAuthMethod = initMsg.authMechanism;
+            this._sessionDomainProperties = {};
             const originalUri = initMsg.connectionString;
-            this._relay = new WorkerTokenRelay(
-                clusterId,
-                initMsg,
-                epoch,
-                this._sessionId,
-                workerPin,
-                (identity) => {
-                    this._pinContext = { clusterId, identity };
-                    this._workerFingerprint = computeConnectionFingerprint({
-                        connectionString: originalUri,
-                        principal: identity,
-                    });
-                },
-            );
+            try {
+                addDomainInfoToProperties(getHostsFromConnectionString(originalUri), this._sessionDomainProperties);
+            } catch {
+                meterSilentCatch('PlaygroundEvaluator_domainInfo');
+            }
+            this._relay = new WorkerTokenRelay(clusterId, initMsg, epoch, this._sessionId, workerPin, (identity) => {
+                this._pinContext = { clusterId, identity };
+                this._workerFingerprint = computeConnectionFingerprint({
+                    connectionString: originalUri,
+                    principal: identity,
+                });
+                learnedBinding = { fingerprint: this._workerFingerprint, entraIdentity: identity };
+            });
         } else {
             initMsg = this._sessionInitMessage;
         }
 
         const relay = this._relay;
+        const isCurrentRelay = (): boolean => relay === this._relay && epoch === ClustersClient.getEpoch(clusterId);
         const assertCurrent = (): void => {
             this.assertConnectionAvailable(clusterId);
-            if (relay !== this._relay || epoch !== ClustersClient.getEpoch(clusterId)) {
+            if (!isCurrentRelay()) {
                 throw new ConnectionUnavailableError('credentialsChanged');
             }
         };
@@ -321,6 +328,17 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         // The telemetry wrapper swallows cancellation even when rethrow is enabled.
         if (originalFailure) {
             this.recordWorkerFailure(clusterId, relay, originalFailure.error);
+            // Startup can fail after sign-in; keep the document pinned without replaying its query.
+            if (
+                learnedBinding &&
+                fingerprint === undefined &&
+                !(originalFailure.error instanceof UserCancelledError) &&
+                isCurrentRelay() &&
+                !this._disposed &&
+                !ClustersClient.getLatchReason(clusterId)
+            ) {
+                onFirstBinding?.(learnedBinding);
+            }
             throw originalFailure.error;
         }
         assertCurrent();
@@ -503,7 +521,6 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         };
     }
 
-
     // ─── Private: Session telemetry ──────────────────────────────────────────
 
     private resetSession(): void {
@@ -519,6 +536,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         }
 
         this._sessionInitMessage = undefined;
+        this._sessionDomainProperties = undefined;
         this._relay = undefined;
         this._workerFingerprint = undefined;
         this._sessionId = undefined;

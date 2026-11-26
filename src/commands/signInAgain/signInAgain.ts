@@ -27,18 +27,15 @@ interface WorkerSignInResult {
     readonly epoch: number;
 }
 
-export function canSignInAgainForWorker(
-    clusterId: string,
-    expectedIdentity: VerifiedEntraIdentity,
-): boolean {
+export function canSignInAgainForWorker(clusterId: string, expectedIdentity: VerifiedEntraIdentity): boolean {
     const credentials = CredentialCache.getCredentials(clusterId);
     const hostIdentity = ClustersClient.getLastVerifiedIdentity(clusterId);
     return (
         ClustersClient.getLatchReason(clusterId) === undefined &&
         credentials?.authMechanism === AuthMethodId.MicrosoftEntraID &&
         credentials.entraIdConfig?.tenantId === expectedIdentity.tenantId &&
-        (hostIdentity === undefined ||
-            (hostIdentity.kind === 'entra' && sameEntraIdentity(hostIdentity, expectedIdentity)))
+        hostIdentity?.kind === 'entra' &&
+        sameEntraIdentity(hostIdentity, expectedIdentity)
     );
 }
 
@@ -106,20 +103,14 @@ async function signInAgainInternal(
     context.errorHandling.suppressDisplay = true;
     addEstablishedConnectionContext(context.telemetry, clusterId);
     const isCurrent = (): boolean => {
-        if (
-            ClustersClient.getEpoch(clusterId) !== epoch ||
-            CredentialCache.getCredentials(clusterId) !== credentials
-        ) {
+        if (ClustersClient.getEpoch(clusterId) !== epoch || CredentialCache.getCredentials(clusterId) !== credentials) {
             return false;
         }
         if (!expectedIdentity) {
             return true;
         }
         const currentIdentity = ClustersClient.getLastVerifiedIdentity(clusterId);
-        return (
-            currentIdentity === undefined ||
-            (currentIdentity.kind === 'entra' && sameEntraIdentity(currentIdentity, expectedIdentity))
-        );
+        return currentIdentity?.kind === 'entra' && sameEntraIdentity(currentIdentity, expectedIdentity);
     };
     const reportClosed = (): void => {
         if (!expectedIdentity) {
@@ -163,8 +154,7 @@ async function signInAgainInternal(
         });
         if (
             expectedIdentity &&
-            (auth.verifiedIdentity?.kind !== 'entra' ||
-                !sameEntraIdentity(auth.verifiedIdentity, expectedIdentity))
+            (auth.verifiedIdentity?.kind !== 'entra' || !sameEntraIdentity(auth.verifiedIdentity, expectedIdentity))
         ) {
             throw new EntraIdentityMismatchError();
         }
@@ -188,9 +178,7 @@ async function signInAgainInternal(
         ) {
             refreshAuthenticationNode(node);
         }
-        return auth.verifiedIdentity
-            ? { identity: auth.verifiedIdentity, epoch: startupEpoch }
-            : undefined;
+        return auth.verifiedIdentity ? { identity: auth.verifiedIdentity, epoch: startupEpoch } : undefined;
     } catch (error) {
         if (!starting && !isCurrent()) {
             reportClosed();

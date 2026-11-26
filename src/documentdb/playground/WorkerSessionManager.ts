@@ -16,7 +16,7 @@ import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
 import { settingsKeys } from '../../settingsKeys';
 import { traceEntraDestination, type AuthTraceContext } from '../../utils/authTrace';
-import { AuthMethodId } from '../auth/AuthMethodId';
+import { type AuthMethodId } from '../auth/AuthMethodId';
 import { getEntraCustomHostnameSuffix } from '../auth/entraDestinationSettings';
 import { removeConflictingOidcMechanism } from '../auth/nonOidcConnectionString';
 import {
@@ -655,7 +655,9 @@ export class WorkerSessionManager implements vscode.Disposable {
                     this._pendingRequests.delete(msg.requestId);
                     const reason = isWorkerAuthReason(msg.authReason)
                         ? msg.authReason
-                        : (msg.errorName === 'EntraDestinationRejectedError' ? 'destinationRejected' : this._authFailure);
+                        : msg.errorName === 'EntraDestinationRejectedError'
+                          ? 'destinationRejected'
+                          : this._authFailure;
                     this._authFailure ??= reason;
                     if (msg.success && !reason) {
                         pending.resolve(undefined);
