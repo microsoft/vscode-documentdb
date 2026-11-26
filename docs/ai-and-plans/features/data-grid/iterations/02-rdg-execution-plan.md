@@ -961,6 +961,15 @@ parity.
 > Usage: coding 237.7 AIU (56 requests, 22m04s); shared A3/A4 checks 3.9 AIU (50 requests,
 > 4m47s summed, including prior attempts).
 
+> **E3 approved during A5 (2026-11-26):** The first high-contrast `mixed-types` report ran
+> before columns 10–12 were mounted. A later Integrated Browser snapshot showed all the
+> expected values and type indicators without a scroll command; the precise timing or layout
+> trigger was not measured. The operator approved waiting for or navigating to the target
+> columns in the test setup, with the same expected content and no product behavior change.
+> `gpt-6.1-sol` made one keyboard pass across the columns after readiness. All 39
+> `mixed-types` assertions passed in each theme in the Integrated Browser; 75 scenario
+> unit tests and the browser type check passed. Contract coding: 43.1 AIU (17 requests).
+
 **WI-9a: tree keyboard spike** · `gpt-6.1-sol` · scratch worktree, throwaway
 
 - Build the smallest treegrid on RDG at the pinned version over `TreeNode[]`: flattened visible rows,

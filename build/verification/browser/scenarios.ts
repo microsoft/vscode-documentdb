@@ -288,31 +288,62 @@ function collectionViewScenario(name: keyof typeof collectionViewFixtures): Scen
     };
 }
 
+interface MixedTypesColumnExpectation {
+    readonly texts?: readonly [string | undefined, string | undefined];
+    readonly indicator?: string;
+    readonly numericIndicator?: string;
+}
+
+const mixedTypesExpectations: Readonly<Record<number, MixedTypesColumnExpectation>> = {
+    2: { texts: ['fixture text', undefined], indicator: 'Ab' },
+    3: { texts: ['7', '-4.5'], indicator: 'i32', numericIndicator: '.12' },
+    4: { texts: ['true', 'false'], indicator: 'tf' },
+    5: { texts: ['2026-01-02T03:04:05.000Z', undefined], indicator: 'DT' },
+    6: { texts: ['12.50', undefined], indicator: 'd128', numericIndicator: 'L' },
+    7: { texts: ['000000000000000000000002', undefined], indicator: 'ID' },
+    8: { texts: ['00112233-4455-6677-8899-aabbccddeeff', undefined], indicator: 'U' },
+    9: { texts: ['AQI=', undefined], indicator: '01' },
+    10: { texts: ['array[3]', 'array[0]'], indicator: '[ ]' },
+    11: { indicator: '{ }' },
+    12: { indicator: 'U~' },
+};
+
 // These are browser user-outcome contracts, not assertions about the grid package's DOM classes.
 export const collectionViewContracts = {
     'mixed-types': [
-        {
-            kind: 'text', name: 'TDD: K5 BSON values retain their formatted text',
-            requiresGrid: 'grid', selector: '[role="grid"]',
-            includes: ['fixture text', '7', '-4.5', 'true', 'false', '2026-01-02T03:04:05.000Z', '12.50',
-                '000000000000000000000002', '00112233-4455-6677-8899-aabbccddeeff', 'AQI=', 'array[3]', 'array[0]'],
-            excludes: ['\\[object Object\\]'],
-        },
-        ...[
-            [2, 'Ab'], [3, 'i32'], [4, 'tf'], [5, 'DT'], [6, 'd128'], [7, 'ID'],
-            [8, 'U'], [9, '01'], [10, '[ ]'], [11, '{ }'], [12, 'U~'],
-        ].map(([column, label]): ScenarioAssertion => ({
-            kind: 'text', name: `TDD: K7 distinct cell type indicator ${label}`,
-            requiresGrid: 'grid',
-            selector: `[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="${column}"]`,
-            includes: [String(label)], excludes: [],
-        })),
-        ...[[3, '.12'], [6, 'L']].map(([column, label]): ScenarioAssertion => ({
-            kind: 'text', name: `TDD: K5 numeric type ${label} is not reduced to an ordinary number`,
-            requiresGrid: 'grid',
-            selector: `[role="grid"] [role="row"][aria-rowindex="3"] [role="gridcell"][aria-colindex="${column}"]`,
-            includes: [String(label)], excludes: [],
-        })),
+        ...collectionViewFixtures['mixed-types'].tablePage.columns.flatMap(({ label }, index): ScenarioAssertion[] => {
+            const column = index + 1;
+            const expectation = mixedTypesExpectations[column];
+            // Assertions run after readiness; finish both rows/types before advancing the header.
+            const advance: ScenarioStep = column === 1
+                ? { action: 'focus', role: 'columnheader', name: '_id' }
+                : { action: 'press', key: 'ArrowRight' };
+            return [
+                ...[2, 3].map((row): ScenarioAssertion => {
+                    const text = expectation?.texts?.[row - 2];
+                    return {
+                        kind: 'text', name: `TDD: K5 BSON values retain their formatted text (${label}, row ${row - 1})`,
+                        requiresGrid: 'grid',
+                        selector: `[role="grid"] [role="row"][aria-rowindex="${row}"] [role="gridcell"][aria-colindex="${column}"]`,
+                        includes: text === undefined ? [] : [text],
+                        excludes: ['\\[object Object\\]'],
+                        steps: row === 2 ? [advance] : [],
+                    };
+                }),
+                ...(expectation?.indicator === undefined ? [] : [{
+                    kind: 'text', name: `TDD: K7 distinct cell type indicator ${expectation.indicator}`,
+                    requiresGrid: 'grid',
+                    selector: `[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="${column}"]`,
+                    includes: [expectation.indicator], excludes: [],
+                } as const]),
+                ...(expectation?.numericIndicator === undefined ? [] : [{
+                    kind: 'text', name: `TDD: K5 numeric type ${expectation.numericIndicator} is not reduced to an ordinary number`,
+                    requiresGrid: 'grid',
+                    selector: `[role="grid"] [role="row"][aria-rowindex="3"] [role="gridcell"][aria-colindex="${column}"]`,
+                    includes: [expectation.numericIndicator], excludes: [],
+                } as const]),
+            ];
+        }),
         {
             kind: 'style', name: 'TDD: K10 grid background follows the VS Code theme',
             requiresGrid: 'grid', selector: '[role="grid"]', property: 'background-color', expected: '',
