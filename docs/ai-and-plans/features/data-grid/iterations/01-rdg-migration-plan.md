@@ -240,6 +240,9 @@ Each item ends when its WI-3 scenario checks pass in Playwright.
 - **Scope:** select one or more documents with mouse and keyboard; toolbar View/Edit/Delete enabled
   accordingly and acting on the selected `_id`s; selection cleared when the rows change. Use RDG's
   selection support where it is enough; the gesture set is the agent's proposal at G2.
+- **Edge cases with automated checks:** a row without a trustworthy root `_id` stays browsable but
+  is never a View/Edit/Delete target; a delete acknowledgement that arrives late applies only to
+  the documents it was issued for, never to a newer selection.
 - **Scope list:** K1–K2; D9.
 - **Pointers:** Cosmos DB's selection and later fixes
   ([migration-research.md §3–§4](../migration-research.md#3-what-the-partner-migrated)).
@@ -288,7 +291,8 @@ recommended here because it is the riskiest piece. Findings become fixes before 
   the [e2e testing strategy](../../e2e-testing/strategy.md) and `build/vite/README.md`, release
   notes.
 
-**G3 (operator, final):** NVDA and Narrator in packaged VS Code, Windows contrast themes, a real
+**G3 (operator, final):** NVDA and Narrator in packaged VS Code (including that focus and
+selection are announced distinctly, and tree navigation), Windows contrast themes, a real
 cluster with wide and deep data, then the Case 2 checks from `.github/copilot-instructions.md`.
 Merge the feature branch into `main`. Comment on #383 and the other grid `a11y` issues with what
 the migration fixed; whatever remains goes to the next iteration.
