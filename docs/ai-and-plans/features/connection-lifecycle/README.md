@@ -77,7 +77,8 @@ entries are unpublished drafts and do not represent a shipped release.
   Resource Manager challenge can prompt during Azure Discovery. Subscription listing keeps
   successful results and records a sanitized diagnostic if an account or tenant cannot be listed.
 - **Keep one client per cluster.** Surfaces resolve it per operation and check its identity
-  fingerprint and generation.
+  fingerprint and generation. The fingerprint is keyed for equality within one extension host;
+  neither the fingerprint nor its key is persisted.
 - **Never change identity under an open surface.** It stays open, keeps its state, and shows a
   shaded, disabled view with a dialog that names the problem in a short title and gives the next
   step separately. Offer **Close view**, with **Retry** beside it when the view can safely reuse
@@ -133,6 +134,7 @@ See [decisions.md](./decisions.md):
 - 0018 saved connection edits permanently lock existing views.
 - 0019 require a fresh Dashboard delete after Disconnect and retain tree-only Paste.
 - 0020 defer the late-failure comparison across releases and retain descriptive telemetry.
+- 0021 key the in-memory connection fingerprint per extension host.
 
 ## Timeline
 

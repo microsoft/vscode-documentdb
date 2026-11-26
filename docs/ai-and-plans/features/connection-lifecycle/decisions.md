@@ -32,6 +32,7 @@ created: 2026-11-19
 | 0018 | Saved connection edits permanently lock existing views                                                     | Accepted                    | Operator prefers simple reconnect for unchanged settings over recovery after edits   | 2026-11-24 | Yes; removes same-identity recovery after a saved edit           |
 | 0019 | Require a fresh Dashboard delete after Disconnect and keep Paste Collection in the tree                    | Accepted                    | Operator: a lifecycle change cancels the pending delete and never replays it         | 2026-11-24 | —                                                                |
 | 0020 | Defer the cross-release comparison of late failures                                                        | Accepted                    | Operator: keep descriptive telemetry and defer the comparison                        | 2026-11-26 | Yes; removes the WI-9 before/after comparison for 1.2.0          |
+| 0021 | Key the in-memory connection fingerprint per extension host                                                | Accepted                    | Operator: use HMAC and verify CodeQL without dismissing a remaining alert            | 2026-11-26 | Yes; replaces unkeyed SHA-256 without changing identity rules    |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -502,3 +503,15 @@ could be a reporting change rather than improved recovery.
 Keep renewal, client age and entry generation, and ARM challenge queries for a single version.
 Do not add an instrumentation path or keep a socket-only comparison in this release. CP-5 still
 checks pre-release ingestion and records that the late-failure trend is unmeasured.
+
+## 0021. Key the in-memory connection fingerprint per extension host
+
+The operator chose HMAC-SHA-256 with a random key held only by the extension host.
+Fingerprints are compared within one running host; they are not passwords or stored
+verifiers. Keep the existing URI comparison, including exclusion of the database password
+in its authority, and keep the verified principal in the fingerprint. The URI's other
+options may contain credentials and are not treated as sanitized data.
+
+Do not retain historical connection strings in an identity map or persist the HMAC key.
+Recheck [CodeQL alert 39](https://github.com/microsoft/vscode-documentdb/security/code-scanning/39).
+If it still reports the HMAC call, leave it open for review rather than suppressing it.
