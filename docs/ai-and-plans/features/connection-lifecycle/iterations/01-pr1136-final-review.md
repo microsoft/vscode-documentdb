@@ -59,7 +59,7 @@ Nothing here argues against the architecture. Most findings are small, local fix
 | F5  | Medium   | Partial Azure subscription listing is reported only in the output channel                         | Small                  | Accepted                    |
 | F6  | Low      | Swallowed failures that hide real problems are not metered                                        | Small, mechanical      | Accepted                    |
 | F7  | Low      | Explain-then-display chains have no fallback if the explain RPC fails                             | 1 line × 4             | Accepted                    |
-| F8  | Low      | Collection View shows a generic error modal for a client the host has already replaced            | Small                  | Accepted (wording adjusted) |
+| F8  | Low      | Collection View shows a generic error modal for a client marked for replacement                  | Small                  | Accepted                    |
 | F9  | Low      | Ships the prerelease `@microsoft/vscode-azext-azureauth` `6.1.0-alpha.2`                          | Track (accepted, 0008) | Accepted (no code change)   |
 | O1  | Medium   | Over-engineering: lifecycle plumbing copied into three React views                                | Medium                 | Accepted                    |
 | O2  | Low      | Over-engineering: `retryAuthentication` decides policy by looking at view IDs in `contextValue`   | Small                  | Accepted                    |
@@ -69,13 +69,17 @@ There are no Critical findings.
 
 ## Operator decisions (2026-11-26)
 
-The operator accepted every finding and proposal in this review as a set. Each item's
-recommended option is the accepted one. Where a finding offered alternatives, its decision line
-below names the accepted option. All code and documentation changes land in **one dedicated PR
-against `feature/connection-lifecycle`**. Branch protection prevents committing to the feature
-branch directly, so this review is the first commit on that PR's branch. Avoiding
-over-engineering remains a constraint for every item. Each item's decision line is binding for
-implementation.
+The operator accepted every finding and proposal in this review as a set: F1–F9 and O1–O3.
+Acceptance covers the recommended outcomes and constraints, including the validation-only,
+tracking and no-change dispositions below; it does not mean implementation or verification is
+complete. The lead and advisor prepare the work-item plan and model assignments, and resolve
+implementation details within that accepted scope.
+
+All code and documentation changes land in **one dedicated PR against
+`feature/connection-lifecycle`**. The operator's branch-protection correction supersedes the
+earlier instruction to commit this review to the feature branch: carry the review and plan on
+the new PR branch instead. This review is its first commit. Do not commit or push directly to
+the feature branch. Avoiding over-engineering remains a constraint for every item.
 
 ---
 
@@ -271,15 +275,16 @@ the connection looks broken for the rest of the session.
   warning with "Show output". No dialog per tenant.
 - Meter the tenant-lookup catches.
 
-**Operator decision (2026-11-26):** Accepted.
+**Operator decision (2026-11-26):** Accepted as recommended.
 
-- **Hint:** one non-modal warning per listing that skipped something, with a **Show Output**
-  action. The tree-description option is not used, because it needs more plumbing.
-- **Telemetry:** record the counters on the telemetry context of the code that requested the
-  listing.
+- **Hint:** one helpful non-modal report per partial listing, with no per-tenant dialogs.
+  The lead and advisor select the simplest suitable presentation from the recommended
+  alternatives; the operator has not selected a specific UI option or warning text.
+- **Telemetry:** record bounded skipped-account and skipped-tenant counters using the existing
+  telemetry mechanism.
 - **Catches:** add `meterSilentCatch` to the tenant-lookup catches in `SelectSubscriptionStep.ts`
   and in the three discovery root items.
-- Specify the warning text in the work item.
+- Specify the presentation and any user-facing text in the work item.
 
 ## F6. Swallowed failures that hide real problems are not metered (Low)
 
@@ -336,7 +341,7 @@ becomes a single fix.
 - If O1 lands first, fix the Retry chains once, in the shared hook.
 - Fix the Document View **Save** chain separately; it is not part of the Retry flow.
 
-## F8. Collection View shows a generic error modal for an already replaced client (Low)
+## F8. Collection View shows a generic error modal for a client marked for replacement (Low)
 
 **Evidence**
 
@@ -356,9 +361,9 @@ connection was reopened. Run the query again." Do not add an overlay for transie
 
 - Collection View query errors only: show text, no overlay, and no change to `runWithClient`
   semantics for other callers.
-- Wording correction: the host replaces the client on the next run, not before it, so
-  "reopened" would be inaccurate. The message is: "The connection was closed. Run the query
-  again to reconnect."
+- Implementation note: the host attempts replacement on the next run, not before it, so
+  "reopened" would be inaccurate. Use truthful retry guidance rather than claiming recovery
+  already succeeded; the lead and advisor specify the wording during planning.
 
 ## F9. Prerelease `azureauth` dependency (Low, accepted)
 
