@@ -176,6 +176,11 @@ identify the current and upcoming gates and what they block.
 `claude-opus-5.5` approved it at 86% (see the [WI-1c verdict](#wi-1c-interface-spec)). This is a
 read-only design gate, not runtime verification or release of G1. The operator choices remain open.
 
+**A2 passed (2026-11-26), leader decision.** On the WI-3b revision: `npm run build` passed after
+a type-only fixture correction, `npm run package` and `npm run verify:vsix` passed, and
+`npx vitest run src/utils/documentGrid` passed all 22 tests. The scoped SlickGrid grep found no
+tracked matches. The package graph still limits React Data Grid to Collection View.
+
 ### Escalations
 
 | ID  | Trigger                                                                                                                                    | Operator chooses                                                                                          |
@@ -900,6 +905,17 @@ parity.
   (0/10/11 elements), `page-500`, `html-values`, `empty`, `no-id` (a row without a trustworthy
   `_id`), `first-load`. Each in three themes (automatic).
 - Acceptance: routes load; `data-ready` succeeds against the placeholders.
+
+> **Done (2026-11-26), commit `b6851a97`:** `mai-code-2` added the ten fixtures and 30 routes,
+> preserving the three defaults. Leader review (98%) confirmed plain JSON, the 500-row and
+> browse-only shapes, and shell-based readiness. Four fixture cases added; after one type-only
+> correction to use inferred tRPC output types, build, browser type check and all 51 browser
+> scenario tests passed. In the VS Code Integrated Browser, all 33 Collection View routes became
+> ready with no reported harness/console/CSP errors; the first-load routes kept the intended
+> progress indicator. The serialized helper needed a `page.waitForTimeout` timer bridge
+> because the browser tool context does not supply `setTimeout`. No production behavior
+> or browser test payload changed in the corrective turn. **A2 passed** on the evidence above.
+> Usage: coding 19.3 AIU (25 requests, 5m19s); checks 1.5 AIU (23 requests, 2m10s).
 
 **WI-3c: `TDD:` contract checks** · `gpt-6.1-sol` · after WI-3b
 
