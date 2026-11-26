@@ -72,6 +72,24 @@ describe('destination RPC attribution', () => {
     });
 });
 
+const unavailableResponse = {
+    unavailable: {
+        reason: 'credentialsRejected',
+        title: 'Reconnect',
+        detail: 'The saved credentials were rejected.',
+        action: 'retry',
+    },
+} as const;
+const ordinaryResponse = { value: 'loaded' } as const;
+const malformedUnavailableResponse = {
+    unavailable: {
+        reason: 'tokenExpired',
+        title: 'Reconnect',
+        detail: 'The connection token expired.',
+        action: 'retry',
+    },
+} as const;
+
 const testRouter = router({
     dismissed: publicProcedureWithTelemetry.mutation((): never => {
         throw new UserCancelledError();
@@ -87,6 +105,9 @@ const testRouter = router({
     rejected: publicProcedureWithTelemetry.mutation((): never => {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'rejected' });
     }),
+    unavailable: publicProcedureWithTelemetry.query(() => unavailableResponse),
+    ordinary: publicProcedureWithTelemetry.query(() => ordinaryResponse),
+    malformedUnavailable: publicProcedureWithTelemetry.query(() => malformedUnavailableResponse),
 });
 
 const createCaller = createCallerFactory(testRouter);
@@ -124,5 +145,25 @@ describe('publicProcedureWithTelemetry', (): void => {
         await expect(caller().rejected()).rejects.toBeDefined();
         expect(recordedContexts[0].telemetry.properties.result).toBe('Failed');
         expect(recordedContexts[0].telemetry.properties.causeType).toBeUndefined();
+    });
+
+    it('records the bounded reason from an unavailable response without changing the RPC result', async (): Promise<void> => {
+        await expect(caller().unavailable()).resolves.toBe(unavailableResponse);
+        expect(recordedContexts).toHaveLength(1);
+        expect(recordedContexts[0].telemetry.properties).toMatchObject({
+            result: 'Succeeded',
+            unavailableReason: 'credentialsRejected',
+        });
+    });
+
+    it.each([
+        ['ordinary', ordinaryResponse],
+        ['malformed unavailable', malformedUnavailableResponse],
+    ] as const)('does not add unavailableReason for an %s response', async (procedure, expected): Promise<void> => {
+        const result =
+            procedure === 'ordinary' ? await caller().ordinary() : await caller().malformedUnavailable();
+        expect(result).toBe(expected);
+        expect(recordedContexts).toHaveLength(1);
+        expect(recordedContexts[0].telemetry.properties.unavailableReason).toBeUndefined();
     });
 });
