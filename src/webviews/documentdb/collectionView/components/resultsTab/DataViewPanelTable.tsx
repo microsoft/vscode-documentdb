@@ -10,12 +10,12 @@ import * as l10n from '@vscode/l10n';
 import {
     getCell,
     type ColumnKey,
-    type TableColumn,
     type TablePage,
     type TableRow,
 } from '../../../../../utils/documentGrid/types';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { LoadingAnimationTable } from './LoadingAnimationTable';
+import { TypedValueCell } from './TypedValueCell';
 import './dataGridTheme.scss';
 import './dataViewPanelTable.scss';
 
@@ -29,10 +29,6 @@ interface DataViewPanelTableProps {
 const defaultColumnOptions: DefaultColumnOptions<TableRow, unknown> = {
     resizable: true,
 };
-
-function renderTableCell(row: TableRow, column: TableColumn): React.ReactNode {
-    return getCell(row, column.key)?.display ?? '';
-}
 
 export function DataViewPanelTable({
     page,
@@ -51,7 +47,9 @@ export function DataViewPanelTable({
                 (column): Column<TableRow> => ({
                     key: column.key,
                     name: column.label,
-                    renderCell: ({ row }): React.ReactNode => renderTableCell(row, column),
+                    renderCell: ({ row }): React.ReactNode => (
+                        <TypedValueCell value={getCell(row, column.key)} isRootId={column.isRootId} />
+                    ),
                 }),
             ),
         [page?.columns],

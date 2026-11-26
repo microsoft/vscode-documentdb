@@ -198,6 +198,15 @@ tests passed. Cross-collection panel isolation is a G2 workbench check, per the 
 keyboard, focus and ARIA checks in the VS Code Insiders Integrated Browser. The spike verifies
 browser behavior, not screen reader announcements or the shipped UI.
 
+**A5 evidence (2026-11-26), not yet released.** The build, 25 focused tests, 75 scenario unit
+tests and browser TypeScript passed. After the approved E3 test setup correction, the Insiders
+Integrated Browser reported 237 passing assertions across 30 Table routes in dark, light and
+high contrast, with all routes ready and no reported errors. This covers the table core,
+typed values, paging, column and cell navigation, loading/empty states and 500-row
+virtualization. The root-ID shaping test passes, but the nested K3/K4 journey still needs
+WI-7 document actions and WI-8 step-in. Run those pinned assertions alongside A7 before
+releasing A5; do not treat incidental K2 passes before selection exists as A6 evidence.
+
 ### Escalations
 
 | ID  | Trigger                                                                                                                                    | Operator chooses                                                                                          |
@@ -1004,7 +1013,8 @@ through `mai-code-2-flash` after each pair of items, not after every commit.
 > **Implementation (2026-11-26):** `mai-code-2` replaced the Table placeholder with the
 > themed beta.64 grid, using neutral columns and row keys, native keyboard navigation,
 > resizing and virtualization. Paging stays in Collection View; the first-load skeleton is
-> unchanged. A5 is shared with WI-6 and remains pending. Coding usage: 12.8 AIU (20 requests).
+> unchanged. The implementation is committed at `f301fa07`; the shared A5 evidence above
+> records what passed and the nested journey still due. Coding usage: 12.8 AIU (20 requests).
 
 **WI-6: typed value cell** · `mai-code-2` (fallback `gpt-6.1-terra`)
 
@@ -1012,6 +1022,13 @@ through `mai-code-2-flash` after each pair of items, not after every commit.
   `DataViewPanelTable.tsx` (one-line change, declared in the prompt).
 - Scope rows K5–K8; D8. Text only, never HTML (K8).
 - Acceptance: A5.
+
+> **Implementation complete (2026-11-26):** `mai-code-2` added BSON text, type indicators and
+> hover descriptions with an explicit missing state and no extra Tab stops. The component is
+> wired into the table; all K5–K8 browser checks passed in three themes. Shared A5 is pending
+> the nested table journey, not a typed-cell failure. Coding: 18.8 AIU (24 requests).
+> Shared A5 verification: 1.3 AIU on `mai-code-2-flash` (22 requests) for build, tests and
+> initial browser attempt; 20.9 AIU on `gpt-6.1-terra` (28 requests) for the Integrated Browser.
 
 **WI-7: selection and document actions** · `gpt-6.1-sol` · after WI-5
 
@@ -1179,7 +1196,7 @@ published artifacts, scratch Chromium 142/148 and Insiders behavior, Vite CSS de
 packaged-theme caveat. The operator accepted release metadata for the support floor; the exact
 stable workbench smoke, a real collection, screen readers and high-contrast were not run.
 
-Step 1 is complete. A2, A3 and A4 passed. Product Table and Tree are still placeholders;
-the behavior contracts provide the red baseline for Step 2. Resume with WI-5, WI-6 and WI-9
-in the documented lanes; WI-6's integration waits for WI-5. Do not reopen G1 decisions or
-claim placeholder behavior as implementation. G2 remains the next operator gate.
+Step 1 is complete. A2, A3 and A4 passed. The product Table renders real rows and typed cells
+after WI-5/WI-6. A5 still needs the nested journey that becomes reachable after WI-7/WI-8.
+WI-7 selection and WI-9 Tree are the next parallel lanes; the Tree remains a placeholder until
+WI-9. G2 remains the next operator gate.
