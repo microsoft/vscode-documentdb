@@ -819,6 +819,17 @@ parity.
 > claimed. Usage: coding 2.6 AIU (5 requests, 38s); checks 0.3 AIU (6 requests, 32s summed).
 > WI-4a's dependency and grid changes remain planned.
 
+> **Done (2026-11-26), commit `409eceef`:** `mai-code-2` installed the approved exact beta.64
+> pin, removed the SlickGrid runtime, and left the approved Table/Tree placeholders. Leader
+> review (98%) retained the existing props/readiness and used an inert, hidden-from-AT empty
+> RDG instance to verify the real lazy dependency without exposing functional grid behavior.
+> `mai-code-2-flash`: `npm run build`, `npm run package`, L1 inspection and 26 negative controls
+> passed. The packaged JS chunk was reachable only through Collection View. Inspector
+> `node --test` (this is a `node:test` suite, not a root Vitest match) passed 45 tests; focused
+> browser Vitest passed 47. SlickGrid-named BSON shapers and their fixture import remain for
+> WI-2b. The existing missing-field l10n call is temporarily removed pending WI-6; no localization
+> generation ran. Usage: coding 27.7 AIU (44 requests, 6m48s); checks 0.7 AIU (16 requests, 1m19s).
+
 **WI-3a: scenario runner, keys and focus** · `mai-code-2` (fallback `gpt-6.1-terra`)
 
 - Owns: `build/verification/browser/scenarios.ts` (step and assertion type unions only),

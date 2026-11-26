@@ -101,7 +101,8 @@ that view's lazy chunk and its static import closure, never every dynamic child.
 `facadeModuleId` must match the registry-backed map and appear in the entry's `dynamicImports`.
 When adding a webview, register its facade in `viewModules` in
 [`inspect.cjs`](./inspect.cjs) and its page label in [`build-size-report.cjs`](./build-size-report.cjs).
-Local Quick Start and Atlas Credentials must always exclude Monaco and SlickGrid.
+Local Quick Start and Atlas Credentials must always exclude Monaco. In the JavaScript bundle
+graph, React Data Grid is reachable only through Collection View.
 
 The packaged manifest's top-level icon and local file paths under `contributes` are required,
 with missing paths reported alongside their JSON pointers; URLs, substitutions and codicons are excluded.
