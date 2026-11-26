@@ -48,6 +48,7 @@ vi.mock('../../documentdb/playground/PlaygroundEvaluator', () => ({
     PlaygroundEvaluator: class {
         evaluate = evaluate;
         dispose = dispose;
+        sessionDomainProperties = { domainInfo_isAzure: 'true' };
     },
 }));
 
@@ -142,6 +143,28 @@ describe('executePlaygroundCode', () => {
             progress.mockRestore();
             showError.mockRestore();
             showWarning.mockRestore();
+            stopPlaygroundEvaluator('cluster');
+        }
+    });
+
+    it('keeps the worker destination properties on a warm run', async () => {
+        const failure = Object.assign(new Error('token unavailable'), { name: 'TokenCallbackError' });
+        evaluate.mockRejectedValueOnce(failure).mockRejectedValueOnce(failure);
+        const progress = vi.spyOn(vscode.window, 'withProgress').mockImplementation((_options, task) =>
+            Promise.resolve(
+                task({ report: vi.fn() }, { isCancellationRequested: false, onCancellationRequested: vi.fn() }),
+            ),
+        );
+        try {
+            const uri = vscode.Uri.file('test.documentdb.js');
+            await expect(executePlaygroundCode('db.stats()', 'runAll', uri)).rejects.toBe(failure);
+            await expect(executePlaygroundCode('db.stats()', 'runAll', uri)).rejects.toBe(failure);
+            expect(contexts.get('playground.execute')?.telemetry.properties).toMatchObject({
+                isNewEvaluator: 'false',
+                domainInfo_isAzure: 'true',
+            });
+        } finally {
+            progress.mockRestore();
             stopPlaygroundEvaluator('cluster');
         }
     });

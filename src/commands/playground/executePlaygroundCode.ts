@@ -12,7 +12,6 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
-import { CredentialCache } from '../../documentdb/CredentialCache';
 import { feedResultToSchemaStore } from '../../documentdb/feedResultToSchemaStore';
 import { PlaygroundEvaluator } from '../../documentdb/playground/PlaygroundEvaluator';
 import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
@@ -20,8 +19,6 @@ import { formatError, formatResult } from '../../documentdb/playground/resultFor
 import { type PlaygroundConnection } from '../../documentdb/playground/types';
 import { getWorkerAuthReason, type WorkerAuthReason } from '../../documentdb/playground/workerTypes';
 import { extractErrorCode } from '../../documentdb/shell/ShellOutputFormatter';
-import { getHostsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
-import { addDomainInfoToProperties } from '../../documentdb/utils/getClusterMetadata';
 import { ext } from '../../extensionVariables';
 import { ErrorExplanationService } from '../../services/errorExplanationService';
 import { recordSurveyActivity } from '../../services/survey/SurveyService';
@@ -179,13 +176,6 @@ export async function executePlaygroundCode(
             context.telemetry.measurements[`cmd_${category}`] = count;
         }
 
-        // Domain info — privacy-safe hashed host data for platform analytics
-        const domainProps: Record<string, string | undefined> = {};
-        if (isNewEvaluator) {
-            collectDomainTelemetry(boundConnection, domainProps);
-        }
-        Object.assign(context.telemetry.properties, domainProps);
-
         // Link to server metadata via connectionCorrelationId
         try {
             const existingClient = ClustersClient.getExistingClient(boundConnection.clusterId);
@@ -307,6 +297,7 @@ export async function executePlaygroundCode(
                     // error, and errorMessage in telemetry
                     throw error;
                 } finally {
+                    Object.assign(context.telemetry.properties, evaluator?.sessionDomainProperties);
                     service.setExecuting(boundConnection.clusterId, false);
                 }
             },
@@ -418,26 +409,4 @@ function offerPlaygroundRecovery(
             }
         });
     });
-}
-
-// ─── Domain telemetry ────────────────────────────────────────────────────────
-
-/**
- * Collects domain info from the query playground connection's cached credentials.
- * Reuses the same hashing logic as the connection metadata telemetry.
- */
-function collectDomainTelemetry(
-    connection: PlaygroundConnection,
-    properties: Record<string, string | undefined>,
-): void {
-    try {
-        const credentials = CredentialCache.getCredentials(connection.clusterId);
-        if (!credentials?.connectionString) {
-            return;
-        }
-        const hosts = getHostsFromConnectionString(credentials.connectionString);
-        addDomainInfoToProperties(hosts, properties);
-    } catch {
-        // Domain info is best-effort — don't fail telemetry if parsing fails
-    }
 }

@@ -22,6 +22,8 @@ import { ClustersClient } from '../ClustersClient';
 import { computeConnectionFingerprint } from '../connectionFingerprint';
 import { ConnectionUnavailableError } from '../ConnectionUnavailableError';
 import { CredentialCache } from '../CredentialCache';
+import { getHostsFromConnectionString } from '../utils/connectionStringHelpers';
+import { addDomainInfoToProperties } from '../utils/getClusterMetadata';
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 import { type ExecutionResult, type PlaygroundConnection, type PlaygroundWorkerBinding } from './types';
 import { WorkerSessionManager } from './WorkerSessionManager';
@@ -98,6 +100,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
 
     /** Auth mechanism used for the current worker session (for telemetry). */
     private _sessionAuthMethod: string | undefined;
+    private _sessionDomainProperties: Record<string, string | undefined> | undefined;
 
     /** Telemetry accessors — read by the command layer for telemetry properties. */
     get sessionId(): string | undefined {
@@ -108,6 +111,9 @@ export class PlaygroundEvaluator implements vscode.Disposable {
     }
     get sessionAuthMethod(): string | undefined {
         return this._sessionAuthMethod;
+    }
+    get sessionDomainProperties(): Readonly<Record<string, string | undefined>> | undefined {
+        return this._sessionDomainProperties;
     }
 
     /** Duration of the last worker init (spawn + auth), in ms. 0 if worker was already alive. */
@@ -271,7 +277,13 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             this._workerFingerprint = expected;
             this._sessionId = randomUUID();
             this._sessionAuthMethod = initMsg.authMechanism;
+            this._sessionDomainProperties = {};
             const originalUri = initMsg.connectionString;
+            try {
+                addDomainInfoToProperties(getHostsFromConnectionString(originalUri), this._sessionDomainProperties);
+            } catch {
+                meterSilentCatch('PlaygroundEvaluator_domainInfo');
+            }
             this._relay = new WorkerTokenRelay(clusterId, initMsg, epoch, this._sessionId, workerPin, (identity) => {
                 this._pinContext = { clusterId, identity };
                 this._workerFingerprint = computeConnectionFingerprint({
@@ -524,6 +536,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         }
 
         this._sessionInitMessage = undefined;
+        this._sessionDomainProperties = undefined;
         this._relay = undefined;
         this._workerFingerprint = undefined;
         this._sessionId = undefined;
