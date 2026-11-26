@@ -67,9 +67,11 @@ let Operations =
 
 ## Daily database token lookups and lifetime
 
-`connection.tokenRenewal` counts completed post-startup Entra database token lookups on the extension,
-Shell, and Playground. `returned` means a token passed the callback's checks; it does **not** mean the
-token changed, MSAL made a network request, or the database accepted the token. Lifetime is the
+`connection.tokenRenewal` counts post-startup Entra database token lookup outcomes. For `extension`,
+`returned` means the token passed the host callback's checks. For `shell` and `playground`, it means
+the host checked and sent a token response; the worker can still reject or discard it before its
+callback completes. On any surface, `returned` does **not** mean the token changed, MSAL made a
+network request, or the database accepted the token. Lifetime is the
 JWT's positive `exp − iat` in seconds, not its remaining validity. An opaque or invalid lifetime is
 missing, not zero. Compare returned rows with and without a lifetime; failures don't have one.
 
