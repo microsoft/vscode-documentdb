@@ -132,6 +132,7 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
             );
             indexes.push(...searchIndexes);
         } catch {
+            meterSilentCatch('IndexesItem_searchIndexes');
             // Search indexes not supported on this platform, continue without them
         }
 

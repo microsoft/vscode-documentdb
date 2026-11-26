@@ -5,6 +5,7 @@
 
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { type IndexItem } from '../../tree/documentdb/IndexItem';
+import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
 
 /**
  * Fetch the size + usage of a single index for a confirmation dialog, so the
@@ -30,6 +31,7 @@ export async function getIndexConfirmationStats(node: IndexItem): Promise<{ size
             sizeBytes = bytes;
         }
     } catch {
+        meterSilentCatch('getIndexConfirmationStats_size');
         // Ignore — size stays unknown.
     }
 
@@ -41,6 +43,7 @@ export async function getIndexConfirmationStats(node: IndexItem): Promise<{ size
             usageOps = stat.accesses.ops;
         }
     } catch {
+        meterSilentCatch('getIndexConfirmationStats_usage');
         // Ignore — usage stays unknown.
     }
 

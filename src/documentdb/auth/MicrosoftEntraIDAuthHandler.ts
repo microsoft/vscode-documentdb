@@ -9,6 +9,7 @@ import { randomUUID } from 'crypto';
 import { type OIDCCallbackParams, type OIDCResponse } from 'mongodb';
 import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
+import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
 import { traceAuthFlow, traceAuthOperation, traceEntraDestination, type AuthTraceContext } from '../../utils/authTrace';
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { withTokenAcquisitionTiming, type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
@@ -73,6 +74,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         try {
             return this.policy.onTokenLookup ? this.policy.getTokenLookupEpoch?.() : undefined;
         } catch {
+            meterSilentCatch('MicrosoftEntraIDAuthHandler_getTokenLookupEpoch');
             // Telemetry eligibility must not affect authentication.
             return undefined;
         }
@@ -298,6 +300,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                         try {
                             this.policy.onTokenLookup?.(observation);
                         } catch {
+                            meterSilentCatch('MicrosoftEntraIDAuthHandler_onTokenLookup');
                             // Observers never change the auth flow.
                         }
                     }

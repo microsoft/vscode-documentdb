@@ -1127,6 +1127,7 @@ export class ClustersClient {
         if (epoch !== ClustersClient.getEpoch(clusterId)) {
             client._closed = true;
             void client._mongoClient.close().catch(() => {
+                meterSilentCatch('ClustersClient_supersededClientClose');
                 ext.outputChannel.debug(
                     `[ClustersClient] startup=${id} superseded client cleanup failed surface=extension`,
                 );
@@ -1200,6 +1201,7 @@ export class ClustersClient {
                     ClustersClient.latch(clusterId, 'credentialsRejected');
                 }
                 void ClustersClient.deleteClient(clusterId).catch(() => {
+                    meterSilentCatch('ClustersClient_evictedClientClose');
                     ext.outputChannel.debug('[ClustersClient] failed to close an evicted client');
                 });
                 break;
