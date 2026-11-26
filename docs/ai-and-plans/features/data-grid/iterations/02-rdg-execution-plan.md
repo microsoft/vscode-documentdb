@@ -93,6 +93,24 @@ expected to cover collections without globally unique `_id` values, resolve the 
 before implementing it. Release only on the operator's `G1 released` with any per-row changes.
 WI-0b has not started.
 
+**G1 operator feedback (2026-11-26; not a release).** The operator wants the gate message to
+show the options and recommendations directly; the links are for evidence. Keep implementation
+simple and maintainable. The exact pin remains open pending a retest in VS Code's Integrated
+Browser and the operator's pin decision.
+
+| Choice | Operator feedback |
+| --- | --- |
+| Scope, execution and models | Keep the M/K/D rows and accept C1–C8 and the assigned models as written. |
+| Pin | Prefers beta.64; retest both in VS Code's built-in browser before choosing. |
+| Playwright checks | On demand only. |
+| Gestures | Accept the proposed row gestures and Enter. Include Shift+arrows only if already in scope; it is listed for future cell-range selection (F-3), not as a row-selection gesture in this migration. Do not add it. |
+| O1–O3 | Keep today's nested `_id` display and field-name tree ordering; withhold document actions for unreliable IDs. |
+| O4 | Browsable rows are always selectable, even when they have no safe action target. Selection does not confer action eligibility. |
+| O5 | Cross-page/shard duplicate handling is out of scope. Keep existing error handling when the database reports an error. This is not a guarantee that a duplicate ID will trigger one: `ClustersClient.deleteDocuments` uses `deleteMany` and currently checks acknowledgement, not match uniqueness. |
+
+The [built-in browser retest](#built-in-browser-retest) is complete. The pin and `G1 released`
+are still pending; the retest does not authorize raising `engines.vscode` or adding a polyfill.
+
 ### G2: hands-on direction check (operator test gate)
 
 - **When:** A2–A8 have passed (WI-5 to WI-9 done) and the VSIX for G2 is built (A9).
@@ -439,6 +457,23 @@ retained all 12 native calls and restored correct forced colors in Chromium 142;
 injected stylesheet and no CSP violations. This diagnostic is not a recommendation to disable
 minification globally. Verify the planned VS Code token/theme mapping under packaged output;
 high-contrast and the installed minimum VS Code workbench were not run.
+
+##### Built-in browser retest
+
+On 2026-11-26, `mai-code-2-flash` drove the existing scratch routes in VS Code's Integrated
+Browser as requested. Its reported runtime was **VS Code Insiders 1.149.0-insider, Electron
+43.8.10, Chromium 150.0.7871.250**. Both Map and WeakMap upserts were present. The four dev and
+packaged-style routes loaded, rendered a 760×400 grid (`aria-rowcount=501`, three columns and
+15 initial virtual rows), and reached ID 500 on scroll. Both packaged routes had one injected
+stylesheet. The beta.64 dev and beta.61 packaged reloads recorded no CSP violations. An attempted
+external-browser inspection returned a missing-reference error and supplied no test evidence.
+
+This verifies both versions on the operator's current Insiders runtime. It does not reproduce
+the earlier Chromium 142 setup, which loaded the beta.61 control but threw the missing-method
+error with beta.64, nor does it test an installed VS Code 1.109.0. **Keep the beta.61 recommendation
+if retaining the declared support floor.** Selecting beta.64 requires compatibility evidence at
+that floor or a separately approved new floor. Retest checks used 3.0 AIU over 27 requests
+(2m41s summed model time; host log).
 
 > **Done (2026-11-26), commit `4f8ef192`:** `gpt-6.1-sol` compared exact artifacts and prepared
 > the isolated smoke; `mai-code-2-flash` ran the checks and fixed a scratch-only React alias
