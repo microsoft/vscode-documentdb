@@ -62,6 +62,10 @@ loading behavior.
 ordered work items for the React Data Grid migration (high level; detailed interfaces follow in the
 next iteration).
 
+**Execution plan (proposed):** [iterations/02-rdg-execution-plan.md](./iterations/02-rdg-execution-plan.md),
+the same scope as work items with owned files, parallel lanes, operator and automated gates,
+interfaces, a model per item, and the choice between `/lead` and Copilot Fusion.
+
 See [slickgrid-removal.md](./slickgrid-removal.md) for the earlier footprint snapshot,
 candidate directions, sequential gates, and explicit non-scope. Use the newer research and parity
 checklist above for current upstream facts and the expanded behavior inventory. The build rationale for the current
