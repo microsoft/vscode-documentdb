@@ -131,6 +131,12 @@ identify the current and upcoming gates and what they block.
   View/Edit/Delete on a throwaway collection; page through 10/50/100/500; switch to Tree view,
   expand and collapse with arrow keys, check Narrator reads level and expanded state; switch the
   three VS Code themes.
+- **Cross-collection isolation (added by operator, 2026-11-26):** Open two collection panels with
+  distinct document IDs. While a refresh in the first is pending, switch to the second, select a
+  row and open View. Check that the namespace and ID belong to the second collection before and
+  after the first panel updates. The existing L2-dev harness mounts one fixed collection, so
+  verify actual panel switching here rather than adding a multi-panel simulation. WI-3c still
+  verifies late responses within one collection.
 - **Operator decides:** the gestures (confirms or changes the G1 provisional choice); whether the
   look is acceptable; whether to open the draft PR now (C8).
 - **Release:** `G2 released` plus a numbered findings list. Findings become items WI-G2-1, WI-G2-2,
@@ -928,6 +934,9 @@ parity.
   acting on another collection) and the WI-7 edge cases (no-`_id` row is never a target; a late
   delete acknowledgement does not touch a newer selection).
 - Acceptance: A3.
+
+> **Verification placement (2026-11-26), operator decision:** Cross-collection isolation moves
+> to the two-panel workbench check at G2. It is not removed from scope or claimed by A3.
 
 **WI-9a: tree keyboard spike** · `gpt-6.1-sol` · scratch worktree, throwaway
 
