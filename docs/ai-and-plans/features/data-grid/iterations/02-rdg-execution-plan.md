@@ -363,6 +363,69 @@ item may change; "Not" lists files it must leave alone. The leader re-derives ow
   links, and a recommendation.
 - Checks: `mai-code-2-flash` runs the dev server and Playwright.
 
+#### WI-1 pin report
+
+**Recommendation for G1: exact-pin `react-data-grid@7.0.0-beta.61`.** Beta.64's normal resize
+setup uses a `WeakMap` upsert method unavailable at the declared VS Code engine floor. Its
+newer-runtime success does not make it a compatible pin. No dependency or engine was changed
+in the product.
+
+`npm view` and `npm pack` retrieved both exact artifacts through the configured approved proxy
+(`https://packagefeedproxy.microsoft.io/npm/`), with lifecycle scripts disabled. The downloaded
+hashes matched proxy metadata (SHA-1 for both, published SRI also for beta.64), and the installed
+scratch JavaScript/CSS matched the unpacked artifacts byte for byte.
+
+| Published artifact | 7.0.0-beta.61 | 7.0.0-beta.64 |
+| --- | --- | --- |
+| Upstream evidence | [Release](https://github.com/Comcast/react-data-grid/releases/tag/v7.0.0-beta.61) | [Release](https://github.com/Comcast/react-data-grid/releases/tag/v7.0.0-beta.64), [sizing hook](https://github.com/Comcast/react-data-grid/blob/v7.0.0-beta.64/src/hooks/useGridDimensions.ts) |
+| Executable `getOrInsertComputed` in `lib/index.js` | No `Map` or `WeakMap` call; uses a module-scoped `ResizeObserver`. | No executable `Map` call; one `WeakMap` call for grid sizing. The [grouping fix](https://github.com/Comcast/react-data-grid/pull/4227) is a different call site. |
+| Published `lib/styles.css` | 12 `light-dark()` color calls; 8,813 bytes. | 13 `light-dark()` color calls; 9,900 bytes. |
+| React/React DOM peer and public row key API | `^19.2`; `rowKeyGetter`. | `^19.2`; `getRowKey`. |
+
+**Minimum runtime.** `engines.vscode` is `^1.109.0`. The
+[VS Code 1.109.0 source](https://github.com/microsoft/vscode/blob/1.109.0/.npmrc) pins
+[Electron 39.3.0](https://releases.electronjs.org/release/v39.3.0) with Chromium **142.0.7444.265**.
+[Chromium 145](https://developer.chrome.com/release-notes/145#upsert) first shipped the Map and
+WeakMap upsert methods by default; [`light-dark()` colors](https://developer.chrome.com/blog/new-in-chrome-123#light-dark)
+have been supported since Chromium 123. Transpiling syntax to ES2023 does not polyfill a missing
+runtime method. The minimum VS Code installation is distinct from either of the standalone browser
+probes.
+
+**CSS and CSP.** [The webview controller](../../../../../packages/vscode-ext-webview/src/host/WebviewController.ts)
+uses a nonce in `script-src`, not in `style-src`. Its `style-src` already permits inline styles
+and there is no overriding `style-src-attr`/`style-src-elem`; RDG needs no CSP relaxation.
+[The views build](../../../../../vite.config.views.mjs) injects the emitted stylesheet via
+[`inlineCss()`](../../../../../build/vite/inline-css.mjs), so a standalone CSS file is expected
+from a Vite library build but not from the packaged-style output. Both need content checks.
+
+**Scratch smoke results.** Both exact aliases used React 19.2.4, Vite 8.1.6, Lightning CSS 1.33.0
+and Playwright Core 1.65.1. The scratch-only aliases initially split the dev React dependency
+graph (beta.61 invalid hook call); React deduplication and pre-optimization of both aliases
+eliminated the error. The smoke has no host RPC or installed VS Code webview.
+
+| Check | 7.0.0-beta.61 | 7.0.0-beta.64 |
+| --- | --- | --- |
+| Chromium 148.0.7778.96, dev and packaged-style | Rendered 500 rows. | Rendered 500 rows; one benign favicon 404 in the dev probe. |
+| [Chrome for Testing](https://googlechromelabs.github.io/chrome-for-testing/) 142.0.7444.175, dev and packaged-style | Rendered a 760×400 grid, 16 virtual rows initially, reached ID 500. No page/CSP errors. | Both routes failed to mount: `resizeObservers.getOrInsertComputed is not a function`. Map and WeakMap upserts were absent; `ResizeObserver` and `light-dark()` were supported. |
+| Vite library output | Standalone CSS (8,871 bytes), RDG selectors/tokens present. | Standalone CSS (9,963 bytes), RDG selectors/tokens present. |
+| Packaged-style output | One injected style (8,871 bytes), no standalone CSS or CSP violation. | One injected style (9,963 bytes), no standalone CSS or CSP violation. |
+
+The library/packaged builds ran `npm run build:lib:64`, `build:lib:61`, `build:packaged:64` and
+`build:packaged:61` in the scratch package (`--ignore-scripts` for each). Playwright drove
+`npm run watch:views --ignore-scripts` and a local static server for the packaged-style pages.
+In Chromium 148, both packaged grids also supported horizontal scrolling with a frozen column,
+keyboard movement and resizing from 400 to 430 px. This is a runtime smoke, not the K11
+performance or accessibility acceptance check.
+
+**Theme caveat for WI-4b/K10.** The default packaged CSS on both versions had Lightning CSS
+markers and no native `light-dark()` calls. It tracked the system preference even when the
+document's `color-scheme` was explicitly set to the opposite mode. A scratch-only beta.61 A/B
+using `npx vite build --config vite.config.ab61.mjs --mode packaged61` with `cssMinify: false`
+retained all 12 native calls and restored correct forced colors in Chromium 142; still one
+injected stylesheet and no CSP violations. This diagnostic is not a recommendation to disable
+minification globally. Verify the planned VS Code token/theme mapping under packaged output;
+high-contrast and the installed minimum VS Code workbench were not run.
+
 **WI-1c: interface spec** · advisor `claude-opus-5.5`, read-only
 
 - Input: the [interfaces sketch](#interfaces-starting-point-for-wi-1c), `toSlickGridTable.ts`,
