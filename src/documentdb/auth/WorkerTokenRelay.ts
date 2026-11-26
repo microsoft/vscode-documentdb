@@ -186,19 +186,25 @@ export class WorkerTokenRelay {
                         throw new EntraSignInRequiredError('providerChanged');
                     }
                     const providerId = assertEnvironment(environment);
-                    const session = await withTokenAcquisitionTiming(timings, () =>
-                        getEntraSession({
-                            providerId,
-                            resource: resolved.scope,
-                            tenantId,
-                            account: pin ? { id: pin.accountId, label: pin.accountLabel } : undefined,
-                            mode: pin ? 'silent' : 'interactive',
-                        }),
-                    );
+                    let session: Awaited<ReturnType<typeof getEntraSession>>;
+                    try {
+                        session = await withTokenAcquisitionTiming(timings, () =>
+                            getEntraSession({
+                                providerId,
+                                resource: resolved.scope,
+                                tenantId,
+                                account: pin ? { id: pin.accountId, label: pin.accountLabel } : undefined,
+                                mode: pin ? 'silent' : 'interactive',
+                            }),
+                        );
+                    } finally {
+                        if (canReply()) {
+                            assertEnvironment(environment);
+                        }
+                    }
                     if (!canReply()) {
                         return;
                     }
-                    assertEnvironment(environment);
                     if (!session && pin) {
                         throw new EntraSignInRequiredError('noSession');
                     }

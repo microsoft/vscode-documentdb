@@ -888,6 +888,111 @@ describe('WorkerSessionManager', () => {
                 lookup.mockRestore();
             }
         });
+
+        it('validates the environment when the Entra lookup rejects', async () => {
+            const clusterId = 'relay-rejected-lookup';
+            let environment: typeof originalEnvironment = originalEnvironment;
+            const environmentSpy = vi
+                .spyOn(entraSession, 'readEntraSignInEnvironment')
+                .mockImplementation(() => environment);
+            const resolver = vi.spyOn(tokenResource, 'resolveInteractiveTokenResource').mockResolvedValue(resolvedResource);
+            const lookup = vi.spyOn(entraSession, 'getEntraSession').mockImplementation(async () => {
+                environment = {
+                    ...environment,
+                    authority: 'https://authority.example.com/changed/',
+                };
+                throw new Error('private-lookup-cause');
+            });
+            const relay = createRelay(clusterId);
+            const responses: MainToWorkerMessage[] = [];
+            const startupProperties: Record<string, string> = {};
+            recordEntraTokenFailure(clusterId, { cloudCategory: 'custom', authMethod: 'interactive' });
+            const priorFailure = getRecentEntraTokenFailure(clusterId);
+            try {
+                await relay.relay(
+                    { type: 'tokenRequest', requestId: 'rejected' },
+                    (response) => responses.push(response),
+                    () => true,
+                    undefined,
+                    { startupProperties },
+                );
+
+                expect(responses).toEqual([
+                    expect.objectContaining({
+                        type: 'tokenError',
+                        requestId: 'rejected',
+                        reason: 'signInRequired',
+                    }),
+                ]);
+                expect(getRecentEntraTokenFailure(clusterId)).toBe(priorFailure);
+                expect(startupProperties.entraFailureKind).not.toBe('tokenAcquisitionFailed');
+                expect(JSON.stringify(responses)).not.toContain('private-lookup-cause');
+            } finally {
+                resetEntraTokenFailuresForTests();
+                environmentSpy.mockRestore();
+                resolver.mockRestore();
+                lookup.mockRestore();
+            }
+        });
+
+        it.each(['oldWorker', 'epoch'] as const)(
+            'does not validate or diagnose a rejected lookup from a stale %s',
+            async (staleBy) => {
+                const clusterId = `relay-stale-${staleBy}`;
+                let current = true;
+                const environmentSpy = vi
+                    .spyOn(entraSession, 'readEntraSignInEnvironment')
+                    .mockReturnValue(originalEnvironment);
+                const resolver = vi
+                    .spyOn(tokenResource, 'resolveInteractiveTokenResource')
+                    .mockResolvedValue(resolvedResource);
+                let signalStarted!: () => void;
+                const started = new Promise<void>((resolve) => {
+                    signalStarted = resolve;
+                });
+                let rejectLookup!: () => void;
+                const lookup = vi.spyOn(entraSession, 'getEntraSession').mockImplementation(
+                    async () =>
+                        await new Promise<vscode.AuthenticationSession | undefined>((_, reject) => {
+                            rejectLookup = () => reject(new Error('obsolete lookup failure'));
+                            signalStarted();
+                        }),
+                );
+                const relay = createRelay(clusterId);
+                const responses: MainToWorkerMessage[] = [];
+                recordEntraTokenFailure(clusterId, { cloudCategory: 'china', authMethod: 'interactive' });
+                const priorFailure = getRecentEntraTokenFailure(clusterId);
+                try {
+                    const relaying = relay.relay(
+                        { type: 'tokenRequest', requestId: 'stale' },
+                        (response) => responses.push(response),
+                        () => current,
+                    );
+                    const outcome =
+                        staleBy === 'epoch'
+                            ? expect(relaying).rejects.toBeInstanceOf(UserCancelledError)
+                            : relaying;
+                    await started;
+                    const readsBeforeRejection = environmentSpy.mock.calls.length;
+                    if (staleBy === 'oldWorker') {
+                        current = false;
+                    } else {
+                        ClustersClient.invalidate(clusterId);
+                    }
+                    rejectLookup();
+                    await outcome;
+
+                    expect(responses).toEqual([]);
+                    expect(environmentSpy).toHaveBeenCalledTimes(readsBeforeRejection);
+                    expect(getRecentEntraTokenFailure(clusterId)).toBe(priorFailure);
+                } finally {
+                    resetEntraTokenFailuresForTests();
+                    environmentSpy.mockRestore();
+                    resolver.mockRestore();
+                    lookup.mockRestore();
+                }
+            },
+        );
     });
 
     describe('startup tracking', () => {
