@@ -220,6 +220,12 @@ tuning to #1105.
 - The message change is conditional: implement it only if OP-6 step 1 fails. Do not implement
   it speculatively.
 
+> **WI-10 documentation done (2026-11-26), commit `10badbc0d`:** Added all three
+> scenarios to the OP-6 row and PR F step 3. Operator decision: validation only (explicit
+> acceptance); leader confirmed the plan includes the no-read/no-replay constraints.
+> No automated tests added. **OP-6 pending:** run on the packaged VSIX and record actual
+> outcomes. Do not change the Save message unless the first-write scenario fails.
+
 ## F3. Blocked webview operations look like successes in telemetry (Medium)
 
 **Evidence**
@@ -402,6 +408,10 @@ re-run the ARM renewal check when upgrading.
 
 **Operator decision (2026-11-26):** Accepted. No code change in this PR.
 
+> **WI-12 disposition recorded (2026-11-26):** Operator decision: retain the
+> prerelease pin (explicit acceptance, decision 0008). Track GA here; rerun the ARM
+> renewal check on upgrade. No code, tests, or new GitHub issue.
+
 ---
 
 ## Over-engineering
@@ -462,6 +472,9 @@ generations, pending startups) into its own module, so the class is easier to re
 
 **Operator decision (2026-11-26):** Accepted as written. No change in this PR. The extraction
 stays a possible later follow-up and is not scheduled.
+
+> **WI-12 disposition recorded (2026-11-26):** Operator decision: no extraction in
+> this PR (explicit acceptance). No code or tests.
 
 ### Considered and not raised
 
