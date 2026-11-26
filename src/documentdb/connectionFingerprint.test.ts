@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { computeConnectionFingerprint, type ConnectionPrincipal } from './connectionFingerprint';
 
@@ -12,7 +12,7 @@ describe('computeConnectionFingerprint', () => {
     const native = { kind: 'native', username: 'user' } as const;
     const entra = { kind: 'entra', providerId: 'public', accountId: 'account', tenantId: 'tenant' } as const;
 
-    it('returns a deterministic 32-character lowercase hex fingerprint', () => {
+    it('returns the same 32-character lowercase hex fingerprint within a host', () => {
         const fingerprint = computeConnectionFingerprint({ connectionString, principal: native });
         expect(fingerprint).toMatch(/^[a-f0-9]{32}$/);
         expect(computeConnectionFingerprint({ connectionString, principal: { ...native } })).toBe(fingerprint);
@@ -80,5 +80,15 @@ describe('computeConnectionFingerprint', () => {
         expect(computeConnectionFingerprint({ connectionString, principal: first })).not.toBe(
             computeConnectionFingerprint({ connectionString, principal: second }),
         );
+    });
+
+    it('does not reuse the fingerprint key after a fresh module load', async () => {
+        const input = { connectionString, principal: native };
+        const originalFingerprint = computeConnectionFingerprint(input);
+
+        vi.resetModules();
+        const { computeConnectionFingerprint: computeFreshFingerprint } = await import('./connectionFingerprint');
+
+        expect(computeFreshFingerprint(input)).not.toBe(originalFingerprint);
     });
 });

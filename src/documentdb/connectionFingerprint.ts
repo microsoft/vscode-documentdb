@@ -3,7 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createHash } from 'node:crypto';
+import { createHmac, generateKeySync } from 'node:crypto';
+
+const connectionFingerprintKey = generateKeySync('hmac', { length: 256 });
 
 export type ConnectionPrincipal =
     | { kind: 'native'; username: string }
@@ -11,14 +13,15 @@ export type ConnectionPrincipal =
     | { kind: 'managedIdentity'; clientId?: string }
     | { kind: 'none' };
 
+/** An opaque equality key for the current extension host, not a password verifier. */
 export function computeConnectionFingerprint(input: {
     connectionString: string;
     principal: ConnectionPrincipal;
 }): string {
     // Match only the password in the URI authority, without decoding or reserializing the URI.
-    const uri = input.connectionString.replace(/^([^:/?#]+:\/\/[^:/?#@]*:)[^/?#@]*(?=@)/, '$1');
-    const identity = JSON.stringify([uri, principalParts(input.principal)]);
-    return createHash('sha256').update(identity).digest('hex').slice(0, 32);
+    const uriWithoutAuthorityPassword = input.connectionString.replace(/^([^:/?#]+:\/\/[^:/?#@]*:)[^/?#@]*(?=@)/, '$1');
+    const identityMaterial = JSON.stringify([uriWithoutAuthorityPassword, principalParts(input.principal)]);
+    return createHmac('sha256', connectionFingerprintKey).update(identityMaterial).digest('hex').slice(0, 32);
 }
 
 function principalParts(principal: ConnectionPrincipal): readonly (string | null)[] {
