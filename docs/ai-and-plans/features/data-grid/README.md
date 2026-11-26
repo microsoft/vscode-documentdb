@@ -58,6 +58,10 @@ loading behavior.
 
 ## Plan
 
+**Current proposal:** [iterations/01-rdg-migration-plan.md](./iterations/01-rdg-migration-plan.md),
+ordered work items for the React Data Grid migration (high level; detailed interfaces follow in the
+next iteration).
+
 See [slickgrid-removal.md](./slickgrid-removal.md) for the earlier footprint snapshot,
 candidate directions, sequential gates, and explicit non-scope. Use the newer research and parity
 checklist above for current upstream facts and the expanded behavior inventory. The build rationale for the current
