@@ -90,7 +90,7 @@ result may continue, but say so in the message. Record the result in the Progres
 | OP-3 | WI-5 done          | OT-2's tree part with a real sign-out: Sign in again, a dismissal, no reprompt.                                                                    |
 | OP-4 | WI-6 done          | Cleared: short OT-1 and OT-3 identity-guard evidence; the original password-only recovery check was waived by the operator.                        |
 | OP-5 | WI-7 done          | OT-7, including **Keep open (disabled)** and its pushed disable message, plus OT-3's immediate lock after a saved edit (decision 0018).            |
-| OP-6 | Before PR F (CP-5) | OT-1 to OT-7 on the packaged VSIX, with at least one real wait of two hours or more (PR F step 3).                                                 |
+| OP-6 | Before PR F (CP-5) | OT-1 to OT-7 on the packaged VSIX: first action a write after at least two hours idle, continuous use across expiry, and sleep/wake plus Shell and Playground after expiry (PR F step 3). |
 
 ### Per-PR workflow
 
@@ -1919,6 +1919,16 @@ one loop.
 2. Run Case 2 on the feature branch head.
 3. Run OT-1 to OT-7 on the packaged VSIX, with at least one real wait of two hours or more. Record each
    result, and the evidence the approved plan requires, in `# Outcome`. In addition:
+   - **First write after expiry:** prepare an edit in Document View on a connection whose string
+     sets `retrywrites=false`. After at least two hours idle, make **Save** the first database
+     operation; do not run a read beforehand. Record the result and any message. Only if this
+     fails, fix the message to tell the user to try again without claiming the write was not
+     applied (F-22). Do not replay writes or add a pre-write probe in this PR; a probe would
+     require a separate decision next to [0010](../decisions.md).
+   - **Continuous use across expiry:** run a query every few minutes for about 90 minutes
+     spanning a token expiry. Record whether operations continue without an interactive prompt.
+   - **Sleep/wake and workers:** sleep and wake across a token expiry and exercise the connection
+     after waking. Exercise Shell and Playground after expiry as separate worker paths.
    - **OT-1:** check the shell separately. After the wait, its worker's own connection must renew without
      a prompt; record the token relay in the output channel, never the token.
    - **OT-7:** also Disconnect while a query or save is in flight. Whatever its outcome, it is reported;
@@ -1937,4 +1947,5 @@ one loop.
 
 - **WI-9 telemetry: pending ingestion.** Run the [feature queries](../telemetry.md) on
   pre-release data before CP-5. The cross-release trend is unmeasured for 1.2.0. Record the
-  packaged operator validation here at OP-6.
+  packaged operator validation here at OP-6. The additional first-write, continuous-use and
+  sleep/wake and worker scenarios are pending operator verification on a packaged build.
