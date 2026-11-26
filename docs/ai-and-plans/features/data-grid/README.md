@@ -58,7 +58,7 @@ loading behavior.
 
 ## Plan
 
-**Current proposal:** [iterations/01-rdg-migration-plan.md](./iterations/01-rdg-migration-plan.md),
+**Accepted plan:** [iterations/01-rdg-migration-plan.md](./iterations/01-rdg-migration-plan.md),
 ordered work items for the React Data Grid migration (high level; detailed interfaces follow in the
 next iteration).
 
