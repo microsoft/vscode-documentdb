@@ -101,7 +101,7 @@ Browser and the operator's pin decision.
 | Choice | Operator feedback |
 | --- | --- |
 | Scope, execution and models | Keep the M/K/D rows and accept C1–C8 and the assigned models as written. |
-| Pin | Selected `7.0.0-beta.64` after the built-in browser retest. Raise the support floor to the earliest stable VS Code release verified to work with beta.64; no compatibility shim. The exact floor is not yet verified. |
+| Pin | Selected `7.0.0-beta.64` after the built-in browser retest. Raise the support floor to the earliest stable VS Code release verified to work with beta.64; no compatibility shim. [Candidate: VS Code 1.123.0](#candidate-minimum-for-beta64); exact workbench verification is pending. |
 | Playwright checks | On demand only. |
 | Gestures | Accept the proposed row gestures and Enter. Include Shift+arrows only if already in scope; it is listed for future cell-range selection (F-3), not as a row-selection gesture in this migration. Do not add it. |
 | O1–O3 | Keep today's nested `_id` display and field-name tree ordering; withhold document actions for unreliable IDs. |
@@ -475,6 +475,23 @@ error with beta.64, nor does it test an installed VS Code 1.109.0. **Keep the be
 if retaining the declared support floor.** Selecting beta.64 requires compatibility evidence at
 that floor or a separately approved new floor. Retest checks used 3.0 AIU over 27 requests
 (2m41s summed model time; host log).
+
+##### Candidate minimum for beta.64
+
+**VS Code 1.123.0 is the earliest stable candidate, not a verified minimum.** The last patch
+in the preceding release, [1.122.1](https://code.visualstudio.com/updates/v1_122), pins
+[Electron 39.8.8](https://raw.githubusercontent.com/microsoft/vscode/1.122.1/.npmrc) with
+[Chromium 142.0.7444.265](https://releases.electronjs.org/release/v39.8.8). The shipped
+[1.123.0 commit](https://raw.githubusercontent.com/microsoft/vscode/6a44c352bd24569c417e530095901b649960f9f8/.npmrc)
+pins Electron 42.3.0 with
+[Chromium 148.0.7778.180](https://releases.electronjs.org/release/v42.3.0), past Chromium 145's
+upsert threshold. These are shipped-release mappings, not a run of RDG in the stable workbench.
+
+Before changing the manifest, open both beta.64 scratch routes in **stable 1.123.0's Integrated
+Browser**, not the current Insiders tab or a 1.123 patch release. Confirm the reported runtime,
+`WeakMap.prototype.getOrInsertComputed`, the mounted grid and row 500 on scroll. No stable 1.123.0
+build was present in the workspace/scratch cache; no new instance was launched. The floor lookup
+used `mai-code-2-flash` (1.0 AIU, 11 requests, 1m39s summed model time).
 
 > **Done (2026-11-26), commit `4f8ef192`:** `gpt-6.1-sol` compared exact artifacts and prepared
 > the isolated smoke; `mai-code-2-flash` ran the checks and fixed a scratch-only React alias
