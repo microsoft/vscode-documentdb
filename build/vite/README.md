@@ -73,7 +73,7 @@ The groups capture modules in this priority order:
 | `preload-helper` | `50`       | Vite's virtual preload helper.                                                           |
 | `react`          | `40`       | `react`, `react-dom`, `scheduler`.                                                       |
 | `fluentui`       | `30`       | `@fluentui`, `@griffel`.                                                                 |
-| `slickgrid`      | `20`       | `slickgrid-react`, `@slickgrid-universal`.                                               |
+| `react-data-grid`| `20`       | `react-data-grid`.                                                                      |
 | `monaco`         | `10`       | `monaco-editor`, `@monaco-editor`, and the plugin's `monacoVirtualModulePrefix` modules. |
 
 Order matters because `includeDependenciesRecursively` remains at its default, enabled:
@@ -84,10 +84,10 @@ without introducing circular chunks.
 
 There is deliberately no catch-all vendor group. A group shared by the entry and a lazy view
 would hoist the view's dependencies into the entry's static graph. React and Fluent UI are
-needed by the entry; Monaco remains behind editor views, and SlickGrid behind Collection View.
+needed by the entry; Monaco remains behind editor views, and React Data Grid behind Collection View.
 Other modules are split automatically. L1 requires each registry-backed lazy chunk and excludes
-Monaco/SlickGrid from Local Quick Start and Atlas Credentials. L2 checks actual fetched chunks
-and SlickGrid's rendered rows/styles, not just an apparent drop in `views.js` size.
+Monaco/React Data Grid from Local Quick Start and Atlas Credentials. L2 checks actual fetched chunks
+and Collection View's rendered application and Monaco, not just an apparent drop in `views.js` size.
 
 ### Monaco features and workers
 
@@ -134,7 +134,7 @@ worker check.
 | `server.host: '127.0.0.1'`, `server.port: 18080`, `server.strictPort: true` | `npm run watch:views` binds locally at the fixed port expected by the host. A busy port must fail, not silently move to a URL outside the development CSP.                                                                                                                                                                                                                                                                           |
 | `server.origin: 'http://localhost:18080'`                                   | Match `WebviewController`'s `DEFAULT_DEV_SERVER_HOST` exactly for absolute asset and worker URLs, even though the listener binds to `127.0.0.1`.                                                                                                                                                                                                                                                                                     |
 | `server.cors: { origin: allowedDevOrigins }`                                | Allow module fetches from `vscode-webview://` pages and Vite's local-machine origins, including Blob-worker fetches, without accepting arbitrary origins.                                                                                                                                                                                                                                                                            |
-| `optimizeDeps.include`                                                      | Pre-bundle Fluent UI/Griffel, React (including JSX runtimes), SlickGrid, the Monaco React wrapper, and `monaco.optimizeDepsInclude` (all feature/API/language imports plus the JavaScript tokenizer) together. Avoid first-editor re-optimization, page reloads and split Monaco identities.                                                                                                                                         |
+| `optimizeDeps.include`                                                      | Pre-bundle Fluent UI/Griffel, React (including JSX runtimes), React Data Grid, the Monaco React wrapper, and `monaco.optimizeDepsInclude` (all feature/API/language imports plus the JavaScript tokenizer) together. Avoid first-editor re-optimization, page reloads and split Monaco identities.                                                                                                                                    |
 | `server.warmup.clientFiles`                                                 | Transform the entry and `./src/webviews/**/*.tsx` early to reduce first-panel latency; this is not a production eager-import boundary.                                                                                                                                                                                                                                                                                               |
 | [webview-dev-entry.mjs](./webview-dev-entry.mjs)                            | Serve `/views.js` without a prebuilt disk entry. Its first import is a separate React Refresh preamble module, then it re-exports the source entry's `render`. plugin-react normally injects the preamble into `index.html`, which this host does not use; a separate allowed-origin module avoids adding an inline script/nonce to the template. The middleware supplies CORS itself because it runs before Vite's CORS middleware. |
 | [webview-scenarios.mjs](./webview-scenarios.mjs)                            | Serve-only L2-dev index, typed scenario pages and runner endpoints via `ssrLoadModule`. Unknown routes return 404; source/HMR/asset requests pass to Vite. Nothing is added to production bundles.                                                                                                                                                                                                                                   |

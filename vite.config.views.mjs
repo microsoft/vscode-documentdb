@@ -122,10 +122,10 @@ export default defineConfig(async ({ command, mode }) => {
                     keepNames: false,
                     // Named vendor chunks (`codeSplitting.groups`, which replaces the deprecated
                     // `manualChunks`/`advancedChunks` in Rolldown 1.0). The entry statically loads
-                    // React and Fluent UI; Monaco and SlickGrid stay behind the lazy view chunks that
-                    // import them. A catch-all vendor group is deliberately absent: a group shared by
-                    // the entry and a lazy view would hoist the view's dependencies into the entry's
-                    // static graph. Everything else is chunked automatically per view.
+                    // React and Fluent UI; Monaco and React Data Grid stay behind the lazy view
+                    // chunks that import them. A catch-all vendor group is deliberately absent: a
+                    // group shared by the entry and a lazy view would hoist the view's dependencies
+                    // into the entry's static graph. Everything else is chunked automatically per view.
                     codeSplitting: {
                         // Rolldown also moves every not-yet-captured dependency of a group's modules
                         // into that group (`includeDependenciesRecursively`, kept on to avoid circular
@@ -137,8 +137,8 @@ export default defineConfig(async ({ command, mode }) => {
                             { name: 'react', test: inPackages('react', 'react-dom', 'scheduler'), priority: 40 },
                             { name: 'fluentui', test: inPackages('@fluentui', '@griffel'), priority: 30 },
                             {
-                                name: 'slickgrid',
-                                test: inPackages('slickgrid-react', '@slickgrid-universal'),
+                                name: 'react-data-grid',
+                                test: inPackages('react-data-grid'),
                                 priority: 20,
                             },
                             {
@@ -167,7 +167,7 @@ export default defineConfig(async ({ command, mode }) => {
                 'react/jsx-runtime',
                 'react/jsx-dev-runtime',
                 '@monaco-editor/react',
-                'slickgrid-react',
+                'react-data-grid',
                 ...monaco.optimizeDepsInclude,
             ],
         },

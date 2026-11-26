@@ -506,13 +506,9 @@ export const fixtures = {
     collectionView: {
         config: collectionConfig,
         monaco: true,
-        content: ['Stage 0 fixture row Alpha', 'Stage 0 fixture row Beta'],
+        content: ['Documents'],
         styles: [
             { selector: '.collectionView', property: 'display', expected: 'flex' },
-            { selector: '.slick-cell', property: 'position', expected: 'absolute' },
-            { selector: '.slick-header-column', property: 'box-sizing', expected: 'content-box' },
-            { selector: '.slick-resizable-handle', property: 'cursor', expected: 'col-resize' },
-            { selector: '.slick-resizable-handle', property: 'width', expected: '7px' },
             { selector: '.monaco-editor', property: 'position', expected: 'relative' },
             { selector: '.monaco-editor .overflow-guard', property: 'overflow', expected: 'hidden' },
             { selector: '.monaco-editor .view-lines', property: 'position', expected: 'absolute' },

@@ -199,6 +199,16 @@ test('host BSON invariant requires one per host/worker and permits zero or one, 
     assert.throws(() => hostGraphs(report, bundled), /playgroundWorker: expected exactly one BSON module, got 0/);
 });
 
+test('host graphs exclude React Data Grid', () => {
+    for (const name of ['main', 'playgroundWorker', 'playgroundTsPlugin']) {
+        const { report, bundled } = hostFixture();
+        report.chunks.find((chunk) => chunk.name === name).moduleIds.push(
+            './node_modules/react-data-grid/lib/index.js',
+        );
+        assert.throws(() => hostGraphs(report, bundled), new RegExp(`${name} must exclude React Data Grid`));
+    }
+});
+
 test('host graph edges require report chunks and packaged chunks, and obsolete reports require regeneration', () => {
     const { report, bundled } = hostFixture();
     assert.throws(() => hostGraphs({ bundler: 'webpack' }, bundled), /non-Vite host bundle report; regenerate/);
@@ -672,13 +682,17 @@ function viteFixture() {
             imports: [],
             moduleIds: ['./node_modules/monaco-editor/esm/vs/editor/editor.api.js'],
         },
-        { fileName: 'slickgrid.js', imports: [], moduleIds: ['./node_modules/@slickgrid-universal/common/index.js'] },
+        {
+            fileName: 'react-data-grid.js',
+            imports: [],
+            moduleIds: ['./node_modules/react-data-grid/lib/index.js'],
+        },
         ...Object.entries(viewModules).map(([name, facadeModuleId]) => ({
             fileName: `${name}.js`,
             facadeModuleId,
             imports:
                 name === 'collectionView'
-                    ? ['monaco-AbC12345.js', 'slickgrid.js']
+                    ? ['monaco-AbC12345.js', 'react-data-grid.js']
                     : name === 'documentView'
                       ? ['monaco-AbC12345.js']
                       : [],
@@ -704,20 +718,20 @@ test('Vite view graphs include only entry and view static closures, including cy
         assets: ['localQuickStart.js', 'runtime.js', 'shared.js', 'views.js'],
         bsonModules: [],
         monaco: false,
-        slickgrid: false,
+        reactDataGrid: false,
     });
     assert.deepEqual(graphs.collectionView.assets, [
         'collectionView.js',
         'monaco-AbC12345.js',
+        'react-data-grid.js',
         'runtime.js',
         'shared.js',
-        'slickgrid.js',
         'views.js',
     ]);
     assert.equal(graphs.collectionView.monaco, true);
-    assert.equal(graphs.collectionView.slickgrid, true);
+    assert.equal(graphs.collectionView.reactDataGrid, true);
     assert.equal(graphs.documentView.monaco, true);
-    assert.equal(graphs.documentView.slickgrid, false);
+    assert.equal(graphs.documentView.reactDataGrid, false);
 });
 
 test('Vite requires the mapped lazy chunk to be a direct dynamic import of views.js', () => {
@@ -743,16 +757,33 @@ test('every Vite graph chunk must exist in both the report and the VSIX', () => 
     );
 });
 
-test('Vite always enforces lightweight views', () => {
+test('Vite always enforces lazy React Data Grid loading and lightweight views', () => {
+    const missing = viteFixture();
+    missing.report.chunks.find((chunk) => chunk.fileName === 'collectionView.js').imports.pop();
+    assert.throws(() => viewGraphs(missing.report, missing.bundled), /collectionView must include React Data Grid/);
+
     for (const name of ['localQuickStart', 'atlasCredentials']) {
-        for (const asset of ['monaco-AbC12345.js', 'slickgrid.js']) {
+        for (const asset of ['monaco-AbC12345.js', 'react-data-grid.js']) {
             const { report, bundled } = viteFixture();
             report.chunks.find((chunk) => chunk.fileName === `${name}.js`).imports.push(asset);
             assert.throws(
                 () => viewGraphs(report, bundled),
-                (error) => error.message === `${name} must exclude Monaco and SlickGrid`,
+                (error) => error.message === `${name} must exclude Monaco and React Data Grid`,
             );
         }
+    }
+
+    for (const name of Object.keys(viewModules).filter((candidate) => candidate !== 'collectionView')) {
+        const { report, bundled } = viteFixture();
+        report.chunks.find((chunk) => chunk.fileName === `${name}.js`).imports.push('react-data-grid.js');
+        assert.throws(
+            () => viewGraphs(report, bundled),
+            (error) =>
+                error.message ===
+                (['localQuickStart', 'atlasCredentials'].includes(name)
+                    ? `${name} must exclude Monaco and React Data Grid`
+                    : `${name} must exclude React Data Grid`),
+        );
     }
 });
 
