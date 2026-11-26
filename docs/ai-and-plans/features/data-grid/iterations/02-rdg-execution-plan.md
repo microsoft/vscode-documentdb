@@ -829,6 +829,15 @@ parity.
 - Acceptance: unit tests for each new step and assertion; existing scenarios unchanged.
 - Check: `npx vitest run --config build/verification/browser/vitest.config.ts build/verification/browser/scenario-runtime.test.ts build/verification/browser/scenarios.test.ts`
 
+> **Done (2026-11-26), commit `d83782fc`:** `mai-code-2` added `press`, `dblclick`, `focus`
+> and `focused`, with no existing scenario changes. Leader review (98%) kept role/name
+> targeting exact and the run-all helper self-contained. One focused runner test covers the
+> new operations and missing focus targets. After a type-only mock correction, `mai-code-2-flash`
+> confirmed 73 tests passed across the runtime, scenario and Playwright adapter suites;
+> `npx tsc -p build/verification/browser/tsconfig.json --noEmit` and whitespace checks passed.
+> Usage: coding 12.4 AIU (14 requests, 3m19s summed, one corrective turn); checks 0.2 AIU
+> (6 requests, 38s summed).
+
 **WI-2b: host shaping and identity** · `gpt-6.1-sol` · after WI-4a and WI-2a
 
 - Owns: `src/utils/slickgrid/**` moved to the WI-1c folder (with tests), `src/webviews/utils/slickgrid/typeToDisplayString.ts`
