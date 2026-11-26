@@ -1876,7 +1876,8 @@ one loop.
   follows the published client; worker eligibility is captured when the ready or executing worker
   requests the token. Neither uses the first callback as a startup proxy.
 - Case 1 passed: `npm run build` and 349 focused tests in 8 files. Ingestion is **pending**; the
-  [telemetry queries](../telemetry.md) and dashboard scope/volume checks are for the operator.
+  [telemetry queries](../telemetry.md) are ready to run. The dashboard worktree has unrelated
+  changes in progress and was left untouched.
 
 ---
 
@@ -1902,6 +1903,11 @@ one loop.
 
 **Progress:**
 
+- The operator chose text-only 1.2.0 release notes. The user manual extends
+  `connecting-to-databases.md` rather than adding a second page.
+- The local GitHub Pages build rendered the manual and draft release notes. The three
+  manual links and the release index link resolve, and the internal feature docs stay excluded.
+
 ---
 
 ## PR F: `feature/connection-lifecycle` → `main`
@@ -1926,4 +1932,5 @@ one loop.
 
 # Outcome
 
-_To be written at hand-over._
+- **WI-9 telemetry: pending ingestion.** Run the [feature queries](../telemetry.md) on
+  pre-release data before CP-5. Record the packaged operator validation here at OP-6.
