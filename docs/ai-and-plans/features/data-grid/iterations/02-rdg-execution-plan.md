@@ -1038,6 +1038,16 @@ through `mai-code-2-flash` after each pair of items, not after every commit.
 - Scope rows K1–K2; D9. Gestures as released at G1.
 - Acceptance: A6, including the advisor's logic review (lifecycle and data-loss risk).
 
+> **Implementation complete (2026-11-26):** `gpt-6.1-sol` added the released selection gestures
+> and guarded action eligibility against the current table request. The build and 33 focused
+> tests passed. In each theme, 49 assertions passed across selection, no-ID, identity,
+> late-delete and paging. `claude-opus-5.5` approved the action logic (85% confidence).
+> Run the pinned late-query scenario with WI-8 before closing A6. G2 should confirm modifier
+> clicks and whether re-extending toward the anchor should keep the already selected rows
+> (current behavior) or shrink the range; no gesture choice changed here.
+> Coding: 39.1 AIU (15 requests). Shared A6/A8 first pass: 235.7 AIU advisor (39 requests),
+> 0.4 AIU terminal (9), 6.7 AIU Integrated Browser (13).
+
 **WI-8: step in and out** · `mai-code-2` (fallback `gpt-6.1-sol`) · after WI-7
 
 - Owns: `DataViewPanelTable.tsx` (double-click and key), `CollectionView.tsx`

@@ -168,20 +168,24 @@ export const CollectionView = (): JSX.Element => {
     const dataRequestRef = useRef(0);
     const cachedQueryRef = useRef<CollectionViewContextType['activeQuery'] | undefined>(undefined);
     const tablePageQueryRef = useRef<CollectionViewContextType['activeQuery'] | undefined>(undefined);
+    const tablePageRequestRef = useRef<number | undefined>(undefined);
     currentQueryResultsRef.current = currentQueryResults;
     currentContextRef.current = currentContext;
 
     const handleSelectedRowKeysChange = useCallback((selectedRowKeys: readonly string[]): void => {
         setCurrentContext((prev) => {
-            const targets =
+            const isCurrentPage =
                 !prev.isLoading &&
                 prev.currentView === Views.TABLE &&
-                tablePageQueryRef.current === prev.activeQuery
-                    ? resolveDocumentTargets(currentQueryResultsRef.current?.tablePage, selectedRowKeys)
-                    : undefined;
+                tablePageQueryRef.current === prev.activeQuery &&
+                tablePageRequestRef.current === dataRequestRef.current;
+            const nextRowKeys = isCurrentPage ? [...selectedRowKeys] : [];
+            const targets = isCurrentPage
+                ? resolveDocumentTargets(currentQueryResultsRef.current?.tablePage, nextRowKeys)
+                : undefined;
             const next = {
                 ...prev,
-                dataSelection: { selectedRowKeys: [...selectedRowKeys] },
+                dataSelection: { selectedRowKeys: nextRowKeys },
                 commands: {
                     disableAddDocument: false,
                     disableViewDocument: targets?.length !== 1,
@@ -320,6 +324,7 @@ export const CollectionView = (): JSX.Element => {
             return;
         }
         const request = ++dataRequestRef.current;
+        handleSelectedRowKeysChange([]);
         const query = currentContextRef.current.activeQuery;
         const path = [...(currentContextRef.current.currentViewState?.currentPath ?? [])];
         const isCurrentRequest = (): boolean =>
@@ -338,6 +343,7 @@ export const CollectionView = (): JSX.Element => {
                             return;
                         }
                         tablePageQueryRef.current = query;
+                        tablePageRequestRef.current = request;
                         currentQueryResultsRef.current = { ...currentQueryResultsRef.current, tablePage: result };
                         setCurrentQueryResults((prev) => ({
                             ...prev,
@@ -444,6 +450,7 @@ export const CollectionView = (): JSX.Element => {
         setCurrentContext((prev) => ({
             ...prev,
             isLoading: true,
+            dataSelection: { selectedRowKeys: [] },
             commands: {
                 ...prev.commands,
                 disableViewDocument: true,
@@ -561,7 +568,8 @@ export const CollectionView = (): JSX.Element => {
         if (
             context.isLoading ||
             context.currentView !== Views.TABLE ||
-            tablePageQueryRef.current !== context.activeQuery
+            tablePageQueryRef.current !== context.activeQuery ||
+            tablePageRequestRef.current !== dataRequestRef.current
         ) {
             return;
         }
@@ -573,6 +581,7 @@ export const CollectionView = (): JSX.Element => {
             return;
         }
         const requestedIds = targets.map((target) => target.documentId);
+        const requestedIdSet = new Set(requestedIds);
         trpcClient.mongoClusters.collectionView.deleteDocumentsById
             .mutate(requestedIds)
             .then((acknowledged) => {
@@ -592,7 +601,7 @@ export const CollectionView = (): JSX.Element => {
                 }
                 const removedKeys = new Set(
                     page.rows
-                        .filter((row) => row.documentId !== undefined && requestedIds.includes(row.documentId))
+                        .filter((row) => row.documentId !== undefined && requestedIdSet.has(row.documentId))
                         .map((row) => row.rowKey),
                 );
                 const nextPage = { ...page, rows: page.rows.filter((row) => !removedKeys.has(row.rowKey)) };
@@ -603,7 +612,8 @@ export const CollectionView = (): JSX.Element => {
                     const remainingTargets =
                         !prev.isLoading &&
                         prev.currentView === Views.TABLE &&
-                        tablePageQueryRef.current === prev.activeQuery
+                        tablePageQueryRef.current === prev.activeQuery &&
+                        tablePageRequestRef.current === dataRequestRef.current
                             ? resolveDocumentTargets(currentQueryResultsRef.current?.tablePage, selectedRowKeys)
                             : undefined;
                     const next = {
@@ -634,7 +644,8 @@ export const CollectionView = (): JSX.Element => {
         if (
             context.isLoading ||
             context.currentView !== Views.TABLE ||
-            tablePageQueryRef.current !== context.activeQuery
+            tablePageQueryRef.current !== context.activeQuery ||
+            tablePageRequestRef.current !== dataRequestRef.current
         ) {
             return;
         }
@@ -661,7 +672,8 @@ export const CollectionView = (): JSX.Element => {
         if (
             context.isLoading ||
             context.currentView !== Views.TABLE ||
-            tablePageQueryRef.current !== context.activeQuery
+            tablePageQueryRef.current !== context.activeQuery ||
+            tablePageRequestRef.current !== dataRequestRef.current
         ) {
             return;
         }
