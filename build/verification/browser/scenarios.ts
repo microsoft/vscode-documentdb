@@ -12,6 +12,7 @@ import {
     type FixturePaths,
     type TypedRpcFixtures,
 } from './core/fixtures';
+import { collectionViewFixtures } from './collectionViewFixtures';
 import {
     diagnosticsCard,
     diagnosticsConnectedCard,
@@ -249,6 +250,20 @@ function defaultScenario<V extends WebviewName>(view: V, steps: readonly Scenari
 }
 
 const base = fixtures.localQuickStart;
+const collectionViewBase = defaultScenario('collectionView');
+
+function collectionViewScenario(name: keyof typeof collectionViewFixtures): Scenario<'collectionView'> {
+    const fixture = collectionViewFixtures[name];
+    return {
+        config: 'config' in fixture ? { ...collectionViewBase.config, ...fixture.config } : collectionViewBase.config,
+        rpc: { ...collectionViewBase.rpc, ...fixture.rpc },
+        readiness:
+            'readiness' in fixture
+                ? { ...collectionViewBase.readiness, ...fixture.readiness }
+                : collectionViewBase.readiness,
+    };
+}
+
 const readyDocker = base.rpc['localQuickStart.getDockerStatus'].results[0];
 const completedStages = [
     { stage: 'checking', status: 'done', dockerReadiness: readyDocker.readiness },
@@ -2448,7 +2463,19 @@ const diagnosticsScenarios = {
 } as const satisfies Readonly<Record<string, Scenario<'connectionDiagnostics'>>>;
 
 export const scenarios = {
-    collectionView: { default: defaultScenario('collectionView') },
+    collectionView: {
+        default: collectionViewBase,
+        'mixed-types': collectionViewScenario('mixed-types'),
+        'missing-vs-null': collectionViewScenario('missing-vs-null'),
+        heterogeneous: collectionViewScenario('heterogeneous'),
+        'deep-nesting': collectionViewScenario('deep-nesting'),
+        arrays: collectionViewScenario('arrays'),
+        'page-500': collectionViewScenario('page-500'),
+        'html-values': collectionViewScenario('html-values'),
+        empty: collectionViewScenario('empty'),
+        'no-id': collectionViewScenario('no-id'),
+        'first-load': collectionViewScenario('first-load'),
+    },
     documentView: { default: defaultScenario('documentView') },
     clusterDashboard: { default: defaultScenario('clusterDashboard') },
     atlasCredentials: { default: defaultScenario('atlasCredentials', atlasSteps) },

@@ -6,6 +6,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { collectionViewFixtures } from './collectionViewFixtures';
 import { type TypedRpcFixtures } from './core/fixtures';
 import { diagnosticsRowLabels, fixtures, type DiagnosticsRow } from './fixtures';
 import { parseScenarioRoute, runnerRoutes, scenarioHtml, scenarioIndex, scenarioRunner } from './scenario-server';
@@ -32,9 +33,68 @@ describe('L2-dev manifest and routes', (): void => {
 
     it('round-trips every scenario and theme, without duplicate routes', (): void => {
         const routes = scenarioRoutes();
-        expect(routes).toHaveLength(171);
-        expect(new Set(routes.map((route): string => route.path)).size).toBe(171);
+        expect(routes).toHaveLength(201);
+        expect(new Set(routes.map((route): string => route.path)).size).toBe(201);
         for (const route of routes) expect(parseScenarioRoute(route.path)).toEqual(route);
+    });
+
+    it('provides the ten Collection View fixtures in every theme', (): void => {
+        const expected = [
+            'mixed-types',
+            'missing-vs-null',
+            'heterogeneous',
+            'deep-nesting',
+            'arrays',
+            'page-500',
+            'html-values',
+            'empty',
+            'no-id',
+            'first-load',
+        ];
+        expect(Object.keys(collectionViewFixtures)).toEqual(expected);
+        for (const name of expected) {
+            expect(
+                scenarioRoutes()
+                    .filter((route): boolean => route.view === 'collectionView' && route.scenario === name)
+                    .map((route) => route.theme),
+            ).toEqual(['dark', 'light', 'high-contrast']);
+            expect(scenarios.collectionView[name as keyof typeof scenarios.collectionView].readiness.content).toEqual([
+                'Documents',
+            ]);
+            expect(
+                scenarios.collectionView[name as keyof typeof scenarios.collectionView].readiness.selectors,
+            ).not.toContainEqual(expect.stringMatching(/row|gridcell/i));
+        }
+    });
+
+    it('provides exactly 500 distinct physical Collection View fixture rows', (): void => {
+        const page = collectionViewFixtures['page-500'].tablePage;
+        expect(page.rows).toHaveLength(500);
+        expect(new Set(page.rows.map((row) => row.rowKey)).size).toBe(500);
+        expect(collectionViewFixtures['page-500'].config.defaultPageSize).toBe(500);
+    });
+
+    it('keeps browse-only Collection View rows distinct from ordinary action targets', (): void => {
+        const page = collectionViewFixtures['no-id'].tablePage;
+        expect(page.rows[0]).toMatchObject({ rowKey: 'pos:0' });
+        expect(page.rows[0]).not.toHaveProperty('documentId');
+        expect(page.rows[1]).toMatchObject({
+            rowKey: 'id:"ordinary-target"',
+            documentId: '"ordinary-target"',
+        });
+    });
+
+    it('keeps the first-load query pending and readiness shell-based', (): void => {
+        const scenario = scenarios.collectionView['first-load'];
+        expect(scenario.rpc['mongoClusters.collectionView.runFindQuery']).toEqual({
+            type: 'query',
+            results: [],
+            keepOpen: true,
+        });
+        expect(scenario.readiness).toMatchObject({
+            selectors: ['.collectionView', '.monaco-editor'],
+            noProgressbar: false,
+        });
     });
 
     it.each([
@@ -71,7 +131,7 @@ describe('L2-dev manifest and routes', (): void => {
     });
 
     it('provides path-only all/view/theme helpers and rejects unknown subsets', (): void => {
-        expect(runnerRoutes('/scenarios/run-all.js')).toHaveLength(171);
+        expect(runnerRoutes('/scenarios/run-all.js')).toHaveLength(201);
         expect(runnerRoutes('/scenarios/run-all/connectionDiagnostics.js')).toHaveLength(84);
         expect(runnerRoutes('/scenarios/run-all/localQuickStart.js')).toHaveLength(75);
         expect(runnerRoutes('/scenarios/run-all/localQuickStart/dark.js')).toHaveLength(25);
