@@ -29,6 +29,7 @@ created: 2026-10-14
 | 0014 | CI jobs run in parallel where safe, under descriptive names        | Accepted (modified) | Accepted as proposed; prompted by the operator's comparison with PR #963; 0015 changes its `Merge gate` timing | 2026-10-14 | #880  |
 | 0015 | Rename the required check to `Merge gate` on #880                  | Accepted            | Operator's call; reverses the order in 0014                                                                    | 2026-10-14 | #880  |
 | 0016 | Prepare a version branch and an assigned issue instead of a bot PR | Accepted            | Operator approved the issue and prefilled-link alternative after bot PR creation was blocked                   | 2026-10-21 | #1043 |
+| 0017 | Feature branches require checks, not approving reviews             | Accepted            | Keeps PR and check protection while moving required human approval to the final merge into `main`              | 2026-11-25 | #1132 |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old
 > ones, and record reversals as a new entry plus a status change above. Heading text is frozen
@@ -699,3 +700,43 @@ credential. Issue write permission remains a prerequisite and errors remain expl
   maintainer intervention.
 - A closed reminder is reopened if the bump is still needed. The maintainer closes it after
   merging the manually submitted PR.
+
+---
+
+## 0017: Feature branches require checks, not approving reviews
+
+**Status:** Accepted · **Date:** 2026-11-25 · **Raised by:** the operator
+
+### Question
+
+Should incremental PRs that merge into `feature/**` require approving and code-owner reviews when
+the completed feature must later pass the required review on its PR to `main`?
+
+### Decision
+
+No. The `feature/**` ruleset continues to require a PR, `license/cla`, `Merge gate`, and its deletion
+and force-push protections. It does not require an approving or code-owner review, approval after
+the last push, or an extra approval for unattributed changes. Focused human review remains
+encouraged, but the mandatory approval belongs to the final feature PR into `main`.
+
+### Reasoning
+
+Required approvals on every incremental feature PR slow down stacked delivery without adding a
+second release boundary: those commits have not reached `main`. Keeping PR-only integration with
+the required checks preserves reviewable, verified increments. The final PR to `main` remains the
+release gate and retains its approving-review requirement.
+
+### Rejected alternatives
+
+- **Keep the approval requirement on feature branches:** preserves the existing friction that the
+  operator is removing.
+- **Remove the feature ruleset:** would also allow direct pushes and remove required CI checks and
+  branch-history protections.
+- **Remove approval from `main` too:** moves unreviewed code into the release branch and violates
+  the intended separation between feature integration and release.
+
+### Consequences
+
+- PRs into `feature/**` can merge after `license/cla` and `Merge gate` pass.
+- The ruleset still blocks direct pushes, deletion and force pushes.
+- Review expectations do not change for PRs into `main`.
