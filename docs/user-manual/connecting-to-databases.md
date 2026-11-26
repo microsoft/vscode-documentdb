@@ -69,9 +69,12 @@ why it is unavailable:
 
 Use the cluster's **Reconnect** action in the tree to restore the same connection. If reconnect
 automatically opens the retained Dashboard for that connection, it retries on its own. If it
-stays disabled, select **Retry**, as you would in other retained webviews. An Interactive Shell prints
-**Disconnected** and stops its worker, then requires a new shell from the tree. A retained Query
-Playground requires you to reconnect and re-pick its connection before running it again.
+stays disabled, select **Retry**, as you would in other retained webviews.
+
+After reconnecting to the same connection with unchanged settings, run a command in the existing
+Interactive Shell or run the retained Query Playground again. No new terminal or connection pick
+is needed. The terminal scrollback and Playground text remain, but worker-local state such as
+variables and open cursors is lost. Interrupted commands are not replayed.
 
 ## After changing connection details
 
