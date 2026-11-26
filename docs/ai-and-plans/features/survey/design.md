@@ -6,6 +6,7 @@ created: 2026-10-07
 code:
     - src/services/survey/**
     - src/utils/feedbackPermission.ts
+    - src/utils/feedbackRoutes.ts
 ---
 
 # Survey: Design
@@ -77,6 +78,16 @@ still defers the invitation. The rendered message plus current view visibility j
 `onVisible` once, even if resolution or visibility occurs after the reveal API completes.
 Actual editor/terminal focus and moved/hidden behavior are pending operator verification;
 see the Stage 2 Progress in the [implementation plan](./iterations/01-implementation-plan.md).
+
+Both automatic and manually opened sidebar content place native "Report a bug" and
+"Suggest a feature" links between the action buttons and "Why am I seeing this?". Their
+label-prefilled GitHub URLs are shared with the Help and Feedback tree through
+`feedbackRoutes.ts`. Clicking a link opens the browser but leaves the sidebar and survey
+lifecycle unchanged: it records no invitation outcome, visibility change, opt-out, or cooldown.
+When the survey is enabled, the host emits one `survey.openFeedbackRoute` event with the
+categorical route, opening result, activation source, and automatic invitation ID when
+applicable. The URL itself is never sent. Telemetry permission is still checked at emission;
+browser navigation remains available when the link is selected even if telemetry is disabled.
 
 Explicitly hiding the view, signaled by WebviewView `onDidDispose`, counts as `dismissed`.
 Collapsing it, switching containers, or temporarily hiding the sidebar does not. Programmatic
@@ -331,7 +342,7 @@ and any `invitationSessionId` that is not a UUID.
 | --------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `surveyCampaignId`    | `documentdb-satisfaction-1` (D0009)   | Every event                                                                                           |
 | `surveyPolicyVersion` | `1`; bumped when a gate value changes | Every event                                                                                           |
-| `invitationSessionId` | Random UUID per invitation            | `invitationShown`, `invitationHidden`, `invitationResolved`, and `openForm` with trigger `invitation` |
+| `invitationSessionId` | Random UUID per invitation            | `invitationShown`, `invitationHidden`, `invitationResolved`, `openForm` with trigger `invitation`, and `openFeedbackRoute` from an automatic invitation |
 
 The framework adds machine/session identifiers, extension metadata, `result`, and measurement
 `duration`. The queries below use the README's `VSCodeMachineId` and `VSCodeSessionId` warehouse
@@ -357,6 +368,7 @@ Cohort queries use the machine ID for installations and the machine and session 
 |                               | `openResult`                                                                   | `success`, `failure`                                                                                                                                                                                                                                                                                                         |                                                                                      |
 |                               | measurement `attempt`                                                          | 1 to 3                                                                                                                                                                                                                                                                                                                       |                                                                                      |
 |                               | measurement `selectedRating`                                                   | Optional integer 1-5 on sidebar openings (invitation or manual), omitted without selection                                                                                                                                                                                                                                   | Same three-attempt event budget; selection itself emits nothing                      |
+| `survey.openFeedbackRoute`    | `feedbackRoute`, `openResult`, and activation provenance                       | Routes `reportBug`, `suggestFeature`; result `success`, `failure`; same activation values as `survey.feedbackActivated`                                                                                                                                                                                                       | Once per route click; no survey lifecycle effect                                    |
 | `survey.invitationResolved`   | `outcome`                                                                      | `opened`, `askLater`, `neverAgain`, `dismissed`                                                                                                                                                                                                                                                                              | Once per invitation; never after permission withdrawal                               |
 |                               | `wasVisible`                                                                   | `true`, `false`                                                                                                                                                                                                                                                                                                              |                                                                                      |
 
@@ -368,6 +380,11 @@ progress, after the invitation ended (choice, form opened, cancellation, permiss
 extension disposal), after `invitationResolved`, on view removal (that is `dismissed`), or for
 manually opened feedback. It changes no state and carries no extra properties, measurements,
 durations or timestamps.
+
+`survey.openFeedbackRoute` is independent of the invitation funnel: it is not an invitation
+outcome and changes no persisted state. Automatic-invitation events carry
+`invitationSessionId` for correlation; manual-sidebar events omit it. No issue URL, issue
+contents, or browser destination is included in telemetry.
 
 `openResult` is not named `result` because the framework sets `result` on every event.
 The invitation kind and return reason come from local persisted invitation visibility and
@@ -664,7 +681,8 @@ uninstall, transmission loss or why an installation stopped returning.
 **Status: awaiting operator review, not approved.** This inventories the implemented schema and
 copy, not a new consent mechanism. Events and the closed survey vocabularies are enforced in
 `surveyTelemetry.ts`; identifiers/configuration values are not answer fields. The Event Schema
-tables above supply the bounds. No extra click/RPC instrumentation is attached to the invitation.
+tables above supply the bounds. The only route-click event is the disclosed
+`survey.openFeedbackRoute` browser-opening attempt; no route URL or issue contents are attached.
 
 **D0023 update:** this packet now includes an optional satisfaction answer, `selectedRating`,
 on invitation opening telemetry. The visible notice explicitly describes that collection.
@@ -683,6 +701,7 @@ An operator request to implement collection is not a claim of independent privac
 | `survey.invitationHidden`     | `invitationSessionId`: same invitation UUID; no other survey-owned property                                                                                                                                                                                                                                                                                                                                                                   | None                                                                                                                                         |
 | `survey.feedbackActivated`    | `activationSource`: `automaticInvitation`, `clusterDashboard`, `collectionView`, `atlasCredentials`, `localQuickStart`, `connectionDiagnostics`, `helpAndFeedbackView`, `giveFeedbackCommand`; `collectionTab`: only for Collection View (`documents`, `indexes`, `queryInsights`); `invitationKind`: `first`, `returning`, `unknown` and `returnReason`: `opened`, `askLater`, `dismissed`, `none`, `unknown` only for automatic invitations | None                                                                                                                                         |
 | `survey.openForm`             | `trigger`: `invitation`, `command`; `openResult`: `success`, `failure`; `invitationSessionId`: UUID only for `invitation`, absent for `command`; the same closed activation fields as above for service-originated opens                                                                                                                                                                                                                      | `attempt`: integer 1, 2 or 3; optional `selectedRating`: integer 1-5 on sidebar openings with a chosen rating. Both are numeric measurements |
+| `survey.openFeedbackRoute`    | `feedbackRoute`: `reportBug`, `suggestFeature`; `openResult`: `success`, `failure`; the same closed activation fields as above; `invitationSessionId` only for automatic invitations                                                                                                                                                                                                                                                    | None                                                                                                                                         |
 | `survey.invitationResolved`   | `invitationSessionId`: same invitation UUID; `outcome`: `opened`, `askLater`, `dismissed`, `neverAgain`; `wasVisible`: `true`, `false`                                                                                                                                                                                                                                                                                                        | None                                                                                                                                         |
 
 `openResult=failure` normally has framework `result=Succeeded`: the wrapper emits an already

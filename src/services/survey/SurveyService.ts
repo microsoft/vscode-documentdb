@@ -369,7 +369,6 @@ export class SurveyService implements vscode.Disposable {
         if (gen !== this.generation) {
             return ok ? 'opened' : 'failed';
         }
-
         const enabled = this.isEnabled();
         const permitted = this.isPermitted();
         if (enabled && permitted) {
@@ -407,7 +406,14 @@ export class SurveyService implements vscode.Disposable {
         } catch {
             // Browser failures are returned to the presenter without changing survey lifecycle state.
         }
-        this.telemetry.reportOpenFeedbackRoute(route, opened ? 'success' : 'failure', activation, invitationSessionId);
+        if (this.isEnabled()) {
+            this.telemetry.reportOpenFeedbackRoute(
+                route,
+                opened ? 'success' : 'failure',
+                activation,
+                invitationSessionId,
+            );
+        }
         return opened;
     }
 

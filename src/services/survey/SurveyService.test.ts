@@ -246,6 +246,15 @@ describe('SurveyService', (): void => {
         expect(h.sent('survey.invitationResolved')).toHaveLength(0);
     });
 
+    it('opens a feedback route when the survey is disabled without emitting survey telemetry', async (): Promise<void> => {
+        const h = createHarness();
+        h.flags.enabled = false;
+        expect(await h.service.showFeedbackForm()).toBe(true);
+        expect(await h.callbacks().onOpenFeedbackRoute('suggestFeature')).toBe(true);
+        expect(h.openExternal).toHaveBeenCalledWith(FEEDBACK_ROUTE_URLS.suggestFeature);
+        expect(h.sent('survey.openFeedbackRoute')).toHaveLength(0);
+    });
+
     it.each(['atlasCredentials', 'localQuickStart', 'connectionDiagnostics', 'helpAndFeedbackView'] as const)(
         'attributes %s feedback through activation and form opening',
         async (source): Promise<void> => {

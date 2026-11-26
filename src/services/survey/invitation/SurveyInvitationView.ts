@@ -381,7 +381,7 @@ export function getSurveyInvitationStrings(): SurveyInvitationStrings {
         ),
         close: vscode.l10n.t('Close'),
         manualTelemetry: vscode.l10n.t(
-            "If VS Code telemetry is on, we record whether you continue to the survey and the rating you picked here. We don't record your name or your answers in the survey.",
+            "If VS Code telemetry is on, we record whether you continue to the survey, open a bug report or feature request, and the rating you picked here. We don't record your name or your answers in the survey.",
         ),
         reminders: {
             opened: vscode.l10n.t("It's been a while since you last opened the survey, so we're checking in again."),
@@ -389,7 +389,7 @@ export function getSurveyInvitationStrings(): SurveyInvitationStrings {
             dismissed: vscode.l10n.t('You closed this invitation a while ago, so we are asking once more.'),
         },
         telemetry: vscode.l10n.t(
-            "If VS Code telemetry is on, we record whether you qualified, whether this invitation was shown, what you chose, and the rating you picked when you continue to the survey. We don't record your name, your answers in the survey, or your usage count.",
+            "If VS Code telemetry is on, we record whether you qualified, whether this invitation was shown, what you chose, whether you open a bug report or feature request, and the rating you picked when you continue to the survey. We don't record your name, your answers in the survey, or your usage count.",
         ),
         privacy: vscode.l10n.t('Privacy Statement'),
     };

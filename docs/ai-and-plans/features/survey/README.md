@@ -8,6 +8,7 @@ code:
   - src/commands/giveFeedback/**
   - src/debug/**
   - src/utils/feedbackPermission.ts
+  - src/utils/feedbackRoutes.ts
 ---
 
 # Survey Refresh
@@ -19,6 +20,11 @@ The Cluster Dashboard and Collection View also open the same sidebar on explicit
 clicks. This manual mode explains that the user opened it, rather than claiming survey
 eligibility, and does not offer reminder or opt-out actions. A rating selected there is
 reported on the existing `survey.openForm` event only when feedback telemetry is permitted.
+Both manual feedback and automatic invitations also show "Report a bug" and "Suggest a feature"
+links immediately above "Why am I seeing this?". They use the same label-prefilled GitHub issue
+routes as the Help and Feedback tree. Opening either route records only a
+`survey.openFeedbackRoute` telemetry event; it does not close the sidebar or change survey
+outcomes, opt-out state, or cooldowns.
 The command-palette Give Feedback opens the same sidebar (D0033). This supersedes
 the invitation-only rating restrictions in the historical proposal below, pending privacy review.
 Feedback buttons in webviews, the Help and Feedback tree item, and the Give Feedback command appear only when

@@ -243,6 +243,7 @@ describe('SurveyInvitationView', (): void => {
         await h.service.whenIdle();
         h.surface.message({ type: 'rendered' });
         await flush();
+        const stateBefore = { ...h.state() };
         h.surface.message({ type: 'suggestFeature' });
         await flush();
         expect(h.open).toHaveBeenCalledWith(FEEDBACK_ROUTE_URLS.suggestFeature);
@@ -254,8 +255,28 @@ describe('SurveyInvitationView', (): void => {
                 openResult: 'success',
             },
         });
-        expect(h.state().lastOutcome).toBeUndefined();
+        expect(h.state()).toEqual(stateBefore);
         expect(h.surface.view.webview.html).not.toBe('');
+        h.service.dispose();
+        h.presenter.dispose();
+    });
+
+    it('reports a failed feedback route without changing or closing the sidebar', async (): Promise<void> => {
+        const h = harness();
+        h.open.mockResolvedValue(false);
+        expect(await h.service.showFeedbackForm()).toBe(true);
+        const stateBefore = { ...h.state() };
+        const htmlBefore = h.surface.view.webview.html;
+        h.surface.message({ type: 'reportBug' });
+        await flush();
+        expect(h.events.find((event): boolean => event.name === 'survey.openFeedbackRoute')).toMatchObject({
+            properties: { feedbackRoute: 'reportBug', openResult: 'failure' },
+        });
+        expect(h.state()).toEqual(stateBefore);
+        expect(h.surface.view.webview.html).toBe(htmlBefore);
+        expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+            "We couldn't open the feedback link in your browser. Please try again.",
+        );
         h.service.dispose();
         h.presenter.dispose();
     });
