@@ -101,15 +101,16 @@ Browser and the operator's pin decision.
 | Choice | Operator feedback |
 | --- | --- |
 | Scope, execution and models | Keep the M/K/D rows and accept C1–C8 and the assigned models as written. |
-| Pin | Prefers beta.64; retest both in VS Code's built-in browser before choosing. |
+| Pin | Selected `7.0.0-beta.64` after the built-in browser retest. The choice does not by itself change VS Code's minimum supported version. |
 | Playwright checks | On demand only. |
 | Gestures | Accept the proposed row gestures and Enter. Include Shift+arrows only if already in scope; it is listed for future cell-range selection (F-3), not as a row-selection gesture in this migration. Do not add it. |
 | O1–O3 | Keep today's nested `_id` display and field-name tree ordering; withhold document actions for unreliable IDs. |
 | O4 | Browsable rows are always selectable, even when they have no safe action target. Selection does not confer action eligibility. |
 | O5 | Cross-page/shard duplicate handling is out of scope. Keep existing error handling when the database reports an error. This is not a guarantee that a duplicate ID will trigger one: `ClustersClient.deleteDocuments` uses `deleteMany` and currently checks acknowledgement, not match uniqueness. |
 
-The [built-in browser retest](#built-in-browser-retest) is complete. The pin and `G1 released`
-are still pending; the retest does not authorize raising `engines.vscode` or adding a polyfill.
+The [built-in browser retest](#built-in-browser-retest) is complete. The operator selected
+beta.64 and said G1 was approved. The specified `G1 released` signal and the minimum-version
+policy are still pending. No change to `engines.vscode` or compatibility shim was authorized.
 
 ### G2: hands-on direction check (operator test gate)
 
