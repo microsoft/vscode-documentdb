@@ -884,6 +884,14 @@ parity.
 - Not: the grid components (WI-5 imports the file).
 - Check: `npm run build`. Visual check happens in WI-5's scenarios and at G2.
 
+> **Done (2026-11-26), commit `51284437`:** `mai-code-2` defined `.documentDataGrid` using
+> editor/list/focus/contrast tokens and left RDG's OS forced-colors rules alone. Leader review
+> (98%) confirmed the selector is scoped and distinguishes selection from focus. The unchanged
+> palette contract found two missing fixture tokens, so one corrective turn supplied them in
+> each simulated theme. Shared build, Sass compile and all 47 browser scenario tests passed;
+> no runtime visual claim until WI-5/G2 applies the class. Usage: coding 7.5 AIU
+> (12 requests, 1m36s); Sass and palette checks 0.2 AIU (5 requests, 28s summed).
+
 **WI-3b: Collection View fixtures and scenarios** · `mai-code-2` (fallback `gpt-6.1-terra`) · after WI-2b, WI-3a, WI-4a
 
 - Owns: a new `build/verification/browser/collectionViewFixtures.ts`, the `collectionView` entry in
