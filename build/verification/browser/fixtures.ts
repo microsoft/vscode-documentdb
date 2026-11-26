@@ -9,7 +9,7 @@ import {
     type DockerStatusResult,
     type InstanceStatusUpdate,
 } from '../../../src/services/localQuickStart/quickStartTypes';
-import { type CellValue } from '../../../src/utils/slickgrid/CellValue';
+import { type TableRow } from '../../../src/utils/documentGrid/types';
 import { type WebviewName } from '../../../src/webviews/_integration/WebviewRegistry';
 import { type AtlasCredentialsWebviewConfig } from '../../../src/webviews/documentdb/atlasCredentials/atlasCredentialsController';
 import { type ClusterDashboardWebviewConfigurationType } from '../../../src/webviews/documentdb/clusterDashboard/clusterDashboardController';
@@ -435,34 +435,34 @@ export const diagnosticsRowLabels = [
     'Authentication',
     'Database access',
 ] as const;
-interface FixtureTableRow {
-    readonly id: string;
-    readonly 'x-objectid': string;
-    readonly _id: CellValue;
-    readonly name: CellValue;
-    readonly quantity: CellValue;
-    readonly [key: string]: unknown;
-}
-const rows: FixtureTableRow[] = [
+const rows: TableRow[] = [
     {
-        id: 'stage0-row-1',
-        'x-objectid': '"stage0-1"',
-        _id: { value: 'stage0-1', type: 'string' },
-        name: { value: 'Stage 0 fixture row Alpha', type: 'string' },
-        quantity: { value: '7', type: 'number' },
+        rowKey: 'id:"stage0-1"',
+        documentId: '"stage0-1"',
+        cells: {
+            'root:_id': { display: 'stage0-1', type: 'string' },
+            'field:name': { display: 'Stage 0 fixture row Alpha', type: 'string' },
+            'field:quantity': { display: '7', type: 'number' },
+        },
     },
     {
-        id: 'stage0-row-2',
-        'x-objectid': '"stage0-2"',
-        _id: { value: 'stage0-2', type: 'string' },
-        name: { value: 'Stage 0 fixture row Beta', type: 'string' },
-        quantity: { value: '11', type: 'number' },
+        rowKey: 'id:"stage0-2"',
+        documentId: '"stage0-2"',
+        cells: {
+            'root:_id': { display: 'stage0-2', type: 'string' },
+            'field:name': { display: 'Stage 0 fixture row Beta', type: 'string' },
+            'field:quantity': { display: '11', type: 'number' },
+        },
     },
 ];
 const table: CollectionOutputs['getCurrentPageAsTable'] = {
     path: [],
-    headers: ['_id', 'name', 'quantity'],
-    data: rows,
+    columns: [
+        { key: 'root:_id', label: '_id', isRootId: true },
+        { key: 'field:name', label: 'name', isRootId: false },
+        { key: 'field:quantity', label: 'quantity', isRootId: false },
+    ],
+    rows,
 };
 const stage1: CollectionOutputs['queryInsights']['getQueryInsightsStage1'] = {
     executionTime: 2,

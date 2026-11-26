@@ -7,8 +7,15 @@ import { Button, ProgressBar, Tab, TabList } from '@fluentui/react-components';
 import { EmojiRegular } from '@fluentui/react-icons';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
-import { type JSX, useEffect, useRef, useState } from 'react';
-import { type TableDataEntry } from '../../../documentdb/ClusterSession';
+import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
+import {
+    fieldFromColumnKey,
+    getCell,
+    ROOT_ID_COLUMN_KEY,
+    type ColumnKey,
+    type TablePage,
+    type TreeNode,
+} from '../../../utils/documentGrid/types';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { useViewLoadTelemetry } from '../../_integration/useViewLoadTelemetry';
 import { Announcer } from '../../components/accessibility';
@@ -19,6 +26,7 @@ import {
     CollectionViewContext,
     type CollectionViewContextType,
     DefaultCollectionViewContext,
+    resolveDocumentTargets,
     Views,
 } from './collectionViewContext';
 import { type CollectionViewWebviewConfigurationType } from './collectionViewController';
@@ -37,12 +45,8 @@ import { QueryInsightsMain } from './queryInsightsTab/QueryInsightsTab';
 import { extractErrorCode } from './utils/errorCodeExtractor';
 
 interface QueryResults {
-    tableHeaders?: string[];
-    tableData?: TableDataEntry[]; // 'x-objectid': string;
-    tableCurrentPath?: string[];
-
-    treeData?: { [key: string]: unknown }[];
-
+    tablePage?: TablePage;
+    treeNodes?: TreeNode[];
     jsonDocuments?: string[];
 
     /** Number of documents returned by the query (for screen reader announcements) */
@@ -69,6 +73,7 @@ export const CollectionView = (): JSX.Element => {
      */
     const firstLoadStartedAtRef = useRef<number | undefined>(undefined);
     const firstLoadClaimedRef = useRef(false);
+    const firstLoadDocumentCountRef = useRef<number | undefined>(undefined);
 
     /**
      * Please note: using the context and states inside of closures can lead to stale data.
@@ -160,11 +165,34 @@ export const CollectionView = (): JSX.Element => {
     // keep Refs updated with the current state
     const currentQueryResultsRef = useRef(currentQueryResults);
     const currentContextRef = useRef(currentContext);
+    const dataRequestRef = useRef(0);
+    const cachedQueryRef = useRef<CollectionViewContextType['activeQuery'] | undefined>(undefined);
+    const tablePageQueryRef = useRef<CollectionViewContextType['activeQuery'] | undefined>(undefined);
+    currentQueryResultsRef.current = currentQueryResults;
+    currentContextRef.current = currentContext;
 
-    useEffect(() => {
-        currentQueryResultsRef.current = currentQueryResults;
-        currentContextRef.current = currentContext;
-    }, [currentQueryResults, currentContext]);
+    const handleSelectedRowKeysChange = useCallback((selectedRowKeys: readonly string[]): void => {
+        setCurrentContext((prev) => {
+            const targets =
+                !prev.isLoading &&
+                prev.currentView === Views.TABLE &&
+                tablePageQueryRef.current === prev.activeQuery
+                    ? resolveDocumentTargets(currentQueryResultsRef.current?.tablePage, selectedRowKeys)
+                    : undefined;
+            const next = {
+                ...prev,
+                dataSelection: { selectedRowKeys: [...selectedRowKeys] },
+                commands: {
+                    disableAddDocument: false,
+                    disableViewDocument: targets?.length !== 1,
+                    disableEditDocument: targets?.length !== 1,
+                    disableDeleteDocument: !targets?.length,
+                },
+            };
+            currentContextRef.current = next;
+            return next;
+        });
+    }, []);
 
     /**
      * Reset query insights when query changes (not on pagination)
@@ -278,36 +306,51 @@ export const CollectionView = (): JSX.Element => {
      * within various controls (query panel, paging, etc.).
      */
 
-    function getDataForView(selectedView: Views, onSettled?: (loaded: boolean) => void): void {
+    function settleFirstLoad(outcome: 'dataShown' | 'empty' | 'failed'): void {
+        const startedAt = firstLoadStartedAtRef.current;
+        if (startedAt === undefined) {
+            return;
+        }
+        firstLoadStartedAtRef.current = undefined;
+        viewLoad.reportFirstData(outcome, performance.now() - startedAt);
+    }
+
+    function getDataForView(selectedView: Views): void {
+        if (cachedQueryRef.current !== currentContextRef.current.activeQuery) {
+            return;
+        }
+        const request = ++dataRequestRef.current;
+        const query = currentContextRef.current.activeQuery;
+        const path = [...(currentContextRef.current.currentViewState?.currentPath ?? [])];
+        const isCurrentRequest = (): boolean =>
+            request === dataRequestRef.current &&
+            query === currentContextRef.current.activeQuery &&
+            selectedView === currentContextRef.current.currentView &&
+            (selectedView !== Views.TABLE ||
+                JSON.stringify(path) ===
+                    JSON.stringify(currentContextRef.current.currentViewState?.currentPath ?? []));
         switch (selectedView) {
             case Views.TABLE: {
-                const path = currentContext.currentViewState?.currentPath ?? [];
-
                 trpcClient.mongoClusters.collectionView.getCurrentPageAsTable
                     .query(path)
                     .then((result) => {
-                        let tableHeaders: string[];
-
-                        /*
-                         * If the _id is not in the headers, we add it as the first column.
-                         * This is a presentation detail, not a data detail, that's why it's done
-                         * here, in the view, not in the controller.
-                         */
-                        if (result.headers.find((header) => header === '_id') === undefined) {
-                            tableHeaders = ['_id', ...result.headers];
-                        } else {
-                            tableHeaders = result.headers ?? [];
+                        if (!isCurrentRequest() || JSON.stringify(result.path) !== JSON.stringify(path)) {
+                            return;
                         }
-
+                        tablePageQueryRef.current = query;
+                        currentQueryResultsRef.current = { ...currentQueryResultsRef.current, tablePage: result };
                         setCurrentQueryResults((prev) => ({
                             ...prev,
-                            tableHeaders: tableHeaders,
-                            tableData: (result.data as TableDataEntry[]) ?? [],
+                            tablePage: result,
                         }));
-                        onSettled?.(true);
+                        handleSelectedRowKeysChange([]);
+                        settleFirstLoad(firstLoadDocumentCountRef.current === 0 ? 'empty' : 'dataShown');
                     })
                     .catch((error) => {
-                        onSettled?.(false);
+                        if (!isCurrentRequest()) {
+                            return;
+                        }
+                        settleFirstLoad('failed');
                         void trpcClient.common.displayErrorMessage.mutate({
                             message: l10n.t('Error while loading the data'),
                             modal: false,
@@ -320,14 +363,20 @@ export const CollectionView = (): JSX.Element => {
                 trpcClient.mongoClusters.collectionView.getCurrentPageAsTree
                     .query()
                     .then((result) => {
+                        if (!isCurrentRequest()) {
+                            return;
+                        }
                         setCurrentQueryResults((prev) => ({
                             ...prev,
-                            treeData: result,
+                            treeNodes: result,
                         }));
-                        onSettled?.(true);
+                        settleFirstLoad(firstLoadDocumentCountRef.current === 0 ? 'empty' : 'dataShown');
                     })
                     .catch((error) => {
-                        onSettled?.(false);
+                        if (!isCurrentRequest()) {
+                            return;
+                        }
+                        settleFirstLoad('failed');
                         void trpcClient.common.displayErrorMessage.mutate({
                             message: l10n.t('Error while loading the data'),
                             modal: false,
@@ -339,14 +388,20 @@ export const CollectionView = (): JSX.Element => {
                 trpcClient.mongoClusters.collectionView.getCurrentPageAsJson
                     .query()
                     .then((result) => {
+                        if (!isCurrentRequest()) {
+                            return;
+                        }
                         setCurrentQueryResults((prev) => ({
                             ...prev,
                             jsonDocuments: result,
                         }));
-                        onSettled?.(true);
+                        settleFirstLoad(firstLoadDocumentCountRef.current === 0 ? 'empty' : 'dataShown');
                     })
                     .catch((error) => {
-                        onSettled?.(false);
+                        if (!isCurrentRequest()) {
+                            return;
+                        }
+                        settleFirstLoad('failed');
                         void trpcClient.common.displayErrorMessage.mutate({
                             message: l10n.t('Error while loading the data'),
                             modal: false,
@@ -355,7 +410,7 @@ export const CollectionView = (): JSX.Element => {
                     });
                 break;
             default:
-                onSettled?.(true);
+                settleFirstLoad(firstLoadDocumentCountRef.current === 0 ? 'empty' : 'dataShown');
                 break;
         }
     }
@@ -383,22 +438,25 @@ export const CollectionView = (): JSX.Element => {
     }
 
     useEffect(() => {
-        setCurrentContext((prev) => ({ ...prev, isLoading: true }));
+        let cancelled = false;
+        cachedQueryRef.current = undefined;
+        ++dataRequestRef.current;
+        setCurrentContext((prev) => ({
+            ...prev,
+            isLoading: true,
+            commands: {
+                ...prev.commands,
+                disableViewDocument: true,
+                disableEditDocument: true,
+                disableDeleteDocument: true,
+            },
+        }));
 
         const isFirstLoad = !firstLoadClaimedRef.current;
         if (isFirstLoad) {
             firstLoadClaimedRef.current = true;
             firstLoadStartedAtRef.current = performance.now();
         }
-        const settleFirstLoad = (outcome: 'dataShown' | 'empty' | 'failed'): void => {
-            const startedAt = firstLoadStartedAtRef.current;
-            if (!isFirstLoad || startedAt === undefined) {
-                return;
-            }
-            firstLoadStartedAtRef.current = undefined;
-            viewLoad.reportFirstData(outcome, performance.now() - startedAt);
-        };
-
         // 1. Run the query, this operation only acknowledges the request.
         //    Next we need to load the ones we need.
         trpcClient.mongoClusters.collectionView.runFindQuery
@@ -413,6 +471,11 @@ export const CollectionView = (): JSX.Element => {
                 executionIntent: currentContext.activeQuery.executionIntent ?? 'pagination',
             })
             .then((response) => {
+                if (cancelled || currentContext.activeQuery !== currentContextRef.current.activeQuery) {
+                    return;
+                }
+                cachedQueryRef.current = currentContext.activeQuery;
+                firstLoadDocumentCountRef.current = response.documentCount;
                 // Store document count for screen reader announcements (skip pagination)
                 if (currentContext.activeQuery.executionIntent !== 'pagination') {
                     setCurrentQueryResults((prev) => ({ ...prev, documentCount: response.documentCount }));
@@ -423,9 +486,7 @@ export const CollectionView = (): JSX.Element => {
                 updateAutoCompletionData();
 
                 // 3. Load the data for the current view
-                getDataForView(currentContext.currentView, (loaded) =>
-                    settleFirstLoad(!loaded ? 'failed' : response.documentCount === 0 ? 'empty' : 'dataShown'),
-                );
+                getDataForView(currentContextRef.current.currentView);
 
                 // 4. Non-blocking Stage 1 prefetch to populate cache. Only on a
                 //    fresh query (initial/refresh): pagination keeps the same
@@ -441,9 +502,15 @@ export const CollectionView = (): JSX.Element => {
                 setCurrentContext((prev) => ({ ...prev, isLoading: false, isFirstTimeLoad: false }));
             })
             .catch(async (error) => {
+                if (cancelled || currentContext.activeQuery !== currentContextRef.current.activeQuery) {
+                    return;
+                }
                 settleFirstLoad('failed');
                 const cause = error instanceof Error ? error.message : String(error);
                 const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
+                if (cancelled || currentContext.activeQuery !== currentContextRef.current.activeQuery) {
+                    return;
+                }
                 void trpcClient.common.displayErrorMessage.mutate({
                     message: explained ?? l10n.t('Error while running the query'),
                     modal: true,
@@ -451,8 +518,14 @@ export const CollectionView = (): JSX.Element => {
                 });
             })
             .finally(() => {
-                setCurrentContext((prev) => ({ ...prev, isLoading: false, isFirstTimeLoad: false }));
+                if (!cancelled && currentContext.activeQuery === currentContextRef.current.activeQuery) {
+                    setCurrentContext((prev) => ({ ...prev, isLoading: false, isFirstTimeLoad: false }));
+                }
             });
+        return (): void => {
+            cancelled = true;
+            ++dataRequestRef.current;
+        };
     }, [currentContext.activeQuery]);
 
     useEffect(() => {
@@ -477,13 +550,31 @@ export const CollectionView = (): JSX.Element => {
                 console.debug('Failed to report an event:', error);
             });
 
+        handleSelectedRowKeysChange([]);
+        currentContextRef.current = { ...currentContextRef.current, currentView: selection };
         setCurrentContext((prev) => ({ ...prev, currentView: selection }));
         getDataForView(selection);
     };
 
     function handleDeleteDocumentRequest(): void {
+        const context = currentContextRef.current;
+        if (
+            context.isLoading ||
+            context.currentView !== Views.TABLE ||
+            tablePageQueryRef.current !== context.activeQuery
+        ) {
+            return;
+        }
+        const targets = resolveDocumentTargets(
+            currentQueryResultsRef.current?.tablePage,
+            context.dataSelection.selectedRowKeys,
+        );
+        if (!targets?.length) {
+            return;
+        }
+        const requestedIds = targets.map((target) => target.documentId);
         trpcClient.mongoClusters.collectionView.deleteDocumentsById
-            .mutate(currentContext.dataSelection.selectedDocumentObjectIds)
+            .mutate(requestedIds)
             .then((acknowledged) => {
                 if (!acknowledged) {
                     return;
@@ -495,23 +586,39 @@ export const CollectionView = (): JSX.Element => {
                  * the changes immediately without potential focus/table resizing issues etc.
                  */
 
-                setCurrentQueryResults((prev) => ({
-                    ...prev,
-                    tableData: prev?.tableData?.filter(
-                        (row) =>
-                            !currentContextRef.current.dataSelection.selectedDocumentObjectIds.includes(
-                                row['x-objectid'] ?? '',
-                            ),
-                    ),
-                }));
-
-                setCurrentContext((prev) => ({
-                    ...prev,
-                    dataSelection: {
-                        selectedDocumentIndexes: [],
-                        selectedDocumentObjectIds: [],
-                    },
-                }));
+                const page = currentQueryResultsRef.current?.tablePage;
+                if (!page) {
+                    return;
+                }
+                const removedKeys = new Set(
+                    page.rows
+                        .filter((row) => row.documentId !== undefined && requestedIds.includes(row.documentId))
+                        .map((row) => row.rowKey),
+                );
+                const nextPage = { ...page, rows: page.rows.filter((row) => !removedKeys.has(row.rowKey)) };
+                currentQueryResultsRef.current = { ...currentQueryResultsRef.current, tablePage: nextPage };
+                setCurrentQueryResults((prev) => ({ ...prev, tablePage: nextPage }));
+                setCurrentContext((prev) => {
+                    const selectedRowKeys = prev.dataSelection.selectedRowKeys.filter((key) => !removedKeys.has(key));
+                    const remainingTargets =
+                        !prev.isLoading &&
+                        prev.currentView === Views.TABLE &&
+                        tablePageQueryRef.current === prev.activeQuery
+                            ? resolveDocumentTargets(currentQueryResultsRef.current?.tablePage, selectedRowKeys)
+                            : undefined;
+                    const next = {
+                        ...prev,
+                        dataSelection: { selectedRowKeys },
+                        commands: {
+                            disableAddDocument: false,
+                            disableViewDocument: remainingTargets?.length !== 1,
+                            disableEditDocument: remainingTargets?.length !== 1,
+                            disableDeleteDocument: !remainingTargets?.length,
+                        },
+                    };
+                    currentContextRef.current = next;
+                    return next;
+                });
             })
             .catch((error) => {
                 void trpcClient.common.displayErrorMessage.mutate({
@@ -523,8 +630,23 @@ export const CollectionView = (): JSX.Element => {
     }
 
     function handleViewDocumentRequest(): void {
+        const context = currentContextRef.current;
+        if (
+            context.isLoading ||
+            context.currentView !== Views.TABLE ||
+            tablePageQueryRef.current !== context.activeQuery
+        ) {
+            return;
+        }
+        const targets = resolveDocumentTargets(
+            currentQueryResultsRef.current?.tablePage,
+            context.dataSelection.selectedRowKeys,
+        );
+        if (targets?.length !== 1) {
+            return;
+        }
         trpcClient.mongoClusters.collectionView.viewDocumentById
-            .mutate(currentContext.dataSelection.selectedDocumentObjectIds[0])
+            .mutate(targets[0].documentId)
             .catch((error) => {
                 void trpcClient.common.displayErrorMessage.mutate({
                     message: l10n.t('Error opening the document view'),
@@ -535,8 +657,23 @@ export const CollectionView = (): JSX.Element => {
     }
 
     function handleEditDocumentRequest(): void {
+        const context = currentContextRef.current;
+        if (
+            context.isLoading ||
+            context.currentView !== Views.TABLE ||
+            tablePageQueryRef.current !== context.activeQuery
+        ) {
+            return;
+        }
+        const targets = resolveDocumentTargets(
+            currentQueryResultsRef.current?.tablePage,
+            context.dataSelection.selectedRowKeys,
+        );
+        if (targets?.length !== 1) {
+            return;
+        }
         trpcClient.mongoClusters.collectionView.editDocumentById
-            .mutate(currentContext.dataSelection.selectedDocumentObjectIds[0])
+            .mutate(targets[0].documentId)
             .catch((error) => {
                 void trpcClient.common.displayErrorMessage.mutate({
                     message: l10n.t('Error opening the document view'),
@@ -556,46 +693,29 @@ export const CollectionView = (): JSX.Element => {
         });
     }
 
-    function handleStepInRequest(row: number, cell: number): void {
-        // Always use the ref to access latest data
-        const queryResults = currentQueryResultsRef.current;
-
-        const activeDocument: TableDataEntry = queryResults?.tableData?.[row] ?? {};
-        const activeColumn: string = queryResults?.tableHeaders?.[cell] ?? '';
-
-        // Add proper property existence check
-        if (!(activeColumn in activeDocument)) {
-            console.debug('Column does not exist in document:', activeColumn);
-            return;
-        }
-
-        const activeCell = activeDocument[activeColumn];
-
-        // Add proper null check
-        if (activeCell === undefined || activeCell === null) {
-            console.debug('Cell value is undefined for column:', activeColumn);
-            return;
-        }
-
-        console.debug('Step-in requested on cell', activeCell, 'in row', row, 'column', cell);
-
-        if (activeColumn === '_id') {
-            console.debug('Cell is an _id, skipping step-in');
-            return;
-        }
-
-        // Type guard for safer property access
+    function handleStepInRequest(rowKey: string, columnKey: ColumnKey): void {
+        const page = currentQueryResultsRef.current?.tablePage;
+        const context = currentContextRef.current;
+        const path = context.currentViewState?.currentPath ?? [];
+        const row = page?.rows.find((candidate) => candidate.rowKey === rowKey);
+        const field = fieldFromColumnKey(columnKey);
         if (
-            typeof activeCell !== 'object' ||
-            activeCell === null ||
-            !('type' in activeCell) ||
-            activeCell.type !== 'object'
+            !page ||
+            !row ||
+            context.isLoading ||
+            context.currentView !== Views.TABLE ||
+            tablePageQueryRef.current !== context.activeQuery ||
+            JSON.stringify(page.path) !== JSON.stringify(path) ||
+            columnKey === ROOT_ID_COLUMN_KEY ||
+            field === undefined ||
+            field === '_id' ||
+            !page.columns.some((column) => column.key === columnKey && !column.isRootId) ||
+            getCell(row, columnKey)?.type !== 'object'
         ) {
-            console.debug('Cell is not an object, skipping step-in');
             return;
         }
 
-        const newPath = [...(currentContextRef.current.currentViewState?.currentPath ?? []), activeColumn];
+        const newPath = [...path, field];
 
         setCurrentContext((prev) => ({
             ...prev,
@@ -763,13 +883,14 @@ export const CollectionView = (): JSX.Element => {
                                     {
                                         'Table View': (
                                             <DataViewPanelTable
-                                                liveHeaders={currentQueryResults?.tableHeaders ?? []}
-                                                liveData={currentQueryResults?.tableData ?? []}
-                                                handleStepIn={handleStepInRequest}
+                                                page={currentQueryResults?.tablePage}
+                                                selectedRowKeys={currentContext.dataSelection.selectedRowKeys}
+                                                onSelectedRowKeysChange={handleSelectedRowKeysChange}
+                                                onStepIn={handleStepInRequest}
                                             />
                                         ),
                                         'Tree View': (
-                                            <DataViewPanelTree liveData={currentQueryResults?.treeData ?? []} />
+                                            <DataViewPanelTree nodes={currentQueryResults?.treeNodes ?? []} />
                                         ),
                                         'JSON View': (
                                             <DataViewPanelJSON value={currentQueryResults?.jsonDocuments ?? []} />

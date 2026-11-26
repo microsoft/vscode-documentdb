@@ -4,12 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as React from 'react';
+import { type TreeNode } from '../../../../../utils/documentGrid/types';
 
-interface Props {
-    liveData: { [key: string]: unknown }[];
+interface DataViewPanelTreeProps {
+    readonly nodes: readonly TreeNode[];
 }
 
-export const DataViewPanelTree = ({ liveData }: Props): React.JSX.Element => {
-    void liveData;
+export const DataViewPanelTree = ({ nodes }: DataViewPanelTreeProps): React.JSX.Element => {
+    void nodes;
     return <></>;
 };

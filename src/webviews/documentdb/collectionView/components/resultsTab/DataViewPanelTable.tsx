@@ -6,21 +6,28 @@
 import * as React from 'react';
 import { DataGrid } from 'react-data-grid';
 import 'react-data-grid/lib/styles.css';
-import { type TableDataEntry } from '../../../../../documentdb/ClusterSession';
+import { type ColumnKey, type TablePage } from '../../../../../utils/documentGrid/types';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { LoadingAnimationTable } from './LoadingAnimationTable';
 
-interface Props {
-    liveHeaders: string[];
-    liveData: TableDataEntry[];
-    handleStepIn: (row: number, cell: number) => void;
+interface DataViewPanelTableProps {
+    readonly page: TablePage | undefined;
+    readonly selectedRowKeys: readonly string[];
+    readonly onSelectedRowKeysChange: (rowKeys: readonly string[]) => void;
+    readonly onStepIn: (rowKey: string, columnKey: ColumnKey) => void;
 }
 
-export function DataViewPanelTable({ liveHeaders, liveData, handleStepIn }: Props): React.JSX.Element {
+export function DataViewPanelTable({
+    page,
+    selectedRowKeys,
+    onSelectedRowKeysChange,
+    onStepIn,
+}: DataViewPanelTableProps): React.JSX.Element {
     const [currentContext] = React.useContext(CollectionViewContext);
-    void liveHeaders;
-    void liveData;
-    void handleStepIn;
+    void page;
+    void selectedRowKeys;
+    void onStepIn;
+    React.useEffect(() => (): void => onSelectedRowKeysChange([]), [onSelectedRowKeysChange]);
 
     if (currentContext.isFirstTimeLoad) {
         return <LoadingAnimationTable />;
