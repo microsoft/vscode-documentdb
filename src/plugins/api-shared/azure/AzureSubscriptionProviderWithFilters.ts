@@ -14,8 +14,11 @@ import {
     type SubscriptionId,
     type TenantIdAndAccount,
 } from '@microsoft/vscode-azext-azureauth';
+import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
+import { meterSilentCatch } from '../../../utils/accumulatingTelemetry';
 
 export async function getUnfilteredAzureTenants(
     provider: VSCodeAzureSubscriptionProvider,
@@ -50,6 +53,10 @@ export async function getUnfilteredAzureTenants(
  */
 export class AzureSubscriptionProviderWithFilters extends VSCodeAzureSubscriptionProvider {
     private freshListingRequested = false;
+    private readonly listingSkips = new AsyncLocalStorage<{
+        skippedAccounts: number;
+        skippedTenants: number;
+    }>();
     private readonly cacheRefreshSubscription: vscode.Disposable;
 
     constructor() {
@@ -94,8 +101,37 @@ export class AzureSubscriptionProviderWithFilters extends VSCodeAzureSubscriptio
             options = { ...options, noCache: true };
         }
 
+        const counters = { skippedAccounts: 0, skippedTenants: 0 };
         try {
-            return await super.getAvailableSubscriptions(options);
+            const subscriptions = await this.listingSkips.run(counters, () =>
+                super.getAvailableSubscriptions(options),
+            );
+            if (counters.skippedAccounts > 0 || counters.skippedTenants > 0) {
+                void callWithTelemetryAndErrorHandling('azureSubscriptions.partialListing', (context) => {
+                    context.errorHandling.suppressDisplay = true;
+                    context.telemetry.measurements.skippedAccounts = counters.skippedAccounts;
+                    context.telemetry.measurements.skippedTenants = counters.skippedTenants;
+                });
+
+                const showOutput = vscode.l10n.t('Show Output');
+                void Promise.resolve(
+                    vscode.window.showWarningMessage(
+                        vscode.l10n.t(
+                            'Some Azure accounts or tenants could not be listed, so some subscriptions may be missing.',
+                        ),
+                        showOutput,
+                    ),
+                )
+                    .then((choice) => {
+                        if (choice === showOutput) {
+                            ext.outputChannel.show();
+                        }
+                    })
+                    .catch(() => {
+                        meterSilentCatch('AzureSubscriptionProviderWithFilters_partialListingHint');
+                    });
+            }
+            return subscriptions;
         } catch (error) {
             if (isNotSignedInError(error)) {
                 return [];
@@ -105,10 +141,18 @@ export class AzureSubscriptionProviderWithFilters extends VSCodeAzureSubscriptio
     }
 
     protected override errorForAccount(_account: AzureAccount, _message: string, _error: unknown): void {
+        const counters = this.listingSkips.getStore();
+        if (counters) {
+            counters.skippedAccounts++;
+        }
         ext.outputChannel.warn(vscode.l10n.t('Skipped an Azure account because its tenants could not be listed.'));
     }
 
     protected override errorForTenant(_tenant: TenantIdAndAccount, _message: string, _error: unknown): void {
+        const counters = this.listingSkips.getStore();
+        if (counters) {
+            counters.skippedTenants++;
+        }
         ext.outputChannel.warn(vscode.l10n.t('Skipped an Azure tenant because its subscriptions could not be listed.'));
     }
 

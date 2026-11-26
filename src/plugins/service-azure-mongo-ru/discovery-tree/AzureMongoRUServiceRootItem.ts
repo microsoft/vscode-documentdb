@@ -12,6 +12,7 @@ import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeEle
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
 import { type TreeElementWithExplicitReload } from '../../../tree/TreeElementWithExplicitReload';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
+import { meterSilentCatch } from '../../../utils/accumulatingTelemetry';
 import { askToConfigureCredentials } from '../../api-shared/azure/askToConfigureCredentials';
 import {
     getUnfilteredAzureTenants,
@@ -66,7 +67,10 @@ export class AzureMongoRUServiceRootItem
         }
 
         // This information is extracted to improve the UX, that's why there are fallbacks to 'undefined'
-        const tenantPromise = getUnfilteredAzureTenants(this.azureSubscriptionProvider).catch(() => undefined);
+        const tenantPromise = getUnfilteredAzureTenants(this.azureSubscriptionProvider).catch(() => {
+            meterSilentCatch('AzureMongoRUServiceRootItem_getUnfilteredAzureTenants');
+            return undefined;
+        });
         const timeoutPromise = new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 5000));
         const knownTenants = await Promise.race([tenantPromise, timeoutPromise]);
 

@@ -9,6 +9,7 @@ import * as l10n from '@vscode/l10n';
 import { QuickPickItemKind, ThemeIcon, Uri, window, type QuickPickItem } from 'vscode';
 import { type NewConnectionWizardContext } from '../../../../commands/newConnection/NewConnectionWizardContext';
 import { ext } from '../../../../extensionVariables';
+import { meterSilentCatch } from '../../../../utils/accumulatingTelemetry';
 import { askToConfigureCredentials } from '../askToConfigureCredentials';
 import {
     getUnfilteredAzureTenants,
@@ -55,7 +56,10 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
             });
 
             // This information is extracted to improve the UX, that's why there are fallbacks to 'undefined'
-            const tenantPromise = getUnfilteredAzureTenants(subscriptionProvider).catch(() => undefined);
+            const tenantPromise = getUnfilteredAzureTenants(subscriptionProvider).catch(() => {
+                meterSilentCatch('SelectSubscriptionStep_getUnfilteredAzureTenants');
+                return undefined;
+            });
             const timeoutPromise = new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 5000));
             const knownTenants = await Promise.race([tenantPromise, timeoutPromise]);
 

@@ -12,12 +12,45 @@ import {
     type AzureSubscription,
     type AzureTenant,
 } from '@microsoft/vscode-azext-azureauth';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
 import { AzureSubscriptionProviderWithFilters } from './AzureSubscriptionProviderWithFilters';
 
-vi.mock('../../../extensionVariables', () => ({ ext: { outputChannel: { warn: vi.fn() } } }));
+interface RecordedTelemetryEvent {
+    callbackId: string;
+    measurements: Record<string, number | undefined>;
+}
+
+const recordedTelemetry = vi.hoisted(() => ({
+    events: [] as RecordedTelemetryEvent[],
+}));
+
+vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@microsoft/vscode-azext-utils')>();
+    return {
+        ...actual,
+        callWithTelemetryAndErrorHandling: vi.fn(
+            (callbackId: string, callback: (context: IActionContext) => unknown): Promise<unknown> => {
+                const context = {
+                    telemetry: { properties: {}, measurements: {} },
+                    errorHandling: { suppressDisplay: false },
+                } as unknown as IActionContext;
+                const result = callback(context);
+                recordedTelemetry.events.push({
+                    callbackId,
+                    measurements: { ...context.telemetry.measurements },
+                });
+                return Promise.resolve(result);
+            },
+        ),
+    };
+});
+
+vi.mock('../../../extensionVariables', () => ({
+    ext: { outputChannel: { show: vi.fn(), warn: vi.fn() } },
+}));
 
 vi.mock('vscode', async (importOriginal) => {
     const actual = await importOriginal<typeof vscode>();
@@ -28,6 +61,10 @@ vi.mock('vscode', async (importOriginal) => {
             getAccounts: vi.fn(),
             onDidChangeSessions: vi.fn(() => ({ dispose: vi.fn() })),
         },
+        window: {
+            ...actual.window,
+            showWarningMessage: vi.fn(),
+        },
         workspace: {
             ...actual.workspace,
             onDidChangeConfiguration: vi.fn(() => ({ dispose: vi.fn() })),
@@ -36,6 +73,12 @@ vi.mock('vscode', async (importOriginal) => {
 });
 
 describe('AzureSubscriptionProviderWithFilters', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        recordedTelemetry.events.length = 0;
+        vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(undefined);
+    });
+
     afterEach(() => {
         vi.restoreAllMocks();
     });
@@ -66,6 +109,8 @@ describe('AzureSubscriptionProviderWithFilters', () => {
 
         await expect(provider.getAvailableSubscriptions()).resolves.toEqual([]);
         await expect(provider.getAvailableSubscriptions()).rejects.toBe(failure);
+        expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+        expect(recordedTelemetry.events).toEqual([]);
         provider.dispose();
     });
 
@@ -209,6 +254,7 @@ describe('AzureSubscriptionProviderWithFilters', () => {
         };
         const failure = new Error('ARM error with private details');
         vi.spyOn(provider, 'getAccounts').mockResolvedValue([account, failedAccount]);
+        vi.mocked(vscode.window.showWarningMessage).mockResolvedValue('Show Output' as never);
         vi.spyOn(provider, 'getTenantsForAccount').mockImplementation(async (requestedAccount) => {
             if (requestedAccount === failedAccount) {
                 throw failure;
@@ -243,6 +289,86 @@ describe('AzureSubscriptionProviderWithFilters', () => {
                 ['Skipped an Azure tenant because its subscriptions could not be listed.'],
             ]),
         );
+        expect(vscode.window.showWarningMessage).toHaveBeenCalledExactlyOnceWith(
+            'Some Azure accounts or tenants could not be listed, so some subscriptions may be missing.',
+            'Show Output',
+        );
+        expect(recordedTelemetry.events).toEqual([
+            {
+                callbackId: 'azureSubscriptions.partialListing',
+                measurements: { skippedAccounts: 1, skippedTenants: 1 },
+            },
+        ]);
+        await vi.waitFor(() => expect(ext.outputChannel.show).toHaveBeenCalledOnce());
+        provider.dispose();
+    });
+
+    it('attributes skipped counts only to an overlapping partial listing', async () => {
+        const provider = new AzureSubscriptionProviderWithFilters();
+        const environment = new ExtendedEnvironment(Environment.AzureCloud, false);
+        const partialAccount = { id: 'partial-account-id', label: 'Partial account', environment };
+        const completeAccount = { id: 'complete-account-id', label: 'Complete account', environment };
+        const failedTenant = { account: partialAccount, tenantId: 'failed-tenant' };
+        const heldTenant = { account: partialAccount, tenantId: 'held-tenant' };
+        const completeTenant = { account: completeAccount, tenantId: 'complete-tenant' };
+        const partialSubscription: AzureSubscription = {
+            account: partialAccount,
+            authentication: { getSession: vi.fn(), getSessionWithScopes: vi.fn() },
+            credential: { getToken: vi.fn() },
+            environment,
+            isCustomCloud: false,
+            name: 'Partial subscription',
+            subscriptionId: 'partial-subscription-id',
+            tenantId: heldTenant.tenantId,
+        };
+        const completeSubscription: AzureSubscription = {
+            ...partialSubscription,
+            account: completeAccount,
+            name: 'Complete subscription',
+            subscriptionId: 'complete-subscription-id',
+            tenantId: completeTenant.tenantId,
+        };
+        let releaseHeldTenant: () => void = () => undefined;
+        const heldTenantMayFinish = new Promise<void>((resolve) => {
+            releaseHeldTenant = resolve;
+        });
+
+        vi.spyOn(provider, 'getAccounts').mockImplementation(async (options) => {
+            return options && 'maximumTenants' in options && options.maximumTenants === 2
+                ? [partialAccount]
+                : [completeAccount];
+        });
+        vi.spyOn(provider, 'getTenantsForAccount').mockImplementation(async (account) => {
+            return account === partialAccount ? [failedTenant, heldTenant] : [completeTenant];
+        });
+        vi.spyOn(provider, 'getSubscriptionsForTenant').mockImplementation(async (tenant) => {
+            if (tenant === failedTenant) {
+                throw new Error('private tenant failure');
+            }
+            if (tenant === heldTenant) {
+                await heldTenantMayFinish;
+                return [partialSubscription];
+            }
+            return [completeSubscription];
+        });
+
+        const partial = provider.getAvailableSubscriptions({ filter: false, maximumTenants: 2 });
+        const complete = provider.getAvailableSubscriptions({ filter: false, maximumTenants: 3 });
+
+        await vi.waitFor(() => expect(ext.outputChannel.warn).toHaveBeenCalledOnce());
+        await expect(complete).resolves.toEqual([completeSubscription]);
+        expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+        expect(recordedTelemetry.events).toEqual([]);
+
+        releaseHeldTenant();
+        await expect(partial).resolves.toEqual([partialSubscription]);
+        expect(vscode.window.showWarningMessage).toHaveBeenCalledOnce();
+        expect(recordedTelemetry.events).toEqual([
+            {
+                callbackId: 'azureSubscriptions.partialListing',
+                measurements: { skippedAccounts: 0, skippedTenants: 1 },
+            },
+        ]);
         provider.dispose();
     });
 });
