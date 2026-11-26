@@ -636,7 +636,7 @@ export class ClustersClient {
             ...(pinnedEntraIdentity ? { pinnedEntraIdentity } : {}),
             ...(authMethod === AuthMethodId.MicrosoftEntraID
                 ? {
-                      canObserveTokenLookup: () => this.isCurrentForTokenRenewal(epoch),
+                      getTokenLookupEpoch: () => this.getTokenLookupEpoch(),
                       onTokenLookup: (observation) => emitTokenRenewal('extension', observation),
                   }
                 : {}),
@@ -1142,13 +1142,15 @@ export class ClustersClient {
         return !this._closed && this._replacement === undefined;
     }
 
-    public isCurrentForTokenRenewal(epoch: number): boolean {
-        return (
-            !this._closed &&
-            ClustersClient.getExistingClient(this.clusterId) === this &&
-            ClustersClient.getEpoch(this.clusterId) === epoch &&
-            !ClustersClient.getLatchReason(this.clusterId)
-        );
+    public getTokenLookupEpoch(): number | undefined {
+        if (
+            !this.canReuse() ||
+            ClustersClient.getExistingClient(this.clusterId) !== this ||
+            ClustersClient.getLatchReason(this.clusterId)
+        ) {
+            return undefined;
+        }
+        return ClustersClient.getEpoch(this.clusterId);
     }
 
     public static hasReusableClient(clusterId: string): boolean {

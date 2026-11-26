@@ -1444,7 +1444,7 @@ describe('regular connection startup diagnostics', () => {
             const policy = {
                 interactive,
                 ...(interactive
-                    ? { canObserveTokenLookup: expect.any(Function), onTokenLookup: expect.any(Function) }
+                    ? { getTokenLookupEpoch: expect.any(Function), onTokenLookup: expect.any(Function) }
                     : {}),
             };
             expect(factory).toHaveBeenCalledWith(authMethod, expect.objectContaining({ clusterId }), policy);
@@ -1455,7 +1455,7 @@ describe('regular connection startup diagnostics', () => {
         },
     );
 
-    it('counts completed Entra lookups only after startup, independent of database acceptance', async () => {
+    it('counts completed Entra lookups on the current client, independent of database acceptance', async () => {
         CredentialCache.setAuthCredentials(
             clusterId,
             AuthMethodId.MicrosoftEntraID,
@@ -1480,15 +1480,16 @@ describe('regular connection startup diagnostics', () => {
         const account = { id: 'test-account', label: 'Test account' };
         const session = { id: 'test-session', account, accessToken: timedToken, scopes: [] };
         const getSession = vi.spyOn(entraSession, 'getEntraSession').mockResolvedValue(session);
-        const signal = new AbortController();
-        const lookup = async (timeoutContext = signal.signal): Promise<Mongodb.OIDCResponse> => {
+        const getCallback = (): NonNullable<Mongodb.AuthMechanismProperties['OIDC_CALLBACK']> => {
             const options = vi.mocked(MongoClient).mock.lastCall?.[1];
             const callback = options?.authMechanismProperties?.OIDC_CALLBACK;
             if (!callback) {
                 throw new Error('Expected an OIDC callback');
             }
-            return await callback({ version: 1, timeoutContext });
+            return callback;
         };
+        const params = { version: 1, timeoutContext: new AbortController().signal } as const;
+        const lookup = (): Promise<Mongodb.OIDCResponse> => getCallback()(params);
         const renewalEvents = (): RecordedTelemetry[] =>
             mockTelemetryEvents.filter(({ eventName }) => eventName === 'connection.tokenRenewal');
         const serverRejection = new MongoServerError({ code: 18, message: 'test server rejection' });
@@ -1516,8 +1517,7 @@ describe('regular connection startup diagnostics', () => {
         getSession.mockResolvedValueOnce(undefined);
         await expect(lookup()).rejects.toBeInstanceOf(EntraSignInRequiredError);
 
-        signal.abort();
-        await lookup();
+        await getCallback()({ ...params, timeoutContext: AbortSignal.abort() });
         expect(
             renewalEvents().map(({ telemetry, error }) => [telemetry.properties, telemetry.measurements, error]),
         ).toEqual([
@@ -1529,6 +1529,37 @@ describe('regular connection startup diagnostics', () => {
             [{ surface: 'extension', renewalOutcome: 'returned', result: 'Succeeded' }, { duration: 0 }, undefined],
             [{ surface: 'extension', renewalOutcome: 'noSession', result: 'Succeeded' }, { duration: 0 }, undefined],
         ]);
+
+        const didStart = deferred();
+        const finish = deferred();
+        getSession.mockImplementationOnce(async () => {
+            didStart.resolve();
+            await finish.promise;
+            return session;
+        });
+        const spanningSave = lookup();
+        await didStart.promise;
+        // An unchanged save latches and unlatches without retiring this client.
+        ClustersClient.latch(clusterId, 'credentialsUpdating');
+        await lookup();
+        ClustersClient.unlatch(clusterId);
+        finish.resolve();
+        await spanningSave;
+        expect(renewalEvents()).toHaveLength(3);
+        expect(ClustersClient.getExistingClient(clusterId)).toBe(client);
+
+        await lookup();
+        expect(renewalEvents()).toHaveLength(4);
+
+        const retiredLookup = getCallback();
+        ClustersClient.reportFailure(client.binding, new MongoNotConnectedError('driver closed'));
+        await retiredLookup(params);
+        expect(await ClustersClient.getClient(clusterId)).not.toBe(client);
+        await retiredLookup(params);
+        const closedLookup = getCallback();
+        await ClustersClient.deleteClient(clusterId);
+        await closedLookup(params);
+        expect(renewalEvents()).toHaveLength(4);
     });
 
     it('passes its startup ID to auth configuration', async (): Promise<void> => {

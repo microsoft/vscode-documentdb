@@ -118,21 +118,22 @@ describe('signInAgain', () => {
         vi.mocked(getEntraSession).mockResolvedValueOnce({
             account: { id: pin.accountId, label: pin.accountLabel },
         } as vscode.AuthenticationSession);
-        const isCurrentForTokenRenewal = vi.fn(() => true);
+        const getTokenLookupEpoch = vi.fn<() => number | undefined>(() => 1);
         vi.mocked(ClustersClient.startAfterSignIn).mockImplementationOnce(async () => {
             const [policy] = mocks.capturePolicy.mock.lastCall!;
-            expect(policy.canObserveTokenLookup?.()).toBe(false);
-            return { isCurrentForTokenRenewal } as unknown as ClustersClient;
+            expect(policy.getTokenLookupEpoch?.()).toBeUndefined();
+            return { getTokenLookupEpoch } as unknown as ClustersClient;
         });
 
         await signInAgain(actionContext(), { clusterId });
 
         const [policy] = mocks.capturePolicy.mock.lastCall!;
         expect(policy.onTokenLookup).toBeTypeOf('function');
-        expect(policy.canObserveTokenLookup?.()).toBe(true);
-        expect(isCurrentForTokenRenewal).toHaveBeenCalledExactlyOnceWith(1);
-        isCurrentForTokenRenewal.mockReturnValue(false);
-        expect(policy.canObserveTokenLookup?.()).toBe(false);
+        expect(policy.getTokenLookupEpoch?.()).toBe(1);
+        getTokenLookupEpoch.mockReturnValue(2);
+        expect(policy.getTokenLookupEpoch?.()).toBe(2);
+        getTokenLookupEpoch.mockReturnValue(undefined);
+        expect(policy.getTokenLookupEpoch?.()).toBeUndefined();
     });
 
     it.each([undefined, new Error('User did not consent to login.')])(

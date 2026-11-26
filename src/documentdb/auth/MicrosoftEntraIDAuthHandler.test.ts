@@ -284,7 +284,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         const onTokenLookup = vi.fn();
         const handler = new MicrosoftEntraIDAuthHandler(
             buildCredentials('mongodb://cluster.mongocluster.cosmos.azure.com/'),
-            { interactive: true, onTokenLookup },
+            { interactive: true, getTokenLookupEpoch: () => 0, onTokenLookup },
         );
         const { options, verifiedIdentity } = await handler.configureAuth(undefined, {
             startupCorrelationId: 'startup-id',
@@ -402,7 +402,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         const onCallbackTokenObserved = vi.fn<NonNullable<AuthPhaseObserver['onCallbackTokenObserved']>>();
         const { options } = await new MicrosoftEntraIDAuthHandler(
             buildCredentials('mongodb://cluster.mongocluster.cosmos.azure.com/'),
-            { interactive: true, onTokenLookup, observer: { onCallbackTokenObserved } },
+            { interactive: true, getTokenLookupEpoch: () => 0, onTokenLookup, observer: { onCallbackTokenObserved } },
         ).configureAuth();
         if (failure === 'providerChanged') {
             getConfiguredAuthProviderId.mockReturnValue('microsoft-sovereign-cloud');
@@ -477,7 +477,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
             const onTokenLookup = vi.fn();
             const { options } = await new MicrosoftEntraIDAuthHandler(
                 buildCredentials('mongodb://cluster.mongocluster.cosmos.azure.com/'),
-                { interactive: true, onTokenLookup },
+                { interactive: true, getTokenLookupEpoch: () => 0, onTokenLookup },
             ).configureAuth();
             recordEntraTokenFailure('cluster-1', { cloudCategory: 'custom', authMethod: 'interactive' });
             const priorFailure = getRecentEntraTokenFailure('cluster-1');
@@ -604,7 +604,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         const onCallbackTokenObserved = vi.fn<NonNullable<AuthPhaseObserver['onCallbackTokenObserved']>>();
         const { options } = await new MicrosoftEntraIDAuthHandler(
             buildCredentials('mongodb://cluster.mongocluster.cosmos.azure.com/'),
-            { interactive: true, onTokenLookup, observer: { onCallbackTokenObserved } },
+            { interactive: true, getTokenLookupEpoch: () => 0, onTokenLookup, observer: { onCallbackTokenObserved } },
         ).configureAuth();
         const cause = new Error('AADSTS65002: private-cause');
         getSessionFromVSCode.mockRejectedValueOnce(cause);

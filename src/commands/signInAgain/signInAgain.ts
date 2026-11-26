@@ -121,12 +121,12 @@ async function signInAgainInternal(
     };
 
     let starting = false;
-    let established: { client: ClustersClient; epoch: number } | undefined;
+    let establishedClient: ClustersClient | undefined;
     try {
         const handler = new MicrosoftEntraIDAuthHandler(credentials, {
             interactive: false,
             pinnedEntraIdentity: identity,
-            canObserveTokenLookup: () => established?.client.isCurrentForTokenRenewal(established.epoch) ?? false,
+            getTokenLookupEpoch: () => establishedClient?.getTokenLookupEpoch(),
             onTokenLookup: (observation) => emitTokenRenewal('extension', observation),
         });
         const auth = await handler.configureAuth(undefined, undefined, async (request) => {
@@ -170,7 +170,7 @@ async function signInAgainInternal(
             reportClosed();
             return undefined;
         }
-        established = { client, epoch: startupEpoch };
+        establishedClient = client;
         if (
             ClustersClient.getExistingClient(clusterId) === client &&
             !ClustersClient.getLatchReason(clusterId) &&

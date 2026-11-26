@@ -69,11 +69,12 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         notifyAuthPhaseObserver(this.policy.observer, notify);
     }
 
-    private canObserveTokenLookup(): boolean {
+    private getTokenLookupEpoch(): number | undefined {
         try {
-            return this.policy.onTokenLookup !== undefined && (this.policy.canObserveTokenLookup?.() ?? true);
+            return this.policy.onTokenLookup ? this.policy.getTokenLookupEpoch?.() : undefined;
         } catch {
-            return false;
+            // Telemetry eligibility must not affect authentication.
+            return undefined;
         }
     }
 
@@ -286,9 +287,13 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         const callback = properties?.OIDC_CALLBACK;
         if ((this.policy.onTokenLookup || this.policy.observer?.onCallbackTokenObserved) && properties && callback) {
             properties.OIDC_CALLBACK = async (params): Promise<OIDCResponse> => {
-                const observe = this.canObserveTokenLookup();
+                const lookupEpoch = this.getTokenLookupEpoch();
                 const notifyLookup = (observation: EntraTokenLookupObservation): void => {
-                    if (observe && !params.timeoutContext?.aborted && this.canObserveTokenLookup()) {
+                    if (
+                        lookupEpoch !== undefined &&
+                        !params.timeoutContext?.aborted &&
+                        this.getTokenLookupEpoch() === lookupEpoch
+                    ) {
                         try {
                             this.policy.onTokenLookup?.(observation);
                         } catch {
@@ -299,7 +304,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                 try {
                     // Report acquisition only after the configured callback re-checks destination trust.
                     const response = await callback(params);
-                    if (observe) {
+                    if (lookupEpoch !== undefined) {
                         const lifetimeSeconds = jwtLifetimeSeconds(readJwtTimes(response.accessToken));
                         notifyLookup({
                             outcome: 'returned',

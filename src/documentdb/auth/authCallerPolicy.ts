@@ -45,8 +45,8 @@ export interface AuthCallerPolicy {
     readonly interactive: boolean;
     readonly pinnedEntraIdentity?: VerifiedEntraIdentity;
     readonly observer?: AuthPhaseObserver;
-    /** Entra only. Check at callback entry and completion to exclude startup and obsolete clients. */
-    readonly canObserveTokenLookup?: () => boolean;
+    /** Entra only. Returns the current client epoch, or undefined if renewal telemetry is not eligible. */
+    readonly getTokenLookupEpoch?: () => number | undefined;
     readonly onTokenLookup?: (observation: EntraTokenLookupObservation) => void;
 }
 
