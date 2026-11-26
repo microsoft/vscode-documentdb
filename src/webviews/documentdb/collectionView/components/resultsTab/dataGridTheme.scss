@@ -1,0 +1,51 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.documentDataGrid {
+    @media (forced-colors: none) {
+        --rdg-color: var(--vscode-editor-foreground, var(--vscode-foreground));
+        --rdg-background-color: var(--vscode-editor-background);
+        --rdg-border-color: var(
+            --vscode-contrastBorder,
+            var(--vscode-panel-border, var(--vscode-widget-border, var(--vscode-editorWidget-border)))
+        );
+        --rdg-header-background-color: var(
+            --vscode-editorWidget-background,
+            var(--vscode-editor-background)
+        );
+        --rdg-header-draggable-background-color: var(
+            --vscode-list-hoverBackground,
+            var(--vscode-editorWidget-background, var(--vscode-editor-background))
+        );
+        --rdg-row-hover-background-color: var(
+            --vscode-list-hoverBackground,
+            var(--vscode-editorWidget-background, var(--vscode-editor-background))
+        );
+        --rdg-row-selected-background-color: var(
+            --vscode-list-inactiveSelectionBackground,
+            var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground))
+        );
+        --rdg-row-selected-hover-background-color: var(
+            --vscode-list-activeSelectionBackground,
+            var(--vscode-list-inactiveSelectionBackground, var(--vscode-list-hoverBackground))
+        );
+        --rdg-selection-color: var(--vscode-focusBorder);
+        --rdg-checkbox-focus-color: var(--vscode-focusBorder);
+
+        [role='row'][aria-selected='true'] {
+            color: var(--vscode-list-inactiveSelectionForeground, var(--vscode-editor-foreground));
+
+            &:hover {
+                color: var(
+                    --vscode-list-activeSelectionForeground,
+                    var(
+                        --vscode-list-inactiveSelectionForeground,
+                        var(--vscode-editor-foreground)
+                    )
+                );
+            }
+        }
+    }
+}
