@@ -293,6 +293,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             }
             this._relay = new WorkerTokenRelay(clusterId, initMsg, epoch, this._sessionId, workerPin, (identity) => {
                 this._pinContext = { clusterId, identity };
+                // Like the document binding, this keyed fingerprint is only compared in the host.
                 this._workerFingerprint = computeConnectionFingerprint({
                     connectionString: originalUri,
                     principal: identity,

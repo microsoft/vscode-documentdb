@@ -13,7 +13,7 @@ export type ConnectionPrincipal =
     | { kind: 'managedIdentity'; clientId?: string }
     | { kind: 'none' };
 
-/** An opaque equality key for the current extension host, not a password verifier. */
+/** An opaque equality key for the current extension host, not a password verifier. See .github/codeql-exceptions.md. */
 export function computeConnectionFingerprint(input: {
     connectionString: string;
     principal: ConnectionPrincipal;

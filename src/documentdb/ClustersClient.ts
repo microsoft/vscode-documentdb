@@ -327,6 +327,7 @@ export class ClustersClient {
         if (method === AuthMethodId.MicrosoftEntraID && (!pin || pin.tenantId !== tenantId)) {
             return undefined;
         }
+        // The keyed fingerprint compares identities only in this host; it does not verify a password.
         return computeConnectionFingerprint({
             connectionString: credentials.connectionString,
             principal: getVerifiedIdentity(
@@ -654,6 +655,7 @@ export class ClustersClient {
 
         this.advanceClientStartup(startup, 'stage03PreparingClient');
         this.#verifiedIdentity = getVerifiedIdentity(authMethod, credentials, connectionString, verifiedIdentity);
+        // Keep the fingerprint on the host for binding comparisons, not in the driver credentials.
         this._fingerprint = computeConnectionFingerprint({
             connectionString: credentials.connectionString,
             principal: this.#verifiedIdentity,

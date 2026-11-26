@@ -268,6 +268,7 @@ export class ShellSessionManager implements vscode.Disposable {
                 initMsg.authMechanism === 'MicrosoftEntraID' ? pin : undefined,
                 (identity) => {
                     this._pin = identity;
+                    // The keyed fingerprint stays on the host for reconnect comparisons, not in worker messages.
                     this._fingerprint ??= computeConnectionFingerprint({
                         connectionString: initMsg.connectionString,
                         principal: identity,
