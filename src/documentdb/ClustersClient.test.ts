@@ -401,6 +401,58 @@ describe('regular connection startup diagnostics', () => {
         expect(runFind).toHaveBeenCalledOnce();
     });
 
+    it('adds retry guidance when the query marks its current client for replacement', async (): Promise<void> => {
+        const client = await ClustersClient.connectInteractive(clusterId);
+        const session = ClusterSession.getSession(await ClusterSession.initNewSession(clusterId));
+        const failure = new MongoNotConnectedError('private-query-connection-closed');
+        mockToArray.mockImplementationOnce(async () => {
+            poolEvents.emit('topologyClosed');
+            throw failure;
+        });
+
+        let caught: unknown;
+        try {
+            await session.runFindQueryWithCache('db', 'items', { filter: '{}' }, 1, 10);
+        } catch (error) {
+            caught = error;
+        }
+
+        expect(caught).toBeInstanceOf(Error);
+        if (!(caught instanceof Error)) {
+            throw new Error('Expected the query to fail.');
+        }
+        expect(caught).not.toBe(failure);
+        expect(caught.message).toBe(
+            'private-query-connection-closed Run the query again to retry the connection.',
+        );
+        expect(caught.cause).toBe(failure);
+        expect(ClustersClient.getBinding(clusterId)).toBe(client.binding);
+        expect(ClustersClient.hasReusableClient(clusterId)).toBe(false);
+
+        mockToArray.mockResolvedValueOnce([{ _id: 'retried' }]);
+        await expect(
+            session.runFindQueryWithCache('db', 'items', { filter: '{}' }, 1, 10),
+        ).resolves.toBe(1);
+        expect(ClustersClient.getBinding(clusterId)).toMatchObject({
+            generation: client.generation + 1,
+        });
+    });
+
+    it('does not add retry guidance when classifier-equivalent replacement startup fails before the query', async (): Promise<void> => {
+        const client = await ClustersClient.connectInteractive(clusterId);
+        const session = ClusterSession.getSession(await ClusterSession.initNewSession(clusterId));
+        ClustersClient.reportFailure(client.binding, new MongoNotConnectedError('previous connection closed'));
+        const failure = new MongoNotConnectedError('private-replacement-connection-closed');
+        mockConnect.mockRejectedValueOnce(failure);
+
+        await expect(
+            session.runFindQueryWithCache('db', 'items', { filter: '{}' }, 1, 10),
+        ).rejects.toBe(failure);
+        expect(failure.message).toBe('private-replacement-connection-closed');
+        expect(mockToArray).not.toHaveBeenCalled();
+        expect(mockConnect).toHaveBeenCalledTimes(2);
+    });
+
     it('rejects a changed identity before a session can submit a write', async (): Promise<void> => {
         await ClustersClient.connectInteractive(clusterId);
         const session = ClusterSession.getSession(await ClusterSession.initNewSession(clusterId));
