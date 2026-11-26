@@ -6,7 +6,7 @@
 import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 
 export interface EntraTokenLookupObservation {
-    readonly outcome: 'returned' | 'noSession' | 'identityMismatch' | 'failed';
+    readonly outcome: 'returned' | 'noSession' | 'identityMismatch' | 'failed' | 'timedOut';
     readonly lifetimeSeconds?: number;
 }
 

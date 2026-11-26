@@ -99,6 +99,14 @@ export function classifyConnectionFailure(error: unknown, authMethod?: AuthMetho
                 return { kind: 'identityChanged', generation: 'evict' };
             case 'TokenCallbackError':
                 return { kind: 'transient', generation: 'replaceOnNextForeground' };
+            case 'MongoOIDCError':
+                if (
+                    typeof candidate.message === 'string' &&
+                    /^OIDC callback timed out after \d+ms\.$/.test(candidate.message)
+                ) {
+                    return { kind: 'transient', generation: 'replaceOnNextForeground' };
+                }
+                break;
         }
         if (candidate instanceof MongoServerError && candidate.code === 18) {
             // The OIDC workflow already tries its callback after a cached token is rejected.

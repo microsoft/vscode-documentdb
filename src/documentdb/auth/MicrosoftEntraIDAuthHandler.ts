@@ -288,10 +288,11 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         if ((this.policy.onTokenLookup || this.policy.observer?.onCallbackTokenObserved) && properties && callback) {
             properties.OIDC_CALLBACK = async (params): Promise<OIDCResponse> => {
                 const lookupEpoch = this.getTokenLookupEpoch();
+                const signal = params.timeoutContext;
                 const notifyLookup = (observation: EntraTokenLookupObservation): void => {
                     if (
                         lookupEpoch !== undefined &&
-                        !params.timeoutContext?.aborted &&
+                        (observation.outcome === 'timedOut' || !signal?.aborted) &&
                         this.getTokenLookupEpoch() === lookupEpoch
                     ) {
                         try {
@@ -301,6 +302,10 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                         }
                     }
                 };
+                const onAbort = (): void => notifyLookup({ outcome: 'timedOut' });
+                if (lookupEpoch !== undefined && signal && !signal.aborted) {
+                    signal.addEventListener('abort', onAbort, { once: true });
+                }
                 try {
                     // Report acquisition only after the configured callback re-checks destination trust.
                     const response = await callback(params);
@@ -340,6 +345,8 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                         this.notify((observer) => observer.onCallbackTokenObserved?.({ outcome: 'failed', error }));
                     }
                     throw error;
+                } finally {
+                    signal?.removeEventListener('abort', onAbort);
                 }
             };
         }
