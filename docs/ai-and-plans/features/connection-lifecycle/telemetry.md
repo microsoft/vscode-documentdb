@@ -15,7 +15,7 @@ for the two cohorts. Use equal, complete UTC windows, with a gap if the rollout 
 let ReleaseAt = startofday(ago(7d)); // Replace with rollout boundary for this comparison.
 let Window = 7d;
 let RolloutGap = 0d;
-let BaselineVersion = "1.1.1";
+let BaselineVersion = "1.1.0";
 let ReleaseVersion = "1.2.0";
 let BeforeEnd = ReleaseAt - RolloutGap;
 let AfterStart = ReleaseAt + RolloutGap;
@@ -35,13 +35,12 @@ let Events =
 let Operations =
     Events
     | where inWindow
+    | extend parentContext = tostring(customDimensions.parentNodeContext)
     | extend family = case(
         eventScope == "connect", "connect",
         eventScope startswith "documentdb.rpc.", "rpc",
         (eventScope == "getchildren" or eventScope endswith ".getchildren")
-            and isnotempty(tostring(customDimensions.parentNodeContext))
-            and tostring(customDimensions.parentNodeContext) !~ "root"
-            and tostring(customDimensions.usedCachedErrorNode) !~ "true", "getchildren",
+            and isnotempty(parentContext) and parentContext !~ "root", "getchildren",
         "")
     | where isnotempty(family)
     | extend connectionResult = tolower(tostring(customDimensions.connectionResult))
@@ -53,15 +52,16 @@ let Operations =
     | extend ageMs = todouble(customMeasurements.connectionAgeMs),
              generation = tolong(customMeasurements.clientGeneration),
              failureKind = tostring(customDimensions.connectionFailureKind),
-             failureType = coalesce(tostring(customDimensions.causeType), tostring(customDimensions.error)),
-             failureMessage = tostring(customDimensions.errorMessage)
+             failureType = tostring(customDimensions.causeType),
+             recoveryRows = tostring(customDimensions.usedCachedErrorNode) =~ "true"
+                or tostring(customDimensions.cachedErrorNode) =~ "true"
     | extend signature = case(
         operationResult != "failed", "",
+        family != "rpc", "notClassified",
         failureType in~ ("18", "391", "AuthenticationFailed", "Unauthorized",
             "EntraSignInRequiredError", "EntraIdentityMismatchError"), "auth",
         failureType in~ ("MongoNotConnectedError", "MongoTopologyClosedError"), "closedClient",
-        failureType in~ ("MongoNetworkError", "MongoNetworkTimeoutError", "ECONNRESET", "EPIPE")
-            or failureMessage matches regex @"(?i)\bconnection \d+ to .+ closed\b", "socket",
+        failureType in~ ("MongoNetworkError", "MongoNetworkTimeoutError", "ECONNRESET", "EPIPE"), "socket",
         "otherOrUnclassified");
 ```
 
@@ -94,10 +94,11 @@ surface to check the observed volume against the telemetry budget. No lookups me
 
 ## Post-release outcomes by client age and generation
 
-Successes on generation 2 or above show the replacement served an operation; they are not a count
-of unique recoveries or proof that renewal triggered recovery. Show missing age and generation
-explicitly: not every operation has a published client to report. `transient` is broader than
-socket failures, so this drilldown keeps the lifecycle kind and the comparable signature separate.
+The replacement count uses successful cluster expansions that did not return first-time or
+cached recovery rows. Other operations are shown for context only: for example, an RPC can
+return a typed unavailable result without reporting an SDK failure. The count is neither
+unique recoveries nor proof that renewal triggered them. Not every operation reports client
+age or generation; show missing values explicitly.
 
 ```kusto
 Operations
@@ -108,20 +109,25 @@ Operations
     generationBand = case(isnull(generation) or generation < 1, "(missing)", generation == 1, "1", "2+"),
     lifecycleKind = coalesce(failureKind, "(missing)")
 | summarize operations = count(),
-    successfulOnReplacement = countif(operationResult == "succeeded" and generation >= 2)
+    successfulClusterExpansionsOnReplacement = countif(
+        family == "getchildren" and tolower(parentContext) matches regex @"\btreeitem_documentdbcluster\b"
+        and operationResult == "succeeded" and generation >= 2 and not(recoveryRows))
     by version, family, ageBand, generationBand, operationResult, lifecycleKind, signature
 | order by family asc, ageBand asc, generationBand asc
 ```
 
 ## Comparable late failures before and after release
 
-The baseline lacks client age and generation. Use the **same exposure on both versions**: recorded
-non-canceled operations at least one hour after the most recent preceding successful database
-startup in a VS Code session whose successful startups all used Entra ID. Only existing session
-metadata is used for this historical attribution; no session key or raw failure data is returned.
-The warmup is the same on both sides. This is a session-age proxy, not a per-client age or a causal
-estimate. It can miss sparse telemetry, mixed-auth sessions, and versions that don't report the
-same failure signatures. Do not mix new lifecycle-only classifications into the comparison.
+The baseline lacks client age and generation. Compare the same database RPC scopes in versions
+that report the same `causeType` scheme. Do not use tree `connect` or expansion counts for this
+comparison: their redaction and reporting of failures as recovery rows make the cohorts
+incomparable. These are rates of reported RPC failure signatures, not all database failures.
+
+Use the **same exposure on both versions**: recorded non-canceled calls to each selected
+procedure at least one hour after the most recent preceding successful database startup in a
+VS Code session whose successful startups all used Entra ID. Only existing session metadata
+is used; no session key or raw failure data is returned. The warmup is identical for both cohorts.
+This is a session-age proxy, not per-client age or a causal estimate.
 
 ```kusto
 let Startups = materialize(
@@ -140,10 +146,12 @@ let EntraSessions =
     | project cohort, version, sessionKey;
 Operations
 | where operationResult in ("succeeded", "failed")
+| where eventScope in ("documentdb.rpc.query.mongoclusters.collectionview.runfindquery",
+    "documentdb.rpc.query.mongoclusters.documentview.getdocumentbyid")
 | extend sessionKey = coalesce(tostring(customDimensions.VSCodeSessionId),
     tostring(customDimensions["common.vscodesessionid"]))
 | where isnotempty(sessionKey)
-| project cohort, version, sessionKey, timestamp, family, operationResult, signature
+| project cohort, version, sessionKey, timestamp, eventScope, operationResult, signature
 | serialize operationRow = row_number()
 | join kind=inner (Startups | join kind=leftsemi (EntraSessions) on cohort, version, sessionKey)
     on cohort, version, sessionKey
@@ -156,15 +164,16 @@ Operations
     lateSocket = countif(signature == "socket"),
     lateClosedClient = countif(signature == "closedClient"),
     otherOrUnclassified = countif(signature == "otherOrUnclassified")
-    by cohort, version, family
+    by cohort, version, eventScope
 | extend authPer1000 = 1000.0 * lateAuth / exposureOperations,
     socketPer1000 = 1000.0 * lateSocket / exposureOperations,
     closedClientPer1000 = 1000.0 * lateClosedClient / exposureOperations
-| order by family asc, cohort asc
+| order by eventScope asc, cohort asc
 ```
 
-Compare like families and inspect counts along with rates. A missing cohort/family or no later
-operations is insufficient exposure, not a zero failure rate.
+Compare the same procedure across cohorts and inspect counts, including unclassified failures,
+alongside rates. Missing exposure, or cohorts without comparable signatures, are insufficient
+evidence, not zero failures.
 
 ## ARM challenge versus final operation result
 
