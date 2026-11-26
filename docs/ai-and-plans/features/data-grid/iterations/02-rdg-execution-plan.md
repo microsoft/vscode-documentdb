@@ -17,7 +17,7 @@ code:
 
 # Iteration 2: execution plan for the React Data Grid migration
 
-**Status:** proposed, awaiting the operator at **G1**. This turns the accepted
+**Status:** **G1 released**; implementation can begin. This turns the accepted
 [iteration 1 plan](./01-rdg-migration-plan.md) into work items an agent run can execute: owned
 files, order, parallel lanes, interfaces, checks, gates and a model per item. It does **not** change
 iteration 1's scope, guiding rules or the three operator gates. Where it reorders or splits items,
@@ -83,7 +83,7 @@ Rules that apply to every gate:
 - **Blocks:** all code on the feature branch.
 - **May continue:** nothing except answering questions about the evidence.
 
-**G1 pending (2026-11-26).** Step 0 evidence is ready: [proposed decisions](../decisions.md),
+**Initial G1 recommendation (2026-11-26).** Step 0 evidence: [proposed decisions](../decisions.md),
 [M/K/D scope tables](./01-rdg-migration-plan.md#scope-what-the-migration-replicates),
 [pin report](#wi-1-pin-report) and [interface spec and O1–O5](#wi-1c-interface-spec). Recommended:
 beta.61, on-demand Playwright checks, the scope rows as proposed, and the gestures above with
@@ -111,6 +111,16 @@ Browser and the operator's pin decision.
 The [built-in browser retest](#built-in-browser-retest) is complete. On 2026-11-26 the operator
 accepted the release evidence for 1.123.0, authorized the manifest bump, and directed the leader
 to record G1 released after the bump.
+
+**G1 released (2026-11-26), operator decision.** The [accepted runtime evidence](#candidate-minimum-for-beta64)
+is recorded in `a15d509f`; the manifest bump is committed as `a81d40fc`. The choices in the table
+above are binding and override the initial recommendations and the interface sketch where they
+differ. In particular, O4 allows selection even without a safe action target; O5 adds no host-side
+cross-page uniqueness policy. The exact stable 1.123.0 workbench smoke was not run and is not a
+G1 requirement. Next: WI-0b records these decisions in `decisions.md`.
+
+After each work item completes, report what is complete, in progress, planned and blocked, and
+identify the current and upcoming gates and what they block.
 
 ### G2: hands-on direction check (operator test gate)
 
@@ -515,8 +525,9 @@ The floor lookup used `mai-code-2-flash` (1.0 AIU, 11 requests, 1m39s summed mod
 
 #### WI-1c interface spec
 
-**Status:** proposed by the advisor; only G1 accepts it. Pin, gestures and scope rows are separate
-G1 decisions. This is the concrete proposal for the provisional sketch above.
+**Status:** accepted at G1 subject to the [operator decisions above](#g1-scope-pin-interfaces-gestures-operator-decision-gate).
+This is the advisor's concrete proposal for the provisional sketch above; the G1 decisions
+override its O1–O5 defaults where they differ.
 
 | File | Side | Owner | Contents |
 | --- | --- | --- | --- |
@@ -787,6 +798,15 @@ parity.
 - Checks (stated explicitly, so they override Case 1): `npm run build`, the L1 inspection, and
   `npx vitest run build/verification/inspect.test.cjs`.
 
+> **WI-4a-floor done (2026-11-26), commit `a81d40fc`:** The operator accepted VS Code 1.123.0
+> on [shipped-release evidence](#candidate-minimum-for-beta64) and authorized the isolated
+> manifest change before the G1 record. `mai-code-2` updated `engines.vscode` to `^1.123.0`,
+> its lockfile mirror and the contributor guide. Leader review confirmed (100%) those were the
+> only changes. `mai-code-2-flash`: `npm run build` and `git diff --check` passed; the activation
+> check derives `1.123.0` from the manifest. No tests added; no exact stable workbench run
+> claimed. Usage: coding 2.6 AIU (5 requests, 38s); checks 0.3 AIU (6 requests, 32s summed).
+> WI-4a's dependency and grid changes remain planned.
+
 **WI-3a: scenario runner, keys and focus** · `mai-code-2` (fallback `gpt-6.1-terra`)
 
 - Owns: `build/verification/browser/scenarios.ts` (step and assertion type unions only),
@@ -1025,9 +1045,9 @@ Later sessions keep everything after the first paragraph and replace it with:
 
 # Outcome
 
-Step 0 complete; stopped at **G1**, not released. Only documentation was committed, on
-`dev/tnaum/table-redesign`. `feature/rdg-migration` remains at its local `main` base, with no
-product code changes. Verified: published artifacts, scratch Chromium 142/148 behavior, Vite
-CSS delivery and the packaged-theme caveat. Not verified: installed VS Code 1.109.0, a real
-collection, screen readers and high-contrast. The package pin, final scope and operator-visible
-behavior have not been approved. No Step 1 work has begun.
+Step 0 evidence is complete and **G1 is released**. The feature branch carries the planning
+commits and the isolated VS Code minimum change. The operator approved beta.64 and the scope
+and behavior listed at G1; the RDG dependency is not yet in the product manifest. Verified:
+published artifacts, scratch Chromium 142/148 and Insiders behavior, Vite CSS delivery and the
+packaged-theme caveat. The operator accepted release metadata for the support floor; the exact
+stable workbench smoke, a real collection, screen readers and high-contrast were not run.
