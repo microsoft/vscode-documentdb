@@ -17,6 +17,19 @@ import { ShellCompletionProvider } from './ShellCompletionProvider';
 import { ShellSpinner } from './ShellSpinner';
 
 const mockSessionTelemetry: Record<string, string | undefined>[] = [];
+const workerSignIn = vi.hoisted(() => ({
+    canRecover: vi.fn(),
+    recover: vi.fn(),
+    pin: undefined as
+        | {
+              kind: 'entra';
+              providerId: string;
+              accountId: string;
+              accountLabel: string;
+              tenantId: string;
+          }
+        | undefined,
+}));
 
 // callWithTelemetryAndErrorHandling from @microsoft/vscode-azext-utils silently swallows
 // errors in the test environment because its internal error handling relies on extension
@@ -75,6 +88,11 @@ vi.mock('../../utils/accumulatingTelemetry', () => ({
     ),
 }));
 
+vi.mock('../../commands/signInAgain/signInAgain', () => ({
+    canSignInAgainForWorker: workerSignIn.canRecover,
+    signInAgainForWorker: workerSignIn.recover,
+}));
+
 // Mock ShellSessionManager
 const mockInitialize = vi.fn().mockResolvedValue({
     host: 'test-host.documents.azure.com:10255',
@@ -86,6 +104,7 @@ const mockEvaluate = vi.fn();
 const mockDispose = vi.fn();
 const mockKillWorker = vi.fn();
 const mockSetActiveDatabase = vi.fn();
+const mockResetAfterSignIn = vi.fn();
 
 vi.mock('./ShellSessionManager', () => ({
     ShellSessionManager: vi.fn().mockImplementation(function (_connectionInfo, callbacks) {
@@ -97,6 +116,8 @@ vi.mock('./ShellSessionManager', () => ({
             dispose: mockDispose,
             killWorker: mockKillWorker,
             setActiveDatabase: mockSetActiveDatabase,
+            resetAfterSignIn: mockResetAfterSignIn,
+            pinnedEntraIdentity: workerSignIn.pin,
             isInitialized: true,
         };
     }),
@@ -121,6 +142,8 @@ describe('DocumentDBShellPty', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mockSessionTelemetry.length = 0;
+        workerSignIn.pin = undefined;
+        workerSignIn.canRecover.mockReturnValue(false);
         written = '';
         closeCode = undefined;
         terminalName = undefined;
@@ -172,6 +195,62 @@ describe('DocumentDBShellPty', () => {
     });
 
     describe('open', () => {
+        it.each([false, true])(
+            'offers one non-modal pinned recovery, respecting a superseding epoch (%s)',
+            async (superseded): Promise<void> => {
+                workerSignIn.pin = {
+                    kind: 'entra',
+                    providerId: 'microsoft',
+                    accountId: 'account',
+                    accountLabel: 'Account',
+                    tenantId: 'tenant',
+                };
+                workerSignIn.canRecover.mockReturnValue(true);
+                let epoch = 0;
+                vi.spyOn(ClustersClient, 'getEpoch').mockImplementation(() => epoch);
+                workerSignIn.recover.mockImplementationOnce(async () => {
+                    const signInEpoch = ++epoch;
+                    if (superseded) {
+                        epoch++;
+                    }
+                    return { identity: workerSignIn.pin, epoch: signInEpoch };
+                });
+                pty = new DocumentDBShellPty(defaultOptions);
+                pty.onDidWrite((data) => {
+                    written += data;
+                });
+                pty.open(undefined);
+                await new Promise((resolve) => setTimeout(resolve, 10));
+                written = '';
+                mockEvaluate.mockRejectedValueOnce(
+                    Object.assign(new Error('private session miss'), { name: 'EntraSignInRequiredError' }),
+                );
+                const action = vi
+                    .spyOn(vscode.window, 'showWarningMessage')
+                    .mockResolvedValue('Sign in again' as unknown as vscode.MessageItem);
+                const modal = vi.spyOn(vscode.window, 'showErrorMessage');
+
+                pty.handleInput('db.stats()');
+                pty.handleInput('\r');
+                await new Promise((resolve) => setTimeout(resolve, 20));
+
+                expect(written).toContain('Microsoft sign-in expired for this shell. Sign in again to continue.');
+                expect(written).not.toContain('private session miss');
+                expect(action).toHaveBeenCalledExactlyOnceWith(
+                    'Microsoft sign-in expired for this shell. Sign in again to continue.',
+                    'Sign in again',
+                );
+                expect(modal).not.toHaveBeenCalled();
+                expect(workerSignIn.recover).toHaveBeenCalledOnce();
+                expect(mockEvaluate).toHaveBeenCalledOnce();
+                if (superseded) {
+                    expect(mockResetAfterSignIn).not.toHaveBeenCalled();
+                } else {
+                    expect(mockResetAfterSignIn).toHaveBeenCalledExactlyOnceWith(workerSignIn.pin, 1);
+                }
+            },
+        );
+
         it('carries URL attribution into actual shell startup', async (): Promise<void> => {
             const deepLink = { deepLinkCorrelationId: 'link-attempt', deepLinkSource: 'docs' };
             pty = new DocumentDBShellPty({ ...defaultOptions, deepLink });

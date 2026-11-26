@@ -6,9 +6,10 @@
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
+import { ClustersClient } from '../ClustersClient';
 import { CredentialCache } from '../CredentialCache';
 import { PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './constants';
-import { type PlaygroundConnection } from './types';
+import { type PlaygroundConnection, type PlaygroundWorkerBinding } from './types';
 
 /**
  * Normalize playground text for content correlation across an untitled→file save.
@@ -49,6 +50,9 @@ export class PlaygroundService implements vscode.Disposable {
 
     /** Per-document connections keyed by `uri.toString()`. */
     private readonly _connections = new Map<string, PlaygroundConnection>();
+
+    /** Save As moves the original object, which an in-flight worker may still hold. */
+    private readonly _transferredConnectionKeys = new WeakMap<PlaygroundConnection, string>();
 
     /**
      * Last-known binding per document URI, kept in memory only (never persisted).
@@ -152,12 +156,72 @@ export class PlaygroundService implements vscode.Disposable {
     // ── Connection management ──────────────────────────────────────────
 
     setConnection(uri: vscode.Uri, connection: PlaygroundConnection): void {
+        connection = this.captureHostBinding(connection);
         ext.outputChannel?.trace(
             `[PlaygroundService] setConnection: ${uri.toString()} → cluster=${connection.clusterId}, db=${connection.databaseName}`,
         );
         this._connections.set(uri.toString(), connection);
         this._lastBindingByPath.set(uri.toString(), connection);
         this._onDidChangeState.fire();
+    }
+
+    /** Bind a newly selected playground to the current connected host identity, when available. */
+    setConnectionFromHost(uri: vscode.Uri, connection: PlaygroundConnection): PlaygroundConnection {
+        const key = uri.toString();
+        const isRepick = this._connections.has(key);
+        // A selection is a new binding even if it targets the same unpinned cluster and database.
+        const bound = this.captureHostBinding({ ...connection });
+        const activated =
+            isRepick && bound.fingerprint !== undefined
+                ? { ...bound, workerReplacement: { fingerprint: bound.fingerprint } }
+                : bound;
+        this.setConnection(uri, activated);
+        return this._connections.get(key) ?? activated;
+    }
+
+    private captureHostBinding(connection: PlaygroundConnection): PlaygroundConnection {
+        const binding = ClustersClient.getBinding(connection.clusterId);
+        const verifiedIdentity = ClustersClient.getLastVerifiedIdentity(connection.clusterId);
+        const hostIdentityIsCompatible =
+            connection.fingerprint === undefined || connection.fingerprint === binding?.fingerprint;
+        return binding === undefined
+            ? connection
+            : {
+                  ...connection,
+                  fingerprint: connection.fingerprint ?? binding.fingerprint,
+                  entraIdentity:
+                      connection.entraIdentity ??
+                      (hostIdentityIsCompatible && verifiedIdentity?.kind === 'entra' ? verifiedIdentity : undefined),
+              };
+    }
+
+    /** Capture a worker-learned binding only while the originating connection is still current and unpinned. */
+    captureWorkerBinding(
+        uri: vscode.Uri,
+        expectedConnection: PlaygroundConnection,
+        binding: PlaygroundWorkerBinding,
+    ): PlaygroundConnection | undefined {
+        const originalKey = uri.toString();
+        const key =
+            this._connections.get(originalKey) === expectedConnection
+                ? originalKey
+                : this._transferredConnectionKeys.get(expectedConnection);
+        if (
+            key === undefined ||
+            this._connections.get(key) !== expectedConnection ||
+            expectedConnection.fingerprint !== undefined
+        ) {
+            return undefined;
+        }
+        const bound = {
+            ...expectedConnection,
+            fingerprint: binding.fingerprint,
+            entraIdentity: binding.entraIdentity,
+        };
+        this._connections.set(key, bound);
+        this._lastBindingByPath.set(key, bound);
+        this._onDidChangeState.fire();
+        return bound;
     }
 
     removeConnection(uri: vscode.Uri): void {
@@ -228,6 +292,7 @@ export class PlaygroundService implements vscode.Disposable {
 
         this._connections.delete(sourceKey);
         this._connections.set(fileKey, connection);
+        this._transferredConnectionKeys.set(connection, fileKey);
         // Move the remembered binding onto the saved file too, so a later in-session
         // reopen of that file can be restored silently.
         this._lastBindingByPath.delete(sourceKey);

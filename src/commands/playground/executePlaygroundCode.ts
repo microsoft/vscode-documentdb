@@ -11,19 +11,19 @@ import {
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
-import { CredentialCache } from '../../documentdb/CredentialCache';
+import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
 import { feedResultToSchemaStore } from '../../documentdb/feedResultToSchemaStore';
 import { PlaygroundEvaluator } from '../../documentdb/playground/PlaygroundEvaluator';
 import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
 import { formatError, formatResult } from '../../documentdb/playground/resultFormatter';
 import { type PlaygroundConnection } from '../../documentdb/playground/types';
+import { getWorkerAuthReason, type WorkerAuthReason } from '../../documentdb/playground/workerTypes';
 import { extractErrorCode } from '../../documentdb/shell/ShellOutputFormatter';
-import { getHostsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
-import { addDomainInfoToProperties } from '../../documentdb/utils/getClusterMetadata';
 import { ext } from '../../extensionVariables';
 import { ErrorExplanationService } from '../../services/errorExplanationService';
 import { recordSurveyActivity } from '../../services/survey/SurveyService';
 import { classifyCodeBlock } from '../../utils/classifyCommand';
+import { canSignInAgainForWorker, signInAgainForWorker } from '../signInAgain/signInAgain';
 import { promptAndConnectPlayground } from './connectDatabase';
 
 /** Per-cluster evaluator pool — one worker per cluster, lazily created. */
@@ -121,17 +121,18 @@ export async function executePlaygroundCode(
             return; // user cancelled the connection picker
         }
     }
+    let boundConnection: PlaygroundConnection = connection;
 
-    const { clusterId } = connection;
-    if (ClustersClient.getLatchReason(clusterId)) {
-        void vscode.window.showWarningMessage(
-            l10n.t('This connection is unavailable. Reconnect from the tree to run this playground.'),
-        );
+    const { clusterId } = boundConnection;
+    const latchReason = ClustersClient.getLatchReason(clusterId);
+    if (latchReason) {
+        const recovery = getPlaygroundRecovery(new ConnectionUnavailableError(latchReason), connection);
+        void vscode.window.showWarningMessage(recovery?.message ?? l10n.t('This connection is unavailable.'));
         return;
     }
 
     // Prevent concurrent runs on the same cluster — no queuing
-    if (service.isExecuting(connection.clusterId)) {
+    if (service.isExecuting(boundConnection.clusterId)) {
         void vscode.window.showInformationMessage(
             l10n.t('A playground is already running on this cluster. Wait for it to finish.'),
         );
@@ -139,14 +140,14 @@ export async function executePlaygroundCode(
     }
 
     // Get or create the evaluator for this cluster
-    let evaluator = evaluators.get(connection.clusterId);
+    let evaluator = evaluators.get(boundConnection.clusterId);
     const isNewEvaluator = !evaluator;
     if (!evaluator) {
         evaluator = new PlaygroundEvaluator();
-        evaluators.set(connection.clusterId, evaluator);
+        evaluators.set(boundConnection.clusterId, evaluator);
     }
 
-    service.setExecuting(connection.clusterId, true);
+    service.setExecuting(boundConnection.clusterId, true);
 
     // callWithTelemetryAndErrorHandling automatically tracks:
     //   - duration (measured from callback start to end)
@@ -175,14 +176,9 @@ export async function executePlaygroundCode(
             context.telemetry.measurements[`cmd_${category}`] = count;
         }
 
-        // Domain info — privacy-safe hashed host data for platform analytics
-        const domainProps: Record<string, string | undefined> = {};
-        collectDomainTelemetry(connection, domainProps);
-        Object.assign(context.telemetry.properties, domainProps);
-
         // Link to server metadata via connectionCorrelationId
         try {
-            const existingClient = ClustersClient.getExistingClient(connection.clusterId);
+            const existingClient = ClustersClient.getExistingClient(boundConnection.clusterId);
             if (existingClient?.connectionCorrelationId) {
                 context.telemetry.properties.connectionCorrelationId = existingClient.connectionCorrelationId;
             }
@@ -214,9 +210,17 @@ export async function executePlaygroundCode(
                     if (evaluators.get(clusterId) !== evaluator) {
                         throw new UserCancelledError('playground.execute');
                     }
-                    const result = await evaluator!.evaluate(connection, code, (message) => {
-                        progress.report({ message });
-                    });
+                    const result = await evaluator!.evaluate(
+                        boundConnection,
+                        code,
+                        (message) => {
+                            progress.report({ message });
+                        },
+                        (binding) => {
+                            boundConnection =
+                                service.captureWorkerBinding(documentUri, boundConnection, binding) ?? boundConnection;
+                        },
+                    );
 
                     if (evaluators.get(clusterId) !== evaluator) {
                         return;
@@ -229,8 +233,8 @@ export async function executePlaygroundCode(
                     context.telemetry.measurements.sessionEvalCount = evaluator!.sessionEvalCount;
                     context.telemetry.properties.authMethod = evaluator!.sessionAuthMethod ?? 'unknown';
 
-                    let formattedOutput = formatResult(result, code, connection);
-                    feedResultToSchemaStore(result, connection.clusterId);
+                    let formattedOutput = formatResult(result, code, boundConnection);
+                    feedResultToSchemaStore(result, boundConnection.clusterId);
 
                     // If console output was produced, append a hint to check the output channel
                     if (evaluator!.lastEvalConsoleOutputCount > 0) {
@@ -267,14 +271,21 @@ export async function executePlaygroundCode(
                     // the extracted code is preserved for future telemetry.
                     const { message: errorMessage } = extractErrorCode(rawMessage);
                     const durationMs = Date.now() - startTime;
-                    const formattedOutput = formatError(error, code, durationMs, connection);
+                    const recovery = getPlaygroundRecovery(error, boundConnection);
+                    const displayError = recovery ? new Error(recovery.message) : error;
+                    const formattedOutput = formatError(displayError, code, durationMs, boundConnection);
 
                     if (sourceUri) {
                         await ext.playgroundResultProvider.showResult(sourceUri, formattedOutput);
                     }
 
+                    if (recovery) {
+                        offerPlaygroundRecovery(sourceUri, boundConnection, recovery);
+                        throw error;
+                    }
+
                     const explanation = await ErrorExplanationService.explain({
-                        clusterId: connection.clusterId,
+                        clusterId: boundConnection.clusterId,
                         error,
                     });
 
@@ -286,31 +297,116 @@ export async function executePlaygroundCode(
                     // error, and errorMessage in telemetry
                     throw error;
                 } finally {
-                    service.setExecuting(connection.clusterId, false);
+                    Object.assign(context.telemetry.properties, evaluator?.sessionDomainProperties);
+                    service.setExecuting(boundConnection.clusterId, false);
                 }
             },
         );
     });
 }
 
-// ─── Domain telemetry ────────────────────────────────────────────────────────
+interface PlaygroundRecovery {
+    readonly message: string;
+    readonly authReason?: WorkerAuthReason;
+}
 
-/**
- * Collects domain info from the query playground connection's cached credentials.
- * Reuses the same hashing logic as the connection metadata telemetry.
- */
-function collectDomainTelemetry(
+function getPlaygroundRecovery(error: unknown, connection: PlaygroundConnection): PlaygroundRecovery | undefined {
+    const authReason = getWorkerAuthReason(error);
+    if (authReason) {
+        switch (authReason) {
+            case 'signInRequired':
+                return {
+                    authReason,
+                    message:
+                        connection.entraIdentity &&
+                        canSignInAgainForWorker(connection.clusterId, connection.entraIdentity)
+                            ? l10n.t('Microsoft sign-in expired for this playground. Sign in again to continue.')
+                            : l10n.t(
+                                  'Microsoft sign-in expired for this playground. Re-pick its connection from the tree.',
+                              ),
+                };
+            case 'identityMismatch':
+                return {
+                    authReason,
+                    message: l10n.t(
+                        'This playground is bound to a different Microsoft account. Re-pick its connection from the tree.',
+                    ),
+                };
+            case 'destinationRejected':
+                return {
+                    authReason,
+                    message: l10n.t(
+                        'This connection is not allowed for Microsoft sign-in. Review the trusted server settings, then re-pick the playground connection.',
+                    ),
+                };
+            case 'refreshFailed':
+                return {
+                    authReason,
+                    message: l10n.t(
+                        'The sign-in token could not be refreshed. Run the query again to reconnect with the same connection.',
+                    ),
+                };
+        }
+    }
+
+    if (!(error instanceof ConnectionUnavailableError)) {
+        return undefined;
+    }
+    if (error.reason === 'credentialsChanged' || error.reason === 'identityChanged') {
+        return {
+            message: l10n.t(
+                'This playground is bound to the previous connection. Re-pick its connection from the tree.',
+            ),
+        };
+    }
+    return {
+        message: l10n.t('This connection is unavailable. Reconnect from the tree, then re-pick it here.'),
+    };
+}
+
+function offerPlaygroundRecovery(
+    documentUri: vscode.Uri,
     connection: PlaygroundConnection,
-    properties: Record<string, string | undefined>,
+    recovery: PlaygroundRecovery,
 ): void {
-    try {
-        const credentials = CredentialCache.getCredentials(connection.clusterId);
-        if (!credentials?.connectionString) {
+    if (
+        recovery.authReason !== 'signInRequired' ||
+        !connection.entraIdentity ||
+        !canSignInAgainForWorker(connection.clusterId, connection.entraIdentity)
+    ) {
+        return;
+    }
+    const identity = connection.entraIdentity;
+    const { clusterId } = connection;
+    const service = PlaygroundService.getInstance();
+    const evaluator = evaluators.get(clusterId);
+    const epoch = ClustersClient.getEpoch(clusterId);
+    const stillOwnsAction = (): boolean =>
+        service.getConnection(documentUri) === connection &&
+        evaluators.get(clusterId) === evaluator &&
+        !service.isExecuting(clusterId);
+    const action = l10n.t('Sign in again');
+    void vscode.window.showWarningMessage(recovery.message, action).then(async (choice) => {
+        if (choice !== action || ClustersClient.getEpoch(clusterId) !== epoch || !stillOwnsAction()) {
             return;
         }
-        const hosts = getHostsFromConnectionString(credentials.connectionString);
-        addDomainInfoToProperties(hosts, properties);
-    } catch {
-        // Domain info is best-effort — don't fail telemetry if parsing fails
-    }
+        await callWithTelemetryAndErrorHandling('playground.signInAgain', async (context) => {
+            context.errorHandling.suppressDisplay = true;
+            context.telemetry.properties.sessionId = evaluator?.sessionId ?? 'none';
+            try {
+                const result = await signInAgainForWorker(context, clusterId, identity);
+                if (!result || ClustersClient.getEpoch(clusterId) !== result.epoch || !stillOwnsAction()) {
+                    return;
+                }
+                stopPlaygroundEvaluator(clusterId);
+            } catch (error) {
+                if (!(error instanceof UserCancelledError) && stillOwnsAction()) {
+                    void vscode.window.showWarningMessage(
+                        l10n.t('Could not sign in again. Re-pick the playground connection from the tree.'),
+                    );
+                }
+                throw error;
+            }
+        });
+    });
 }

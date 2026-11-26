@@ -16,6 +16,7 @@ import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
 import { settingsKeys } from '../../settingsKeys';
 import { traceEntraDestination, type AuthTraceContext } from '../../utils/authTrace';
+import { type AuthMethodId } from '../auth/AuthMethodId';
 import { getEntraCustomHostnameSuffix } from '../auth/entraDestinationSettings';
 import { removeConflictingOidcMechanism } from '../auth/nonOidcConnectionString';
 import {
@@ -24,13 +25,18 @@ import {
     normalizeCustomHostnameSuffix,
 } from '../auth/oidcAllowedHosts';
 import { createOidcDestinationPolicy } from '../auth/oidcClientOptions';
+import { createWorkerAuthError } from '../auth/WorkerTokenRelay';
+import { ClustersClient } from '../ClustersClient';
+import { ConnectionUnavailableError } from '../ConnectionUnavailableError';
 import { SettingsHintError } from '../shell/SettingsHintError';
 import { prepareDriverConnectionString } from '../srv/prepareDriverConnectionString';
 import { ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import {
+    isWorkerAuthReason,
     type MainToWorkerMessage,
     type SerializableExecutionResult,
     type SerializableOidcDestinationPolicy,
+    type WorkerAuthReason,
     type WorkerStartupStage,
     type WorkerToMainMessage,
 } from './workerTypes';
@@ -87,7 +93,8 @@ export interface WorkerSessionCallbacks {
     /**
      * Called when the worker requests an OIDC token (Entra ID auth).
      * The implementation must acquire the token via VS Code auth APIs
-     * and post it back to the worker.
+     * and post it back to the worker, or throw UserCancelledError if the
+     * still-attached worker's request was invalidated.
      */
     onTokenRequest?: (
         msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
@@ -116,6 +123,9 @@ export class WorkerSessionManager implements vscode.Disposable {
     private _worker: Worker | undefined;
     private _workerState: WorkerState = 'idle';
     private _workerClusterId: string | undefined;
+    private _workerAuthMethod: AuthMethodId | undefined;
+    private _authFailure: WorkerAuthReason | undefined;
+    private _shuttingDownWorker: Worker | undefined;
     private _startup: WorkerStartup | undefined;
     private _startupAbortController: AbortController | undefined;
     private _oidcDestinationPolicy: SerializableOidcDestinationPolicy | undefined;
@@ -152,6 +162,10 @@ export class WorkerSessionManager implements vscode.Disposable {
         return this._workerClusterId;
     }
 
+    get authFailure(): WorkerAuthReason | undefined {
+        return this._authFailure;
+    }
+
     /**
      * Whether the worker is alive and connected to the specified cluster.
      */
@@ -179,10 +193,7 @@ export class WorkerSessionManager implements vscode.Disposable {
         telemetryContext: WorkerStartupTelemetryContext = {},
     ): Promise<void> {
         // If worker is alive but connected to a different cluster, shut it down
-        if (this._worker && this._workerClusterId !== clusterId) {
-            ext.outputChannel?.trace(
-                `[WorkerSessionManager] Cluster changed (${String(this._workerClusterId)} → ${clusterId}), terminating old worker`,
-            );
+        if (this._worker && (this._workerClusterId !== clusterId || this._authFailure || this._shuttingDownWorker)) {
             this.terminateWorker('intentional');
         }
 
@@ -198,13 +209,14 @@ export class WorkerSessionManager implements vscode.Disposable {
      * @returns The serializable execution result from the worker.
      */
     async sendEval(evalMsg: MainToWorkerMessage & { type: 'eval' }): Promise<{ result: SerializableExecutionResult }> {
+        const worker = this._worker;
         this._workerState = 'executing';
 
         try {
             const result = await this.sendRequest<{ result: SerializableExecutionResult }>(evalMsg);
             return result;
         } finally {
-            if (this._workerState === 'executing') {
+            if (this._worker === worker && this._workerState === 'executing') {
                 this._workerState = 'ready';
             }
         }
@@ -221,13 +233,17 @@ export class WorkerSessionManager implements vscode.Disposable {
         }
 
         ext.outputChannel?.trace('[WorkerSessionManager] Graceful shutdown requested');
+        const worker = this._worker;
+        this._shuttingDownWorker = worker;
         try {
             await this.sendRequest<void>({ type: 'shutdown', requestId: '' }, 5000);
         } catch {
             // Shutdown timed out or failed — force-kill
         }
 
-        this.terminateWorker('intentional');
+        if (this._worker === worker) {
+            this.terminateWorker('intentional');
+        }
     }
 
     /**
@@ -330,6 +346,17 @@ export class WorkerSessionManager implements vscode.Disposable {
         telemetryContext: WorkerStartupTelemetryContext,
     ): Promise<void> {
         this._workerState = 'spawning';
+        const epoch = ClustersClient.getEpoch(clusterId);
+        const assertAvailable = (): void => {
+            const reason = ClustersClient.getLatchReason(clusterId);
+            if (reason) {
+                throw new ConnectionUnavailableError(reason);
+            }
+            if (epoch !== ClustersClient.getEpoch(clusterId) || abortSignal.aborted) {
+                throw new UserCancelledError('workerStartup');
+            }
+        };
+        assertAvailable();
         const options = { ...initMsg.clientOptions };
         const usesOidc = initMsg.authMechanism === 'MicrosoftEntraID' || initMsg.authMechanism === 'ManagedIdentity';
         const customHostnameSuffix = usesOidc
@@ -406,12 +433,11 @@ export class WorkerSessionManager implements vscode.Disposable {
         // extension root, rather than this module's location, keeps the path independent of the
         // chunk this code is bundled into.
         const workerPath = path.join(ext.context.extensionPath, 'playgroundWorker.mjs');
-        if (abortSignal.aborted) {
-            throw new UserCancelledError('workerStartup');
-        }
+        assertAvailable();
         const worker = new Worker(workerPath);
         this._worker = worker;
         this._workerClusterId = clusterId;
+        this._workerAuthMethod = initMsg.authMechanism as AuthMethodId;
         // Everything this worker reports stays tied to the startup that created it.
         const connection: AuthTraceContext = {
             startupCorrelationId: startup.requestId,
@@ -421,7 +447,9 @@ export class WorkerSessionManager implements vscode.Disposable {
 
         // Listen for messages from the worker
         worker.on('message', (msg: WorkerToMainMessage) => {
-            this.handleWorkerMessage(msg, connection);
+            if (this._worker === worker) {
+                this.handleWorkerMessage(msg, connection, worker);
+            }
         });
 
         // terminateWorker() detaches a worker before it exits, so only the current worker can exit unexpectedly.
@@ -450,6 +478,10 @@ export class WorkerSessionManager implements vscode.Disposable {
         });
 
         await this.sendRequest<void>(preparedInitMsg, initTimeoutMs, settingsKeys.connectionTimeout);
+        assertAvailable();
+        if (this._worker !== worker || this._shuttingDownWorker === worker) {
+            throw new UserCancelledError('workerStartup');
+        }
         this.finishStartup('succeeded');
         this._workerState = 'ready';
     }
@@ -586,7 +618,7 @@ export class WorkerSessionManager implements vscode.Disposable {
     /**
      * Handle an incoming message from the worker.
      */
-    private handleWorkerMessage(msg: WorkerToMainMessage, connection: AuthTraceContext): void {
+    private handleWorkerMessage(msg: WorkerToMainMessage, connection: AuthTraceContext, worker: Worker): void {
         switch (msg.type) {
             case 'initTiming': {
                 const startup = this._startup;
@@ -620,12 +652,18 @@ export class WorkerSessionManager implements vscode.Disposable {
                 const pending = this._pendingRequests.get(msg.requestId);
                 if (pending) {
                     this._pendingRequests.delete(msg.requestId);
-                    if (msg.success) {
+                    const reason = isWorkerAuthReason(msg.authReason)
+                        ? msg.authReason
+                        : msg.errorName === 'EntraDestinationRejectedError'
+                          ? 'destinationRejected'
+                          : this._authFailure;
+                    this._authFailure ??= reason;
+                    if (msg.success && !reason) {
                         pending.resolve(undefined);
                     } else {
                         pending.reject(
-                            msg.errorName === 'EntraDestinationRejectedError'
-                                ? new EntraDestinationRejectedError({ hostCount: 0 })
+                            reason
+                                ? createWorkerAuthError(reason, this._workerAuthMethod)
                                 : new Error(msg.error ?? 'Worker init failed'),
                         );
                     }
@@ -637,6 +675,10 @@ export class WorkerSessionManager implements vscode.Disposable {
                 const pending = this._pendingRequests.get(msg.requestId);
                 if (pending) {
                     this._pendingRequests.delete(msg.requestId);
+                    if (isWorkerAuthReason(msg.authReason)) {
+                        this._authFailure ??= msg.authReason;
+                    }
+                    // Never turn a successful (possibly side-effecting) command into a retry.
                     pending.resolve(msg);
                 }
                 break;
@@ -646,8 +688,12 @@ export class WorkerSessionManager implements vscode.Disposable {
                 const pending = this._pendingRequests.get(msg.requestId);
                 if (pending) {
                     this._pendingRequests.delete(msg.requestId);
-                    const error: Error & { code?: number } = new Error(msg.error);
-                    if (msg.stack) {
+                    const reason = isWorkerAuthReason(msg.authReason) ? msg.authReason : this._authFailure;
+                    this._authFailure ??= reason;
+                    const error: Error & { code?: number } = reason
+                        ? createWorkerAuthError(reason, this._workerAuthMethod)
+                        : new Error(msg.error);
+                    if (!reason && msg.stack) {
                         error.stack = msg.stack;
                     }
                     if (msg.code !== undefined) {
@@ -668,20 +714,7 @@ export class WorkerSessionManager implements vscode.Disposable {
             }
 
             case 'tokenRequest': {
-                if (this._callbacks.onTokenRequest) {
-                    const worker = this._worker;
-                    void this._callbacks.onTokenRequest(
-                        msg,
-                        (response) => {
-                            if (this._worker === worker) {
-                                worker?.postMessage(response);
-                            }
-                        },
-                        () => this._worker === worker,
-                        this._startup?.costTimings,
-                        connection,
-                    );
-                }
+                void this.handleTokenRequest(msg, connection, worker);
                 break;
             }
 
@@ -697,12 +730,48 @@ export class WorkerSessionManager implements vscode.Disposable {
         }
     }
 
+    private async handleTokenRequest(
+        msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
+        connection: AuthTraceContext,
+        worker: Worker,
+    ): Promise<void> {
+        const isCurrent = (): boolean => this._worker === worker && this._shuttingDownWorker !== worker;
+        if (!isCurrent()) {
+            return;
+        }
+        try {
+            await this._callbacks.onTokenRequest?.(
+                msg,
+                (response) => {
+                    if (isCurrent()) {
+                        if (response.type === 'tokenError') {
+                            this._authFailure ??= isWorkerAuthReason(response.reason)
+                                ? response.reason
+                                : response.errorName === 'EntraDestinationRejectedError'
+                                  ? 'destinationRejected'
+                                  : 'refreshFailed';
+                        }
+                        worker.postMessage(response);
+                    }
+                },
+                isCurrent,
+                this._startup?.costTimings,
+                connection,
+            );
+        } catch (error) {
+            if (isCurrent()) {
+                // Reject the pending startup/eval and discard the driver blocked in its callback.
+                this.terminateWorker('intentional', error instanceof UserCancelledError ? error : undefined);
+            }
+        }
+    }
+
     // ─── Private: Worker cleanup ─────────────────────────────────────────────
 
-    private terminateWorker(reason: 'intentional' | 'forced'): void {
+    private terminateWorker(reason: 'intentional' | 'forced', cancellation?: UserCancelledError): void {
         this.revokeOidcDestinationPolicy();
         this._startupAbortController?.abort();
-        this.finishStartup('terminated');
+        this.finishStartup(cancellation ? 'canceled' : 'terminated');
         const wasAlive = !!this._worker;
 
         if (this._worker) {
@@ -712,10 +781,13 @@ export class WorkerSessionManager implements vscode.Disposable {
 
         this._workerState = 'idle';
         this._workerClusterId = undefined;
+        this._workerAuthMethod = undefined;
+        this._authFailure = undefined;
+        this._shuttingDownWorker = undefined;
 
         // Reject all pending requests
         for (const [, entry] of this._pendingRequests) {
-            entry.reject(new Error('Worker terminated'));
+            entry.reject(cancellation ?? new Error('Worker terminated'));
         }
         this._pendingRequests.clear();
 
@@ -748,6 +820,9 @@ export class WorkerSessionManager implements vscode.Disposable {
         this._worker = undefined;
         this._workerState = 'idle';
         this._workerClusterId = undefined;
+        this._workerAuthMethod = undefined;
+        this._authFailure = undefined;
+        this._shuttingDownWorker = undefined;
 
         // Reject any still-pending requests
         for (const [, entry] of this._pendingRequests) {

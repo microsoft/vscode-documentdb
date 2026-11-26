@@ -298,10 +298,42 @@ describe('regular connection startup diagnostics', () => {
             await expect(ClustersClient.resolveBoundClient(client.binding)).rejects.toMatchObject({
                 reason: 'userDisconnected',
             });
+
             expect(mockConnect).toHaveBeenCalledTimes(2);
         } finally {
             ClustersClient.unlatch(clusterId);
         }
+    });
+
+    it('compares current credentials with the canonical password-free and auth-qualified fingerprint', (): void => {
+        const uri = 'mongodb://host.example.com:27017/';
+        function setNative(user: string, password: string): void {
+            CredentialCache.setAuthCredentials(clusterId, AuthMethodId.NativeAuth, uri, {
+                connectionUser: user,
+                connectionPassword: password,
+            });
+        }
+        setNative('first', 'first-password');
+        const first = ClustersClient.getExpectedFingerprint(clusterId);
+        expect(first).toBe(
+            computeConnectionFingerprint({ connectionString: uri, principal: { kind: 'native', username: 'first' } }),
+        );
+        setNative('first', 'rotated-password');
+        expect(ClustersClient.getExpectedFingerprint(clusterId)).toBe(first);
+        setNative('second', 'rotated-password');
+        expect(ClustersClient.getExpectedFingerprint(clusterId)).not.toBe(first);
+        CredentialCache.setAuthCredentials(clusterId, AuthMethodId.NoAuth, uri);
+        expect(ClustersClient.getExpectedFingerprint(clusterId)).not.toBe(first);
+        CredentialCache.setAuthCredentials(clusterId, AuthMethodId.MicrosoftEntraID, uri, undefined, undefined, {
+            tenantId: verifiedIdentity.tenantId,
+        });
+        expect(ClustersClient.getExpectedFingerprint(clusterId)).toBeUndefined();
+        expect(ClustersClient.getExpectedFingerprint(clusterId, verifiedIdentity)).toBe(
+            computeConnectionFingerprint({ connectionString: uri, principal: verifiedIdentity }),
+        );
+        expect(
+            ClustersClient.getExpectedFingerprint(clusterId, { ...verifiedIdentity, tenantId: 'other' }),
+        ).toBeUndefined();
     });
 
     it('does not open a changed connection for an old surface, even with no cached client', async (): Promise<void> => {

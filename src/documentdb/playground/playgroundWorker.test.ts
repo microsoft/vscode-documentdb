@@ -17,6 +17,7 @@ const transport = vi.hoisted(() => ({ on: vi.fn(), postMessage: vi.fn() }));
 const driver = vi.hoisted(() => ({
     construct: vi.fn<(connectionString: string, options: MongoClientOptions) => void>(),
     connect: vi.fn(),
+    evaluate: vi.fn(),
 }));
 
 vi.mock('worker_threads', () => ({ parentPort: transport }));
@@ -32,7 +33,7 @@ vi.mock('mongodb', async () => {
 });
 vi.mock('@documentdb-js/shell-runtime', () => ({
     DocumentDBShellRuntime: vi.fn().mockImplementation(function () {
-        return {};
+        return { evaluate: driver.evaluate };
     }),
 }));
 
@@ -257,8 +258,59 @@ describe('playground worker OIDC configuration at the driver boundary', () => {
             success: false,
             error: "Microsoft Entra ID isn't allowed for this server.",
             errorName: 'EntraDestinationRejectedError',
+            authReason: 'destinationRejected',
         });
     });
+
+    it.each(['signInRequired', 'identityMismatch', 'destinationRejected', 'refreshFailed'] as const)(
+        'round trips %s during init and a warm eval even when the driver discards the callback error',
+        async (reason): Promise<void> => {
+            const rejectCallback = async (): Promise<never> => {
+                const callback = driver.construct.mock.calls.at(-1)?.[1].authMechanismProperties?.OIDC_CALLBACK;
+                if (!callback) {
+                    throw new Error('Expected worker OIDC callback');
+                }
+                const pending = callback({ version: 1, timeoutContext: new AbortController().signal });
+                const request = transport.postMessage.mock.calls
+                    .map(([message]) => message as WorkerToMainMessage)
+                    .findLast((message) => message.type === 'tokenRequest');
+                expect(request).toBeDefined();
+                receive({ type: 'tokenError', requestId: request!.requestId, error: 'private broker detail', reason });
+                try {
+                    await pending;
+                } catch {
+                    throw new Error('Driver discarded the callback error');
+                }
+                throw new Error('Unexpected successful callback');
+            };
+            driver.connect.mockImplementationOnce(rejectCallback);
+            init({ authMechanism: reason === 'refreshFailed' ? 'ManagedIdentity' : 'MicrosoftEntraID' });
+            await waitForInit();
+            expect(transport.postMessage).toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'initResult', success: false, authReason: reason }),
+            );
+
+            transport.postMessage.mockClear();
+            init();
+            await waitForInit();
+            expect(transport.postMessage).toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'initResult', success: true }),
+            );
+            driver.evaluate.mockImplementationOnce(rejectCallback);
+            receive({
+                type: 'eval',
+                requestId: 'warm',
+                code: 'db.test.find()',
+                displayBatchSize: 20,
+                databaseName: 'test',
+            });
+            await vi.waitFor(() =>
+                expect(transport.postMessage).toHaveBeenCalledWith(
+                    expect.objectContaining({ type: 'evalError', requestId: 'warm', authReason: reason }),
+                ),
+            );
+        },
+    );
 
     it.each([
         'mongodb://attacker.cloudapp.azure.com/',
@@ -278,6 +330,7 @@ describe('playground worker OIDC configuration at the driver boundary', () => {
                 success: false,
                 error: "Microsoft Entra ID isn't allowed for this server.",
                 errorName: 'EntraDestinationRejectedError',
+                authReason: 'destinationRejected',
             });
         },
     );
