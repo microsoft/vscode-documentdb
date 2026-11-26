@@ -372,6 +372,244 @@ item may change; "Not" lists files it must leave alone. The leader re-derives ow
   type lives in, and the list of consumers. Recorded in this document under WI-1c. Passing A1 means
   ≥ 80 % confidence.
 
+#### WI-1c interface spec
+
+**Status:** proposed by the advisor; only G1 accepts it. Pin, gestures and scope rows are separate
+G1 decisions. This is the concrete proposal for the provisional sketch above.
+
+| File | Side | Owner | Contents |
+| --- | --- | --- | --- |
+| `src/utils/documentGrid/types.ts` | Shared | WI-2a | Neutral types, column keys and `getCell`; no BSON, driver or React imports. |
+| `src/utils/documentGrid/documentIdentity.ts` | Host | WI-2b | ID serialization, projection trust and page row keys. |
+| `src/utils/documentGrid/toTablePage.ts` | Host | WI-2b | Replaces `slickgrid/mongo/toSlickGridTable.ts`. |
+| `src/utils/documentGrid/toTreeNodes.ts` | Host | WI-2b | Replaces `slickgrid/mongo/toSlickGridTree.ts`. |
+| `src/utils/documentGrid/*.test.ts` | Host | WI-2b | Moved shaping tests and new `documentIdentity.test.ts`. |
+| `src/webviews/utils/documentGrid/typeToDisplayString.ts` | Webview | WI-2b | Moved unchanged: `bsonStringToDisplayString(type: string): string`. |
+
+`GridCellValue` replaces `src/utils/slickgrid/CellValue.ts`. Webviews import only `types.ts` from
+`src/utils/documentGrid/`. Payloads are plain JSON; optional fields are omitted when absent.
+
+```typescript
+// src/utils/documentGrid/types.ts
+export interface GridCellValue {
+    /** Formatter output; render as text, not HTML. */
+    readonly display: string;
+    /** The existing BSONTypes key, not its display name. */
+    readonly type: string;
+}
+
+export const ROOT_ID_COLUMN_KEY = 'root:_id';
+const FIELD_COLUMN_KEY_PREFIX = 'field:';
+export type FieldColumnKey = `field:${string}`;
+export type ColumnKey = typeof ROOT_ID_COLUMN_KEY | FieldColumnKey;
+
+export function fieldColumnKey(field: string): FieldColumnKey {
+    return `${FIELD_COLUMN_KEY_PREFIX}${field}`;
+}
+
+export function fieldFromColumnKey(key: ColumnKey): string | undefined {
+    return key.startsWith(FIELD_COLUMN_KEY_PREFIX) ? key.slice(FIELD_COLUMN_KEY_PREFIX.length) : undefined;
+}
+
+export interface TableColumn {
+    readonly key: ColumnKey;
+    readonly label: string;
+    readonly isRootId: boolean;
+}
+
+export interface TableRow {
+    /** 'id:' + documentId when actionable; otherwise 'pos:' + zero-based page index. */
+    readonly rowKey: string;
+    /** Canonical EJSON of the root _id. Absent means browsable but not actionable. */
+    readonly documentId?: string;
+    /** Missing key means missing field. BSON null is { display: 'null', type: 'null' }. */
+    readonly cells: Readonly<Partial<Record<ColumnKey, GridCellValue>>>;
+}
+
+export interface TablePage {
+    readonly path: readonly string[];
+    /** Root ID column first, then field columns at path. */
+    readonly columns: readonly TableColumn[];
+    /** Server order. */
+    readonly rows: readonly TableRow[];
+}
+
+export interface TreeNode {
+    /** JSON.stringify([rowKey, ...segments]); segments are field strings or array index numbers. */
+    readonly key: string;
+    readonly parentKey: string | null;
+    /** Document root = 0; aria-level = depth + 1. */
+    readonly depth: number;
+    readonly field: string;
+    readonly value: GridCellValue;
+    /** True only if children exist; false for arrays over the expansion cap. */
+    readonly expandable: boolean;
+}
+
+export function getCell(row: TableRow, key: ColumnKey): GridCellValue | undefined {
+    return Object.prototype.hasOwnProperty.call(row.cells, key) ? row.cells[key] : undefined;
+}
+```
+
+The prefix is injective for any raw field, including `''`, `__proto__`, `constructor`, `root:_id`
+and `rdg-select-column`; it does not make a field discoverable if the SchemaStore does not emit it.
+
+```typescript
+// documentIdentity.ts (Document is the driver document type)
+export interface PageRowIdentity {
+    readonly rowKey: string;
+    readonly documentId?: string;
+}
+export function toDocumentId(document: Document): string | undefined;
+export function isIdentityTrustedForProjection(projection: Document | undefined): boolean;
+export function assignRowIdentities(documents: readonly Document[], identityTrusted: boolean): PageRowIdentity[];
+
+// toTablePage.ts
+export function toGridCellValue(value: unknown): GridCellValue;
+export function toTablePage(
+    documents: readonly Document[],
+    path: readonly string[],
+    headers: readonly string[],
+    identityTrusted: boolean,
+): TablePage;
+
+// toTreeNodes.ts
+export function toTreeNodes(documents: readonly Document[], identityTrusted: boolean): TreeNode[];
+```
+
+**Host invariants:**
+
+- `toDocumentId`: require an own `_id` and reject `undefined`, array, regexp, DBRef, Map and unknown
+  root types. In plain objects/arrays at any depth, reject own `$`-prefixed keys, `undefined` values
+  and invalid dates. Require successful canonical `EJSON.stringify(id, { relaxed: false })` and
+  exact reserialization after the existing default `EJSON.parse`. This is intentionally
+  conservative: identity is withheld when the current action parser cannot preserve the value.
+  Cover `0`, `false`, `''`, `null`, ObjectId, UUID, Long, Decimal128, Date and composite IDs in the
+  round-trip matrix; do not assume all numeric subtypes survive the existing parser.
+- An absent/empty projection or one with no `_id`/`_id.*` field preserves identity provenance.
+  A simple boolean or numeric flag for `_id` is allowed, but exclusion still leaves no own ID.
+  An expression, string, sub-projection, dotted `_id.*` key or parse failure withholds identity.
+  `ClusterSession.runFindQueryWithCache` derives and stores the flag with the cached page, using
+  the same Loose `parseShellBSON` semantics as `ClustersClient.runFindQuery`, and clears it with
+  the documents.
+- Only an ID occurring exactly once on the page gets `id:` plus canonical EJSON. Rows with
+  missing, untrusted, non-round-tripping or duplicate IDs get `pos:` plus the row index and no
+  `documentId`. Position keys are scoped to the page and never reused as action targets. This
+  does not establish uniqueness across pages or shards.
+- Table cell formatting preserves BSON keys; arrays are `array[N]`. Formatter failure leaves
+  the cell's text blank, not the page failed; use repository-standard diagnostics without
+  including user values. Use SchemaStore headers, excluding `_id`, after the dedicated root
+  column. The root cell displays an own `_id` even when non-actionable. Walk only own object
+  fields; at a missing path retain the root row and ID. Nested `_id` remains hidden (O1).
+- Tree shaping emits parents before children in proposed document order (O2), with today's
+  root-label algorithm (`null` → `null`, ObjectId → hex, missing → empty, otherwise JSON).
+  Roots and objects use `{...}`, arrays use `(elements: N)` and emit children only for N ≤ 10.
+  Array labels are `field[i]`; other values use `toGridCellValue`. Tree has no document actions.
+  At depth 0 the view labels the type `Document`; elsewhere it maps the BSON key to its
+  existing display name.
+
+```typescript
+// ClusterSession.ts
+getCurrentPageAsTable(path: string[]): TablePage;
+getCurrentPageAsTree(): TreeNode[];
+
+// DataViewPanelTable.tsx
+interface DataViewPanelTableProps {
+    readonly page: TablePage | undefined;
+    readonly selectedRowKeys: readonly string[];
+    readonly onSelectedRowKeysChange: (rowKeys: readonly string[]) => void;
+    readonly onStepIn: (rowKey: string, columnKey: ColumnKey) => void;
+}
+
+// DataViewPanelTree.tsx
+interface DataViewPanelTreeProps {
+    readonly nodes: readonly TreeNode[];
+}
+
+// TypedValueCell.tsx (WI-6)
+interface TypedValueCellProps {
+    readonly value: GridCellValue | undefined;
+    readonly isRootId: boolean;
+}
+
+// collectionViewContext.ts
+// dataSelection: { readonly selectedRowKeys: readonly string[] }
+export interface DocumentTarget {
+    readonly rowKey: string;
+    readonly documentId: string;
+}
+export function resolveDocumentTargets(
+    page: TablePage | undefined,
+    selectedRowKeys: readonly string[],
+): DocumentTarget[] | undefined;
+
+// CollectionView.tsx
+interface QueryResults {
+    tablePage?: TablePage;
+    treeNodes?: TreeNode[];
+    jsonDocuments?: string[];
+    documentCount?: number;
+}
+```
+
+**Webview invariants:**
+
+- Apply a table response only for the latest request token. On successful page replacement,
+  clear selected row keys and disable document actions together; also clear table selection on
+  view switch and table unmount. `resolveDocumentTargets` fails closed if any selected key is not
+  actionable on the current page. Add stays available; View/Edit require one target, Delete at
+  least one. The proposal excludes non-actionable rows from selection (O4).
+- On Delete, snapshot the requested IDs, not the positions, before the RPC. On acknowledgement,
+  remove current rows matching that snapshot, subtract only their keys from the current selection,
+  and recompute toolbar state. An intervening selection of other documents survives.
+- Step-in reads the current page and path from refs; require matching paths, a current row and a
+  non-root column whose cell type is `object`. Decode the raw field and append that one path
+  segment. No `_id`, arrays, Map or DBRef. Keep the `stepIn` telemetry event, source
+  `step-in-button` and `depth`; both double-click and the G1 key use it.
+- `value === undefined` renders the existing missing-cell treatment and tooltip. Null stays a
+  real typed value.
+
+**Consumer migration:**
+
+| Consumer | Change |
+| --- | --- |
+| `src/documentdb/ClusterSession.ts` | Replace the shaper imports and `TableDataEntry`/`TableData` exports; shape the cached page with its identity trust state. |
+| `src/webviews/documentdb/collectionView/collectionViewRouter.ts` | `getCurrentPageAsTable` keeps `z.array(z.string())` input and returns `TablePage`; `getCurrentPageAsTree` keeps no input and returns `TreeNode[]`. JSON and action RPCs keep their names and inputs. |
+| `CollectionView.tsx`, `collectionViewContext.ts` | Update result/context state, RPC response handling, selection, command handlers, step-in and grid props. Remove the webview's extra root header injection. |
+| `DataViewPanelTable.tsx`, `DataViewPanelTree.tsx`, new `TypedValueCell.tsx` | Consume neutral props. `ToolbarDocumentManipulation.tsx` and `ToolbarTableNavigation.tsx` keep their current context interface for commands and path. |
+| Document commands and data access | `viewDocumentById`, `editDocumentById`, `deleteDocumentsById`, `vscode-documentdb.command.internal.documentView.open`, `documentsViewRouter.getDocumentById`, `ClustersClient` action methods and `parseDocumentId` keep their current contracts. Any O5 change is separate. |
+| `build/verification/browser/fixtures.ts` | `CollectionOutputs['getCurrentPageAsTable']` mock becomes `TablePage`; e.g. a string ID is `'"stage0-1"'`. WI-3b supplies `TreeNode[]` and relevant identity/field edge cases once scope is agreed. |
+| Existing shaper tests and docs | Move table/tree tests to the new filenames; add the focused identity matrix. WI-11 updates the still-relevant architecture skill and `slickgrid-removal.md`. |
+
+**Differences from the sketch/current implementation:** root ID display already lives in the
+root cell, so the actionable ID is `documentId?: string` rather than a second display-bearing
+object. Headers currently come from SchemaStore, not a one-page union. The tree currently uses
+display names as its type values. SlickGrid initializes Field-ascending sibling sorting even
+though [parity R06](../migration-parity.md#3-tree-view-is-a-separate-release-gate) describes sorting
+as disabled. Falsy IDs are dropped today; missing IDs can reach the action path as an empty string.
+The late delete handler uses current instead of requested selection. Action identity also depends
+on projection provenance, parser round trips and match semantics, not merely serialization.
+
+**Choices left open for G1/E5 (not approved by A1):**
+
+| Option | Decision |
+| --- | --- |
+| O1 | Keep the current hidden nested `_id` (recommended), or show it separately with a distinct label (E5). |
+| O2 | Preserve current Field-ascending sibling order (leader recommendation; no unrequested visible change), or approve the spec's document-order UI explicitly. The shaper can still emit preorder in either case. |
+| O3 | Confirm the proposed K2 fail-closed cases for computed, ambiguous or unsafe IDs; otherwise specify a different safe policy. |
+| O4 | Confirm non-actionable rows are not selectable (proposed), or allow inspecting them by selection without enabling actions. |
+| O5 | The proposal leaves cross-page duplicates unguarded. Host-side current-page validation or stronger uniqueness safeguards affect the action boundary and need E5 approval. A count observed only after deletion is not a guard. If K2 covers such collections, resolve this before implementing their document actions. |
+
+**A1 advisory verdict — approve (86%), `claude-opus-5.5`.** `toSlickGridTable.ts:41–69`,
+`DataViewPanelTable.tsx:122` and `CollectionView.tsx:498–514,582,611` support the identity,
+late-delete and step-in constraints. `ClustersClient.ts:1190–1243` uses `$in`, `findOne` and
+`replaceOne` with upsert; `parseDocumentId.ts:39` uses default EJSON parsing, so a stable
+presentation key alone is insufficient. The advisor identified risks in the BSON matrix,
+cross-page uniqueness, SchemaStore field discovery and deep-tree payload size. The verdict
+would strengthen with round-trip/payload evidence and weaken if G1 rejects the identity or
+selection constraints. A1 reviews the **proposal**, not approval of O1–O5 or proof of runtime
+parity.
+
 **WI-0b: record the confirmed scope** · `gpt-6-luna` · after G1
 
 - Owns: `decisions.md` entry 0003 (the confirmed M/K/D list, the gestures, the pin, the CI choice),
