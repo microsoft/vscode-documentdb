@@ -50,16 +50,16 @@ Evidence, telemetry and source pointers: [research-findings.md](./research-findi
 
 ## Code map
 
-| Area                               | Primary implementation                                                                    |
-| ---------------------------------- | ----------------------------------------------------------------------------------------- |
-| Client and binding lifecycle       | `ClustersClient`, `ClusterSession`, `runWithClient`                                        |
-| Entra token renewal and errors     | `MicrosoftEntraIDAuthHandler`, `entraSession`, `entraErrors/*`, `entraTokenFailures`        |
-| Shell and playground token relay   | `ShellSessionManager`, `PlaygroundEvaluator`, `WorkerSessionManager`, `playgroundWorker`  |
-| Disconnect and removal             | `connectionTeardown`, Disconnect command, connection and folder removal callers           |
-| Bound webviews and stale replies   | `connectionSurfaces`, `DisconnectedOverlay`, bound-view routers and controllers            |
-| Tree recovery                      | `ClusterItemBase`, provider `errorRecoveryActions`, `showClusterConnectFailure`            |
-| Dashboard lifecycle polling        | Cluster Dashboard controller, router and sampler                                          |
-| Measurement                        | established-connection lifecycle telemetry; the pending WI-9 operator volume/dashboard review |
+| Area                             | Primary implementation                                                                        |
+| -------------------------------- | --------------------------------------------------------------------------------------------- |
+| Client and binding lifecycle     | `ClustersClient`, `ClusterSession`, `runWithClient`                                           |
+| Entra token renewal and errors   | `MicrosoftEntraIDAuthHandler`, `entraSession`, `entraErrors/*`, `entraTokenFailures`          |
+| Shell and playground token relay | `ShellSessionManager`, `PlaygroundEvaluator`, `WorkerSessionManager`, `playgroundWorker`      |
+| Disconnect and removal           | `connectionTeardown`, Disconnect command, connection and folder removal callers               |
+| Bound webviews and stale replies | `connectionSurfaces`, `DisconnectedOverlay`, bound-view routers and controllers               |
+| Tree recovery                    | `ClusterItemBase`, provider `errorRecoveryActions`, `showClusterConnectFailure`               |
+| Dashboard lifecycle polling      | Cluster Dashboard controller, router and sampler                                              |
+| Measurement                      | established-connection lifecycle telemetry; the pending WI-9 operator volume/dashboard review |
 
 ## WI-10 documentation choice
 
@@ -141,6 +141,6 @@ See [decisions.md](./decisions.md):
 | 2026-11-19 | Operator decisions 0001–0005; implementation plan (iteration 1)             |
 | 2026-11-19 | Decision 0006: delivery model (feature branch, sub-PRs, one release)        |
 | 2026-11-23 | WI-1 through WI-5 implement renewal, Azure auth, bindings and recovery      |
-| 2026-11-24 | WI-6 through WI-8 implement bound views, teardown and Dashboard behavior   |
-| 2026-11-25 | WI-2 review fixes and WI-9 lifecycle measurements                          |
+| 2026-11-24 | WI-6 through WI-8 implement bound views, teardown and Dashboard behavior    |
+| 2026-11-25 | WI-2 review fixes and WI-9 lifecycle measurements                           |
 | 2026-11-26 | WI-10 documentation draft, skill updates and unpublished 1.2.0 notes        |

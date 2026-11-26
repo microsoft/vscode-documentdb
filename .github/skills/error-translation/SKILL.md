@@ -33,11 +33,11 @@ watching, whether the operation was a read or a write, and which surface is righ
 The lifecycle uses four typed error families. Preserve their classes and original `cause`; C-2
 types are contracts, not prose to infer from a message:
 
-| Error                                  | Meaning                                                                                                                                     |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `EntraSignInRequiredError`             | Silent acquisition returned no session or the configured authentication provider changed; `reason` is `noSession` or `providerChanged`. |
-| `EntraIdentityMismatchError`           | Interactive acquisition returned a different Microsoft account from the pinned one.                                                        |
-| `TokenCallbackError`                   | Any other OIDC callback throw for Microsoft Entra ID or managed identity. Its bounded `authMethod` records which one, and `cause` retains the original failure. |
+| Error                                   | Meaning                                                                                                                                                                                                                                |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `EntraSignInRequiredError`              | Silent acquisition returned no session or the configured authentication provider changed; `reason` is `noSession` or `providerChanged`.                                                                                                |
+| `EntraIdentityMismatchError`            | Interactive acquisition returned a different Microsoft account from the pinned one.                                                                                                                                                    |
+| `TokenCallbackError`                    | Any other OIDC callback throw for Microsoft Entra ID or managed identity. Its bounded `authMethod` records which one, and `cause` retains the original failure.                                                                        |
 | `ConnectionUnavailableError { reason }` | A bound client cannot be used. The reason is `signInRequired`, `credentialsRejected`, `credentialsMissing`, `credentialsUpdating`, `credentialsChanged`, `identityChanged`, `userDisconnected`, `connectionRemoved`, or `unreachable`. |
 
 Register `EntraSignInRequiredErrorExplainer` with provider id `entraSignInRequired` before the

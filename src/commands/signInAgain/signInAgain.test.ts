@@ -26,7 +26,10 @@ const pin = {
     tenantId: 'tenant',
 } as const;
 const clusterId = 'cluster';
-const mocks = vi.hoisted(() => ({ configureAuth: vi.fn(), capturePolicy: vi.fn<(policy: AuthCallerPolicy) => void>() }));
+const mocks = vi.hoisted(() => ({
+    configureAuth: vi.fn(),
+    capturePolicy: vi.fn<(policy: AuthCallerPolicy) => void>(),
+}));
 
 vi.mock('../../documentdb/ClustersClient', () => ({
     addEstablishedConnectionContext: vi.fn(),

@@ -1463,10 +1463,16 @@ describe('regular connection startup diagnostics', () => {
         );
         vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockImplementation(configureEntraAuth);
         vi.spyOn(tokenResource, 'resolveInteractiveTokenResource').mockResolvedValue({
-            cloudCategory: 'public', reason: 'host', scope: 'test-scope', resource: 'test-resource', details: {},
+            cloudCategory: 'public',
+            reason: 'host',
+            scope: 'test-scope',
+            resource: 'test-resource',
+            details: {},
         });
         vi.spyOn(entraSession, 'readEntraSignInEnvironment').mockReturnValue({
-            providerId: 'microsoft', cloudName: 'AzureCloud', authority: 'https://login.microsoftonline.com/',
+            providerId: 'microsoft',
+            cloudName: 'AzureCloud',
+            authority: 'https://login.microsoftonline.com/',
         });
         const now = 1_800_000_000;
         vi.setSystemTime(now * 1000);
@@ -1512,8 +1518,14 @@ describe('regular connection startup diagnostics', () => {
 
         signal.abort();
         await lookup();
-        expect(renewalEvents().map(({ telemetry, error }) => [telemetry.properties, telemetry.measurements, error])).toEqual([
-            [{ surface: 'extension', renewalOutcome: 'returned', result: 'Succeeded' }, { tokenLifetimeSeconds: 3600, duration: 0 }, undefined],
+        expect(
+            renewalEvents().map(({ telemetry, error }) => [telemetry.properties, telemetry.measurements, error]),
+        ).toEqual([
+            [
+                { surface: 'extension', renewalOutcome: 'returned', result: 'Succeeded' },
+                { tokenLifetimeSeconds: 3600, duration: 0 },
+                undefined,
+            ],
             [{ surface: 'extension', renewalOutcome: 'returned', result: 'Succeeded' }, { duration: 0 }, undefined],
             [{ surface: 'extension', renewalOutcome: 'noSession', result: 'Succeeded' }, { duration: 0 }, undefined],
         ]);
