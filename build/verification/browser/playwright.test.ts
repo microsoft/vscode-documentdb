@@ -10,6 +10,8 @@ import { type BrowserReport } from './runtime';
 
 interface LocatorFixture {
     click(): Promise<void>;
+    dblclick(): Promise<void>;
+    evaluateAll<T>(operation: (elements: Element[]) => T): Promise<T>;
     fill(value: string): Promise<void>;
     press(key: string): Promise<void>;
     focus(): Promise<void>;
@@ -28,6 +30,8 @@ function isReadinessPredicate(operation: (...args: never[]) => unknown): boolean
 function fixturePage(report: BrowserReport): IntegratedPage {
     const locator: LocatorFixture = {
         click: vi.fn(async (): Promise<void> => {}),
+        dblclick: vi.fn(async (): Promise<void> => {}),
+        evaluateAll: async <T>(operation: (elements: Element[]) => T): Promise<T> => operation([]),
         fill: vi.fn(async (): Promise<void> => {}),
         press: vi.fn(async (): Promise<void> => {}),
         focus: vi.fn(async (): Promise<void> => {}),
@@ -39,7 +43,10 @@ function fixturePage(report: BrowserReport): IntegratedPage {
         off: vi.fn(),
         bringToFront: vi.fn(),
         goto: vi.fn(),
-        keyboard: { insertText: vi.fn(async (): Promise<void> => {}) },
+        keyboard: {
+            insertText: vi.fn(async (): Promise<void> => {}),
+            press: vi.fn(async (): Promise<void> => {}),
+        },
         getByRole: vi.fn((): LocatorFixture => locator),
         locator: vi.fn((): LocatorFixture => locator),
         evaluate: vi.fn().mockImplementation(async (operation: () => unknown): Promise<unknown> => {

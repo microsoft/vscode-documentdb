@@ -44,13 +44,28 @@ export interface ScenarioReadiness {
     readonly noProgressbar: boolean;
 }
 
+export type ScenarioTargetRole =
+    | 'button'
+    | 'link'
+    | 'switch'
+    | 'menuitem'
+    | 'radio'
+    | 'textbox'
+    | 'row'
+    | 'gridcell'
+    | 'columnheader'
+    | 'grid'
+    | 'treegrid';
+
 export type ScenarioStep =
+    | { readonly action: 'click'; readonly role: ScenarioTargetRole; readonly name: string }
+    | { readonly action: 'fill'; readonly role: 'textbox'; readonly name: string; readonly value: string }
+    | { readonly action: 'press'; readonly key: string }
     | {
-          readonly action: 'click';
-          readonly role: 'button' | 'link' | 'switch' | 'menuitem' | 'radio';
+          readonly action: 'dblclick' | 'focus';
+          readonly role: ScenarioTargetRole;
           readonly name: string;
-      }
-    | { readonly action: 'fill'; readonly role: 'textbox'; readonly name: string; readonly value: string };
+      };
 
 type CallAssertion = {
     [P in FixturePaths]: {
@@ -165,6 +180,15 @@ interface SequenceAssertion {
     readonly minimumSpanMs: number;
 }
 
+interface FocusedAssertion {
+    readonly kind: 'focused';
+    readonly name: string;
+    readonly target:
+        | { readonly role: ScenarioTargetRole; readonly name: string }
+        | { readonly selector: string };
+    readonly steps?: readonly ScenarioStep[];
+}
+
 export type ScenarioAssertion =
     | CallAssertion
     | SequenceAssertion
@@ -175,6 +199,7 @@ export type ScenarioAssertion =
     | RowHeightsAssertion
     | TopAssertion
     | AttributeAssertion
+    | FocusedAssertion
     | InsideAssertion
     | StableTextAssertion;
 

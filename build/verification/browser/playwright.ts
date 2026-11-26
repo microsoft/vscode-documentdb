@@ -19,6 +19,8 @@ interface BrowserConsole {
 }
 interface BrowserLocator {
     click(options?: { timeout: number }): Promise<void>;
+    dblclick(options?: { timeout: number }): Promise<void>;
+    evaluateAll<T>(operation: (elements: Element[]) => T): Promise<T>;
     fill(value: string, options?: { timeout: number }): Promise<void>;
     press(key: string, options?: { timeout: number }): Promise<void>;
     focus(options?: { timeout: number }): Promise<void>;
@@ -39,7 +41,7 @@ export interface IntegratedPage {
     goto(url: string, options: { waitUntil: 'domcontentloaded'; timeout: number }): Promise<unknown>;
     getByRole(role: string, options: { name: string; exact?: boolean }): BrowserLocator;
     locator(selector: string): BrowserLocator;
-    readonly keyboard: { insertText: (text: string) => Promise<void> };
+    readonly keyboard: { insertText: (text: string) => Promise<void>; press(key: string): Promise<void> };
     evaluate<T>(operation: () => T | Promise<T>): Promise<T>;
     evaluate<T, A>(operation: (argument: A) => T | Promise<T>, argument: A): Promise<T>;
 }

@@ -40,14 +40,28 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
     };
     const steps = async (items: readonly ScenarioStep[]): Promise<void> => {
         for (const step of items) {
+            const description = step.action === 'press' ? step.key : step.name;
             if (await page.evaluate((): boolean => document.documentElement.dataset.ready === 'failed')) {
-                throw new Error(`Page failed before step: ${step.name}`);
+                throw new Error(`Page failed before step: ${description}`);
             }
-            const locator = page.getByRole(step.role, { name: step.name, exact: true });
-            if (step.action === 'click') {
-                await locator.click({ timeout: 60000 });
-            } else {
-                await locator.fill(step.value, { timeout: 60000 });
+            switch (step.action) {
+                case 'press':
+                    await page.keyboard.press(step.key);
+                    break;
+                case 'click':
+                    await page.getByRole(step.role, { name: step.name, exact: true }).click({ timeout: 60000 });
+                    break;
+                case 'fill':
+                    await page
+                        .getByRole(step.role, { name: step.name, exact: true })
+                        .fill(step.value, { timeout: 60000 });
+                    break;
+                case 'dblclick':
+                    await page.getByRole(step.role, { name: step.name, exact: true }).dblclick({ timeout: 60000 });
+                    break;
+                case 'focus':
+                    await page.getByRole(step.role, { name: step.name, exact: true }).focus({ timeout: 60000 });
+                    break;
             }
         }
     };
@@ -284,6 +298,24 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
                                 passed: actual === assertion.expected,
                                 actual,
                                 expected: assertion.expected,
+                            });
+                        } else if (assertion.kind === 'focused') {
+                            await steps(assertion.steps ?? []);
+                            const locator =
+                                'selector' in assertion.target
+                                    ? page.locator(assertion.target.selector)
+                                    : page.getByRole(assertion.target.role, {
+                                          name: assertion.target.name,
+                                          exact: true,
+                                      });
+                            const actual = await locator.evaluateAll((elements: Element[]): boolean =>
+                                elements.some((element): boolean => element === document.activeElement),
+                            );
+                            assertions.push({
+                                name: assertion.name,
+                                passed: actual,
+                                actual,
+                                expected: true,
                             });
                         } else if (assertion.kind === 'stableText') {
                             const read = (): Promise<string | null> =>

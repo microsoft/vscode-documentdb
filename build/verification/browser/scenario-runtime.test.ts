@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type IntegratedPage } from './playwright';
 import { runScenario } from './scenario-playwright';
 import { installScenario, readinessHolds } from './scenario-runtime';
-import { parseScenarioRoute } from './scenario-server';
+import { parseScenarioRoute, scenarioRunner } from './scenario-server';
 import { scenarios, type Scenario, type ScenarioAssertion } from './scenarios';
 
 describe('L2-dev readiness', (): void => {
@@ -162,6 +162,8 @@ describe('L2-dev layout assertions', (): void => {
         document.documentElement.dataset.ready = 'true';
         interface Locator {
             click(): Promise<void>;
+            dblclick(): Promise<void>;
+            evaluateAll<T>(operation: (elements: Element[]) => T): Promise<T>;
             fill(value: string): Promise<void>;
             press(key: string): Promise<void>;
             focus(): Promise<void>;
@@ -170,6 +172,8 @@ describe('L2-dev layout assertions', (): void => {
         }
         const locator: Locator = {
             click: vi.fn(async (): Promise<void> => {}),
+            dblclick: vi.fn(async (): Promise<void> => {}),
+            evaluateAll: async <T>(operation: (elements: Element[]) => T): Promise<T> => operation([]),
             fill: vi.fn(async (): Promise<void> => {}),
             press: vi.fn(async (): Promise<void> => {}),
             focus: vi.fn(async (): Promise<void> => {}),
@@ -181,7 +185,10 @@ describe('L2-dev layout assertions', (): void => {
             off: vi.fn(),
             bringToFront: vi.fn(async (): Promise<void> => {}),
             goto: vi.fn(async (): Promise<void> => {}),
-            keyboard: { insertText: vi.fn(async (): Promise<void> => {}) },
+            keyboard: {
+                insertText: vi.fn(async (): Promise<void> => {}),
+                press: vi.fn(async (): Promise<void> => {}),
+            },
             getByRole: vi.fn((): Locator => locator),
             locator: vi.fn((): Locator => locator),
             // jsdom is the page: run each serialized operation in place.
@@ -320,5 +327,112 @@ describe('L2-dev layout assertions', (): void => {
             passed: false,
             actual: null,
         });
+    });
+
+    it('drives keyboard, double-click and focus steps and checks exact focus targets', async (): Promise<void> => {
+        document.body.innerHTML =
+            '<button id="already">Already focused</button>' +
+            '<div id="record" role="gridcell" data-name="Open record"></div>' +
+            '<input id="filter" role="textbox" data-name="Filter">';
+        const already = document.getElementById('already');
+        const filter = document.getElementById('filter');
+        already?.focus();
+        const route = parseScenarioRoute('/connectionDiagnostics/default/dark');
+        if (!route) throw new Error('Missing test route');
+        window.__harnessErrors = [];
+        window.__harnessCalls = [];
+        window.__scenario = {
+            route,
+            data: {
+                ...scenarios.connectionDiagnostics.default,
+                steps: [
+                    { action: 'press', key: 'Control+Enter' },
+                    { action: 'dblclick', role: 'gridcell', name: 'Open record' },
+                ],
+                assertions: [
+                    {
+                        kind: 'focused',
+                        name: 'role target',
+                        target: { role: 'textbox', name: 'Filter' },
+                        steps: [{ action: 'focus', role: 'textbox', name: 'Filter' }],
+                    },
+                    { kind: 'focused', name: 'missing role target', target: { role: 'row', name: 'Missing' } },
+                    { kind: 'focused', name: 'selector target', target: { selector: '#filter' } },
+                    { kind: 'focused', name: 'missing selector target', target: { selector: '#missing' } },
+                ],
+            },
+            check: (): void => {},
+        };
+        document.documentElement.dataset.ready = 'true';
+
+        interface Locator {
+            click(): Promise<void>;
+            dblclick(): Promise<void>;
+            evaluateAll<T>(operation: (elements: Element[]) => T): Promise<T>;
+            fill(value: string): Promise<void>;
+            press(key: string): Promise<void>;
+            focus(): Promise<void>;
+            first(): Locator;
+            last(): Locator;
+        }
+        const dblclick = vi.fn(async (): Promise<void> => {});
+        const focus = vi.fn(async (onFocus?: () => void): Promise<void> => onFocus?.());
+        const makeLocator = (elements: Element[], onFocus?: () => void): Locator => ({
+            click: vi.fn(async (): Promise<void> => {}),
+            dblclick,
+            evaluateAll: async <T>(operation: (matched: Element[]) => T): Promise<T> => operation(elements),
+            fill: vi.fn(async (): Promise<void> => {}),
+            press: vi.fn(async (): Promise<void> => {}),
+            focus: async (): Promise<void> => focus(onFocus),
+            first: (): Locator => locatorFor(elements),
+            last: (): Locator => locatorFor(elements),
+        });
+        const locatorFor = (elements: Element[]): Locator => makeLocator(elements);
+        const getByRole = vi.fn((role: string, options: { name: string; exact?: boolean }): Locator => {
+            const elements = [...document.querySelectorAll(`[role="${role}"][data-name="${options.name}"]`)];
+            return makeLocator(elements, (): void => {
+                if (elements[0] instanceof HTMLElement) elements[0].focus();
+            });
+        });
+        const press = vi.fn(async (): Promise<void> => {
+            expect(document.activeElement).toBe(already);
+        });
+        const page: IntegratedPage = {
+            on: vi.fn(),
+            off: vi.fn(),
+            bringToFront: vi.fn(async (): Promise<void> => {}),
+            goto: vi.fn(async (): Promise<void> => {}),
+            keyboard: {
+                insertText: vi.fn(async (): Promise<void> => {}),
+                press,
+            },
+            getByRole,
+            locator: vi.fn((selector: string): Locator => locatorFor([...document.querySelectorAll(selector)])),
+            evaluate: vi
+                .fn()
+                .mockImplementation(
+                    async (operation: (argument: unknown) => unknown, argument?: unknown): Promise<unknown> =>
+                        operation(argument),
+                ),
+        };
+
+        const report = await runScenario(page, 'http://localhost:18080', route);
+
+        expect(report.errors).toEqual([]);
+        expect(report.ready).toBe(true);
+        expect(report.assertions.map((result): boolean => result.passed)).toEqual([true, false, true, false]);
+        expect(press).toHaveBeenCalledWith('Control+Enter');
+        expect(dblclick).toHaveBeenCalledTimes(1);
+        expect(focus).toHaveBeenCalledTimes(1);
+        expect(getByRole).toHaveBeenCalledWith('gridcell', { name: 'Open record', exact: true });
+        expect(getByRole).toHaveBeenCalledWith('textbox', { name: 'Filter', exact: true });
+        expect(document.activeElement).toBe(filter);
+
+        const snippet = scenarioRunner([route]);
+        const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+        expect((): void => {
+            new AsyncFunction('page', snippet);
+        }).not.toThrow();
+        expect(snippet).toContain('page.keyboard.press');
     });
 });
