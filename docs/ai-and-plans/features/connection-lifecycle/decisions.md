@@ -31,6 +31,7 @@ created: 2026-11-19
 | 0017 | Limit unavailable webview recovery to Retry and Close view                                                 | Accepted (modified by 0018) | Operator wants credential repair in the tree and no extra recovery workflow in a tab | 2026-11-24 | Yes; removes in-view credential repair                           |
 | 0018 | Saved connection edits permanently lock existing views                                                     | Accepted                    | Operator prefers simple reconnect for unchanged settings over recovery after edits   | 2026-11-24 | Yes; removes same-identity recovery after a saved edit           |
 | 0019 | Require a fresh Dashboard delete after Disconnect and keep Paste Collection in the tree                    | Accepted                    | Operator: a lifecycle change cancels the pending delete and never replays it         | 2026-11-24 | —                                                                |
+| 0020 | Defer the cross-release comparison of late failures                                                        | Accepted                    | Operator: keep descriptive telemetry and defer the comparison                        | 2026-11-26 | Yes; removes the WI-9 before/after comparison for 1.2.0           |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -490,3 +491,14 @@ in the tree only. Copy stores a tree reference, not a snapshot of the data or
 credentials. The later tree Paste uses the current connection; it does not resume
 a Dashboard operation. Binding the whole clipboard and index-copy flow was not
 part of this change.
+
+## 0020. Defer the cross-release comparison of late failures
+
+The operator chose to keep descriptive telemetry and defer the WI-9 before/after comparison
+for 1.2.0. Auth and closed-client unavailability can now be returned as normal RPC responses,
+which the SDK records as successes without a failure signature. An apparent drop across releases
+could be a reporting change rather than improved recovery.
+
+Keep renewal, client age and entry generation, and ARM challenge queries for a single version.
+Do not add an instrumentation path or keep a socket-only comparison in this release. CP-5 still
+checks pre-release ingestion and records that the late-failure trend is unmeasured.

@@ -1878,6 +1878,9 @@ one loop.
 - Case 1 passed: `npm run build` and 349 focused tests in 8 files. Ingestion is **pending**; the
   [telemetry queries](../telemetry.md) are ready to run. The dashboard worktree has unrelated
   changes in progress and was left untouched.
+- PR7 review superseded the before/after comparison in items 2 and 5. Auth and closed-client
+  unavailability are not measured equivalently across releases. The operator deferred the
+  comparison and kept descriptive telemetry for CP-5 ([decision 0020](../decisions.md#0020-defer-the-cross-release-comparison-of-late-failures)).
 
 ---
 
@@ -1933,4 +1936,5 @@ one loop.
 # Outcome
 
 - **WI-9 telemetry: pending ingestion.** Run the [feature queries](../telemetry.md) on
-  pre-release data before CP-5. Record the packaged operator validation here at OP-6.
+  pre-release data before CP-5. The cross-release trend is unmeasured for 1.2.0. Record the
+  packaged operator validation here at OP-6.

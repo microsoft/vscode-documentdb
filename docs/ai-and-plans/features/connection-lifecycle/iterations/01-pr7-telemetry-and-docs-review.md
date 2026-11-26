@@ -10,8 +10,8 @@ queries against live data.
 
 ## F1. The baseline can show a false drop in classified failures (high for WI-9)
 
-The [before/after query](../telemetry.md#comparable-late-failures-before-and-after-release)
-uses error fields that the new tree `connect` path masks but the baseline did not. The
+The original before/after query used error fields that the new tree `connect` path masks but
+the baseline did not. The
 same failure can move to the unclassified bucket without any change in its frequency.
 Tree expansion can also return recovery actions as a normal result.
 
@@ -27,6 +27,10 @@ scopes; do not add a telemetry field or change redaction.
 **Fixed:** [`fe91067a8`](https://github.com/microsoft/vscode-documentdb/commit/fe91067a8)
 limits the classified comparison to two database RPCs and uses `causeType` alone. Tree
 events stay descriptive, and unclassified failures remain visible.
+
+**Superseded by Copilot follow-up:** The RPCs can also return typed unavailability normally,
+which is reported as SDK success. The operator [deferred the comparison](../decisions.md#0020-defer-the-cross-release-comparison-of-late-failures)
+and retained descriptive telemetry for 1.2.0.
 
 ## F2. Disconnect does not wait behind an active task (medium)
 

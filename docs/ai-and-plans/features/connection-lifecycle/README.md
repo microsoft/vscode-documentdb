@@ -132,6 +132,7 @@ See [decisions.md](./decisions.md):
 - 0017 limit unavailable webview recovery to Retry and Close view.
 - 0018 saved connection edits permanently lock existing views.
 - 0019 require a fresh Dashboard delete after Disconnect and retain tree-only Paste.
+- 0020 defer the late-failure comparison across releases and retain descriptive telemetry.
 
 ## Timeline
 
