@@ -5,6 +5,7 @@
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { EJSON } from 'bson';
 import { describe, expect, it } from 'vitest';
 import { collectionViewFixtures } from './collectionViewFixtures';
 import { type TypedRpcFixtures } from './core/fixtures';
@@ -14,12 +15,162 @@ import {
     diagnosticsEntraRuleIds,
     diagnosticsForbiddenText,
     diagnosticsListTop,
+    collectionViewContracts,
     findScenario,
     scenarioRoutes,
     scenarios,
     type Scenario,
     type ScenarioAssertion,
 } from './scenarios';
+
+describe('TDD: Collection View grid contracts', (): void => {
+    const ids = ['M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7',
+        'K1', 'K2', 'K3', 'K4', 'K5', 'K6', 'K7', 'K8', 'K9', 'K10', 'K11'];
+    const assertions: readonly ScenarioAssertion[] = Object.values(collectionViewContracts).flat();
+
+    it.each(ids)('%s has executable user-outcome assertions, never a silent skip', (id): void => {
+        const matching = assertions.filter((assertion): boolean => assertion.name?.startsWith(`TDD: ${id} `) ?? false);
+        expect(matching.length).toBeGreaterThan(0);
+        for (const assertion of matching) {
+            expect(assertion.requiresGrid).toMatch(/^(grid|treegrid)$/);
+            expect(assertion).not.toHaveProperty('skip');
+            if ('selector' in assertion) {
+                expect(assertion.selector).not.toMatch(/rdg|slickgrid/i);
+            }
+            if (assertion.kind === 'text') {
+                expect(assertion.includes.length + assertion.excludes.length).toBeGreaterThan(0);
+            } else if (assertion.kind === 'focused') {
+                expect(assertion.target).toBeDefined();
+            } else if (assertion.kind === 'calls') {
+                expect(assertion.path).toMatch(/^mongoClusters\.collectionView\./);
+            } else if (assertion.kind === 'order') {
+                expect(assertion.texts.length).toBeGreaterThan(0);
+            } else if (assertion.kind === 'countAtMost') {
+                expect(assertion.max).toBeLessThan(500);
+            }
+        }
+        const routes = scenarioRoutes().filter((route): boolean =>
+            route.view === 'collectionView' &&
+            (findScenario(route).assertions?.some((assertion): boolean => assertion.name?.startsWith(`TDD: ${id} `) ?? false) ?? false),
+        );
+        expect(new Set(routes.map((route): string => route.theme))).toEqual(new Set(['dark', 'light', 'high-contrast']));
+    });
+
+    it('pins the single-selection and fail-closed no-ID regressions', (): void => {
+        expect(collectionViewContracts.selection).toContainEqual(expect.objectContaining({
+            kind: 'calls', name: 'TDD: K1 exactly one selected document can be viewed',
+            requiresGrid: 'grid', path: 'mongoClusters.collectionView.viewDocumentById', input: '"heterogeneous-1"', count: 1,
+        }));
+        expect(collectionViewContracts['no-id']).toContainEqual(expect.objectContaining({
+            kind: 'attribute', attribute: 'aria-selected', expected: 'true',
+            selector: '[role="grid"] [role="row"][aria-rowindex="2"]',
+        }));
+        for (const name of ['View selected document', 'Edit selected document', 'Delete selected document(s)']) {
+            expect(collectionViewContracts['no-id']).toContainEqual(expect.objectContaining({
+                kind: 'attribute', selector: `.collectionView :is(button,[role="button"])[aria-label="${name}"]`, attribute: 'disabled', expected: '',
+            }));
+        }
+    });
+
+    it('pins deterministic late acknowledgements separately from same-panel stale results', (): void => {
+        expect(collectionViewContracts['late-delete']).toContainEqual(expect.objectContaining({
+            kind: 'text', name: 'TDD: K2 late delete acknowledgement preserves the newer selection',
+            selector: '[role="grid"] [role="row"][aria-selected="true"]',
+            includes: ['Beta', 'heterogeneous-2'], excludes: ['Alpha'],
+            steps: [{ action: 'click', role: 'gridcell', name: 'Beta' }, { action: 'releaseReply', tag: 'delete-alpha' }],
+        }));
+        expect(collectionViewFixtures['late-delete'].rpc['mongoClusters.collectionView.deleteDocumentsById']).toMatchObject({
+            hold: 'delete-alpha', results: [true],
+        });
+
+        expect(collectionViewFixtures['late-query'].rpc['mongoClusters.collectionView.getCurrentPageAsTable'].cases).toContainEqual(
+            expect.objectContaining({ input: ['details'], hold: 'old-details' }),
+        );
+        expect(collectionViewContracts['late-query']).toContainEqual(expect.objectContaining({
+            kind: 'calls', input: '"heterogeneous-2"', count: 1, path: 'mongoClusters.collectionView.viewDocumentById',
+        }));
+        expect(assertions.map((assertion): string => assertion.name ?? '')).not.toContainEqual(expect.stringMatching(/cross.collection|cross.panel/i));
+    });
+
+    it('keeps identity fixtures canonical and synchronized with document action inputs', (): void => {
+        const documentIds = collectionViewFixtures.identity.tablePage.rows.map((row): string => {
+            if (row.documentId === undefined) throw new Error('Missing identity fixture document ID');
+            expect(row.documentId).toBe(EJSON.stringify(EJSON.parse(row.documentId), { relaxed: false }));
+            return row.documentId;
+        });
+        const identity: readonly ScenarioAssertion[] = collectionViewContracts.identity;
+        const targets = identity.flatMap((assertion): string[] => {
+            if (assertion.kind !== 'calls') return [];
+            if (assertion.path === 'mongoClusters.collectionView.deleteDocumentsById') return assertion.input;
+            if (assertion.path === 'mongoClusters.collectionView.viewDocumentById' ||
+                assertion.path === 'mongoClusters.collectionView.editDocumentById') return [assertion.input];
+            throw new Error('Unexpected identity fixture action');
+        });
+        expect(targets).toEqual(documentIds);
+    });
+
+    it('pins nested whole-page navigation, root identity and the accepted Enter gesture', (): void => {
+        expect(collectionViewContracts['step-in']).toContainEqual(expect.objectContaining({
+            kind: 'text', includes: ['nested Alpha', 'heterogeneous-1', 'heterogeneous-2', 'heterogeneous-3'],
+            steps: [{ action: 'dblclick', role: 'gridcell', name: '{...}' }],
+        }));
+        expect(collectionViewContracts['step-in']).toContainEqual(expect.objectContaining({
+            kind: 'calls', name: 'TDD: K4 nested inspection still targets the root document', input: '"heterogeneous-1"',
+        }));
+        expect(collectionViewContracts['step-in']).toContainEqual(expect.objectContaining({
+            kind: 'text', name: 'TDD: M7 Enter on an object cell steps in', includes: ['leaf Alpha'],
+            steps: [{ action: 'focus', role: 'gridcell', name: '{...}' }, { action: 'press', key: 'Enter' }],
+        }));
+        expect(collectionViewContracts['missing-vs-null']).toContainEqual(expect.objectContaining({
+            kind: 'order', texts: ['', 'null', 'Ab', 'false', '0'],
+        }));
+    });
+
+    it('pins theme outcomes and honest virtualization evidence in every palette', (): void => {
+        const colors = {
+            dark: ['rgb(31, 31, 31)', 'rgb(204, 204, 204)'],
+            light: ['rgb(255, 255, 255)', 'rgb(59, 59, 59)'],
+            'high-contrast': ['rgb(0, 0, 0)', 'rgb(255, 255, 255)'],
+        };
+        for (const route of scenarioRoutes().filter((route): boolean => route.view === 'collectionView' && route.scenario === 'mixed-types')) {
+            expect(findScenario(route).assertions?.filter((assertion): boolean => assertion.kind === 'style').map(
+                (assertion): string => assertion.kind === 'style' ? assertion.expected : '',
+            )).toEqual(colors[route.theme]);
+        }
+        expect(collectionViewContracts['page-500']).toContainEqual(expect.objectContaining({
+            kind: 'countAtMost', selector: '[role="grid"] [role="row"]', max: 100,
+        }));
+        expect(collectionViewContracts['page-500']).toContainEqual(expect.objectContaining({
+            kind: 'text', includes: ['page-499'],
+            steps: [{ action: 'focus', role: 'columnheader', name: '_id' }, { action: 'press', key: 'ArrowDown' }, { action: 'press', key: 'Control+End' }],
+        }));
+    });
+
+    it('pins only the accepted paging choices and loading-to-results workflow', (): void => {
+        const paging: readonly ScenarioAssertion[] = collectionViewContracts.paging;
+        expect(paging.flatMap((assertion): readonly string[] =>
+            'steps' in assertion ? (assertion.steps ?? []).flatMap((step): string[] =>
+                step.action === 'click' && step.role === 'option' ? [step.name] : [],
+            ) : [],
+        )).toEqual(['50', '100', '500', '10', 'Tree View', 'Table View']);
+        expect(collectionViewFixtures['loading-to-results'].rpc['mongoClusters.collectionView.runFindQuery']).toMatchObject({
+            hold: 'initial-results', results: [{ documentCount: 3 }],
+        });
+        expect(collectionViewContracts['loading-to-results']).toContainEqual(expect.objectContaining({
+            kind: 'text', requiresGrid: 'grid', includes: ['Alpha', 'Beta'],
+        }));
+        expect(collectionViewContracts.empty).toContainEqual(expect.objectContaining({
+            kind: 'text', selector: '.collectionView [role="status"][aria-live="assertive"]',
+            includes: ['No results found'],
+        }));
+        expect(collectionViewContracts.empty).toContainEqual(expect.objectContaining({
+            kind: 'attribute', requiresGrid: 'grid', attribute: 'aria-rowcount', expected: '1',
+        }));
+        expect(collectionViewContracts.empty).toContainEqual(expect.objectContaining({
+            kind: 'countAtMost', requiresGrid: 'grid', selector: '[role="grid"] [role="row"] [role="gridcell"]', max: 0,
+        }));
+    });
+});
 
 describe('L2-dev manifest and routes', (): void => {
     it('imports, rather than duplicates, all six settled L2 fixtures', (): void => {
@@ -33,12 +184,12 @@ describe('L2-dev manifest and routes', (): void => {
 
     it('round-trips every scenario and theme, without duplicate routes', (): void => {
         const routes = scenarioRoutes();
-        expect(routes).toHaveLength(201);
-        expect(new Set(routes.map((route): string => route.path)).size).toBe(201);
+        expect(routes).toHaveLength(222);
+        expect(new Set(routes.map((route): string => route.path)).size).toBe(222);
         for (const route of routes) expect(parseScenarioRoute(route.path)).toEqual(route);
     });
 
-    it('provides the ten Collection View fixtures in every theme', (): void => {
+    it('provides the Collection View fixture presets and contracts in every theme', (): void => {
         const expected = [
             'mixed-types',
             'missing-vs-null',
@@ -50,6 +201,13 @@ describe('L2-dev manifest and routes', (): void => {
             'empty',
             'no-id',
             'first-load',
+            'step-in',
+            'selection',
+            'identity',
+            'late-delete',
+            'late-query',
+            'loading-to-results',
+            'paging',
         ];
         expect(Object.keys(collectionViewFixtures)).toEqual(expected);
         for (const name of expected) {
@@ -60,6 +218,7 @@ describe('L2-dev manifest and routes', (): void => {
             ).toEqual(['dark', 'light', 'high-contrast']);
             expect(scenarios.collectionView[name as keyof typeof scenarios.collectionView].readiness.content).toEqual([
                 'Documents',
+                ...(name === 'empty' ? ['No results found'] : []),
             ]);
             expect(
                 scenarios.collectionView[name as keyof typeof scenarios.collectionView].readiness.selectors,
@@ -131,7 +290,7 @@ describe('L2-dev manifest and routes', (): void => {
     });
 
     it('provides path-only all/view/theme helpers and rejects unknown subsets', (): void => {
-        expect(runnerRoutes('/scenarios/run-all.js')).toHaveLength(201);
+        expect(runnerRoutes('/scenarios/run-all.js')).toHaveLength(222);
         expect(runnerRoutes('/scenarios/run-all/connectionDiagnostics.js')).toHaveLength(84);
         expect(runnerRoutes('/scenarios/run-all/localQuickStart.js')).toHaveLength(75);
         expect(runnerRoutes('/scenarios/run-all/localQuickStart/dark.js')).toHaveLength(25);

@@ -48,6 +48,7 @@ const mixedTypesPage: TablePageOutput = {
         { key: fieldColumnKey('binary'), label: 'binary', isRootId: false },
         { key: fieldColumnKey('array'), label: 'array', isRootId: false },
         { key: fieldColumnKey('object'), label: 'object', isRootId: false },
+        { key: fieldColumnKey('legacyUuid'), label: 'legacyUuid', isRootId: false },
     ],
     rows: [
         {
@@ -68,6 +69,10 @@ const mixedTypesPage: TablePageOutput = {
                 [fieldColumnKey('binary')]: { display: 'AQI=', type: 'binary' },
                 [fieldColumnKey('array')]: { display: 'array[3]', type: 'array' },
                 [fieldColumnKey('object')]: { display: '{...}', type: 'object' },
+                [fieldColumnKey('legacyUuid')]: {
+                    display: '00112233-4455-6677-8899-aabbccddeeff',
+                    type: 'uuid-legacy',
+                },
             },
         },
         {
@@ -116,6 +121,18 @@ const missingVsNullPage: TablePageOutput = {
                 [fieldColumnKey('value')]: { display: 'null', type: 'null' },
             },
         },
+        ...[
+            { id: 'empty-string', display: '', type: 'string' },
+            { id: 'false-value', display: 'false', type: 'boolean' },
+            { id: 'zero-value', display: '0', type: 'int32' },
+        ].map(({ id, display, type }): TablePageOutput['rows'][number] => ({
+            rowKey: `id:${JSON.stringify(id)}`,
+            documentId: JSON.stringify(id),
+            cells: {
+                [ROOT_ID_COLUMN_KEY]: { display: id, type: 'string' },
+                [fieldColumnKey('value')]: { display, type },
+            },
+        })),
     ],
 };
 
@@ -165,7 +182,7 @@ const deepRootKey = JSON.stringify([deepRowKey]);
 const deepProfileKey = JSON.stringify([deepRowKey, 'profile']);
 const deepAddressKey = JSON.stringify([deepRowKey, 'profile', 'address']);
 const deepLocationKey = JSON.stringify([deepRowKey, 'profile', 'address', 'location']);
-const deepNestingNodes: TreeNode[] = [
+const deepNestingNodes: CollectionOutputs['getCurrentPageAsTree'] = [
     {
         key: deepRootKey,
         parentKey: null,
@@ -230,6 +247,22 @@ const deepNestingNodes: TreeNode[] = [
         value: { display: '-122.3321', type: 'double' },
         expandable: false,
     },
+    {
+        key: JSON.stringify(['id:"second-root"']),
+        parentKey: null,
+        depth: 0,
+        field: '"second-root"',
+        value: { display: '{...}', type: 'object' },
+        expandable: true,
+    },
+    {
+        key: JSON.stringify(['id:"second-root"', '_id']),
+        parentKey: JSON.stringify(['id:"second-root"']),
+        depth: 1,
+        field: '_id',
+        value: { display: 'second-root', type: 'string' },
+        expandable: false,
+    },
 ];
 
 const arraysRowKey = 'id:"arrays-root"';
@@ -237,7 +270,7 @@ const arraysRootKey = JSON.stringify([arraysRowKey]);
 const emptyArrayKey = JSON.stringify([arraysRowKey, 'empty']);
 const tenArrayKey = JSON.stringify([arraysRowKey, 'ten']);
 const elevenArrayKey = JSON.stringify([arraysRowKey, 'eleven']);
-const arrayNodes: TreeNode[] = [
+const arrayNodes: CollectionOutputs['getCurrentPageAsTree'] = [
     {
         key: arraysRootKey,
         parentKey: null,
@@ -359,6 +392,124 @@ const noIdPage: TablePageOutput = {
     ],
 };
 
+const stepInPage: TablePageOutput = {
+    ...heterogeneousPage,
+    rows: heterogeneousPage.rows.map((row, index): TablePageOutput['rows'][number] => ({
+        ...row,
+        cells: {
+            [ROOT_ID_COLUMN_KEY]: row.cells[ROOT_ID_COLUMN_KEY],
+            [fieldColumnKey('name')]: row.cells[fieldColumnKey('name')],
+            [fieldColumnKey('details')]: index === 0 ? { display: '{...}', type: 'object' } : undefined,
+            [fieldColumnKey('tags')]: { display: index === 0 ? 'array[2]' : 'array[0]', type: 'array' },
+        },
+    })),
+};
+const nestedPage: TablePageOutput = {
+    path: ['details'],
+    columns: [
+        { key: ROOT_ID_COLUMN_KEY, label: '_id', isRootId: true },
+        { key: fieldColumnKey('nestedName'), label: 'nestedName', isRootId: false },
+        { key: fieldColumnKey('child'), label: 'child', isRootId: false },
+    ],
+    rows: stepInPage.rows.map((row, index): TablePageOutput['rows'][number] => ({
+        rowKey: row.rowKey,
+        documentId: row.documentId,
+        cells: index === 0
+            ? {
+                  [ROOT_ID_COLUMN_KEY]: row.cells[ROOT_ID_COLUMN_KEY],
+                  [fieldColumnKey('nestedName')]: { display: 'nested Alpha', type: 'string' },
+                  [fieldColumnKey('child')]: { display: '{...}', type: 'object' },
+              }
+            : { [ROOT_ID_COLUMN_KEY]: row.cells[ROOT_ID_COLUMN_KEY] },
+    })),
+};
+const leafPage: TablePageOutput = {
+    ...nestedPage,
+    path: ['details', 'child'],
+    columns: [
+        { key: ROOT_ID_COLUMN_KEY, label: '_id', isRootId: true },
+        { key: fieldColumnKey('leafName'), label: 'leafName', isRootId: false },
+    ],
+    rows: nestedPage.rows.map((row, index): TablePageOutput['rows'][number] => ({
+        rowKey: row.rowKey,
+        documentId: row.documentId,
+        cells: {
+            [ROOT_ID_COLUMN_KEY]: row.cells[ROOT_ID_COLUMN_KEY],
+            ...(index === 0 ? { [fieldColumnKey('leafName')]: { display: 'leaf Alpha', type: 'string' } } : {}),
+        },
+    })),
+};
+const stepInRpc = {
+    'mongoClusters.collectionView.runFindQuery': { type: 'query', results: [{ documentCount: 3 }] },
+    'mongoClusters.collectionView.getCurrentPageAsTable': {
+        type: 'query',
+        results: [stepInPage],
+        cases: [
+            { input: ['details'], results: [nestedPage] },
+            { input: ['details', 'child'], results: [leafPage] },
+        ],
+    },
+} satisfies TypedRpcFixtures;
+
+const identityPage: TablePageOutput = {
+    path: [],
+    columns: [
+        { key: ROOT_ID_COLUMN_KEY, label: '_id', isRootId: true },
+        { key: fieldColumnKey('name'), label: 'name', isRootId: false },
+    ],
+    rows: [
+        { id: 'null', display: 'null', type: 'null', name: 'Null ID' },
+        { id: '{"$numberInt":"0"}', display: '0', type: 'int32', name: 'Zero ID' },
+        { id: 'false', display: 'false', type: 'boolean', name: 'False ID' },
+        { id: '""', display: '', type: 'string', name: 'Empty ID' },
+        { id: '{"tenant":{"$numberInt":"1"}}', display: '{...}', type: 'object', name: 'Composite ID' },
+    ].map(({ id, display, type, name }): TablePageOutput['rows'][number] => ({
+        rowKey: `id:${id}`,
+        documentId: id,
+        cells: {
+            [ROOT_ID_COLUMN_KEY]: { display, type },
+            [fieldColumnKey('name')]: { display: name, type: 'string' },
+        },
+    })),
+};
+
+const arrayTablePage: TablePageOutput = {
+    path: [],
+    columns: [
+        { key: ROOT_ID_COLUMN_KEY, label: '_id', isRootId: true },
+        { key: fieldColumnKey('ten'), label: 'ten', isRootId: false },
+    ],
+    rows: [{
+        rowKey: arraysRowKey,
+        documentId: '"arrays-root"',
+        cells: {
+            [ROOT_ID_COLUMN_KEY]: { display: 'arrays-root', type: 'string' },
+            [fieldColumnKey('ten')]: { display: 'array[10]', type: 'array' },
+        },
+    }],
+};
+const arrayJsonDocuments: CollectionOutputs['getCurrentPageAsJson'] = [
+    JSON.stringify({
+        _id: 'arrays-root',
+        empty: [],
+        ten: Array.from({ length: 10 }, (_, index): number => index),
+        eleven: Array.from({ length: 11 }, (_, index): number => index),
+    }),
+];
+const heterogeneousTreeNodes: CollectionOutputs['getCurrentPageAsTree'] = heterogeneousPage.rows.flatMap(
+    (row): CollectionOutputs['getCurrentPageAsTree'] => [
+        {
+            key: JSON.stringify([row.rowKey]), parentKey: null, depth: 0,
+            field: row.documentId ?? '', value: { display: '{...}', type: 'object' }, expandable: true,
+        },
+        {
+            key: JSON.stringify([row.rowKey, '_id']), parentKey: JSON.stringify([row.rowKey]), depth: 1,
+            field: '_id', value: { display: row.cells[ROOT_ID_COLUMN_KEY]?.display ?? '', type: 'string' },
+            expandable: false,
+        },
+    ],
+);
+
 export const collectionViewFixtures = {
     'mixed-types': {
         tablePage: mixedTypesPage,
@@ -403,7 +554,7 @@ export const collectionViewFixtures = {
         config: { initialDocumentView: DocumentViewMode.TREE },
         treeNodes: deepNestingNodes,
         rpc: {
-            'mongoClusters.collectionView.runFindQuery': { type: 'query', results: [{ documentCount: 1 }] },
+            'mongoClusters.collectionView.runFindQuery': { type: 'query', results: [{ documentCount: 2 }] },
             'mongoClusters.collectionView.getCurrentPageAsTree': {
                 type: 'query',
                 results: [deepNestingNodes],
@@ -418,6 +569,11 @@ export const collectionViewFixtures = {
             'mongoClusters.collectionView.getCurrentPageAsTree': {
                 type: 'query',
                 results: [arrayNodes],
+            },
+            'mongoClusters.collectionView.getCurrentPageAsTable': { type: 'query', results: [arrayTablePage] },
+            'mongoClusters.collectionView.getCurrentPageAsJson': {
+                type: 'query',
+                results: [arrayJsonDocuments],
             },
         },
     },
@@ -489,6 +645,59 @@ export const collectionViewFixtures = {
             },
         },
     },
+    'step-in': { tablePage: stepInPage, rpc: stepInRpc },
+    selection: {
+        tablePage: heterogeneousPage,
+        rpc: {
+            'mongoClusters.collectionView.runFindQuery': { type: 'query', results: [{ documentCount: 3 }] },
+            'mongoClusters.collectionView.getCurrentPageAsTable': { type: 'query', results: [heterogeneousPage] },
+            'mongoClusters.collectionView.getCurrentPageAsTree': { type: 'query', results: [heterogeneousTreeNodes] },
+        },
+    },
+    identity: {
+        tablePage: identityPage,
+        rpc: {
+            'mongoClusters.collectionView.runFindQuery': { type: 'query', results: [{ documentCount: 5 }] },
+            'mongoClusters.collectionView.getCurrentPageAsTable': { type: 'query', results: [identityPage] },
+        },
+    },
+    'late-delete': {
+        tablePage: heterogeneousPage,
+        rpc: {
+            'mongoClusters.collectionView.runFindQuery': { type: 'query', results: [{ documentCount: 3 }] },
+            'mongoClusters.collectionView.getCurrentPageAsTable': { type: 'query', results: [heterogeneousPage] },
+            'mongoClusters.collectionView.deleteDocumentsById': { type: 'mutation', results: [true], hold: 'delete-alpha' },
+        },
+    },
+    'late-query': {
+        tablePage: stepInPage,
+        rpc: {
+            ...stepInRpc,
+            'mongoClusters.collectionView.getCurrentPageAsTable': {
+                ...stepInRpc['mongoClusters.collectionView.getCurrentPageAsTable'],
+                cases: [{ input: ['details'], results: [nestedPage], hold: 'old-details' }],
+            },
+        },
+    },
+    'loading-to-results': {
+        tablePage: heterogeneousPage,
+        readiness: { selectors: ['.collectionView', '.monaco-editor'], noProgressbar: false },
+        rpc: {
+            'mongoClusters.collectionView.runFindQuery': {
+                type: 'query', results: [{ documentCount: 3 }], hold: 'initial-results',
+            },
+            'mongoClusters.collectionView.getCurrentPageAsTable': { type: 'query', results: [heterogeneousPage] },
+        },
+    },
+    paging: {
+        config: { defaultPageSize: 10 },
+        tablePage: heterogeneousPage,
+        rpc: {
+            'mongoClusters.collectionView.runFindQuery': { type: 'query', results: [{ documentCount: 3 }] },
+            'mongoClusters.collectionView.getCurrentPageAsTable': { type: 'query', results: [heterogeneousPage] },
+            'mongoClusters.collectionView.getCurrentPageAsTree': { type: 'query', results: [heterogeneousTreeNodes] },
+        },
+    },
 } as const satisfies Readonly<
     Record<
         | 'mixed-types'
@@ -500,7 +709,14 @@ export const collectionViewFixtures = {
         | 'html-values'
         | 'empty'
         | 'no-id'
-        | 'first-load',
+        | 'first-load'
+        | 'step-in'
+        | 'selection'
+        | 'identity'
+        | 'late-delete'
+        | 'late-query'
+        | 'loading-to-results'
+        | 'paging',
         CollectionViewFixture
     >
 >;

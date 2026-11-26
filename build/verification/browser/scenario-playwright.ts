@@ -38,32 +38,54 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
             });
         }
     };
-    const steps = async (items: readonly ScenarioStep[]): Promise<void> => {
+    const steps = async (items: readonly ScenarioStep[], guarded = false): Promise<string | undefined> => {
         for (const step of items) {
-            const description = step.action === 'press' ? step.key : step.name;
+            const description =
+                step.action === 'press' ? step.key : step.action === 'releaseReply' ? step.tag : step.name;
+            const exact = !guarded || !('role' in step) || !['gridcell', 'row'].includes(step.role);
             if (await page.evaluate((): boolean => document.documentElement.dataset.ready === 'failed')) {
                 throw new Error(`Page failed before step: ${description}`);
             }
+            if (guarded && 'role' in step) {
+                // A cell's name may include its type indicator as well as the displayed value.
+                const available = await page.getByRole(step.role, { name: step.name, exact }).evaluateAll(
+                    (elements: Element[]): boolean =>
+                        elements.some((element): boolean =>
+                            !element.closest('[inert], [aria-hidden="true"], [aria-disabled="true"]') &&
+                            !element.matches(':disabled'),
+                        ),
+                );
+                if (!available) return `Unavailable accessible ${step.role}: ${step.name}`;
+            }
             switch (step.action) {
+                case 'releaseReply': {
+                    const released = await page.evaluate(
+                        (tag: string): boolean => window.__releaseScenarioReply?.(tag) ?? false,
+                        step.tag,
+                    );
+                    if (!released) throw new Error(`No held scenario reply: ${step.tag}`);
+                    break;
+                }
                 case 'press':
                     await page.keyboard.press(step.key);
                     break;
                 case 'click':
-                    await page.getByRole(step.role, { name: step.name, exact: true }).click({ timeout: 60000 });
+                    await page.getByRole(step.role, { name: step.name, exact }).click({ timeout: 60000 });
                     break;
                 case 'fill':
                     await page
-                        .getByRole(step.role, { name: step.name, exact: true })
+                        .getByRole(step.role, { name: step.name, exact })
                         .fill(step.value, { timeout: 60000 });
                     break;
                 case 'dblclick':
-                    await page.getByRole(step.role, { name: step.name, exact: true }).dblclick({ timeout: 60000 });
+                    await page.getByRole(step.role, { name: step.name, exact }).dblclick({ timeout: 60000 });
                     break;
                 case 'focus':
-                    await page.getByRole(step.role, { name: step.name, exact: true }).focus({ timeout: 60000 });
+                    await page.getByRole(step.role, { name: step.name, exact }).focus({ timeout: 60000 });
                     break;
             }
         }
+        return undefined;
     };
     await page.goto('about:blank', { waitUntil: 'domcontentloaded', timeout: 60000 });
     page.on('console', onConsole);
@@ -87,8 +109,42 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
                 );
                 if (await page.evaluate((): boolean => document.documentElement.dataset.ready === 'true')) {
                     for (const assertion of data.assertions ?? []) {
+                        if (assertion.requiresGrid) {
+                            const accessible = await page.locator(`[role="${assertion.requiresGrid}"]`).evaluateAll(
+                                (elements: Element[]): boolean =>
+                                    elements.some((element): boolean => {
+                                        if (element.closest('[inert], [aria-hidden="true"]')) return false;
+                                        for (let ancestor: Element | null = element; ancestor; ancestor = ancestor.parentElement) {
+                                            const style = getComputedStyle(ancestor);
+                                            if (style.display === 'none' || style.visibility === 'hidden') return false;
+                                        }
+                                        const box = element.getBoundingClientRect();
+                                        return box.width > 0 && box.height > 0;
+                                    }),
+                            );
+                            if (!accessible) {
+                                assertions.push({
+                                    name: assertion.name ?? 'Grid contract',
+                                    passed: false,
+                                    actual: `Absent accessible ${assertion.requiresGrid} (hidden/inert placeholders do not qualify)`,
+                                    expected: assertion.requiresGrid,
+                                });
+                                continue;
+                            }
+                        }
+                        if ('steps' in assertion && assertion.kind !== 'stableText') {
+                            const unavailable = await steps(assertion.steps ?? [], !!assertion.requiresGrid);
+                            if (unavailable) {
+                                assertions.push({
+                                    name: assertion.name,
+                                    passed: false,
+                                    actual: unavailable,
+                                    expected: 'available accessible step target',
+                                });
+                                continue;
+                            }
+                        }
                         if (assertion.kind === 'calls') {
-                            await steps(assertion.steps);
                             await wait(
                                 (expected: { path: string; count: number }): boolean =>
                                     document.documentElement.dataset.ready === 'failed' ||
@@ -287,7 +343,6 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
                                 },
                             });
                         } else if (assertion.kind === 'attribute') {
-                            await steps(assertion.steps ?? []);
                             const actual = await page.evaluate(
                                 (expected: { selector: string; attribute: string }): string | null =>
                                     document.querySelector(expected.selector)?.getAttribute(expected.attribute) ?? null,
@@ -300,13 +355,12 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
                                 expected: assertion.expected,
                             });
                         } else if (assertion.kind === 'focused') {
-                            await steps(assertion.steps ?? []);
                             const locator =
                                 'selector' in assertion.target
                                     ? page.locator(assertion.target.selector)
                                     : page.getByRole(assertion.target.role, {
                                           name: assertion.target.name,
-                                          exact: true,
+                                          exact: !assertion.requiresGrid || !['gridcell', 'row'].includes(assertion.target.role),
                                       });
                             const actual = await locator.evaluateAll((elements: Element[]): boolean =>
                                 elements.some((element): boolean => element === document.activeElement),
@@ -331,7 +385,16 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
                                         .trim();
                                 }, assertion.selector);
                             const before = await read();
-                            await steps(assertion.steps);
+                            const unavailable = await steps(assertion.steps, !!assertion.requiresGrid);
+                            if (unavailable) {
+                                assertions.push({
+                                    name: assertion.name,
+                                    passed: false,
+                                    actual: unavailable,
+                                    expected: 'available accessible step target',
+                                });
+                                continue;
+                            }
                             const after = await read();
                             assertions.push({
                                 name: assertion.name,
@@ -378,6 +441,16 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
                                 actual,
                                 expected: assertion.top,
                             });
+                        } else if (assertion.kind === 'countAtMost') {
+                            const actual = await page.locator(assertion.selector).evaluateAll(
+                                (elements: Element[]): number => elements.length,
+                            );
+                            assertions.push({
+                                name: assertion.name,
+                                passed: actual <= assertion.max,
+                                actual,
+                                expected: `<= ${assertion.max}`,
+                            });
                         } else {
                             const actual = await page.evaluate((expected: typeof assertion): string => {
                                 const element = document.querySelector(expected.selector);
@@ -386,7 +459,7 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
                                     : '<missing>';
                             }, assertion);
                             assertions.push({
-                                name: `${assertion.selector} ${assertion.property}`,
+                                name: assertion.name ?? `${assertion.selector} ${assertion.property}`,
                                 passed: actual === assertion.expected,
                                 actual,
                                 expected: assertion.expected,
