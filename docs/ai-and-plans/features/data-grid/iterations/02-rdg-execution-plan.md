@@ -992,6 +992,11 @@ through `mai-code-2-flash` after each pair of items, not after every commit.
 - Scope rows M3, M6, K3, K4, K9, K11; D1–D3, D5–D6. Plain text cells until WI-6 lands.
 - Acceptance: A5.
 
+> **Implementation (2026-11-26):** `mai-code-2` replaced the Table placeholder with the
+> themed beta.64 grid, using neutral columns and row keys, native keyboard navigation,
+> resizing and virtualization. Paging stays in Collection View; the first-load skeleton is
+> unchanged. A5 is shared with WI-6 and remains pending. Coding usage: 12.8 AIU (20 requests).
+
 **WI-6: typed value cell** · `mai-code-2` (fallback `gpt-6.1-terra`)
 
 - Owns: a new `TypedValueCell.tsx` with a jsdom test. Last step, after WI-5 commits: wire it into

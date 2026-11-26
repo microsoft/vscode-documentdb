@@ -1,0 +1,14 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.dataViewPanelTable {
+    block-size: 100%;
+    min-block-size: 0;
+    user-select: text;
+
+    &.rdg-viewport-dragging {
+        user-select: none;
+    }
+}
