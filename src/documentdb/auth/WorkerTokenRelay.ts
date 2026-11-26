@@ -28,7 +28,11 @@ import {
     TokenCallbackError,
 } from './entraErrors/entraCallbackErrors';
 import { clearEntraTokenFailure, recordEntraTokenFailure } from './entraErrors/entraTokenFailures';
-import { getEntraSession, readEntraSignInEnvironment } from './entraSession';
+import {
+    getEntraSession,
+    readEntraSignInEnvironment,
+    type EntraSignInEnvironment,
+} from './entraSession';
 import { EntraDestinationRejectedError } from './oidcAllowedHosts';
 
 export function sameEntraIdentity(a: VerifiedEntraIdentity, b: VerifiedEntraIdentity): boolean {
@@ -51,6 +55,7 @@ export function createWorkerAuthError(reason: WorkerAuthReason, method?: AuthMet
 /** Host-only token relay for a single worker. The worker cannot select its own identity or destination. */
 export class WorkerTokenRelay {
     private resource: ResolvedTokenResource | undefined;
+    private environment: EntraSignInEnvironment | undefined;
     private pending: Promise<void> = Promise.resolve();
 
     constructor(
@@ -105,30 +110,54 @@ export class WorkerTokenRelay {
                 }
                 assertDestination();
                 const pin = this.pin;
-                const environment = managed ? undefined : readEntraSignInEnvironment();
-                const assertEnvironment = (): string => {
-                    const now = readEntraSignInEnvironment();
+                const readEnvironment = (): EntraSignInEnvironment => {
+                    try {
+                        return readEntraSignInEnvironment();
+                    } catch {
+                        throw new EntraSignInRequiredError('providerChanged');
+                    }
+                };
+                const assertEnvironment = (expected: EntraSignInEnvironment): string => {
+                    const now = readEnvironment();
                     if (
-                        !environment ||
                         (pin && (pin.providerId !== now.providerId || pin.tenantId !== tenantId)) ||
-                        environment.providerId !== now.providerId ||
-                        environment.cloudName !== now.cloudName ||
-                        environment.authority !== now.authority
+                        expected.providerId !== now.providerId ||
+                        expected.cloudName !== now.cloudName ||
+                        expected.authority !== now.authority
                     ) {
                         throw new EntraSignInRequiredError('providerChanged');
                     }
-                    return environment.providerId;
+                    return expected.providerId;
                 };
                 mode = managed ? 'managedIdentity' : pin ? 'silent' : 'interactive';
-                const resolved =
-                    this.resource ??
-                    (managed
+                let resolved = this.resource;
+                let environment = this.environment;
+                if (!resolved) {
+                    const resolutionEnvironment = managed ? undefined : readEnvironment();
+                    if (resolutionEnvironment) {
+                        assertEnvironment(resolutionEnvironment);
+                    }
+                    resolved = managed
                         ? await resolveManagedIdentityTokenResource(connectionString)
-                        : await resolveInteractiveTokenResource(connectionString));
+                        : await resolveInteractiveTokenResource(connectionString);
+                    if (!canReply()) {
+                        return;
+                    }
+                    if (resolutionEnvironment) {
+                        assertEnvironment(resolutionEnvironment);
+                    }
+                    this.resource = resolved;
+                    this.environment = resolutionEnvironment;
+                    environment = resolutionEnvironment;
+                } else if (!managed) {
+                    if (!environment) {
+                        throw new EntraSignInRequiredError('providerChanged');
+                    }
+                    assertEnvironment(environment);
+                }
                 if (!canReply()) {
                     return;
                 }
-                this.resource = resolved;
                 const { tokenResource: _resource, ...details } = resolved.details;
                 traceAuthFlow('entraCloud.resolved', details, requestId, activeTrace());
                 let identity: VerifiedEntraIdentity | undefined;
@@ -153,7 +182,10 @@ export class WorkerTokenRelay {
                     ).accessToken;
                 } else {
                     assertDestination();
-                    const providerId = assertEnvironment();
+                    if (!environment) {
+                        throw new EntraSignInRequiredError('providerChanged');
+                    }
+                    const providerId = assertEnvironment(environment);
                     const session = await withTokenAcquisitionTiming(timings, () =>
                         getEntraSession({
                             providerId,
@@ -166,7 +198,7 @@ export class WorkerTokenRelay {
                     if (!canReply()) {
                         return;
                     }
-                    assertEnvironment();
+                    assertEnvironment(environment);
                     if (!session && pin) {
                         throw new EntraSignInRequiredError('noSession');
                     }

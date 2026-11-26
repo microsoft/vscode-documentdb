@@ -21,6 +21,7 @@ import {
     recordEntraTokenFailure,
     resetEntraTokenFailuresForTests,
 } from '../auth/entraErrors/entraTokenFailures';
+import * as entraSession from '../auth/entraSession';
 import * as managedIdentityProvider from '../auth/managedIdentityTokenProvider';
 import { EntraDestinationRejectedError } from '../auth/oidcAllowedHosts';
 import { WorkerTokenRelay } from '../auth/WorkerTokenRelay';
@@ -752,6 +753,140 @@ describe('WorkerSessionManager', () => {
             expect(posted.connectionString).toBe(rewrittenUri);
             expect(metadata).toMatchObject({ host: 'cluster.mongocluster.cosmos.azure.us', additionalHostCount: 0 });
             session.dispose();
+        });
+    });
+
+    describe('worker token relay environment binding', () => {
+        const originalEnvironment = {
+            providerId: 'microsoft-sovereign-cloud',
+            cloudName: 'CustomCloud',
+            authority: 'https://authority.example.com/original/',
+        };
+        const resolvedResource = {
+            resource: 'https://database.example.com',
+            scope: 'https://database.example.com/.default',
+            cloudCategory: 'custom',
+            reason: 'customLoginHost',
+            details: {
+                flow: 'interactive',
+                tokenResource: 'https://database.example.com',
+            },
+        } as const;
+
+        function createRelay(clusterId: string): WorkerTokenRelay {
+            return new WorkerTokenRelay(
+                clusterId,
+                {
+                    type: 'init',
+                    requestId: '',
+                    connectionString: 'mongodb://cluster.mongocluster.cosmos.azure.com/',
+                    clientOptions: {},
+                    databaseName: 'test',
+                    authMechanism: 'MicrosoftEntraID',
+                },
+                ClustersClient.getEpoch(clusterId),
+                'relay-id',
+                undefined,
+            );
+        }
+
+        it.each([
+            ['provider', (environment: typeof originalEnvironment) => ({ ...environment, providerId: 'changed' })],
+            ['cloud', (environment: typeof originalEnvironment) => ({ ...environment, cloudName: 'AzureCloud' })],
+            [
+                'authority',
+                (environment: typeof originalEnvironment) => ({
+                    ...environment,
+                    authority: 'https://authority.example.com/changed/',
+                }),
+            ],
+        ] as const)('rejects later %s drift against the cached audience environment', async (_name, change) => {
+            let environment: typeof originalEnvironment = originalEnvironment;
+            const environmentSpy = vi
+                .spyOn(entraSession, 'readEntraSignInEnvironment')
+                .mockImplementation(() => environment);
+            const resolver = vi.spyOn(tokenResource, 'resolveInteractiveTokenResource').mockResolvedValue(resolvedResource);
+            const lookup = vi.spyOn(entraSession, 'getEntraSession').mockResolvedValue({
+                id: 'session-id',
+                accessToken: 'access-token',
+                account: { id: 'account-id', label: 'Account' },
+                scopes: [],
+            });
+            const relay = createRelay(`relay-environment-${_name}`);
+            const responses: MainToWorkerMessage[] = [];
+            try {
+                await relay.relay(
+                    { type: 'tokenRequest', requestId: 'first' },
+                    (response) => responses.push(response),
+                    () => true,
+                );
+                environment = change(environment);
+                await relay.relay(
+                    { type: 'tokenRequest', requestId: 'second' },
+                    (response) => responses.push(response),
+                    () => true,
+                );
+
+                expect(responses).toEqual([
+                    { type: 'tokenResponse', requestId: 'first', accessToken: 'access-token' },
+                    expect.objectContaining({
+                        type: 'tokenError',
+                        requestId: 'second',
+                        reason: 'signInRequired',
+                    }),
+                ]);
+                expect(resolver).toHaveBeenCalledTimes(1);
+                expect(lookup).toHaveBeenCalledTimes(1);
+            } finally {
+                environmentSpy.mockRestore();
+                resolver.mockRestore();
+                lookup.mockRestore();
+            }
+        });
+
+        it('fails closed when the cached audience environment cannot be read later', async () => {
+            let readable = true;
+            const environmentSpy = vi.spyOn(entraSession, 'readEntraSignInEnvironment').mockImplementation(() => {
+                if (!readable) {
+                    throw new Error('private-configuration-cause');
+                }
+                return originalEnvironment;
+            });
+            const resolver = vi.spyOn(tokenResource, 'resolveInteractiveTokenResource').mockResolvedValue(resolvedResource);
+            const lookup = vi.spyOn(entraSession, 'getEntraSession').mockResolvedValue({
+                id: 'session-id',
+                accessToken: 'access-token',
+                account: { id: 'account-id', label: 'Account' },
+                scopes: [],
+            });
+            const relay = createRelay('relay-unreadable-environment');
+            const responses: MainToWorkerMessage[] = [];
+            try {
+                await relay.relay(
+                    { type: 'tokenRequest', requestId: 'first' },
+                    (response) => responses.push(response),
+                    () => true,
+                );
+                readable = false;
+                await relay.relay(
+                    { type: 'tokenRequest', requestId: 'second' },
+                    (response) => responses.push(response),
+                    () => true,
+                );
+
+                expect(responses.at(-1)).toMatchObject({
+                    type: 'tokenError',
+                    requestId: 'second',
+                    reason: 'signInRequired',
+                });
+                expect(resolver).toHaveBeenCalledTimes(1);
+                expect(lookup).toHaveBeenCalledTimes(1);
+                expect(JSON.stringify(responses)).not.toContain('private-configuration-cause');
+            } finally {
+                environmentSpy.mockRestore();
+                resolver.mockRestore();
+                lookup.mockRestore();
+            }
         });
     });
 
