@@ -64,6 +64,11 @@ callback completes. On any surface, `returned` does **not** mean the token chang
 network request, or the database accepted the token. Lifetime is the
 JWT's positive `exp − iat` in seconds, not its remaining validity. An opaque or invalid lifetime is
 missing, not zero. Compare returned rows with and without a lifetime; failures don't have one.
+The bounded outcomes are `returned`, `noSession`, `identityMismatch`, `failed` and
+`timedOut`. The extension host reports `timedOut` when the driver aborts a pending, still
+eligible lookup. The Shell and Playground relay gives the timeout precedence over the late
+lookup outcome if it settles after the driver stopped waiting; a worker lookup that never
+settles does not produce a renewal row.
 
 ```kusto
 Events
@@ -109,14 +114,38 @@ Operations
 | order by family asc, ageBand asc, generationBand asc
 ```
 
+## Webview operations blocked by the connection
+
+On `documentDB.rpc.*`, `unavailableReason` is set only for a valid connection-unavailable
+response. Its bounded values are `signInRequired`, `credentialsRejected`, `credentialsMissing`,
+`credentialsUpdating`, `credentialsChanged`, `identityChanged`, `userDisconnected`,
+`connectionRemoved` and `unreachable`. It carries no error text or connection identifiers.
+Check that CP-5 can see the property after exercising a typed unavailable response, and that
+an ordinary successful response does not get it.
+
+```kusto
+Events
+| where eventScope startswith "documentdb.rpc."
+| extend reason = tostring(customDimensions.unavailableReason)
+| where isnotempty(reason)
+| summarize blockedOperations = count() by version, eventScope, reason, sdkResult
+```
+
 ## Cross-release comparison deferred
 
 In 1.2.0, a database RPC can return auth or closed-client unavailability as a normal
 response, recorded as `Succeeded` without `causeType`. Older versions could report the same
 outcome as an RPC failure. Matching procedures and signatures therefore does not make the
 counts comparable. Use the queries here to describe a single release and verify ingestion,
-not to claim that late failures fell. The comparison and any additional instrumentation are
-deferred; see [decision 0020](./decisions.md#0020-defer-the-cross-release-comparison-of-late-failures).
+not to claim that late failures fell. The bounded property above is the only amendment to
+[decision 0020](./decisions.md#0020-defer-the-cross-release-comparison-of-late-failures).
+
+## Partial Azure subscription listings
+
+`azureSubscriptions.partialListing` records `skippedAccounts` and `skippedTenants` as numeric
+measurements when the SDK skips an account or tenant but returns a listing. Signed-out omissions
+are not counted. Callers coalesced onto one SDK listing share a single event. The event does not
+contain account, tenant or subscription identifiers. It does not mean that the whole listing failed.
 
 ## ARM challenge versus final operation result
 

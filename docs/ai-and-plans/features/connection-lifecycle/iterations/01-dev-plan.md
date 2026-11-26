@@ -1946,6 +1946,7 @@ one loop.
 # Outcome
 
 - **WI-9 telemetry: pending ingestion.** Run the [feature queries](../telemetry.md) on
-  pre-release data before CP-5. The cross-release trend is unmeasured for 1.2.0. Record the
+  pre-release data before CP-5, including `unavailableReason` on a typed webview response.
+  The cross-release trend is unmeasured for 1.2.0. Record the
   packaged operator validation here at OP-6. The additional first-write, continuous-use and
   sleep/wake and worker scenarios are pending operator verification on a packaged build.

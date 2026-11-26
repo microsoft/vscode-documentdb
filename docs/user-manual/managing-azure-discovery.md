@@ -20,6 +20,9 @@ For a general overview of service discovery, see the [Service Discovery](./servi
 
 The **Manage Credentials** feature allows you to view your Azure accounts, sign in to specific tenants, and add new accounts for service discovery.
 
+If Azure cannot list some accounts or tenants, Discovery still shows the subscriptions it
+could list. Select **Show Output** in the warning to see which listing step was skipped.
+
 ### How to Access
 
 You can access the credential management feature in two ways:
