@@ -109,6 +109,12 @@ items. A Save wording follow-up is conditional on an observed OP-6 failure, not 
 implementation item. The known out-of-scope cases are the additional explain-then-display
 chains, a new timeout mechanism, write replay or probes, and automatic retry policy changes.
 
+> **WI-11 done (2026-11-26), commit `b10fa6e84`, leader (docs only, no coding worker):**
+> Recorded the operator's F3 amendment to 0020 without expanding it, documented the new
+> fields, and updated the CP-5 gate and Azure Discovery documentation. Leader review (99%):
+> the docs describe the committed telemetry semantics and do not claim successful ingestion.
+> No automated tests added; CP-5 remains pending.
+
 ---
 
 ## F1. A failed token callback leaves a dead client cached (High)
@@ -308,6 +314,17 @@ the connection looks broken for the rest of the session.
 - Add `timedOut` to the documented renewal outcomes in [telemetry.md](../telemetry.md).
 - Add no timeout of our own.
 
+> **Done (2026-11-26), commit `b324be7b4`, `gpt-6.1-sol`:** The exact driver's
+> callback timeout requests replacement on the next foreground action. Other OIDC
+> errors keep their existing classification. The existing Entra observation scopes
+> now record `timedOut`: at abort in the host and at settlement after driver abort in a
+> worker. Operator decision: no additional timer; advised (`claude-opus-5.5`, 85%)
+> that abort, stale epoch and cancellation guards are preserved. Added nine focused
+> cases and the `timedOut` expectation to the existing Shell/Playground test; retained
+> all prior assertions. Six focused suites passed (319 tests, including WI-04).
+> A hung real provider was not exercised; a never-settling worker lookup cannot emit
+> the renewal row.
+
 ## F5. Partial Azure listings are reported only in the output channel (Medium)
 
 **Evidence**
@@ -337,6 +354,15 @@ the connection looks broken for the rest of the session.
 - **Catches:** add `meterSilentCatch` to the tenant-lookup catches in `SelectSubscriptionStep.ts`
   and in the three discovery root items.
 - Specify the presentation and any user-facing text in the work item.
+
+> **Done (2026-11-26), commit `d676501c6`, `mai-code-2`:** Return the available
+> subscriptions and show one warning with **Show Output** alongside numeric, identifier-free
+> counters; meter the four tenant-lookup catches. Operator decision: one non-modal hint.
+> Advised (`claude-opus-5.5`, 88% design, 90% review): scope counters to each SDK listing;
+> callers coalesced by the SDK share one event and hint. Added an overlapping-listings case and
+> extended the existing partial-listing test without removing assertions. Corrected two test
+> types after the first build; the Case 1 build and 188 focused tests passed on retry.
+> Workbench check with a failing Azure tenant remains pending.
 
 ## F6. Swallowed failures that hide real problems are not metered (Low)
 
@@ -368,6 +394,14 @@ These are fine as they are:
 
 - Add `meterSilentCatch` at the locations in the first table. Add no UI.
 - Leave the "fine as they are" catches unchanged.
+
+> **Done (2026-11-26), commits `5cfb3de05` (`gpt-6-luna`) and `d676501c6`
+> (`mai-code-2`, Azure overlap):** Added stable silent-catch counters without changing
+> UI or control flow. Operator decision: meter only the listed swallowed failures;
+> advised (`claude-opus-5.5`) that the Entra telemetry eligibility and observer catches
+> are the intended sites, rather than the nearby rethrows. Leader spot-check (99%) found
+> only the approved calls and imports. No new tests for the mechanical meters; 188 focused
+> tests passed across WI-04/WI-05 and the related client/auth suites.
 
 ## F7. Explain-then-display chains have no fallback (Low)
 
