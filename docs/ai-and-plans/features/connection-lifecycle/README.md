@@ -6,13 +6,20 @@ created: 2026-11-19
 code:
     - src/documentdb/ClustersClient.ts
     - src/documentdb/ClusterSession.ts
+    - src/documentdb/runWithClient.ts
+    - src/documentdb/connectionTeardown.ts
     - src/documentdb/auth/MicrosoftEntraIDAuthHandler.ts
+    - src/documentdb/auth/entraErrors/EntraSignInRequiredErrorExplainer.ts
+    - src/documentdb/shell/ShellSessionManager.ts
+    - src/documentdb/playground/PlaygroundEvaluator.ts
     - src/tree/documentdb/ClusterItemBase.ts
+    - src/webviews/components/DisconnectedOverlay.tsx
 ---
 
 # Connection lifecycle
 
-**Status:** planned (iteration 1) · **Issues:**
+**Status:** implemented in the feature branch; documentation draft ready; release and final
+integration pending · **Issues:**
 
 - [#1102](https://github.com/microsoft/vscode-documentdb/issues/1102)
 - [#1059](https://github.com/microsoft/vscode-documentdb/issues/1059)
@@ -40,6 +47,28 @@ defects:
    old instance.
 
 Evidence, telemetry and source pointers: [research-findings.md](./research-findings.md).
+
+## Code map
+
+| Area                               | Primary implementation                                                                    |
+| ---------------------------------- | ----------------------------------------------------------------------------------------- |
+| Client and binding lifecycle       | `ClustersClient`, `ClusterSession`, `runWithClient`                                        |
+| Entra token renewal and errors     | `MicrosoftEntraIDAuthHandler`, `entraSession`, `entraErrors/*`, `entraTokenFailures`        |
+| Shell and playground token relay   | `ShellSessionManager`, `PlaygroundEvaluator`, `WorkerSessionManager`, `playgroundWorker`  |
+| Disconnect and removal             | `connectionTeardown`, Disconnect command, connection and folder removal callers           |
+| Bound webviews and stale replies   | `connectionSurfaces`, `DisconnectedOverlay`, bound-view routers and controllers            |
+| Tree recovery                      | `ClusterItemBase`, provider `errorRecoveryActions`, `showClusterConnectFailure`            |
+| Dashboard lifecycle polling        | Cluster Dashboard controller, router and sampler                                          |
+| Measurement                        | established-connection lifecycle telemetry; the pending WI-9 operator volume/dashboard review |
+
+## WI-10 documentation choice
+
+The lifecycle manual stays in
+[connecting-to-databases.md](../../../user-manual/connecting-to-databases.md) rather than adding a
+separate page. The existing page already owns failed-connection recovery, so the continuation is
+discoverable without another navigation level. The three requested workflow pages link to that
+section. The operator chose no screenshots; no placeholders were added. Release notes and changelog
+entries are unpublished drafts and do not represent a shipped release.
 
 ## Intent
 
@@ -111,3 +140,7 @@ See [decisions.md](./decisions.md):
 | 2026-11-18 | Investigation: code read, telemetry attribution, vscode-cosmosdb comparison |
 | 2026-11-19 | Operator decisions 0001–0005; implementation plan (iteration 1)             |
 | 2026-11-19 | Decision 0006: delivery model (feature branch, sub-PRs, one release)        |
+| 2026-11-23 | WI-1 through WI-5 implement renewal, Azure auth, bindings and recovery      |
+| 2026-11-24 | WI-6 through WI-8 implement bound views, teardown and Dashboard behavior   |
+| 2026-11-25 | WI-2 review fixes and WI-9 lifecycle measurements                          |
+| 2026-11-26 | WI-10 documentation draft, skill updates and unpublished 1.2.0 notes        |

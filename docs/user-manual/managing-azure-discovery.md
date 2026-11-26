@@ -178,3 +178,4 @@ When adding a new connection via the **"Add New Connection"** wizard:
 - [Azure Cosmos DB for MongoDB (RU) Service Discovery](./service-discovery-azure-cosmosdb-for-mongodb-ru)
 - [Azure DocumentDB Service Discovery](./service-discovery-azure-cosmosdb-for-mongodb-vcore)
 - [Azure VMs (DocumentDB) Service Discovery](./service-discovery-azure-vms)
+- [Connection lifecycle, sign-in renewal, and teardown](./connecting-to-databases#keep-connections-usable)

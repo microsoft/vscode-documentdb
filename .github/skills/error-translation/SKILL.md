@@ -28,6 +28,28 @@ for, and errors that are already obsolete by the time they appear.
 Anything with a side effect belongs at the call site, which alone knows whether the user is
 watching, whether the operation was a read or a write, and which surface is right.
 
+## Connection-lifecycle errors
+
+The lifecycle uses four typed error families. Preserve their classes and original `cause`; C-2
+types are contracts, not prose to infer from a message:
+
+| Error                                  | Meaning                                                                                                                                     |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `EntraSignInRequiredError`             | Silent acquisition returned no session or the configured authentication provider changed; `reason` is `noSession` or `providerChanged`. |
+| `EntraIdentityMismatchError`           | Interactive acquisition returned a different Microsoft account from the pinned one.                                                        |
+| `TokenCallbackError`                   | Any other OIDC callback throw for Microsoft Entra ID or managed identity. Its bounded `authMethod` records which one, and `cause` retains the original failure. |
+| `ConnectionUnavailableError { reason }` | A bound client cannot be used. The reason is `signInRequired`, `credentialsRejected`, `credentialsMissing`, `credentialsUpdating`, `credentialsChanged`, `identityChanged`, `userDisconnected`, `connectionRemoved`, or `unreachable`. |
+
+Register `EntraSignInRequiredErrorExplainer` with provider id `entraSignInRequired` before the
+general Entra explainer because the first explanation wins. That provider follows cyclic-safe
+`cause` links and `MongoServerSelectionError.reason.servers[*].error`, and recognizes only the
+typed sign-in-required and identity-mismatch errors. It explains those failures without exposing
+private causes and asks the user to sign in with the original account when identities differ.
+
+Do not translate `ConnectionUnavailableError` through an infrastructure provider. The call site
+knows whether the right response is a tree recovery action, a disabled webview dialog, or bounded
+shell or playground output. Preserve the `reason`; webviews map it to **Retry** or **Close view**.
+
 ## Adding a provider
 
 Implement `ErrorExplanationProvider` and register it in
@@ -193,5 +215,6 @@ l10n.t('The container was removed outside VS Code.')
 
 - [errorExplanationService.ts](../../../src/services/errorExplanationService.ts)
 - [connectionReachabilityService.ts](../../../src/services/connectionReachabilityService.ts) prepares a connection _before_ connecting; this service explains a failure _afterwards_
+- [EntraSignInRequiredErrorExplainer.ts](../../../src/documentdb/auth/entraErrors/EntraSignInRequiredErrorExplainer.ts)
 - [tree-cluster-architecture](../tree-cluster-architecture/SKILL.md) for `clusterId` versus `treeId`
 - [telemetry-instrumentation](../telemetry-instrumentation/SKILL.md)
