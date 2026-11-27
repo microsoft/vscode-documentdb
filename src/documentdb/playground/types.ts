@@ -30,6 +30,8 @@ export interface ExecutionResult {
     readonly type: string | null;
     /** The printable result value — already iterated for cursors. */
     readonly printable: unknown;
+    /** True when the original printable value was undefined before EJSON serialization. */
+    readonly printableIsUndefined?: boolean;
     /** Execution duration in milliseconds. */
     readonly durationMs: number;
     /** Whether the cursor has more documents beyond the returned batch (Cursor results only). */

@@ -72,6 +72,7 @@ import { pasteCollection } from '../commands/pasteCollection/pasteCollection';
 import { pasteIndexes } from '../commands/pasteIndexes/pasteIndexes';
 import { connectPlayground, showConnectionInfo } from '../commands/playground/connectDatabase';
 import { disposeEvaluators, shutdownOrphanedEvaluators } from '../commands/playground/executePlaygroundCode';
+import { focusPlayground, focusPlaygroundResult } from '../commands/playground/focusPlaygroundResult';
 import { newPlayground, newPlaygroundWithContent } from '../commands/playground/newPlayground';
 import { playgroundOpenQueryInCollectionView } from '../commands/playground/playgroundOpenInCollectionView';
 import { playgroundOpenQueryInShell } from '../commands/playground/playgroundOpenInShell';
@@ -574,6 +575,10 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommand(PlaygroundCommandIds.runAll, withCommandCorrelation(runAll));
 
                 registerCommand(PlaygroundCommandIds.runSelected, withCommandCorrelation(runSelected));
+
+                registerCommand(PlaygroundCommandIds.focusResult, withCommandCorrelation(focusPlaygroundResult));
+
+                registerCommand(PlaygroundCommandIds.focusPlayground, withCommandCorrelation(focusPlayground));
 
                 // Register scan schema command (triggered by "Discover Fields" completion item)
                 registerCommand(

@@ -66,6 +66,38 @@ export class PlaygroundResultProvider implements vscode.TextDocumentContentProvi
         });
     }
 
+    getSourceUri(resultUri: vscode.Uri): vscode.Uri | undefined {
+        if (resultUri.scheme !== PLAYGROUND_RESULT_SCHEME) {
+            return undefined;
+        }
+        const source = new URLSearchParams(resultUri.query).get('source');
+        if (!source) {
+            return undefined;
+        }
+        try {
+            return vscode.Uri.parse(source, true);
+        } catch {
+            return undefined;
+        }
+    }
+
+    async focusResult(sourceUri: vscode.Uri): Promise<boolean> {
+        const resultUri = this.getResultUri(sourceUri);
+        const doc = vscode.workspace.textDocuments.find((d) => d.uri.toString() === resultUri.toString());
+        if (!doc) {
+            return false;
+        }
+        const editor = vscode.window.visibleTextEditors.find(
+            (e) => e.document.uri.toString() === resultUri.toString(),
+        );
+        await vscode.window.showTextDocument(doc, {
+            viewColumn: editor?.viewColumn ?? vscode.ViewColumn.Beside,
+            preserveFocus: false,
+            preview: false,
+        });
+        return true;
+    }
+
     /**
      * Update (or set) the content for a result URI and notify VS Code to re-read it.
      */
@@ -82,7 +114,7 @@ export class PlaygroundResultProvider implements vscode.TextDocumentContentProvi
      * delegates syntax highlighting to JSONC via its TextMate grammar while
      * keeping the custom DocumentDB icon on the tab.
      */
-    async showResult(sourceUri: vscode.Uri, content: string): Promise<void> {
+    async showResult(sourceUri: vscode.Uri, content: string, options?: { readonly focus?: boolean }): Promise<void> {
         const resultUri = this.getResultUri(sourceUri);
         this.updateContent(resultUri, content);
 
@@ -94,7 +126,7 @@ export class PlaygroundResultProvider implements vscode.TextDocumentContentProvi
             const doc = await vscode.workspace.openTextDocument(resultUri);
             await vscode.window.showTextDocument(doc, {
                 viewColumn: vscode.ViewColumn.Beside,
-                preserveFocus: true,
+                preserveFocus: !options?.focus,
                 preview: false,
             });
             // Set our language so VS Code uses our icon and JSONC-delegating grammar.
@@ -106,10 +138,10 @@ export class PlaygroundResultProvider implements vscode.TextDocumentContentProvi
             const visibleEditor = vscode.window.visibleTextEditors.find(
                 (e) => e.document.uri.toString() === resultUri.toString(),
             );
-            if (!visibleEditor) {
+            if (!visibleEditor || options?.focus) {
                 await vscode.window.showTextDocument(existingDoc, {
-                    viewColumn: vscode.ViewColumn.Beside,
-                    preserveFocus: true,
+                    viewColumn: visibleEditor?.viewColumn ?? vscode.ViewColumn.Beside,
+                    preserveFocus: !options?.focus,
                     preview: false,
                 });
             }

@@ -920,6 +920,16 @@
         "icon": "$(terminal)"
       },
       {
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.playground.focusResult",
+        "title": "%playground.focusResult%"
+      },
+      {
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.playground.focusPlayground",
+        "title": "%playground.focusPlayground%"
+      },
+      {
         "//": "[Query Playground] Open Block in Collection View",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.playground.openQueryInCollectionView",
@@ -1969,6 +1979,14 @@
         {
           "command": "vscode-documentdb.command.playground.openQueryInCollectionView",
           "when": "editorLangId == 'documentdb-playground' && documentdbPlaygroundConnected && documentdbPlaygroundBlockHasCode"
+        },
+        {
+          "command": "vscode-documentdb.command.playground.focusResult",
+          "when": "editorLangId == 'documentdb-playground'"
+        },
+        {
+          "command": "vscode-documentdb.command.playground.focusPlayground",
+          "when": "resourceScheme == 'documentdb-playground-result'"
         }
       ]
     },
@@ -1984,6 +2002,20 @@
         "key": "ctrl+enter",
         "mac": "cmd+enter",
         "when": "editorLangId == 'documentdb-playground' && editorTextFocus"
+      },
+      {
+        "command": "vscode-documentdb.command.playground.runAll",
+        "key": "ctrl+shift+enter",
+        "mac": "cmd+shift+enter",
+        "when": "editorLangId == 'documentdb-playground' && editorTextFocus && accessibilityModeEnabled",
+        "args": { "screenReaderMode": true }
+      },
+      {
+        "command": "vscode-documentdb.command.playground.runSelected",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "editorLangId == 'documentdb-playground' && editorTextFocus && accessibilityModeEnabled",
+        "args": { "screenReaderMode": true }
       }
     ],
     "configuration": [
@@ -2132,6 +2164,19 @@
             "type": "boolean",
             "default": true,
             "description": "Show a confirmation dialog before running the entire playground file with Run All."
+          },
+          "documentDB.playground.afterRun": {
+            "order": 2,
+            "type": "string",
+            "default": "auto",
+            "enum": ["auto", "stay", "focusResult", "notify"],
+            "description": "%playground.afterRun.description%",
+            "enumDescriptions": [
+              "%playground.afterRun.auto%",
+              "%playground.afterRun.stay%",
+              "%playground.afterRun.focusResult%",
+              "%playground.afterRun.notify%"
+            ]
           }
         }
       },

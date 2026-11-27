@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
 import { ShellCommandIds } from '../../documentdb/shell/constants';
+import { settingsKeys } from '../../settingsKeys';
 import { executePlaygroundCode } from './executePlaygroundCode';
 import { playgroundOpenQueryInCollectionView } from './playgroundOpenInCollectionView';
 import { playgroundOpenQueryInShell } from './playgroundOpenInShell';
@@ -86,7 +87,9 @@ describe('playground commands', () => {
 
         await runSelected(context as never);
 
-        expect(executePlaygroundCode).toHaveBeenCalledWith('db.users.find({});', 'runSelected', editor.document.uri);
+        expect(executePlaygroundCode).toHaveBeenCalledWith('db.users.find({});', 'runSelected', editor.document.uri, {
+            afterRun: 'stay',
+        });
         expect(context.telemetry.properties).toMatchObject({
             activationSource: 'playgroundOther',
             selectionSource: 'cursor',
@@ -102,7 +105,9 @@ describe('playground commands', () => {
 
         await runSelected(context as never);
 
-        expect(executePlaygroundCode).toHaveBeenCalledWith('db.users.find({});', 'runSelected', editor.document.uri);
+        expect(executePlaygroundCode).toHaveBeenCalledWith('db.users.find({});', 'runSelected', editor.document.uri, {
+            afterRun: 'stay',
+        });
         expect(context.telemetry.properties.selectionSource).toBe('fallback');
     });
 
@@ -118,6 +123,7 @@ describe('playground commands', () => {
             'db.orders.find({});',
             'runSelected',
             editor.document.uri,
+            { afterRun: 'stay' },
         );
         expect(context.telemetry.properties).toMatchObject({
             activationSource: 'playgroundCodeLens',
@@ -138,6 +144,7 @@ describe('playground commands', () => {
             'db.target.find({});',
             'runSelected',
             target.document.uri,
+            { afterRun: 'stay' },
         );
         expect(context.telemetry.properties.activationSource).toBe('playgroundEditorMenu');
     });
@@ -155,6 +162,7 @@ describe('playground commands', () => {
             'db.target.find({});',
             'runSelected',
             target.document.uri,
+            { afterRun: 'stay' },
         );
         expect(context.telemetry.properties.activationSource).toBe('playgroundEditorMenu');
     });
@@ -239,6 +247,60 @@ describe('playground commands', () => {
             'db.users.find({});',
             'runAll',
             editor.document.uri,
+            { afterRun: 'stay' },
         );
+    });
+
+    describe.each([
+        ['Run All', runAll, 'runAll'],
+        ['Run Block', runSelected, 'runSelected'],
+    ] as const)('%s after-run behavior', (_label, command, runMode) => {
+        it.each([
+            ['auto', false, 'stay'],
+            ['auto', true, 'focusResult'],
+            ['stay', true, 'stay'],
+            ['focusResult', false, 'focusResult'],
+            ['notify', true, 'notify'],
+        ] as const)('resolves %s with screenReaderMode=%s at invocation', async (setting, screenReaderMode, afterRun) => {
+            const editor = makeEditor(vscode.Uri.file('/active.documentdb.js'), 'db.users.find({});', 0);
+            activeEditor = editor;
+            visibleEditors = [editor];
+            vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+                get: (key: string): unknown => key === settingsKeys.playgroundAfterRun ? setting : false,
+            } as vscode.WorkspaceConfiguration);
+            const context = makeContext();
+
+            await command(context as never, ...(screenReaderMode ? [{ screenReaderMode: true }] : []));
+
+            expect(executePlaygroundCode).toHaveBeenCalledWith(
+                'db.users.find({});', runMode, editor.document.uri, { afterRun },
+            );
+            expect(context.telemetry.properties).toMatchObject({
+                afterRun,
+                screenReaderMode: screenReaderMode ? 'true' : 'false',
+                activationSource: screenReaderMode ? 'playgroundScreenReaderKeybinding' : 'playgroundOther',
+            });
+        });
+
+        it.each(['stay', 'focusResult', 'notify'] as const)('applies explicit %s to CodeLens and menu invocation', async (afterRun) => {
+            const editor = makeEditor(vscode.Uri.file('/active.documentdb.js'), 'db.users.find({});', 0);
+            activeEditor = editor;
+            visibleEditors = [editor];
+            vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+                get: (key: string): unknown => key === settingsKeys.playgroundAfterRun ? afterRun : false,
+            } as vscode.WorkspaceConfiguration);
+            const args = runMode === 'runAll' ? [{ activationSource: 'playgroundCodeLens' }] : [0, 0];
+
+            await command(makeContext() as never, ...args);
+            await command(makeContext() as never, editor.document.uri);
+
+            expect(executePlaygroundCode).toHaveBeenCalledTimes(2);
+            expect(executePlaygroundCode).toHaveBeenNthCalledWith(
+                1, 'db.users.find({});', runMode, editor.document.uri, { afterRun },
+            );
+            expect(executePlaygroundCode).toHaveBeenNthCalledWith(
+                2, 'db.users.find({});', runMode, editor.document.uri, { afterRun },
+            );
+        });
     });
 });

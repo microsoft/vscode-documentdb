@@ -20,8 +20,29 @@ interface CommandContribution {
     readonly icon?: string;
 }
 
+interface KeybindingContribution {
+    readonly command: string;
+    readonly key: string;
+    readonly mac: string;
+    readonly when: string;
+    readonly args?: { readonly screenReaderMode: boolean };
+}
+
+interface ConfigurationContribution {
+    readonly title: string;
+    readonly properties: Record<string, {
+        readonly type: string;
+        readonly default: unknown;
+        readonly enum?: readonly string[];
+        readonly description: string;
+        readonly enumDescriptions?: readonly string[];
+    }>;
+}
+
 interface PackageContributions {
     readonly commands: readonly CommandContribution[];
+    readonly keybindings: readonly KeybindingContribution[];
+    readonly configuration: readonly ConfigurationContribution[];
     readonly menus: {
         readonly 'editor/context': readonly MenuContribution[];
         readonly 'editor/title': readonly MenuContribution[];
@@ -173,5 +194,62 @@ describe('query playground command contributions', () => {
                 group: 'navigation@1',
             }),
         );
+    });
+
+    it('preserves the original shortcuts and appends their screen-reader variants without new combinations', () => {
+        const originals = [
+            {
+                command: 'vscode-documentdb.command.playground.runAll',
+                key: 'ctrl+shift+enter',
+                mac: 'cmd+shift+enter',
+                when: "editorLangId == 'documentdb-playground' && editorTextFocus",
+            },
+            {
+                command: 'vscode-documentdb.command.playground.runSelected',
+                key: 'ctrl+enter',
+                mac: 'cmd+enter',
+                when: "editorLangId == 'documentdb-playground' && editorTextFocus",
+            },
+        ];
+        expect(contributes.keybindings).toEqual([
+            ...originals,
+            ...originals.map((entry) => ({
+                ...entry,
+                when: `${entry.when} && accessibilityModeEnabled`,
+                args: { screenReaderMode: true },
+            })),
+        ]);
+    });
+
+    it('contributes the after-run setting and all localized enum descriptions in Query Playground', () => {
+        const settings = contributes.configuration.find((entry) => entry.title === 'Query Playground');
+        expect(settings?.properties['documentDB.playground.afterRun']).toMatchObject({
+            type: 'string',
+            default: 'auto',
+            enum: ['auto', 'stay', 'focusResult', 'notify'],
+            description: '%playground.afterRun.description%',
+            enumDescriptions: [
+                '%playground.afterRun.auto%',
+                '%playground.afterRun.stay%',
+                '%playground.afterRun.focusResult%',
+                '%playground.afterRun.notify%',
+            ],
+        });
+        const localized = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../../package.nls.json'), 'utf8')) as Record<string, string>;
+        for (const key of settings?.properties['documentDB.playground.afterRun'].enumDescriptions ?? []) {
+            expect(localized[key.slice(1, -1)]).toBeTruthy();
+        }
+    });
+
+    it.each([
+        ['focusResult', "editorLangId == 'documentdb-playground'", 'Query Playground: Focus Result'],
+        ['focusPlayground', "resourceScheme == 'documentdb-playground-result'", 'Query Playground: Focus Playground'],
+    ])('contributes the localized %s palette command without a shortcut', (id, when, title) => {
+        const command = `vscode-documentdb.command.playground.${id}`;
+        expect(contributes.commands).toContainEqual(expect.objectContaining({ command, title: `%playground.${id}%` }));
+        expect(contributes.menus.commandPalette).toContainEqual({ command, when });
+        expect(contributes.keybindings.some((entry) => entry.command === command)).toBe(false);
+        const localized = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../../package.nls.json'), 'utf8')) as Record<string, string>;
+        expect(localized[`playground.${id}`]).toBe(title);
     });
 });

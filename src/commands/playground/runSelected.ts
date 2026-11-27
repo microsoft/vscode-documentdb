@@ -6,7 +6,9 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { resolveAfterRunOutcome } from '../../documentdb/playground/afterRun';
 import { detectBlocks, getBlockText, resolveBlockAtLine } from '../../documentdb/playground/statementDetector';
+import { settingsKeys } from '../../settingsKeys';
 import { executePlaygroundCode } from './executePlaygroundCode';
 import { parsePlaygroundInvocation, resolvePlaygroundEditor } from './playgroundInvocation';
 
@@ -21,6 +23,12 @@ import { parsePlaygroundInvocation, resolvePlaygroundEditor } from './playground
 export async function runSelected(context: IActionContext, ...args: unknown[]): Promise<void> {
     const invocation = parsePlaygroundInvocation(args);
     context.telemetry.properties.activationSource = invocation.activationSource;
+    const afterRun = resolveAfterRunOutcome(
+        vscode.workspace.getConfiguration().get<unknown>(settingsKeys.playgroundAfterRun),
+        invocation.screenReaderMode,
+    );
+    context.telemetry.properties.afterRun = afterRun;
+    context.telemetry.properties.screenReaderMode = invocation.screenReaderMode ? 'true' : 'false';
 
     const editor = resolvePlaygroundEditor(invocation.uri);
     if (!editor) {
@@ -52,5 +60,5 @@ export async function runSelected(context: IActionContext, ...args: unknown[]): 
         return;
     }
 
-    await executePlaygroundCode(codeToRun, 'runSelected', editor.document.uri);
+    await executePlaygroundCode(codeToRun, 'runSelected', editor.document.uri, { afterRun });
 }

@@ -31,6 +31,8 @@ export const PlaygroundCommandIds = {
     runAll: 'vscode-documentdb.command.playground.runAll',
     /** Run the selection or the statement at the cursor */
     runSelected: 'vscode-documentdb.command.playground.runSelected',
+    focusResult: 'vscode-documentdb.command.playground.focusResult',
+    focusPlayground: 'vscode-documentdb.command.playground.focusPlayground',
     /** Sample documents from a collection to discover field names */
     scanCollectionSchema: 'vscode-documentdb.command.playground.scanCollectionSchema',
     /** Open the current code block in Collection View */

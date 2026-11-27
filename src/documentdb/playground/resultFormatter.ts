@@ -28,6 +28,27 @@ function isMaxTimeMSError(error: unknown): boolean {
     return error instanceof Error && 'code' in error && (error as { code: unknown }).code === 50;
 }
 
+export function describeResult(result: ExecutionResult): string | undefined {
+    const unwrapped = unwrapCursorResult(result.printable);
+    if (result.type === 'Cursor' && Array.isArray(unwrapped)) {
+        return l10n.t('Cursor ({0} documents)', unwrapped.length);
+    }
+    if (result.type) {
+        return result.type;
+    }
+    if (Array.isArray(unwrapped)) {
+        return l10n.t('Array ({0} elements)', unwrapped.length);
+    }
+    return undefined;
+}
+
+export function describeCompletion(result: ExecutionResult): string | undefined {
+    if (result.printableIsUndefined === true) {
+        return undefined;
+    }
+    return describeResult(result) ?? (result.printable === null ? 'null' : typeof result.printable);
+}
+
 /**
  * Formats a query playground execution result for display in a read-only output panel.
  *
