@@ -78,7 +78,10 @@ pre-existing save defect that the migration newly exposes; it was not introduced
 **Recommendation:** (a), with focused save-path tests for `0`, `false`, `""` and `null` (no new
 ObjectId, same filter ID) and one Add case without `_id` that still generates an ID.
 
-**Author decision and rationale:** _Pending._
+**Author decision and rationale:** **Approved (operator): (a).** Decided after a deeper
+investigation of `_id` equality, including the driver and object `_id` field order. See
+[R1 deep dive](#r1-deep-dive-object-_id-field-order-and-the-comparator-question), which adds R6
+and R7.
 
 ### R2 — Medium: keyboard step-in removes the focused cell without restoring grid focus
 
@@ -135,7 +138,9 @@ deletion was found; this is not broadened into R2.
 **Recommendation:** (a), and extend M7 with an uninterrupted Enter → arrow/Space journey,
 including a child level with fewer columns.
 
-**Author decision and rationale:** _Pending._
+**Author decision and rationale:** **Approved: (a).** The operator approved the recommended option
+for every item not discussed individually. Reply on the Copilot thread that the deletion part is
+not established (Delete starts from the toolbar through a host confirmation).
 
 ### R3 — Medium: packaged L2 no longer requires any Collection View results
 
@@ -174,7 +179,8 @@ be a product finding in its own right; unconfirmed.
 
 **Recommendation:** (a), plus (b) if cheap.
 
-**Author decision and rationale:** _Pending._
+**Author decision and rationale:** **Approved: (a)** (recommended option, approved by default);
+(b) only if it is trivially cheap.
 
 ### R4 — GitHub Copilot: focus after Tree results are replaced
 
@@ -200,7 +206,8 @@ refresh.
 - (b) A defensive restore to a surviving ancestor or root, only if focus was in the Tree. Low
   value now; worth revisiting only if an in-Tree refresh trigger is ever added.
 
-**Author decision and rationale:** _Pending._
+**Author decision and rationale:** **Approved: (a)** (operator). No code change; reply on the
+Copilot thread with the trigger analysis.
 
 ### R5 — GitHub Copilot: BSON type description on keyboard-focused Table cells
 
@@ -232,7 +239,13 @@ exposure on keyboard focus (`migration-parity.md:37,43`). D8 makes the hover too
 
 **Recommendation:** (a), or an explicit (c) decision.
 
-**Author decision and rationale:** _Pending._
+**Author decision and rationale:** **Approved (operator): remove the type tooltip, and screen
+readers announce the cell as "type value".** This is (a) without the hover tooltip. The glyph
+becomes `aria-hidden`, and the full type name becomes visually hidden text placed before the
+value, so the focused gridcell's name reads, for example, "Int32 7". The visual layout is
+unchanged, there is no extra Tab stop, and the full type name is no longer shown on hover. This
+is acceptable under D8 because the type is now available as text. Assumption to confirm: the
+missing-field cell keeps its "Not set" label (`TypedValueCell.tsx:74–80`).
 
 ## Independent sweep (steps 3–4)
 
@@ -255,19 +268,262 @@ No additional material new regression was established. These were checked and no
 The protected out-of-scope topics (cell ranges, Tree selection, cross-page/shard duplicate
 mitigation) were not reviewed.
 
-## Ready for author decisions (pending)
+## Second pass: re-validation at HEAD and simplicity review
 
-| Item | Decision needed                                                       | Reviewer recommendation                  | Status  |
-| ---- | --------------------------------------------------------------------- | ---------------------------------------- | ------- |
-| R1   | How falsy-ID saves preserve identity                                  | (a) own-property `_id` in `saveDocument` | Pending |
-| R2   | Focus target after keyboard step-in; reply to deletion part of thread | (a) root `_id` cell of same row          | Pending |
-| R3   | Packaged L2 Collection View result expectations                       | (a), plus (b) if cheap                   | Pending |
-| R4   | Reply to Copilot thread without code change                           | (a) no change                            | Pending |
-| R5   | Accessible type name on focused cells versus D8 acceptance            | (a) or explicit (c)                      | Pending |
+Reviewed local `feature/rdg-migration` at `3cff9df9` (three commits ahead of the pushed
+`4b222421`). Source review only; no build, tests or browser run. Product changes since `4b222421`
+are formatting, l10n, and moving the selection-anchor reset from render into `selectRow`
+(`DataViewPanelTable.tsx:50–56`); none of them touches R1–R5.
 
-**Suggested sequence:** R1 (data integrity) → R2 (documented keyboard journey) → R3
-(verification truthfulness) → R5 decision → R4 and the R2-deletion thread replies. Case 2
-checks stay with the separate handover work.
+### Re-validation of R1–R5
+
+| Item | Still valid at `3cff9df9`? | Evidence at HEAD                                                                                                                                                                                                                                | Severity |
+| ---- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| R1   | Yes                        | `documentsViewRouter.ts` still tests `if (documentBson['_id'])` and passes `''`; `ClustersClient.ts:1224–1242` still generates an ObjectId, deletes `_id` and upserts. `toDocumentId` (`documentIdentity.ts:38–58`) still admits own falsy IDs. | High     |
+| R2   | Yes                        | `handleStepInRequest` (`CollectionView.tsx:696–722`) only changes the path; the path effect (`:551–553`) reloads. Nothing restores grid focus; `DataViewPanelTable.tsx` has no post-load focus logic.                                           | Medium   |
+| R3   | Yes                        | `build/verification/browser/fixtures.ts:509` is still `content: ['Documents']`, with only Monaco and `.collectionView` styles.                                                                                                                  | Medium   |
+| R4   | Not established            | Unchanged: Tree replacement is triggered only from outside the Tree.                                                                                                                                                                            | Low      |
+| R5   | Yes, Low                   | `TypedValueCell.tsx:84–92` still puts the description tooltip on an inner span.                                                                                                                                                                 | Low      |
+
+**R1 pros and cons, made explicit:**
+
+- (a) Own-property test in `saveDocument`. Pro: about 3 lines; fixes every entry point and keeps
+  K2. Con: touches the Document View save path, which this PR otherwise leaves alone, so it needs
+  its own small test.
+- (b) Withhold Edit for falsy IDs. Pro: no change outside the grid. Con: reverses accepted K2, and
+  the latent save bug stays for other entry points.
+- (c) Use `undefined` instead of `''` in `upsertDocument`. Pro: removes the TODO sentinel. Con:
+  wider API change, not needed to fix the bug.
+- (d) Won't fix. Con: silent duplicate document while reporting success. Not acceptable for data
+  integrity.
+
+**Recommendation unchanged: (a).** It is the smallest correct fix.
+
+**R2 pros and cons:** (a) root `_id` cell. Pro: one `setActivePosition` call after the matching
+page is applied; always in bounds. Con: column position is lost. (b) keep the column index. Pro:
+less movement. Con: an extra bounds branch, and the focused column then means something else. (c)
+won't fix. Con: breaks the documented Enter → arrows journey. **Recommendation unchanged: (a).**
+
+**R3 pros and cons:** (a) restore the row texts and add one `[role="grid"]` style entry. Pro: a
+couple of lines; restores the baseline guarantee. Con: none material. (c) won't fix. Con: the
+packaged smoke test cannot catch an empty grid. **Recommendation: (a); skip (b) unless trivially
+cheap.**
+
+### Simplicity pass
+
+Question: did the migration add more structure than it needs? Overall, **no major
+over-engineering in product code.** The shapers (`toTablePage`, `toTreeNodes`,
+`documentIdentity`) are small and each check has a reason. The excess is concentrated in
+`CollectionView.tsx`, where defensive guards and copy-paste have accumulated. The verification
+infrastructure is large but declarative and proportionate.
+
+#### S1 — Low/Medium: stale-reply guards in `CollectionView.tsx` overlap
+
+**Evidence:** four refs, `dataRequestRef`, `cachedQueryRef`, `tablePageQueryRef` and
+`tablePageRequestRef` (`CollectionView.tsx:169–172`), plus a per-effect `cancelled` flag
+(`:458,545`). `isCurrentRequest` (`:342–347`) re-checks query, view and path; the Table `then`
+also re-checks `result.path` (`:354`); `isCurrentTablePage` (`:176–186`) checks six conditions.
+Every trigger already bumps `dataRequestRef`: query change (effect start `:460` and cleanup
+`:545`), view switch (`getDataForView` from `:574`), and path change (`:551`). So:
+
+- `tablePageQueryRef === activeQuery` is implied by `tablePageRequestRef === dataRequestRef`.
+- `isCurrentRequest`'s query, view and path checks and the `result.path` check are implied by
+  `request === dataRequestRef.current`.
+
+**Options:**
+
+- (a) Remove `tablePageQueryRef` and reduce `isCurrentRequest` to the counter check. Keep
+  `cachedQueryRef`, `cancelled`, and the path comparison in `isCurrentTablePage`, which covers the
+  render between a path change and its effect. Pro: one fewer ref and about 12 fewer lines; one
+  rule to explain ("a reply is current if its request number is the latest"). Con: touches race
+  code; relies on the existing late-query, late-delete and step-in scenarios to prove nothing
+  regressed.
+- (b) Won't fix. Pro: zero risk now; the guards are correct, only redundant. Con: future
+  maintainers must keep five overlapping invariants in sync.
+
+**Recommendation:** (a) as a small follow-up commit in this PR if R2 is being changed in the same
+file anyway; otherwise (b) is acceptable.
+
+#### S2 — Low: duplicated selection → targets → commands logic
+
+**Evidence:** the pair `isCurrentTablePage(...)` + `resolveDocumentTargets(...)` appears five times
+(`handleSelectedRowKeysChange`, delete twice, view, edit). The four-flag `commands` block is
+duplicated (`:199–204` and the delete `then`). `handleViewDocumentRequest` and
+`handleEditDocumentRequest` are identical except for the RPC.
+
+**Options:**
+
+- (a) One `getSelectedTargets(context)` helper, one `commandsFor(targets)` helper, and one
+  `openSelectedDocument(rpc)` for View and Edit. Pro: about 40 fewer lines; the
+  enable-buttons rule lives in one place. Con: a small mechanical refactor.
+- (b) Won't fix. Con: the next change to the enable rules must be made in two places.
+
+**Recommendation:** (a). It is mechanical, low risk, and covered by the WI-7 action-guard
+scenarios.
+
+#### S3 — Low: redundant guards in step-in
+
+**Evidence:** `handleStepInRequest` (`CollectionView.tsx:702–713`) checks
+`columnKey === ROOT_ID_COLUMN_KEY`, which is equivalent to `field === undefined` via
+`fieldFromColumnKey`. `field === '_id'` cannot occur because `toTablePage.ts:37,66` never emits
+an `_id` field column, and `page.columns.some(...)` re-checks a key that came from the page.
+`onCellDoubleClick` (`DataViewPanelTable.tsx:157–160`) looks the column up only to narrow its
+type. The guards that matter are `isCurrentTablePage`, `field !== undefined` (which also rejects
+the root `_id` column), and `type === 'object'`.
+
+**Options:** (a) keep those three guards and delete the rest. Pro: readable intent, about 6
+fewer lines. Con: none. (b) Won't fix. **Recommendation:** superseded by the revised S3 options
+in [S3–S4 provenance](#s3s4-provenance-isrootid-and-nested-_id-operator-request), which keep
+`field === '_id'` as the documented O1 rule.
+
+#### S4 — Low: dead `isRootId` prop
+
+**Evidence:** `DataViewPanelTable` passes `isRootId` to `TypedValueCell`, which declares it
+(`TypedValueCell.tsx:68`) but destructures only `value` (`:71`). `TableColumn.isRootId`
+(`types.ts:29`) duplicates `key === ROOT_ID_COLUMN_KEY`; its only other reader is the S3 guard.
+
+**Options:** (a) remove the prop and the field. Pro: one fewer concept in the wire type. Con:
+touches `toTablePage` tests. (b) Remove only the unused prop. **Recommendation:** (a) if S3 is
+done, otherwise (b).
+
+#### S3–S4 provenance: `isRootId` and nested `_id` (operator request)
+
+The operator asked whether `isRootId` is old code that handled embedded objects with fields
+called `_id`.
+
+- **`isRootId` is new and has no embedded-`_id` role.** It first appears in the WI-1 interface
+  sketch (`02-rdg-execution-plan.md:414`) and the WI-1c spec (`373373a0`), and then in
+  `b415822b` (types) and `80200fc6` (shaper). The spec intended it as a cell-component prop
+  (`02-rdg-execution-plan.md:447`: "the cell component's props (`value: GridCellValue |
+undefined`, `isRootId`)"). WI-6 (`bf2686fd`) created `TypedValueCell` with the prop but never
+  read it; its tests pass only `isRootId={false}`. A future `_id` column pin
+  (`frozen: 'start'`, `grid-scorecard.md:368`) can use `column.key === ROOT_ID_COLUMN_KEY`.
+- **The embedded-`_id` handling is old, and it is a different mechanism.** Since the initial
+  import (`43015bbc`, 2025-05-16, inherited from vscode-cosmosdb), the baseline shaper skipped
+  `_id` at every nesting level with the comment `// _id has been processed already`
+  (`git show 8f81840d:src/utils/slickgrid/mongo/toSlickGridTable.ts`). The flat row used the key
+  `_id` for the root ID cell, so a nested `_id` would have overwritten it. The migration's
+  `root:_id` / `field:<name>` keys (`types.ts:13–24`) remove that collision. O1
+  (`decisions.md:107`) then kept the nested `_id` hidden for parity (`toTablePage.ts:37,66`),
+  and `design.md:51` documents that step-in rejects "`_id` fields".
+- **Verdict on the hypothesis:** correct for the column-key split and the `_id` filter in
+  `toTablePage`; not correct for `isRootId`.
+
+**Revised S3 options:**
+
+- (a) Keep `isCurrentTablePage`, `field === undefined` (which already rejects the root column,
+  because `fieldFromColumnKey('root:_id')` is `undefined`), `field === '_id'` with a one-line
+  comment pointing to O1, and the object-type check. Remove `columnKey === ROOT_ID_COLUMN_KEY`
+  and the `page.columns.some(...)` scan; the row's cell lookup already requires a column from
+  this page. Pro: keeps the documented O1 rule at the gesture boundary for one token, and needs
+  no doc change. Con: `field === '_id'` is unreachable today.
+- (b) Also drop `field === '_id'` and update `design.md:51`. Pro: one more line gone. Con: the
+  O1 rule then lives only in the shaper.
+- (c) Won't fix.
+
+**Recommendation:** S3 (a); S4 (a) unchanged.
+
+**Author decision and rationale:** **Approved (operator): S3 revised (a) and S4 (a).**
+
+#### S5 — Low: Escape handler inlined in JSX
+
+**Evidence:** a 40-line `onKeyDown` lambda inside the render tree (`CollectionView.tsx:889–923`).
+**Options:** (a) move it unchanged into a named `handleResultsKeyDown`. Pro: the render tree
+reads as layout again. Con: none. (b) Won't fix. **Recommendation:** (a), opportunistically.
+
+#### S6 — Checked, keep: identity and column-key design
+
+- `toDocumentId` layers a type exclusion, `isSafeIdentityValue`, and an EJSON round-trip
+  (`documentIdentity.ts:15–58`). Each layer has a reason. The `$`-key rejection stops an `_id`
+  such as `{ $gt: … }` from becoming an operator in the action filter. The round-trip withholds
+  IDs that relaxed parsing would change, such as Long. **Won't fix.**
+- `root:_id` / `field:<name>` column keys and `getCell`'s own-property read (`types.ts:13–24,61`)
+  keep user field names such as `__proto__` or the old `x-objectid` from colliding with grid
+  keys. This replaces the baseline's documented collision TODO. **Won't fix.**
+
+#### S7 — Checked, keep with a caveat: `useTreeRows` state reset
+
+**Evidence:** `useTreeRows.ts:72–94` stores `{ nodes, expandedKeys }` and resets during render
+when `nodes` changes (React's "adjust state on prop change" pattern), then repeats the identity
+check in `setExpanded`. A remount with a per-load `key` would be shorter, but it also resets
+scroll and RDG state, and needs a load counter threaded from `CollectionView`. **Won't fix**: the
+logic is contained and unit-tested (`useTreeRows.test.ts`).
+
+Also duplicated, and kept: the focus-syncing `Cell` override exists in both Table and Tree
+(`DataViewPanelTable.tsx:166–178`, `DataViewPanelTree.tsx:118–129`). Two copies of about 10
+lines with different extra props; a shared helper would need parameters and cost more than it
+saves. **Won't fix**, but both comments should explain the same RDG Tab-exit reason.
+
+#### S8 — Checked, keep: verification infrastructure
+
+**Evidence:** `scenarios.ts` grows from 3,422 to 4,926 lines; `collectionViewFixtures.ts` is 741
+new lines. Despite the size, the scenarios are declarative data, not bespoke code. Only three
+assertion kinds are new (`focused`, `style`, `countAtMost`), and each is reused (`countAtMost` 4
+times, the others many). The grid-navigation generator (`scenarios.ts:311–438`) has three call
+sites (Table, Tree, 500-row) and keeps Table and Tree keyboard contracts in parity. The fixture
+datasets are deliberately hand-written for BSON, identity and nesting edge cases; the 500-row
+page is already generated. The meta-tests guard against silently skipped scenarios and missing
+themes. No dead code was found.
+
+**Options:** (a) later, move the Collection View contracts out of `scenarios.ts` into their own
+module for navigability (no behavior change). (b) Won't fix. **Recommendation:** (b) for this
+PR; (a) only if the file keeps growing.
+
+### Simplicity summary
+
+| Item | Severity   | Recommendation                        | Est. lines saved |
+| ---- | ---------- | ------------------------------------- | ---------------- |
+| S1   | Low/Medium | (a) if R2 lands in this file, else WF | ~12              |
+| S2   | Low        | (a) do now                            | ~40              |
+| S3   | Low        | revised (a) with S2, keep `_id` rule  | ~5               |
+| S4   | Low        | (a) with S3, else (b)                 | ~5               |
+| S5   | Low        | (a) opportunistic                     | 0 (readability)  |
+| S6   | n/a        | Won't fix (justified)                 | —                |
+| S7   | n/a        | Won't fix (contained)                 | —                |
+| S8   | n/a        | Won't fix (proportionate)             | —                |
+
+S1–S5 are behavior-preserving and together are well under 100 lines; none of them blocks the
+PR. They are covered by existing WI-7, WI-8 and late-reply browser scenarios plus the unit tests.
+
+## R1 deep dive: object `_id` field order and the comparator question
+
+Moved to a dedicated file at the operator's request:
+[Object `_id` field order and document identity](./04-object-id-field-order.md). In short:
+
+- **R6 (Medium, pre-existing):** an object `_id` with an integer-like key, at any depth, is read
+  back in a different key order, so View, Edit, Delete and Save can target nothing or the wrong
+  document. Approved (a): #1142 withholds the actions. Follow-up
+  [#1144](https://github.com/microsoft/vscode-documentdb/issues/1144) explains the reason to the
+  user and links to a manual page.
+- **R7 (High, pre-existing, outside #1142):** Document View changes numeric BSON types on save.
+  Approved (a): filed as [#1145](https://github.com/microsoft/vscode-documentdb/issues/1145).
+- **Comparator:** rejected; the order is lost before any client comparison runs.
+
+## Author decisions
+
+Items the operator did not address individually take the reviewer recommendation, as the
+operator instructed.
+
+| Item | Decision                                                                                              | Status                 |
+| ---- | ----------------------------------------------------------------------------------------------------- | ---------------------- |
+| R1   | (a) own-property `_id` in `saveDocument`                                                              | Approved (operator)    |
+| R2   | (a) focus the root `_id` cell of the same row; reply on the deletion part                             | Approved (recommended) |
+| R3   | (a) packaged L2 requires Collection View results                                                      | Approved (recommended) |
+| R4   | (a) no code change; reply with the trigger analysis                                                   | Approved (operator)    |
+| R5   | Remove the tooltip; announce "type value"                                                             | Approved (operator)    |
+| R6   | (a) withhold actions for multi-key object `_id`s with integer-like keys; follow-up #1144 explains why | Approved (operator)    |
+| R7   | (a) separate issue #1145; no change in #1142                                                          | Approved (operator)    |
+| S1   | (a) collapse the stale-reply guards (R2 lands in the same file)                                       | Approved (recommended) |
+| S2   | (a) one selection → targets helper                                                                    | Approved (recommended) |
+| S3   | Revised (a): keep the `_id` rule with an O1 comment, drop the rest                                    | Approved (operator)    |
+| S4   | (a) remove `isRootId` from the wire type, the cell props and the tests                                | Approved (operator)    |
+| S5   | (a) extract the Escape handler                                                                        | Approved (recommended) |
+| S6–8 | Won't fix                                                                                             | Approved (recommended) |
+
+**Suggested sequence:** R1 + R6 together (identity and save, data integrity) → R2 with S1–S5 in
+the same file as one cleanup commit → R5 → R3 (verification truthfulness) → R4 and R2-deletion
+thread replies. R7 (#1145) and the R6 follow-up (#1144) are tracked outside #1142. Case 2 checks
+stay with the separate handover work.
 
 ## Boundaries and remaining evidence
 
@@ -293,6 +549,15 @@ checks stay with the separate handover work.
 - Independent fresh-context validation and sweep (steps 3–4): done on `4b222421`. R1–R3 are
   valid; R4 is not established; R5 is a Low gap; no new material regression was found. No
   runtime reproduction; reviewer vendor relative to the initial reviewer was not recorded.
-- Author decisions / G3a: _Pending; not released._
+- Second pass (re-validation at `3cff9df9` and simplicity review): done. R1–R5 assessments are
+  unchanged; S1–S5 add small optional cleanups, and S6–S8 record checked won't-fix items. Source
+  only; no build, tests or browser run.
+- R1 deep dive and S3–S4 provenance (operator request): done. Offline `bson` 7.2.0 experiment,
+  source trace and history search; no server run. Adds R6 (Medium, pre-existing) and R7 (High,
+  pre-existing, outside #1142), rejects an order-insensitive comparator, and revises S3. The deep
+  dive now lives in [04-object-id-field-order.md](./04-object-id-field-order.md).
+- Author decisions / G3a: all items decided on 2026-11-27 and recorded in
+  [decisions.md](../decisions.md) (0004 and 0005). R7 and the R6 follow-up are filed as #1145 and
+  #1144. G3a is _not released_: the approved changes are not implemented yet.
 - Case 1 draft stage: this was a review-file-only task with execution explicitly excluded.
   Full Case 2 checks, including `prettier-fix`, are deferred until ready-for-review handover.
