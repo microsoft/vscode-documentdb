@@ -7,7 +7,7 @@
 ### New Features & Improvements
 
 - **Resilient Connections**: Renews Microsoft Entra ID tokens silently, refreshes Azure discovery credentials, and replaces closed or transient failed clients with the same binding on a later foreground operation. [#990](https://github.com/microsoft/vscode-documentdb/issues/990), [#1102](https://github.com/microsoft/vscode-documentdb/issues/1102)
-- **Explicit Connection Teardown**: Adds Disconnect and Reconnect, a shared disconnect and deletion flow, a Close all or Keep open (disabled) choice, and protection for active copy, export, or import work. [#566](https://github.com/microsoft/vscode-documentdb/issues/566), [#1059](https://github.com/microsoft/vscode-documentdb/issues/1059)
+- **Explicit Connection Teardown**: Adds Disconnect and Reconnect, a shared disconnect and deletion flow, a Close all or Keep open choice, and protection for active copy, export, or import work. [#566](https://github.com/microsoft/vscode-documentdb/issues/566), [#1059](https://github.com/microsoft/vscode-documentdb/issues/1059)
 - **Identity-Bound Open Views**: Keeps open views and editor state tied to the connection that created them. Expired sign-in or unavailable connections receive bounded recovery, while changed saved settings require a new view instead of changing identity behind it. [#1102](https://github.com/microsoft/vscode-documentdb/issues/1102)
 
 ## 1.1.0

@@ -140,6 +140,11 @@ See [decisions.md](./decisions.md):
 - 0019 require a fresh Dashboard delete after Disconnect and retain tree-only Paste.
 - 0020 defer the late-failure comparison across releases and retain descriptive telemetry.
 - 0021 key the in-memory connection fingerprint per extension host.
+- 0022 separately unauthenticated Shell entry from failure rows only.
+- 0023 keep failed retained-view Retry feedback inside the unavailable dialog.
+- 0024 classify explicit stale recovery clicks without disturbing quiet background paths.
+- 0025 use modal feedback for tree-origin commands, leaving webview feedback unchanged;
+  descendant expansion is deferred to #1143 until foreground attribution is supported.
 
 ## Timeline
 

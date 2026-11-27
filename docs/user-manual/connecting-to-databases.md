@@ -48,7 +48,7 @@ When open connection views exist and the setting `documentDB.connections.openTab
 
 - **Close all**, which closes open connection views. Closing a dirty Document View first asks
   whether to **Discard changes**.
-- **Keep open (disabled)**, which keeps view contents but prevents database operations.
+- **Keep open**, which keeps view contents but prevents database operations.
 
 This choice applies to Collection View, Document View, and Cluster Dashboard tabs. It does not close
 the Interactive Shell terminal or the Query Playground file; Disconnect stops their database
@@ -64,7 +64,7 @@ why it is unavailable:
 - Select **Retry** after repairing or reconnecting the connection. Retry checks the binding and
   does not replay the operation that failed.
 - Select **Close view** to close the tab. A dirty Document View warns before closing.
-- Use the **X** to dismiss the dialog when you need to copy from the view. Database operations stay
+- Use the **X** to dismiss the dialog when you need to inspect or copy view contents. Database operations stay
   disabled, and the next operation shows the dialog again.
 
 Use the cluster's **Reconnect** action in the tree to restore the same connection. If reconnect
