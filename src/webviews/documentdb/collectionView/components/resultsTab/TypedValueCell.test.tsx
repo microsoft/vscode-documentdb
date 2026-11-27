@@ -31,7 +31,7 @@ async function render(node: ReactNode): Promise<HTMLElement> {
 
 function referencedText(element: Element, attribute: string): string | undefined {
     const id = element.getAttribute(attribute)?.split(' ')[0];
-    return id === undefined ? undefined : document.getElementById(id)?.textContent ?? undefined;
+    return id === undefined ? undefined : (document.getElementById(id)?.textContent ?? undefined);
 }
 
 afterEach(async () => {
@@ -46,9 +46,7 @@ afterEach(async () => {
 
 describe('TypedValueCell', () => {
     it('renders the formatted value with its existing type glyph and accessible full type name', async () => {
-        const host = await render(
-            <TypedValueCell value={{ display: '12.50', type: 'decimal128' }} isRootId={false} />,
-        );
+        const host = await render(<TypedValueCell value={{ display: '12.50', type: 'decimal128' }} isRootId={false} />);
         const cell = host.firstElementChild;
 
         expect(host.textContent).toBe('12.50d128');

@@ -19,10 +19,7 @@ interface TreeRows {
     readonly setExpanded: (node: TreeNode, expanded: boolean) => void;
 }
 
-export function getVisibleTreeRows(
-    nodes: readonly TreeNode[],
-    expandedKeys: ReadonlySet<string>,
-): TreeNode[] {
+export function getVisibleTreeRows(nodes: readonly TreeNode[], expandedKeys: ReadonlySet<string>): TreeNode[] {
     const children = new Map<string | null, TreeNode[]>();
     for (const node of nodes) {
         const siblings = children.get(node.parentKey);
@@ -81,14 +78,16 @@ export function useTreeRows(nodes: readonly TreeNode[]): TreeRows {
     const rows = useMemo((): TreeNode[] => getVisibleTreeRows(nodes, expandedKeys), [nodes, expandedKeys]);
     const setExpanded = useCallback(
         (node: TreeNode, expanded: boolean): void => {
-            setState((previous): TreeExpansionState => ({
-                nodes,
-                expandedKeys: setTreeNodeExpanded(
-                    node,
-                    previous.nodes === nodes ? previous.expandedKeys : COLLAPSED_KEYS,
-                    expanded,
-                ),
-            }));
+            setState(
+                (previous): TreeExpansionState => ({
+                    nodes,
+                    expandedKeys: setTreeNodeExpanded(
+                        node,
+                        previous.nodes === nodes ? previous.expandedKeys : COLLAPSED_KEYS,
+                        expanded,
+                    ),
+                }),
+            );
         },
         [nodes],
     );

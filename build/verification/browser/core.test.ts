@@ -141,7 +141,8 @@ describe('Shared browser fixture core', (): void => {
         const ignored: Page = { path: ['wrong'], columns: [], rows: [] };
         const responses = {
             'mongoClusters.collectionView.getCurrentPageAsTable': {
-                type: 'query', results: [root],
+                type: 'query',
+                results: [root],
                 cases: [
                     { input: ['details'], results: [nested] },
                     { input: ['details'], results: [ignored] },
@@ -150,12 +151,20 @@ describe('Shared browser fixture core', (): void => {
         } satisfies TypedRpcFixtures;
         const messages = vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
         const api = fakeVsCodeApi(responses, [])();
-        api.postMessage({ id: 'nested', op: { type: 'query', path: 'mongoClusters.collectionView.getCurrentPageAsTable', input: ['details'] } });
-        api.postMessage({ id: 'root', op: { type: 'query', path: 'mongoClusters.collectionView.getCurrentPageAsTable', input: [] } });
+        api.postMessage({
+            id: 'nested',
+            op: { type: 'query', path: 'mongoClusters.collectionView.getCurrentPageAsTable', input: ['details'] },
+        });
+        api.postMessage({
+            id: 'root',
+            op: { type: 'query', path: 'mongoClusters.collectionView.getCurrentPageAsTable', input: [] },
+        });
         await Promise.resolve();
         expect(messages.mock.calls.map((call): unknown => call[0])).toEqual([
-            { id: 'nested', result: nested }, { id: 'nested', complete: true },
-            { id: 'root', result: root }, { id: 'root', complete: true },
+            { id: 'nested', result: nested },
+            { id: 'nested', complete: true },
+            { id: 'root', result: root },
+            { id: 'root', complete: true },
         ]);
     });
 
@@ -166,12 +175,16 @@ describe('Shared browser fixture core', (): void => {
         } satisfies TypedRpcFixtures;
         const messages = vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
         const api = fakeVsCodeApi(responses, errors)();
-        api.postMessage({ id: 'view', op: { type: 'mutation', path: 'mongoClusters.collectionView.viewDocumentById', input: '"a"' } });
+        api.postMessage({
+            id: 'view',
+            op: { type: 'mutation', path: 'mongoClusters.collectionView.viewDocumentById', input: '"a"' },
+        });
         await Promise.resolve();
         expect(messages).not.toHaveBeenCalled();
         expect(window.__releaseScenarioReply?.('view')).toBe(true);
         expect(messages.mock.calls.map((call): unknown => call[0])).toEqual([
-            { id: 'view', result: null }, { id: 'view', complete: true },
+            { id: 'view', result: null },
+            { id: 'view', complete: true },
         ]);
         expect(window.__releaseScenarioReply?.('view')).toBe(false);
         expect(errors).toEqual(['No held scenario reply: view']);
@@ -181,7 +194,9 @@ describe('Shared browser fixture core', (): void => {
         const errors: string[] = [];
         const responses = {
             'mongoClusters.collectionView.deleteDocumentsById': {
-                type: 'mutation', results: [true], hold: 'default',
+                type: 'mutation',
+                results: [true],
+                hold: 'default',
                 cases: [
                     { input: ['"a"'], results: [false], hold: 'cancelled' },
                     { input: ['"immediate"'], results: [true] },
@@ -190,21 +205,33 @@ describe('Shared browser fixture core', (): void => {
         } satisfies TypedRpcFixtures;
         const messages = vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
         const api = fakeVsCodeApi(responses, errors)();
-        api.postMessage({ id: 'a', op: { type: 'mutation', path: 'mongoClusters.collectionView.deleteDocumentsById', input: ['"a"'] } });
-        api.postMessage({ id: 'b', op: { type: 'mutation', path: 'mongoClusters.collectionView.deleteDocumentsById', input: ['"b"'] } });
-        api.postMessage({ id: 'immediate', op: { type: 'mutation', path: 'mongoClusters.collectionView.deleteDocumentsById', input: ['"immediate"'] } });
+        api.postMessage({
+            id: 'a',
+            op: { type: 'mutation', path: 'mongoClusters.collectionView.deleteDocumentsById', input: ['"a"'] },
+        });
+        api.postMessage({
+            id: 'b',
+            op: { type: 'mutation', path: 'mongoClusters.collectionView.deleteDocumentsById', input: ['"b"'] },
+        });
+        api.postMessage({
+            id: 'immediate',
+            op: { type: 'mutation', path: 'mongoClusters.collectionView.deleteDocumentsById', input: ['"immediate"'] },
+        });
         await Promise.resolve();
         expect(messages.mock.calls.map((call): unknown => call[0])).toEqual([
-            { id: 'immediate', result: true }, { id: 'immediate', complete: true },
+            { id: 'immediate', result: true },
+            { id: 'immediate', complete: true },
         ]);
         messages.mockClear();
         expect(window.__releaseScenarioReply?.('cancelled')).toBe(true);
         expect(messages.mock.calls.map((call): unknown => call[0])).toEqual([
-            { id: 'a', result: false }, { id: 'a', complete: true },
+            { id: 'a', result: false },
+            { id: 'a', complete: true },
         ]);
         expect(window.__releaseScenarioReply?.('default')).toBe(true);
         expect(messages.mock.calls.map((call): unknown => call[0]).slice(2)).toEqual([
-            { id: 'b', result: true }, { id: 'b', complete: true },
+            { id: 'b', result: true },
+            { id: 'b', complete: true },
         ]);
         expect(errors).toEqual([]);
     });
@@ -217,12 +244,16 @@ describe('Shared browser fixture core', (): void => {
         const messages = vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
         const api = fakeVsCodeApi(responses, errors)();
         for (const id of ['aborted', 'live']) {
-            api.postMessage({ id, op: { type: 'mutation', path: 'mongoClusters.collectionView.deleteDocumentsById', input: ['"a"'] } });
+            api.postMessage({
+                id,
+                op: { type: 'mutation', path: 'mongoClusters.collectionView.deleteDocumentsById', input: ['"a"'] },
+            });
         }
         api.postMessage({ id: 'aborted', op: { type: 'abort' } });
         expect(window.__releaseScenarioReply?.('delete')).toBe(true);
         expect(messages.mock.calls.map((call): unknown => call[0])).toEqual([
-            { id: 'live', result: true }, { id: 'live', complete: true },
+            { id: 'live', result: true },
+            { id: 'live', complete: true },
         ]);
         expect(errors).toEqual([]);
     });
@@ -233,7 +264,10 @@ describe('Shared browser fixture core', (): void => {
         } satisfies TypedRpcFixtures;
         const messages = vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
         const api = fakeVsCodeApi(responses, [])();
-        api.postMessage({ id: 'old', op: { type: 'mutation', path: 'mongoClusters.collectionView.deleteDocumentsById', input: [] } });
+        api.postMessage({
+            id: 'old',
+            op: { type: 'mutation', path: 'mongoClusters.collectionView.deleteDocumentsById', input: [] },
+        });
         const errors: string[] = [];
         fakeVsCodeApi({}, errors);
         expect(window.__releaseScenarioReply?.('old')).toBe(false);
@@ -242,7 +276,9 @@ describe('Shared browser fixture core', (): void => {
     });
 
     it('validates only well-formed optional input cases and hold tags', (): void => {
-        expect(isRpcFixture({ type: 'query', results: [], cases: [{ input: [], results: [null], hold: 'nested' }] })).toBe(true);
+        expect(
+            isRpcFixture({ type: 'query', results: [], cases: [{ input: [], results: [null], hold: 'nested' }] }),
+        ).toBe(true);
         expect(isRpcFixture({ type: 'query', results: [], hold: 7 })).toBe(false);
         expect(isRpcFixture({ type: 'query', results: [], cases: [{ input: [], results: null }] })).toBe(false);
     });

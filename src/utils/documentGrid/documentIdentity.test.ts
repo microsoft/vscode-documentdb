@@ -112,7 +112,9 @@ describe('documentIdentity', () => {
             { rowKey: 'id:{"$numberInt":"0"}', documentId: '{"$numberInt":"0"}' },
         ]);
         expect(assignRowIdentities([...documents].reverse(), true).at(-1)).toEqual(identities[0]);
-        expect(assignRowIdentities(documents, false)).toEqual(documents.map((_, index) => ({ rowKey: `pos:${index}` })));
+        expect(assignRowIdentities(documents, false)).toEqual(
+            documents.map((_, index) => ({ rowKey: `pos:${index}` })),
+        );
         expect(new Set(identities.map((identity) => identity.rowKey)).size).toBe(documents.length);
         expect(assignRowIdentities([{ _id: { a: 0 } }, { _id: { a: 0 } }], true)).toEqual([
             { rowKey: 'pos:0' },

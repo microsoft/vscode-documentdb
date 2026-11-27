@@ -3,16 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as l10n from '@vscode/l10n';
 import * as React from 'react';
 import { Cell, DataGrid, Row, type Column, type DataGridHandle, type DefaultColumnOptions } from 'react-data-grid';
+// eslint-disable-next-line import/no-internal-modules -- beta.64 explicitly exports this public stylesheet subpath.
 import 'react-data-grid/lib/styles.css';
-import * as l10n from '@vscode/l10n';
-import {
-    getCell,
-    type ColumnKey,
-    type TablePage,
-    type TableRow,
-} from '../../../../../utils/documentGrid/types';
+import { getCell, type ColumnKey, type TablePage, type TableRow } from '../../../../../utils/documentGrid/types';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { LoadingAnimationTable } from './LoadingAnimationTable';
 import { TypedValueCell } from './TypedValueCell';
@@ -43,13 +39,6 @@ export function DataViewPanelTable({
         query: currentContext.activeQuery,
         path: page?.path,
     });
-    if (
-        selectionScopeRef.current.query !== currentContext.activeQuery ||
-        selectionScopeRef.current.path !== page?.path
-    ) {
-        selectionScopeRef.current = { query: currentContext.activeQuery, path: page?.path };
-        anchorRef.current = undefined;
-    }
     const selectedRows = React.useMemo(() => new Set(selectedRowKeys), [selectedRowKeys]);
     React.useEffect(() => (): void => onSelectedRowKeysChange([]), [onSelectedRowKeysChange]);
 
@@ -57,6 +46,13 @@ export function DataViewPanelTable({
         const rows = page?.rows;
         if (!rows || !rows.includes(row)) {
             return;
+        }
+        if (
+            selectionScopeRef.current.query !== currentContext.activeQuery ||
+            selectionScopeRef.current.path !== page?.path
+        ) {
+            selectionScopeRef.current = { query: currentContext.activeQuery, path: page?.path };
+            anchorRef.current = undefined;
         }
         const next = new Set(selectedRowKeys);
         if (gesture === 'extend') {
@@ -104,12 +100,7 @@ export function DataViewPanelTable({
             const columnIndex = Number(event.target.getAttribute('aria-colindex')) - 1;
             const rowIndex = page?.rows.indexOf(row) ?? -1;
             const columnKey = page?.columns[columnIndex]?.key;
-            if (
-                rowIndex === -1 ||
-                !Number.isInteger(columnIndex) ||
-                columnIndex < 0 ||
-                columnKey === undefined
-            ) {
+            if (rowIndex === -1 || !Number.isInteger(columnIndex) || columnIndex < 0 || columnKey === undefined) {
                 return;
             }
             // RDG's active position can lag direct focus, so sync it from the actual focused cell.

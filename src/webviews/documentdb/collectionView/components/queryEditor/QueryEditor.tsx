@@ -649,7 +649,6 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
 
                                 // Toggle enhanced mode
                                 setIsEnhancedQueryMode(enhancedModeEnabled);
-
                             }}
                             icon={isEnhancedQueryMode ? <SettingsFilled /> : <SettingsRegular />}
                         ></ToggleButton>

@@ -40,12 +40,12 @@ for A9 evidence and the remaining workbench checks.
 
 ## Code map
 
-| Area | Source |
-| --- | --- |
-| Grid-neutral model and host shapers | [`types.ts`](../../../../src/utils/documentGrid/types.ts), [`toTablePage.ts`](../../../../src/utils/documentGrid/toTablePage.ts), [`toTreeNodes.ts`](../../../../src/utils/documentGrid/toTreeNodes.ts), [`documentIdentity.ts`](../../../../src/utils/documentGrid/documentIdentity.ts) |
-| Query-session shaping | [`ClusterSession.ts`](../../../../src/documentdb/ClusterSession.ts) |
-| Table, Tree, and tree expansion | [`DataViewPanelTable.tsx`](../../../../src/webviews/documentdb/collectionView/components/resultsTab/DataViewPanelTable.tsx), [`DataViewPanelTree.tsx`](../../../../src/webviews/documentdb/collectionView/components/resultsTab/DataViewPanelTree.tsx), [`useTreeRows.ts`](../../../../src/webviews/documentdb/collectionView/components/resultsTab/useTreeRows.ts) |
-| Navigation, action guards, and view focus | [`CollectionView.tsx`](../../../../src/webviews/documentdb/collectionView/CollectionView.tsx), [`collectionViewContext.ts`](../../../../src/webviews/documentdb/collectionView/collectionViewContext.ts) |
+| Area                                      | Source                                                                                                                                                                                                                                                                                                                                                              |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Grid-neutral model and host shapers       | [`types.ts`](../../../../src/utils/documentGrid/types.ts), [`toTablePage.ts`](../../../../src/utils/documentGrid/toTablePage.ts), [`toTreeNodes.ts`](../../../../src/utils/documentGrid/toTreeNodes.ts), [`documentIdentity.ts`](../../../../src/utils/documentGrid/documentIdentity.ts)                                                                            |
+| Query-session shaping                     | [`ClusterSession.ts`](../../../../src/documentdb/ClusterSession.ts)                                                                                                                                                                                                                                                                                                 |
+| Table, Tree, and tree expansion           | [`DataViewPanelTable.tsx`](../../../../src/webviews/documentdb/collectionView/components/resultsTab/DataViewPanelTable.tsx), [`DataViewPanelTree.tsx`](../../../../src/webviews/documentdb/collectionView/components/resultsTab/DataViewPanelTree.tsx), [`useTreeRows.ts`](../../../../src/webviews/documentdb/collectionView/components/resultsTab/useTreeRows.ts) |
+| Navigation, action guards, and view focus | [`CollectionView.tsx`](../../../../src/webviews/documentdb/collectionView/CollectionView.tsx), [`collectionViewContext.ts`](../../../../src/webviews/documentdb/collectionView/collectionViewContext.ts)                                                                                                                                                            |
 
 ## Durable references
 

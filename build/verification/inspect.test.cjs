@@ -202,9 +202,9 @@ test('host BSON invariant requires one per host/worker and permits zero or one, 
 test('host graphs exclude React Data Grid', () => {
     for (const name of ['main', 'playgroundWorker', 'playgroundTsPlugin']) {
         const { report, bundled } = hostFixture();
-        report.chunks.find((chunk) => chunk.name === name).moduleIds.push(
-            './node_modules/react-data-grid/lib/index.js',
-        );
+        report.chunks
+            .find((chunk) => chunk.name === name)
+            .moduleIds.push('./node_modules/react-data-grid/lib/index.js');
         assert.throws(() => hostGraphs(report, bundled), new RegExp(`${name} must exclude React Data Grid`));
     }
 });

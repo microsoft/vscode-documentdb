@@ -3,21 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as React from 'react';
-import * as l10n from '@vscode/l10n';
 import { ChevronRight12Regular } from '@fluentui/react-icons';
-import {
-    Cell,
-    DataGrid,
-    Row,
-    type Column,
-    type DataGridHandle,
-} from 'react-data-grid';
+import * as l10n from '@vscode/l10n';
+import * as React from 'react';
+import { Cell, DataGrid, Row, type Column, type DataGridHandle } from 'react-data-grid';
+// eslint-disable-next-line import/no-internal-modules -- beta.64 explicitly exports this public stylesheet subpath.
 import 'react-data-grid/lib/styles.css';
 import { type TreeNode } from '../../../../../utils/documentGrid/types';
 import { bsonStringToDisplayString } from '../../../../utils/documentGrid/typeToDisplayString';
-import { useTreeRows } from './useTreeRows';
 import './dataGridTheme.scss';
+import { useTreeRows } from './useTreeRows';
 
 interface DataViewPanelTreeProps {
     readonly nodes: readonly TreeNode[];
@@ -53,17 +48,11 @@ export const DataViewPanelTree = ({ nodes }: DataViewPanelTreeProps): React.JSX.
                                     event.stopPropagation();
                                     // Focus the surviving cell before hiding any active descendant.
                                     event.currentTarget.closest<HTMLElement>('[role="gridcell"]')?.focus();
-                                    gridRef.current?.setActivePosition(
-                                        { rowIdx, idx: 0 },
-                                        { shouldFocus: true },
-                                    );
+                                    gridRef.current?.setActivePosition({ rowIdx, idx: 0 }, { shouldFocus: true });
                                     setExpanded(row, !expandedKeys.has(row.key));
                                 }}
                             >
-                                <ChevronRight12Regular
-                                    className="treeExpanderIcon"
-                                    aria-hidden="true"
-                                />
+                                <ChevronRight12Regular className="treeExpanderIcon" aria-hidden="true" />
                             </button>
                         ) : (
                             <span className="treeExpanderSlot" aria-hidden="true" />
@@ -102,13 +91,7 @@ export const DataViewPanelTree = ({ nodes }: DataViewPanelTreeProps): React.JSX.
             event.preventDefault();
             return;
         }
-        if (
-            event.key !== 'Enter' ||
-            event.altKey ||
-            event.ctrlKey ||
-            event.metaKey ||
-            event.shiftKey
-        ) {
+        if (event.key !== 'Enter' || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
             return;
         }
 
@@ -147,12 +130,7 @@ export const DataViewPanelTree = ({ nodes }: DataViewPanelTreeProps): React.JSX.
                         onKeyDown={(event): void => {
                             props.onKeyDown?.(event);
                             if (!event.defaultPrevented && props.column.key === 'field') {
-                                onTreeKeyDown(
-                                    props.row,
-                                    props.rowIdx,
-                                    props.setActivePosition,
-                                    event,
-                                );
+                                onTreeKeyDown(props.row, props.rowIdx, props.setActivePosition, event);
                             }
                         }}
                     />

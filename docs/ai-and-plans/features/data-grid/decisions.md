@@ -10,11 +10,11 @@ created: 2026-11-26
 G1 was released by the operator on 2026-11-26. These entries record the accepted decisions;
 implementation remains subject to the planned work items and later gates.
 
-| #    | Decision                                              | Status   | Changed from the proposal?                          | Date       | PR  |
-| ---- | ----------------------------------------------------- | -------- | ---------------------------------------------------- | ---------- | --- |
-| 0001 | React Data Grid, beta candidate and document tree     | Accepted | Exact pin and VS Code support floor finalized       | 2026-11-26 | —   |
-| 0002 | Migration workflow and menus                         | Accepted | Playwright checks are on demand, not in CI          | 2026-11-26 | —   |
-| 0003 | Confirmed migration scope                            | Accepted | M/K retained; D rows use RDG defaults; G1 choices set | 2026-11-26 | —   |
+| #    | Decision                                          | Status   | Changed from the proposal?                            | Date       | PR  |
+| ---- | ------------------------------------------------- | -------- | ----------------------------------------------------- | ---------- | --- |
+| 0001 | React Data Grid, beta candidate and document tree | Accepted | Exact pin and VS Code support floor finalized         | 2026-11-26 | —   |
+| 0002 | Migration workflow and menus                      | Accepted | Playwright checks are on demand, not in CI            | 2026-11-26 | —   |
+| 0003 | Confirmed migration scope                         | Accepted | M/K retained; D rows use RDG defaults; G1 choices set | 2026-11-26 | —   |
 
 ## 0001 - React Data Grid, beta candidate and document tree
 

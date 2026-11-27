@@ -65,7 +65,11 @@ describe('tree expansion and visible rows', () => {
         expect(expanded.has(root.key)).toBe(true);
         expect(collapsed.has(object.key)).toBe(true);
         expect(getVisibleTreeRows(nodes, setTreeNodeExpanded(root, collapsed, true))).toEqual([
-            otherRoot, root, object, leaf, sibling,
+            otherRoot,
+            root,
+            object,
+            leaf,
+            sibling,
         ]);
     });
 
@@ -92,20 +96,32 @@ describe('tree expansion and visible rows', () => {
 
     it('respects host array expansion eligibility and never fabricates capped children', () => {
         const empty: TreeNode = {
-            ...sibling, key: 'empty', field: 'empty',
+            ...sibling,
+            key: 'empty',
+            field: 'empty',
             value: { display: '(elements: 0)', type: 'array' },
         };
         const ten: TreeNode = {
-            ...object, key: 'ten', field: 'ten',
+            ...object,
+            key: 'ten',
+            field: 'ten',
             value: { display: '(elements: 10)', type: 'array' },
         };
         const eleven: TreeNode = {
-            ...sibling, key: 'eleven', field: 'eleven',
+            ...sibling,
+            key: 'eleven',
+            field: 'eleven',
             value: { display: '(elements: 11)', type: 'array' },
         };
-        const elements: TreeNode[] = Array.from({ length: 10 }, (_, index): TreeNode => ({
-            ...leaf, key: `ten:${index}`, parentKey: ten.key, field: `ten[${index}]`,
-        }));
+        const elements: TreeNode[] = Array.from(
+            { length: 10 },
+            (_, index): TreeNode => ({
+                ...leaf,
+                key: `ten:${index}`,
+                parentKey: ten.key,
+                field: `ten[${index}]`,
+            }),
+        );
         const arrayNodes = [root, empty, ten, ...elements, eleven];
         let expanded: ReadonlySet<string> = new Set([root.key]);
         expanded = setTreeNodeExpanded(eleven, expanded, true);

@@ -53,13 +53,15 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
             }
             if (guarded && 'role' in step) {
                 // A cell's name may include its type indicator as well as the displayed value.
-                const available = await page.getByRole(step.role, { name: step.name, exact }).evaluateAll(
-                    (elements: Element[]): boolean =>
-                        elements.some((element): boolean =>
-                            !element.closest('[inert], [aria-hidden="true"], [aria-disabled="true"]') &&
-                            !element.matches(':disabled'),
+                const available = await page
+                    .getByRole(step.role, { name: step.name, exact })
+                    .evaluateAll((elements: Element[]): boolean =>
+                        elements.some(
+                            (element): boolean =>
+                                !element.closest('[inert], [aria-hidden="true"], [aria-disabled="true"]') &&
+                                !element.matches(':disabled'),
                         ),
-                );
+                    );
                 if (!available) return `Unavailable accessible ${step.role}: ${step.name}`;
             }
             switch (step.action) {
@@ -78,9 +80,7 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
                     await page.getByRole(step.role, { name: step.name, exact }).click({ timeout: 60000 });
                     break;
                 case 'fill':
-                    await page
-                        .getByRole(step.role, { name: step.name, exact })
-                        .fill(step.value, { timeout: 60000 });
+                    await page.getByRole(step.role, { name: step.name, exact }).fill(step.value, { timeout: 60000 });
                     break;
                 case 'dblclick':
                     await page.getByRole(step.role, { name: step.name, exact }).dblclick({ timeout: 60000 });
@@ -115,18 +115,23 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
                 if (await page.evaluate((): boolean => document.documentElement.dataset.ready === 'true')) {
                     for (const assertion of data.assertions ?? []) {
                         if (assertion.requiresGrid) {
-                            const accessible = await page.locator(`[role="${assertion.requiresGrid}"]`).evaluateAll(
-                                (elements: Element[]): boolean =>
+                            const accessible = await page
+                                .locator(`[role="${assertion.requiresGrid}"]`)
+                                .evaluateAll((elements: Element[]): boolean =>
                                     elements.some((element): boolean => {
                                         if (element.closest('[inert], [aria-hidden="true"]')) return false;
-                                        for (let ancestor: Element | null = element; ancestor; ancestor = ancestor.parentElement) {
+                                        for (
+                                            let ancestor: Element | null = element;
+                                            ancestor;
+                                            ancestor = ancestor.parentElement
+                                        ) {
                                             const style = getComputedStyle(ancestor);
                                             if (style.display === 'none' || style.visibility === 'hidden') return false;
                                         }
                                         const box = element.getBoundingClientRect();
                                         return box.width > 0 && box.height > 0;
                                     }),
-                            );
+                                );
                             if (!accessible) {
                                 assertions.push({
                                     name: assertion.name ?? 'Grid contract',
@@ -239,12 +244,18 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
                                             const element = document.querySelector(expected.selector);
                                             if (!element) return false;
                                             const text = (
-                                                element instanceof HTMLElement ? element.innerText : (element.textContent ?? '')
+                                                element instanceof HTMLElement
+                                                    ? element.innerText
+                                                    : (element.textContent ?? '')
                                             )
                                                 .replace(/\s+/g, ' ')
                                                 .trim();
-                                            return expected.includes.every((value): boolean => text.includes(value)) &&
-                                                expected.excludes.every((pattern): boolean => !new RegExp(pattern, 'i').test(text));
+                                            return (
+                                                expected.includes.every((value): boolean => text.includes(value)) &&
+                                                expected.excludes.every(
+                                                    (pattern): boolean => !new RegExp(pattern, 'i').test(text),
+                                                )
+                                            );
                                         },
                                         assertion,
                                         assertion.name,
@@ -392,7 +403,9 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
                                     ? page.locator(assertion.target.selector)
                                     : page.getByRole(assertion.target.role, {
                                           name: assertion.target.name,
-                                          exact: !assertion.requiresGrid || !['gridcell', 'row'].includes(assertion.target.role),
+                                          exact:
+                                              !assertion.requiresGrid ||
+                                              !['gridcell', 'row'].includes(assertion.target.role),
                                       });
                             const actual = await locator.evaluateAll((elements: Element[]): boolean =>
                                 elements.some((element): boolean => element === document.activeElement),
@@ -474,9 +487,9 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
                                 expected: assertion.top,
                             });
                         } else if (assertion.kind === 'countAtMost') {
-                            const actual = await page.locator(assertion.selector).evaluateAll(
-                                (elements: Element[]): number => elements.length,
-                            );
+                            const actual = await page
+                                .locator(assertion.selector)
+                                .evaluateAll((elements: Element[]): number => elements.length);
                             assertions.push({
                                 name: assertion.name,
                                 passed: actual <= assertion.max,

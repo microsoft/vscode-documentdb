@@ -9,10 +9,10 @@ import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import {
+    type ColumnKey,
     fieldFromColumnKey,
     getCell,
     ROOT_ID_COLUMN_KEY,
-    type ColumnKey,
     type TablePage,
     type TreeNode,
 } from '../../../utils/documentGrid/types';
@@ -181,32 +181,34 @@ export const CollectionView = (): JSX.Element => {
             page !== undefined &&
             tablePageQueryRef.current === context.activeQuery &&
             tablePageRequestRef.current === dataRequestRef.current &&
-            JSON.stringify(page.path) ===
-                JSON.stringify(context.currentViewState?.currentPath ?? [])
+            JSON.stringify(page.path) === JSON.stringify(context.currentViewState?.currentPath ?? [])
         );
     }, []);
 
-    const handleSelectedRowKeysChange = useCallback((selectedRowKeys: readonly string[]): void => {
-        setCurrentContext((prev) => {
-            const isCurrentPage = isCurrentTablePage(prev);
-            const nextRowKeys = isCurrentPage ? [...selectedRowKeys] : [];
-            const targets = isCurrentPage
-                ? resolveDocumentTargets(currentQueryResultsRef.current?.tablePage, nextRowKeys)
-                : undefined;
-            const next = {
-                ...prev,
-                dataSelection: { selectedRowKeys: nextRowKeys },
-                commands: {
-                    disableAddDocument: false,
-                    disableViewDocument: targets?.length !== 1,
-                    disableEditDocument: targets?.length !== 1,
-                    disableDeleteDocument: !targets?.length,
-                },
-            };
-            currentContextRef.current = next;
-            return next;
-        });
-    }, [isCurrentTablePage]);
+    const handleSelectedRowKeysChange = useCallback(
+        (selectedRowKeys: readonly string[]): void => {
+            setCurrentContext((prev) => {
+                const isCurrentPage = isCurrentTablePage(prev);
+                const nextRowKeys = isCurrentPage ? [...selectedRowKeys] : [];
+                const targets = isCurrentPage
+                    ? resolveDocumentTargets(currentQueryResultsRef.current?.tablePage, nextRowKeys)
+                    : undefined;
+                const next = {
+                    ...prev,
+                    dataSelection: { selectedRowKeys: nextRowKeys },
+                    commands: {
+                        disableAddDocument: false,
+                        disableViewDocument: targets?.length !== 1,
+                        disableEditDocument: targets?.length !== 1,
+                        disableDeleteDocument: !targets?.length,
+                    },
+                };
+                currentContextRef.current = next;
+                return next;
+            });
+        },
+        [isCurrentTablePage],
+    );
 
     /**
      * Reset query insights when query changes (not on pagination)
@@ -342,8 +344,7 @@ export const CollectionView = (): JSX.Element => {
             query === currentContextRef.current.activeQuery &&
             selectedView === currentContextRef.current.currentView &&
             (selectedView !== Views.TABLE ||
-                JSON.stringify(path) ===
-                    JSON.stringify(currentContextRef.current.currentViewState?.currentPath ?? []));
+                JSON.stringify(path) === JSON.stringify(currentContextRef.current.currentViewState?.currentPath ?? []));
         switch (selectedView) {
             case Views.TABLE: {
                 trpcClient.mongoClusters.collectionView.getCurrentPageAsTable
@@ -652,15 +653,13 @@ export const CollectionView = (): JSX.Element => {
         if (targets?.length !== 1) {
             return;
         }
-        trpcClient.mongoClusters.collectionView.viewDocumentById
-            .mutate(targets[0].documentId)
-            .catch((error) => {
-                void trpcClient.common.displayErrorMessage.mutate({
-                    message: l10n.t('Error opening the document view'),
-                    modal: false,
-                    cause: error instanceof Error ? error.message : String(error),
-                });
+        trpcClient.mongoClusters.collectionView.viewDocumentById.mutate(targets[0].documentId).catch((error) => {
+            void trpcClient.common.displayErrorMessage.mutate({
+                message: l10n.t('Error opening the document view'),
+                modal: false,
+                cause: error instanceof Error ? error.message : String(error),
             });
+        });
     }
 
     function handleEditDocumentRequest(): void {
@@ -675,15 +674,13 @@ export const CollectionView = (): JSX.Element => {
         if (targets?.length !== 1) {
             return;
         }
-        trpcClient.mongoClusters.collectionView.editDocumentById
-            .mutate(targets[0].documentId)
-            .catch((error) => {
-                void trpcClient.common.displayErrorMessage.mutate({
-                    message: l10n.t('Error opening the document view'),
-                    modal: false,
-                    cause: error instanceof Error ? error.message : String(error),
-                });
+        trpcClient.mongoClusters.collectionView.editDocumentById.mutate(targets[0].documentId).catch((error) => {
+            void trpcClient.common.displayErrorMessage.mutate({
+                message: l10n.t('Error opening the document view'),
+                modal: false,
+                cause: error instanceof Error ? error.message : String(error),
             });
+        });
     }
 
     function handleAddDocumentRequest(): void {
@@ -878,12 +875,14 @@ export const CollectionView = (): JSX.Element => {
                                 <ViewSwitcher onViewChanged={handleViewChanged} focusTargetRef={viewPickerRef} />
                             </div>
 
+                            {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- Delegates Escape from focused RDG cells/headers; the wrapper is not independently interactive. */}
                             <div
                                 className="resultsDisplayArea"
                                 id="resultsDisplayAreaId"
                                 data-tabster={
                                     // RDG owns cell Tab order, not Tabster's DOM-order traversal.
-                                    currentContext.currentView === Views.TABLE || currentContext.currentView === Views.TREE
+                                    currentContext.currentView === Views.TABLE ||
+                                    currentContext.currentView === Views.TREE
                                         ? JSON.stringify({ focusable: { ignoreKeydown: { Tab: true } } })
                                         : undefined
                                 }
@@ -930,9 +929,7 @@ export const CollectionView = (): JSX.Element => {
                                                 onStepIn={handleStepInRequest}
                                             />
                                         ),
-                                        'Tree View': (
-                                            <DataViewPanelTree nodes={currentQueryResults?.treeNodes ?? []} />
-                                        ),
+                                        'Tree View': <DataViewPanelTree nodes={currentQueryResults?.treeNodes ?? []} />,
                                         'JSON View': (
                                             <DataViewPanelJSON value={currentQueryResults?.jsonDocuments ?? []} />
                                         ),

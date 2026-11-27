@@ -125,11 +125,11 @@ export const ToolbarTableNavigation = (): React.JSX.Element => {
             <InfoLabel
                 info={
                     <>
-                        {l10n.t('To step into an object field, focus its cell and press Enter, or double-click the cell.')}
-                        <br />
                         {l10n.t(
-                            'Use Level Up to return one level, or activate an ancestor breadcrumb to jump to it.',
+                            'To step into an object field, focus its cell and press Enter, or double-click the cell.',
                         )}
+                        <br />
+                        {l10n.t('Use Level Up to return one level, or activate an ancestor breadcrumb to jump to it.')}
                         <br />
                         {l10n.t('Activate Root Level to return to the document root.')}
                     </>

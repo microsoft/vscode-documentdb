@@ -201,11 +201,13 @@ describe('L2-dev layout assertions', (): void => {
                 press: vi.fn(async (): Promise<void> => {}),
             },
             getByRole: vi.fn((): Locator => locator),
-            locator: vi.fn((selector: string): Locator => ({
-                ...locator,
-                evaluateAll: async <T>(operation: (elements: Element[]) => T): Promise<T> =>
-                    operation([...document.querySelectorAll(selector)]),
-            })),
+            locator: vi.fn(
+                (selector: string): Locator => ({
+                    ...locator,
+                    evaluateAll: async <T>(operation: (elements: Element[]) => T): Promise<T> =>
+                        operation([...document.querySelectorAll(selector)]),
+                }),
+            ),
             // jsdom is the page: run each serialized operation in place.
             evaluate: vi
                 .fn()
@@ -224,27 +226,43 @@ describe('L2-dev layout assertions', (): void => {
         '<div inert><div id="list" role="grid"></div></div>',
         '<div aria-hidden="true"><div id="list" role="grid"></div></div>',
         '<div style="display:none"><div id="list" role="grid"></div></div>',
-    ])('reports a missing accessible grid without executing that contract or skipping its sibling (%s)', async (grid): Promise<void> => {
-        const results = await measure([], 100, [
-            {
-                kind: 'attribute', name: 'TDD: K2 cannot pass with a missing grid', requiresGrid: 'grid',
-                selector: '[role="row"][aria-selected="true"]', attribute: 'role', expected: null,
-                steps: [{ action: 'releaseReply', tag: 'must-not-run' }],
-            },
-            { kind: 'text', name: 'supporting shell', selector: 'h2', includes: ['Shell'], excludes: [] },
-        ], `${grid}<h2>Shell</h2>`);
-        expect(results).toEqual([
-            {
-                name: 'TDD: K2 cannot pass with a missing grid', passed: false,
-                actual: 'Absent accessible grid (hidden/inert placeholders do not qualify)', expected: 'grid',
-            },
-            {
-                name: 'supporting shell', passed: true,
-                actual: { text: 'Shell', missing: [], found: [] }, expected: { includes: ['Shell'], excludes: [] },
-            },
-        ]);
-        expect(document.documentElement.dataset.ready).toBe('true');
-    });
+    ])(
+        'reports a missing accessible grid without executing that contract or skipping its sibling (%s)',
+        async (grid): Promise<void> => {
+            const results = await measure(
+                [],
+                100,
+                [
+                    {
+                        kind: 'attribute',
+                        name: 'TDD: K2 cannot pass with a missing grid',
+                        requiresGrid: 'grid',
+                        selector: '[role="row"][aria-selected="true"]',
+                        attribute: 'role',
+                        expected: null,
+                        steps: [{ action: 'releaseReply', tag: 'must-not-run' }],
+                    },
+                    { kind: 'text', name: 'supporting shell', selector: 'h2', includes: ['Shell'], excludes: [] },
+                ],
+                `${grid}<h2>Shell</h2>`,
+            );
+            expect(results).toEqual([
+                {
+                    name: 'TDD: K2 cannot pass with a missing grid',
+                    passed: false,
+                    actual: 'Absent accessible grid (hidden/inert placeholders do not qualify)',
+                    expected: 'grid',
+                },
+                {
+                    name: 'supporting shell',
+                    passed: true,
+                    actual: { text: 'Shell', missing: [], found: [] },
+                    expected: { includes: ['Shell'], excludes: [] },
+                },
+            ]);
+            expect(document.documentElement.dataset.ready).toBe('true');
+        },
+    );
 
     it('executes optional text steps after an accessible treegrid exists', async (): Promise<void> => {
         const release = vi.fn((tag: string): boolean => {
@@ -255,97 +273,158 @@ describe('L2-dev layout assertions', (): void => {
             return true;
         });
         window.__releaseScenarioReply = release;
-        const [result] = await measure([], 100, [{
-            kind: 'text', name: 'TDD: M4 released text', requiresGrid: 'treegrid',
-            selector: '#value', includes: ['Released result'], excludes: ['Pending'],
-            steps: [{ action: 'releaseReply', tag: 'tree-result' }],
-        }], '<div id="list" role="treegrid"><span id="value">Pending</span></div>');
+        const [result] = await measure(
+            [],
+            100,
+            [
+                {
+                    kind: 'text',
+                    name: 'TDD: M4 released text',
+                    requiresGrid: 'treegrid',
+                    selector: '#value',
+                    includes: ['Released result'],
+                    excludes: ['Pending'],
+                    steps: [{ action: 'releaseReply', tag: 'tree-result' }],
+                },
+            ],
+            '<div id="list" role="treegrid"><span id="value">Pending</span></div>',
+        );
         expect(result.passed).toBe(true);
         expect(release).toHaveBeenCalledOnce();
     });
 
-    it.each([false, true])('synchronizes text only when opted in (%s), without repeating its steps', async (waitForText): Promise<void> => {
-        vi.useFakeTimers();
-        const release = vi.fn((): boolean => {
-            const value = document.getElementById('value');
-            if (!value) throw new Error('Missing text result target');
-            setTimeout((): void => { value.textContent = 'leaf Alpha nested Alpha'; }, 100);
-            setTimeout((): void => { value.textContent = 'leaf \n Alpha'; }, 200);
-            return true;
-        });
-        window.__releaseScenarioReply = release;
-        const run = measure([], 100, [{
-            kind: 'text', name: 'step-in result', selector: '#value',
-            includes: ['leaf Alpha'], excludes: ['NESTED Alpha'],
-            ...(waitForText ? { waitForText: true } : {}),
-            steps: [{ action: 'releaseReply', tag: 'step-in' }],
-        }], '<span id="value">nested Alpha</span>');
-        await vi.advanceTimersByTimeAsync(250);
-        expect((await run)[0]).toEqual({
-            name: 'step-in result',
-            passed: waitForText,
-            actual: waitForText
-                ? { text: 'leaf Alpha', missing: [], found: [] }
-                : { text: 'nested Alpha', missing: ['leaf Alpha'], found: ['NESTED Alpha'] },
-            expected: { includes: ['leaf Alpha'], excludes: ['NESTED Alpha'] },
-        });
-        expect(release).toHaveBeenCalledOnce();
-    });
-
-    it.each([false, true])('keeps a synchronized text assertion failing on timeout or page failure (%s)', async (pageFails): Promise<void> => {
-        vi.useFakeTimers();
-        const release = vi.fn((): boolean => {
-            if (pageFails) {
+    it.each([false, true])(
+        'synchronizes text only when opted in (%s), without repeating its steps',
+        async (waitForText): Promise<void> => {
+            vi.useFakeTimers();
+            const release = vi.fn((): boolean => {
+                const value = document.getElementById('value');
+                if (!value) throw new Error('Missing text result target');
                 setTimeout((): void => {
-                    const value = document.getElementById('value');
-                    if (!value) throw new Error('Missing text result target');
-                    value.textContent = 'leaf Alpha';
-                    document.documentElement.dataset.ready = 'failed';
+                    value.textContent = 'leaf Alpha nested Alpha';
                 }, 100);
-            }
-            return true;
-        });
-        window.__releaseScenarioReply = release;
-        const run = measure([], 100, [{
-            kind: 'text', name: 'step-in result', selector: '#value',
-            includes: ['leaf Alpha'], excludes: ['nested Alpha'], waitForText: true,
-            steps: [{ action: 'releaseReply', tag: 'step-in' }],
-        }], '<span id="value">nested Alpha</span>', [
-            pageFails ? 'Page failed while waiting for step-in result' : 'Timed out waiting for step-in result',
-        ]);
-        await vi.advanceTimersByTimeAsync(3100);
-        expect((await run)[0]).toEqual({
-            name: 'step-in result',
-            passed: false,
-            actual: pageFails
-                ? { text: 'leaf Alpha', missing: [], found: [] }
-                : { text: 'nested Alpha', missing: ['leaf Alpha'], found: ['nested Alpha'] },
-            expected: { includes: ['leaf Alpha'], excludes: ['nested Alpha'] },
-        });
-        expect(release).toHaveBeenCalledOnce();
-        expect(document.documentElement.dataset.ready).toBe('failed');
-    });
+                setTimeout((): void => {
+                    value.textContent = 'leaf \n Alpha';
+                }, 200);
+                return true;
+            });
+            window.__releaseScenarioReply = release;
+            const run = measure(
+                [],
+                100,
+                [
+                    {
+                        kind: 'text',
+                        name: 'step-in result',
+                        selector: '#value',
+                        includes: ['leaf Alpha'],
+                        excludes: ['NESTED Alpha'],
+                        ...(waitForText ? { waitForText: true } : {}),
+                        steps: [{ action: 'releaseReply', tag: 'step-in' }],
+                    },
+                ],
+                '<span id="value">nested Alpha</span>',
+            );
+            await vi.advanceTimersByTimeAsync(250);
+            expect((await run)[0]).toEqual({
+                name: 'step-in result',
+                passed: waitForText,
+                actual: waitForText
+                    ? { text: 'leaf Alpha', missing: [], found: [] }
+                    : { text: 'nested Alpha', missing: ['leaf Alpha'], found: ['NESTED Alpha'] },
+                expected: { includes: ['leaf Alpha'], excludes: ['NESTED Alpha'] },
+            });
+            expect(release).toHaveBeenCalledOnce();
+        },
+    );
+
+    it.each([false, true])(
+        'keeps a synchronized text assertion failing on timeout or page failure (%s)',
+        async (pageFails): Promise<void> => {
+            vi.useFakeTimers();
+            const release = vi.fn((): boolean => {
+                if (pageFails) {
+                    setTimeout((): void => {
+                        const value = document.getElementById('value');
+                        if (!value) throw new Error('Missing text result target');
+                        value.textContent = 'leaf Alpha';
+                        document.documentElement.dataset.ready = 'failed';
+                    }, 100);
+                }
+                return true;
+            });
+            window.__releaseScenarioReply = release;
+            const run = measure(
+                [],
+                100,
+                [
+                    {
+                        kind: 'text',
+                        name: 'step-in result',
+                        selector: '#value',
+                        includes: ['leaf Alpha'],
+                        excludes: ['nested Alpha'],
+                        waitForText: true,
+                        steps: [{ action: 'releaseReply', tag: 'step-in' }],
+                    },
+                ],
+                '<span id="value">nested Alpha</span>',
+                [pageFails ? 'Page failed while waiting for step-in result' : 'Timed out waiting for step-in result'],
+            );
+            await vi.advanceTimersByTimeAsync(3100);
+            expect((await run)[0]).toEqual({
+                name: 'step-in result',
+                passed: false,
+                actual: pageFails
+                    ? { text: 'leaf Alpha', missing: [], found: [] }
+                    : { text: 'nested Alpha', missing: ['leaf Alpha'], found: ['nested Alpha'] },
+                expected: { includes: ['leaf Alpha'], excludes: ['nested Alpha'] },
+            });
+            expect(release).toHaveBeenCalledOnce();
+            expect(document.documentElement.dataset.ready).toBe('failed');
+        },
+    );
 
     it('reports an unavailable contract target as an assertion result, not a harness failure', async (): Promise<void> => {
-        const [result] = await measure([], 100, [{
-            kind: 'focused', name: 'TDD: M6 missing cell', requiresGrid: 'grid',
-            target: { role: 'gridcell', name: 'Unavailable document' },
-            steps: [{ action: 'focus', role: 'gridcell', name: 'Unavailable document' }],
-        }], '<div id="list" role="grid"></div>');
+        const [result] = await measure(
+            [],
+            100,
+            [
+                {
+                    kind: 'focused',
+                    name: 'TDD: M6 missing cell',
+                    requiresGrid: 'grid',
+                    target: { role: 'gridcell', name: 'Unavailable document' },
+                    steps: [{ action: 'focus', role: 'gridcell', name: 'Unavailable document' }],
+                },
+            ],
+            '<div id="list" role="grid"></div>',
+        );
         expect(result).toMatchObject({
-            passed: false, actual: 'Unavailable accessible gridcell: Unavailable document',
+            passed: false,
+            actual: 'Unavailable accessible gridcell: Unavailable document',
         });
         expect(document.documentElement.dataset.ready).toBe('true');
     });
 
     it('checks a DOM bound without claiming a timing or screen-reader measurement', async (): Promise<void> => {
         const assertion: ScenarioAssertion = {
-            kind: 'countAtMost', name: 'TDD: K11 mounted rows', requiresGrid: 'grid',
-            selector: '[role="row"]', max: 2,
+            kind: 'countAtMost',
+            name: 'TDD: K11 mounted rows',
+            requiresGrid: 'grid',
+            selector: '[role="row"]',
+            max: 2,
         };
         const html = '<div id="list" role="grid"><div role="row"></div><div role="row"></div></div>';
-        expect((await measure([], 100, [assertion], html))[0]).toMatchObject({ passed: true, actual: 2, expected: '<= 2' });
-        expect((await measure([], 100, [{ ...assertion, max: 1 }], html))[0]).toMatchObject({ passed: false, actual: 2 });
+        expect((await measure([], 100, [assertion], html))[0]).toMatchObject({
+            passed: true,
+            actual: 2,
+            expected: '<= 2',
+        });
+        expect((await measure([], 100, [{ ...assertion, max: 1 }], html))[0]).toMatchObject({
+            passed: false,
+            actual: 2,
+        });
     });
 
     it('compares an attribute after its steps, and treats a missing element as null', async (): Promise<void> => {
@@ -573,9 +652,16 @@ describe('L2-dev layout assertions', (): void => {
         expect(document.activeElement).toBe(filter);
 
         const snippet = scenarioRunner([route]);
-        const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+        type AsyncFunctionConstructor = new (...parameters: string[]) => (...args: unknown[]) => Promise<unknown>;
+        const asyncFunctionPrototype = Object.getPrototypeOf(async function () {}) as object;
+        const AsyncFunction: unknown = Reflect.get(asyncFunctionPrototype, 'constructor');
+        expect(typeof AsyncFunction).toBe('function');
+        if (typeof AsyncFunction !== 'function') {
+            throw new Error('Async function constructor is unavailable');
+        }
+        const createAsyncFunction = AsyncFunction as AsyncFunctionConstructor;
         expect((): void => {
-            new AsyncFunction('page', snippet);
+            new createAsyncFunction('page', snippet);
         }).not.toThrow();
         expect(snippet).toContain('page.keyboard.press');
     });

@@ -3,19 +3,19 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { EJSON } from 'bson';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { EJSON } from 'bson';
 import { describe, expect, it } from 'vitest';
 import { collectionViewFixtures } from './collectionViewFixtures';
 import { type TypedRpcFixtures } from './core/fixtures';
 import { diagnosticsRowLabels, fixtures, type DiagnosticsRow } from './fixtures';
 import { parseScenarioRoute, runnerRoutes, scenarioHtml, scenarioIndex, scenarioRunner } from './scenario-server';
 import {
+    collectionViewContracts,
     diagnosticsEntraRuleIds,
     diagnosticsForbiddenText,
     diagnosticsListTop,
-    collectionViewContracts,
     findScenario,
     scenarioRoutes,
     scenarios,
@@ -24,8 +24,26 @@ import {
 } from './scenarios';
 
 describe('TDD: Collection View grid contracts', (): void => {
-    const ids = ['M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7',
-        'K1', 'K2', 'K3', 'K4', 'K5', 'K6', 'K7', 'K8', 'K9', 'K10', 'K11'];
+    const ids = [
+        'M1',
+        'M2',
+        'M3',
+        'M4',
+        'M5',
+        'M6',
+        'M7',
+        'K1',
+        'K2',
+        'K3',
+        'K4',
+        'K5',
+        'K6',
+        'K7',
+        'K8',
+        'K9',
+        'K10',
+        'K11',
+    ];
     const assertions: readonly ScenarioAssertion[] = Object.values(collectionViewContracts).flat();
 
     it.each(ids)('%s has executable user-outcome assertions, never a silent skip', (id): void => {
@@ -49,47 +67,85 @@ describe('TDD: Collection View grid contracts', (): void => {
                 expect(assertion.max).toBeLessThan(500);
             }
         }
-        const routes = scenarioRoutes().filter((route): boolean =>
-            route.view === 'collectionView' &&
-            (findScenario(route).assertions?.some((assertion): boolean => assertion.name?.startsWith(`TDD: ${id} `) ?? false) ?? false),
+        const routes = scenarioRoutes().filter(
+            (route): boolean =>
+                route.view === 'collectionView' &&
+                (findScenario(route).assertions?.some(
+                    (assertion): boolean => assertion.name?.startsWith(`TDD: ${id} `) ?? false,
+                ) ??
+                    false),
         );
-        expect(new Set(routes.map((route): string => route.theme))).toEqual(new Set(['dark', 'light', 'high-contrast']));
+        expect(new Set(routes.map((route): string => route.theme))).toEqual(
+            new Set(['dark', 'light', 'high-contrast']),
+        );
     });
 
     it('pins the single-selection and fail-closed no-ID regressions', (): void => {
-        expect(collectionViewContracts.selection).toContainEqual(expect.objectContaining({
-            kind: 'calls', name: 'TDD: K1 exactly one selected document can be viewed',
-            requiresGrid: 'grid', path: 'mongoClusters.collectionView.viewDocumentById', input: '"heterogeneous-1"', count: 1,
-        }));
-        expect(collectionViewContracts['no-id']).toContainEqual(expect.objectContaining({
-            kind: 'attribute', attribute: 'aria-selected', expected: 'true',
-            selector: '[role="grid"] [role="row"][aria-rowindex="2"]',
-        }));
+        expect(collectionViewContracts.selection).toContainEqual(
+            expect.objectContaining({
+                kind: 'calls',
+                name: 'TDD: K1 exactly one selected document can be viewed',
+                requiresGrid: 'grid',
+                path: 'mongoClusters.collectionView.viewDocumentById',
+                input: '"heterogeneous-1"',
+                count: 1,
+            }),
+        );
+        expect(collectionViewContracts['no-id']).toContainEqual(
+            expect.objectContaining({
+                kind: 'attribute',
+                attribute: 'aria-selected',
+                expected: 'true',
+                selector: '[role="grid"] [role="row"][aria-rowindex="2"]',
+            }),
+        );
         for (const name of ['View selected document', 'Edit selected document', 'Delete selected document(s)']) {
-            expect(collectionViewContracts['no-id']).toContainEqual(expect.objectContaining({
-                kind: 'attribute', selector: `.collectionView :is(button,[role="button"])[aria-label="${name}"]`, attribute: 'disabled', expected: '',
-            }));
+            expect(collectionViewContracts['no-id']).toContainEqual(
+                expect.objectContaining({
+                    kind: 'attribute',
+                    selector: `.collectionView :is(button,[role="button"])[aria-label="${name}"]`,
+                    attribute: 'disabled',
+                    expected: '',
+                }),
+            );
         }
     });
 
     it('pins deterministic late acknowledgements separately from same-panel stale results', (): void => {
-        expect(collectionViewContracts['late-delete']).toContainEqual(expect.objectContaining({
-            kind: 'text', name: 'TDD: K2 late delete acknowledgement preserves the newer selection',
-            selector: '[role="grid"] [role="row"][aria-selected="true"]',
-            includes: ['Beta', 'heterogeneous-2'], excludes: ['Alpha'],
-            steps: [{ action: 'click', role: 'gridcell', name: 'Beta' }, { action: 'releaseReply', tag: 'delete-alpha' }],
-        }));
-        expect(collectionViewFixtures['late-delete'].rpc['mongoClusters.collectionView.deleteDocumentsById']).toMatchObject({
-            hold: 'delete-alpha', results: [true],
+        expect(collectionViewContracts['late-delete']).toContainEqual(
+            expect.objectContaining({
+                kind: 'text',
+                name: 'TDD: K2 late delete acknowledgement preserves the newer selection',
+                selector: '[role="grid"] [role="row"][aria-selected="true"]',
+                includes: ['Beta', 'heterogeneous-2'],
+                excludes: ['Alpha'],
+                steps: [
+                    { action: 'click', role: 'gridcell', name: 'Beta' },
+                    { action: 'releaseReply', tag: 'delete-alpha' },
+                ],
+            }),
+        );
+        expect(
+            collectionViewFixtures['late-delete'].rpc['mongoClusters.collectionView.deleteDocumentsById'],
+        ).toMatchObject({
+            hold: 'delete-alpha',
+            results: [true],
         });
 
-        expect(collectionViewFixtures['late-query'].rpc['mongoClusters.collectionView.getCurrentPageAsTable'].cases).toContainEqual(
-            expect.objectContaining({ input: ['details'], hold: 'old-details' }),
+        expect(
+            collectionViewFixtures['late-query'].rpc['mongoClusters.collectionView.getCurrentPageAsTable'].cases,
+        ).toContainEqual(expect.objectContaining({ input: ['details'], hold: 'old-details' }));
+        expect(collectionViewContracts['late-query']).toContainEqual(
+            expect.objectContaining({
+                kind: 'calls',
+                input: '"heterogeneous-2"',
+                count: 1,
+                path: 'mongoClusters.collectionView.viewDocumentById',
+            }),
         );
-        expect(collectionViewContracts['late-query']).toContainEqual(expect.objectContaining({
-            kind: 'calls', input: '"heterogeneous-2"', count: 1, path: 'mongoClusters.collectionView.viewDocumentById',
-        }));
-        expect(assertions.map((assertion): string => assertion.name ?? '')).not.toContainEqual(expect.stringMatching(/cross.collection|cross.panel/i));
+        expect(assertions.map((assertion): string => assertion.name ?? '')).not.toContainEqual(
+            expect.stringMatching(/cross.collection|cross.panel/i),
+        );
     });
 
     it('keeps identity fixtures canonical and synchronized with document action inputs', (): void => {
@@ -102,64 +158,123 @@ describe('TDD: Collection View grid contracts', (): void => {
         const targets = identity.flatMap((assertion): string[] => {
             if (assertion.kind !== 'calls') return [];
             if (assertion.path === 'mongoClusters.collectionView.deleteDocumentsById') return assertion.input;
-            if (assertion.path === 'mongoClusters.collectionView.viewDocumentById' ||
-                assertion.path === 'mongoClusters.collectionView.editDocumentById') return [assertion.input];
+            if (
+                assertion.path === 'mongoClusters.collectionView.viewDocumentById' ||
+                assertion.path === 'mongoClusters.collectionView.editDocumentById'
+            )
+                return [assertion.input];
             throw new Error('Unexpected identity fixture action');
         });
         expect(targets).toEqual(documentIds);
     });
 
     it('pins nested whole-page navigation, root identity and the accepted Enter gesture', (): void => {
-        expect(collectionViewContracts['step-in']).toContainEqual(expect.objectContaining({
-            kind: 'text', includes: ['nested Alpha', 'heterogeneous-1', 'heterogeneous-2', 'heterogeneous-3'],
-            steps: [{ action: 'dblclick', role: 'gridcell', name: '{...}' }],
-        }));
-        expect(collectionViewContracts['step-in']).toContainEqual(expect.objectContaining({
-            kind: 'calls', name: 'TDD: K4 nested inspection still targets the root document', input: '"heterogeneous-1"',
-        }));
-        expect(collectionViewContracts['step-in']).toContainEqual(expect.objectContaining({
-            kind: 'text', name: 'TDD: M7 Enter on an object cell steps in', includes: ['leaf Alpha'],
-            steps: [{ action: 'focus', role: 'gridcell', name: '{...}' }, { action: 'press', key: 'Enter' }],
-        }));
-        expect(collectionViewContracts['missing-vs-null']).toContainEqual(expect.objectContaining({
-            kind: 'order', texts: ['', 'null', 'Ab', 'false', '0'],
-        }));
+        expect(collectionViewContracts['step-in']).toContainEqual(
+            expect.objectContaining({
+                kind: 'text',
+                includes: ['nested Alpha', 'heterogeneous-1', 'heterogeneous-2', 'heterogeneous-3'],
+                steps: [{ action: 'dblclick', role: 'gridcell', name: '{...}' }],
+            }),
+        );
+        expect(collectionViewContracts['step-in']).toContainEqual(
+            expect.objectContaining({
+                kind: 'calls',
+                name: 'TDD: K4 nested inspection still targets the root document',
+                input: '"heterogeneous-1"',
+            }),
+        );
+        expect(collectionViewContracts['step-in']).toContainEqual(
+            expect.objectContaining({
+                kind: 'text',
+                name: 'TDD: M7 Enter on an object cell steps in',
+                includes: ['leaf Alpha'],
+                steps: [
+                    { action: 'focus', role: 'gridcell', name: '{...}' },
+                    { action: 'press', key: 'Enter' },
+                ],
+            }),
+        );
+        expect(collectionViewContracts['missing-vs-null']).toContainEqual(
+            expect.objectContaining({
+                kind: 'order',
+                texts: ['', 'null', 'Ab', 'false', '0'],
+            }),
+        );
     });
 
     it('pins Enter tree activation without weakening the hierarchy or array viewport contract', (): void => {
         const tree: readonly ScenarioAssertion[] = collectionViewContracts['deep-nesting'];
-        expect(tree).toContainEqual(expect.objectContaining({
-            kind: 'attribute', name: 'TDD: M5 Enter expands a focused root',
-            attribute: 'aria-expanded', expected: 'true',
-            steps: [{ action: 'press', key: 'ArrowLeft' }, { action: 'press', key: 'Enter' }],
-        }));
-        expect(tree).toContainEqual(expect.objectContaining({
-            kind: 'focused', name: 'TDD: M5 Up visits the previous visible sibling rather than a direct parent shortcut',
-            steps: [{ action: 'press', key: 'ArrowUp' }],
-        }));
-        expect(tree).toContainEqual(expect.objectContaining({
-            kind: 'text', selector: '[role="treegrid"] [role="row"][aria-level="6"]', includes: ['latitude'],
-        }));
-        expect(collectionViewContracts.arrays).toContainEqual(expect.objectContaining({
-            kind: 'text', name: 'TDD: M4 arrays of ten expand from the keyboard',
-            selector: '[role="treegrid"]', includes: ['ten[0]'], excludes: ['eleven\\[0\\]'],
-            steps: [{ action: 'focus', role: 'gridcell', name: 'ten' }, { action: 'press', key: 'Enter' }],
-        }));
-        expect(collectionViewContracts.arrays).toContainEqual(expect.objectContaining({
-            kind: 'text', name: 'TDD: M4 keyboard scrolling reaches the last child of an array of ten',
-            selector: '[role="treegrid"]', includes: ['ten[9]'], excludes: ['eleven\\[0\\]'],
-            waitForText: true,
-            steps: [{ action: 'press', key: 'Control+End' }],
-        }));
-        expect(collectionViewContracts.arrays).toContainEqual(expect.objectContaining({
-            kind: 'text', name: 'TDD: M4 the top viewport is mounted before comparing over-ten array text',
-            requiresGrid: 'treegrid', selector: '[role="treegrid"]',
-            includes: ['"arrays-root"', '(elements: 11)'], excludes: ['eleven\\[0\\]'], waitForText: true,
-        }));
-        expect(collectionViewContracts.arrays).toContainEqual(expect.objectContaining({
-            kind: 'stableText', name: 'TDD: M4 arrays over ten do not gain children',
-            steps: [{ action: 'focus', role: 'gridcell', name: 'eleven' }, { action: 'press', key: 'Enter' }],
-        }));
+        expect(tree).toContainEqual(
+            expect.objectContaining({
+                kind: 'attribute',
+                name: 'TDD: M5 Enter expands a focused root',
+                attribute: 'aria-expanded',
+                expected: 'true',
+                steps: [
+                    { action: 'press', key: 'ArrowLeft' },
+                    { action: 'press', key: 'Enter' },
+                ],
+            }),
+        );
+        expect(tree).toContainEqual(
+            expect.objectContaining({
+                kind: 'focused',
+                name: 'TDD: M5 Up visits the previous visible sibling rather than a direct parent shortcut',
+                steps: [{ action: 'press', key: 'ArrowUp' }],
+            }),
+        );
+        expect(tree).toContainEqual(
+            expect.objectContaining({
+                kind: 'text',
+                selector: '[role="treegrid"] [role="row"][aria-level="6"]',
+                includes: ['latitude'],
+            }),
+        );
+        expect(collectionViewContracts.arrays).toContainEqual(
+            expect.objectContaining({
+                kind: 'text',
+                name: 'TDD: M4 arrays of ten expand from the keyboard',
+                selector: '[role="treegrid"]',
+                includes: ['ten[0]'],
+                excludes: ['eleven\\[0\\]'],
+                steps: [
+                    { action: 'focus', role: 'gridcell', name: 'ten' },
+                    { action: 'press', key: 'Enter' },
+                ],
+            }),
+        );
+        expect(collectionViewContracts.arrays).toContainEqual(
+            expect.objectContaining({
+                kind: 'text',
+                name: 'TDD: M4 keyboard scrolling reaches the last child of an array of ten',
+                selector: '[role="treegrid"]',
+                includes: ['ten[9]'],
+                excludes: ['eleven\\[0\\]'],
+                waitForText: true,
+                steps: [{ action: 'press', key: 'Control+End' }],
+            }),
+        );
+        expect(collectionViewContracts.arrays).toContainEqual(
+            expect.objectContaining({
+                kind: 'text',
+                name: 'TDD: M4 the top viewport is mounted before comparing over-ten array text',
+                requiresGrid: 'treegrid',
+                selector: '[role="treegrid"]',
+                includes: ['"arrays-root"', '(elements: 11)'],
+                excludes: ['eleven\\[0\\]'],
+                waitForText: true,
+            }),
+        );
+        expect(collectionViewContracts.arrays).toContainEqual(
+            expect.objectContaining({
+                kind: 'stableText',
+                name: 'TDD: M4 arrays over ten do not gain children',
+                steps: [
+                    { action: 'focus', role: 'gridcell', name: 'eleven' },
+                    { action: 'press', key: 'Enter' },
+                ],
+            }),
+        );
     });
 
     it('pins symmetric grid traversal, explicit Escape exit and focus-only outlines in both grids', (): void => {
@@ -169,23 +284,40 @@ describe('TDD: Collection View grid contracts', (): void => {
             ['page-500', 'M6', 'grid'],
         ] as const) {
             const navigation: readonly ScenarioAssertion[] = collectionViewContracts[scenario];
-            expect(navigation).toContainEqual(expect.objectContaining({
-                kind: 'focused', name: `TDD: ${id} Shift+Tab crosses the same data row boundary backwards`,
-                requiresGrid: role, steps: [{ action: 'press', key: 'Shift+Tab' }],
-            }));
-            expect(navigation).toContainEqual(expect.objectContaining({
-                kind: 'focused', name: `TDD: ${id} Escape focuses the existing view picker`,
-                target: { selector: '.collectionDocumentViewSwitcher [role="combobox"]' },
-                steps: [{ action: 'press', key: 'Escape' }],
-            }));
-            expect(navigation).toContainEqual(expect.objectContaining({
-                kind: 'style', name: `TDD: ${id} the remembered cell has no focus outline after Escape`,
-                property: 'outline-style', expected: 'none',
-            }));
-            expect(navigation).toContainEqual(expect.objectContaining({
-                kind: 'focused', name: `TDD: ${id} Tab leaves at the last cell`,
-                steps: [{ action: 'press', key: 'Control+End' }, { action: 'press', key: 'Tab' }],
-            }));
+            expect(navigation).toContainEqual(
+                expect.objectContaining({
+                    kind: 'focused',
+                    name: `TDD: ${id} Shift+Tab crosses the same data row boundary backwards`,
+                    requiresGrid: role,
+                    steps: [{ action: 'press', key: 'Shift+Tab' }],
+                }),
+            );
+            expect(navigation).toContainEqual(
+                expect.objectContaining({
+                    kind: 'focused',
+                    name: `TDD: ${id} Escape focuses the existing view picker`,
+                    target: { selector: '.collectionDocumentViewSwitcher [role="combobox"]' },
+                    steps: [{ action: 'press', key: 'Escape' }],
+                }),
+            );
+            expect(navigation).toContainEqual(
+                expect.objectContaining({
+                    kind: 'style',
+                    name: `TDD: ${id} the remembered cell has no focus outline after Escape`,
+                    property: 'outline-style',
+                    expected: 'none',
+                }),
+            );
+            expect(navigation).toContainEqual(
+                expect.objectContaining({
+                    kind: 'focused',
+                    name: `TDD: ${id} Tab leaves at the last cell`,
+                    steps: [
+                        { action: 'press', key: 'Control+End' },
+                        { action: 'press', key: 'Tab' },
+                    ],
+                }),
+            );
         }
     });
 
@@ -195,43 +327,82 @@ describe('TDD: Collection View grid contracts', (): void => {
             light: ['rgb(255, 255, 255)', 'rgb(59, 59, 59)'],
             'high-contrast': ['rgb(0, 0, 0)', 'rgb(255, 255, 255)'],
         };
-        for (const route of scenarioRoutes().filter((route): boolean => route.view === 'collectionView' && route.scenario === 'mixed-types')) {
-            expect(findScenario(route).assertions?.filter((assertion): boolean => assertion.kind === 'style').map(
-                (assertion): string => assertion.kind === 'style' ? assertion.expected : '',
-            )).toEqual(colors[route.theme]);
+        for (const route of scenarioRoutes().filter(
+            (route): boolean => route.view === 'collectionView' && route.scenario === 'mixed-types',
+        )) {
+            expect(
+                findScenario(route)
+                    .assertions?.filter((assertion): boolean => assertion.kind === 'style')
+                    .map((assertion): string => (assertion.kind === 'style' ? assertion.expected : '')),
+            ).toEqual(colors[route.theme]);
         }
-        expect(collectionViewContracts['page-500']).toContainEqual(expect.objectContaining({
-            kind: 'countAtMost', selector: '[role="grid"] [role="row"]', max: 100,
-        }));
-        expect(collectionViewContracts['page-500']).toContainEqual(expect.objectContaining({
-            kind: 'text', includes: ['page-499'],
-            steps: [{ action: 'focus', role: 'columnheader', name: '_id' }, { action: 'press', key: 'ArrowDown' }, { action: 'press', key: 'Control+End' }],
-        }));
+        expect(collectionViewContracts['page-500']).toContainEqual(
+            expect.objectContaining({
+                kind: 'countAtMost',
+                selector: '[role="grid"] [role="row"]',
+                max: 100,
+            }),
+        );
+        expect(collectionViewContracts['page-500']).toContainEqual(
+            expect.objectContaining({
+                kind: 'text',
+                includes: ['page-499'],
+                steps: [
+                    { action: 'focus', role: 'columnheader', name: '_id' },
+                    { action: 'press', key: 'ArrowDown' },
+                    { action: 'press', key: 'Control+End' },
+                ],
+            }),
+        );
     });
 
     it('pins only the accepted paging choices and loading-to-results workflow', (): void => {
         const paging: readonly ScenarioAssertion[] = collectionViewContracts.paging;
-        expect(paging.flatMap((assertion): readonly string[] =>
-            'steps' in assertion ? (assertion.steps ?? []).flatMap((step): string[] =>
-                step.action === 'click' && step.role === 'option' ? [step.name] : [],
-            ) : [],
-        )).toEqual(['50', '100', '500', '10', 'Tree View', 'Table View']);
-        expect(collectionViewFixtures['loading-to-results'].rpc['mongoClusters.collectionView.runFindQuery']).toMatchObject({
-            hold: 'initial-results', results: [{ documentCount: 3 }],
+        expect(
+            paging.flatMap((assertion): readonly string[] =>
+                'steps' in assertion
+                    ? (assertion.steps ?? []).flatMap((step): string[] =>
+                          step.action === 'click' && step.role === 'option' ? [step.name] : [],
+                      )
+                    : [],
+            ),
+        ).toEqual(['50', '100', '500', '10', 'Tree View', 'Table View']);
+        expect(
+            collectionViewFixtures['loading-to-results'].rpc['mongoClusters.collectionView.runFindQuery'],
+        ).toMatchObject({
+            hold: 'initial-results',
+            results: [{ documentCount: 3 }],
         });
-        expect(collectionViewContracts['loading-to-results']).toContainEqual(expect.objectContaining({
-            kind: 'text', requiresGrid: 'grid', includes: ['Alpha', 'Beta'],
-        }));
-        expect(collectionViewContracts.empty).toContainEqual(expect.objectContaining({
-            kind: 'text', selector: '.collectionView [role="status"][aria-live="assertive"]',
-            includes: ['No results found'],
-        }));
-        expect(collectionViewContracts.empty).toContainEqual(expect.objectContaining({
-            kind: 'attribute', requiresGrid: 'grid', attribute: 'aria-rowcount', expected: '1',
-        }));
-        expect(collectionViewContracts.empty).toContainEqual(expect.objectContaining({
-            kind: 'countAtMost', requiresGrid: 'grid', selector: '[role="grid"] [role="row"] [role="gridcell"]', max: 0,
-        }));
+        expect(collectionViewContracts['loading-to-results']).toContainEqual(
+            expect.objectContaining({
+                kind: 'text',
+                requiresGrid: 'grid',
+                includes: ['Alpha', 'Beta'],
+            }),
+        );
+        expect(collectionViewContracts.empty).toContainEqual(
+            expect.objectContaining({
+                kind: 'text',
+                selector: '.collectionView [role="status"][aria-live="assertive"]',
+                includes: ['No results found'],
+            }),
+        );
+        expect(collectionViewContracts.empty).toContainEqual(
+            expect.objectContaining({
+                kind: 'attribute',
+                requiresGrid: 'grid',
+                attribute: 'aria-rowcount',
+                expected: '1',
+            }),
+        );
+        expect(collectionViewContracts.empty).toContainEqual(
+            expect.objectContaining({
+                kind: 'countAtMost',
+                requiresGrid: 'grid',
+                selector: '[role="grid"] [role="row"] [role="gridcell"]',
+                max: 0,
+            }),
+        );
     });
 });
 

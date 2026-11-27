@@ -628,16 +628,16 @@ of the heuristic sprawl.
 
 **Copy verbatim:**
 
-| Technique                                                                                               | Note                                                                                                                                 |
-| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Diagnostics in the failure message — open tab labels + frame URLs                                       | Turns an opaque 30 s timeout into a diagnosis                                                                                        |
-| Unit-test frame selection against **stubbed** `Frame` objects                                           | Verifies the gnarly logic without launching an editor                                                                                |
-| `keyboard.insertText` instead of per-character typing for Monaco                                        | Make it the default; per-character typing triggers IntelliSense                                                                      |
-| `toPass` around the whole **scroll-then-assert** block for virtualised grids                            | Retry the action, not just the assertion                                                                                             |
-| Drive virtualized-grid scrolling through a visible browser input (wheel or keyboard)                    | Avoid relying on library-specific synthetic-scroll workarounds; assert that the target value is reachable                           |
-| Assert "at least N rows" or "this value is reachable after scrolling" — never exact counts              | Row counts are a function of viewport height, which is a function of the runner                                                      |
-| Scope row selectors to the result grid and distinguish header from data rows                            | A grid header can also have `role="row"`; unscoped row queries can silently include it                                               |
-| Assert on the **absence of a bad state** (e.g. poll that the count of "Disconnected" status items is 0) | Frequently more robust than waiting for a good state to appear                                                                       |
+| Technique                                                                                               | Note                                                                                                      |
+| ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Diagnostics in the failure message — open tab labels + frame URLs                                       | Turns an opaque 30 s timeout into a diagnosis                                                             |
+| Unit-test frame selection against **stubbed** `Frame` objects                                           | Verifies the gnarly logic without launching an editor                                                     |
+| `keyboard.insertText` instead of per-character typing for Monaco                                        | Make it the default; per-character typing triggers IntelliSense                                           |
+| `toPass` around the whole **scroll-then-assert** block for virtualised grids                            | Retry the action, not just the assertion                                                                  |
+| Drive virtualized-grid scrolling through a visible browser input (wheel or keyboard)                    | Avoid relying on library-specific synthetic-scroll workarounds; assert that the target value is reachable |
+| Assert "at least N rows" or "this value is reachable after scrolling" — never exact counts              | Row counts are a function of viewport height, which is a function of the runner                           |
+| Scope row selectors to the result grid and distinguish header from data rows                            | A grid header can also have `role="row"`; unscoped row queries can silently include it                    |
+| Assert on the **absence of a bad state** (e.g. poll that the count of "Disconnected" status items is 0) | Frequently more robust than waiting for a good state to appear                                            |
 
 **The single most valuable comment in their entire E2E codebase** documents an IntelliSense failure:
 when typing a multi-line query, the suggest widget intercepts the literal `Enter` and _accepts a
@@ -1273,17 +1273,17 @@ the interest payment.
 
 ### 7.7 Wave 3 — depth, driven by real bugs
 
-| Item                                                                         | Source    | Value  | Complexity | Carry  | Note                                                               |
-| ---------------------------------------------------------------------------- | --------- | ------ | ---------- | ------ | ------------------------------------------------------------------ |
-| Unpark #867 as a **Vite entry + Vitest browser mode** (§4.3 option B)        | Ours      | High   | M          | Low    | One runner, one config; its unique value is failure states         |
-| Wire the harness **assertions** into CI; screenshots stay artifacts          | §4.4      | High   | S          | Low    | Neither reference project split this, and both lost the assertions |
-| **Mutation test on the suite itself**, as a script not a sentence            | **#867**  | High   | S          | None   | The one practice we would export rather than import (§4.5)         |
-| Scenario ownership in `dev/`; `as const satisfies`; registry-drift assertion | Ref1      | Medium | S          | Low    | Three idioms; adopt all three                                      |
+| Item                                                                         | Source    | Value  | Complexity | Carry  | Note                                                                     |
+| ---------------------------------------------------------------------------- | --------- | ------ | ---------- | ------ | ------------------------------------------------------------------------ |
+| Unpark #867 as a **Vite entry + Vitest browser mode** (§4.3 option B)        | Ours      | High   | M          | Low    | One runner, one config; its unique value is failure states               |
+| Wire the harness **assertions** into CI; screenshots stay artifacts          | §4.4      | High   | S          | Low    | Neither reference project split this, and both lost the assertions       |
+| **Mutation test on the suite itself**, as a script not a sentence            | **#867**  | High   | S          | None   | The one practice we would export rather than import (§4.5)               |
+| Scenario ownership in `dev/`; `as const satisfies`; registry-drift assertion | Ref1      | Medium | S          | Low    | Three idioms; adopt all three                                            |
 | Monaco input and completion patterns                                         | Ref1      | Medium | S          | Low    | Monaco lessons transfer; grid behavior follows the current RDG contracts |
-| Regression-only growth policy + explicit cap                                 | Ref1      | High   | S          | None   | A written rule is the cheapest High-value item on this page        |
-| Seeded workspace fixture + `restartVsCode()`                                 | Ref1      | Medium | M          | Medium | Only if settings-scope or persistence bugs appear                  |
-| Coverage collection from E2E                                                 | Cosmos DB | Low    | M          | Low    | Interesting, not load-bearing                                      |
-| Docs-screenshot project                                                      | Ref1      | Low    | M          | Low    | Only when the user manual demands it                               |
+| Regression-only growth policy + explicit cap                                 | Ref1      | High   | S          | None   | A written rule is the cheapest High-value item on this page              |
+| Seeded workspace fixture + `restartVsCode()`                                 | Ref1      | Medium | M          | Medium | Only if settings-scope or persistence bugs appear                        |
+| Coverage collection from E2E                                                 | Cosmos DB | Low    | M          | Low    | Interesting, not load-bearing                                            |
+| Docs-screenshot project                                                      | Ref1      | Low    | M          | Low    | Only when the user manual demands it                                     |
 
 ### 7.8 Deliberately not doing — and what it would have cost
 

@@ -303,14 +303,17 @@ const arrayNodes: CollectionOutputs['getCurrentPageAsTree'] = [
         value: { display: '(elements: 10)', type: 'array' },
         expandable: true,
     },
-    ...Array.from({ length: 10 }, (_, index): TreeNode => ({
-        key: JSON.stringify([arraysRowKey, 'ten', index]),
-        parentKey: tenArrayKey,
-        depth: 2,
-        field: `ten[${index}]`,
-        value: { display: `${index}`, type: 'int32' },
-        expandable: false,
-    })),
+    ...Array.from(
+        { length: 10 },
+        (_, index): TreeNode => ({
+            key: JSON.stringify([arraysRowKey, 'ten', index]),
+            parentKey: tenArrayKey,
+            depth: 2,
+            field: `ten[${index}]`,
+            value: { display: `${index}`, type: 'int32' },
+            expandable: false,
+        }),
+    ),
     {
         key: elevenArrayKey,
         parentKey: arraysRootKey,
@@ -414,13 +417,14 @@ const nestedPage: TablePageOutput = {
     rows: stepInPage.rows.map((row, index): TablePageOutput['rows'][number] => ({
         rowKey: row.rowKey,
         documentId: row.documentId,
-        cells: index === 0
-            ? {
-                  [ROOT_ID_COLUMN_KEY]: row.cells[ROOT_ID_COLUMN_KEY],
-                  [fieldColumnKey('nestedName')]: { display: 'nested Alpha', type: 'string' },
-                  [fieldColumnKey('child')]: { display: '{...}', type: 'object' },
-              }
-            : { [ROOT_ID_COLUMN_KEY]: row.cells[ROOT_ID_COLUMN_KEY] },
+        cells:
+            index === 0
+                ? {
+                      [ROOT_ID_COLUMN_KEY]: row.cells[ROOT_ID_COLUMN_KEY],
+                      [fieldColumnKey('nestedName')]: { display: 'nested Alpha', type: 'string' },
+                      [fieldColumnKey('child')]: { display: '{...}', type: 'object' },
+                  }
+                : { [ROOT_ID_COLUMN_KEY]: row.cells[ROOT_ID_COLUMN_KEY] },
     })),
 };
 const leafPage: TablePageOutput = {
@@ -479,14 +483,16 @@ const arrayTablePage: TablePageOutput = {
         { key: ROOT_ID_COLUMN_KEY, label: '_id', isRootId: true },
         { key: fieldColumnKey('ten'), label: 'ten', isRootId: false },
     ],
-    rows: [{
-        rowKey: arraysRowKey,
-        documentId: '"arrays-root"',
-        cells: {
-            [ROOT_ID_COLUMN_KEY]: { display: 'arrays-root', type: 'string' },
-            [fieldColumnKey('ten')]: { display: 'array[10]', type: 'array' },
+    rows: [
+        {
+            rowKey: arraysRowKey,
+            documentId: '"arrays-root"',
+            cells: {
+                [ROOT_ID_COLUMN_KEY]: { display: 'arrays-root', type: 'string' },
+                [fieldColumnKey('ten')]: { display: 'array[10]', type: 'array' },
+            },
         },
-    }],
+    ],
 };
 const arrayJsonDocuments: CollectionOutputs['getCurrentPageAsJson'] = [
     JSON.stringify({
@@ -499,12 +505,19 @@ const arrayJsonDocuments: CollectionOutputs['getCurrentPageAsJson'] = [
 const heterogeneousTreeNodes: CollectionOutputs['getCurrentPageAsTree'] = heterogeneousPage.rows.flatMap(
     (row): CollectionOutputs['getCurrentPageAsTree'] => [
         {
-            key: JSON.stringify([row.rowKey]), parentKey: null, depth: 0,
-            field: row.documentId ?? '', value: { display: '{...}', type: 'object' }, expandable: true,
+            key: JSON.stringify([row.rowKey]),
+            parentKey: null,
+            depth: 0,
+            field: row.documentId ?? '',
+            value: { display: '{...}', type: 'object' },
+            expandable: true,
         },
         {
-            key: JSON.stringify([row.rowKey, '_id']), parentKey: JSON.stringify([row.rowKey]), depth: 1,
-            field: '_id', value: { display: row.cells[ROOT_ID_COLUMN_KEY]?.display ?? '', type: 'string' },
+            key: JSON.stringify([row.rowKey, '_id']),
+            parentKey: JSON.stringify([row.rowKey]),
+            depth: 1,
+            field: '_id',
+            value: { display: row.cells[ROOT_ID_COLUMN_KEY]?.display ?? '', type: 'string' },
             expandable: false,
         },
     ],
@@ -666,7 +679,11 @@ export const collectionViewFixtures = {
         rpc: {
             'mongoClusters.collectionView.runFindQuery': { type: 'query', results: [{ documentCount: 3 }] },
             'mongoClusters.collectionView.getCurrentPageAsTable': { type: 'query', results: [heterogeneousPage] },
-            'mongoClusters.collectionView.deleteDocumentsById': { type: 'mutation', results: [true], hold: 'delete-alpha' },
+            'mongoClusters.collectionView.deleteDocumentsById': {
+                type: 'mutation',
+                results: [true],
+                hold: 'delete-alpha',
+            },
         },
     },
     'late-query': {
@@ -684,7 +701,9 @@ export const collectionViewFixtures = {
         readiness: { selectors: ['.collectionView', '.monaco-editor'], noProgressbar: false },
         rpc: {
             'mongoClusters.collectionView.runFindQuery': {
-                type: 'query', results: [{ documentCount: 3 }], hold: 'initial-results',
+                type: 'query',
+                results: [{ documentCount: 3 }],
+                hold: 'initial-results',
             },
             'mongoClusters.collectionView.getCurrentPageAsTable': { type: 'query', results: [heterogeneousPage] },
         },

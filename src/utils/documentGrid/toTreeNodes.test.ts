@@ -73,7 +73,10 @@ describe('toTreeNodes', () => {
 
     it('preserves root labels and retains _id fields in the tree', () => {
         const objectId = new ObjectId('000000000000000000000001');
-        const tree = toTreeNodes([{ _id: null }, {}, { _id: objectId }, { _id: false, nested: { _id: 'child' } }], true);
+        const tree = toTreeNodes(
+            [{ _id: null }, {}, { _id: objectId }, { _id: false, nested: { _id: 'child' } }],
+            true,
+        );
         expect(tree.filter((node) => node.parentKey === null).map((node) => node.field)).toEqual([
             'null',
             '',

@@ -98,15 +98,15 @@ show the options and recommendations directly; the links are for evidence. Keep 
 simple and maintainable. The exact pin remains open pending a retest in VS Code's Integrated
 Browser and the operator's pin decision.
 
-| Choice | Operator feedback |
-| --- | --- |
-| Scope, execution and models | Keep the M/K/D rows and accept C1–C8 and the assigned models as written. |
-| Pin | Selected `7.0.0-beta.64` after the built-in browser retest. Raise the support floor to **VS Code 1.123.0**, based on the [accepted release evidence](#candidate-minimum-for-beta64); no compatibility shim. |
-| Playwright checks | On demand only. |
-| Gestures | Accept the proposed row gestures and Enter. Include Shift+arrows only if already in scope; it is listed for future cell-range selection (F-3), not as a row-selection gesture in this migration. Do not add it. |
-| O1–O3 | Keep today's nested `_id` display and field-name tree ordering; withhold document actions for unreliable IDs. |
-| O4 | Browsable rows are always selectable, even when they have no safe action target. Selection does not confer action eligibility. |
-| O5 | Cross-page/shard duplicate handling is out of scope. Keep existing error handling when the database reports an error. This is not a guarantee that a duplicate ID will trigger one: `ClustersClient.deleteDocuments` uses `deleteMany` and currently checks acknowledgement, not match uniqueness. |
+| Choice                      | Operator feedback                                                                                                                                                                                                                                                                                  |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Scope, execution and models | Keep the M/K/D rows and accept C1–C8 and the assigned models as written.                                                                                                                                                                                                                           |
+| Pin                         | Selected `7.0.0-beta.64` after the built-in browser retest. Raise the support floor to **VS Code 1.123.0**, based on the [accepted release evidence](#candidate-minimum-for-beta64); no compatibility shim.                                                                                        |
+| Playwright checks           | On demand only.                                                                                                                                                                                                                                                                                    |
+| Gestures                    | Accept the proposed row gestures and Enter. Include Shift+arrows only if already in scope; it is listed for future cell-range selection (F-3), not as a row-selection gesture in this migration. Do not add it.                                                                                    |
+| O1–O3                       | Keep today's nested `_id` display and field-name tree ordering; withhold document actions for unreliable IDs.                                                                                                                                                                                      |
+| O4                          | Browsable rows are always selectable, even when they have no safe action target. Selection does not confer action eligibility.                                                                                                                                                                     |
+| O5                          | Cross-page/shard duplicate handling is out of scope. Keep existing error handling when the database reports an error. This is not a guarantee that a duplicate ID will trigger one: `ClustersClient.deleteDocuments` uses `deleteMany` and currently checks acknowledgement, not match uniqueness. |
 
 The [built-in browser retest](#built-in-browser-retest) is complete. On 2026-11-26 the operator
 accepted the release evidence for 1.123.0, authorized the manifest bump, and directed the leader
@@ -174,7 +174,7 @@ identify the current and upcoming gates and what they block.
 | A5   | WI-5, WI-6             | Their scope rows' contract checks pass; no earlier passing check regresses; build green.                                                                                                                                |
 | A6   | WI-7                   | K1–K2 checks pass, including the late-delete and missing-`_id` cases; advisor logic review approved.                                                                                                                    |
 | A7   | WI-8                   | M1, M2, M7 checks pass; step-in telemetry still fires (unit test or harness call log).                                                                                                                                  |
-| A8   | WI-9, WI-9b            | M4–M5 and the shared focus/navigation checks pass; advisor logic review approved; the resize investigation is resolved separately.                                                                                       |
+| A8   | WI-9, WI-9b            | M4–M5 and the shared focus/navigation checks pass; advisor logic review approved; the resize investigation is resolved separately.                                                                                      |
 | A9   | Before G2              | `npm run package` succeeds; L1 and L3 checks green; a VSIX path is in the G2 message.                                                                                                                                   |
 | A10  | WI-10                  | Sweep report written with "verified" and "not verified" lists; no console errors or CSP violations in any Collection View route.                                                                                        |
 | A11  | Before G3b             | Full Case 2 list from `.github/copilot-instructions.md` ran and passed, each result reported separately.                                                                                                                |
@@ -237,6 +237,17 @@ registered and clean logs; the injected activation failure was correctly rejecte
 **A10 passed (2026-11-27).** The [sweep report](#wi-10-sweep-report) records all 54 browser
 routes and the post-change selection reruns, plus L1/L3 for the updated VSIX. Manual
 workbench and assistive-technology checks remain open; this is not a review-ready handoff.
+
+**Early Case 2 baseline (2026-11-27), not A11.** At the operator's request, all eight
+commands ran while draft [#1142](https://github.com/microsoft/vscode-documentdb/pull/1142)
+waited for Copilot review. Localization generation and checking, formatting, the build,
+strict test type-checking, and packaging passed. Ten migration lint diagnostics were
+corrected; lint, build, localization checking, strict test type-checking and the focused
+grid and browser tests then passed. The full Vitest run failed in four unchanged test
+files. In a targeted rerun, the OIDC harness passed with Git's OpenSSL on PATH and both
+shell suites passed with two workers. Two Query Insights expectations still failed
+because this host formats numbers using `en-DE` instead of `en-US`; the tests were not
+changed. The full final suite is still due on the post-G3a revision before A11.
 
 ### Escalations
 
@@ -480,12 +491,12 @@ in the product.
 hashes matched proxy metadata (SHA-1 for both, published SRI also for beta.64), and the installed
 scratch JavaScript/CSS matched the unpacked artifacts byte for byte.
 
-| Published artifact | 7.0.0-beta.61 | 7.0.0-beta.64 |
-| --- | --- | --- |
-| Upstream evidence | [Release](https://github.com/Comcast/react-data-grid/releases/tag/v7.0.0-beta.61) | [Release](https://github.com/Comcast/react-data-grid/releases/tag/v7.0.0-beta.64), [sizing hook](https://github.com/Comcast/react-data-grid/blob/v7.0.0-beta.64/src/hooks/useGridDimensions.ts) |
-| Executable `getOrInsertComputed` in `lib/index.js` | No `Map` or `WeakMap` call; uses a module-scoped `ResizeObserver`. | No executable `Map` call; one `WeakMap` call for grid sizing. The [grouping fix](https://github.com/Comcast/react-data-grid/pull/4227) is a different call site. |
-| Published `lib/styles.css` | 12 `light-dark()` color calls; 8,813 bytes. | 13 `light-dark()` color calls; 9,900 bytes. |
-| React/React DOM peer and public row key API | `^19.2`; `rowKeyGetter`. | `^19.2`; `getRowKey`. |
+| Published artifact                                 | 7.0.0-beta.61                                                                     | 7.0.0-beta.64                                                                                                                                                                                   |
+| -------------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Upstream evidence                                  | [Release](https://github.com/Comcast/react-data-grid/releases/tag/v7.0.0-beta.61) | [Release](https://github.com/Comcast/react-data-grid/releases/tag/v7.0.0-beta.64), [sizing hook](https://github.com/Comcast/react-data-grid/blob/v7.0.0-beta.64/src/hooks/useGridDimensions.ts) |
+| Executable `getOrInsertComputed` in `lib/index.js` | No `Map` or `WeakMap` call; uses a module-scoped `ResizeObserver`.                | No executable `Map` call; one `WeakMap` call for grid sizing. The [grouping fix](https://github.com/Comcast/react-data-grid/pull/4227) is a different call site.                                |
+| Published `lib/styles.css`                         | 12 `light-dark()` color calls; 8,813 bytes.                                       | 13 `light-dark()` color calls; 9,900 bytes.                                                                                                                                                     |
+| React/React DOM peer and public row key API        | `^19.2`; `rowKeyGetter`.                                                          | `^19.2`; `getRowKey`.                                                                                                                                                                           |
 
 **Minimum runtime.** `engines.vscode` is `^1.109.0`. The
 [VS Code 1.109.0 source](https://github.com/microsoft/vscode/blob/1.109.0/.npmrc) pins
@@ -508,12 +519,12 @@ and Playwright Core 1.65.1. The scratch-only aliases initially split the dev Rea
 graph (beta.61 invalid hook call); React deduplication and pre-optimization of both aliases
 eliminated the error. The smoke has no host RPC or installed VS Code webview.
 
-| Check | 7.0.0-beta.61 | 7.0.0-beta.64 |
-| --- | --- | --- |
-| Chromium 148.0.7778.96, dev and packaged-style | Rendered 500 rows. | Rendered 500 rows; one benign favicon 404 in the dev probe. |
+| Check                                                                                                               | 7.0.0-beta.61                                                                           | 7.0.0-beta.64                                                                                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Chromium 148.0.7778.96, dev and packaged-style                                                                      | Rendered 500 rows.                                                                      | Rendered 500 rows; one benign favicon 404 in the dev probe.                                                                                                                    |
 | [Chrome for Testing](https://googlechromelabs.github.io/chrome-for-testing/) 142.0.7444.175, dev and packaged-style | Rendered a 760×400 grid, 16 virtual rows initially, reached ID 500. No page/CSP errors. | Both routes failed to mount: `resizeObservers.getOrInsertComputed is not a function`. Map and WeakMap upserts were absent; `ResizeObserver` and `light-dark()` were supported. |
-| Vite library output | Standalone CSS (8,871 bytes), RDG selectors/tokens present. | Standalone CSS (9,963 bytes), RDG selectors/tokens present. |
-| Packaged-style output | One injected style (8,871 bytes), no standalone CSS or CSP violation. | One injected style (9,963 bytes), no standalone CSS or CSP violation. |
+| Vite library output                                                                                                 | Standalone CSS (8,871 bytes), RDG selectors/tokens present.                             | Standalone CSS (9,963 bytes), RDG selectors/tokens present.                                                                                                                    |
+| Packaged-style output                                                                                               | One injected style (8,871 bytes), no standalone CSS or CSP violation.                   | One injected style (9,963 bytes), no standalone CSS or CSP violation.                                                                                                          |
 
 The library/packaged builds ran `npm run build:lib:64`, `build:lib:61`, `build:packaged:64` and
 `build:packaged:61` in the scratch package (`--ignore-scripts` for each). Playwright drove
@@ -591,14 +602,14 @@ The floor lookup used `mai-code-2-flash` (1.0 AIU, 11 requests, 1m39s summed mod
 This is the advisor's concrete proposal for the provisional sketch above; the G1 decisions
 override its O1–O5 defaults where they differ.
 
-| File | Side | Owner | Contents |
-| --- | --- | --- | --- |
-| `src/utils/documentGrid/types.ts` | Shared | WI-2a | Neutral types, column keys and `getCell`; no BSON, driver or React imports. |
-| `src/utils/documentGrid/documentIdentity.ts` | Host | WI-2b | ID serialization, projection trust and page row keys. |
-| `src/utils/documentGrid/toTablePage.ts` | Host | WI-2b | Replaces `slickgrid/mongo/toSlickGridTable.ts`. |
-| `src/utils/documentGrid/toTreeNodes.ts` | Host | WI-2b | Replaces `slickgrid/mongo/toSlickGridTree.ts`. |
-| `src/utils/documentGrid/*.test.ts` | Host | WI-2b | Moved shaping tests and new `documentIdentity.test.ts`. |
-| `src/webviews/utils/documentGrid/typeToDisplayString.ts` | Webview | WI-2b | Moved unchanged: `bsonStringToDisplayString(type: string): string`. |
+| File                                                     | Side    | Owner | Contents                                                                    |
+| -------------------------------------------------------- | ------- | ----- | --------------------------------------------------------------------------- |
+| `src/utils/documentGrid/types.ts`                        | Shared  | WI-2a | Neutral types, column keys and `getCell`; no BSON, driver or React imports. |
+| `src/utils/documentGrid/documentIdentity.ts`             | Host    | WI-2b | ID serialization, projection trust and page row keys.                       |
+| `src/utils/documentGrid/toTablePage.ts`                  | Host    | WI-2b | Replaces `slickgrid/mongo/toSlickGridTable.ts`.                             |
+| `src/utils/documentGrid/toTreeNodes.ts`                  | Host    | WI-2b | Replaces `slickgrid/mongo/toSlickGridTree.ts`.                              |
+| `src/utils/documentGrid/*.test.ts`                       | Host    | WI-2b | Moved shaping tests and new `documentIdentity.test.ts`.                     |
+| `src/webviews/utils/documentGrid/typeToDisplayString.ts` | Webview | WI-2b | Moved unchanged: `bsonStringToDisplayString(type: string): string`.         |
 
 `GridCellValue` replaces `src/utils/slickgrid/CellValue.ts`. Webviews import only `types.ts` from
 `src/utils/documentGrid/`. Payloads are plain JSON; optional fields are omitted when absent.
@@ -785,15 +796,15 @@ interface QueryResults {
 
 **Consumer migration:**
 
-| Consumer | Change |
-| --- | --- |
-| `src/documentdb/ClusterSession.ts` | Replace the shaper imports and `TableDataEntry`/`TableData` exports; shape the cached page with its identity trust state. |
-| `src/webviews/documentdb/collectionView/collectionViewRouter.ts` | `getCurrentPageAsTable` keeps `z.array(z.string())` input and returns `TablePage`; `getCurrentPageAsTree` keeps no input and returns `TreeNode[]`. JSON and action RPCs keep their names and inputs. |
-| `CollectionView.tsx`, `collectionViewContext.ts` | Update result/context state, RPC response handling, selection, command handlers, step-in and grid props. Remove the webview's extra root header injection. |
-| `DataViewPanelTable.tsx`, `DataViewPanelTree.tsx`, new `TypedValueCell.tsx` | Consume neutral props. `ToolbarDocumentManipulation.tsx` and `ToolbarTableNavigation.tsx` keep their current context interface for commands and path. |
-| Document commands and data access | `viewDocumentById`, `editDocumentById`, `deleteDocumentsById`, `vscode-documentdb.command.internal.documentView.open`, `documentsViewRouter.getDocumentById`, `ClustersClient` action methods and `parseDocumentId` keep their current contracts. Any O5 change is separate. |
-| `build/verification/browser/fixtures.ts` | `CollectionOutputs['getCurrentPageAsTable']` mock becomes `TablePage`; e.g. a string ID is `'"stage0-1"'`. WI-3b supplies `TreeNode[]` and relevant identity/field edge cases once scope is agreed. |
-| Existing shaper tests and docs | Move table/tree tests to the new filenames; add the focused identity matrix. WI-11 updates the still-relevant architecture skill and `slickgrid-removal.md`. |
+| Consumer                                                                    | Change                                                                                                                                                                                                                                                                       |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/documentdb/ClusterSession.ts`                                          | Replace the shaper imports and `TableDataEntry`/`TableData` exports; shape the cached page with its identity trust state.                                                                                                                                                    |
+| `src/webviews/documentdb/collectionView/collectionViewRouter.ts`            | `getCurrentPageAsTable` keeps `z.array(z.string())` input and returns `TablePage`; `getCurrentPageAsTree` keeps no input and returns `TreeNode[]`. JSON and action RPCs keep their names and inputs.                                                                         |
+| `CollectionView.tsx`, `collectionViewContext.ts`                            | Update result/context state, RPC response handling, selection, command handlers, step-in and grid props. Remove the webview's extra root header injection.                                                                                                                   |
+| `DataViewPanelTable.tsx`, `DataViewPanelTree.tsx`, new `TypedValueCell.tsx` | Consume neutral props. `ToolbarDocumentManipulation.tsx` and `ToolbarTableNavigation.tsx` keep their current context interface for commands and path.                                                                                                                        |
+| Document commands and data access                                           | `viewDocumentById`, `editDocumentById`, `deleteDocumentsById`, `vscode-documentdb.command.internal.documentView.open`, `documentsViewRouter.getDocumentById`, `ClustersClient` action methods and `parseDocumentId` keep their current contracts. Any O5 change is separate. |
+| `build/verification/browser/fixtures.ts`                                    | `CollectionOutputs['getCurrentPageAsTable']` mock becomes `TablePage`; e.g. a string ID is `'"stage0-1"'`. WI-3b supplies `TreeNode[]` and relevant identity/field edge cases once scope is agreed.                                                                          |
+| Existing shaper tests and docs                                              | Move table/tree tests to the new filenames; add the focused identity matrix. WI-11 updates the still-relevant architecture skill and `slickgrid-removal.md`.                                                                                                                 |
 
 **Differences from the sketch/current implementation:** root ID display already lives in the
 root cell, so the actionable ID is `documentId?: string` rather than a second display-bearing
@@ -806,13 +817,13 @@ on projection provenance, parser round trips and match semantics, not merely ser
 
 **Choices left open for G1/E5 (not approved by A1):**
 
-| Option | Decision |
-| --- | --- |
-| O1 | Keep the current hidden nested `_id` (recommended), or show it separately with a distinct label (E5). |
-| O2 | Preserve current Field-ascending sibling order (leader recommendation; no unrequested visible change), or approve the spec's document-order UI explicitly. The shaper can still emit preorder in either case. |
-| O3 | Confirm the proposed K2 fail-closed cases for computed, ambiguous or unsafe IDs; otherwise specify a different safe policy. |
-| O4 | Confirm non-actionable rows are not selectable (proposed), or allow inspecting them by selection without enabling actions. |
-| O5 | The proposal leaves cross-page duplicates unguarded. Host-side current-page validation or stronger uniqueness safeguards affect the action boundary and need E5 approval. A count observed only after deletion is not a guard. If K2 covers such collections, resolve this before implementing their document actions. |
+| Option | Decision                                                                                                                                                                                                                                                                                                               |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| O1     | Keep the current hidden nested `_id` (recommended), or show it separately with a distinct label (E5).                                                                                                                                                                                                                  |
+| O2     | Preserve current Field-ascending sibling order (leader recommendation; no unrequested visible change), or approve the spec's document-order UI explicitly. The shaper can still emit preorder in either case.                                                                                                          |
+| O3     | Confirm the proposed K2 fail-closed cases for computed, ambiguous or unsafe IDs; otherwise specify a different safe policy.                                                                                                                                                                                            |
+| O4     | Confirm non-actionable rows are not selectable (proposed), or allow inspecting them by selection without enabling actions.                                                                                                                                                                                             |
+| O5     | The proposal leaves cross-page duplicates unguarded. Host-side current-page validation or stronger uniqueness safeguards affect the action boundary and need E5 approval. A count observed only after deletion is not a guard. If K2 covers such collections, resolve this before implementing their document actions. |
 
 **A1 advisory verdict — approve (86%), `claude-opus-5.5`.** `toSlickGridTable.ts:41–69`,
 `DataViewPanelTable.tsx:122` and `CollectionView.tsx:498–514,582,611` support the identity,
@@ -1192,13 +1203,13 @@ only part of the results area, and expanders that look like gray native buttons.
 with chevron rotation included. The follow-ups may start. No draft PR push was authorized
 in the release message.
 
-| Item | When | Accepted scope |
-| ---- | ---- | ---------------- |
-| WI-G2-1: Tree height | After G2, before draft PR | Size Tree to the available results area, like Table, without changing paging, the stable scrollbar gutter, or virtualization. Check short and tall views, a large result, keyboard scrolling, and no observer errors. |
-| WI-G2-2: Tree expander | After WI-G2-1, before draft PR | Use a transparent Fluent-style chevron for branches, with a matching empty slot for leaves. Animate the chevron's rotation on expansion and collapse; use an instant state change with reduced motion. Keep the current named button, pointer hit area, Enter and focus behavior, and high-contrast visibility. |
-| WI-G2-3: Table cell readability | After G2, before draft PR | Reserve space for the type indicator; ellipsize only the overflowing value. Keep full text available through existing document inspection/JSON and preserve the cell's accessible text. Check narrow columns, long strings, and zoom without adding per-cell Tab stops. |
-| WI-G2-4: Breadcrumb help | After G2, before draft PR; carry the same guidance into WI-11 | Update in-product help for Enter or double-click on an object cell, and for Level Up or activating an ancestor breadcrumb. Replace example accessibility labels with product labels and localize changed strings. Any pinned locator changes follow E3. |
-| WI-G2-5: Clear Table selection with Escape | Before closing WI-10/A10 | With Table rows selected, Escape clears the selection and keeps grid focus; the next Escape returns focus to the view picker. Space then selects just the focused row if desired. Preserve the existing selection gestures and safe-ID rules, Tree Escape, and popup dismissal. |
+| Item                                       | When                                                          | Accepted scope                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------ | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| WI-G2-1: Tree height                       | After G2, before draft PR                                     | Size Tree to the available results area, like Table, without changing paging, the stable scrollbar gutter, or virtualization. Check short and tall views, a large result, keyboard scrolling, and no observer errors.                                                                                           |
+| WI-G2-2: Tree expander                     | After WI-G2-1, before draft PR                                | Use a transparent Fluent-style chevron for branches, with a matching empty slot for leaves. Animate the chevron's rotation on expansion and collapse; use an instant state change with reduced motion. Keep the current named button, pointer hit area, Enter and focus behavior, and high-contrast visibility. |
+| WI-G2-3: Table cell readability            | After G2, before draft PR                                     | Reserve space for the type indicator; ellipsize only the overflowing value. Keep full text available through existing document inspection/JSON and preserve the cell's accessible text. Check narrow columns, long strings, and zoom without adding per-cell Tab stops.                                         |
+| WI-G2-4: Breadcrumb help                   | After G2, before draft PR; carry the same guidance into WI-11 | Update in-product help for Enter or double-click on an object cell, and for Level Up or activating an ancestor breadcrumb. Replace example accessibility labels with product labels and localize changed strings. Any pinned locator changes follow E3.                                                         |
+| WI-G2-5: Clear Table selection with Escape | Before closing WI-10/A10                                      | With Table rows selected, Escape clears the selection and keeps grid focus; the next Escape returns focus to the view picker. Space then selects just the focused row if desired. Preserve the existing selection gestures and safe-ID rules, Tree Escape, and popup dismissal.                                 |
 
 **Implementation notes:**
 
