@@ -69,6 +69,35 @@ redesign, or unrelated error-message cleanup.
    time. Keep changes in the existing command/tree/webview surfaces; avoid new lifecycle
    abstractions unless current code demonstrates they are necessary.
 
+### Execution authorization (2026-11-27)
+
+The operator invoked `/lead` to process this plan, then explicitly approved the item/model
+mapping and the remaining F1/F4/F5/F3 choices. The endpoint is **local work and commits**:
+no push, external edits or Case 2 handoff was requested.
+
+- Advisor: `claude-opus-5.5`.
+- WI-1 expansion, WI-2, WI-3 and WI-5: `mai-code-2`, substituted for the advisor's
+  `gpt-6.1-terra` recommendations at the operator's request.
+- WI-4: `gpt-6-luna`, the advisor's mechanical-copy recommendation.
+- WI-1 stale recovery and WI-6: `gpt-6.1-sol`, retained for lifecycle/authentication logic.
+- Tests, builds and other tool-running agents: `mai-code-2-flash`.
+- F1: replace the error-row action with **Open shell without authentication**, using the
+  bounded authentication/endpoint policy in [decision 0022](../decisions.md#0022-offer-a-separately-unauthenticated-shell-from-failure-rows-only).
+- F4: option B, with the bounded copy and in-view announcement in
+  [decision 0023](../decisions.md#0023-keep-retained-view-retry-failure-feedback-inside-the-unavailable-dialog).
+- F5: option C, with the explicit-click and quiet-background policy in
+  [decision 0024](../decisions.md#0024-classify-explicit-stale-recovery-clicks-and-explain-only-failed-actions).
+- F3: explicit tree-origin commands are included; webview-origin feedback is unchanged
+  ([decision 0025](../decisions.md#0025-tree-origin-failures-use-modals-webview-origin-command-feedback-stays-unchanged)).
+- WI-2: the operator requested proposed copy for other unavailable reasons before editing;
+  that wording remains gated.
+- WI-4: F10 changes explanatory copy only; the opt-in credential-save branch is unchanged.
+- F7: current source inspection has not established a defect. A live reproduction is
+  still pending; no speculative menu change is authorized.
+
+Unrelated untracked `.copilot-connection-relays/` and `.copilot-connection-telemetry/`
+directories were present at intake and are left untouched.
+
 ## Workstream order and dependencies
 
 ```text

@@ -26,13 +26,17 @@ created: 2026-11-19
 | 0012 | Keep the lifecycle design minimal: no state machine, one epoch, no prompts in getClient, one-step teardown | Accepted                    | Operator: approved every proposed simplification                                     | 2026-11-19 | —                                                                |
 | 0013 | Correct the minimal design where it lost edits, identity or recovery: latch before save, epoch checks      | Accepted (modifies 0012)    | Operator: "update the plan" after the omissions review                               | 2026-11-19 | —                                                                |
 | 0014 | Keep in-memory connection settings after a rejection for a verified Entra identity                         | Accepted                    | Operator selected A to make sign-in recovery smoother                                | 2026-11-23 | Yes; WI-5 previously said to delete the entry                    |
-| 0015 | Use the existing latch to block startup after authentication rejection                                     | Accepted                    | Operator selected A; keep the approach simple and pragmatic                          | 2026-11-23 | Yes; expands the existing latch rather than adding a second hold |
+| 0015 | Use the existing latch to block startup after authentication rejection                                     | Accepted (modified by 0022) | Operator selected A; keep the approach simple and pragmatic                          | 2026-11-23 | Yes; expands the existing latch rather than adding a second hold |
 | 0016 | Keep disconnected webviews open under a full-view overlay                                                  | Accepted (modified by 0017) | Operator chose a simple disabled state with explicit actions                         | 2026-11-24 | Yes; replaces the inline banner and single-action layout         |
 | 0017 | Limit unavailable webview recovery to Retry and Close view                                                 | Accepted (modified by 0018) | Operator wants credential repair in the tree and no extra recovery workflow in a tab | 2026-11-24 | Yes; removes in-view credential repair                           |
 | 0018 | Saved connection edits permanently lock existing views                                                     | Accepted                    | Operator prefers simple reconnect for unchanged settings over recovery after edits   | 2026-11-24 | Yes; removes same-identity recovery after a saved edit           |
 | 0019 | Require a fresh Dashboard delete after Disconnect and keep Paste Collection in the tree                    | Accepted                    | Operator: a lifecycle change cancels the pending delete and never replays it         | 2026-11-24 | —                                                                |
 | 0020 | Defer the cross-release comparison of late failures                                                        | Accepted                    | Operator: keep descriptive telemetry and defer the comparison                        | 2026-11-26 | Yes; removes the WI-9 before/after comparison for 1.2.0          |
 | 0021 | Key the in-memory connection fingerprint per extension host                                                | Accepted                    | Operator: use HMAC and verify CodeQL without dismissing a remaining alert            | 2026-11-26 | Yes; replaces unkeyed SHA-256 without changing identity rules    |
+| 0022 | Offer a separately unauthenticated Shell from failure rows only                                           | Accepted                    | Operator approved the bounded F1 policy in the iteration 2 lead run                 | 2026-11-27 | Modifies 0015 only for this explicit anonymous entry             |
+| 0023 | Keep retained-view Retry failure feedback inside the unavailable dialog                                   | Accepted                    | Operator selected F4 option B and bounded failure copy                              | 2026-11-27 | No host modal or operation replay                                |
+| 0024 | Classify explicit stale recovery clicks and explain only failed actions                                   | Accepted                    | Operator selected F5 option C                                                      | 2026-11-27 | Cancellation, disposed work and obsolete replies remain quiet    |
+| 0025 | Tree-origin failures use modals; webview-origin command feedback stays unchanged                          | Accepted                    | Operator confirmed F3 scope                                                        | 2026-11-27 | Shared command registrations must preserve origin                |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -520,3 +524,58 @@ options may contain credentials and are not treated as sanitized data.
 Do not retain historical connection strings in an identity map or persist the HMAC key.
 Recheck [CodeQL alert 39](https://github.com/microsoft/vscode-documentdb/security/code-scanning/39).
 If it still reports the HMAC call, leave it open for review rather than suppressing it.
+
+## 0022. Offer a separately unauthenticated Shell from failure rows only
+
+**Accepted** by the operator on 2026-11-27 during
+[iteration 2](./iterations/02-ux-implementation-plan.md).
+
+Replace the failure-row Shell action with **Open shell without authentication**.
+Normal context-menu Shell startup remains authenticated. The anonymous entry may bypass
+rejected or missing authentication holds, but must honor removal, credential-update and
+explicit Disconnect guards. It does not clear a latch, use or modify `CredentialCache`,
+change saved credentials or connection identity, or fall back to saved authentication.
+
+Use an available model or stored endpoint stripped of credentials and authentication
+options. Do not fetch an endpoint from ARM on this path; report an unavailable endpoint
+honestly. Retain the existing host-gated TLS and emulator rules. Opening the terminal
+does not promise that anonymous database operations are authorized.
+
+This is the operator's explicit approval of the proposed policy, including its authentication
+boundary. No additional rationale was supplied. Implementation remains subject to verifying
+the endpoint and lifecycle contracts against the current source.
+
+## 0023. Keep retained-view Retry failure feedback inside the unavailable dialog
+
+**Accepted** by the operator on 2026-11-27: F4 option B.
+
+Keep the original unavailable reason distinct from the latest failed attempt. Use the bounded
+copy **Unable to recover the connection. Try Retry again, or close this view.** for an
+unclassified failure, without exposing a raw exception or stack. Announce the failure in-view
+and restore Retry, Close view and X after the attempt. Do not add a host modal, change the
+bound identity, or replay the failed database operation. No additional rationale was supplied.
+
+## 0024. Classify explicit stale recovery clicks and explain only failed actions
+
+**Accepted** by the operator on 2026-11-27: F5 option C.
+
+Refresh current tree state and explain actually failed explicit clicks using their real reason:
+**This connection was removed. Choose another connection.** or
+**This connection changed. Refresh the tree and try again.**
+Already-completed recovery refreshes or reveals current state without an error.
+Cancellation, disposed work and obsolete background replies remain quiet.
+
+An explicit stale worker sign-in click uses its existing bounded worker surface when that
+terminal or file still exists, not the tree's host-modal policy. Never connect another identity
+or restart disposed work to make a stale action appear successful. No additional rationale
+was supplied.
+
+## 0025. Tree-origin failures use modals; webview-origin command feedback stays unchanged
+
+**Accepted** by the operator on 2026-11-27.
+
+F3 covers explicit tree-origin actions, including tree expansion and commands, but does not
+turn shared webview-origin command failures into host modals. One failed action gives one
+modal with a translated heading and separate detail. Tree children remain recovery actions,
+not error or information rows. Background replies and cancellations stay quiet.
+No additional rationale was supplied.
