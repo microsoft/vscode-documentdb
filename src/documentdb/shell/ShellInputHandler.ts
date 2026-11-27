@@ -285,6 +285,15 @@ export class ShellInputHandler {
     }
 
     /**
+     * Restore the current line text and logical cursor position.
+     */
+    restoreLine(text: string, cursor: number): void {
+        this._buffer = text;
+        this._cursor = Math.max(0, Math.min(cursor, text.length));
+        this.reRenderLine();
+    }
+
+    /**
      * Replace text before the cursor and insert new text.
      * Used by the PTY when a completion needs to replace the typed prefix
      * (e.g., quoting a dotted field path: `address.ci` → `"address.city"`).

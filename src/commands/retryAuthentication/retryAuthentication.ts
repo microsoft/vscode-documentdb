@@ -79,10 +79,30 @@ export async function retryAuthentication(context: IActionContext, node: Retryab
 
     const clusterId = node.cluster?.clusterId;
     if (clusterId) {
+        const viewId = getViewId(node);
+        const supportsRefresh =
+            viewId === Views.ConnectionsView ||
+            viewId === Views.DiscoveryView ||
+            (viewId === Views.AzureResourcesView &&
+                (containsDelimited(node.contextValue, 'ruBranch') ||
+                    containsDelimited(node.contextValue, 'documentDbBranch')));
         let epoch = ClustersClient.getEpoch(clusterId);
         const latch = ClustersClient.getLatchReason(clusterId);
         const kind = latch === 'credentialsRejected' ? latch : node.lastConnectionFailureKind;
         if (latch && latch !== 'credentialsRejected') {
+            if (!supportsRefresh) {
+                return;
+            }
+            refreshAuthenticationNode(node);
+            if (latch === 'connectionRemoved' || latch === 'credentialsChanged' || latch === 'identityChanged') {
+                context.errorHandling.suppressDisplay = true;
+                void window.showErrorMessage(
+                    latch === 'connectionRemoved'
+                        ? l10n.t('This connection was removed. Choose another connection.')
+                        : l10n.t('This connection changed. Refresh the tree and try again.'),
+                    { modal: true },
+                );
+            }
             return;
         }
         addEstablishedConnectionContext(context.telemetry, clusterId);
@@ -108,6 +128,25 @@ export async function retryAuthentication(context: IActionContext, node: Retryab
                 credentials = await node.readReplacementKey(context);
             } catch (error) {
                 if (ClustersClient.getEpoch(clusterId) !== epoch) {
+                    if (!supportsRefresh) {
+                        return;
+                    }
+                    refreshAuthenticationNode(node);
+                    const reason = ClustersClient.getLatchReason(clusterId);
+                    if (
+                        !(error instanceof UserCancelledError) &&
+                        (reason === 'connectionRemoved' ||
+                            reason === 'credentialsChanged' ||
+                            reason === 'identityChanged')
+                    ) {
+                        context.errorHandling.suppressDisplay = true;
+                        void window.showErrorMessage(
+                            reason === 'connectionRemoved'
+                                ? l10n.t('This connection was removed. Choose another connection.')
+                                : l10n.t('This connection changed. Refresh the tree and try again.'),
+                            { modal: true },
+                        );
+                    }
                     return;
                 }
                 if (error instanceof UserCancelledError) {
@@ -132,6 +171,20 @@ export async function retryAuthentication(context: IActionContext, node: Retryab
                 throw error;
             }
             if (ClustersClient.getEpoch(clusterId) !== epoch) {
+                if (!supportsRefresh) {
+                    return;
+                }
+                refreshAuthenticationNode(node);
+                const reason = ClustersClient.getLatchReason(clusterId);
+                if (reason === 'connectionRemoved' || reason === 'credentialsChanged' || reason === 'identityChanged') {
+                    context.errorHandling.suppressDisplay = true;
+                    void window.showErrorMessage(
+                        reason === 'connectionRemoved'
+                            ? l10n.t('This connection was removed. Choose another connection.')
+                            : l10n.t('This connection changed. Refresh the tree and try again.'),
+                        { modal: true },
+                    );
+                }
                 return;
             }
             // One fresh ARM read per explicit click. A subsequent database rejection re-latches in
@@ -157,6 +210,20 @@ export async function retryAuthentication(context: IActionContext, node: Retryab
             epoch = ClustersClient.getEpoch(clusterId);
             await closing;
             if (ClustersClient.getEpoch(clusterId) !== epoch) {
+                if (!supportsRefresh) {
+                    return;
+                }
+                refreshAuthenticationNode(node);
+                const reason = ClustersClient.getLatchReason(clusterId);
+                if (reason === 'connectionRemoved' || reason === 'credentialsChanged' || reason === 'identityChanged') {
+                    context.errorHandling.suppressDisplay = true;
+                    void window.showErrorMessage(
+                        reason === 'connectionRemoved'
+                            ? l10n.t('This connection was removed. Choose another connection.')
+                            : l10n.t('This connection changed. Refresh the tree and try again.'),
+                        { modal: true },
+                    );
+                }
                 return;
             }
         }

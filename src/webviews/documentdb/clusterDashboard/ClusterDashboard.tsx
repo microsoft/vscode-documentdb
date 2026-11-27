@@ -128,6 +128,8 @@ export const ClusterDashboard = (): JSX.Element => {
         revisionRef: operationRevisionRef,
         disposedRef,
         recovering,
+        recoveryFailure,
+        retryOffered,
         recoveryAnnouncement,
         showUnavailable,
         isOperationCurrent,
@@ -764,6 +766,8 @@ export const ClusterDashboard = (): JSX.Element => {
             onDismiss={() => setRecoveryDialogDismissed(true)}
             onAction={handleUnavailableAction}
             recovering={recovering}
+            retryFailure={recoveryFailure}
+            retryOffered={retryOffered}
         >
             <div className="clusterDashboard">
                 {isBusy && <ProgressBar thickness="large" shape="square" className="progressBar" aria-hidden={true} />}

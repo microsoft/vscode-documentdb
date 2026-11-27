@@ -26,13 +26,17 @@ created: 2026-11-19
 | 0012 | Keep the lifecycle design minimal: no state machine, one epoch, no prompts in getClient, one-step teardown | Accepted                    | Operator: approved every proposed simplification                                     | 2026-11-19 | —                                                                |
 | 0013 | Correct the minimal design where it lost edits, identity or recovery: latch before save, epoch checks      | Accepted (modifies 0012)    | Operator: "update the plan" after the omissions review                               | 2026-11-19 | —                                                                |
 | 0014 | Keep in-memory connection settings after a rejection for a verified Entra identity                         | Accepted                    | Operator selected A to make sign-in recovery smoother                                | 2026-11-23 | Yes; WI-5 previously said to delete the entry                    |
-| 0015 | Use the existing latch to block startup after authentication rejection                                     | Accepted                    | Operator selected A; keep the approach simple and pragmatic                          | 2026-11-23 | Yes; expands the existing latch rather than adding a second hold |
+| 0015 | Use the existing latch to block startup after authentication rejection                                     | Accepted (modified by 0022) | Operator selected A; keep the approach simple and pragmatic                          | 2026-11-23 | Yes; expands the existing latch rather than adding a second hold |
 | 0016 | Keep disconnected webviews open under a full-view overlay                                                  | Accepted (modified by 0017) | Operator chose a simple disabled state with explicit actions                         | 2026-11-24 | Yes; replaces the inline banner and single-action layout         |
 | 0017 | Limit unavailable webview recovery to Retry and Close view                                                 | Accepted (modified by 0018) | Operator wants credential repair in the tree and no extra recovery workflow in a tab | 2026-11-24 | Yes; removes in-view credential repair                           |
-| 0018 | Saved connection edits permanently lock existing views                                                     | Accepted                    | Operator prefers simple reconnect for unchanged settings over recovery after edits   | 2026-11-24 | Yes; removes same-identity recovery after a saved edit           |
+| 0018 | Saved connection edits permanently lock existing views                                                     | Accepted (modified by 0023) | Operator prefers simple reconnect for unchanged settings over recovery after edits   | 2026-11-24 | Yes; removes same-identity recovery after a saved edit           |
 | 0019 | Require a fresh Dashboard delete after Disconnect and keep Paste Collection in the tree                    | Accepted                    | Operator: a lifecycle change cancels the pending delete and never replays it         | 2026-11-24 | —                                                                |
 | 0020 | Defer the cross-release comparison of late failures                                                        | Accepted                    | Operator: keep descriptive telemetry and defer the comparison                        | 2026-11-26 | Yes; removes the WI-9 before/after comparison for 1.2.0          |
 | 0021 | Key the in-memory connection fingerprint per extension host                                                | Accepted                    | Operator: use HMAC and verify CodeQL without dismissing a remaining alert            | 2026-11-26 | Yes; replaces unkeyed SHA-256 without changing identity rules    |
+| 0022 | Offer a separately unauthenticated Shell from failure rows only                                            | Accepted                    | Operator approved the bounded F1 policy in the iteration 2 lead run                  | 2026-11-27 | Modifies 0015 only for this explicit anonymous entry             |
+| 0023 | Keep retained-view Retry failure feedback inside the unavailable dialog                                    | Accepted                    | Operator selected F4 option B and bounded failure copy                               | 2026-11-27 | No host modal or operation replay                                |
+| 0024 | Classify explicit stale recovery clicks and explain only failed actions                                    | Accepted                    | Operator selected F5 option C                                                        | 2026-11-27 | Cancellation, disposed work and obsolete replies remain quiet    |
+| 0025 | Tree-origin failures use modals; webview-origin command feedback stays unchanged                           | Accepted                    | Operator confirmed F3 scope                                                          | 2026-11-27 | Shared command registrations must preserve origin                |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -520,3 +524,109 @@ options may contain credentials and are not treated as sanitized data.
 Do not retain historical connection strings in an identity map or persist the HMAC key.
 Recheck [CodeQL alert 39](https://github.com/microsoft/vscode-documentdb/security/code-scanning/39).
 If it still reports the HMAC call, leave it open for review rather than suppressing it.
+
+## 0022. Offer a separately unauthenticated Shell from failure rows only
+
+**Accepted** by the operator on 2026-11-27 during
+[iteration 2](./iterations/02-ux-implementation-plan.md).
+
+Replace the failure-row Shell action with **Open shell without authentication**.
+Normal context-menu Shell startup remains authenticated. The anonymous entry may bypass
+rejected or missing authentication holds, but must honor removal, credential-update and
+explicit Disconnect guards. It does not clear a latch, use or modify `CredentialCache`,
+change saved credentials or connection identity, or fall back to saved authentication.
+
+Use an available model or stored endpoint stripped of credentials and authentication
+options. Do not fetch an endpoint from ARM on this path; report an unavailable endpoint
+honestly. Retain the existing host-gated TLS and emulator rules. Opening the terminal
+does not promise that anonymous database operations are authorized.
+
+This is the operator's explicit approval of the proposed policy, including its authentication
+boundary. No additional rationale was supplied. Implementation remains subject to verifying
+the endpoint and lifecycle contracts against the current source.
+
+**Execution clarification (2026-11-27):** the operator approved a code-only internal command,
+the missing-endpoint message **Cannot open a shell without authentication for "{0}": its
+endpoint is not available.**, and stripping database, proxy and client-certificate
+authentication credentials while preserving server TLS validation.
+
+**Completion boundary (2026-11-27):** the operator questioned disabling already-working
+suggestions, then agreed to metadata-only isolation for the new diagnostic anonymous path.
+Normal Shell behavior remains unchanged. An internal `includeClusterMetadata` capability,
+defaulting to the existing behavior, preserves local methods, commands, operators, history and
+bracket suggestions while excluding shared-client database/collection/field/schema lookups in
+anonymous sessions. Prewarming, schema feeds and credential-backed error explanations are also
+excluded there. No fake cluster IDs or blanket suggestion disablement are authorized.
+The completion provider and its existing tests are directly dependent owned files for WI-6.
+
+**Parse-error clarification (2026-11-27):** the operator selected **1.A**: show
+**Invalid connection string.** when anonymous endpoint parsing fails and discard the
+original parser error/cause completely. Dependency parser errors can contain the credential-bearing
+URI or username, so retaining the unsafe cause is not permitted. The bounded replacement applies
+only to constructor parsing, not arbitrary startup errors.
+
+## 0023. Keep retained-view Retry failure feedback inside the unavailable dialog
+
+**Accepted** by the operator on 2026-11-27: F4 option B.
+
+Keep the original unavailable reason distinct from the latest failed attempt. Use the bounded
+copy **Unable to recover the connection. Try Retry again, or close this view.** for an
+unclassified failure, without exposing a raw exception or stack. Announce the failure in-view
+and restore Retry, Close view and X after the attempt. Do not add a host modal, change the
+bound identity, or replay the failed database operation. No additional rationale was supplied.
+
+**Runtime-control clarification (2026-11-27):** after a review found that Retry can return
+a new Close-only unavailable reason, the operator selected **2.A**, qualified by:
+**when a user had a Retry button visible, it should never be gone after a retry**.
+The displayed reason must remain truthful without removing an already-visible Retry control
+because state changes at runtime. Identity and lifecycle guards
+continue to reject unsafe attempts; keeping a control visible does not authorize rebinding.
+
+**Episode scope (2026-11-27):** the operator explicitly selected **1A**. An unavailable episode
+persists while its dialog is dismissed and reopened, and ends when recovery succeeds. Once Retry
+has been offered, runtime reason changes or a failed attempt do not remove it within that episode.
+After success, a later initially Close-only episode does not inherit Retry.
+
+This qualifies 0018's visible **Close view**-only policy only for an already-unavailable episode
+that previously offered Retry. Saved edits still permanently block database operations and old
+views never rebind to changed settings. The explicit Retry remains a guarded attempt, not a promise
+that the current reason can recover. This records the operator's qualified instruction; no new
+rationale is inferred.
+
+## 0024. Classify explicit stale recovery clicks and explain only failed actions
+
+**Accepted** by the operator on 2026-11-27: F5 option C.
+
+Refresh current tree state and explain actually failed explicit clicks using their real reason:
+**This connection was removed. Choose another connection.** or
+**This connection changed. Refresh the tree and try again.**
+Already-completed recovery refreshes or reveals current state without an error.
+Cancellation, disposed work and obsolete background replies remain quiet.
+
+An explicit stale worker sign-in click uses its existing bounded worker surface when that
+terminal or file still exists, not the tree's host-modal policy. Never connect another identity
+or restart disposed work to make a stale action appear successful. No additional rationale
+was supplied.
+
+## 0025. Tree-origin failures use modals; webview-origin command feedback stays unchanged
+
+**Accepted** by the operator on 2026-11-27.
+
+F3 covers explicit tree-origin actions, including tree expansion and commands, but does not
+turn shared webview-origin command failures into host modals. One failed action gives one
+modal with a translated heading and separate detail. Tree children remain recovery actions,
+not error or information rows. Background replies and cancellations stay quiet.
+No additional rationale was supplied.
+
+**Execution scope clarification (2026-11-27):** the operator selected descendant-expansion
+alignment only for extension-owned Connections and Discovery TreeViews, leaving Azure Resources
+unchanged. `getChildren` does not identify foreground versus background origin, and the Azure
+Resources host owns its TreeView. The operator requested
+[#1143](https://github.com/microsoft/vscode-documentdb/issues/1143) to investigate Azure support,
+with motivating scenarios and the trade-offs of consistent feedback versus background modal
+noise and host coordination. The own-view origin/event-order contract still needs verification.
+
+**Disposition (2026-11-27):** after the advisor found no documented expansion-event ordering,
+the operator selected **Ship tree-command alignment now; defer descendant expansion to #1143
+until foreground attribution is supported**. This supersedes the earlier own-view-only
+expansion scope for this iteration. No descendant-expansion modal change is authorized here.

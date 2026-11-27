@@ -87,6 +87,10 @@ entries are unpublished drafts and do not represent a shipped release.
   the available credentials. Credential repair stays in the tree. Dismissing the dialog with
   its **X** exposes the existing contents for copying without resuming database operations.
   Trying another operation shows the dialog again. **Close view** asks for confirmation.
+- **Do not remove Retry during an unavailable episode once it has been offered.** A failed attempt
+  or a runtime reason change keeps the control, while the reason remains truthful and host guards
+  still reject unsafe recovery. Dismissing the dialog does not reset this choice. Successful
+  recovery ends the episode; a later initially Close-only episode does not inherit Retry.
 - After an explicit Disconnect, the tree offers **Reconnect**. If reconnecting automatically
   opens the existing Dashboard for the same identity, it retries that view without replaying
   an operation. Other retained views still require **Retry**.
@@ -96,6 +100,10 @@ entries are unpublished drafts and do not represent a shipped release.
 - After a database rejects a verified Entra identity, discard the client but keep its in-memory
   connection settings for explicit sign-in. Do not retain the rejected token or retry silently.
   When the tree offers **Retry sign-in**, it does not also offer **Retry**.
+- Failure rows offer **Open shell without authentication** as a separate diagnostic entry.
+  It never uses the failed saved authentication or shared authenticated metadata, and does not
+  promise that anonymous commands are authorized. Normal context-menu Shell startup is unchanged.
+  Pre-terminal failures use a tree modal; later failures stay in the terminal.
 - **Disconnect and Remove Connection** share a teardown and a tab choice. Saving a change to
   connection details (including a password-only change) in this window keeps old tabs open and
   copyable, but they cannot recover. Open new tabs from the tree. Unchanged settings still
@@ -105,14 +113,16 @@ entries are unpublished drafts and do not represent a shipped release.
 
 ## Documents
 
-| Document                                                                       | Kind      |
-| ------------------------------------------------------------------------------ | --------- |
-| [research-findings.md](./research-findings.md)                                 | research  |
-| [decisions.md](./decisions.md)                                                 | decisions |
-| [iterations/01-implementation-plan.md](./iterations/01-implementation-plan.md) | plan      |
-| [iterations/01-dev-plan.md](./iterations/01-dev-plan.md)                       | plan      |
-| [iterations/01-pr1136-final-review.md](./iterations/01-pr1136-final-review.md) | review    |
-| [iterations/01-pr1136-ux-review.md](./iterations/01-pr1136-ux-review.md)       | ux-review |
+| Document                                                                             | Kind      |
+| ------------------------------------------------------------------------------------ | --------- |
+| [research-findings.md](./research-findings.md)                                       | research  |
+| [decisions.md](./decisions.md)                                                       | decisions |
+| [iterations/01-implementation-plan.md](./iterations/01-implementation-plan.md)       | plan      |
+| [iterations/01-dev-plan.md](./iterations/01-dev-plan.md)                             | plan      |
+| [iterations/02-ux-implementation-plan.md](./iterations/02-ux-implementation-plan.md) | plan      |
+| [iterations/02-pr1146-copilot-review.md](./iterations/02-pr1146-copilot-review.md)   | review    |
+| [iterations/01-pr1136-final-review.md](./iterations/01-pr1136-final-review.md)       | review    |
+| [iterations/01-pr1136-ux-review.md](./iterations/01-pr1136-ux-review.md)             | ux-review |
 
 ## Decisions index
 
@@ -139,6 +149,11 @@ See [decisions.md](./decisions.md):
 - 0019 require a fresh Dashboard delete after Disconnect and retain tree-only Paste.
 - 0020 defer the late-failure comparison across releases and retain descriptive telemetry.
 - 0021 key the in-memory connection fingerprint per extension host.
+- 0022 separately unauthenticated Shell entry from failure rows only.
+- 0023 keep failed retained-view Retry feedback inside the unavailable dialog.
+- 0024 classify explicit stale recovery clicks without disturbing quiet background paths.
+- 0025 use modal feedback for tree-origin commands, leaving webview feedback unchanged;
+  descendant expansion is deferred to #1143 until foreground attribution is supported.
 
 ## Timeline
 
@@ -151,3 +166,4 @@ See [decisions.md](./decisions.md):
 | 2026-11-24 | WI-6 through WI-8 implement bound views, teardown and Dashboard behavior    |
 | 2026-11-25 | WI-2 review fixes and WI-9 lifecycle measurements                           |
 | 2026-11-26 | WI-10 documentation draft, skill updates and unpublished 1.2.0 notes        |
+| 2026-11-27 | UX review findings organized into a draft implementation plan               |

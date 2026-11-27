@@ -165,6 +165,11 @@ A cluster item's first-connect catch must render through `showClusterConnectFail
 it **before** evicting `CredentialCache` or deleting the client: the Entra and Atlas providers read
 the cached credentials.
 
+The failure-row anonymous diagnostic Shell must not ask credential-backed explainers about a
+different saved authentication context. Its pre-terminal failures use one modal directly at the
+command call site; later driver failures stay in the terminal. Preserve the raw safe server
+rejection, never reinterpret it as rejected saved credentials or fall back to saved authentication.
+
 ### Do not call it from background paths
 
 Background work shows nothing, so translating there costs I/O for no benefit. Leave these alone:

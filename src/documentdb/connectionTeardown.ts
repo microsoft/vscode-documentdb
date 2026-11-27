@@ -75,7 +75,7 @@ export async function confirmTeardown(
         setting !== 'keepOpenDisabled' &&
         ids.some((id) => getConnectionSurfaces(id).length)
     ) {
-        const keepOpen = vscode.l10n.t('Keep open (disabled)');
+        const keepOpen = vscode.l10n.t('Keep open');
         const selected = await vscode.window.showWarningMessage(
             intent === 'connectionRemoved' ? vscode.l10n.t('Remove the connection?') : vscode.l10n.t('Disconnect?'),
             { modal: true, detail: vscode.l10n.t('What should happen to the open tabs for this connection?') },

@@ -15,6 +15,7 @@ import * as vscode from 'vscode';
 import { AuthMethodId } from '../../../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
+import { toUnauthenticatedConnectionString } from '../../../../documentdb/shell/unauthenticatedEndpoint';
 import { showClusterConnectFailure } from '../../../../documentdb/showClusterConnectFailure';
 import { maskSensitiveValuesInTelemetry } from '../../../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../../../documentdb/utils/DocumentDBConnectionString';
@@ -90,6 +91,8 @@ function sessionPort(connectionString: string | undefined): number | undefined {
 }
 
 export class AzureVMResourceItem extends ClusterItemBase<VirtualMachineModel> {
+    private _attemptedEndpoint?: string;
+
     iconPath = new vscode.ThemeIcon('server-environment');
 
     constructor(
@@ -138,6 +141,10 @@ export class AzureVMResourceItem extends ClusterItemBase<VirtualMachineModel> {
 
             return this.credentialsWithPort(portNumber);
         });
+    }
+
+    public override async getUnauthenticatedEndpoint(): Promise<string | undefined> {
+        return this._attemptedEndpoint;
     }
 
     /**
@@ -314,6 +321,10 @@ export class AzureVMResourceItem extends ClusterItemBase<VirtualMachineModel> {
 
             let clustersClient: ClustersClient;
             try {
+                this._attemptedEndpoint = undefined;
+                this._attemptedEndpoint = toUnauthenticatedConnectionString(
+                    nonNullValue(connectionString, 'connectionString', 'AzureVMResourceItem.ts'),
+                );
                 clustersClient = await this.getClientWithProgress(this.cluster.clusterId);
             } catch (error) {
                 if (error instanceof UserCancelledError) {

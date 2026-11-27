@@ -185,7 +185,7 @@ describe('connection teardown', () => {
             'Disconnect?',
             expect.objectContaining({ modal: true }),
             'Close all',
-            'Keep open (disabled)',
+            'Keep open',
         );
         expect(draft.dispose).not.toHaveBeenCalled();
         expect(draft.disable).not.toHaveBeenCalled();

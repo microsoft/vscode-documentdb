@@ -38,7 +38,7 @@ There are three ways to open it:
 
 - **From a failed connection.** When a cluster fails to connect, the tree shows recovery items under
   it. Select **Diagnose connection…**. Configuration repairs appear before diagnosis and
-  **Open shell**, with **Retry** last; see [connection recovery](./connecting-to-databases#recover-from-a-failed-connection).
+  **Open shell without authentication**, with **Retry** last; see [connection recovery](./connecting-to-databases#recover-from-a-failed-connection).
 - **From any cluster.** Right-click a cluster in the Connections, Discovery or Azure view and select
   **Diagnose Connection…**. This works whether or not the cluster is connected. It is not offered
   on the Local Quick Start instance node.

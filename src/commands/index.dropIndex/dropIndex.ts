@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
 import { type IndexItem } from '../../tree/documentdb/IndexItem';
+import { markCommandErrorPresented } from '../../utils/commandErrorHandling';
 import { confirmIndexAction } from '../../utils/dialogs/confirmIndexAction';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { getIndexConfirmationStats } from '../index.shared/getIndexConfirmationStats';
@@ -72,6 +73,7 @@ export async function dropIndex(context: IActionContext, node: IndexItem): Promi
         // error, then rethrow so telemetry still records the failure.
         const detail = error instanceof Error ? error.message : String(error);
         context.errorHandling.suppressDisplay = true;
+        markCommandErrorPresented(context, error);
         void vscode.window.showErrorMessage(l10n.t('Failed to delete index "{indexName}".', { indexName }), {
             modal: true,
             detail,

@@ -28,6 +28,8 @@ interface DisconnectedOverlayProps {
     readonly onAction: (action: ConnectionRecoveryAction) => void;
     readonly onDismiss: () => void;
     readonly recovering?: boolean;
+    readonly retryFailure?: string;
+    readonly retryOffered?: boolean;
     readonly warnOnClose?: boolean;
     readonly children: ReactNode;
 }
@@ -37,6 +39,8 @@ export function DisconnectedOverlay({
     onAction,
     onDismiss,
     recovering,
+    retryFailure,
+    retryOffered,
     warnOnClose,
     children,
 }: DisconnectedOverlayProps): JSX.Element {
@@ -98,7 +102,7 @@ export function DisconnectedOverlay({
                                         <Button
                                             appearance="subtle"
                                             icon={<DismissRegular />}
-                                            aria-label={l10n.t('Dismiss dialog to copy view contents')}
+                                            aria-label={l10n.t('Dismiss dialog to access view contents')}
                                             disabledFocusable={confirming || recovering}
                                         />
                                     </DialogTrigger>
@@ -108,19 +112,20 @@ export function DisconnectedOverlay({
                             </DialogTitle>
                             <DialogContent id={descriptionId}>
                                 {unavailable.detail}
+                                {retryFailure && <p role="alert">{retryFailure}</p>}
                                 {warnOnClose && <p>{l10n.t('Closing this view discards unsaved changes.')}</p>}
                                 {confirmationFailed && (
                                     <p role="alert">{l10n.t('Unable to confirm closing the view. Try again.')}</p>
                                 )}
                             </DialogContent>
                             <DialogActions>
-                                {unavailable.action !== 'close' && (
+                                {(unavailable.action !== 'close' || retryOffered) && (
                                     <Button
                                         appearance="primary"
                                         disabledFocusable={recovering || confirming}
                                         onClick={() => {
                                             if (!recovering && !confirming) {
-                                                onAction(unavailable.action);
+                                                onAction('retry');
                                             }
                                         }}
                                     >

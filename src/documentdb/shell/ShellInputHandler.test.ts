@@ -566,6 +566,51 @@ describe('ShellInputHandler', () => {
         });
     });
 
+    describe('restoreLine', () => {
+        it('should restore text and cursor without firing onBufferChange', () => {
+            let changeCount = 0;
+            const restoreHandler = new ShellInputHandler({
+                write: () => {},
+                onLine: () => {},
+                onInterrupt: () => {},
+                onContinuation: () => {},
+                onBufferChange: () => {
+                    changeCount++;
+                },
+            });
+
+            restoreHandler.restoreLine('abcdef', 2);
+            restoreHandler.handleInput('X');
+
+            expect(restoreHandler.getBuffer()).toBe('abXcdef');
+            expect(restoreHandler.getCursor()).toBe(3);
+            expect(changeCount).toBe(1);
+        });
+
+        it.each([
+            [-1, 0],
+            [99, 6],
+        ])('should clamp cursor %s to %s', (cursor, expected) => {
+            handler.restoreLine('abcdef', cursor);
+
+            expect(handler.getCursor()).toBe(expected);
+        });
+
+        it('should preserve multiline state and history', () => {
+            handler.handleInput('db.test.find({');
+            handler.handleInput('\r');
+
+            handler.restoreLine('})', 2);
+            expect(handler.isInMultiLineMode).toBe(true);
+            handler.handleInput('\r');
+            expect(lines).toEqual(['db.test.find({\n})']);
+
+            handler.resetLine();
+            handler.handleInput('\x1b[A');
+            expect(handler.getBuffer()).toBe('db.test.find({ })');
+        });
+    });
+
     describe('replaceText', () => {
         it('should replace text before cursor with new text', () => {
             handler.handleInput('address.ci');

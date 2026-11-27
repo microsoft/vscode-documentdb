@@ -63,6 +63,34 @@ describe('ShellCompletionProvider', () => {
         mockSchemaStore();
     });
 
+    describe('metadata-free completions', () => {
+        const context = { ...TEST_CONTEXT, includeClusterMetadata: false };
+
+        it.each(['use ', 'db[', "db['", 'db.users.find({ na'])(
+            'does not consult shared clients or schema for %s',
+            async (input): Promise<void> => {
+                expect(provider.getCompletions(input, input.length, context).candidates).toEqual([]);
+                await provider.prewarmCollections(context);
+                expect(ClustersClient.getExistingClient).not.toHaveBeenCalled();
+                expect(SchemaStore.getInstance).not.toHaveBeenCalled();
+            },
+        );
+
+        it.each([
+            ['hel', 'command'],
+            ['db.', 'method'],
+            ['db.users.', 'method'],
+            ['db.users.find({ $', 'operator'],
+            ['db.users.find({ _id: ', 'bson'],
+        ] as const)('retains local %s completions (%s)', (input, kind): void => {
+            const result = provider.getCompletions(input, input.length, context);
+            expect(result.candidates.length).toBeGreaterThan(0);
+            expect(result.candidates.some((candidate) => candidate.kind === kind)).toBe(true);
+            expect(ClustersClient.getExistingClient).not.toHaveBeenCalled();
+            expect(SchemaStore.getInstance).not.toHaveBeenCalled();
+        });
+    });
+
     describe('context detection', () => {
         it('should detect empty buffer as top-level', () => {
             const ctx = provider.detectContext('', 0);

@@ -21,11 +21,17 @@ The actions available depend on the connection and the failure:
 1. **Update connection string…**, when offered, corrects the saved destination before you change credentials.
 2. **Update credentials…**, when offered, lets you review the saved authentication.
 3. **Diagnose connection…** opens [step-by-step connection diagnostics](./diagnose-connection).
-4. **Open shell** opens the Interactive Shell for further investigation.
+4. **Open shell without authentication** opens a diagnostic Interactive Shell without using the
+   failed saved login. The server can still reject database commands that require authentication.
 5. **Retry** tries the connection again after you have corrected or investigated the problem.
 
 Retry is always last. These shorter labels apply to the recovery rows under a failed cluster;
 context-menu and Command Palette titles can differ.
+
+The normal context-menu Shell still uses the connection's saved authentication. The diagnostic
+Shell keeps local commands, methods, operators and history suggestions, but does not borrow
+database, collection or field suggestions from an authenticated shared client. If the endpoint is
+not available, the action explains that instead of retrying the saved authentication.
 
 ## Keep connections usable
 
@@ -48,7 +54,7 @@ When open connection views exist and the setting `documentDB.connections.openTab
 
 - **Close all**, which closes open connection views. Closing a dirty Document View first asks
   whether to **Discard changes**.
-- **Keep open (disabled)**, which keeps view contents but prevents database operations.
+- **Keep open**, which keeps view contents but prevents database operations.
 
 This choice applies to Collection View, Document View, and Cluster Dashboard tabs. It does not close
 the Interactive Shell terminal or the Query Playground file; Disconnect stops their database
@@ -64,8 +70,13 @@ why it is unavailable:
 - Select **Retry** after repairing or reconnecting the connection. Retry checks the binding and
   does not replay the operation that failed.
 - Select **Close view** to close the tab. A dirty Document View warns before closing.
-- Use the **X** to dismiss the dialog when you need to copy from the view. Database operations stay
+- Use the **X** to dismiss the dialog when you need to inspect or copy view contents. Database operations stay
   disabled, and the next operation shows the dialog again.
+
+Once **Retry** is offered, it remains available while that connection problem is unresolved,
+even if the reason changes or you dismiss and reopen the dialog. Attempts still check the original
+binding and cannot bypass a blocked connection or switch identity. After successful recovery,
+a later problem can offer **Close view** only.
 
 Use the cluster's **Reconnect** action in the tree to restore the same connection. If reconnect
 automatically opens the retained Dashboard for that connection, it retries on its own. If it

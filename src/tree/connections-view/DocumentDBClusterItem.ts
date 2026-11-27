@@ -54,6 +54,11 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
         return this.cluster.storageId;
     }
 
+    public override async getUnauthenticatedEndpoint(): Promise<string | undefined> {
+        const connection = await ConnectionStorageService.get(this.storageId, resolveStorageZone(this.cluster));
+        return connection && isConnection(connection) ? connection.secrets.connectionString : undefined;
+    }
+
     public async getCredentials(options?: GetCredentialsOptions): Promise<EphemeralClusterCredentials | undefined> {
         const connectionType = resolveStorageZone(this.cluster);
         const connectionCredentials = await ConnectionStorageService.get(this.storageId, connectionType);
@@ -352,7 +357,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                         const updateButton = l10n.t('Update saved password');
                         const saveChoice = await vscode.window.showInformationMessage(
                             l10n.t(
-                                'Connected to "{cluster}" using the decoded password. Would you like to update your saved credentials?',
+                                'Connected to "{cluster}" using the decoded password. Would you like to update your saved credentials with the correctly formatted password?',
                                 { cluster: this.cluster.name },
                             ),
                             { modal: false },

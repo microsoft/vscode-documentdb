@@ -16,6 +16,10 @@ export type ConnectionUnavailableReason =
     | 'connectionRemoved'
     | 'unreachable';
 
+export function isDiagnosticAuthenticationHold(reason: ConnectionUnavailableReason | undefined): boolean {
+    return reason === 'credentialsRejected' || reason === 'signInRequired' || reason === 'credentialsMissing';
+}
+
 export class ConnectionUnavailableError extends Error {
     constructor(
         readonly reason: ConnectionUnavailableReason,

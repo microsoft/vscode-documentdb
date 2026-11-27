@@ -29,7 +29,6 @@ import {
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { isEntraDestinationRejectedError } from '../../documentdb/auth/oidcAllowedHosts';
 import { classifyConnectionFailure, type ConnectionFailure } from '../../documentdb/connectionFailures';
-import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { showClusterConnectFailure } from '../../documentdb/showClusterConnectFailure';
 import { ext } from '../../extensionVariables';
 import { SettingsService } from '../../services/SettingsService';
@@ -222,6 +221,10 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
      * @returns A promise that resolves to the EphemeralClusterCredentials if successful; otherwise, undefined.
      */
     public abstract getCredentials(): Promise<EphemeralClusterCredentials | undefined>;
+
+    public async getUnauthenticatedEndpoint(): Promise<string | undefined> {
+        return this.cluster.connectionString;
+    }
 
     /**
      * Reads the connection details for connection diagnostics: no UI, no tunnels, typed
@@ -431,9 +434,9 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             createGenericElementWithContext({
                 contextValue: 'error',
                 id: `${this.id}/open-shell`,
-                label: vscode.l10n.t('Open shell'),
+                label: vscode.l10n.t('Open shell without authentication'),
                 iconPath: new vscode.ThemeIcon('terminal'),
-                commandId: ShellCommandIds.open,
+                commandId: 'vscode-documentdb.command.internal.shell.openWithoutAuthentication',
                 commandArgs: [this],
             }),
             ...(needsSignIn || rejectedStoredCredentials ? [] : [createRetryNode(this.id, this)]),

@@ -78,6 +78,12 @@ router, shell, playground, task, or clipboard state.
 - Shell and playground workers may keep their own connection, but pin the originating identity and
   obey the same fingerprint and epoch checks when they respawn.
 
+The failure-row **Open shell without authentication** entry is separate from normal authenticated
+Shell startup. It binds to a sanitized endpoint and re-reads it with epoch/latch checks, without
+`CredentialCache`, an authentication pin or a token relay. Only credential-rejection/sign-in/missing
+credential holds may be bypassed; Disconnect, removal and updates still block it. Keep local
+completion behavior, but exclude shared authenticated metadata and credential-backed explainers.
+
 ## Design Rendering and Lookup Together
 
 When adding a cluster hierarchy or a tree/list mode, specify these four functions before coding:
@@ -202,7 +208,7 @@ If a command is intentionally unavailable, gate it explicitly with context value
 The tree shows **actions, never error or information rows**. When expanding a cluster fails, the
 reason goes in a **modal** (`showErrorMessage(..., { modal: true, detail })`, translated through
 `ErrorExplanationService` where available). The children are only recovery actions:
-"Diagnose connection…", "Open shell" (on every failure, so experts can debug
+"Diagnose connection…", "Open shell without authentication" (on every failure, so experts can debug
 in the shell even when connecting or sign-in failed), and provider-owned
 actions such as "Update credentials…" via `errorRecoveryActions`
 (`ClusterItemBase.createErrorRecoveryChildren`).
@@ -211,7 +217,7 @@ Keep a fixed relative order: configuration/targeted repairs, diagnosis/inspectio
 destructive recovery, and **Retry always last** (including "Retry setup…").
 Providers prepend repairs; **Update connection string** precedes **Update credentials** when both
 exist. Then `ClusterItemBase` renders **Retry sign-in** when a verified Entra identity can recover,
-followed by **Diagnose connection…** and **Open shell**. **Retry** is last. When **Retry sign-in** or
+followed by **Diagnose connection…** and **Open shell without authentication**. **Retry** is last. When **Retry sign-in** or
 the stored-credential rejection action replaces Retry, do not add an ordinary Retry row too.
 Failure classification changes availability, never ordering. When healthy resources coexist with
 recovery actions, render the healthy resources first and the recovery block last.

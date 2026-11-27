@@ -182,6 +182,8 @@ export const CollectionView = (): JSX.Element => {
         revisionRef: lifecycleRevisionRef,
         disposedRef,
         recovering,
+        recoveryFailure,
+        retryOffered,
         recoveryAnnouncement,
         showUnavailable,
         isOperationCurrent,
@@ -835,6 +837,8 @@ export const CollectionView = (): JSX.Element => {
             onDismiss={() => setUnavailable(undefined)}
             onAction={handleUnavailableAction}
             recovering={recovering}
+            retryFailure={recoveryFailure}
+            retryOffered={retryOffered}
         >
             <CollectionViewContext.Provider
                 value={[
