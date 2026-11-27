@@ -226,6 +226,14 @@ high contrast (168 assertions). No ResizeObserver, console, page or CSP errors w
 reported. The dark Table regression passed 29/29; computed gutter was `auto` for Table and
 `stable` for Tree. This releases A8, not the G2 Narrator or packaged-workbench check.
 
+**A9 passed (2026-11-27).** `npm run package` produced
+`vscode-documentdb-1.1.1-alpha.0.vsix` from `20c1c7ab` (9,217,565 bytes, SHA-256
+`37E65BC00A9C8191A44F21AA61044E7E1C32F31EE3CF99B7772B6C364C84E640`). L1 verified RDG
+is reachable only from Collection View; all 26 inspection negative controls passed.
+L3 installed and activated the VSIX in isolated VS Code 1.123.0, with final commands
+registered and clean logs; the injected activation failure was correctly rejected.
+`mai-code-2-flash` used 1.1 AIU (18 requests). G2 is raised and awaits operator release.
+
 ### Escalations
 
 | ID  | Trigger                                                                                                                                    | Operator chooses                                                                                          |
@@ -1309,5 +1317,6 @@ stable workbench smoke, a real collection, screen readers and high-contrast were
 
 Step 1 is complete. A1–A7 passed; the Table works through WI-8, including nested actions and
 the held late query. WI-9 Tree and WI-9b keyboard navigation are complete. The separate
-resize fix and approved E3 viewport setup passed A8 in all three themes. A9 packages and
-checks the VSIX before G2. No draft PR has been opened.
+resize fix and approved E3 viewport setup passed A8 in all three themes. A9 passed at
+`20c1c7ab` and the verified VSIX is ready for the operator's G2 workbench check. G2 is
+not released, and no draft PR has been opened.
