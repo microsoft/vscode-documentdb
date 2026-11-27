@@ -6,6 +6,7 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { ConnectionUnavailableError } from '../../../documentdb/ConnectionUnavailableError';
+import { DocumentViewMode } from '../../../documentdb/DocumentViewMode';
 import { API } from '../../../DocumentDBExperiences';
 import { createCallerFactory } from '../../_integration/trpc';
 import { collectionsViewRouter, type RouterContext } from './collectionViewRouter';
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
     assertCurrent: vi.fn(),
     runFindQueryWithCache: vi.fn(),
     findCollection: vi.fn(),
+    updateGlobalState: vi.fn(),
 }));
 
 vi.mock('../../../documentdb/ClusterSession', () => ({
@@ -30,6 +32,7 @@ vi.mock('../../../documentdb/ClusterSession', () => ({
 }));
 vi.mock('../../../extensionVariables', () => ({
     ext: {
+        context: { globalState: { update: mocks.updateGlobalState } },
         connectionsBranchDataProvider: { findCollectionByClusterId: mocks.findCollection },
         discoveryBranchDataProvider: { findCollectionByClusterId: vi.fn() },
         azureResourcesVCoreBranchDataProvider: { findCollectionByClusterId: vi.fn() },
@@ -40,7 +43,13 @@ vi.mock('../../../extensionVariables', () => ({
 vi.mock('../../_integration/trpc', async () => {
     const { initWebviewTrpc } = await import('@microsoft/vscode-ext-webview');
     const { createCallerFactory, publicProcedure, router, mergeRouters } = initWebviewTrpc();
-    return { createCallerFactory, mergeRouters, publicProcedureWithTelemetry: publicProcedure, router };
+    return {
+        createCallerFactory,
+        mergeRouters,
+        publicProcedure,
+        publicProcedureWithTelemetry: publicProcedure,
+        router,
+    };
 });
 
 const binding = { clusterId: 'cluster', fingerprint: 'host-only-fingerprint', generation: 1 };
@@ -94,6 +103,13 @@ it('returns structured unavailability from a Collection View query', async (): P
         },
     });
     expect(mocks.runFindQueryWithCache).toHaveBeenCalledOnce();
+});
+
+it('persists the selected document view without resolving a connection', async (): Promise<void> => {
+    await createCaller().setCollectionDocumentView(DocumentViewMode.TREE);
+
+    expect(mocks.updateGlobalState).toHaveBeenCalledWith(expect.any(String), DocumentViewMode.TREE);
+    expect(mocks.getBinding).not.toHaveBeenCalled();
 });
 
 it('captures the transfer binding before asynchronous collection lookup', async (): Promise<void> => {
