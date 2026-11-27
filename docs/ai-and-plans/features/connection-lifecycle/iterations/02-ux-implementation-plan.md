@@ -90,8 +90,17 @@ no push, external edits or Case 2 handoff was requested.
 - F3: explicit tree-origin commands are included; webview-origin feedback is unchanged
   ([decision 0025](../decisions.md#0025-tree-origin-failures-use-modals-webview-origin-command-feedback-stays-unchanged)).
 - WI-2: the operator requested proposed copy for other unavailable reasons before editing;
-  that wording remains gated.
+  the subsequent reason-specific Shell/Playground proposals were approved. Changed
+  identity/settings and sign-in messages remain unchanged. Single-line partial Shell input
+  is preserved; partial multi-line and queued evaluation input are cleared, as approved.
 - WI-4: F10 changes explanatory copy only; the opt-in credential-save branch is unchanged.
+  The final approved wording retains the cluster and successful decoded-password context:
+  **Connected to "{cluster}" using the decoded password. Would you like to update your
+  saved credentials with the correctly formatted password?**
+- F3 expansion: the operator selected extension-owned TreeViews only. Azure Resources
+  remains unchanged, with enhancement [#1143](https://github.com/microsoft/vscode-documentdb/issues/1143)
+  created at their request. Foreground-origin/event-order verification is still required
+  before implementing owned-view expansion.
 - F7: current source inspection has not established a defect. A live reproduction is
   still pending; no speculative menu change is authorized.
 
@@ -180,6 +189,16 @@ behavior, current-state refresh, and quiet cancellation/background paths. Use ex
 tree/error-translation helpers and assert the translated-message contract rather than
 duplicating framework behavior.
 
+> **Deferred, escalated (2026-11-27), WI-1a/F3 descendant expansion:** the advisor
+> (`claude-opus-5.5`, 40% confidence in origin attribution) found no documented ordering
+> between `onDidExpandElement` and the first failing `getChildren`. Options were modals
+> for all owned-view failures including background refresh, a workbench event-order probe
+> without an API guarantee, or deferral. The operator explicitly chose to ship
+> tree-command alignment and defer descendant expansion to
+> [#1143](https://github.com/microsoft/vscode-documentdb/issues/1143) until foreground
+> attribution is supported. No expansion code was changed. The issue records Azure
+> scenarios, benefits, background-noise risks and host-coordination trade-offs.
+
 ## WI-2: Correct worker recovery guidance and Shell status output (F2, F8)
 
 **Depends on:** none.  
@@ -262,6 +281,18 @@ related tests, and localization.
 **Tests:** focused existing component/command tests for the rendered label, confirmation
 copy and action, accessible name, and blocked-operation behavior.
 
+> **Done (2026-11-27), commit `5d00558cb`:** F9 now says **Keep open**; F10 retains the
+> successful decoded-password/cluster context and explicitly names the correctly formatted
+> password saved in credentials; F11 names access to retained contents. The save branch,
+> teardown settings and blocked-operation behavior are unchanged. Decisions: operator,
+> explicit approval of the exact copy; leader, 99% confidence after reviewing the
+> mechanical source diff that the action/save semantics were preserved. Advised
+> (`claude-opus-5.5`) during WI-0; its `gpt-6-luna` recommendation was used. One added
+> decoded-password workflow test proves dismissal does not save. The three focused
+> Vitest files passed (26 tests), including after the operator-driven F10 correction.
+> The original generic F10 prompt was a leader error, corrected before commit.
+> Batch build/localization and live workbench presentation checks remain pending.
+
 ## WI-5: Unify human-readable debug-stat formatting (F12)
 
 **Depends on:** none.  
@@ -284,6 +315,16 @@ existing fields, inventing values, or disclosing sensitive data.
 **Tests:** focused output tests for headings, field labels/units, missing values, and
 redaction-safe output. Assert representative formatting without overfitting whitespace
 that is not user-visible.
+
+> **Done (2026-11-27), commit `e4a6ad337`:** both stats commands now use labeled
+> multiline records, explicit units and **(not available)** for missing values, preserving
+> existing host-client, pending/held, worker/session, expiry and username facts.
+> Decisions: operator, explicit F12/model approval; leader, 99% confidence after comparing
+> the mechanical output diff that existing values/redaction boundaries were retained.
+> Advised (`claude-opus-5.5`); recommended `gpt-6.1-terra`, actual `mai-code-2` per the
+> approved substitution. Five tests were added across the two stats test files; all
+> nine focused tests passed. Review replaced an `as never` evaluator fixture with a real,
+> typed evaluator using a mocked worker. Batch build remains pending.
 
 ## WI-6: Offer an unauthenticated Shell from connection failure rows (F1)
 
@@ -356,10 +397,10 @@ Before calling this iteration complete:
 | WI | Status | Outcome / decision / verification |
 | --- | --- | --- |
 | WI-0 | Pending operator review | |
-| WI-1 | Pending | |
+| WI-1 | Commands/stale actions in progress; expansion deferred | F3 expansion follows #1143, operator decision |
 | WI-2 | Pending | |
 | WI-3 | Pending operator decision | |
-| WI-4 | Pending | |
-| WI-5 | Pending | |
+| WI-4 | Implemented; batch/live checks pending | `5d00558cb`; 26 focused tests passed |
+| WI-5 | Implemented; batch checks pending | `e4a6ad337`; nine focused tests passed |
 | WI-6 | Pending operator decision | |
 | WI-7 | Conditional on reproduction | |

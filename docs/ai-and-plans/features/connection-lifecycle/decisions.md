@@ -545,6 +545,11 @@ This is the operator's explicit approval of the proposed policy, including its a
 boundary. No additional rationale was supplied. Implementation remains subject to verifying
 the endpoint and lifecycle contracts against the current source.
 
+**Execution clarification (2026-11-27):** the operator approved a code-only internal command,
+the missing-endpoint message **Cannot open a shell without authentication for "{0}": its
+endpoint is not available.**, and stripping database, proxy and client-certificate
+authentication credentials while preserving server TLS validation.
+
 ## 0023. Keep retained-view Retry failure feedback inside the unavailable dialog
 
 **Accepted** by the operator on 2026-11-27: F4 option B.
@@ -579,3 +584,16 @@ turn shared webview-origin command failures into host modals. One failed action 
 modal with a translated heading and separate detail. Tree children remain recovery actions,
 not error or information rows. Background replies and cancellations stay quiet.
 No additional rationale was supplied.
+
+**Execution scope clarification (2026-11-27):** the operator selected descendant-expansion
+alignment only for extension-owned Connections and Discovery TreeViews, leaving Azure Resources
+unchanged. `getChildren` does not identify foreground versus background origin, and the Azure
+Resources host owns its TreeView. The operator requested
+[#1143](https://github.com/microsoft/vscode-documentdb/issues/1143) to investigate Azure support,
+with motivating scenarios and the trade-offs of consistent feedback versus background modal
+noise and host coordination. The own-view origin/event-order contract still needs verification.
+
+**Disposition (2026-11-27):** after the advisor found no documented expansion-event ordering,
+the operator selected **Ship tree-command alignment now; defer descendant expansion to #1143
+until foreground attribution is supported**. This supersedes the earlier own-view-only
+expansion scope for this iteration. No descendant-expansion modal change is authorized here.
