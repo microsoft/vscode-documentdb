@@ -274,6 +274,14 @@ failure does not execute the original operation again.
 controls, announcement, and no operation replay. Exercise Collection View, Document View,
 and Dashboard if their shared integration wiring differs.
 
+> **Review correction pending (2026-11-27):** the first `mai-code-2` implementation passed
+> 19 focused tests and type-checking, but advisor `claude-opus-5.5` (80%) found that a Retry
+> reply can disclose a new irrecoverable reason. Keeping the old reason hides actual
+> removal/settings/identity state. The operator selected adopting truthful current reasons,
+> with the explicit constraint that an already-visible Retry button must not disappear after
+> Retry or runtime state changes. This is not permission to change identity or bypass a hold.
+> The corrected UI contract is pending; the initial implementation is not marked done.
+
 ## WI-4: Clarify teardown and retained-content wording (F9–F11)
 
 **Depends on:** none.  
@@ -379,6 +387,13 @@ focused command/tree tests.
 **Tests:** focused command tests contrasting error-row and normal entry, proving no
 credential use or mutation on the former and preserving the latter's existing startup
 path. Test the anonymous command failure feedback.
+
+> **Gate resolved (2026-11-27):** the worker stopped before edits because URI parser errors
+> can contain credentials. Advisor `claude-opus-5.5` approved a constructor-only bounded
+> replacement at 90%, and removing every mixed-case credential-key spelling at 95%.
+> The operator selected **1.A**: **Invalid connection string.**, with the unsafe parser
+> error/cause discarded entirely. WI-6 implementation resumed with the previously approved
+> zero-cache, endpoint, trust and lifecycle constraints.
 
 ## WI-7: Investigate F7 only if WI-0 reproduces it
 

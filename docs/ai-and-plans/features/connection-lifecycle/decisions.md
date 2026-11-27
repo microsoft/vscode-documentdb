@@ -550,6 +550,12 @@ the missing-endpoint message **Cannot open a shell without authentication for "{
 endpoint is not available.**, and stripping database, proxy and client-certificate
 authentication credentials while preserving server TLS validation.
 
+**Parse-error clarification (2026-11-27):** the operator selected **1.A**: show
+**Invalid connection string.** when anonymous endpoint parsing fails and discard the
+original parser error/cause completely. Dependency parser errors can contain the credential-bearing
+URI or username, so retaining the unsafe cause is not permitted. The bounded replacement applies
+only to constructor parsing, not arbitrary startup errors.
+
 ## 0023. Keep retained-view Retry failure feedback inside the unavailable dialog
 
 **Accepted** by the operator on 2026-11-27: F4 option B.
@@ -559,6 +565,14 @@ copy **Unable to recover the connection. Try Retry again, or close this view.** 
 unclassified failure, without exposing a raw exception or stack. Announce the failure in-view
 and restore Retry, Close view and X after the attempt. Do not add a host modal, change the
 bound identity, or replay the failed database operation. No additional rationale was supplied.
+
+**Runtime-control clarification (2026-11-27):** after a review found that Retry can return
+a new Close-only unavailable reason, the operator selected **2.A**, qualified by:
+**when a user had a Retry button visible, it should never be gone after a retry**.
+The displayed reason must remain truthful without removing an already-visible Retry control
+because state changes at runtime. The scope of retained Retry availability across a successful
+recovery and a later unavailable episode is still being clarified. Identity and lifecycle guards
+continue to reject unsafe attempts; keeping a control visible does not authorize rebinding.
 
 ## 0024. Classify explicit stale recovery clicks and explain only failed actions
 
