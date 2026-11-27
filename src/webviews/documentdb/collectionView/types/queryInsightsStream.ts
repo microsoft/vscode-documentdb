@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type AIIndexRecommendation } from '../../../../services/ai/types';
+import { type ConnectionUnavailableResponse } from '../../../_integration/connectionUnavailable';
 
 /**
  * Best-effort Copilot token-usage measurements, mirrored here in a
@@ -48,6 +49,7 @@ export interface QueryInsightsStreamUsage {
  * final `complete`.
  */
 export type QueryInsightsStreamEvent =
+    | ({ type: 'unavailable' } & ConnectionUnavailableResponse)
     | {
           type: 'status';
           /**

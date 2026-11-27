@@ -5,6 +5,9 @@
 
 import * as l10n from '@vscode/l10n';
 
+/** Marks localized recovery guidance, not an SDK error message. */
+export class ManagedIdentityGuidanceError extends Error {}
+
 /**
  * Coarse classification of a managed identity token failure.
  *

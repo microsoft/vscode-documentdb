@@ -6,8 +6,7 @@
 import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { CredentialCache } from '../../documentdb/CredentialCache';
-import { SchemaStore } from '../../documentdb/SchemaStore';
+import { withConnectionRemoval } from '../../documentdb/connectionTeardown';
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService } from '../../services/connectionStorageService';
 import { checkCanProceedAndInformUser } from '../../services/taskService/resourceUsageHelper';
@@ -75,33 +74,41 @@ export async function removeConnection(
     let successCount = 0;
     let failureCount = 0;
 
-    await withConnectionsViewProgress(async () => {
-        for (const connection of connectionsToDelete) {
-            try {
-                await ext.state.showDeleting(connection.id, async () => {
-                    await ConnectionStorageService.delete(resolveStorageZone(connection.cluster), connection.storageId);
+    try {
+        await withConnectionRemoval(
+            connectionsToDelete.map((connection) => connection.cluster.clusterId),
+            async (remove) => {
+                await withConnectionsViewProgress(async () => {
+                    for (const connection of connectionsToDelete) {
+                        try {
+                            await remove(connection.cluster.clusterId, async () => {
+                                await ext.state.showDeleting(connection.id, async () => {
+                                    await ConnectionStorageService.delete(
+                                        resolveStorageZone(connection.cluster),
+                                        connection.storageId,
+                                    );
+                                });
+                            });
+                            successCount++;
+                        } catch (error) {
+                            failureCount++;
+                            const errorMessage = error instanceof Error ? error.message : String(error);
+                            ext.outputChannel.error(
+                                l10n.t('Failed to remove connection "{connectionName}": {error}', {
+                                    connectionName: connection.cluster.name,
+                                    error: errorMessage,
+                                }),
+                            );
+                        }
+                    }
                 });
-
-                // delete cached credentials from memory using stable clusterId (not treeId)
-                CredentialCache.deleteCredentials(connection.cluster.clusterId);
-
-                // clear cached schema data for this cluster
-                SchemaStore.getInstance().clearCluster(connection.cluster.clusterId);
-
-                refreshParentInConnectionsView(connection.id);
-                successCount++;
-            } catch (error) {
-                failureCount++;
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                ext.outputChannel.error(
-                    l10n.t('Failed to remove connection "{connectionName}": {error}', {
-                        connectionName: connection.cluster.name,
-                        error: errorMessage,
-                    }),
-                );
-            }
+            },
+        );
+    } finally {
+        for (const connection of connectionsToDelete) {
+            refreshParentInConnectionsView(connection.id);
         }
-    });
+    }
 
     context.telemetry.measurements.connectionsDeleted = successCount;
     context.telemetry.measurements.errorCount = failureCount;

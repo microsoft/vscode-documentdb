@@ -37,6 +37,7 @@ import { createMongoDocument } from '../commands/createDocument/createDocument';
 import { deleteCollection } from '../commands/deleteCollection/deleteCollection';
 import { deleteAzureDatabase } from '../commands/deleteDatabase/deleteDatabase';
 import { diagnoseConnection } from '../commands/diagnoseConnection/diagnoseConnection';
+import { connectDisconnected, disconnect } from '../commands/disconnect/disconnect';
 import { filterProviderContent } from '../commands/discoveryService.filterProviderContent/filterProviderContent';
 import { manageCredentials } from '../commands/discoveryService.manageCredentials/manageCredentials';
 import { exportEntireCollection, exportQueryResults } from '../commands/exportDocuments/exportDocuments';
@@ -67,6 +68,7 @@ import { openIndexManagementView } from '../commands/openIndexManagementView/ope
 import {
     openInteractiveShell,
     openInteractiveShellWithInput,
+    openUnauthenticatedShell,
 } from '../commands/openInteractiveShell/openInteractiveShell';
 import { pasteCollection } from '../commands/pasteCollection/pasteCollection';
 import { pasteIndexes } from '../commands/pasteIndexes/pasteIndexes';
@@ -86,7 +88,9 @@ import { retryAuthentication } from '../commands/retryAuthentication/retryAuthen
 import { revealView } from '../commands/revealView/revealView';
 import { clearSchemaCache } from '../commands/schemaStore/clearSchemaCache';
 import { showSchemaStoreStats } from '../commands/schemaStore/showSchemaStoreStats';
+import { showConnectionStats } from '../commands/showConnectionStats/showConnectionStats';
 import { showWorkerStats } from '../commands/showWorkerStats/showWorkerStats';
+import { signInAgain } from '../commands/signInAgain/signInAgain';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
 import { updateCredentials } from '../commands/updateCredentials/updateCredentials';
 import { isVCoreAndRURolloutEnabled } from '../extension';
@@ -143,6 +147,7 @@ import {
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
 import { registerClusterDashboardContextMenuCommands } from '../webviews/documentdb/clusterDashboard/clusterDashboardController';
 import { EntraErrorExplainer } from './auth/entraErrors/EntraErrorExplainer';
+import { EntraSignInRequiredErrorExplainer } from './auth/entraErrors/EntraSignInRequiredErrorExplainer';
 import { PLAYGROUND_FILE_EXTENSION, PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './playground/constants';
 import { PlaygroundBlockHighlighter } from './playground/PlaygroundBlockHighlighter';
 import { PlaygroundCodeLensProvider } from './playground/PlaygroundCodeLensProvider';
@@ -187,6 +192,7 @@ export class ClustersExtension implements vscode.Disposable {
         ErrorExplanationService.registerProvider(new AtlasErrorExplainer());
         // First explanation wins, so source-specific explanations take priority over generic SRV failures.
         ErrorExplanationService.registerProvider(new SrvDnsErrorExplainer());
+        ErrorExplanationService.registerProvider(new EntraSignInRequiredErrorExplainer());
         ErrorExplanationService.registerProvider(new EntraErrorExplainer());
     }
 
@@ -621,6 +627,10 @@ export class ClustersExtension implements vscode.Disposable {
                     withCommandCorrelation(showSchemaStoreStats),
                 );
 
+                registerCommand(
+                    'vscode-documentdb.command.showConnectionStats',
+                    withCommandCorrelation(showConnectionStats),
+                );
                 registerCommand('vscode-documentdb.command.showWorkerStats', withCommandCorrelation(showWorkerStats));
 
                 //// General Commands:
@@ -1005,6 +1015,19 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.internal.retry',
                     withTreeNodeCommandCorrelation(retryAuthentication),
+                );
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.disconnect', disconnect);
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.internal.connectDisconnected',
+                    withTreeNodeCommandCorrelation(connectDisconnected),
+                );
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.internal.shell.openWithoutAuthentication',
+                    withTreeNodeCommandCorrelation(openUnauthenticatedShell),
+                );
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.signInAgain',
+                    withTreeNodeCommandCorrelation(signInAgain),
                 );
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.internal.revealView',

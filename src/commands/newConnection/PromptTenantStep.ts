@@ -8,7 +8,10 @@ import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
-import { type AzureSubscriptionProviderWithFilters } from '../../plugins/api-shared/azure/AzureSubscriptionProviderWithFilters';
+import {
+    getUnfilteredAzureTenants,
+    type AzureSubscriptionProviderWithFilters,
+} from '../../plugins/api-shared/azure/AzureSubscriptionProviderWithFilters';
 import { traceTenantLookup, type TenantLookupResult } from '../../plugins/api-shared/azure/traceTenantLookup';
 import { traceAuthFlow } from '../../utils/authTrace';
 import { nonNullValue } from '../../utils/nonNull';
@@ -29,16 +32,22 @@ export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardC
         const subscriptionProvider = new VSCodeAzureSubscriptionProvider();
         let accountManagementUsed = false;
         let lookupTimeoutMs = TENANT_LOOKUP_TIMEOUT_MS;
+        let reloadTenants = false;
 
         if (!(await this.isSignedIn(subscriptionProvider))) {
             await this.handleSignInToOtherAccounts(context, subscriptionProvider);
             accountManagementUsed = true;
+            reloadTenants = true;
         }
 
         // Create async function to provide better loading UX and debugging experience
         const tenantItemsPromise = async (): Promise<TenantQuickPickItem[]> => {
             // Load available tenants from Azure subscription provider
-            const { tenants, status } = await this.getAvailableTenants(subscriptionProvider, lookupTimeoutMs);
+            const { tenants, status } = await this.getAvailableTenants(
+                subscriptionProvider,
+                lookupTimeoutMs,
+                reloadTenants,
+            );
             context.telemetry.measurements.availableTenantsCount = tenants.length;
 
             // Create quick pick items
@@ -122,9 +131,11 @@ export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardC
             if (selectedItem.isSignInOption) {
                 await this.handleSignInToOtherAccounts(context, subscriptionProvider);
                 accountManagementUsed = true;
+                reloadTenants = true;
             }
             if (selectedItem.isRetryOption) {
                 lookupTimeoutMs = TENANT_RETRY_TIMEOUT_MS;
+                reloadTenants = true;
             }
         } while (selectedItem.isSignInOption || selectedItem.isRetryOption);
 
@@ -179,10 +190,11 @@ export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardC
 
     private async isSignedIn(subscriptionProvider: VSCodeAzureSubscriptionProvider): Promise<boolean> {
         try {
-            return await traceTenantLookup('newConnection.isSignedIn', () => subscriptionProvider.isSignedIn(), {
-                timeoutMs: TENANT_LOOKUP_TIMEOUT_MS,
-                fallbackValue: true,
-            });
+            return await traceTenantLookup(
+                'newConnection.isSignedIn',
+                () => subscriptionProvider.signIn(undefined, { promptIfNeeded: false }),
+                { timeoutMs: TENANT_LOOKUP_TIMEOUT_MS, fallbackValue: true },
+            );
         } catch {
             return true;
         }
@@ -191,12 +203,13 @@ export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardC
     private async getAvailableTenants(
         subscriptionProvider: VSCodeAzureSubscriptionProvider,
         timeoutMs: number,
+        noCache: boolean,
     ): Promise<TenantLookupResult> {
         let timedOut = false;
         try {
             const tenants = await traceTenantLookup(
                 'newConnection.getTenants',
-                () => subscriptionProvider.getTenants(),
+                () => getUnfilteredAzureTenants(subscriptionProvider, noCache),
                 {
                     timeoutMs,
                     fallbackValue: [],

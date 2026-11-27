@@ -35,6 +35,7 @@ vi.mock('../../utils/accumulatingTelemetry', () => ({
 vi.mock('../../documentdb/ClustersClient', () => ({
     ClustersClient: {
         getClient: vi.fn(),
+        reportFailure: vi.fn(),
     },
 }));
 
@@ -65,10 +66,23 @@ describe('DatabaseItem - async collection count loading', () => {
         estimateDocumentCountMock = vi.fn().mockResolvedValue(0);
 
         (ClustersClient.getClient as Mock).mockResolvedValue({
+            binding: { clusterId: cluster.clusterId, fingerprint: 'identity', generation: 1 },
             listCollections: listCollectionsMock,
             countCollections: countCollectionsMock,
             estimateDocumentCount: estimateDocumentCountMock,
         });
+    });
+
+    it('reports the failed list against its own binding and preserves the error', async (): Promise<void> => {
+        const error = new Error('List collections failed');
+        listCollectionsMock.mockRejectedValueOnce(error);
+
+        await expect(new DatabaseItem(cluster, databaseInfo).getChildren()).rejects.toBe(error);
+        expect(ClustersClient.reportFailure).toHaveBeenCalledExactlyOnceWith(
+            { clusterId: cluster.clusterId, fingerprint: 'identity', generation: 1 },
+            error,
+        );
+        expect(listCollectionsMock).toHaveBeenCalledOnce();
     });
 
     function flushAsync(): Promise<void> {
@@ -81,6 +95,13 @@ describe('DatabaseItem - async collection count loading', () => {
         item.loadCollectionCount();
         await flushAsync();
 
+        expect(ClustersClient.getClient).toHaveBeenCalledExactlyOnceWith(
+            cluster.clusterId,
+            undefined,
+            undefined,
+            'treeChildren',
+            { background: true },
+        );
         expect(countCollectionsMock).toHaveBeenCalledWith('testdb', COLLECTION_COUNT_LIMIT);
         expect(listCollectionsMock).not.toHaveBeenCalled();
         expect(notifyChildrenChangedMock).toHaveBeenCalledWith(item.id);
@@ -124,6 +145,13 @@ describe('DatabaseItem - async collection count loading', () => {
         // Now expand the node, which fetches the full list
         const children = await item.getChildren();
 
+        expect(ClustersClient.getClient).toHaveBeenNthCalledWith(
+            2,
+            cluster.clusterId,
+            undefined,
+            undefined,
+            'treeChildren',
+        );
         expect(listCollectionsMock).toHaveBeenCalledTimes(1);
         expect(children).toHaveLength(3);
         // Description now shows exact count, no "+"

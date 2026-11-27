@@ -4,35 +4,41 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    UserCancelledError,
     callWithTelemetryAndErrorHandling,
     createContextValue,
     createGenericElement,
+    UserCancelledError,
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { type IconPath } from 'vscode';
 import { type Experience } from '../../DocumentDBExperiences';
-import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
+import {
+    addEstablishedConnectionContext,
+    ClustersClient,
+    type DatabaseItemModel,
+} from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
+import { Views } from '../../documentdb/Views';
 import {
     type EntraIdAuthConfig,
     type ManagedIdentityAuthConfig,
     type NativeAuthConfig,
 } from '../../documentdb/auth/AuthConfig';
-import { type AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { isEntraDestinationRejectedError } from '../../documentdb/auth/oidcAllowedHosts';
-import { ShellCommandIds } from '../../documentdb/shell/constants';
+import { classifyConnectionFailure, type ConnectionFailure } from '../../documentdb/connectionFailures';
 import { showClusterConnectFailure } from '../../documentdb/showClusterConnectFailure';
 import { ext } from '../../extensionVariables';
 import { SettingsService } from '../../services/SettingsService';
 import { ErrorExplanationService } from '../../services/errorExplanationService';
+import { isQuickStartClusterId } from '../../services/localQuickStart/quickStartTypes';
 import { settingsKeys } from '../../settingsKeys';
 import { regionToDisplayName } from '../../utils/regionToDisplayName';
 import { withDelayedProgress } from '../../utils/withProgress';
 import { type TreeElement } from '../TreeElement';
-import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
+import { isTreeElementWithContextValue, type TreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
 import { type TreeElementWithRetryChildren } from '../TreeElementWithRetryChildren';
 import { createGenericElementWithContext } from '../api/createGenericElementWithContext';
@@ -103,6 +109,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
     public journeyCorrelationId?: string;
     public lastConnectionOutcome?: 'connected' | 'canceled' | 'failed';
     public lastConnectionFailureReason?: 'entraDestinationRejected';
+    public lastConnectionFailureKind?: ConnectionFailure['kind'];
     public lastConnectionCorrelationId?: string;
 
     protected descriptionOverride?: string;
@@ -152,8 +159,13 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
         this.lastConnectionOutcome = undefined;
         this.lastConnectionFailureReason = undefined;
         this.lastConnectionCorrelationId = undefined;
-        if (CredentialCache.hasCredentials(this.cluster.clusterId)) {
-            await this.beforeCachedClientConnect();
+        if (
+            CredentialCache.hasCredentials(this.cluster.clusterId) ||
+            ClustersClient.getLatchReason(this.cluster.clusterId)
+        ) {
+            if (!ClustersClient.getLatchReason(this.cluster.clusterId)) {
+                await this.beforeCachedClientConnect();
+            }
 
             try {
                 return await this.getClientWithProgress(this.cluster.clusterId);
@@ -169,6 +181,8 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 if (isEntraDestinationRejectedError(error)) {
                     await callWithTelemetryAndErrorHandling('connect', async (context) => {
                         context.errorHandling.suppressDisplay = true;
+                        context.telemetry.maskEntireErrorMessage = true;
+                        addEstablishedConnectionContext(context.telemetry, this.cluster.clusterId);
                         context.telemetry.properties.connectionResult = 'failed';
                         context.telemetry.properties.experience = this.experience.api;
                         context.telemetry.properties.failurePhase = 'cachedClientConnect';
@@ -208,6 +222,10 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
      */
     public abstract getCredentials(): Promise<EphemeralClusterCredentials | undefined>;
 
+    public async getUnauthenticatedEndpoint(): Promise<string | undefined> {
+        return this.cluster.connectionString;
+    }
+
     /**
      * Reads the connection details for connection diagnostics: no UI, no tunnels, typed
      * failures (see `diagnosticCredentialRead.ts`). `undefined` means the connection no longer exists.
@@ -222,7 +240,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
     }
 
     /**
-     * Connects to the cluster using `ClustersClient.getClient()`, showing a cancellable
+     * Connects to the cluster using `ClustersClient.connectInteractive()`, showing a cancellable
      * notification so the user can abort a long-running connection attempt.
      *
      * @param clusterId - The stable cluster ID for cache and credential lookups.
@@ -248,13 +266,20 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
         }
     }
 
-    protected async getClientWithProgress(clusterId: string): Promise<ClustersClient> {
+    protected async getClientWithProgress(
+        clusterId: string,
+        onReuse?: (client: ClustersClient | undefined) => void,
+    ): Promise<ClustersClient> {
         const abortController = new AbortController();
-        const clientPromise = ClustersClient.getClient(
+        const clientPromise = ClustersClient.connectInteractive(
             clusterId,
             abortController.signal,
             (id) => {
                 this.lastConnectionCorrelationId = id;
+                if (onReuse) {
+                    const client = ClustersClient.getExistingClient(clusterId);
+                    onReuse(client?.connectionCorrelationId === id ? client : undefined);
+                }
             },
             'treeConnect',
         );
@@ -285,24 +310,119 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
         }
     }
 
+    /** First startup did not publish a binding. Classify without attributing it to a generation. */
+    protected async finishFailedStartup(context: IActionContext, error: unknown, epoch: number): Promise<void> {
+        const { clusterId } = this.cluster;
+        const failure = this.classifyTreeFailure(error);
+        context.telemetry.properties.connectionFailureKind = failure.kind;
+        addEstablishedConnectionContext(context.telemetry, clusterId);
+        if (ClustersClient.getEpoch(clusterId) !== epoch || failure.note === 'cancelled') {
+            return;
+        }
+        this.lastConnectionFailureKind = failure.kind;
+        if (ClustersClient.getLatchReason(clusterId)) {
+            return;
+        }
+        const retainedEntraSettings = failure.kind === 'credentialsRejected' && this.canSignInAgain();
+        if (failure.kind === 'other' || (failure.kind === 'credentialsRejected' && !retainedEntraSettings)) {
+            CredentialCache.deleteCredentials(clusterId);
+        }
+        if (retainedEntraSettings || (failure.kind === 'credentialsRejected' && this.readReplacementKey)) {
+            ClustersClient.latch(clusterId, 'credentialsRejected');
+        }
+        await ClustersClient.deleteClient(clusterId);
+    }
+
+    /** Only the two Azure RU item types can replace a rejected database key from ARM. */
+    public readReplacementKey?(context: IActionContext): Promise<EphemeralClusterCredentials>;
+
+    public canRetryRejectedCredentials(): boolean {
+        const { clusterId, viewId } = this.cluster;
+        if (viewId === String(Views.ConnectionsView)) {
+            return isQuickStartClusterId(clusterId);
+        }
+        if (viewId !== String(Views.DiscoveryView) && viewId !== String(Views.AzureResourcesView)) {
+            return false;
+        }
+        const credentials = CredentialCache.getCredentials(clusterId);
+        return (
+            credentials !== undefined &&
+            (credentials.authMechanism ?? AuthMethodId.NativeAuth) === AuthMethodId.NativeAuth
+        );
+    }
+
+    private classifyTreeFailure(error: unknown): ConnectionFailure {
+        const method = CredentialCache.getCredentials(this.cluster.clusterId)?.authMechanism ?? AuthMethodId.NativeAuth;
+        return classifyConnectionFailure(error, method);
+    }
+
+    private canSignInAgain(): boolean {
+        const { clusterId } = this.cluster;
+        const credentials = CredentialCache.getCredentials(clusterId);
+        const identity = ClustersClient.getLastVerifiedIdentity(clusterId);
+        return (
+            credentials?.authMechanism === AuthMethodId.MicrosoftEntraID &&
+            identity?.kind === 'entra' &&
+            identity.tenantId === credentials.entraIdConfig?.tenantId
+        );
+    }
+
+    private hasStoredCredentialEditor(): boolean {
+        return (
+            this.cluster.viewId === String(Views.ConnectionsView) &&
+            this.contextValue.split(';').includes(CLUSTER_ITEM_CONTEXT_VALUE)
+        );
+    }
+
+    private describeCredentialRejection(): string {
+        if (this.canSignInAgain()) {
+            return vscode.l10n.t('The database rejected the credentials. Choose Retry sign-in to continue.');
+        }
+        if (this.readReplacementKey) {
+            return vscode.l10n.t('The database rejected the key. Choose Retry to read the key from Azure again.');
+        }
+        if (this.hasStoredCredentialEditor()) {
+            return vscode.l10n.t('The database rejected the credentials. Choose Update credentials to continue.');
+        }
+        return vscode.l10n.t('The database rejected the credentials. Choose Retry to reload them.');
+    }
+
     /**
      * Builds the FAILURE-TYPE error-recovery nodes owned by the element layer.
      *
-     * Always includes the canonical "retry" node (see {@link createRetryNode}), a diagnosis
-     * action that opens diagnostics without connecting, and an "open shell" node. `hasRetryNode`
-     * and the provider detect the error state via the retry node. The shell is offered for every
+     * Includes diagnosis and "open shell", plus any applicable Retry action. `hasRetryNode`
+     * lets the provider detect the error state even without Retry. The shell is offered for every
      * failure, including sign-in failures, so experts can investigate with the shell's own
      * connection and error output. View-specific recovery actions (e.g. "update credentials") are
      * added separately by the provider via `errorRecoveryActions`.
      *
      * Error-recovery nodes in this tree are produced by two layers:
-     * - The ELEMENT layer (this class) owns FAILURE-TYPE nodes: "retry", "diagnose" and
+     * - The ELEMENT layer (this class) owns FAILURE-TYPE nodes: "sign in again" or "retry", "diagnose" and
      *   "open shell", for any failure.
      * - The PROVIDER layer (a BranchDataProvider) owns VIEW-SPECIFIC nodes (e.g. "update
      *   credentials") via `errorRecoveryActions`, gated by the failing element's contextValue.
      */
     private createErrorRecoveryChildren(): TreeElement[] {
+        const needsSignIn =
+            (this.lastConnectionFailureKind === 'signInRequired' ||
+                this.lastConnectionFailureKind === 'credentialsRejected') &&
+            this.canSignInAgain();
+        const rejectedStoredCredentials =
+            this.hasStoredCredentialEditor() &&
+            ClustersClient.getLatchReason(this.cluster.clusterId) === 'credentialsRejected';
         return [
+            ...(needsSignIn
+                ? [
+                      createGenericElementWithContext({
+                          contextValue: 'error',
+                          id: `${this.id}/sign-in-again`,
+                          label: vscode.l10n.t('Retry sign-in'),
+                          iconPath: new vscode.ThemeIcon('sign-in'),
+                          commandId: 'vscode-documentdb.command.signInAgain',
+                          commandArgs: [this],
+                      }),
+                  ]
+                : []),
             createGenericElementWithContext({
                 contextValue: 'error',
                 id: `${this.id}/diagnose`,
@@ -314,13 +434,102 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             createGenericElementWithContext({
                 contextValue: 'error',
                 id: `${this.id}/open-shell`,
-                label: vscode.l10n.t('Open shell'),
+                label: vscode.l10n.t('Open shell without authentication'),
                 iconPath: new vscode.ThemeIcon('terminal'),
-                commandId: ShellCommandIds.open,
+                commandId: 'vscode-documentdb.command.internal.shell.openWithoutAuthentication',
                 commandArgs: [this],
             }),
-            createRetryNode(this.id, this),
+            ...(needsSignIn || rejectedStoredCredentials ? [] : [createRetryNode(this.id, this)]),
         ];
+    }
+
+    private async renderExpansionFailure(
+        error: unknown,
+        phase: 'cachedClientConnect' | 'listDatabases',
+        failedClient?: ClustersClient,
+        acquisitionEpoch?: number,
+    ): Promise<TreeElement[]> {
+        const { clusterId, name } = this.cluster;
+        const failure = failedClient
+            ? classifyConnectionFailure(error, failedClient.authMethod)
+            : this.classifyTreeFailure(error);
+        const destinationRejected = isEntraDestinationRejectedError(error);
+        let children: TreeElement[] = [];
+        const telemetry = callWithTelemetryAndErrorHandling('connect', async (context) => {
+            context.errorHandling.suppressDisplay = true;
+            context.telemetry.maskEntireErrorMessage = true;
+            context.telemetry.properties.connectionResult = failure.note === 'cancelled' ? 'cancelled' : 'failed';
+            context.telemetry.properties.source = 'treeExpansion';
+            context.telemetry.properties.experience = this.experience.api;
+            context.telemetry.properties.failurePhase = phase;
+            if (failedClient?.binding) {
+                addEstablishedConnectionContext(context.telemetry, failedClient);
+                const kind = ClustersClient.reportFailure(failedClient.binding, error);
+                if (!kind && failure.note !== 'cancelled') {
+                    return;
+                }
+                this.lastConnectionFailureKind = kind;
+            } else {
+                if (
+                    acquisitionEpoch !== undefined &&
+                    ClustersClient.getEpoch(clusterId) !== acquisitionEpoch &&
+                    failure.note !== 'cancelled' &&
+                    failure.note !== 'alreadyUnavailable'
+                ) {
+                    return;
+                }
+                addEstablishedConnectionContext(context.telemetry, clusterId);
+                this.lastConnectionFailureKind = failure.kind;
+                if (this.lastConnectionCorrelationId) {
+                    context.telemetry.properties.connectionCorrelationId = this.lastConnectionCorrelationId;
+                }
+                // A failed replacement startup has no published generation of its own.
+                if (
+                    failure.kind === 'credentialsRejected' &&
+                    !failure.note &&
+                    (this.canSignInAgain() || this.readReplacementKey) &&
+                    !ClustersClient.getLatchReason(clusterId)
+                ) {
+                    ClustersClient.latch(clusterId, 'credentialsRejected');
+                }
+            }
+            context.telemetry.properties.connectionFailureKind = failure.kind;
+            if (failure.note === 'cancelled') {
+                this.lastConnectionOutcome = 'canceled';
+                throw error;
+            }
+            this.lastConnectionOutcome = 'failed';
+            this.lastConnectionFailureReason = destinationRejected ? 'entraDestinationRejected' : undefined;
+            children = this.createErrorRecoveryChildren();
+            if (destinationRejected) {
+                await showClusterConnectFailure({ clusterId, clusterName: name, error, context });
+            } else {
+                const renderingEpoch = ClustersClient.getEpoch(clusterId);
+                const explanation = await ErrorExplanationService.explain({ clusterId, error });
+                if (ClustersClient.getEpoch(clusterId) !== renderingEpoch) {
+                    children = [];
+                    return;
+                }
+                context.telemetry.properties.explanationProviderId = explanation?.providerId ?? 'none';
+                const heading =
+                    explanation?.message ??
+                    (phase === 'listDatabases'
+                        ? vscode.l10n.t('Failed to load databases for "{0}"', name)
+                        : vscode.l10n.t('Failed to connect to "{0}"', name));
+                let detail = error instanceof Error ? error.message : String(error);
+                if (failure.note === 'alreadyUnavailable') {
+                    if (failure.kind === 'signInRequired') {
+                        detail = vscode.l10n.t('Sign in again to continue using this connection.');
+                    } else if (failure.kind === 'credentialsRejected') {
+                        detail = this.describeCredentialRejection();
+                    }
+                }
+                void vscode.window.showErrorMessage(heading, { modal: true, detail });
+            }
+            throw error;
+        });
+        await telemetry;
+        return children;
     }
 
     /**
@@ -337,111 +546,52 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
      * @returns A list of databases in the cluster or a single element to create a new database.
      */
     async getChildren(): Promise<TreeElement[]> {
+        const clusterId = this.cluster.clusterId;
+        const disconnected = (): boolean => ClustersClient.getLatchReason(clusterId) === 'userDisconnected';
+        if (disconnected()) {
+            return this.createDisconnectedChildren();
+        }
         ext.outputChannel.appendLine(l10n.t('Loading cluster details for "{cluster}"', { cluster: this.cluster.name }));
 
         const wasConnected = ClustersClient.exists(this.cluster.clusterId);
         this.lastConnectionOutcome = undefined;
         this.lastConnectionFailureReason = undefined;
+        this.lastConnectionFailureKind = undefined;
         this.lastConnectionCorrelationId = undefined;
         let clustersClient: ClustersClient | null;
 
         // Check if credentials are cached, and return the cached client if available
         // Use clusterId for cache lookups - stable across folder moves
-        if (CredentialCache.hasCredentials(this.cluster.clusterId)) {
+        if (CredentialCache.hasCredentials(clusterId) || ClustersClient.getLatchReason(clusterId)) {
             ext.outputChannel.appendLine(
                 l10n.t('Reusing active connection for "{cluster}".', {
                     cluster: this.cluster.name,
                 }),
             );
+            let reusedClient: ClustersClient | undefined;
+            let acquisitionEpoch = ClustersClient.getEpoch(clusterId);
             try {
-                await this.beforeCachedClientConnect();
-                clustersClient = await this.getClientWithProgress(this.cluster.clusterId);
-            } catch (error) {
-                if (error instanceof UserCancelledError) {
-                    this.lastConnectionOutcome = 'canceled';
-                    ext.outputChannel.appendLine(
-                        l10n.t('Connection to "{cluster}" was cancelled.', { cluster: this.cluster.name }),
-                    );
-
-                    void callWithTelemetryAndErrorHandling('connect', (context) => {
-                        context.telemetry.properties.connectionResult = 'cancelled';
-                        context.telemetry.properties.source = 'treeExpansion';
-                        context.telemetry.properties.experience = this.experience.api;
-                        throw error;
-                    });
-
-                    return [];
+                if (!ClustersClient.getLatchReason(clusterId)) {
+                    await this.beforeCachedClientConnect();
                 }
-
-                // Reusing a cached client can still fail (server down, stale credentials, dropped
-                // tunnel, TLS/auth renegotiation, …). If we let the rejection propagate out of
-                // getChildren(), the tree expansion would end with no children and — crucially —
-                // no retry affordance, leaving the user stuck. Mirror the `!clustersClient` and
-                // listDatabases branches: record telemetry, surface a modal, and return a retry
-                // node. We intentionally keep the cached credentials so the retry can re-attempt
-                // the connection without forcing the user to re-enter credentials (the failure may
-                // be transient).
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                const entraRejected = isEntraDestinationRejectedError(error);
-                const explanation = entraRejected
-                    ? undefined
-                    : await ErrorExplanationService.explain({
-                          clusterId: this.cluster.clusterId,
-                          error,
-                      });
-
-                const telemetryPromise = callWithTelemetryAndErrorHandling('connect', async (telemetryContext) => {
-                    telemetryContext.errorHandling.suppressDisplay = true;
-                    telemetryContext.telemetry.properties.connectionResult = 'failed';
-                    telemetryContext.telemetry.properties.source = 'treeExpansion';
-                    telemetryContext.telemetry.properties.experience = this.experience.api;
-                    telemetryContext.telemetry.properties.failurePhase = 'cachedClientConnect';
-                    telemetryContext.telemetry.properties.explanationProviderId = explanation?.providerId ?? 'none';
-                    // The connection being reused, so the failure joins its destination.
-                    const reusedConnectionId = ClustersClient.getExistingClient(
-                        this.cluster.clusterId,
-                    )?.connectionCorrelationId;
-                    if (reusedConnectionId) {
-                        telemetryContext.telemetry.properties.connectionCorrelationId = reusedConnectionId;
-                    }
-                    if (entraRejected) {
-                        await showClusterConnectFailure({
-                            clusterId: this.cluster.clusterId,
-                            clusterName: this.cluster.name,
-                            error,
-                            context: telemetryContext,
-                        });
-                    }
-                    throw error;
+                acquisitionEpoch = ClustersClient.getEpoch(clusterId);
+                clustersClient = await this.getClientWithProgress(clusterId, (client) => {
+                    reusedClient = client;
                 });
-                if (entraRejected) {
-                    await telemetryPromise;
+            } catch (error) {
+                if (disconnected()) {
+                    return this.createDisconnectedChildren();
                 }
-
-                ext.outputChannel.appendLine(
-                    l10n.t('Failed to reuse the active connection for "{cluster}": {error}', {
-                        cluster: this.cluster.name,
-                        error: errorMessage,
-                    }),
-                );
-
-                if (!entraRejected) {
-                    void vscode.window.showErrorMessage(
-                        explanation?.message ?? vscode.l10n.t('Failed to connect to "{0}"', this.cluster.name),
-                        {
-                            modal: true,
-                            detail: errorMessage,
-                        },
-                    );
-                }
-
-                return this.createErrorRecoveryChildren();
+                return this.renderExpansionFailure(error, 'cachedClientConnect', reusedClient, acquisitionEpoch);
             }
         } else {
             // Call to the abstract method to authenticate and connect to the cluster
             clustersClient = await this.authenticateAndConnect();
         }
 
+        if (disconnected()) {
+            return this.createDisconnectedChildren();
+        }
         // If authentication failed or cancelled, return the error element
         if (!clustersClient) {
             this.lastConnectionOutcome ??= 'failed';
@@ -463,45 +613,17 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
         try {
             databases = await connectedClient.listDatabases();
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            const explanation = await ErrorExplanationService.explain({
-                clusterId: this.cluster.clusterId,
-                error,
-            });
-
-            // Record failure telemetry, but suppress azext's default (non-modal) notification:
-            // this failure blocks the user's interactive expand flow, so we present a modal below
-            // instead (consistent with how blocking errors are surfaced elsewhere). Throwing inside
-            // the callback lets callWithTelemetryAndErrorHandling capture the error details without
-            // propagating out of getChildren().
-            void callWithTelemetryAndErrorHandling('connect', (telemetryContext) => {
-                telemetryContext.errorHandling.suppressDisplay = true;
-                telemetryContext.telemetry.properties.connectionResult = 'failed';
-                telemetryContext.telemetry.properties.source = 'treeExpansion';
-                telemetryContext.telemetry.properties.experience = this.experience.api;
-                telemetryContext.telemetry.properties.failurePhase = 'listDatabases';
-                telemetryContext.telemetry.properties.explanationProviderId = explanation?.providerId ?? 'none';
-                // The connection that worked but was refused the listing, so the failure joins its destination.
-                if (connectedClient.connectionCorrelationId) {
-                    telemetryContext.telemetry.properties.connectionCorrelationId =
-                        connectedClient.connectionCorrelationId;
-                }
-                throw error;
-            });
-
-            ext.outputChannel.appendLine(
-                l10n.t('Failed to list databases for "{cluster}": {error}', {
-                    cluster: this.cluster.name,
-                    error: errorMessage,
-                }),
-            );
-
-            void vscode.window.showErrorMessage(
-                explanation?.message ?? vscode.l10n.t('Failed to load databases for "{0}"', this.cluster.name),
-                { modal: true, detail: errorMessage },
-            );
-
-            return this.createErrorRecoveryChildren();
+            if (disconnected()) {
+                return this.createDisconnectedChildren();
+            }
+            return this.renderExpansionFailure(error, 'listDatabases', connectedClient);
+        }
+        const binding = connectedClient.binding;
+        const isCurrentIdentity = (): boolean =>
+            !ClustersClient.getLatchReason(clusterId) &&
+            (!binding || ClustersClient.getExistingClient(clusterId)?.fingerprint === binding.fingerprint);
+        if (!isCurrentIdentity()) {
+            return disconnected() ? this.createDisconnectedChildren() : [];
         }
 
         // A deep link that opens the dashboard itself suppresses the automatic open; that is not a skip.
@@ -510,6 +632,9 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 await vscode.commands.executeCommand('vscode-documentdb.command.clusterDashboard.open', this, null, {
                     activationSource: 'autoOpenOnConnect',
                 });
+                if (!isCurrentIdentity()) {
+                    return disconnected() ? this.createDisconnectedChildren() : [];
+                }
             } else {
                 // The counterpart of an automatic open: without it, people who turned automatic
                 // opening off in Settings, rather than from the dashboard, are invisible.
@@ -519,6 +644,10 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                     context.telemetry.properties.experience = this.experience.api;
                 });
             }
+        }
+
+        if (!wasConnected && ClustersClient.exists(clusterId)) {
+            ext.state.notifyChildrenChanged(this.id);
         }
 
         if (databases.length === 0) {
@@ -547,13 +676,39 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
         });
     }
 
+    private createDisconnectedChildren(): TreeElement[] {
+        return [
+            createGenericElementWithContext({
+                id: `${this.id}/connect`,
+                contextValue: 'treeItem_connectDisconnected',
+                label: vscode.l10n.t('Reconnect'),
+                iconPath: new vscode.ThemeIcon('plug'),
+                commandId: 'vscode-documentdb.command.internal.connectDisconnected',
+                commandArgs: [this],
+            }),
+        ];
+    }
+
+    protected getClusterTreeItemContextValue(): string {
+        const clusterId = this.cluster.clusterId;
+        return ClustersClient.exists(clusterId) && !ClustersClient.getLatchReason(clusterId)
+            ? createContextValue([this.contextValue, 'connected'])
+            : this.contextValue;
+    }
+
     /**
-     * Checks if the given children array contains an error node.
-     * @param children The children array to check.
-     * @returns True if any child in the array is an error node, false otherwise.
+     * Detect a failed expansion even when there is no Retry row.
      */
     public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
-        return containsRetryNode(children);
+        return (
+            containsRetryNode(children) ||
+            children?.some(
+                (child) =>
+                    child.id === `${this.id}/diagnose` &&
+                    isTreeElementWithContextValue(child) &&
+                    child.contextValue === 'error',
+            ) === true
+        );
     }
 
     /**
@@ -569,7 +724,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
 
         return {
             id: this.id,
-            contextValue: this.contextValue,
+            contextValue: this.getClusterTreeItemContextValue(),
             label: this.cluster.name,
             description: this.descriptionOverride
                 ? this.descriptionOverride

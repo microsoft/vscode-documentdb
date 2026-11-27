@@ -19,6 +19,10 @@ import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
 
 import { type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
+import {
+    isConnectionUnavailableResponse,
+    type ConnectionUnavailableDetails,
+} from '../../../_integration/connectionUnavailable';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
 import { useFilterUsageReporter } from '../../../components/useFilterUsageReporter';
 import { isShowCollectionsMessage } from '../clusterDashboardContextMenu';
@@ -83,6 +87,10 @@ export interface InventoryPanelProps {
         readonly operation: 'create' | 'delete';
         readonly phase: 'running' | 'settling';
     }>;
+    isSubmissionBlocked?: () => boolean;
+    startOperation?: (revealUnavailable?: boolean) => number | undefined;
+    isOperationCurrent?: (revision: number) => boolean;
+    onUnavailable?: (unavailable: ConnectionUnavailableDetails) => void;
 }
 
 /**
@@ -149,6 +157,9 @@ export const InventoryPanel = ({
     onRetryStorage,
     isCreatingNamespace,
     busyNamespaces,
+    startOperation = () => 0,
+    isOperationCurrent = () => true,
+    onUnavailable = () => undefined,
 }: InventoryPanelProps): JSX.Element => {
     const { sort, filterText, currentDatabase } = viewState;
     const trpcClient = useTrpcClient();
@@ -303,9 +314,21 @@ export const InventoryPanel = ({
             activationSource: 'rowClick' | 'rowActionButton',
             isFiltered: boolean,
         ): void => {
+            const revision = startOperation(true);
+            if (revision === undefined) {
+                return;
+            }
             void trpcClient.clusterDashboard.openCollectionView
                 .mutate({ databaseName, collectionName, activationSource, isFiltered })
+                .then((response) => {
+                    if (isOperationCurrent(revision) && isConnectionUnavailableResponse(response)) {
+                        onUnavailable(response.unavailable);
+                    }
+                })
                 .catch((error: unknown) => {
+                    if (!isOperationCurrent(revision)) {
+                        return;
+                    }
                     void trpcClient.common.displayErrorMessage.mutate({
                         message: l10n.t('Failed to open the collection view.'),
                         modal: false,
@@ -313,7 +336,7 @@ export const InventoryPanel = ({
                     });
                 });
         },
-        [trpcClient],
+        [isOperationCurrent, onUnavailable, startOperation, trpcClient],
     );
 
     // Every other context-menu entry is carried out on the host against the row's tree node;
@@ -321,6 +344,9 @@ export const InventoryPanel = ({
     useEffect(() => {
         const handleMessage = (event: MessageEvent<unknown>): void => {
             if (isShowCollectionsMessage(event.data)) {
+                if (startOperation(true) === undefined) {
+                    return;
+                }
                 const { databaseName } = event.data;
                 report('inventoryNavigation', { direction: 'down', control: 'rowContextMenu', level: 'databases' });
                 onViewStateChange((current) => ({ ...current, currentDatabase: databaseName, filterText: '' }));
@@ -329,9 +355,12 @@ export const InventoryPanel = ({
 
         window.addEventListener('message', handleMessage);
         return () => window.removeEventListener('message', handleMessage);
-    }, [onViewStateChange, report]);
+    }, [onViewStateChange, report, startOperation]);
 
     const activate = (row: NamespaceRow, control: 'rowClick' | 'rowActionButton'): void => {
+        if (startOperation(true) === undefined) {
+            return;
+        }
         if (currentDatabase === null) {
             report('inventoryNavigation', {
                 direction: 'down',
@@ -374,7 +403,9 @@ export const InventoryPanel = ({
         allRows.length === 0
             ? currentDatabase === null
                 ? (storageError ?? (errors.length > 0 ? errors.join('; ') : null))
-                : (collections.error ?? (errors.length > 0 ? errors.join('; ') : null))
+                : (collections.error ??
+                  (collections.isInterrupted ? l10n.t('Connection lost') : null) ??
+                  (errors.length > 0 ? errors.join('; ') : null))
             : null;
     const canCreateNamespace = emptyStateFailureReason === null && (allRows.length > 0 || !inventoryIsLoading);
 

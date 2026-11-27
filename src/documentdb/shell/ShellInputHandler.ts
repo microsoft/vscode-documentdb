@@ -214,6 +214,13 @@ export class ShellInputHandler {
     }
 
     /**
+     * Discard input queued behind an evaluation that will no longer resume.
+     */
+    clearPendingInput(): void {
+        this._pendingInput = '';
+    }
+
+    /**
      * Get the current line buffer content.
      */
     getBuffer(): string {
@@ -274,6 +281,15 @@ export class ShellInputHandler {
         const after = this._buffer.slice(this._cursor);
         this._buffer = before + text + after;
         this._cursor += text.length;
+        this.reRenderLine();
+    }
+
+    /**
+     * Restore the current line text and logical cursor position.
+     */
+    restoreLine(text: string, cursor: number): void {
+        this._buffer = text;
+        this._cursor = Math.max(0, Math.min(cursor, text.length));
         this.reRenderLine();
     }
 

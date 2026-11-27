@@ -52,7 +52,7 @@ export interface HarnessFixture extends ViewFixture {
 function reply<T>(
     type: RpcFixture['type'],
     result: T,
-): Omit<RpcFixture, 'results'> & { readonly results: readonly T[] } {
+): Omit<RpcFixture, 'results' | 'afterFirst'> & { readonly results: readonly T[] } {
     if (result === undefined) {
         return { type, results: [], undefinedResult: true };
     }
@@ -543,6 +543,7 @@ export const fixtures = {
         ],
         rpc: {
             ...common,
+            'mongoClusters.documentView.reportDirty': reply('mutation', null),
             'mongoClusters.documentView.getDocumentById': reply<
                 Outputs['mongoClusters']['documentView']['getDocumentById']
             >('query', JSON.stringify({ _id: 'stage0-1', name: 'Stage 0 document payload', quantity: 7 }, null, 2)),

@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../../../extensionVariables';
 import { nonNullProp, nonNullValue } from '../../../../utils/nonNull';
+import { getUnfilteredAzureTenants } from '../AzureSubscriptionProviderWithFilters';
 import { tenantSignInLimiter } from '../tenantSignInLimiter';
 import { traceTenantLookup } from '../traceTenantLookup';
 import {
@@ -150,7 +151,7 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
         try {
             // Get all tenants which include the accounts
             const tenants = await traceTenantLookup('accountManagement.getTenants', () =>
-                context.azureSubscriptionProvider.getTenants(),
+                getUnfilteredAzureTenants(context.azureSubscriptionProvider, true),
             );
 
             // Check sign-in status for all tenants with bounded parallelism
@@ -158,7 +159,10 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
                 tenants.map(async (tenant) => {
                     const tenantId = nonNullProp(tenant, 'tenantId', 'tenant.tenantId', 'SelectAccountStep.ts');
                     const isSignedIn = await tenantSignInLimiter(() =>
-                        context.azureSubscriptionProvider.isSignedIn(tenantId, tenant.account),
+                        context.azureSubscriptionProvider.signIn(
+                            { tenantId, account: tenant.account },
+                            { promptIfNeeded: false },
+                        ),
                     );
                     return { tenant, isSignedIn };
                 }),
@@ -196,7 +200,7 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
     private async handleSignIn(context: CredentialsManagementWizardContext): Promise<void> {
         try {
             ext.outputChannel.info(l10n.t('Starting Azure sign-in process…'));
-            const success = await context.azureSubscriptionProvider.signIn();
+            const success = await context.azureSubscriptionProvider.signIn(undefined, { clearSessionPreference: true });
             if (success) {
                 ext.outputChannel.info(l10n.t('Azure sign-in completed successfully'));
             } else {

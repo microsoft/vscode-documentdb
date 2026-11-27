@@ -14,53 +14,36 @@ import { getPlaygroundEvaluators } from '../playground/executePlaygroundCode';
  */
 export function showWorkerStats(_context: IActionContext): void {
     const log = (msg: string): void => ext.outputChannel.appendLog(msg);
-
-    log('──────────────────────────────────────');
-    log('[Worker Task Manager] Worker Stats');
-    log('──────────────────────────────────────');
-
-    // ── Playground Workers ───────────────────────────────────────────────
-    log('');
-    log('  Playground Workers:');
-
     const evaluators = getPlaygroundEvaluators();
-    if (evaluators.size === 0) {
-        log('    (no playground workers — no playground run yet)');
-    } else {
-        log(`    Active workers: ${String(evaluators.size)}`);
-        for (const [clusterId, evaluator] of evaluators) {
-            log(`    ─ Cluster: ${clusterId}`);
-            log(`      Status: ${evaluator.isAlive ? 'alive' : 'not running'}`);
-            log(`      Worker state: ${evaluator.workerState}`);
-            log(`      Session ID: ${evaluator.sessionId ?? '(none)'}`);
-            log(`      Eval count (session): ${String(evaluator.sessionEvalCount)}`);
-            log(`      Auth method: ${evaluator.sessionAuthMethod ?? '(none)'}`);
-            log(`      Last init duration: ${String(evaluator.lastInitDurationMs)}ms`);
-        }
-    }
-    // ── Interactive Shell Workers ────────────────────────────────────────
-    log('');
-    log('  Interactive Shell Workers:');
-
     const shellTerminals = getRegisteredShellTerminals();
-    if (shellTerminals.length === 0) {
-        log('    (no active shell sessions)');
-    } else {
-        log(`    Active sessions: ${String(shellTerminals.length)}`);
-        for (const { terminal, info } of shellTerminals) {
-            log(`    ─ Terminal: "${terminal.name}"`);
-            log(`      Cluster: ${info.clusterDisplayName} (${info.clusterId})`);
-            log(`      Database: ${info.activeDatabase}`);
-            log(`      Initialized: ${String(info.isInitialized)}`);
-            log(`      Worker state: ${info.workerState}`);
-            log(`      Evaluating: ${String(info.isEvaluating)}`);
-            log(`      Auth method: ${info.authMethod ?? '(not yet initialized)'}`);
-            log(`      Username: ${info.username ?? '(n/a)'}`);
-        }
+
+    log('[Worker Stats]');
+    log(`  Shell sessions: ${String(shellTerminals.length)}`);
+    log(`  Playground sessions: ${String(evaluators.size)}`);
+
+    for (const [index, { terminal, info }] of shellTerminals.entries()) {
+        log(`  Shell ${String(index + 1)}:`);
+        log(`    Terminal: ${terminal.name}`);
+        log(`    Cluster: ${info.clusterDisplayName}`);
+        log(`    Cluster ID: ${info.clusterId}`);
+        log(`    Database: ${info.activeDatabase || '(not available)'}`);
+        log(`    Worker state: ${info.workerState}`);
+        log(`    Initialized: ${String(info.isInitialized)}`);
+        log(`    Evaluating: ${String(info.isEvaluating)}`);
+        log(`    Auth method: ${info.authMethod ?? '(not available)'}`);
+        log(`    Username: ${info.username ?? '(not available)'}`);
     }
 
-    log('');
-    log('──────────────────────────────────────');
+    for (const [index, [clusterId, evaluator]] of Array.from(evaluators).entries()) {
+        log(`  Playground ${String(index + 1)}:`);
+        log(`    Cluster ID: ${clusterId}`);
+        log(`    Worker alive: ${String(evaluator.isAlive)}`);
+        log(`    Worker state: ${evaluator.workerState}`);
+        log(`    Session ID: ${evaluator.sessionId ?? '(not available)'}`);
+        log(`    Eval count (session): ${String(evaluator.sessionEvalCount)}`);
+        log(`    Auth method: ${evaluator.sessionAuthMethod ?? '(not available)'}`);
+        log(`    Last init duration (ms): ${String(evaluator.lastInitDurationMs)}`);
+    }
 
     ext.outputChannel.show();
 }

@@ -20,7 +20,7 @@ interface TokenWorker {
 }
 
 const workers = vi.hoisted((): TokenWorker[] => []);
-const getSession = vi.hoisted(() => vi.fn());
+const getHandlerSession = vi.hoisted(() => vi.fn());
 const getManagedToken = vi.hoisted(() => vi.fn());
 const postedMessages = vi.hoisted((): MainToWorkerMessage[] => []);
 const events = vi.hoisted((): { eventName: string; telemetry: ITelemetryContext }[] => []);
@@ -32,8 +32,9 @@ vi.mock('../../extensionVariables', () => ({
     },
 }));
 
-vi.mock('@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode', () => ({
-    getSessionFromVSCode: getSession,
+vi.mock('vscode', async (importOriginal) => ({
+    ...(await importOriginal<typeof vscode>()),
+    authentication: { getSession: getHandlerSession },
 }));
 
 vi.mock('./managedIdentityTokenProvider', () => ({ getManagedIdentityAccessToken: getManagedToken }));
@@ -175,7 +176,10 @@ describe('sovereign authentication with real audience resolvers', () => {
         events.length = 0;
         selectedCloud = 'USGovernment';
         resetEntraTokenFailuresForTests();
-        getSession.mockResolvedValue({ accessToken: 'private-token', account: { label: 'private-account' } });
+        getHandlerSession.mockResolvedValue({
+            accessToken: 'private-token',
+            account: { id: 'account-id', label: 'private-account' },
+        });
         getManagedToken.mockResolvedValue({ accessToken: 'private-token', expiresOnTimestamp: Date.now() + 3_600_000 });
         const configuration = { get: vi.fn(), inspect: vi.fn(), has: vi.fn(), update: vi.fn() };
         configuration.get.mockImplementation((key: string, defaultValue?: unknown): unknown => {
@@ -201,7 +205,11 @@ describe('sovereign authentication with real audience resolvers', () => {
         const { options } = await new MicrosoftEntraIDAuthHandler(
             credentials(AuthMethodId.MicrosoftEntraID, cloud.suffix),
         ).configureAuth(undefined, { startupCorrelationId: 'startup-id', surface: 'extension', startupProperties });
-        expect(getSession).toHaveBeenCalledExactlyOnceWith([cloud.scope], 'private-tenant', { createIfNone: true });
+        expect(getHandlerSession).toHaveBeenCalledExactlyOnceWith(
+            cloud.setting === 'AzureCloud' ? 'microsoft' : 'microsoft-sovereign-cloud',
+            [cloud.scope, 'VSCODE_TENANT:private-tenant'],
+            { createIfNone: true },
+        );
         expect(options.authMechanismProperties?.ALLOWED_HOSTS).toEqual([`*.mongocluster.cosmos.azure.${cloud.suffix}`]);
         expect(startupProperties).toEqual({
             entraDestinationClass: 'documentdbService',
@@ -239,7 +247,7 @@ describe('sovereign authentication with real audience resolvers', () => {
                 expect.any(String),
                 undefined,
             );
-            expect(getSession).not.toHaveBeenCalled();
+            expect(getHandlerSession).not.toHaveBeenCalled();
         },
     );
 
@@ -290,8 +298,15 @@ describe('sovereign authentication with real audience resolvers', () => {
                     requestId: 'token-request',
                     accessToken: 'private-token',
                 });
-                const provider = authMethod === AuthMethodId.ManagedIdentity ? getManagedToken : getSession;
-                expect(provider.mock.calls[0]?.[0]).toEqual([clouds[0].scope]);
+                if (authMethod === AuthMethodId.ManagedIdentity) {
+                    expect(getManagedToken.mock.calls[0]?.[0]).toEqual([clouds[0].scope]);
+                } else {
+                    expect(getHandlerSession).toHaveBeenCalledExactlyOnceWith(
+                        'microsoft-sovereign-cloud',
+                        [clouds[0].scope, 'VSCODE_TENANT:private-tenant'],
+                        { createIfNone: true },
+                    );
+                }
                 const startup = events.find((event) => event.eventName === 'worker.startup');
                 expect(startup?.telemetry.properties).toMatchObject({
                     surface,
@@ -312,7 +327,20 @@ describe('sovereign authentication with real audience resolvers', () => {
     describe.each(workerSessions)('%s %s worker lifetime', (surface, authMethod) => {
         let manager: ShellSessionManager | PlaygroundEvaluator;
         const connection = { clusterId, clusterDisplayName: 'Test cluster', databaseName: 'test' };
-        const provider = authMethod === AuthMethodId.ManagedIdentity ? getManagedToken : getSession;
+        const managed = authMethod === AuthMethodId.ManagedIdentity;
+        const provider = managed ? getManagedToken : getHandlerSession;
+
+        function requestedScopes(): unknown[] {
+            return provider.mock.calls.map((args) => (managed ? args[0] : args[1]));
+        }
+
+        function scopedTo(scope: string): string[] {
+            return managed ? [scope] : [scope, 'VSCODE_TENANT:private-tenant'];
+        }
+
+        function newSurface(): ShellSessionManager | PlaygroundEvaluator {
+            return surface === 'shell' ? new ShellSessionManager(connection) : new PlaygroundEvaluator();
+        }
 
         function storeCredentials(suffix: string): void {
             const stored = credentials(authMethod, suffix);
@@ -346,7 +374,7 @@ describe('sovereign authentication with real audience resolvers', () => {
 
         beforeEach(() => {
             storeCredentials('us');
-            manager = surface === 'shell' ? new ShellSessionManager(connection) : new PlaygroundEvaluator();
+            manager = newSurface();
         });
 
         afterEach(() => manager.dispose());
@@ -362,12 +390,18 @@ describe('sovereign authentication with real audience resolvers', () => {
                 requestId: 'refresh-request',
                 accessToken: 'private-token',
             });
-            expect(provider.mock.calls.map((call) => call[0])).toEqual([[clouds[0].scope], [clouds[0].scope]]);
+            expect(requestedScopes()).toEqual([scopedTo(clouds[0].scope), scopedTo(clouds[0].scope)]);
+            if (!managed) {
+                expect(getHandlerSession.mock.calls[1]?.[2]).toEqual({
+                    silent: true,
+                    account: { id: 'account-id', label: 'private-account' },
+                });
+            }
         });
 
-        it('keeps the first audience after cloud configuration changes', async () => {
+        it('retains the audience and refuses Entra renewal after a cloud change', async () => {
             await initializeSession();
-            if (authMethod === AuthMethodId.ManagedIdentity) {
+            if (managed) {
                 customEndpoint = clouds[1].scope.replace('/.default', '');
             } else {
                 selectedCloud = 'ChinaCloud';
@@ -379,12 +413,23 @@ describe('sovereign authentication with real audience resolvers', () => {
             await refreshToken(workers[0], 'refresh-request');
 
             expect(workers).toHaveLength(1);
-            expect(postedMessages).toContainEqual({
-                type: 'tokenResponse',
-                requestId: 'refresh-request',
-                accessToken: 'private-token',
-            });
-            expect(provider.mock.calls.map((call) => call[0])).toEqual([[clouds[0].scope], [clouds[0].scope]]);
+            if (managed) {
+                expect(postedMessages).toContainEqual({
+                    type: 'tokenResponse',
+                    requestId: 'refresh-request',
+                    accessToken: 'private-token',
+                });
+                expect(requestedScopes()).toEqual([scopedTo(clouds[0].scope), scopedTo(clouds[0].scope)]);
+            } else {
+                expect(postedMessages).toContainEqual(
+                    expect.objectContaining({
+                        type: 'tokenError',
+                        requestId: 'refresh-request',
+                        reason: 'signInRequired',
+                    }),
+                );
+                expect(requestedScopes()).toEqual([scopedTo(clouds[0].scope)]);
+            }
         });
 
         it('retries audience resolution after a resolution failure', async () => {
@@ -398,13 +443,13 @@ describe('sovereign authentication with real audience resolvers', () => {
 
             await refreshToken(workers[0], 'failed-resolution');
 
-            expect(postedMessages).toContainEqual({
-                type: 'tokenError',
-                requestId: 'failed-resolution',
-                error: expect.stringContaining(
-                    authMethod === AuthMethodId.ManagedIdentity ? 'HTTPS' : 'sign-in is set to',
-                ),
-            });
+            expect(postedMessages).toContainEqual(
+                expect.objectContaining({
+                    type: 'tokenError',
+                    requestId: 'failed-resolution',
+                    reason: 'refreshFailed',
+                }),
+            );
             expect(provider).not.toHaveBeenCalled();
             expect(getRecentEntraTokenFailure(clusterId)).toBeUndefined();
 
@@ -417,15 +462,20 @@ describe('sovereign authentication with real audience resolvers', () => {
                 requestId: 'retry-resolution',
                 accessToken: 'private-token',
             });
-            expect(provider.mock.calls[0]?.[0]).toEqual([clouds[0].scope]);
+            expect(requestedScopes()).toEqual([scopedTo(clouds[0].scope)]);
         });
 
-        it('replaces the captured connection and audience when a new worker starts', async () => {
+        it('requires a new surface or binding to use a changed destination', async () => {
             await initializeSession();
             manager.killWorker();
             storeCredentials('cn');
             selectedCloud = 'ChinaCloud';
 
+            if (manager instanceof ShellSessionManager) {
+                await expect(initializeSession()).rejects.toMatchObject({ reason: 'credentialsChanged' });
+            }
+            manager.dispose();
+            manager = newSurface();
             await initializeSession();
             CredentialCache.deleteCredentials(clusterId);
             await refreshToken(workers[1], 'replacement-refresh');
@@ -436,10 +486,10 @@ describe('sovereign authentication with real audience resolvers', () => {
                 requestId: 'replacement-refresh',
                 accessToken: 'private-token',
             });
-            expect(provider.mock.calls.map((call) => call[0])).toEqual([
-                [clouds[0].scope],
-                [clouds[1].scope],
-                [clouds[1].scope],
+            expect(requestedScopes()).toEqual([
+                scopedTo(clouds[0].scope),
+                scopedTo(clouds[1].scope),
+                scopedTo(clouds[1].scope),
             ]);
         });
 
@@ -506,9 +556,10 @@ describe('sovereign authentication with real audience resolvers', () => {
             await new Promise<void>((resolve, reject) => {
                 // Replace the worker before the old resolver's await continuation runs.
                 queueMicrotask(() => {
-                    manager.killWorker();
+                    manager.dispose();
                     storeCredentials('cn');
                     selectedCloud = 'ChinaCloud';
+                    manager = newSurface();
                     void initializeSession().then(resolve, reject);
                 });
             });
@@ -517,7 +568,7 @@ describe('sovereign authentication with real audience resolvers', () => {
             await refreshToken(workers[1], 'replacement-refresh');
 
             expect(workers).toHaveLength(2);
-            expect(provider.mock.calls.at(-1)?.[0]).toEqual([clouds[1].scope]);
+            expect(requestedScopes().at(-1)).toEqual(scopedTo(clouds[1].scope));
             expect(postedMessages).not.toContainEqual(expect.objectContaining({ requestId: 'late-resolution' }));
         });
     });

@@ -1,0 +1,1952 @@
+---
+feature: connection-lifecycle
+kind: plan
+status: active
+created: 2026-11-19
+code:
+    - src/documentdb/auth/MicrosoftEntraIDAuthHandler.ts
+    - src/documentdb/auth/oidcClientOptions.ts
+    - src/documentdb/auth/connectionAuthIdentity.ts
+    - src/documentdb/auth/tokenExpiry.ts
+    - src/documentdb/ClustersClient.ts
+    - src/documentdb/ClusterSession.ts
+    - src/documentdb/CredentialCache.ts
+    - src/documentdb/shell/ShellSessionManager.ts
+    - src/documentdb/playground/PlaygroundEvaluator.ts
+    - src/documentdb/playground/playgroundWorker.ts
+    - src/documentdb/playground/workerTypes.ts
+    - src/tree/documentdb/ClusterItemBase.ts
+    - src/commands/retryAuthentication/retryAuthentication.ts
+    - src/commands/updateCredentials/updateCredentials.ts
+    - src/commands/removeConnection/removeConnection.ts
+    - src/services/taskService/resourceUsageHelper.ts
+    - src/webviews/documentdb/collectionView/collectionViewRouter.ts
+    - src/webviews/documentdb/documentView/documentsViewRouter.ts
+    - src/webviews/documentdb/clusterDashboard/clusterDashboardRouter.ts
+    - src/plugins/api-shared/azure/AzureSubscriptionProviderWithFilters.ts
+    - src/connectionDiagnostics/checks/resolveTarget.ts
+---
+
+# Iteration 1, dev plan: how to execute the connection lifecycle work
+
+> This is the execution guide for the approved [01-implementation-plan.md](./01-implementation-plan.md).
+> That plan says **what** to build and in which PRs. This file says **how** for each work item: what to read
+> first, ordered steps, the contracts that cross PRs, tests, the done criteria, and the points where the
+> advisor must decide. Work-item numbers (WI-n), PR numbers and OT-n acceptance tests are the same as in
+> the approved plan. Decisions are in [../decisions.md](../decisions.md), evidence in
+> [../research-findings.md](../research-findings.md). Neither is repeated here.
+
+Written at `4fe5a72c9` (branch `tnaum-ms/issue1102`). Line numbers will drift; function names are the
+stable pointers.
+
+## 0. How to use this document
+
+### Authority and deviation
+
+1. **Accepted decisions 0001–0008 bind you.** You cannot change them on your own. If the code shows one of
+   them is wrong or cannot be met, stop and raise it with the operator, giving evidence and alternatives.
+   The advisor cannot overrule an accepted decision.
+2. **The approved plan's content binds you**, except where §3 (Tensions) names a conflict. There the advisor
+   decides at the named checkpoint. If that changes the intent of an accepted decision, the operator
+   confirms, as rule 1 requires.
+3. **Everything in this dev plan is guidance.** That includes steps, file names, helper names and contract
+   field names. You may deviate when the advisor agrees. Record each deviation **inline, under the work
+   item's Progress block**, naming the alternatives you considered and why each was rejected
+   (knowledge-base rules, [docs/ai-and-plans/README.md](../../../README.md)). Never rewrite the plan text
+   to match what happened.
+4. **The provisional answers in §1 are not decisions.** Implement them as written, keep them easy to change
+   (one constant, one setting, one branch of code), and list them in every PR description until the
+   operator confirms them. Once confirmed, append a decision entry to `decisions.md`.
+
+### Progress recording
+
+Each work item ends with a **Progress** block. When you commit a step, add a line there that names the
+commit SHA, what landed, and anything that differed from the plan. Each checkpoint (§5) also writes its
+verdict there. At the hand-over, add an `# Outcome` chapter to the end of this file: what was verified,
+and just as plainly, what was not.
+
+### Operator tests: announce them clearly
+
+Some checks need the operator: a real cluster, a long wait, a real account, or the packaged VSIX. When
+the work reaches one, **stop** and post a message whose first line is:
+
+> **⏸ OPERATOR TEST NEEDED: OP-n, <name>**
+
+followed by:
+
+- **why** it is needed now, and what it blocks;
+- **setup:** the build to install, the cluster and account, and the settings;
+- **steps**, numbered;
+- **what to send back:** output-channel lines, screenshots, pass or fail per step. Never include tokens;
+- **an estimated duration**, including waits.
+
+Do not continue past the blocked step until the operator replies. Work that does not depend on the
+result may continue, but say so in the message. Record the result in the Progress block of the WI.
+
+| OP   | When               | Test                                                                                                                                                                                      |
+| ---- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OP-1 | WI-1, CP-0         | **Two parts.** (a) Before the handler change: does an expired token on a new socket get code 18 or a socket close? (b) After it: renewal succeeds.                                        |
+| OP-2 | WI-3, CP-W3        | The azext workflow checks on the packaged VSIX: Azure sign-in, discovery, filters, deep links, wizards, Azure Resources view.                                                             |
+| OP-3 | WI-5 done          | OT-2's tree part with a real sign-out: Sign in again, a dismissal, no reprompt.                                                                                                           |
+| OP-4 | WI-6 done          | Cleared: short OT-1 and OT-3 identity-guard evidence; the original password-only recovery check was waived by the operator.                                                               |
+| OP-5 | WI-7 done          | OT-7, including **Keep open (disabled)** and its pushed disable message, plus OT-3's immediate lock after a saved edit (decision 0018).                                                   |
+| OP-6 | Before PR F (CP-5) | OT-1 to OT-7 on the packaged VSIX: first action a write after at least two hours idle, continuous use across expiry, and sleep/wake plus Shell and Playground after expiry (PR F step 3). |
+
+### Per-PR workflow
+
+- **Branch:** create `dev/tnaum/<topic>` from the preceding PR's head and target that branch while
+  the preceding PR is open. If it is already merged, branch from and target
+  `feature/connection-lifecycle`. Do not wait for intermediate approvals or merges; the operator
+  handles those. The advisor checkpoints and explicit operator decisions and tests still apply.
+- **Publish:** pushing the topic branch and opening its draft PR are pre-approved (decision 0006).
+  Do not pause for separate publication confirmation. Normal review and merge requirements remain.
+  Prefix the GitHub title with the plan number, for example `PR0:` or `PR1:`.
+- **Commits:** one or more commits per WI, never one commit that mixes two WIs. Each commit ends with the
+  `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailer.
+- **While working, and for draft PRs:** Case 1 only: `npm run build` plus `npx vitest run <touched paths>`.
+  If you edit `packages/*/src`, run `npm run build` in that package before the root tests; root tests
+  import the package's `dist`.
+- **Ready for review:** Case 2 in full (copilot instructions). Run `npm run l10n` before `l10n:check`
+  whenever a `vscode.l10n.t()` string changed.
+- **AI pre-review:** run the review (CONTRIBUTING §6) and commit it as
+  `iterations/01-pr<N>-<topic>-review.md`, for example `01-pr1-entra-renewal-review.md`. When this folder
+  reaches three or more iteration-1 documents, ask the operator before promoting it to an
+  `iterations/01-…/` folder. Moving the files breaks links in the issues.
+- **PR description:** name the WIs, the issues (next section), the provisional answers (§1) the PR relies
+  on, the checkpoint verdicts it implements, and which verification case ran.
+
+### Issues: link them, and comment on partial fixes
+
+Every PR names the issues it may resolve, using the table below, and says for each one whether it
+**resolves** it or is a **partial fix**.
+
+- **Closing keywords only in PR F.** GitHub closes an issue through `Fixes #n` only when the PR merges into
+  the default branch. Sub-PRs merge into `feature/connection-lifecycle`, so they write
+  `Resolves #n (closes with PR F)` or `Part of #n`. PR F carries `Fixes #n` for every issue that the
+  iteration resolves in full.
+- **Partial fix → a comment on the issue.** When a PR merges with only part of an issue done, post a
+  dedicated comment on that issue (`gh issue comment <n> --body-file <file>`). It contains:
+  - the PR link and the WIs it implemented;
+  - what now works, in user terms;
+  - what is still open, and where it is planned (a later PR, or a follow-up issue);
+  - decisions taken on the way that change the issue's scope, linked to `decisions.md`;
+  - the tests or operator tests that cover it.
+
+  Keep it factual and short. Never include tokens, account names, cluster names or connection strings.
+  Record the comment's link in the WI's Progress block.
+
+- **Work moved to a follow-up issue** (#1105, #1106, #1119): when a PR hands work over, comment on the
+  follow-up in the same way, so it can be planned from that comment alone.
+
+| Issue | Title (short)                                     | PRs           | Expected                                                       |
+| ----- | ------------------------------------------------- | ------------- | -------------------------------------------------------------- |
+| #1102 | Keep connections usable across expiry and idle    | 1, 3, 4, 5, 7 | Partial in each sub-PR; resolved by PR F                       |
+| #990  | Upgrade azureauth to v6                           | 2             | Resolved by PR 2 (closes with PR F)                            |
+| #626  | Upgrade azext-utils v3 → v4                       | 2             | Check after CP-W3: likely superseded by the utils v5 upgrade   |
+| #1059 | Disconnect action that ends live sessions         | 6             | Resolved by PR 6 (closes with PR F)                            |
+| #566  | Unified disconnect/remove experience              | 6             | Resolved or partial; decide against the issue text in PR 6     |
+| #1091 | Dashboard health check: pause, back off, stop     | 6 (WI-8)      | Partial unless WI-8 also does the visibility pause and backoff |
+| #1105 | Follow-up: Kubernetes tunnels, network resilience | —             | Not resolved; comment when a PR moves work there               |
+| #1106 | Follow-up: indicate possibly out-of-date results  | —             | Not resolved; comment when a PR moves work there               |
+| #1119 | Follow-up: handle Microsoft sign-out promptly     | —             | Not in 1.2.0                                                   |
+
+### Skills to load per work item
+
+| WI    | Load before starting                                                                         |
+| ----- | -------------------------------------------------------------------------------------------- |
+| WI-1  | error-translation, telemetry-instrumentation                                                 |
+| WI-2  | error-translation                                                                            |
+| WI-3  | flagging-fresh-dependencies (lockfile audit), error-translation                              |
+| WI-4  | tree-cluster-architecture, telemetry-instrumentation                                         |
+| WI-5  | tree-cluster-architecture, error-translation, telemetry-instrumentation                      |
+| WI-6  | webview-trpc-messaging, react-webview-architecture, fluentui, detecting-accessibility-issues |
+| WI-7  | tree-cluster-architecture, webview-trpc-messaging, telemetry-instrumentation                 |
+| WI-8  | webview-trpc-messaging, react-webview-architecture                                           |
+| WI-9  | telemetry-instrumentation                                                                    |
+| WI-10 | writing-release-notes, documentation-screenshots, previewing-docs-site, skill-creator        |
+
+---
+
+## 1. Answers to the open questions
+
+The operator was not available on 2026-11-19 at first. They answered A2 to A6 later the same day; A1 is
+still **provisional** under rule 4 above.
+
+| #   | Question                                             | Answer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Status                                                                                                  | Where it lands         |
+| --- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------- |
+| A1  | Plan Q1: how does sign-in start after a silent miss? | **Only through the Sign in again button**, everywhere. The first connect from the tree stays interactive, as it is today. One rule, and no surface has to decide whether it is in the foreground. This matches 0001.                                                                                                                                                                                                                                                                                                                                                                            | Provisional                                                                                             | WI-1, WI-2, WI-5, WI-6 |
+| A2  | Plan Q2: Disconnect choice, default and memory       | A **VS Code modal**, which has no pre-selected button and **remembers nothing**. A setting lets users choose a default: `ask` (the default) shows the modal; `closeAll` or `keepOpenDisabled` skips it. The unsaved-edits confirmation still appears when closing. See WI-7 step 3.                                                                                                                                                                                                                                                                                                             | **Operator, 2026-11-19** (decision 0007)                                                                | WI-7                   |
+| A3  | Plan Q3: does Disconnect drop `CredentialCache`?     | **No** (reverses the #1059 proposal). Disconnect keeps the `CredentialCache` entry **and** `lastVerifiedIdentity`, so Connect and a tab's Reconnect work without the tree and without retyping a discovery password. Only Remove Connection drops them; an identity-changing credential update replaces them. Keep `dropCredentials` as a teardown option.                                                                                                                                                                                                                                      | **Operator, 2026-11-19** (decision 0011)                                                                | WI-7                   |
+| A4  | #990: which azext versions?                          | **As high as viable without breaking our workflows**, using the Azure Resources extension (same team as azureauth, heavily used) as the reference. Ladder and findings are in WI-3 step 1: target L2, fall back to L1, then L0.                                                                                                                                                                                                                                                                                                                                                                 | **Operator policy, 2026-11-19** (decision 0008)                                                         | WI-3 (CP-W3)           |
+| A5  | How does Disconnect see an in-flight Export?         | **Reuse the existing mechanism.** Delete Collection, Delete Database and Remove Connection already guard through `checkCanProceedAndInformUser` (`TaskService` resource tracking). Export **and Import** are the gap: neither is a task and neither registers anything, so even Delete Collection does not see a running export or import today. Close it with a small **resource lease** that feeds the same check. Every existing guard then sees them too, and the export and import logic is not touched. Copy/paste and copy-indexes are already tasks that register both endpoints (F-9). | Operator pointed at the existing check; lease is the recommendation; operator added Import (2026-11-19) | WI-7                   |
+| A6  | Where do the dev plan and its progress notes live?   | In this file. Progress is recorded inline per WI here. The approved plan gets a one-line pointer.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | **Operator, 2026-11-19**                                                                                | —                      |
+
+---
+
+## 2. Facts established while writing this plan
+
+These were verified at `4fe5a72c9` with mongodb driver 7.2.0. They shape the steps below. If a dependency
+upgrade changes any of them, stop and re-plan the affected WI.
+
+- **F-1. One failed OIDC callback breaks that `MongoClient`'s Entra authentication for good.**
+  - Where: `node_modules/mongodb/lib/cmap/auth/mongodb_oidc/callback_workflow.js`, `withLock`. It runs
+    `await lock` _before_ it reassigns `lock`, so after one rejection every later callback call throws the
+    same rejection again.
+  - This is the "same workflow reused the rejection" result of the earlier probe.
+  - Consequence: the only way to recover after the callback throws is a **new `MongoClient`**, that is, a
+    new generation. It applies to every throw, including transient Entra errors.
+- **F-2. The driver ignores `expiresInSeconds` in the automated workflow.**
+  - `token_cache.js` stores the value, but `AutomatedCallbackWorkflow.execute` never reads it.
+  - `CallbackWorkflow.speculativeAuth` sends the cached token on **every new socket**.
+  - Code 18 drops the cached token and calls the callback again. A transport failure does not.
+  - Code 391 goes through `reauthenticate`.
+  - So no `OIDCResponse` value alone can stop an expired token from being offered.
+- **F-3. `getSessionFromVSCode` reads the auth provider ID that is configured _at call time_.**
+  - Where: azureauth 4.1.1 `getSessionFromVSCode.js` calls `getConfiguredAuthProviderId()`.
+  - If the user changes their sovereign-cloud setting after connecting, a callback would ask a different
+    provider. That breaks the identity pin.
+  - The deep import path `@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode` does not exist
+    in v6; it moved to `dist/esm/src/utils/`.
+  - `vscode.authentication.getSession` supports `account` (engine `^1.109.0`).
+- **F-4. Cluster ID equality differs by store.**
+  - `CredentialCache` and the Entra failure registry use case-insensitive maps.
+  - `ClustersClient._clients`, `ClusterSession._sessions` and `SchemaStore` (prefix `${clusterId}::`) match
+    exactly.
+  - Kubernetes IDs keep the context's case (`kubernetes_${source}_${context}__…`), so `Prod` and `prod`
+    already collide in `CredentialCache` today.
+  - **Out of scope for this iteration** (decision 0009, #1105). Every store keeps its current matching;
+    this iteration adds no case handling.
+- **F-5. There is no per-cluster registry of open webview panels.**
+  - Only the Cluster Dashboard keeps its own `openPanels` map (`clusterDashboardController.ts`).
+  - Collection View and Document View open through `openAppWebview`, whose handle exposes `onDisposed`.
+- **F-6. Collection View sessions.**
+  - `ClusterSession` sessions are keyed by a random session ID and **hold** a `ClustersClient`.
+  - `openCollectionView.ts` calls `closeSession` when the panel is disposed.
+  - Paging uses **offset queries**: `skip = querySkip + (page - 1) * pageSize`. No cursor is held between
+    pages.
+- **F-7. The Cluster Dashboard health poll runs in the webview, not the host.**
+  - Where: `ClusterDashboard.tsx`, the interval effect around `refreshIntervalMs`.
+  - The host procedure `measureRtt` resolves the client for every tick, with trigger `clusterDashboardPoll`.
+- **F-8. Worker IPC loses error types.**
+  - `tokenError` carries only a message, plus `errorName` for one value: destination rejection.
+  - `initResult` and `evalError` carry strings only.
+  - The playground rebuilds its init message from `CredentialCache` on **every run**
+    (`PlaygroundEvaluator.evaluate` → `buildInitMessage`), even when the worker is warm.
+- **F-9. Task coverage.**
+  - Copy/paste and copy-indexes register both endpoints through `getUsedResources()`.
+  - **Export and Import are not tasks.** `exportDocuments.ts` and `importDocuments.ts` call `getClient`
+    directly and register nothing. Import calls `getClient` again for every insert batch, so a latch
+    during an import leaves a partial import, and running it again inserts duplicates.
+- **F-10. Remove Connection does not close the client, shells, the playground or webviews.** It deletes
+  storage, `CredentialCache` and `SchemaStore` data only.
+- **F-11. Credential updates.**
+  - Update Credentials saves first, then calls `deleteClient`, then shuts down the playground. It only warns
+    about shells (the D12 modal).
+  - Update Connection String deletes the client only when recovering a rejected destination.
+- **F-12. Errors lose their identity at the tRPC boundary.**
+  - Errors arrive rebuilt as `{ code, name, message, stack, cause }`.
+  - Webview RPC telemetry records the tRPC code as `error` (`src/webviews/_integration/trpc.ts`).
+  - So a disconnected reason must reach a webview as **structured data**, never as an error that the
+    webview has to recognize.
+- **F-13. About 35 other `getClient` call sites are not open surfaces, but some of them are background
+  work.**
+  - One-shot user commands: create/delete database and collection, import, index commands, LLM commands,
+    paste. They act on the current client, so WI-6 does not bind them.
+  - **Background callers:** playground completions (`CollectionNameCache.ts`, an explicit background
+    lookup), tree count badges and prefetches.
+  - Today **every** startup is interactive: `initializeClient` hardcodes `{ interactive: true }`. A
+    background caller can therefore reconnect, or even prompt, after an eviction or a Disconnect.
+  - So `getClient` must **never prompt**, and the latch must be enforced **inside `getClient`** (C-6),
+    not per caller.
+- **F-15. A stopped worker respawns by itself.**
+  - `ShellSessionManager.evaluate` re-initializes a dead or stopped worker from the current
+    `CredentialCache`. `executePlaygroundCode.ts` recreates the evaluator in the same way.
+  - "Stop the worker" alone therefore keeps neither a shell nor a playground disconnected. Without a
+    latch, it silently adopts new credentials on the next command.
+- **F-16. The host rebuilds worker errors as generic errors.**
+  - `WorkerSessionManager` turns `initResult` and `evalError` into a plain `Error`. Only
+    `EntraDestinationRejectedError` keeps its name.
+  - New IPC fields are lost unless this layer is changed too.
+- **F-17. The native authentication database follows the driver's rules.**
+  - With no explicit `authSource`, the driver uses the URI's database path (`connection_string.js`, around
+    line 307). Only when there is none does it use `admin`.
+  - The same user on `/sales` and on `/admin` is therefore two different principals.
+  - The fingerprint hashes the stored connection string, which carries the database path and any
+    `authSource`, so this needs no special handling (WI-4 step 1).
+- **F-18. Cluster ID matching is inconsistent across stores.**
+  - `CredentialCache.deleteCredentials` lowercases its key (`CaseInsensitiveMap`), so deleting Kubernetes
+    context `prod` also deletes `Prod`.
+  - Task conflict matching (`hasResourceConflict` in `taskServiceResourceTracking.ts`) compares IDs
+    exactly, so it misses Azure case aliases.
+  - Both problems exist today. They are **out of scope** for this iteration (decision 0009, #1105).
+- **F-19. Credential saves can fail without the command knowing.** The Update Credentials `ExecuteStep`
+  catches save failures and returns normally, so the command cannot tell whether the save happened.
+- **F-20. Only the tree fills `CredentialCache`, and the tree empties it on any connect failure.**
+  - `ClustersClient.initializeClient` starts only from a `CredentialCache` entry. Without one it throws
+    "No credentials found for id {clusterId}" and sets `startup.credentialsMissing`.
+  - Only the tree items' provider-specific `authenticateAndConnect` methods (and Update Credentials,
+    which reloads the entry from storage) fill the cache.
+  - Every `authenticateAndConnect` failure path calls `deleteClient` **and**
+    `CredentialCache.deleteCredentials`, whatever the cause: `DocumentDBClusterItem`, the Azure
+    Resources vCore and RU items, and the Atlas, Kubernetes, VM, vCore and RU discovery items.
+  - So a tree expand during a network outage leaves open surfaces with nothing to reconnect from.
+- **F-21. Storage saves are not atomic.** `StorageService.push` writes the secrets to `SecretStorage`
+  first, then the metadata to `globalState`. A failure after the secret write leaves the new secrets beside
+  the old metadata, so "the save failed" does not mean "nothing changed".
+- **F-22. `MongoClient.close(force)` does not cancel anything.** In the installed driver the `force`
+  argument is "currently an unused flag that has no effect". An operation already sent may still
+  complete, and a write the server accepted cannot be undone.
+- **F-23. Handoffs that drop the binding.**
+  - Playground evaluators are shared per `clusterId` and deleted on shutdown
+    (`executePlaygroundCode.ts`). The per-document connection lives in `PlaygroundService`
+    (`getConnection(uri)`), and it has no fingerprint today.
+  - Collection View starts import and export by passing a tree node to a command
+    (`collectionViewRouter.ts`), so the work runs under whatever credentials the cluster has when it starts.
+  - Folder deletion (`deleteFolder/ExecuteStep.ts`) deletes descendant connections straight from storage.
+    It never touches their clients, credentials, shells or tabs.
+- **F-24. The dashboard sampler turns errors into strings.** `getClusterHealth.ts` catches every command
+  separately and records `name: message` in `errors`. An authentication failure during a ping therefore
+  reaches the router as a partial sample, not as an error.
+- **F-14. VS Code has no API to collapse one tree node.**
+  - The repository uses `reveal(..., { expand: false })`, which does not collapse a node.
+  - Collapsing through a changed `TreeItem.id` would conflict with the `treeId`/`clusterId` rules.
+
+---
+
+## 3. Tensions between the approved plan and the code
+
+| #   | Tension                                                                                                                                                                                                                                                                                               | Decided at | Recommendation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| T-1 | WI-1 required that a known-expired token is never offered on a new socket. Under F-2 that is only possible with a new `MongoClient` once the issued token expires. Decision 0002 says a new generation re-runs reads from page 1 "because cursors are lost", but under F-6 no surface holds a cursor. | CP-0       | **Resolved by the operator on 2026-11-19 (decision 0010).** (1) No proactive rotation and no local expiry checks: "the server will tell us, then we can act". An expired token is rejected by the server; the driver then calls the callback, which renews silently. If the server closes the socket instead, the classifier acts on that (WI-5). (2) Replacing a client for the same identity is **transparent**: no re-run and no "out of date" notice, including on return from the disconnected state. Stale-data indication is #1106. |
+| T-2 | OT-7 expects the cluster node to "collapse" after Disconnect, but VS Code cannot collapse a single node (F-14).                                                                                                                                                                                       | CP-4       | Refresh the node. A disconnected cluster returns **one** child action, "Connect", following the actions-only rule. Its handler reconnects and refreshes. Do not change `TreeItem.id`. Update OT-7's wording at hand-over.                                                                                                                                                                                                                                                                                                                  |
+| T-3 | WI-7 asked for provider-specific cluster ID equality (Azure case aliases match; Kubernetes contexts such as `Prod` and `prod` stay distinct). Today's stores disagree on this (F-4, F-18).                                                                                                            | —          | **Withdrawn 2026-11-19:** moved out of this iteration (decision 0009, #1105). Each store keeps its current matching.                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| T-4 | Under decision 0002, a classified failure evicts and replaces the client. A background caller such as the dashboard poll or tree count badges could therefore start a new connection every tick.                                                                                                      | CP-2       | Only a **foreground** operation replaces a generation. Background callers pass `background: true` and just fail (C-6, WI-8). No backoff: with no background replacement there is no loop to guard against (decision 0012).                                                                                                                                                                                                                                                                                                                 |
+| T-5 | For Entra, code 18 after the driver's own fresh callback means the server rejected a _fresh_ token: the principal has no database user, or Conditional Access or CAE intervened. That is not the same as `signInRequired`.                                                                            | CP-2       | Classify it as `credentialsRejected` with an Entra-specific explanation ("Your account has no access…"). Offer **Sign in again** only when the token came from a session the user can replace. Decide this with the real driver error shapes collected for CP-0.                                                                                                                                                                                                                                                                           |
+
+---
+
+## 3a. Out of scope for this iteration
+
+Moved to [#1105](https://github.com/microsoft/vscode-documentdb/issues/1105) on 2026-11-19 (decision
+0009), to be scheduled after 1.2.0:
+
+- re-creating Kubernetes port-forward tunnels outside the tree (per-operation resolution, recovery);
+- tunnel ownership on Disconnect and Remove, and running the teardown when a kubeconfig source is removed;
+- provider-specific cluster ID matching (the withdrawn T-3; F-4, F-18);
+- Kubernetes API credential expiry (AKS exec plugin);
+- a wider network-resilience test matrix beyond OT-4, including a Kubernetes acceptance test.
+
+Moved to [#1106](https://github.com/microsoft/vscode-documentdb/issues/1106) (decision 0010): any
+"results may be out of date" indication. That covers the return from the disconnected state, long idle,
+and writes made from another view or another client.
+
+Prompt handling of Microsoft account sign-out is deferred to
+[#1119](https://github.com/microsoft/vscode-documentdb/issues/1119), after 1.2.0. Under decisions
+0001 and 0012, signing out of VS Code does not close an established database client. The client
+can keep authenticating with a cached token while the server accepts it. When the driver requests
+a new token and the pinned session is gone, recovery remains explicit through **Sign in again**.
+
+Generic idle and network-drop recovery **stays in scope**: closed-client and transient classification,
+the cancelled-reuse fix, closed-client replacement and OT-4. It is #1102's "recover on the next
+operation without a restart". The no-regression rules in WI-5 and WI-6 keep tunneled connections
+working as they do today.
+
+---
+
+## 4. Contracts that cross PRs
+
+These contracts define how PRs 1–3 share the verified account, provider and tenant while the
+implementation PRs are stacked. The field names are illustrative; the semantics are binding unless
+a checkpoint changes them.
+
+- **C-1. Verified identity.**
+  - WI-1 produces it on the first successful Entra acquisition:
+    `{ kind: 'entra', providerId, accountId, accountLabel, tenantId? }`.
+  - `providerId` is the provider that was **actually used**, never re-read later (F-3).
+  - It is returned on `AuthHandlerResponse` as an optional field.
+  - Native, managed identity and no-auth handlers return nothing; WI-4 derives their identity from the
+    credentials used.
+  - WI-2 builds the same shape at worker spawn.
+  - Never logged, never sent to telemetry, never persisted.
+- **C-2. Typed errors: four classes in total.**
+  - `EntraSignInRequiredError`, reason `noSession | providerChanged`.
+  - `EntraIdentityMismatchError`: a different account came back.
+  - `TokenCallbackError`: wraps **any other** error thrown from an OIDC callback, for every auth method
+    (Entra and managed identity), with a bounded `authMethod`. The original is kept as `cause` and is
+    never rendered raw.
+  - `ConnectionUnavailableError { reason }`: the one error for a client the caller cannot use (the latch,
+    an identity change, missing credentials). `reason` is the C-5 enum.
+  - Messages are localized. Classification uses the `name` (walking `cause`), never the message. Existing
+    name checks that walk `cause`, such as destination rejection, keep working.
+  - The first three are "callback threw" for F-1.
+  - Keep the existing `AuthInputUnavailableError` for the non-interactive startup path (diagnostics).
+    Either make the new errors related to it or map between them explicitly, so the Entra failure registry
+    still skips silent misses (comment in `MicrosoftEntraIDAuthHandler.configureAuth`).
+- **C-3. Token lookup observation.**
+  - Every **completed** post-startup token lookup notifies an optional host-only observer, whether it
+    succeeded or failed: `{ outcome: 'returned' | 'noSession' | 'identityMismatch' | 'failed', lifetimeSeconds? }`.
+  - `lifetimeSeconds` is the JWT `exp` minus `iat`, and is omitted when the token is opaque.
+  - Nothing about a token is retained between lookups. The observer never receives the token, a hash of it
+    or any other claim.
+  - WI-9 uses it for `connection.tokenRenewal`.
+- **C-4. Binding.**
+  - Its form is `{ clusterId, fingerprint, generation }`.
+  - **`fingerprint`** is an opaque hash of the stored connection string without its password, plus the
+    principal (WI-4 step 1). It never contains a password and is never sent to telemetry.
+  - **`generation`** is a per-cluster number that only ever increases. It is **never reset**, not even
+    after teardown. A binding from before Disconnect therefore never matches a client created after
+    Reconnect.
+- **C-5. Unavailable reasons, derived on demand.**
+  - There is **no stored connection state** and no state machine. A surface learns where it stands when it
+    resolves its binding (WI-6): it gets a client, or a `ConnectionUnavailableError { reason }`. A router
+    returns that to the webview as structured data (F-12).
+  - A surface whose fingerprint differs from the client the cluster would use now is unavailable with
+    `identityChanged` or `credentialsChanged`, **even while the tree works**. This is what lets the tree and
+    new panels run as identity B while panels opened as A stay disabled.
+  - `reason` is one of: `signInRequired`, `credentialsRejected`, `credentialsMissing`, `credentialsChanged`,
+    `identityChanged`, `userDisconnected`, `connectionRemoved`, `unreachable`.
+  - `action` is `retry` or `close`. Close view is always available.
+  - Reasons are bounded enums. The webview gets the localized text and the action from the host.
+  - The only push is teardown: Disconnect with Keep open calls each registered surface's `disable(reason)`
+    (WI-6 host step 1).
+- **C-6. `getClient` rules.**
+  - **It never prompts.** `getClient` is always silent. Only the tree's first connect
+    (`authenticateAndConnect`, through `ClustersClient.connectInteractive`) and the Sign in again command
+    may prompt (A1). Once an identity is verified (`lastVerifiedIdentity`, WI-4), a reconnect is silent and
+    pinned to it.
+  - **Background callers** (the dashboard poll, tree count badges, playground completions) pass
+    `background: true`. They never replace a client; they just fail (T-4).
+  - **Latch:** while a cluster is disconnected (Disconnect, Remove, an identity-changing credentials
+    update), `getClient` throws `ConnectionUnavailableError` with the latch's reason, for every caller.
+    Only the explicit Connect and Reconnect actions clear the latch, plus one internal case: an
+    identity-changing credential update whose save reached nothing clears the latch it set (WI-7 step 5).
+    New tasks and resource leases are refused while the latch is set.
+    A `credentialsRejected` latch blocks startup until the matching explicit recovery clears it
+    with an unchanged epoch (decision 0015). That recovery cannot clear a teardown latch.
+  - **One epoch:** a per-cluster counter that `invalidate` increases **synchronously** on every latch,
+    unlatch, eviction and teardown. A startup publishes only if the epoch is unchanged. Every recovery
+    command (Retry, Sign in again, Reconnect) captures the epoch **before** its first `await`, and applies
+    its result only if it is unchanged. With the per-client generation, it is the only staleness guard.
+
+---
+
+## 5. Advisor checkpoints
+
+Each checkpoint is a short written verdict recorded in the Progress block of the WI named. Until the
+verdict exists, do not start the work it gates. The fingerprint table (formerly CP-1) and the PR 5 split
+(formerly CP-3) are ordinary PR review (decision 0012).
+
+| CP    | When                                                            | Question                                                                                                                                                                                                    | Evidence required                                                                                                                                                |
+| ----- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CP-0  | WI-1, after step 1, before the handler is changed               | What does the server do when an expired token reaches a new socket: does it answer code 18, or close the socket? The strategy itself is decided (0010); this only tells the WI-5 classifier what to act on. | Contract test output, and **OP-1a** (§0): one real waited session, never logging tokens. OP-1b, after step 5, proves renewal.                                    |
+| CP-W3 | WI-3, after the version probe                                   | Which azext versions (A4)?                                                                                                                                                                                  | `npm ls` for each package, bundle scan for duplicate copies, build-error list per level, and the **packaged VSIX** loading and passing the WI-3 workflow checks. |
+| CP-2  | WI-5, after the classifier is drafted, before recovery is wired | The classifier table and T-5.                                                                                                                                                                               | Classifier table tests run on **real** driver error shapes captured by the contract test and the tree paths.                                                     |
+| CP-4  | Before WI-7 starts                                              | Teardown order, T-2, the export and import lease (A5).                                                                                                                                                      | Teardown sequence diagram in the PR description.                                                                                                                 |
+| CP-5  | Before PR F                                                     | Is the hand-over complete?                                                                                                                                                                                  | OT-1 to OT-7 results recorded in `# Outcome`, WI-9 queries run on pre-release ingestion.                                                                         |
+
+---
+
+## 6. PR 0: plan, research, decisions
+
+1. **Carry over the planning commits first.** The plan, research and decisions were written as commits on
+   the local branch `tnaum-ms/issue1102` (from `e22a39b8d` "wip: initial plan" onward). PR 0 is made of
+   **those commits**. Do not re-create the files in a fresh commit, and do not squash or rebase them: the
+   repository merges with merge commits only, so the history stays intact.
+   - Check that the branch holds only docs: `git --no-pager diff --stat origin/main...tnaum-ms/issue1102`.
+   - Push it as the PR 0 head branch, either under its current name or as `dev/tnaum/connection-lifecycle-plan`
+     (`git push origin tnaum-ms/issue1102:refs/heads/dev/tnaum/connection-lifecycle-plan`).
+2. Have the operator create `feature/connection-lifecycle` from `main`, or create it yourself if you
+   have permission: `git push origin origin/main:refs/heads/feature/connection-lifecycle`. Deletion and
+   force-push are blocked afterwards, so check the base commit first. It must contain the planning
+   branch's base commit (`git merge-base --is-ancestor $(git merge-base origin/main tnaum-ms/issue1102) origin/main`).
+3. Open PR 0 from that head branch into `feature/connection-lifecycle`. It contains:
+   - `research-findings.md`, `decisions.md`, `README.md`;
+   - `01-implementation-plan.md` with the pointer to this file;
+   - **this file**;
+   - the index row in `docs/ai-and-plans/README.md` (already present).
+4. Its description:
+   - states that §4 (C-1 to C-6) is the agreement that lets PRs 1–3 share the connection contracts;
+   - lists A1 as the one provisional answer for the operator to confirm;
+   - links the issues as `Part of #1102`, plus #1059, #566 and #990 (references only; PR 0 resolves
+     nothing, so it posts no issue comments).
+5. Verification: docs only, so none, beyond `npm run prettier` on the changed Markdown.
+
+**Progress:**
+
+- **Published (2026-11-19):** [Draft PR 0 (#1107)](https://github.com/microsoft/vscode-documentdb/pull/1107)
+  targets `feature/connection-lifecycle` from `dev/tnaum/connection-lifecycle-plan`. The operator
+  removed the intermediate merge gate: PR 1 can build on PR 0 now. The operator will handle reviews
+  and merges; CP-0 and OP-1a still apply before any OIDC handler change.
+- **Coding model assignments (2026-11-19), advised (`claude-opus-5.5`):** `gpt-6.1-sol` for WI-1
+  (including the pre-OP-1a work), WI-2, the WI-3 version probe, WI-4, WI-5, the WI-6 host, and WI-7,
+  where auth, lifecycle or cross-module contracts dominate. `mai-code-2` for the WI-6 webviews and
+  WI-8, which consume those contracts; `gpt-6.1-terra` is the fallback. `gpt-6.1-terra` for WI-3
+  follow-through after the version verdict, WI-9 and WI-10 prose; `gpt-6-luna` for WI-10 cross-links
+  and preview. If a webview design decision is needed, consult the advisor in a fresh session before
+  dispatch. These assignments do not move any operator gate. No coding workers have been started.
+- **Model override (operator, 2026-11-19):** Use `gpt-6.2-sol` for the Sol assignments above.
+  Keep `gpt-6.1-terra` until a GPT-6.2 Terra model is available. The MAI Code 2, Luna, and advisor
+  assignments are unchanged.
+
+---
+
+## WI-1: Entra ID, silent renewal on every OIDC callback (PR 1)
+
+**Outcome:**
+
+- Each OIDC callback returns a token that is valid for the account the connection started with, looked up
+  silently.
+- A silent miss produces a typed error that every surface explains the same way.
+- An expired token that the server rejects is renewed silently. The extension relies on the server's
+  answer, not on local expiry checks (decision 0010).
+
+**Read first:**
+
+- `MicrosoftEntraIDAuthHandler.configureAuth`, and `MicrosoftEntraIDAuthHandler.test.ts`;
+- `buildOidcClientConfiguration` in `oidcClientOptions.ts`;
+- `documentdbTokenResource.ts`: `resolveInteractiveTokenResource` and the provider and env helpers;
+- the JWT decoding in `playgroundWorker.ts` (the OIDC callback, around `tokenRequest`);
+- `tokenExpiry.ts`;
+- `entraErrors/entraTokenFailures.ts`;
+- the error-translation skill.
+
+**Steps:**
+
+1. **Driver contract test (CP-0 evidence).**
+   - Add `src/documentdb/auth/driverOidcContract.test.ts`. It imports the driver's internal OIDC workflow
+     modules (use an ESLint disable comment, like the existing deep import) and drives them with a fake
+     `connection.command`.
+   - It asserts:
+     - (a) after the callback throws once, the next `fetchAccessToken` rethrows the same error (F-1);
+     - (b) `speculativeAuth` sends the cached token, whatever `expiresInSeconds` was (F-2);
+     - (c) code 18 calls the callback again and uses the new token;
+     - (d) a network error does not.
+   - Name the suite so it reads as a contract: `driver contract: mongodb OIDC workflow (7.2.0)`. If a
+     driver upgrade breaks it, the strategy has to be reviewed again.
+2. **CP-0.** The strategy is **decided** (T-1, decision 0010): rely on the server. No proactive
+   rotation and no local expiry checks. An expired token is rejected with code 18, and the driver calls
+   our callback, which renews silently (step 5).
+   - Add **tracing** that makes this visible without logging tokens: each callback call with its
+     outcome (C-3), and the server error code or socket error that preceded it.
+   - Then **stop and hand OP-1a to the operator** (§0, operator tests). Today's callback returns the token
+     captured at connect, so OP-1a can only tell code 18 apart from a socket close; it **cannot** show
+     renewal.
+     - **A new socket on the same client** is what is under test. A new client would discard the token
+       cache. Add `maxIdleTimeMS=60000` to the test connection string, so the idle pool drops its sockets
+       and the next operation authenticates a fresh socket on the same `MongoClient`.
+     - The evidence is the trace line (server code or socket error, then whether the callback ran), not
+       "the query worked": a query on a socket that is already authenticated proves nothing.
+   - Act on the result:
+     - **code 18, then a second callback, then success:** nothing more to do;
+     - **socket closed or reset, with no callback:** the driver keeps its stale cached token, so retrying
+       on the same client cannot recover. Add a WI-5 classifier rule: on an Entra client, a closed
+       connection during authentication is `clientClosed`, so the next **foreground** operation creates a
+       new generation with a fresh token cache. No local expiry check (decision 0010).
+   - Record the result and the rule, if one was added, in Progress.
+   - **After step 5, hand OP-1b to the operator:** the same setup on the changed handler. Pass when the trace
+     shows the expiry signal, a callback with outcome `returned`, and a successful operation, with no
+     prompt.
+
+3. **Session helper.**
+   - Add `src/documentdb/auth/entraSession.ts`. It calls `vscode.authentication.getSession` with an
+     **explicit** provider ID, normalizes the scopes (same rules as `getSessionFromVSCode`: `.default`
+     suffix plus `VSCODE_TENANT:<id>`), and takes the `account` and mode (`interactive` = `createIfNone`,
+     `silent`, `forceNew`) as parameters.
+   - Replace the deep import in `MicrosoftEntraIDAuthHandler.ts` with it. This takes the handler off the
+     azureauth internal path, so PR 1 and PR 2 do not collide.
+   - Read the provider ID through the existing seam in `documentdbTokenResource.ts`, so that PR 2 migrates
+     a single place.
+4. **First acquisition.** Keep it as it is: interactive, reached only through the tree's first connect
+   (C-6). Then record C-1 from
+   `session.account` and the provider ID that was actually used, and return it on `AuthHandlerResponse`.
+5. **The callback.** Replace the closure over `session` with:
+   - a silent lookup pinned to the provider, scopes, tenant and `account`;
+   - if the provider in use differs from the pinned one: `EntraSignInRequiredError('providerChanged')`;
+   - no session: `EntraSignInRequiredError('noSession')`;
+   - `session.account.id !== pinned.accountId`: `EntraIdentityMismatchError`;
+   - any other thrown error: `TokenCallbackError` (keep the cause);
+   - a result of `{ accessToken, expiresInSeconds }`, where `expiresInSeconds` comes from the JWT `exp`;
+   - a C-3 notification for every completed lookup, including misses and failures.
+
+   Leave `buildOidcClientConfiguration` untouched; it still checks the destination policy around the call.
+
+6. **Shared JWT helper.** Move the JWT `exp` and `iat` decoding into `tokenExpiry.ts` as
+   `readJwtTimes(token)`, returning `{ iatSec?, expSec? }`. Use it in the handler and in
+   `playgroundWorker.ts`. An unknown `exp` stays unknown (`undefined`). The worker keeps its own fallback
+   TTL; WI-9 must not report that fallback as a measured value.
+7. **Failure registry.** A silent miss and an identity mismatch are **not** recorded as token failures,
+   as the existing comment requires. A `TokenCallbackError` is recorded through
+   `recordEntraTokenFailure`, with its `classifyEntraError` rule.
+8. **Explanation.**
+   - Register an `ErrorExplanationService` provider (id `entraSignInRequired`) that walks the
+     `cause` chain, and the server-selection `reason` if the driver wraps the error, looking for C-2
+     names.
+   - It returns:
+     - "Your Microsoft sign-in for '{cluster}' expired. Sign in again to continue.";
+     - for a mismatch: "VS Code returned a different Microsoft account for '{cluster}'…".
+   - Text only, no UI (skill rules).
+   - The cluster name comes from the request's `clusterId`. Find out how existing providers resolve a
+     display name; if none do, use a generic "this connection" rather than adding a lookup.
+9. **Telemetry trace.** Extend the existing `traceAuthFlow` usage to the callback, with bounded values
+   only. WI-9 adds the counted event; do not emit it here.
+
+**Tests** (extend `MicrosoftEntraIDAuthHandler.test.ts`):
+
+- a second callback asks the provider again, pinned, with `silent: true` and **never** `createIfNone`;
+- the same token bytes while the token is still valid are accepted;
+- no session gives `EntraSignInRequiredError`;
+- a different account gives `EntraIdentityMismatchError`;
+- a changed configured provider gives `providerChanged`, and `getSession` is never called with the new
+  provider;
+- the destination policy is still enforced before and after;
+- `expiresInSeconds` comes from the JWT, and an opaque token leads to an unknown value, not 0;
+- the registry is not touched for silent misses;
+- the explanation provider recognizes a C-2 error wrapped two levels deep.
+
+**Done when:**
+
+- Case 1 is green;
+- the contract test is committed;
+- the CP-0 verdict is recorded;
+- no `createIfNone` is reachable from the callback (a grep test or an assertion on the mock).
+
+**Progress:**
+
+- **Done (2026-11-19), commit `df0c22ade` (WI-1a, `gpt-6.2-sol`):** Added four MongoDB driver
+  contract tests for the pinned 7.2.0 workflow: callback rejection, cached-token speculation,
+  auth code 18 retry, and network error propagation without a retry. The accepted operator strategy
+  (decision 0010) is unchanged; the tests confirm the mocked driver behavior, not the live server's
+  response. All four focused tests and `npx tsc --noEmit -p .` passed.
+- **Done (2026-11-19), commit `01c0d4846` (WI-1b, `gpt-6.2-sol`):** Added local callback, socket,
+  and final-error traces without changing token handling. The implementation and review were advised
+  (`claude-opus-5.5`, high confidence): the driver does not emit the initial code 18 it handles,
+  so infer that path from the callback and final numeric code. Four trace tests added; Case 1 build
+  and 92 focused tests passed.
+- **OP-1a / CP-0 (2026-11-19), advised (`claude-opus-5.5`, 80%):** After about two hours idle,
+  the cached client opened two fresh sockets. Both called back with the original captured token
+  and closed before they became ready. The final error was `MongoNetworkError`, with no numeric
+  code exposed. A contemporaneous diagnostics run authenticated with its own client and separate
+  non-interactive session lookup; it did not measure token freshness. The pinned driver's
+  cached-token path calls back after code 18, but the live trace does not show that code directly.
+  Proceed with the accepted silent renewal plan. Keep WI-5 unchanged for now; carry the possible
+  network-error shape to CP-2. OP-1b must verify a post-idle callback and successful operation
+  without prompting, including if the driver has to retry the read on a second socket.
+- **Done (2026-11-19), commit `d05b66909` (WI-1c, `gpt-6.2-sol`):** Added silent token lookup
+  for the originally verified provider and account, shared JWT time parsing, typed callback
+  failures, and bounded lookup observations. Kept the destination policy and Playground TTL
+  fallback. Added 15 focused tests and updated dependent test mocks for the new session API.
+  The advisor approved the OP-1b candidate (`claude-opus-5.5`, 85% confidence). `npm run build`
+  and all 254 targeted tests passed.
+- **OP-1b evidence (2026-11-19):** After about 43 minutes idle, Refresh reused the same client.
+  A fresh socket triggered callback invocation 2 (`returned`) and then closed. The next socket
+  became ready without another callback; later sockets and a second Refresh also succeeded at
+  socket authentication on the same client. No `listDatabases.failed` was logged. This verifies
+  the post-idle renewal and retry path; no longer wait is needed for OP-1b. The trace cannot alone
+  confirm whether the database list was visible or whether a sign-in prompt appeared.
+- **OP-1b passed (2026-11-19), operator verification:** The database list loaded and no sign-in
+  prompt appeared. Resume the remaining PR 1 work. The separate long-wait requirement for OP-6
+  still applies.
+- **Done (2026-11-19), commit `5ee98385c` (WI-1d, `gpt-6.2-sol`):** Added a localized, text-only
+  explanation for typed sign-in and identity mismatch errors, including errors wrapped by the
+  driver. Used “this connection” rather than introducing a display-name lookup, as allowed by
+  step 8. Four new tests; 51 focused tests and `npx tsc --noEmit -p .` passed. Localization
+  generation and the remaining PR checks are deferred to handoff.
+- **PR 1 pre-review F2 (2026-11-20), operator decision:** Defer typed webview sign-in errors to
+  the WI-5 classifier and WI-6 structured unavailable response. PR 1 keeps the existing webview
+  error transport. See the [review finding](./01-pr1-entra-renewal-review.md#f2-typed-entra-explanations-do-not-yet-reach-webviews).
+
+---
+
+## WI-2: Shell and Playground token relays (after WI-7)
+
+**Outcome:**
+
+- Worker token relays follow WI-1's policy, pinned to a snapshot taken at spawn.
+- A miss reaches the host as a bounded reason, and the shell or playground shows one "sign in again" line
+  with an action.
+- A healthy warm worker never reads `CredentialCache`.
+
+**Read first:**
+
+- `ShellSessionManager`: `initialize`, `buildInitMessage`, the token relay and the shutdown paths;
+- `PlaygroundEvaluator`: `evaluate`, `buildInitMessage`, the token relay and the worker lifecycle;
+- `playgroundWorker.ts`: the OIDC callback and the `tokenError` handling;
+- `workerTypes.ts`;
+- the sovereign-clouds `decisions.md` D12 and finding E4
+  (`sovereign-clouds/iterations/02-copilot-feedback-and-edge-case-review.md`);
+- `ShellSessionManager.test.ts` and `PlaygroundEvaluator.test.ts`.
+
+**Steps:**
+
+1. **Snapshot and surface binding.**
+   - Extend the D12 session snapshot with C-1: `providerId`, `accountId` and `tenantId`. Capture them on
+     the **first** token relay of a newly spawned worker.
+   - The first relay is silent and pinned when the host has a verified identity for the cluster
+     (`lastVerifiedIdentity`, WI-4). Only when the snapshot has no pinned account yet may it be
+     interactive, because opening a shell or running a playground is user-initiated. No separate
+     "initial acquisition pending" flag.
+   - Every later relay uses `entraSession.ts` in silent mode with the pinned account, and the same C-2
+     errors as WI-1.
+   - **Where the fingerprint lives (F-23).** A shell stores its fingerprint string (C-4) on its terminal
+     session, which lives as long as the terminal. A playground stores it on the **document's**
+     `PlaygroundConnection` in `PlaygroundService` when the document is bound to a cluster, never on the
+     evaluator, which is shared per cluster and deleted on shutdown. Every Run compares the document's
+     fingerprint, whether or not a worker is warm. Neither joins the surface registry; teardown finds
+     shells through `getRegisteredShellTerminals` and playgrounds through `PlaygroundService` (WI-7). Before an automatic respawn
+     (`ShellSessionManager.evaluate`, `executePlaygroundCode.ts`), compare the fingerprint of the current
+     credentials with the stored one, and check the cluster latch (C-6):
+     - same fingerprint and not latched: respawn as today;
+     - a different fingerprint, or latched: do not respawn. Print the reason and the action.
+     - Only an explicit recovery (Sign in again, Reconnect) may respawn under a new fingerprint.
+2. **IPC.**
+   - Extend `tokenError` with an optional bounded `reason`. Its values are `signInRequired`,
+     `identityMismatch`, `destinationRejected` and `refreshFailed`. Keep the existing allow-list pattern
+     of `errorName`.
+   - The worker rebuilds an error with the matching C-2 `name`.
+   - Add an optional bounded `authReason` to `initResult` and `evalError`, so that the reason survives both
+     **init** and a **warm evaluation**.
+   - **Update `WorkerSessionManager`'s error reconstruction** for init and eval (F-16). Today it builds a
+     plain `Error` and keeps only `EntraDestinationRejectedError`. Test the whole path: worker → manager
+     → surface.
+   - Never send token values over IPC except the existing `tokenResponse`.
+3. **Host behavior when the reason arrives.**
+   - **Shell:** print one localized line, "Microsoft sign-in expired for this shell. Run 'Sign in again' to
+     continue.", plus a terminal link or a non-modal notification with **Sign in again**. Never a modal
+     (A1).
+   - **Playground:** show the same as the run's error output, with an action.
+   - **Sign in again for a worker:** under F-1 the worker's own driver workflow is broken. After a
+     successful interactive acquisition **for the pinned account**, restart the worker session. The shell
+     keeps its terminal and prints "Reconnected". The playground respawns on the next run.
+   - A different account is an identity change (0003): the shell prints "Signed in as a different account;
+     open a new shell to use it". Do not rebind.
+   - **Any other token failure (F-1).** A `refreshFailed` reason, or any other error thrown from the
+     worker's OIDC callback, whatever the auth method (Entra or managed identity), leaves the worker's
+     `MongoClient` broken while the worker process stays alive, so the automatic respawn (F-15) never
+     runs. Mark the worker session as broken when such a reason arrives. The next command, or the next
+     playground run, stops the worker and respawns it under the **same fingerprint**, using the respawn
+     rule in step 1. Print one line, without a modal.
+4. **#1059 note.**
+   - Call `PlaygroundEvaluator.buildInitMessage` only when a worker is spawned.
+   - A warm run on the same cluster reuses the stored init.
+   - A run against a different cluster, or a dead worker, spawns as it does today.
+5. **E4.** A late token response or error from a disposed or replaced worker must change neither state nor
+   diagnostics. Ignore messages from a worker that is no longer the session's current worker (compare the
+   worker object); no extra ID.
+
+**Tests:**
+
+- Extend the two existing suites:
+  - the second relay is silent and pinned; `createIfNone` is never used after the initial acquisition;
+  - a changed provider fails closed;
+  - a mismatched account fails closed;
+  - the reason reaches the host during init **and** during a warm `evaluate`;
+  - a warm evaluation does not read `CredentialCache` (spy);
+  - a late relay result from a replaced worker is ignored;
+  - after the cluster's credentials change to another user, the next shell command does **not** respawn
+    silently; it prints `credentialsChanged`. A password-only change does respawn;
+  - a latched (disconnected) shell or playground does not respawn on its next command;
+  - a playground document bound as identity A, left open while the cluster moves to B (and its evaluator is
+    shut down and recreated for another document), does not run as B; it prints `credentialsChanged`
+    until the user rebinds it;
+  - after a `refreshFailed` token error (Entra and managed identity), the next command respawns the
+    worker once under the same fingerprint, and the command after that runs on the new worker.
+- Add a test of the worker message round trip for `reason` and `authReason`.
+
+**Done when:** Case 1 is green, and the relay PR pre-review is committed.
+
+**Progress:**
+
+- **Deferred, escalated (2026-11-19), advised (`claude-opus-5.5`):** PR 1 does not yet have WI-4's
+  verified identity or fingerprint, or the disconnect latch. The worker IPC and session-local
+  pinning can be built independently, but delivering only those pieces in PR 1 would leave the
+  existing respawn behavior in place until the later guards land. Recommendation: keep WI-2
+  together and deliver it after both prerequisites exist. Alternative: approve a split, with
+  IPC and session-local pinning in PR 1 and the identity and respawn guards later. Also confirm
+  whether A1's provisional **Sign in again** action should remain in the worker delivery. No
+  relay implementation has started.
+- **Rescheduled (2026-11-20), operator decision:** Finish PR 1 with WI-1 only. Deliver WI-2
+  intact after WI-4's verified identity and fingerprint and WI-7's disconnect latch exist,
+  retaining the planned **Sign in again** action. Do not implement the partial relay option.
+- **PR6a ([#1133](https://github.com/microsoft/vscode-documentdb/pull/1133)):** The complete relay
+  and recovery flow is in a draft stacked on PR6. The operator approved all four fixes in the
+  [AI pre-review](./01-pr6a-worker-token-relays-review.md). All four are implemented; the combined
+  Case 1 build and 534 focused tests passed. Live Shell and Playground verification stays at OP-6.
+
+---
+
+## WI-3: Azure discovery on azureauth v6 (#990) (PR 2)
+
+**Outcome:**
+
+- Discovery works after the ARM token expires, with no provider refresh.
+- The ARM challenge works.
+- Diagnostics reports "Azure sign-in needed" for ARM sign-in failures.
+
+**Read first:**
+
+- issue #990: `gh issue view 990 --comments`. It is the checklist.
+- `AzureSubscriptionProviderWithFilters.ts` and `subscriptionFiltering/*`;
+- `azureClients.ts`;
+- `classifyResolutionFailure` in `resolveTarget.ts`, and its tests;
+- the azureauth import list in #990.
+
+**Steps:**
+
+1. **Version selection (CP-W3), under the A4 policy: as high as viable without breaking our workflows.**
+   - Findings on 2026-11-19:
+     - The **Azure Resources extension** (`vscode-azureresourcegroups` `main`, 0.13.x) uses azureauth
+       `^6.1.0-alpha.2`, azureutils `^4.3.0` and utils `^4.1.0`.
+     - azureutils `4.3.0`, `5.0.0` and `5.1.0` all require azureauth `^6.1.0-alpha.2`.
+     - Our azureutils `4.2.0` requires `^6.0.0-alpha.6`, which **does not** accept `6.1.0-alpha.x`.
+     - utils `4.1.1` and later, including `5.x`, require `@microsoft/vscode-azureresources-api`
+       **`^3.1.1`**. We are on `~2.5.0`; version 3 moved the package to CJS+ESM and finalized the auth
+       challenge API. We use it in about 30 files, mostly for `AzureSubscription` types, plus the Azure
+       Resources branch and workspace providers, `getAzureResourcesExtensionApi` and `unwrapArgs`.
+     - **utils 5.0.0's only breaking change** removes the experimentation (TAS) API, which we do not use.
+       The other public typings from 4.1.0 to 5.1.0 are additive (workflow telemetry,
+       `openReadOnlyFile`, `authentication` on subscription context). Whole-error masking in
+       `callWithTelemetryAndErrorHandling` is unchanged.
+     - azureutils `5.0.0` only bumps it to utils v5; `5.1.0` loosens the Azure client type generics.
+     - In our lockfile, only azureutils depends on the other azext packages, so the root manifest
+       controls all versions.
+   - The ladder (try from the top, stop at the first that passes):
+
+     | Level           | azureauth       | azureutils | utils    | azureresources-api | Note                                                       |
+     | --------------- | --------------- | ---------- | -------- | ------------------ | ---------------------------------------------------------- |
+     | **L2 (target)** | `6.1.0-alpha.2` | `~5.1.0`   | `~5.1.0` | `~3.1.1`           | Highest available; ahead of Azure Resources on utils       |
+     | L1              | `6.1.0-alpha.2` | `~4.3.0`   | `~4.3.0` | `~3.1.1`           | Parity with Azure Resources                                |
+     | L0              | `6.0.0-alpha.8` | `~4.2.0`   | `~4.1.0` | `~2.5.0`           | Minimal; only if L1 breaks a workflow that cannot be fixed |
+
+   - Before choosing, check the lockfile of the Azure Resources release that is published for the utils
+     and azureauth versions it actually resolved.
+   - For each level tried, record:
+     - `npm ls` for all four packages: exactly **one** copy each;
+     - the number of `npm run build` errors and what kind they are;
+     - the bundle scan from #990 for duplicate copies and the broken ESM init pattern;
+     - `flagging-fresh-dependencies` on the resulting lockfile.
+   - **"Not breaking our workflows" means all of these pass:**
+     - Azure Resources view: vCore and RU nodes, and the workspace resource provider;
+     - Discovery: vCore, RU and VMs, with subscription and tenant filters;
+     - sign-in, account changes, MFA and cloud switches;
+     - deep links (`/connect/azure`, with and without a tenant ID);
+     - every `AzureWizard` flow;
+     - the **packaged VSIX** (`npm run package`) loads and activates, and the checks above pass on it,
+       not only on a dev build;
+     - the masking test in the telemetry-masking memory: a property containing "error" is still redacted.
+   - Choose with the advisor. If L2 needs more than mechanical changes in the `azureresources-api` 3
+     consumers, step down to L1 and record why.
+
+2. **Migrate the APIs** at every call site that #990 lists:
+   - `getSubscriptions` → `getAvailableSubscriptions`;
+   - accounts and tenants;
+   - `signIn`;
+   - `onRefreshSuggested`;
+   - the provider class paths;
+   - the type-only imports.
+
+   Keep the subscription-filter override effective, and keep the tenant filter as **one** mechanism
+   (#990 asks you to choose; recommended: keep the extension's `globalState` tenant filter as it is).
+
+3. **Shared seam.** Migrate `documentdbTokenResource.ts` (`getConfiguredAuthProviderId`,
+   `getConfiguredAzureEnv`). That is the single seam WI-1 reads. If PR 1 merged first, re-run the WI-1
+   tests.
+4. **Stored subscriptions.** Confirm that v6 `credential.getToken` and `authentication.getSession` acquire
+   a token on **every** call.
+   - Add a unit test: a stored `AzureSubscription` whose first session "expires" still lists clusters on
+     the second call. Use a mocked session sequence, and go through `createSubscriptionContext` the way
+     `azureClients.ts` does.
+5. **Diagnostics.**
+   - In `classifyResolutionFailure`, classify these as `signInRequired`:
+     - the package's `isNotSignedInError` guard;
+     - a failed challenge;
+     - `interaction_required` or an AADSTS sign-in error, matched by name or code, never by free text where
+       a typed signal exists.
+   - The report stays bounded: error name and status only.
+   - Replace the test that manufactures `name: 'NotSignedInError'` with the **real** v6 exception shape
+     (`name: 'Error'`, no status) recognized by the guard.
+   - Do not assume ARM never prompts: a challenge can ask for step-up.
+6. **l10n.** Refresh `l10n/@microsoft/vscode-azext-azureauth/bundle.l10n.json` as #990 describes, then
+   run `npm run l10n` and `npm run l10n:check`.
+
+**Done when:**
+
+- Case 1 is green;
+- exactly one copy of azureauth is installed;
+- the #990 manual checklist is recorded in Progress, with OT-6 still pending;
+- the PR 2 pre-review is committed.
+
+**Fallback:** if PR 2 is not merged when WI-6 is ready, tell the operator (approved plan). Do not add a
+shim (0005).
+
+**Progress:**
+
+- **Deferred, awaiting operator decisions (2026-11-20):** The L2 probe installed one copy of each
+  azext package and found no fresh versions among the 13 newly resolved packages. The partial
+  migration passed 402 focused tests; the build still has 19 diagnostics in the unconverted
+  subscription-listing paths. No draft or packaged candidate is ready.
+- **ARM challenge prompts:** The advisor (`claude-opus-5.5`) verified that each planned v6 level
+  can prompt on a challenge during passive Discovery. The SDK has no supported option to limit
+  prompts to explicit actions. Recommended for operator consideration: preserve silent
+  Discovery, accepting that its own wizard and deep-link flows would also forgo step-up. The
+  alternatives are to accept the v6 prompt behavior or widen the design to distinguish passive
+  and explicit calls.
+- **Partial subscription results:** The advisor verified that v6 can skip tenants after ARM
+  failures and return a partial list. Recommended for operator consideration: retain healthy
+  results with a sanitized output diagnostic for failed tenants. Preserving visible failure and
+  Retry instead would require a larger change to listing. Neither behavior change was adopted.
+  OP-2 and the final CP-W3 verdict remain pending.
+- **Unblocked (2026-11-20), operator decisions:** Keep successful subscription results when an
+  account or tenant cannot be listed, and record a sanitized diagnostic in the Output channel.
+  Keep the SDK's default ARM challenge behavior. The operator allowed that fallback if keeping
+  browsing silent required more than a small update. A prompt override would have to cover
+  both the SDK listing pipeline and subscription authentication, so PR2 will not add one.
+  OP-2 should include checking where prompts appear and what happens when they are dismissed.
+- **OP-2 candidate ready (2026-11-20):** [Draft PR2 #1111](https://github.com/microsoft/vscode-documentdb/pull/1111)
+  contains the L2 migration (`1869c22ab`) and local account-cache fix (`423c2e1b7`). The
+  [PR2 pre-review](./01-pr2-azureauth-review.md) records the findings and verification. The full
+  suite passed before the cache follow-up (9,682 passed, one skipped); 55 focused tests and
+  root type-check passed after it. The rebuilt VSIX passed inspection and its host graph has one
+  azureauth ESM copy, with no legacy lowered initializer call in the Azure auth chunk.
+  Automated activation did not run in this host because Electron's GUI libraries are missing.
+- **OP-2 accepted by the operator (2026-11-20):** The packaged extension activated. Discovery,
+  filters, and Refresh/Retry passed. The operator signed out and back in with the same account
+  and accepted the untested account-switch, MFA, and cloud cases. New Connection via Azure
+  service discovery and the Azure Resources RU and vCore/DocumentDB nodes worked. Deep-link URLs
+  were not tested; the operator accepted the risk. Update Credentials and workspace-provider
+  results were not reported. Partial failures could not be reproduced live; focused tests cover
+  partial results and sanitized warnings.
+- **CP-W3 (2026-11-20), advised (`claude-opus-5.5`, 85% confidence):** Retain L2:
+  azureauth `6.1.0-alpha.2`, azureutils and utils `5.1.0`, and Azure Resources API `3.1.1`.
+  The build, installed dependency tree, bundle inspection, and operator-accepted OP-2 support
+  this choice. L1 uses the same azureauth and Azure Resources API versions and does not reduce
+  the remaining risks. The untested OP-2 cases above remain unverified.
+- **OP-2 repeat accepted (2026-11-23):** After the alias removal changed the packaged payload,
+  the operator tested the PR2 CI-built VSIX and cleared the gate. The
+  [PR2 review record](./01-pr2-azureauth-review.md#azure-esm-bundle-verification) lists what
+  passed and what was not tested. CP-W3 still retains L2.
+
+---
+
+## WI-4: Client identity, generation and the two cache fixes (PR 3)
+
+**Outcome:**
+
+- Every cached client carries C-4.
+- Concurrent cold starts share one startup.
+- Teardown and late startups cannot publish stale clients.
+- Cancelling a cached reuse never closes the shared client.
+- A closed topology is replaced, never reconnected with old options.
+- `getClient` never prompts (C-6).
+
+**Read first:**
+
+- `ClustersClient`: `getClient`, `initClient`, `initializeClient`, `connect` and `deleteClient`;
+- `ClustersClient.test.ts`;
+- `connectionAuthIdentity.ts`;
+- the tree-cluster-architecture skill (dual ID);
+- the Kubernetes and Atlas reachability providers (how a tunnel rewrites the host).
+
+**Steps:**
+
+1. **Fingerprint** (`src/documentdb/connectionFingerprint.ts`, pure).
+   - It hashes two inputs (SHA-256, hex, truncated) into an opaque string:
+     - the **stored connection string without its password**, as it was before reachability rewrote the
+       host to `localhost`. It carries the hosts, the database path and any `authSource`, so F-17 needs no
+       special handling;
+     - the **principal**: the native user name; Entra `providerId` + `accountId` + `tenantId` (C-1); the
+       managed identity client ID, or `system-assigned`; or `none`.
+   - **No normalization.** Any edit to the connection string counts as an identity change. That fails
+     closed: the user sees "credentials changed" once and reconnects.
+   - The Entra `providerId` is part of it, so a provider or cloud change is an identity change too.
+   - **Known limitation:** if an admin replaces a resource's system-assigned identity, the principal
+     changes but the fingerprint does not. That is not the user-driven identity switch that 0003 guards
+     against; document it.
+   - Table tests, reviewed as part of the PR:
+     - a password-only change keeps the fingerprint, including an RU key rotation;
+     - another user changes it;
+     - an edited connection string changes it;
+     - two managed identity client IDs differ;
+     - stable fingerprints across Kubernetes local-port changes are deferred to #1105
+       (operator amendment to decision 0009); automatic replacement still rejects a mismatch.
+2. **Generation.**
+   - Keep a static `Map<clusterId, number>` that only ever increases and is never cleared.
+   - Each `ClustersClient` instance records `generation`, `fingerprint`, `createdAt` and its credentials
+     snapshot.
+   - Expose a read-only `binding` (C-4) and `ClustersClient.getBinding(clusterId)`.
+3. **One startup at a time (single flight).**
+   - A `_pendingStartups` map keyed by `clusterId` holds the startup promise. Every caller awaits it.
+   - A caller's own `abortSignal` rejects only **that caller's** wait. It never aborts the startup, which
+     has its own timeout.
+   - The startup captures the C-6 epoch and publishes only if it is unchanged. Otherwise it closes its own
+     `MongoClient`. Its waiters then get the latch's `ConnectionUnavailableError` if the cluster is
+     latched, or retry once with the current credentials if it is not.
+   - `deleteClient` calls `invalidate` **before** its first `await`.
+4. **`getClient` rules (C-6).**
+   - `initializeClient` stops hardcoding `{ interactive: true }`; `getClient` is always silent. Its options
+     are `{ trigger, abortSignal, background? }`.
+   - The interactive first connect moves to `ClustersClient.connectInteractive(clusterId)`, called only by
+     the tree items' `authenticateAndConnect` and by Sign in again. No per-call-site audit is needed: every
+     other caller acts on a cluster that the tree has already connected.
+   - Add a per-cluster `lastVerifiedIdentity` record (C-1 for Entra; the principal for other methods),
+     keyed by `clusterId` like `ClustersClient._clients`. It **survives eviction and Disconnect**, and only
+     Remove Connection clears it (WI-7, decision 0011). A silent reconnect is pinned to it.
+   - Add the latch check: a latched cluster throws `ConnectionUnavailableError(reason)` for every caller.
+     WI-7 sets the latch.
+   - Missing credentials throw `ConnectionUnavailableError('credentialsMissing')` instead of today's plain
+     `Error`, whose message shows the raw `clusterId` (F-20).
+   - Pass `background: true` from the dashboard poll, tree count badges and `CollectionNameCache`.
+5. **Cached reuse.**
+   - Remove the abort handler that closes the shared client (the cached branch of `getClient`).
+   - A cancelled waiter just rejects with `UserCancelledError`.
+6. **Closed topology.**
+   - Track closure with the public SDAM event `topologyClosed` on the `MongoClient`, plus our own `close()`
+     calls.
+   - A foreground `getClient` on a closed client publishes a **new generation**, using the **current**
+     `CredentialCache` and requiring the **same fingerprint**. A background caller fails instead.
+   - If the fingerprint differs, do not publish; throw `ConnectionUnavailableError('identityChanged')`.
+   - Today's `client._mongoClient.connect()` call on the cached path goes away.
+7. **Telemetry helper.**
+   - Add `addEstablishedConnectionContext(context, clusterId | client)`. It sets `authMethod`,
+     `connectionCorrelationId`, and the measurements `connectionAgeMs` and `clientGeneration`.
+   - No property name may contain "error" (masking).
+   - WI-5 and WI-6 call it; add the helper and its tests only here.
+8. **Development test hook** (optional, recommended).
+   - Add `vscode-documentdb.debug.connection.simulateExpiry`, following the survey debug commands:
+     - declared in `package.json`;
+     - registered only in development mode;
+     - listed in `LAZY_COMMANDS` with its reason.
+   - It (a) makes the next N Entra callbacks for a selected cluster behave like a silent miss, and (b)
+     force-closes the pool to simulate an idle drop.
+   - Use a dashed context key if one is needed.
+
+**Tests** (`ClustersClient.test.ts`, plus the new fingerprint test):
+
+- two concurrent cold `getClient` calls create one `MongoClient`;
+- cancelling one of two waiters leaves the other connected; cancelling both does not abort the startup;
+- a startup that finishes after `deleteClient` does not publish, and closes its client;
+- a cancelled cached reuse does not close the shared client;
+- `topologyClosed` followed by a foreground `getClient` gives a new generation with the same fingerprint;
+  a background `getClient` does not replace it;
+- a changed principal followed by `getClient` gives `ConnectionUnavailableError('identityChanged')`;
+- `getClient` never prompts, even with no client and with credentials cached; only `connectInteractive`
+  may, and only when the cluster has no `lastVerifiedIdentity`;
+- a latched cluster rejects every caller, including background ones;
+- missing credentials give `credentialsMissing`, with no `clusterId` in the message;
+- generation numbers only ever increase across delete and reconnect;
+- the telemetry helper sets the bounded properties and no forbidden names.
+
+**Done when:**
+
+- Case 1 is green;
+- every existing `ClustersClient` test still passes unchanged, or each change is justified in Progress.
+
+**Progress:**
+
+- **Done (2026-11-20), commit `0e2a89576` (WI-4a, `gpt-6.2-sol`):** Integrated the original
+  fingerprint comparison winner onto the actual PR3 base. The blind advisor scored it 94/100
+  against 88/100 for `mai-code-2` (80% confidence). It hashes the stored URI without its password
+  and the principal, preserving all other URI bytes. The build and 13 fingerprint tests passed.
+- **Done (2026-11-20), commit `a9a8d5103` (WI-4b, `gpt-6.2-sol`):** Integrated the client
+  generation, binding, isolated cached-waiter cancellation, and telemetry context helper.
+  The blind scores were 89/100 and 74/100; the selection was provisional until the advisor
+  (`claude-opus-5.5`) approved the staged winner on the actual PR3 base at 85% confidence.
+  The build and 121 focused tests passed. Generations advance only on successful establishment;
+  cancelling one waiter no longer closes the client shared by other callers.
+- **WI-4c deferred, escalated (2026-11-20):** The plan allows one retry after a stale startup
+  and specifies the result when a latch is set. It does not specify the unlatched result when
+  that retry is also invalidated. Recommendation: use a neutral retryable error, “The connection
+  changed while it was opening. Try again.” The advisor suggested `credentialsChanged`, which
+  fits the existing enum but can imply a credential change after a plain eviction. Confirm
+  the changes to the existing cancellation tests as well: cancelling a wait must not cancel
+  or misreport the physical startup, and a real startup failure must still be logged and cleaned
+  up. Neither choice was assumed. The two worktrees are ready; no coding variants have run.
+- **WI-4c operator decision (2026-11-20):** Use the neutral retryable error “The connection
+  changed while it was opening. Try again.” if the one retry is also superseded and no latch
+  is set. Do not add a new unavailable reason or a third attempt. A latch takes precedence.
+  Cancellation assertions continue to follow the approved waiter-only behavior and retain
+  coverage of actual startup failures, telemetry and cleanup.
+- **Done (2026-11-20), commit `61e9cd4f5` (WI-4c, `gpt-6.2-astra`, High, large context):**
+  Integrated the top blind-review candidate with bounded follow-up changes. Concurrent callers
+  share a startup for the current epoch; cancellation only ends a caller's wait. A superseded
+  client cannot publish or delay a retry while closing. Added the stale-handshake failure and
+  latch regression; the build and 108 focused tests passed on the delivery branch. The operator
+  chose the neutral second-invalidation message. The advisor (`claude-opus-5.5`) approved the
+  corrected candidate for delivery at 85% confidence. Full Case 2 and localization generation
+  remain deferred to PR3 handoff.
+
+  **WI-4c blind comparison:** Same baseline (`9a4d28dfa`), accepted behavior, build and focused
+  selectors. Scores describe the original candidates, not the corrected delivery commit. The
+  ranking had 60–65% confidence. Test counts differ because candidates authored their own tests.
+  Fusion ran alone via the Copilot CLI; its AI credits are reported separately from AIU.
+
+  | Variant                                   | Candidate             |            Score |        Elapsed | Input / output tokens |   Tool calls |             Usage |
+  | ----------------------------------------- | --------------------- | ---------------: | -------------: | --------------------: | -----------: | ----------------: |
+  | `gpt-6.2-astra`, High, large context      | `89d642e66`           |               92 |          4m03s |            737k / 12k |           27 |         254.7 AIU |
+  | `gpt-6.1-sol`, High                       | `18e933d13`           |               89 |          8m16s |            1.1M / 24k |           33 |          55.8 AIU |
+  | `gpt-6.1-sol`, Extra High                 | `7a1845af5`           |               88 |          6m56s |            918k / 21k |           31 |          51.2 AIU |
+  | `gpt-6.2-sol`, default                    | `eb388ef45`           |               88 |          5m04s |            1.0M / 13k |           28 |          78.5 AIU |
+  | Copilot Fusion Standard (`gpt-6.1-terra`) | `4ac6c4765`           |               86 |          3m07s |        911.6k / 12.5k | Not reported |  13.55 AI credits |
+  | Copilot Fusion High                       | No complete candidate |       Not scored | 9m55s reported |          2.0M / 77.1k |           40 | 184.43 AI credits |
+  | `gpt-6.2-sol`, High                       | `f80f3a325`           |               84 |          4m41s |            1.1M / 15k |           28 |          79.6 AIU |
+  | `gpt-6.2-sol`, Extra High                 | `aeabaabd2`           |               84 |          7m01s |            1.1M / 18k |           33 |          87.6 AIU |
+  | `mai-code-2`, default                     | `1978a3c80`           |               74 |          8m06s |            1.6M / 21k |           41 |          17.0 AIU |
+  | `gpt-6.1-sol`, Medium                     | `2cb904a18`           | 73, fix required |          5m46s |            982k / 14k |           28 |          41.3 AIU |
+  | `claude-opus-5.5`, default, large context | `a0b581b07`           |     Disqualified |          7m53s |            2.5M / 44k |           29 |         201.1 AIU |
+
+  The medium-effort candidate could replace a cached client without closing it. The Opus
+  candidate did not honor the retry or latch on an obsolete startup failure. Astra led on
+  simplicity among the correct candidates; Sol 6.1 High had the strongest tests. This was
+  one trial per configuration, not a general model ranking.
+  Fusion High ran alone on the same baseline and hit the 10-minute limit. It left partial
+  implementation changes but no test changes. The partial result was not verified or scored
+  and does not change the delivery selection. Fusion chose Critique mode but never finished
+  the Opus 5.5 draft. The first request took 5m15s and reached its 48,000-output-token limit.
+  The draft then made further requests until the timeout; the critic and revision never ran.
+
+- **WI-4d/e deferred, escalated (2026-11-20):** The advisor reviewed the split between silent
+  reconnect and closed-client replacement. Before implementing, confirm these reconnect rules:
+  1. Reject a silent Entra startup without a verified account before asking VS Code for a
+     session. Only a deliberate first connect may prompt.
+  2. Let background callers use a healthy cached client or join an existing startup, but not
+     start or replace one.
+  3. Keep the verified account for Discovery and Azure Resources connections. Those items have
+     no Remove action, so switching accounts may require a reload until there is an explicit
+     account-switch flow.
+  4. Reject a closed-client replacement with a different identity and retain the closed entry,
+     so the next ordinary call cannot start as the new identity.
+  5. Pin account, provider, and tenant for automatic reconnect. Use changed tenant credentials
+     only after an explicit credentials change.
+
+  The initial request went unanswered, so implementation did not start at that checkpoint.
+
+- **WI-4d/e approved (2026-11-20), operator decision:** The operator accepted all five rules above.
+  For rule 1, the operator preferred requiring an explicit first connect to silently picking
+  an account. For rule 3, the operator accepted the reload limitation as an edge case. Finish
+  silent reconnect first, then closed-client replacement. PR2's pre-review was signed off
+  separately and does not block this work.
+- **Done (2026-11-20), commit `6a53cf19e` (WI-4d, `gpt-6.2-sol`):** Reconnect silently with the
+  verified provider, account and tenant. Only a deliberate first connect may prompt, and
+  background calls cannot start a client. The shared tree helper uses `connectInteractive`;
+  the positional `getClient` signature remains compatible, with an optional background flag.
+  The advisor (`claude-opus-5.5`, 85% confidence) approved the implementation. All 372 focused
+  tests across 13 files and the TypeScript check passed. WI-4e will handle closed topology.
+- **Done (2026-11-20), commit `4680b459f` (WI-4e, `gpt-6.2-sol`):** Reuse open clients without
+  calling driver `connect()` again. A foreground caller can replace a closed client; concurrent
+  callers share that replacement, including background callers that join it. Reject a different
+  fingerprint before constructing a driver and retain the closed binding, as the operator
+  approved. The leader checked the topology event and caller, epoch, and latch checks against
+  the advised WI-4e contract. Build and 116 focused tests passed. The cancellation and stale
+  retry tests now exercise a pending replacement rather than an obsolete cached `connect()` call.
+- **PR3 pre-review (2026-11-23):** The operator approved two scoped fixes: preserve the shared
+  startup when the decoded-password wait is canceled (`e751df24b`), and keep passive index counts
+  from starting a client (`db01f24a5`). Both used `gpt-6.2-sol`; build and 95 focused tests passed.
+  The operator also approved deferring stable Kubernetes tunnel fingerprints to #1105. See the
+  [review record](./01-pr3-client-identity-review.md) for advisor confidence and verification.
+- **PR3 handoff:** Case 2 passed after syncing PR2 and updating the connection-string edit
+  fixture to mock the interactive entry point without changing behavior assertions. The full
+  rerun passed 9,735 tests with one skipped. See the
+  [verification record](./01-pr3-client-identity-review.md#case-2-handoff). PR3 stays stacked
+  on PR2; WI-5 starts with the classifier and stops at CP-2 before recovery wiring.
+
+---
+
+## WI-5: Classify failures and recover: host and tree (PR 4)
+
+**Outcome:**
+
+- One pure classifier.
+- The tree's Retry actually reconnects.
+- **Sign in again** exists and prompts once per click.
+- A token callback failure never leaves a broken client cached, for any auth method.
+
+**Read first:**
+
+- `ClusterItemBase.getChildren` and `createErrorRecoveryChildren`;
+- `retryAuthentication.ts` and its test;
+- the RU items: `MongoRUResourceItem.ts`, `RUCoreResourceItem.ts`, `ruClusterHelpers.ts`;
+- the tree-cluster-architecture skill, "Failure Presentation: Actions Only";
+- the contract-test fixtures from WI-1.
+
+**Steps:**
+
+1. **Classifier** (`src/documentdb/connectionFailures.ts`, pure). Draft the table, then hold CP-2.
+   - It walks `cause`, plus `MongoServerSelectionError.reason.servers[*].error` where present.
+   - Carry-forward from [PR1 review R5](https://github.com/microsoft/vscode-documentdb/pull/1108#discussion_r4640902166):
+     recheck whether the installed driver can retain callback failures in per-server errors. If it
+     can, use the same bounded traversal for `EntraErrorExplainer`, test mixed-server failures, and
+     render only the rule-based explanation, not raw cause text. Recheck on driver upgrades.
+   - Initial table:
+
+     | Signal                                                                        | Auth       | Kind                         | Generation                                   | Offered action                                  |
+     | ----------------------------------------------------------------------------- | ---------- | ---------------------------- | -------------------------------------------- | ----------------------------------------------- |
+     | `EntraSignInRequiredError`                                                    | Entra      | `signInRequired`             | replace on recovery (F-1)                    | Sign in again                                   |
+     | `EntraIdentityMismatchError`, `ConnectionUnavailableError('identityChanged')` | any        | `identityChanged`            | evict; surfaces unavailable                  | Reconnect (rebind)                              |
+     | `TokenCallbackError` (step 2)                                                 | Entra, MI  | `transient`, workflow broken | replace on the next **foreground** operation | Retry                                           |
+     | `ConnectionUnavailableError('credentialsMissing')` (F-20)                     | any        | `credentialsMissing`         | none to keep                                 | Update credentials                              |
+     | code 18                                                                       | Native, RU | `credentialsRejected`        | evict; no automatic retry                    | Update credentials (RU: Retry re-reads the key) |
+     | final code 18                                                                 | Entra      | `credentialsRejected`        | evict; no automatic retry                    | Sign in again with a verified Entra identity    |
+     | `MongoNotConnectedError`, `MongoTopologyClosedError`                          | any        | `clientClosed`               | new generation on the next foreground call   | none                                            |
+     | network errors, timeouts, server selection with no auth cause                 | any        | `transient`                  | keep                                         | Retry                                           |
+     | anything else                                                                 | any        | `other`                      | keep                                         | existing behavior                               |
+
+   - **No regression for tunneled connections:** connection refused against a Kubernetes port-forward
+     port is `transient`. The client is **kept**, never evicted, so the tree's existing tunnel restore
+     (`beforeCachedClientConnect`) still recovers it. Tunnel recovery itself is #1105.
+
+2. **Callback failures for every auth method (F-1).**
+   - F-1 applies to **every** throw from the OIDC callback. The managed identity callback
+     (`ManagedIdentityAuthHandler.configureAuth`) rethrows token-service (IMDS) failures and throttling as
+     they are, so today they fall to `other → keep`, and the broken client stays cached until VS Code
+     restarts.
+   - Both handlers wrap such errors in `TokenCallbackError` (C-2). Destination rejection keeps its current
+     handling.
+   - The classifier treats it as `transient`, workflow broken: `reportFailure` marks the client, and the
+     next **foreground** `getClient` replaces it with a new generation and the same fingerprint.
+3. **Report failures.**
+   - Add `ClustersClient.reportFailure(binding, error)`: a function, not a service. It classifies the
+     error and ignores it when `binding.generation` is stale. It evicts or marks the client according to
+     the table, and returns the kind so the caller can choose its UI.
+   - It keeps no connection state and fires no events (C-5).
+   - **Every operation reports its own failure.** A client can resolve and then fail authentication
+     **during** a read, save or ping. Add one thin function, `runWithClient(binding, op, { background? })`:
+     it resolves the client (WI-6), runs `op`, and on a throw calls `reportFailure`. For a terminal kind
+     (`signInRequired`, `credentialsRejected`, `credentialsMissing`, `identityChanged`) it returns the
+     structured unavailable result (C-5); otherwise it rethrows. Every WI-6 router operation and WI-8
+     ping goes through it. It keeps no state (decision 0013).
+4. **Tree.**
+   - Route both catch paths in `getChildren` (cached-client reuse and `listDatabases`) through
+     `reportFailure`. Keep the modal-plus-actions presentation.
+   - Change `createErrorRecoveryChildren` to:
+     - **Retry sign-in** when the kind is `signInRequired` or `credentialsRejected` and the
+       Entra identity and settings are available, or **Update credentials** (the provider-owned
+       action that exists today);
+     - then Diagnose;
+     - then Open shell;
+     - then **Retry last**, except when **Retry sign-in** is offered in its place.
+   - Check that order against the skill text, and update the skill in WI-10 if it differs.
+   - Call `addEstablishedConnectionContext` on the failure events of `connect`, `getchildren` and the tree.
+   - **Keep credentials on recoverable failures (F-20).** In every provider item's `authenticateAndConnect`
+     failure path, still call `deleteClient`, but call `CredentialCache.deleteCredentials` only when the
+     kind is `credentialsRejected`, or `other` as today. For `credentialsRejected` with a verified
+     Entra identity, retain the in-memory settings for explicit **Sign in again** (decision 0014).
+     For `transient`, `clientClosed` and
+     `signInRequired`, keep the entry: a network outage during a tree expand must not leave open surfaces
+     with nothing to reconnect from, nor make the user retype a discovery password. Put the decision in
+     one shared helper, not in ten copies.
+5. **Retry.**
+   - `retryAuthentication` evicts the client (`deleteClient` without clearing credentials) when the last
+     kind was `signInRequired`, `credentialsRejected` or `clientClosed`, and then refreshes.
+   - It captures the C-6 epoch **before** its first `await`. If the epoch changed in the meantime (a
+     Disconnect, or another recovery replaced the client), it does nothing destructive: no eviction, and
+     no latch cleared.
+   - The `CredentialCache` entry is kept.
+   - **RU key exception:** on Retry after `credentialsRejected` for an RU Discovery or Azure Resources
+     item:
+     - drop the cached key and re-read it from ARM once (`extractCredentialsFromRUAccount`);
+     - an ARM sign-in failure there is reported as "Azure sign-in needed" (WI-3 classifier), not as a
+       database rejection;
+     - never open a password wizard.
+6. **Sign in again** command (`vscode-documentdb.command.signInAgain`, args: a tree node or `{ clusterId }`).
+   - Read the pinned C-1 from the cluster's `lastVerifiedIdentity` record (WI-4). Capture the C-6 epoch
+     **before** prompting.
+   - Call `entraSession.ts` with `forceNewSession` for that account and tenant, every time. The user
+     clicked, so one prompt is expected, and it also covers a session that the silent lookup still
+     returns but the server rejects.
+   - **After the prompt, check the epoch.** If it changed while the user was signing in (for example, a
+     Disconnect), do not evict, do not reconnect and do not clear the latch. Report "The connection was
+     closed while you were signing in."
+   - Same account: evict and start a new generation.
+   - Different account: the identity changed. Surfaces bound to the old fingerprint become unavailable
+     with `identityChanged` (C-5), and the tree continues with the new identity.
+   - A dismissal is a `UserCancelledError`. Nothing re-prompts, because `getClient` never prompts (C-6).
+   - There is no `onDidChangeSessions` listener (decision 0012). A signed-out account is found by the next
+     operation's silent lookup, which fails with `signInRequired`.
+
+**Tests:**
+
+- classifier table tests on real error shapes;
+- a managed identity callback that throws once: the next foreground operation works on a new
+  generation, and a background tick does not replace the client;
+- Retry after `clientClosed` creates a new generation; after `credentialsRejected` it keeps the
+  credentials and does not loop;
+- the RU old/new key pair; an ARM sign-in failure compared with a database rejection;
+- Sign in again with the same account and with a different account, always with `forceNewSession`;
+- no re-prompt after a dismissal;
+- a stale-generation result is ignored;
+- an old Retry that resolves after the client was replaced does not evict the new client;
+- Sign in again that completes after a Disconnect does not reconnect or clear the latch;
+- with the tree untouched, an OIDC callback failure during a Document View read offers the recovery
+  action (through `runWithClient`), and the next foreground read gets a new generation;
+- a tree expand that fails with a network error keeps the `CredentialCache` entry, and an open surface
+  then reconnects silently once the network is back; a code 18 failure still evicts it.
+
+**Done when:**
+
+- Case 1 is green;
+- the CP-2 verdict is recorded;
+- OT-2's tree part can be reproduced with the WI-4 hook.
+
+**Progress:**
+
+- **CP-2, advisor verdict: revise before wiring.** The classifier draft builds and 32 focused
+  tests pass. The pinned 7.2.0 workflow test shows that if a cached OIDC token receives code 18,
+  the driver calls the callback and propagates the final rejection unchanged if that token is
+  also refused. This does not prove that the callback returned newly issued token bytes.
+  Treat the final Entra authentication rejection as `credentialsRejected` and evict the client,
+  rather than adding callback-freshness fields with no reliable producer (85% advisor confidence).
+  Keep typed `noSession` distinct. Plain network failures (including the OP-1a shape and tunnel
+  refusal) and mixed per-server failures keep the client. Closed-client checks are typed only.
+  Plain callback errors do not reach the per-server descriptions through the pinned OIDC path,
+  so R5 does not require changing the Entra explainer now. Cancellation and destination handling
+  stay in place.
+- **CP-2 / OC-1, accepted (2026-11-23):** The operator chose A for smoother recovery and asked
+  to record it in [decision 0014](../decisions.md#0014-keep-in-memory-connection-settings-after-a-rejection-for-a-verified-entra-identity).
+  Evict the rejected client, but keep the in-memory settings for a verified Entra identity.
+  Explicit **Sign in again** then works when invoked with just `clusterId`. No rejected token is
+  retained, no automatic retry is started, and Native/RU rejection and persistent storage are unchanged.
+- **CP-2 revision verified:** Removed the unproducible freshness inputs. The contract test now
+  sends the exact final code 18 from the driver workflow through the classifier. Case 1 passed:
+  build and 31 focused tests across classification, the driver contract, and the Entra explainer.
+- **CP-2 / OC-2, accepted:** Reuse the existing latch for `credentialsRejected` rather than
+  adding a separate hold. Eviction must not let an ordinary operation open another client with
+  rejected settings. Only the matching explicit recovery can clear the rejection, and only if
+  its epoch is current. The operator preferred the simpler option and asked to record
+  [decision 0015](../decisions.md#0015-use-the-existing-latch-to-block-startup-after-authentication-rejection).
+- **OP-3 candidate:** Host and tree recovery, Retry and **Sign in again** are implemented
+  for [draft PR4 (#1117)](https://github.com/microsoft/vscode-documentdb/pull/1117). Case 1 passed:
+  the host batch passed 222 tests, the tree batch passed 367, and a final 127-test run covered
+  the Native discovery Retry correction and the core recovery paths. These counts overlap.
+  OP-3 requires a real Entra sign-out on the dev host and a fresh-socket callback. PR4 pre-review
+  and handoff checks remain; WI-6 does not start before OP-3 is cleared.
+- **OP-3 UI clarification:** The operator accepted showing **Sign in again** instead of **Retry**
+  when Entra sign-in is the next useful step. Diagnose and Open shell remain. This follows decision
+  0001's single sign-in action and preserves the original Retry behavior for transient failures.
+- **Draft PR4 CI follow-up:** The VSIX built, passed inspection, and activated in VS Code. Static
+  checks exposed stale localization, formatting changes, and a type-only import lint error. The
+  full test run found 32 failures in three suites whose mocks did not expose the new lifecycle
+  methods. Update those fixtures without changing their assertions or runtime recovery behavior.
+  OP-3 remains the live Entra sign-out and dismissal gate.
+- **OP-3 partial live run (2026-11-23):** A CI-built PR4 VSIX loaded databases and the dashboard.
+  After sign-out, idle sockets closed and fresh sockets became ready under the same client startup.
+  No post-sign-out OIDC callback appears in the supplied excerpt, and sign-in recovery and dismissal
+  were not reached. The run is inconclusive; OP-3 remains open. On resume, close the dashboard,
+  wait until the cached token is no longer accepted, and explicitly refresh the cluster node
+  without restarting the extension host. Collapse and re-expand can show cached children.
+- **OP-3 resumed on the older VSIX (2026-11-23):** A refresh opened a new socket on the
+  same client. OIDC callback invocation 2 threw, and the database listing failed.
+  The operator confirmed that the initial failure showed an error modal, not a sign-in
+  prompt. Closing the modal revealed the recovery action. They confirmed dismissing the
+  actual Microsoft sign-in prompt as requested and that the recovery actions remained.
+  A later explicit sign-in restored the database list. **OP-3 passed** on the older CI VSIX.
+  The operator approved renaming the tree action to **Retry sign-in**, first before Diagnose
+  and Open shell, without a separate Retry row. Command ID and recovery behavior are unchanged.
+- **Sign-out scope review (2026-11-23):** Claude Opus 5.5 recommended keeping the approved
+  1.2.0 scope (80% confidence). Prompt sign-out handling would need account-specific session
+  checks, coordination with active tasks, and separate handling for Shell and Playground
+  clients. Track it in [#1119](https://github.com/microsoft/vscode-documentdb/issues/1119).
+  OP-3 and its required evidence are unchanged.
+- **Future operator VSIX builds:** Give each new test candidate a distinct extension version in
+  the root `package.json` and corresponding root lockfile entries. Verify the version in the
+  packaged manifest, and give the operator that version, the commit, and the CI artifact link.
+  Do not rebuild an unchanged candidate just to label the partial run.
+- **Connection stats add-on:** Add a read-only **Show Connection Stats** command alongside
+  **Show Worker Stats**, as a separate WI-5 commit. The extension-host snapshot shows client
+  generation, age, auth method, startup correlation, pending or held state, and whether socket
+  events are traced. It contains no cluster or account identifiers and makes no service calls.
+  For Entra it shows the UTC expiry declared by the last token supplied to the driver, with
+  the remaining time at capture (`hh:mm:ss`), `expired`, or `unknown`. This local diagnostic
+  retains no token and does not predict server acceptance or force renewal.
+  Leave socket counts out rather than guessing. The operator requested restarting OP-3 on
+  the next CI-built candidate, `1.1.1-alpha.1`, which includes the diagnostics and worker fix.
+- **Worker startup regression:** PR4's shared OIDC code imported the VS Code UI auth-method
+  module into the Node worker path. Keep the shared auth IDs independent of VS Code. Verify
+  the next packaged candidate starts both Shell and Playground; the tree OP-3 gate is unchanged.
+- **PR4 handoff verification:** OP-3 passed, author-approved pre-review fixes are in
+  [the review record](./01-pr4-connection-recovery-review.md), and local Case 2 passed
+  (9,796 runtime tests passed, one skipped). Full CI passed on `d422d065b`.
+  The operator confirmed both Shell and Playground on the CI-built `1.1.1-alpha.1` VSIX
+  on 2026-11-24. The worker smoke gate is cleared, and PR4 can move to operator review.
+  WI-6 continues on this base without waiting for PR4 to merge.
+
+---
+
+## WI-6: Bind surfaces and add the unavailable state (PR 5)
+
+**Carry-forward from PR 1:** Verify that a typed sign-in error classified by WI-5 reaches the
+webview as a structured unavailable result, not a generic query error.
+
+**Outcome:**
+
+- Collection View (all tabs), Document View and the Cluster Dashboard resolve their client per operation
+  through a binding.
+- They show an unavailable state (C-5) with a dimmed view, Close view, and a repair action when supported.
+- They keep all user state.
+- They never apply stale results.
+- They never run under another identity.
+
+**Read first:**
+
+- the webview-trpc-messaging and react-webview-architecture skills;
+- `collectionViewRouter.ts`, `indexesTab/indexViewRouter.ts`, `queryInsights/queryInsightsRouter.ts`
+  and `queryInsightsEventsRouter.ts`;
+- `QueryInsightsAIService.ts` and `indexAdvisorCommands.ts`;
+- `documentsViewRouter.ts` and `documentView.tsx` (the `isDirty` state);
+- `clusterDashboardRouter.ts` and `ClusterDashboard.tsx`;
+- `collectionViewContext.ts`;
+- `openAppWebview.ts`;
+- `build/verification/browser/scenarios.ts` and `fixtures.ts`.
+
+PR 5 is one PR. Split it into host and webviews only if the diff becomes too large to review well, as the
+approved plan allows; the webview half then stacks on the host half without waiting for it to merge.
+
+### Host
+
+1. **Surface registry** (`src/documentdb/connectionSurfaces.ts`).
+   - A plain list per `clusterId`: `register({ clusterId, kind, disable(reason), dispose, isDirty? })`
+     returns a disposable.
+   - Collection View, Document View and the Dashboard register when they open and unregister on
+     `onDisposed`.
+   - Only teardown reads it (WI-7). Shells and the playground do not register (WI-2).
+2. **Binding resolution.**
+   - `resolveBoundClient(binding, { background? })` has two outcomes:
+     - **the same fingerprint:** return the cluster's current client, whatever its generation. Replacing a
+       client for the same identity is transparent: no re-run and no notice (decision 0010). If there is
+       no client and the cluster is not latched, `getClient` reconnects silently, pinned to
+       `lastVerifiedIdentity`;
+     - **a different fingerprint, or a latched cluster:** throw `ConnectionUnavailableError(reason)`.
+   - A surface **never** prompts (C-6).
+   - Router procedures run their operations through `runWithClient` (WI-5 step 3), so failures **during**
+     the operation are classified too, and return a structured `{ unavailable: { reason, text, action } }`
+     result instead of an error (F-12).
+   - **No regression for tunneled connections** (Kubernetes `ClusterIP` through port-forward). Creating a
+     new generation from this path may not do less than today's tree path, and it does not re-create
+     tunnels. A tab whose tunnel died behaves as it does today: it fails transiently until a tree expand
+     restores the tunnel. Re-creating the tunnel outside the tree is #1105.
+3. **`ClusterSession`.**
+   - It stops holding a `ClustersClient`, and stores the binding instead.
+   - `getClient()` becomes an `async` resolve.
+   - Update its callers:
+     - the Collection View router;
+     - the Query Insights routers;
+     - `QueryInsightsAIService`;
+     - `indexAdvisorCommands`.
+4. **Routers without a session.**
+   - Document View, the index router and the Dashboard capture the binding when the panel opens (in the
+     controller's config and tRPC context), and resolve it for every operation.
+   - Re-run the grep from the approved plan, and list every converted call site in Progress.
+5. **Writes.**
+   - Save document, inserts and deletes, and index create, drop, hide and unhide.
+   - The extension **never resubmits** a write; that is OT-4's "not replayed". A failed write is reported
+     as it is today, and never with text that claims the write was not applied: when the reply was lost,
+     the server may have applied it (F-22). The driver's own retryable writes (`retryWrites`) stay as they are: the server
+     deduplicates them by design, and RU connection strings disable them.
+   - Test that one application-level submission results in exactly one call to the driver.
+6. **Stale results.**
+   - Every request records the C-6 **epoch** when it starts.
+   - **Before any host-side mutation**, check once that the epoch is unchanged, that the binding still
+     resolves to the same fingerprint, and that the cluster is not latched. Otherwise drop the result.
+     Disconnect, Reconnect and every eviction bump the epoch, so a reply that started before a Disconnect
+     is dropped even after a Reconnect as the same user. That covers `ClusterSession`'s
+     `_currentRawDocuments`, its query caches, the Query Insights caches and `SchemaStore` updates. A stale
+     result must not change host state at all.
+7. Every router error path uses `addEstablishedConnectionContext` (WI-4).
+
+### Webviews
+
+1. **Shared UI.**
+   - A feature-local `DisconnectedOverlay` uses a controlled Fluent `Dialog` to dim the webview
+     and show the host-provided reason in the center. Show **Close view** and at most one supported
+     repair action (decision 0016). Focus stays in the dialog; Escape and backdrop clicks do not
+     dismiss it or close the view.
+   - It shows when a procedure returns `unavailable`, or when the host's `disable(reason)` sends its one
+     message to the panel over the existing webview channel.
+   - Put it in the shared webview components folder, and run the detecting-accessibility-issues skill on
+     it.
+2. **Disabling.**
+   - While the overlay shows, every action that talks to the server is disabled: run query, paging,
+     refresh, save, delete, insert, index actions, Query Insights stages and AI calls.
+   - The underlying view is inert. Editors stay mounted and retain their contents and dirty state.
+   - A response that arrives while the overlay shows is ignored.
+   - **A reply never overwrites a newer edit.** The Document View applies a save or load reply to the editor
+     only if the editor content has not changed since the request was sent; otherwise it keeps the edit and
+     stays dirty. Today's save handler (`documentView.tsx`) replaces the content and clears `isDirty`
+     unconditionally. The Collection View applies a page only for the latest query request it sent.
+3. **What each view keeps.**
+   - **Collection View:** query text, filter, sort, projection, page number and size, the selected tab,
+     and the Query Insights results as they were.
+   - **Document View:** the dirty editor content and `isDirty`.
+   - **Dashboard:** the last data (WI-8 stops the polling).
+4. **Actions.**
+   - **Retry:** resolve only the original fingerprint, silently and without clearing a latch.
+     After a same-identity repair in the tree, recovery removes the overlay without replaying the
+     failed operation. The live region announces "Reconnected"; there is no out-of-date notice
+     (decision 0010; see #1106). Sign-in and credential changes stay in the tree.
+   - **Close view:** the only action after an identity change or removal. Reopen from the tree
+     to use a different identity. A dirty Document View warns that closing discards unsaved
+     changes; do not open a second prompt (decision 0017).
+5. **L2-dev scenarios** (`scenarios.ts` and `fixtures.ts`):
+   - `collectionView/disconnected-signInRequired`: query text kept, Run disabled, no host calls when
+     Run is clicked;
+   - `documentView/disconnected-dirty`: edit kept, Save disabled;
+   - `clusterDashboard/disconnected`;
+   - a scenario that injects a disconnect after typing and then delivers a page response: the applied
+     results are not overwritten;
+   - `documentView/stale-save-after-reconnect`: send Save, Disconnect, Reconnect, edit again, then deliver
+     the old save reply: the new edit stays and the view stays dirty.
+   - Run them with the browser scenario config. Screenshots are artifacts, not baselines.
+
+**Transfers:** do not change how copy, paste or export work (approved plan). One addition: when Collection
+View starts an import or export, it passes its binding's fingerprint in the command arguments (F-23). The
+command checks it once, where it takes the WI-7 lease and before its first `getClient`. A mismatch stops
+with `credentialsChanged` and nothing is written. Commands started from the tree carry no fingerprint and
+behave as today.
+
+**Tests:**
+
+- router tests for both resolution outcomes on each converted router;
+- `ClusterSession` no longer stores a client (a type-level or structural test);
+- a stale result is dropped before any host-side mutation, including a reply that started before a
+  Disconnect and arrives after a Reconnect as the same user;
+- the webview ignores a response that arrives while the overlay shows;
+- one submission for a write whose reply is lost;
+- an import started from Collection View as identity A, with its file picker left open while the cluster
+  moves to B, writes nothing until the user starts it again;
+- the scenarios above.
+
+**Done when:**
+
+- Case 1 is green;
+- the scenarios pass;
+- OT-1 and OT-3(a) can be reproduced with the WI-4 hook.
+
+**Progress:**
+
+- **Host foundation:** Started PR5 from verified PR4 `d422d065b` while the independent
+  packaged-worker smoke test is pending. Added the disposable, cluster-scoped registry.
+  The bound resolver permits a new generation of the same identity and refuses to start
+  or use a client for a changed identity. `runWithClient` uses that resolver and reports
+  startup credential rejection without submitting the operation (PR4 review N1). Build and
+  86 focused tests passed.
+- **Collection View host slice:** `ClusterSession` holds a binding instead of a client.
+  Collection View, Query Insights, and the index advisor resolve the client per operation.
+  Check the epoch, latch, and identity before applying results to session caches. Build
+  and 193 focused tests passed. Procedure response shapes are unchanged for now; structured
+  unavailable results and the remaining panels are subsequent WI-6 slices.
+- **Webview design decision:** After the advisor's banner draft, the operator chose the
+  full-view disabled overlay in [decision 0016](../decisions.md#0016-keep-disconnected-webviews-open-under-a-full-view-overlay).
+  It keeps the content mounted and inert, uses a polite announcement, and shows only Close
+  when there is no supported repair. The shared component builds and passed its focused
+  test; panels are not yet wired. Keep both planned stale-reply browser scenarios.
+- **Document View and Dashboard host slice:** Both capture their binding on the host.
+  Document reads and saves resolve per operation, and a stale save cannot update the tab
+  title or show confirmation. Dashboard database calls use the binding; forwarded commands
+  check it before dispatch. Build and 35 focused host and overlay tests passed together.
+- **Document View overlay:** The panel receives structured unavailable replies or a typed
+  disable message. It stays open with the draft intact and offers explicit Close and supported
+  repairs. Dismissing sign-in does not report recovery; a different account requires an explicit
+  rebind. A stale Reconnect cannot clear a Remove latch. Build and 26 focused tests passed.
+  The default, dirty-disconnect, and stale-save-after-reconnect scenarios passed in dark,
+  light, and high-contrast themes. The two recovery scenarios each sent one save and no
+  automatic replay.
+- **Dashboard overlay:** Added structured unavailable replies, registration, and explicit
+  recovery. The disabled view keeps its last inventory and filter, and does not submit
+  automatic requests while the overlay is visible. The build, 118 focused view tests, and
+  66 browser harness tests passed. Default and disconnected Dashboard scenarios passed in
+  dark, light, and high-contrast themes. Next: Collection View recovery and bound handoffs.
+- **Transfer command guard:** Import and export can receive the Collection View's host-only
+  binding. After the file picker, they resolve that identity before opening a stream or writing.
+  A bound import keeps its original client for every batch; tree-originated transfers keep their
+  existing behavior. The build and 91 focused tests passed, including an identity change while
+  the import picker is open. Collection View command forwarding and WI-7 task leases are separate.
+- **Collection View overlay:** Documents, Indexes and Query Insights share the view's connection
+  binding. The view preserves its query and applied results, returns typed unavailable responses,
+  and forwards the initiating binding to imports and exports. The sign-in and late-page browser
+  scenarios passed in all three themes before the dialog refinement. After adopting Fluent Dialog,
+  all eight dark-theme scenarios for Collection View, Document View and Dashboard passed.
+  The dialog uses **Disconnected** for an explicit disconnect, **Connection lost** for an
+  unreachable connection, and **Close view** for explicit disposal.
+- **Final recovery design:** Decision 0017 supersedes the earlier in-view repair and rebind
+  experiments. The operator approved a short status title, separate next-step text, and
+  **Retry** beside **Close view** in an interactive Collection View preview on 2026-11-24.
+  Credential repair stays in the tree; Retry keeps the original identity and never resubmits an
+  operation. The dirty Document View warning stays in the dialog, without another prompt.
+- **OP-4 partial live evidence (`1.1.1-alpha.2`):** The operator switched between Entra and invalid
+  username/password credentials rather than testing two valid Native users. They saw Dashboard
+  move from Retry/Close view to Close view only as the identity change was recognized. Collection
+  View went directly to Close view only on the next query.
+- **OP-4 cleared (`1.1.1-alpha.3`, 2026-11-24):** The operator reported that silent Entra renewal
+  passed and explicitly lifted the gate without running the same-user password-only rotation test.
+  The earlier authentication-change result is accepted as the identity-guard evidence.
+  OP-5 still covers **Keep open (disabled)** and the pushed disable notification.
+
+---
+
+## WI-7: Teardown, Disconnect, Remove and Update Credentials (PR 6)
+
+**Outcome:**
+
+- Disconnect and Remove share teardown. Saved edits share the task fence and resource cleanup,
+  but keep old views locked without asking to close them (decision 0018).
+- Task conflicts block teardown or saving an edit. Dirty editors are checked before Close all.
+- It covers every per-cluster resource.
+- **What it guarantees** (F-22: closing a client cancels nothing already sent):
+  - no **new** submission under the old binding after the latch is set;
+  - no automatic replay of anything;
+  - no stale reply changes host state or the UI (WI-6 step 6 and the webview rule);
+  - no message claims that an unacknowledged write was not applied.
+
+  Operations already in flight may complete or fail; whatever happens is reported normally. Shell and
+  playground workers are stopped. Tasks, exports and imports are protected by the conflict check.
+
+  This is the right level for an interactive tool; do not build per-operation admission control.
+
+**Read first:**
+
+- `removeConnection.ts`;
+- `resourceUsageHelper.ts` and `taskService.ts` (`getConflictingTasks`);
+- `CopyPasteCollectionTask.ts` and `CopyIndexesTask.ts` (`getUsedResources`);
+- `exportDocuments.ts` and `importDocuments.ts`;
+- `deleteFolder/` (`ExecuteStep.ts`, `VerifyNoConflictsStep.ts`);
+- `storageService.ts` `push` (F-21);
+- `updateCredentials.ts`, including the D12 modal;
+- `updateConnectionString.ts`;
+- `CredentialCache.ts`, `entraTokenFailures.ts` and `SchemaStore.clearCluster`;
+- the WI-6 registry;
+- `switchAtlasViewMode.ts` (the `globalState` pattern).
+
+**CP-4 first:** the teardown order, T-2 and the export and import lease.
+
+**Steps:**
+
+1. **Export and import lease (A5).**
+   - Add `TaskService.acquireResourceLease(resource, label)`, which returns a disposable.
+     `getConflictingTasks` includes active leases.
+   - `exportDocuments.ts` holds the lease for the whole export, and `importDocuments.ts` for the whole
+     import (from the first `getClient` to the last flushed batch), on the target collection.
+   - Copy/paste and copy-indexes are tasks already and need no lease (F-9).
+   - `acquireResourceLease`, and starting a task, are refused while the cluster is latched (C-6), with the
+     latch's reason. The latch is what keeps new work out during a credential save (step 5).
+   - Test that export and import each conflict with Disconnect of their cluster and with Delete
+     Collection of their collection, and that an unrelated cluster does not.
+2. **Teardown** (`src/documentdb/connectionTeardown.ts`): plain functions, with no reservation. The latch
+   is the only thing that can be undone, and only Update Credentials ever undoes it (step 5). Disconnect
+   and Remove call `confirmTeardown` and `commitTeardown` back to back.
+   - **`confirmTeardown(clusterId, intent)`**, which may prompt and may be cancelled. It changes nothing:
+     1. **Conflicts:** task and lease conflicts through `checkCanProceedAndInformUser`. On a conflict,
+        stop; the conflicting task is named.
+     2. **Choice:** Close all or Keep open (A2), only when surfaces are registered and the setting is
+        `ask`. With the setting at `closeAll` or `keepOpenDisabled`, use that value without a modal.
+     3. **Dirty check** (only for `close`): if any registered surface reports `isDirty`, ask for
+        confirmation. Cancelling leaves every panel, draft and connection intact, also when Remove started
+        the teardown.
+   - **`latchForTeardown(clusterId, reason)`**, synchronous: recheck conflicts with `getConflictingTasks`,
+     because a copy, export or import may have started while a prompt was open; on a conflict return
+     `false` and change nothing. Otherwise set the latch (C-6), which already increases the epoch,
+     with no `await` in between, and return `true`. From here on no new task, lease or client can start.
+   - **`commitTeardown(clusterId, { reason, choice, dropCredentials })`**, which has no prompts:
+     1. Call `latchForTeardown` unless the caller already did (step 5). On a conflict, stop and inform the
+        user; nothing has changed.
+     2. **Surfaces:** for Keep open, call each registered surface's `disable(reason)`; for Close all,
+        dispose them.
+     3. **Shells** (found through `getRegisteredShellTerminals`): print "Disconnected", then stop the
+        worker. **Playground:** stop the worker. The latch keeps both from respawning (F-15).
+     4. Close the client (`deleteClient`). Clear the Entra failure registry and `SchemaStore.clearCluster`.
+        Clear the `CredentialCache` entry and `lastVerifiedIdentity` **only** when `dropCredentials` is
+        set (Remove). Disconnect keeps both (A3, decision 0011), so tree Reconnect and then tab Retry
+        can reuse the same identity.
+     5. Refresh the tree (T-2).
+   - **Never touched:** VS Code auth sessions, the managed identity cache, the ARM cache.
+   - **Keys:** every store keeps its current `clusterId` matching. Provider-specific equality is out of
+     scope (decision 0009, #1105). Do not add case folding or unfolding in this iteration.
+   - **Kubernetes tunnels:** the teardown does not stop port-forward tunnels, and does not change how
+     removing a kubeconfig source works (#1105).
+3. **Disconnect command** (`vscode-documentdb.command.disconnect`).
+   - Add a `connected` tag to the cluster item's `contextValue` while a client exists, and refresh it when
+     the item refreshes. Use `viewItem` regex menus in the Connections, Azure Resources and Discovery
+     views.
+   - **The choice (A2):**
+     - Use a modal warning: `showWarningMessage` with `{ modal: true, detail }` and the two buttons Close
+       all and Keep open (disabled). The built-in Cancel cancels the whole operation.
+     - The modal cannot pre-select a button, and nothing is remembered.
+     - Add a setting, proposed as `documentDB.connections.openTabsOnDisconnect`, with the enum `ask`
+       (default), `closeAll` and `keepOpenDisabled`. `documentDB.shell.multiLinePasteBehavior` is the
+       precedent for an enum with an `ask` default and `enumDescriptions`.
+     - Follow [settings/README.md](../../settings/README.md) for the group, `order` and the ID naming
+       rules. If an existing group fits better than `connections`, use it and record the final ID in
+       Progress.
+     - The same choice applies to Remove Connection. Saved connection edits keep old views open
+       and locked without asking for a tab choice (decision 0018).
+     - The setting never skips the unsaved-edits confirmation: when Close all is chosen and an editor is
+       dirty, that confirmation still appears.
+     - Skip the modal when no surfaces are registered.
+   - Add a disconnected cluster node child action, "Reconnect" (T-2). Check the `userDisconnected`
+     latch before reusing cached credentials when building the children. The action clears only
+     that latch and refreshes the node without changing its ID; normal expansion connects.
+4. **Remove Connection and folder deletion.**
+   - Remove Connection: teardown with reason `connectionRemoved` and `dropCredentials: true`, then delete
+     the stored connection and clear the schema, as today. Keep the existing confirmation.
+   - **Deleting a folder** (F-23) runs the same teardown for **every connected descendant**, with **one**
+     combined `confirmTeardown` for all of them (conflicts, choice, dirty check), not one modal per
+     connection. It runs before `deleteFolder/ExecuteStep.ts` deletes anything. Cancelling leaves the
+     folder, its connections, panels, drafts and shells intact. Descendants without a client or open
+     surface still get their `CredentialCache` entry and schema cleared, as Remove does.
+5. **Update Credentials and Update Connection String.**
+   - Follow decision 0018: do not classify edits into same- and different-fingerprint recovery
+     flows or ask whether to close tabs. Check for task conflicts, fence new operations while
+     persisting the edit, and make the save result explicit (F-19).
+   - **Storage decides, not the success flag** (F-21). Compare the relevant before/after stored
+     connection settings in memory, including credentials; never log or persist the comparison.
+     If storage is unchanged, release the save fence without retiring the old views. Preserve
+     existing failure reporting for a failed save.
+   - If storage changed, retire the old bindings, invalidate the old client and cached settings,
+     and push `credentialsChanged` to the affected views. They keep their contents but cannot
+     Retry; new views use the saved settings. If the save reported a failure, warn that the
+     change may be incomplete. Fence concurrent startup so it cannot publish the old credentials.
+   - Keep the existing identity checks for other sources of change. Silent token renewal, a
+     same-account sign-in and reconnect with unchanged settings do not retire old bindings.
+   - Add a **Disconnect** button to the D12 modal for open shells.
+6. **Telemetry.**
+   - One `connection.disconnect` event with `source` (`command`, `remove`, `credentialsChanged`),
+     `surfacesChoice`, and counts of surfaces, shells and the playground, plus `blockedByTask`.
+   - No identifiers.
+
+**Tests:**
+
+- teardown for each surface type;
+- blocked for a copy source, a copy destination, an export source and an import target; an unrelated
+  cluster is not blocked; Disconnect succeeds once the task is done or stopped;
+- a token response that arrives after Disconnect is ignored;
+- Reconnect uses the current credentials and cloud settings;
+- after Disconnect, tree Reconnect followed by tab Retry succeeds without the tree reloading
+  credentials and without a prompt (native, Entra and discovery with a typed password); after Remove,
+  the `CredentialCache` entry and `lastVerifiedIdentity` are gone;
+- Remove reuses the same teardown;
+- cancelling the dirty prompt changes nothing;
+- a copy, export or import that starts while the Disconnect prompt is open stops the commit, and nothing
+  changes;
+- a shell or playground left open after Disconnect does not respawn on its next command;
+- Disconnect while a query or save is in flight: whatever the operation's outcome, it is reported, its
+  reply changes no state, and nothing new is submitted under the old binding;
+- an import attempted while Update Credentials is saving is refused with the latch's reason, and nothing
+  is half-applied;
+- a save that fails before any write keeps the old binding and clears the latch;
+- a cancelled or identical edit keeps old views usable; a saved password-only edit permanently
+  locks existing views with their contents kept and no tab-choice prompt;
+- a save whose metadata write fails after the secret write ends in teardown under `credentialsChanged`,
+  never in a split state (old client, new stored secrets);
+- deleting a folder with a connected child that has a dirty Document View and a live shell: cancelling
+  leaves everything intact; confirming leaves no usable client, cached credentials, shell or tab for the
+  child;
+- a concurrent connect during Update Credentials does not publish the old credentials.
+
+**Done when:** Case 1 is green, and the OT-7 flows can be reproduced on a dev build.
+
+**Progress:**
+
+- **CP-4 verdict:** Opus 5.5 approved the teardown order, T-2 and A5 at about 85% confidence.
+  Register tasks and acquire export/import leases synchronously against the latch. Take a lease
+  before client resolution, release it in `finally`, and include it in folder-delete conflict
+  queries. Recheck conflicts immediately before latching; use the epoch bump already in
+  `ClustersClient.latch`. For saved edits, keep the fence through persistence and retirement,
+  then restore only the applicable prior hold. Enforce retirement on the host as well as in the
+  dialog: a password-only edit does not change the fingerprint. The proposed per-cluster
+  generation watermark is an implementation candidate to validate in the saved-edit slice,
+  not a new public contract. No operator decision is needed for the lease slice.
+- **WI-7 S1:** Import and export hold a collection lease from client resolution through
+  completion. Task admission checks the same latch as client startup. Existing conflict queries
+  see leases, including the folder-delete check. The task, transfer and Dashboard-bound command
+  test suites passed together (18 tests).
+- **WI-7 S2a:** Disconnect now checks task conflicts and dirty views before teardown, with a
+  synchronous conflict recheck before latching. It stops matching Shell and Playground workers,
+  keeps credentials and the verified identity, and refreshes the same tree node with one
+  **Connect** action. The integrated build and 225 focused tests passed. Remove and saved edits
+  are not wired into teardown yet.
+- **WI-7 S2b:** Remove and folder deletion keep their existing deletion confirmation and share
+  one tab choice for the affected connections. The batch rechecks and fences the entire set
+  before disposal or deletion. A failed storage delete leaves the surviving connection
+  disconnected rather than stuck in the removed state. Build and 30 focused tests passed.
+- **WI-7 S3:** The save fence reports a retryable update-in-progress state; only a changed
+  stored value permanently retires the older generations. This also covers password-only and
+  partial secret writes without adding passwords to the fingerprint. Existing views remain
+  copyable. Same-settings reconnect can still follow a newer generation. Build and 196
+  focused tests passed.
+- **OP-5 (`1.1.1-alpha.4`):** The operator reported that Keep open, Close all with a dirty
+  draft, Remove, and the saved-edit lock passed. Disconnect during import or export was
+  not tested live; it is checked in the real transfer-lease and teardown preflight paths
+  by automated tests. Operator feedback: label the tree action **Reconnect**, use the
+  default Fluent layout with an instant backdrop, and clarify that an old view is bound
+  to its previous connection settings.
+- **PR6 review:** The operator kept the single dirty check at **Close all** confirmation
+  ([review thread](https://github.com/microsoft/vscode-documentdb/pull/1130#discussion_r4694258852)).
+  In a batch removal, a view edited after that check still closes; there is no second prompt.
+- **Carry-forward from WI-4d:** An explicit Update Credentials that changes the tenant must
+  replace or clear the old verified Entra identity so the next connect can use the saved
+  tenant (decision 0011). Automatic reconnect remains pinned until that explicit update.
+
+---
+
+## WI-8: Cluster Dashboard health polling (PR 6)
+
+**Outcome:** the poll stops when the cluster is unavailable, shows the overlay, and resumes with exactly
+one loop.
+
+**Steps:**
+
+1. `measureRtt` runs through `runWithClient` with `background: true`, so it never replaces a client
+   (T-4). It returns a structured result, `{ ok, rttMs } | { unavailable }`, instead of throwing.
+   - **Classify before the sampler stringifies (F-24).** `sampleClusterHealth` keeps the error object
+     of a failed command long enough to classify it. A terminal kind (auth, closed client) is rethrown so
+     that `runWithClient` returns `unavailable`. An unsupported command, such as `serverStatus` on some
+     servers, stays an ordinary partial sample with its entry in `errors`.
+2. The webview poll effect stops on `unavailable` or a `disable` message, even when the dialog is
+   dismissed to copy contents. It starts again only after Retry succeeds. React's effect cleanup
+   keeps it to one loop; no extra loop token.
+3. A ping that resolves while the overlay shows is ignored (the WI-6 webview rule), so it cannot clear the
+   overlay.
+4. Visibility pause and backoff are the rest of #1091. Do them here only if they are trivial; otherwise
+   leave them to #1091.
+
+**Tests** (fake timers):
+
+- no client lookups on ticks or on reveal after Disconnect;
+- a late success does not clear the overlay;
+- reconnecting starts exactly one loop;
+- `signInRequired` and `credentialsRejected` stop the loop after one tick, including when they happen
+  **inside** the sampler's ping with the tree untouched;
+- an unsupported `serverStatus` still yields a partial sample and keeps polling.
+
+**Progress:**
+
+- The Dashboard polls with a background-only binding. Auth and closed-client errors from
+  inside the sampler return an unavailable result; unsupported `serverStatus` still returns a
+  partial sample. Build and 131 focused tests passed. The browser fixture showed no polls
+  during disconnect, copy mode or reveal; Retry restarted one loop. A held ping released
+  after disconnect did not clear the dialog.
+
+---
+
+## WI-9: Token renewal telemetry (PR 7)
+
+**Outcome:** the release can be judged from events that need no joins and no persistent identifiers.
+
+**Steps:**
+
+1. **`connection.tokenRenewal`.**
+   - Emitted from the C-3 observer (host client) and from the host side of the shell and playground
+     relays.
+   - Once per completed post-startup Entra **database** token lookup. The initial acquisition is excluded.
+   - Properties: `surface` (`extension`, `shell`, `playground`) and `renewalOutcome` (`returned`,
+     `noSession`, `identityMismatch`, `failed`).
+   - One measurement: `tokenLifetimeSeconds`. Omit it when unknown; never send 0 or the worker's fallback
+     TTL.
+   - Never send a token, hash, claim, account, tenant, cluster ID, fingerprint or host name.
+2. **Recovery, without a new event.** Existing `connect`, `rpc` and `getchildren` events carry
+   `connectionAgeMs` and `clientGeneration` (WI-4 `addEstablishedConnectionContext`). A successful
+   operation on a generation above 1 shows that a replacement worked, and late auth, socket and
+   closed-client failures should drop against the baseline.
+3. **ARM.** Report challenge outcomes separately from database renewal. Confirm that the final ARM request
+   succeeded, not just that a token was acquired.
+4. **Volume.**
+   - `connection.tokenRenewal` is a background event. If the dashboards keep an event-scope exclusion list
+     for "active users" totals, add it there.
+   - Check the expected volume (about one renewal per active Entra client per hour) against the
+     telemetry budget.
+5. **Queries.**
+   - Commit runnable Kusto queries in a durable `../telemetry.md` at the feature root:
+     - daily renewal outcomes;
+     - p50/p90 of the token lifetime;
+     - successful operations on a replaced client (generation above 1);
+     - late auth, socket and closed-client failures against the pre-release baseline, using the same
+       exposure denominator.
+   - Show sample counts and missing timing data next to every percentile.
+   - If the operator's telemetry dashboards worktree is available, port the queries there too.
+6. **Fake-clock test** for the sequence returned → returned → noSession:
+   - check counts and units;
+   - include an opaque token (no lifetime) and a database rejection after the lookup.
+
+**Done when:**
+
+- the tests are green;
+- the queries have run once against pre-release ingestion (or they are marked "pending ingestion" in
+  `# Outcome`).
+
+**Progress:**
+
+- The WI-9 commit records only checked post-startup Entra database lookups. Host lookup eligibility
+  follows the published client; worker eligibility is captured when the ready or executing worker
+  requests the token. Neither uses the first callback as a startup proxy.
+- Case 1 passed: `npm run build` and 349 focused tests in 8 files. Ingestion is **pending**; the
+  [telemetry queries](../telemetry.md) are ready to run. The dashboard worktree has unrelated
+  changes in progress and was left untouched.
+- PR7 review superseded the before/after comparison in items 2 and 5. Auth and closed-client
+  unavailability are not measured equivalently across releases. The operator deferred the
+  comparison and kept descriptive telemetry for CP-5 ([decision 0020](../decisions.md#0020-defer-the-cross-release-comparison-of-late-failures)).
+
+---
+
+## WI-10: Documentation (PR 7)
+
+1. **User manual:**
+   - add `docs/user-manual/connection-lifecycle.md`, or extend `connecting-to-databases.md` (choose one and
+     record the choice). It covers Disconnect, Sign in again, what a disconnected tab means and how to
+     resume, and what Update Credentials does to open sessions;
+   - link it from `interactive-shell.md`, `query-playground.md` and `managing-azure-discovery.md`;
+   - user-manual pages and release notes use **separate copies** of their images.
+2. **Release notes** for 1.2.0 (writing-release-notes skill). Screenshots go through the
+   documentation-screenshots skill.
+3. **Skills:**
+   - tree-cluster-architecture: "resolve the client per operation through a binding; never hold a
+     `ClustersClient`", the recovery-children order, and the `connected` context tag;
+   - error-translation: the C-2 errors and the `entraSignInRequired` provider.
+4. **Feature docs:**
+   - feature `README.md`: status, code map and timeline;
+   - `decisions.md`: entries for A1–A6 once confirmed, T-1 and anything else the checkpoints decided;
+   - add `design.md` if the binding, state and teardown design outgrew the README.
+5. **Preview** the docs site locally (previewing-docs-site skill).
+
+**Progress:**
+
+- The operator chose text-only 1.2.0 release notes. The user manual extends
+  `connecting-to-databases.md` rather than adding a second page.
+- The local GitHub Pages build rendered the manual and draft release notes. The three
+  manual links and the release index link resolve, and the internal feature docs stay excluded.
+
+---
+
+## PR F: `feature/connection-lifecycle` → `main`
+
+1. Sync `main` into the feature branch through a pure merge PR (approved plan rule 5).
+2. Run Case 2 on the feature branch head.
+3. Run OT-1 to OT-7 on the packaged VSIX, with at least one real wait of two hours or more. Record each
+   result, and the evidence the approved plan requires, in `# Outcome`. In addition:
+   - **First write after expiry:** prepare an edit in Document View on a connection whose string
+     sets `retrywrites=false`. After at least two hours idle, make **Save** the first database
+     operation; do not run a read beforehand. Record the result and any message. Only if this
+     fails, fix the message to tell the user to try again without claiming the write was not
+     applied (F-22). Do not replay writes or add a pre-write probe in this PR; a probe would
+     require a separate decision next to [0010](../decisions.md).
+   - **Continuous use across expiry:** run a query every few minutes for about 90 minutes
+     spanning a token expiry. Record whether operations continue without an interactive prompt.
+   - **Sleep/wake and workers:** sleep and wake across a token expiry and exercise the connection
+     after waking. Exercise Shell and Playground after expiry as separate worker paths.
+   - **OT-1:** check the shell separately. After the wait, its worker's own connection must renew without
+     a prompt; record the token relay in the output channel, never the token.
+   - **OT-7:** also Disconnect while a query or save is in flight. Whatever its outcome, it is reported;
+     its reply does not change the open view; nothing new is submitted under the old connection; and no
+     message claims that an unacknowledged save was not applied (F-22).
+   - **OT-1 and OT-2 evidence:** a callback trace line after the wait or the sign-out, on a fresh socket
+     (`maxIdleTimeMS`), not only a successful query. Also Disconnect during an **import**: it must be
+     blocked before the Close/Keep prompt, and the import continues.
+4. CP-5 verdict, then open PR F. Its description carries `Fixes #n` for every issue the iteration
+   resolves in full (see the §0 issue table), and `Part of #n` for the rest.
+5. After the merge: for every linked issue that stays open, post the partial-fix comment (§0), summarizing
+   the whole iteration and what is left. Do the same on #1105 and #1106 for the work handed to them.
+6. Watch telemetry for about one week after the merge (WI-9 queries).
+
+# Outcome
+
+- **WI-9 telemetry: pending ingestion.** Run the [feature queries](../telemetry.md) on
+  pre-release data before CP-5, including `unavailableReason` on a typed webview response.
+  The cross-release trend is unmeasured for 1.2.0. Record the
+  packaged operator validation here at OP-6. The additional first-write, continuous-use and
+  sleep/wake and worker scenarios are pending operator verification on a packaged build.

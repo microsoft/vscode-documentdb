@@ -3,9 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { type DatabaseCollectionsResult } from '../../../../documentdb/utils/getClusterHealth';
+import {
+    type ConnectionUnavailableDetails,
+    isConnectionUnavailableResponse,
+} from '../../../_integration/connectionUnavailable';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
 
 export interface DatabaseCollectionsState {
@@ -14,6 +18,8 @@ export interface DatabaseCollectionsState {
     /** Time when the current database's collections were last read successfully. */
     lastUpdatedAt?: number;
     isLoading: boolean;
+    /** The current request was interrupted and is waiting for an explicit manual refresh. */
+    isInterrupted: boolean;
     /** True only when the table should be replaced by its skeleton. */
     isTableLoading: boolean;
     error: string | null;
@@ -30,7 +36,13 @@ export interface DatabaseCollectionsState {
  * Not cached across visits. A second look at a database is usually a second look *because*
  * something changed, and a cache would answer it with the figures from the first.
  */
-export function useDatabaseCollections(databaseName: string | null): DatabaseCollectionsState {
+export function useDatabaseCollections(
+    databaseName: string | null,
+    isSubmissionBlocked: () => boolean,
+    startOperation: (revealUnavailable?: boolean) => number | undefined,
+    isOperationCurrent: (revision: number) => boolean,
+    onUnavailable: (unavailable: ConnectionUnavailableDetails) => void,
+): DatabaseCollectionsState {
     // Bumped by `reload` so a refresh re-runs the effect for the same database. Background
     // reconciliation preserves the current rows; an explicit manual refresh shows a skeleton.
     const [request, setRequest] = useState<{ attempt: number; source: 'background' | 'manual' }>({
@@ -47,9 +59,15 @@ export function useDatabaseCollections(databaseName: string | null): DatabaseCol
 
     const trpcClient = useTrpcClient();
     const key = `${request.attempt}\u0000${databaseName ?? ''}`;
+    const abandonedKeys = useRef(new Set<string>());
+    const blocked = isSubmissionBlocked();
+    if (blocked && databaseName !== null && entry?.key !== key) {
+        abandonedKeys.current.add(key);
+    }
 
     useEffect(() => {
-        if (databaseName === null) {
+        const revision = startOperation();
+        if (databaseName === null || revision === undefined) {
             return;
         }
 
@@ -60,12 +78,24 @@ export function useDatabaseCollections(databaseName: string | null): DatabaseCol
         trpcClient.clusterDashboard.getDatabaseCollections
             .query({ databaseName, loadReason: request.source })
             .then((result) => {
-                if (!disposed) {
+                if (!disposed && isOperationCurrent(revision)) {
+                    if (isConnectionUnavailableResponse(result)) {
+                        setEntry((current) => ({
+                            key,
+                            databaseName,
+                            result: current?.databaseName === databaseName ? current.result : null,
+                            lastUpdatedAt: current?.databaseName === databaseName ? current.lastUpdatedAt : undefined,
+                            error: result.unavailable.detail,
+                        }));
+                        onUnavailable(result.unavailable);
+                        return;
+                    }
+                    abandonedKeys.current.delete(key);
                     setEntry({ key, databaseName, result, lastUpdatedAt: Date.now(), error: null });
                 }
             })
             .catch((reason: unknown) => {
-                if (!disposed) {
+                if (!disposed && isOperationCurrent(revision)) {
                     setEntry((current) => ({
                         key,
                         databaseName,
@@ -81,21 +111,33 @@ export function useDatabaseCollections(databaseName: string | null): DatabaseCol
             // one's table.
             disposed = true;
         };
-    }, [databaseName, key, request.source, trpcClient]);
+    }, [databaseName, isOperationCurrent, key, onUnavailable, request.source, startOperation, trpcClient]);
 
-    const reload = useCallback((source: 'background' | 'manual' = 'background'): void => {
-        setRequest((current) => ({ attempt: current.attempt + 1, source }));
-    }, []);
+    const reload = useCallback(
+        (source: 'background' | 'manual' = 'background'): void => {
+            if (startOperation(source === 'manual') === undefined || isSubmissionBlocked()) {
+                return;
+            }
+            if (source === 'background' && abandonedKeys.current.has(key)) {
+                return;
+            }
+            setRequest((current) => ({ attempt: current.attempt + 1, source }));
+        },
+        [isSubmissionBlocked, key, startOperation],
+    );
 
     const isCurrent = entry !== null && entry.key === key;
     const isSameDatabase = entry !== null && entry.databaseName === databaseName;
-    const isLoading = databaseName !== null && !isCurrent;
+    const isLoading = databaseName !== null && !isCurrent && !abandonedKeys.current.has(key);
+    const wasAbandoned = abandonedKeys.current.has(key);
 
     return {
         result: isSameDatabase ? entry.result : null,
         lastUpdatedAt: isSameDatabase ? entry.lastUpdatedAt : undefined,
         isLoading,
-        isTableLoading: databaseName !== null && (!isSameDatabase || (isLoading && request.source === 'manual')),
+        isInterrupted: wasAbandoned,
+        isTableLoading:
+            databaseName !== null && ((!isSameDatabase && !wasAbandoned) || (isLoading && request.source === 'manual')),
         error: isCurrent ? entry.error : null,
         reload,
     };

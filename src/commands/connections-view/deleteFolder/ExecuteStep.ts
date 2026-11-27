@@ -4,12 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
+import { withConnectionRemoval } from '../../../documentdb/connectionTeardown';
 import { ext } from '../../../extensionVariables';
 import { ConnectionStorageService, ItemType } from '../../../services/connectionStorageService';
 import {
     refreshParentInConnectionsView,
     withConnectionsViewProgress,
 } from '../../../tree/connections-view/connectionsViewHelpers';
+import { enumerateConnectionsInFolder } from '../verificationUtils';
 import { type DeleteFolderWizardContext } from './DeleteFolderWizardContext';
 
 /**
@@ -28,18 +30,20 @@ export class ExecuteStep extends AzureWizardExecuteStep<DeleteFolderWizardContex
         context.deletedFolders = 0;
         context.deletedConnections = 0;
 
-        await withConnectionsViewProgress(async () => {
-            await ext.state.showDeleting(context.folderItem.id, async () => {
-                // Recursively delete all descendants
-                await this.deleteRecursive(context, context.folderItem.storageId);
-
-                // Delete the folder itself (count as 1 more folder)
-                await ConnectionStorageService.delete(context.connectionType, context.folderItem.storageId);
-                context.deletedFolders++;
+        const ids = await enumerateConnectionsInFolder(context.folderItem.storageId, context.connectionType);
+        try {
+            await withConnectionRemoval(ids, async (removeConnection) => {
+                await withConnectionsViewProgress(async () => {
+                    await ext.state.showDeleting(context.folderItem.id, async () => {
+                        await this.deleteRecursive(context, context.folderItem.storageId, removeConnection);
+                        await ConnectionStorageService.delete(context.connectionType, context.folderItem.storageId);
+                        context.deletedFolders++;
+                    });
+                });
             });
-
+        } finally {
             refreshParentInConnectionsView(context.folderItem.id);
-        });
+        }
 
         // Record telemetry measurements
         context.telemetry.measurements.deletedFolders = context.deletedFolders;
@@ -52,19 +56,25 @@ export class ExecuteStep extends AzureWizardExecuteStep<DeleteFolderWizardContex
     /**
      * Recursively delete all descendants of a folder
      */
-    private async deleteRecursive(context: DeleteFolderWizardContext, parentId: string): Promise<void> {
+    private async deleteRecursive(
+        context: DeleteFolderWizardContext,
+        parentId: string,
+        removeConnection: (clusterId: string, deleteStored: () => Promise<void>) => Promise<void>,
+    ): Promise<void> {
         const children = await ConnectionStorageService.getChildren(parentId, context.connectionType);
 
         for (const child of children) {
             // Recursively delete child folders first
             if (child.properties.type === ItemType.Folder) {
-                await this.deleteRecursive(context, child.id);
+                await this.deleteRecursive(context, child.id, removeConnection);
+                await ConnectionStorageService.delete(context.connectionType, child.id);
                 context.deletedFolders++;
             } else {
+                await removeConnection(child.id, () =>
+                    ConnectionStorageService.delete(context.connectionType, child.id),
+                );
                 context.deletedConnections++;
             }
-            // Delete the child item
-            await ConnectionStorageService.delete(context.connectionType, child.id);
         }
     }
 

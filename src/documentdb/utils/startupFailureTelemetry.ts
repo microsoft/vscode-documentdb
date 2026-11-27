@@ -52,6 +52,9 @@ const CREDENTIALS_UNAVAILABLE_NAMES: ReadonlySet<string> = new Set([
 ]);
 const ENTRA_TOKEN_NAMES: ReadonlySet<string> = new Set([
     'EntraDestinationRejectedError',
+    'EntraIdentityMismatchError',
+    'EntraSignInRequiredError',
+    'TokenCallbackError',
     'TokenResourceResolutionError',
     'CredentialUnavailableError',
     'AuthenticationRequiredError',

@@ -66,6 +66,24 @@ describe('Shared browser fixture core', (): void => {
         ]);
     });
 
+    it('releases a held reply and drops an aborted request', async (): Promise<void> => {
+        const messages = vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
+        const path = 'localQuickStart.checkPort';
+        const api = fakeVsCodeApi({ [path]: { ...rpc[path], holdReply: true } }, [])();
+        api.postMessage({ id: 'aborted', op: { type: 'query', path } });
+        api.postMessage({ id: 'second', op: { type: 'query', path } });
+        api.postMessage({ id: 'aborted', op: { type: 'abort', path } });
+        await Promise.resolve();
+
+        expect(messages).not.toHaveBeenCalled();
+        expect(window.__harnessReleaseReply(path)).toBe(true);
+        expect(window.__harnessReleaseReply(path)).toBe(false);
+        expect(messages.mock.calls.map((call): unknown => call[0])).toEqual([
+            { id: 'second', result: port },
+            { id: 'second', complete: true },
+        ]);
+    });
+
     it('records escaping actions and answers only from fixtures without opening or copying anything', async (): Promise<void> => {
         const errors: string[] = [];
         const messages = vi.spyOn(window, 'postMessage').mockImplementation((): void => {});

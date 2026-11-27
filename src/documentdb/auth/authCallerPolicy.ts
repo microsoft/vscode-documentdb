@@ -3,6 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type VerifiedEntraIdentity } from './AuthHandler';
+import { type EntraTokenLookupObservation } from './tokenRenewalTelemetry';
+
 /**
  * Host-only callbacks that report the authentication phases in the order they really happen.
  *
@@ -27,15 +30,24 @@ export interface AuthPhaseObserver {
         readonly tenantId?: string;
     }): void;
     onTokenFailed?(error: unknown): void;
+    /** Host-only: summarize callback tokens immediately; never store or log them. */
+    onCallbackTokenObserved?(
+        observation:
+            | { readonly outcome: 'acquired'; readonly accessToken: string; readonly tenantId?: string }
+            | { readonly outcome: 'failed'; readonly error: unknown },
+    ): void;
 }
 
 /**
- * How the caller wants authentication to behave. Ordinary connects are interactive; connection
- * diagnostics are not, and never open sign-in UI.
+ * Whether the caller can open sign-in UI and, for Entra reconnect, which identity must be used.
  */
 export interface AuthCallerPolicy {
     readonly interactive: boolean;
+    readonly pinnedEntraIdentity?: VerifiedEntraIdentity;
     readonly observer?: AuthPhaseObserver;
+    /** Entra only. Returns the current client epoch, or undefined if renewal telemetry is not eligible. */
+    readonly getTokenLookupEpoch?: () => number | undefined;
+    readonly onTokenLookup?: (observation: EntraTokenLookupObservation) => void;
 }
 
 /**

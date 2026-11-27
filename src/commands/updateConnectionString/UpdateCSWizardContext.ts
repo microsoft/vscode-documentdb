@@ -16,4 +16,5 @@ export interface UpdateCSWizardContext extends IActionContext {
     originalConnectionString: string;
     newConnectionString?: string;
     connectionStringSaved?: boolean;
+    isRecoveryCurrent?: () => boolean;
 }

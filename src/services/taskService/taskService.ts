@@ -5,6 +5,8 @@
 
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { ClustersClient } from '../../documentdb/ClustersClient';
+import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
 import { ext } from '../../extensionVariables';
 import { recordSurveyActivity } from '../survey/SurveyService';
 import {
@@ -97,6 +99,25 @@ export interface TaskStateChangeEvent {
  */
 export function isTerminalState(state: TaskState): boolean {
     return state === TaskState.Completed || state === TaskState.Failed || state === TaskState.Stopped;
+}
+
+function getTaskUsedResources(task: Task): ResourceDefinition[] {
+    if (!('getUsedResources' in task) || typeof (task as ResourceTrackingTask).getUsedResources !== 'function') {
+        return [];
+    }
+    return (task as ResourceTrackingTask).getUsedResources();
+}
+
+function assertResourcesAdmitted(resources: ResourceDefinition[]): void {
+    for (const resource of resources) {
+        if (!resource.clusterId) {
+            continue;
+        }
+        const reason = ClustersClient.getLatchReason(resource.clusterId);
+        if (reason) {
+            throw new ConnectionUnavailableError(reason);
+        }
+    }
 }
 
 /**
@@ -269,6 +290,8 @@ export abstract class Task {
         if (this._status.state !== TaskState.Pending) {
             throw new Error(vscode.l10n.t('Cannot start task in state: {0}', this._status.state));
         }
+
+        assertResourcesAdmitted(getTaskUsedResources(this));
 
         ext.outputChannel.appendLine(vscode.l10n.t("○ Task '{taskName}' initializing...", { taskName: this.name }));
 
@@ -497,6 +520,15 @@ export interface TaskService {
     registerTask(task: Task): void;
 
     /**
+     * Synchronously acquires a resource lease for work that is not represented by a Task.
+     *
+     * @param resource The resource used by the operation.
+     * @param label A user-readable operation label used in conflict reporting.
+     * @returns A disposable that releases the lease. Disposal is idempotent.
+     */
+    acquireResourceLease(resource: ResourceDefinition, label: string): vscode.Disposable;
+
+    /**
      * Retrieves a task by its ID.
      *
      * @param id The unique identifier of the task.
@@ -585,6 +617,10 @@ export interface TaskService {
 class TaskServiceImpl implements TaskService {
     private readonly tasks = new Map<string, Task>();
     private readonly taskSubscriptions = new Map<string, vscode.Disposable[]>();
+    private readonly resourceLeases = new Map<
+        string,
+        { readonly task: TaskInfo; readonly resource: ResourceDefinition }
+    >();
 
     // Event emitters for the service events
     private readonly _onDidRegisterTask = new vscode.EventEmitter<Task>();
@@ -600,7 +636,11 @@ class TaskServiceImpl implements TaskService {
     public registerTask(task: Task): void {
         if (this.tasks.has(task.id)) {
             throw new Error(vscode.l10n.t('Task with ID {0} already exists', task.id));
-        } // Subscribe to task events and aggregate them
+        }
+
+        assertResourcesAdmitted(getTaskUsedResources(task));
+
+        // Subscribe to task events and aggregate them
         const subscriptions: vscode.Disposable[] = [
             task.onDidChangeStatus((status) => {
                 this._onDidChangeTaskStatus.fire({ taskId: task.id, status });
@@ -613,6 +653,30 @@ class TaskServiceImpl implements TaskService {
         this.tasks.set(task.id, task);
         this.taskSubscriptions.set(task.id, subscriptions); // Notify listeners about the new task
         this._onDidRegisterTask.fire(task);
+    }
+
+    public acquireResourceLease(resource: ResourceDefinition, label: string): vscode.Disposable {
+        assertResourcesAdmitted([resource]);
+
+        const leaseId = `resource-lease-${crypto.randomUUID()}`;
+        this.resourceLeases.set(leaseId, {
+            task: {
+                taskId: leaseId,
+                taskName: label,
+                taskType: 'resource-lease',
+            },
+            resource: { ...resource },
+        });
+
+        let disposed = false;
+        return {
+            dispose: (): void => {
+                if (!disposed) {
+                    disposed = true;
+                    this.resourceLeases.delete(leaseId);
+                }
+            },
+        };
     }
 
     public getTask(id: string): Task | undefined {
@@ -654,20 +718,23 @@ class TaskServiceImpl implements TaskService {
         });
 
         for (const task of activeTasks) {
-            // Check if task implements resource tracking
-            if ('getUsedResources' in task && typeof (task as ResourceTrackingTask).getUsedResources === 'function') {
-                const usedResources = (task as ResourceTrackingTask).getUsedResources();
+            const usedResources = getTaskUsedResources(task);
 
-                // Check if any of the task's resources conflict with the requested resource
-                const hasConflict = usedResources.some((usedResource) => hasResourceConflict(resource, usedResource));
+            // Check if any of the task's resources conflict with the requested resource
+            const hasConflict = usedResources.some((usedResource) => hasResourceConflict(resource, usedResource));
 
-                if (hasConflict) {
-                    conflictingTasks.push({
-                        taskId: task.id,
-                        taskName: task.name,
-                        taskType: task.type,
-                    });
-                }
+            if (hasConflict) {
+                conflictingTasks.push({
+                    taskId: task.id,
+                    taskName: task.name,
+                    taskType: task.type,
+                });
+            }
+        }
+
+        for (const lease of this.resourceLeases.values()) {
+            if (hasResourceConflict(resource, lease.resource)) {
+                conflictingTasks.push(lease.task);
             }
         }
 
@@ -684,21 +751,22 @@ class TaskServiceImpl implements TaskService {
         });
 
         for (const task of activeTasks) {
-            // Check if task implements resource tracking
-            if ('getUsedResources' in task && typeof (task as ResourceTrackingTask).getUsedResources === 'function') {
-                const resources = (task as ResourceTrackingTask).getUsedResources();
+            const resources = getTaskUsedResources(task);
 
-                if (resources.length > 0) {
-                    result.push({
-                        task: {
-                            taskId: task.id,
-                            taskName: task.name,
-                            taskType: task.type,
-                        },
-                        resources,
-                    });
-                }
+            if (resources.length > 0) {
+                result.push({
+                    task: {
+                        taskId: task.id,
+                        taskName: task.name,
+                        taskType: task.type,
+                    },
+                    resources,
+                });
             }
+        }
+
+        for (const lease of this.resourceLeases.values()) {
+            result.push({ task: lease.task, resources: [lease.resource] });
         }
 
         return result;

@@ -11,15 +11,17 @@ import { type initWebviewTrpc as InitWebviewTrpc } from '@microsoft/vscode-ext-w
 import { type Document, type MongoClient } from 'mongodb';
 import * as vscode from 'vscode';
 
+import { ClustersClient } from '../../../documentdb/ClustersClient';
+import { ConnectionUnavailableError } from '../../../documentdb/ConnectionUnavailableError';
 import { API } from '../../../DocumentDBExperiences';
 
 const mockResolveClusterNode = vi.fn();
 const mockResolveNamespaceNode = vi.fn();
 const mockUpdateGlobalSetting = vi.fn();
 
-vi.mock('vscode', () => ({
+vi.mock('vscode', async (importOriginal) => ({
+    ...(await importOriginal<typeof vscode>()),
     commands: { executeCommand: vi.fn() },
-    l10n: { t: vi.fn((message: string) => message) },
 }));
 
 vi.mock('../../../commands/openCollectionView/openCollectionView', () => ({
@@ -27,8 +29,15 @@ vi.mock('../../../commands/openCollectionView/openCollectionView', () => ({
 }));
 
 vi.mock('../../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: vi.fn() },
+    ClustersClient: {
+        resolveBoundClient: vi.fn(),
+        getBinding: vi.fn(),
+        getEpoch: vi.fn(),
+        getLatchReason: vi.fn(),
+        reportFailure: vi.fn(),
+    },
 }));
+vi.mock('../../../documentdb/CredentialCache', () => ({ CredentialCache: { getCredentials: vi.fn() } }));
 
 vi.mock('../../../extensionVariables', () => ({
     ext: { settingsKeys: { showDashboardOnConnect: 'documentDB.userInterface.showDashboardOnConnect' } },
@@ -63,6 +72,8 @@ vi.mock('../../_integration/trpc', async () => {
 import { createCallerFactory, type WithTelemetry } from '../../_integration/trpc';
 import { clusterDashboardRouter, collectRawCommandReplies, type RouterContext } from './clusterDashboardRouter';
 
+const binding = { clusterId: 'cluster-id', fingerprint: 'dashboard-fingerprint', generation: 1 };
+
 // The suite swaps `publicProcedureWithTelemetry` for a plain procedure, so the action context
 // the telemetry middleware would inject has to be supplied here instead.
 function createContext(
@@ -73,6 +84,11 @@ function createContext(
         dbExperience: API.DocumentDB,
         webviewName: 'clusterDashboard',
         clusterId: 'cluster-id',
+        binding,
+        describeUnavailable: (reason) => ({
+            unavailable: { reason, title: 'Connection unavailable', detail: 'Close this view.', action: 'close' },
+        }),
+        recoverUnavailable: vi.fn(),
         clusterDisplayName: 'Test cluster',
         viewId: 'connectionsView',
         dashboardSessionId: 'dashboard-session',
@@ -128,6 +144,114 @@ describe('collectRawCommandReplies', () => {
 describe('clusterDashboardRouter create actions', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.mocked(ClustersClient.getBinding).mockReturnValue(binding);
+        vi.mocked(ClustersClient.getEpoch).mockReturnValue(0);
+        vi.mocked(ClustersClient.getLatchReason).mockReturnValue(undefined);
+    });
+
+    describe('clusterDashboardRouter health poll', () => {
+        it('requests a background client for the sampled cluster', async () => {
+            const unavailable = new Error('test connection unavailable');
+            vi.mocked(ClustersClient.resolveBoundClient).mockRejectedValueOnce(unavailable);
+            const caller = createCallerFactory(clusterDashboardRouter)(createContext());
+
+            await expect(caller.measureRtt()).rejects.toMatchObject({ cause: unavailable });
+            expect(ClustersClient.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(binding, {
+                trigger: 'clusterDashboardPoll',
+                background: true,
+            });
+        });
+
+        it('returns a bounded unavailable response for terminal poll resolution', async () => {
+            vi.mocked(ClustersClient.resolveBoundClient).mockRejectedValueOnce(
+                new ConnectionUnavailableError('signInRequired'),
+            );
+
+            await expect(createCallerFactory(clusterDashboardRouter)(createContext()).measureRtt()).resolves.toEqual({
+                unavailable: {
+                    reason: 'signInRequired',
+                    title: 'Connection unavailable',
+                    detail: 'Close this view.',
+                    action: 'close',
+                },
+            });
+        });
+
+        it.each([
+            ['signInRequired', 'signInRequired'],
+            ['credentialsRejected', 'credentialsRejected'],
+            ['clientClosed', 'unreachable'],
+        ] as const)('maps a %s ping failure to an unavailable poll result', async (kind, reason) => {
+            const failure = new Error('test ping failure');
+            const command = vi.fn(async (input: Document): Promise<Document> => {
+                if (input.ping === 1) {
+                    throw failure;
+                }
+                return { uptime: 42 };
+            });
+            vi.mocked(ClustersClient.resolveBoundClient).mockResolvedValueOnce({
+                binding,
+                getMongoClient: () => ({ db: () => ({ admin: () => ({ command }) }) }),
+            } as unknown as ClustersClient);
+            vi.mocked(ClustersClient.reportFailure).mockReturnValueOnce(kind);
+
+            await expect(
+                createCallerFactory(clusterDashboardRouter)(createContext()).measureRtt(),
+            ).resolves.toMatchObject({
+                unavailable: { reason },
+            });
+            expect(ClustersClient.reportFailure).toHaveBeenCalledWith(binding, failure);
+        });
+
+        it('returns a partial sample for an unsupported serverStatus command', async () => {
+            const command = vi.fn(async (input: Document): Promise<Document> => {
+                if (input.serverStatus === 1) {
+                    throw Object.assign(new Error('unsupported serverStatus'), { code: 59 });
+                }
+                return { ok: 1 };
+            });
+            vi.mocked(ClustersClient.resolveBoundClient).mockResolvedValueOnce({
+                binding,
+                getMongoClient: () => ({ db: () => ({ admin: () => ({ command }) }) }),
+            } as unknown as ClustersClient);
+            vi.mocked(ClustersClient.reportFailure).mockReturnValueOnce('other');
+
+            await expect(
+                createCallerFactory(clusterDashboardRouter)(createContext()).measureRtt(),
+            ).resolves.toMatchObject({
+                pingLatencyMs: expect.any(Number),
+                uptimeSeconds: null,
+                errors: [expect.stringContaining('serverStatus')],
+            });
+        });
+    });
+
+    it('returns unavailable when a storage collector observes rejected credentials', async () => {
+        const rejected = new Error('authentication failed');
+        const client = {
+            binding,
+            getMongoClient: () => ({
+                db: () => ({
+                    admin: () => ({
+                        listDatabases: vi.fn().mockRejectedValue(rejected),
+                    }),
+                }),
+            }),
+        };
+        vi.mocked(ClustersClient.resolveBoundClient).mockResolvedValue(client as never);
+        vi.mocked(ClustersClient.reportFailure).mockReturnValue('credentialsRejected');
+
+        await expect(
+            createCallerFactory(clusterDashboardRouter)(createContext()).getStorageStats({ loadReason: 'manual' }),
+        ).resolves.toEqual({
+            unavailable: {
+                reason: 'credentialsRejected',
+                title: 'Connection unavailable',
+                detail: 'Close this view.',
+                action: 'close',
+            },
+        });
+        expect(ClustersClient.reportFailure).toHaveBeenCalledWith(binding, rejected);
     });
 
     it('opens the shell with the default database', async () => {
@@ -167,11 +291,30 @@ describe('clusterDashboardRouter create actions', () => {
     });
 
     it('persists the dashboard-on-connect preference globally', async () => {
+        vi.mocked(ClustersClient.getLatchReason).mockReturnValue('userDisconnected');
         const caller = createCallerFactory(clusterDashboardRouter)(createContext());
 
         await caller.setShowDashboardOnConnect(true);
 
         expect(mockUpdateGlobalSetting).toHaveBeenCalledWith('documentDB.userInterface.showDashboardOnConnect', true);
+    });
+
+    it('does not forward a command when the tree lookup returns under a changed identity', async () => {
+        mockResolveClusterNode.mockImplementationOnce(async () => {
+            vi.mocked(ClustersClient.getBinding).mockReturnValue({ ...binding, fingerprint: 'replacement' });
+            return { id: 'cluster-tree-id' };
+        });
+        const caller = createCallerFactory(clusterDashboardRouter)(createContext());
+
+        await expect(caller.copyConnectionString()).resolves.toEqual({
+            unavailable: {
+                reason: 'identityChanged',
+                title: 'Connection unavailable',
+                detail: 'Close this view.',
+                action: 'close',
+            },
+        });
+        expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
     });
 
     it('runs the existing copy-connection-string command against the resolved cluster node', async () => {
@@ -223,6 +366,7 @@ describe('clusterDashboardRouter create actions', () => {
             expect.objectContaining({
                 source: 'webview;clusterDashboard',
                 activationSource: 'clusterDashboard:emptyState',
+                binding: createContext().binding,
                 onNameResolved: expect.any(Function),
             }),
         );
@@ -266,6 +410,7 @@ describe('clusterDashboardRouter create actions', () => {
             expect.objectContaining({
                 source: 'webview;clusterDashboard',
                 activationSource: 'clusterDashboard:inventoryToolbar',
+                binding: createContext().binding,
                 onNameResolved: expect.any(Function),
             }),
         );

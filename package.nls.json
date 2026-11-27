@@ -1,4 +1,6 @@
 {
+  "connections.disconnect": "Disconnect",
+  "diagnostics.showConnectionStats": "Show Connection Stats",
   "survey.containerTitle": "DocumentDB Feedback",
   "survey.viewTitle": "Share Your Experience",
   "survey.giveFeedbackTitle": "Give Feedback",

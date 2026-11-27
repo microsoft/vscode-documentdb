@@ -19,6 +19,7 @@ export namespace settingsKeys {
 
     // Connections & Discovery
     export const connectionTimeout = 'documentDB.connectionTimeout';
+    export const openTabsOnDisconnect = 'documentDB.connections.openTabsOnDisconnect';
     export const localPort = 'documentDB.local.port';
     export const kubernetesLocalPortStrategy = 'documentDB.serviceDiscovery.kubernetes.portForward.localPortStrategy';
     export const kubernetesLocalPortBase = 'documentDB.serviceDiscovery.kubernetes.portForward.localPortBase';

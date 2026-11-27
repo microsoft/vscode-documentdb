@@ -76,7 +76,10 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
             undefined,
             'treeChildren',
         );
-        const collections = await client.listCollections(this.databaseInfo.name);
+        const collections = await client.listCollections(this.databaseInfo.name).catch((error: unknown) => {
+            ClustersClient.reportFailure(client.binding, error);
+            throw error;
+        });
 
         // Update the collection count from the full list we just fetched. This
         // is the exact value, so mark it authoritative: a still-running
@@ -136,7 +139,15 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
 
     private async fetchAndUpdateCount(): Promise<void> {
         try {
-            const client = await ClustersClient.getClient(this.cluster.clusterId, undefined, undefined, 'treeChildren');
+            const client = await ClustersClient.getClient(
+                this.cluster.clusterId,
+                undefined,
+                undefined,
+                'treeChildren',
+                {
+                    background: true,
+                },
+            );
             const { count, hasMore } = await client.countCollections(this.databaseInfo.name, COLLECTION_COUNT_LIMIT);
             // `getChildren()` may have run while this request was in flight and
             // established the exact count. Never replace an exact count with

@@ -15,7 +15,18 @@ import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
 import { traceAuthFlow, type AuthTraceContext } from '../../utils/authTrace';
 import { AuthMethodId } from '../auth/AuthMethod';
+import * as tokenResource from '../auth/documentdbTokenResource';
+import {
+    getRecentEntraTokenFailure,
+    recordEntraTokenFailure,
+    resetEntraTokenFailuresForTests,
+} from '../auth/entraErrors/entraTokenFailures';
+import * as entraSession from '../auth/entraSession';
+import * as managedIdentityProvider from '../auth/managedIdentityTokenProvider';
 import { EntraDestinationRejectedError } from '../auth/oidcAllowedHosts';
+import { WorkerTokenRelay } from '../auth/WorkerTokenRelay';
+import { ClustersClient } from '../ClustersClient';
+import { ConnectionUnavailableError } from '../ConnectionUnavailableError';
 import { CredentialCache } from '../CredentialCache';
 import { ShellSessionManager } from '../shell/ShellSessionManager';
 import {
@@ -28,7 +39,7 @@ import {
     type WorkerSessionCallbacks,
     type WorkerStartupTelemetryContext,
 } from './WorkerSessionManager';
-import { type MainToWorkerMessage } from './workerTypes';
+import { getWorkerAuthReason, type MainToWorkerMessage } from './workerTypes';
 
 interface RecordedTelemetry {
     readonly eventName: string;
@@ -744,6 +755,414 @@ describe('WorkerSessionManager', () => {
             expect(metadata).toMatchObject({ host: 'cluster.mongocluster.cosmos.azure.us', additionalHostCount: 0 });
             session.dispose();
         });
+
+        describe('diagnostic Shell startup', (): void => {
+            const clusterId = 'diagnostic-cluster';
+            const authenticationHolds = ['credentialsRejected', 'signInRequired', 'credentialsMissing'] as const;
+            const blockingReasons = [
+                'credentialsUpdating',
+                'credentialsChanged',
+                'identityChanged',
+                'userDisconnected',
+                'connectionRemoved',
+                'unreachable',
+            ] as const;
+            let session: ShellSessionManager;
+            let isolationSpies: MockInstance[];
+            const reread = vi.fn<() => Promise<string | undefined>>();
+
+            beforeEach((): void => {
+                reread.mockReset().mockResolvedValue(originalUri);
+                session = new ShellSessionManager(
+                    { clusterId, clusterDisplayName: 'Cluster', databaseName: 'testdb' },
+                    undefined,
+                    {},
+                    { connectionString: originalUri, reread },
+                );
+                isolationSpies = [
+                    vi.spyOn(ClustersClient, 'getExpectedFingerprint'),
+                    vi.spyOn(ClustersClient, 'getLastVerifiedIdentity'),
+                    vi.spyOn(ClustersClient, 'getClient'),
+                    vi.spyOn(ClustersClient, 'deleteClient'),
+                    vi.spyOn(WorkerTokenRelay.prototype, 'relay'),
+                    vi.spyOn(entraSession, 'getEntraSession'),
+                    vi.spyOn(managedIdentityProvider, 'getManagedIdentityAccessToken'),
+                    vi.spyOn(ClustersClient, 'unlatch'),
+                ];
+            });
+
+            afterEach((): void => {
+                try {
+                    expect(CredentialCache.getCredentials).not.toHaveBeenCalled();
+                    expect(CredentialCache.getConnectionStringWithPassword).not.toHaveBeenCalled();
+                    expect(CredentialCache.getConnectionUser).not.toHaveBeenCalled();
+                    for (const spy of isolationSpies) {
+                        expect(spy).not.toHaveBeenCalled();
+                    }
+                } finally {
+                    session.dispose();
+                    for (const spy of isolationSpies) {
+                        spy.mockRestore();
+                    }
+                    ClustersClient.unlatch(clusterId);
+                }
+            });
+
+            it.each(authenticationHolds)(
+                'spawns the real worker under %s without authentication or clearing the hold',
+                async (reason): Promise<void> => {
+                    ClustersClient.latch(clusterId, reason);
+                    const initializing = session.initialize();
+                    await vi.waitFor(() => expect(Worker).toHaveBeenCalledOnce());
+                    const posted = replyInit();
+                    await expect(initializing).resolves.toMatchObject({
+                        authMechanism: 'NoAuth',
+                        username: undefined,
+                    });
+                    expect(posted).toEqual({
+                        type: 'init',
+                        requestId: expect.any(String),
+                        connectionString: originalUri,
+                        databaseName: 'testdb',
+                        authMechanism: 'NoAuth',
+                        persistent: true,
+                        clientOptions: {
+                            serverSelectionTimeoutMS: undefined,
+                            tlsAllowInvalidCertificates: undefined,
+                            appName: undefined,
+                            tls: undefined,
+                        },
+                        oidcDestinationPolicy: undefined,
+                    });
+                    workerMock()._emit('message', { type: 'tokenRequest', requestId: 'unexpected-token' });
+                    await Promise.resolve();
+                    expect(workerMock().postMessage).toHaveBeenCalledOnce();
+                    expect(session.pinnedEntraIdentity).toBeUndefined();
+                    expect(session.isInitialized).toBe(true);
+                    expect(ClustersClient.getLatchReason(clusterId)).toBe(reason);
+                },
+            );
+
+            it.each(authenticationHolds)(
+                'keeps ordinary NoAuth worker startup strict under %s',
+                async (reason): Promise<void> => {
+                    ClustersClient.latch(clusterId, reason);
+                    const manager = new WorkerSessionManager(callbacks);
+                    try {
+                        await expect(manager.ensureWorker(clusterId, initMessage())).rejects.toMatchObject({ reason });
+                        expect(prepareDriverConnectionString).not.toHaveBeenCalled();
+                        expect(Worker).not.toHaveBeenCalled();
+                        expect(ClustersClient.getLatchReason(clusterId)).toBe(reason);
+                    } finally {
+                        manager.dispose();
+                    }
+                },
+            );
+
+            it.each(blockingReasons)('blocks %s before diagnostic startup', async (reason): Promise<void> => {
+                ClustersClient.latch(clusterId, reason);
+                await expect(session.initialize()).rejects.toMatchObject({ reason });
+                expect(reread).not.toHaveBeenCalled();
+                expect(prepareDriverConnectionString).not.toHaveBeenCalled();
+                expect(Worker).not.toHaveBeenCalled();
+                expect(ClustersClient.getLatchReason(clusterId)).toBe(reason);
+            });
+
+            it.each(blockingReasons)(
+                'blocks %s introduced during diagnostic worker preparation',
+                async (reason): Promise<void> => {
+                    ClustersClient.latch(clusterId, 'credentialsRejected');
+                    const pending = deferred<PreparedDriverConnectionString>();
+                    vi.mocked(prepareDriverConnectionString).mockReturnValueOnce(pending.promise);
+                    const initializing = session.initialize();
+                    await vi.waitFor(() => expect(prepareDriverConnectionString).toHaveBeenCalledOnce());
+                    ClustersClient.latch(clusterId, reason);
+                    pending.resolve({ connectionString: originalUri, options: {}, srvResolution: 'notSrv' });
+                    await expect(initializing).rejects.toBeInstanceOf(ConnectionUnavailableError);
+                    await expect(initializing).rejects.toMatchObject({ reason });
+                    expect(Worker).not.toHaveBeenCalled();
+                    expect(session.isInitialized).toBe(false);
+                    expect(ClustersClient.getLatchReason(clusterId)).toBe(reason);
+                },
+            );
+
+            it.each(['abort', 'epoch'] as const)(
+                'preserves the %s guard during diagnostic worker preparation',
+                async (guard): Promise<void> => {
+                    ClustersClient.latch(clusterId, 'credentialsRejected');
+                    const pending = deferred<PreparedDriverConnectionString>();
+                    vi.mocked(prepareDriverConnectionString).mockReturnValueOnce(pending.promise);
+                    const initializing = session.initialize();
+                    await vi.waitFor(() => expect(prepareDriverConnectionString).toHaveBeenCalledOnce());
+                    if (guard === 'abort') {
+                        session.killWorker();
+                        expect(vi.mocked(prepareDriverConnectionString).mock.calls[0][0].abortSignal?.aborted).toBe(
+                            true,
+                        );
+                    } else {
+                        ClustersClient.invalidate(clusterId);
+                    }
+                    pending.resolve({ connectionString: originalUri, options: {}, srvResolution: 'notSrv' });
+                    await expect(initializing).rejects.toBeInstanceOf(UserCancelledError);
+                    expect(Worker).not.toHaveBeenCalled();
+                    expect(session.isInitialized).toBe(false);
+                    expect(ClustersClient.getLatchReason(clusterId)).toBe('credentialsRejected');
+                },
+            );
+
+            it('preserves the original preparation failure through diagnostic startup', async (): Promise<void> => {
+                ClustersClient.latch(clusterId, 'credentialsRejected');
+                const failure = new Error('DNS preparation failed');
+                vi.mocked(prepareDriverConnectionString).mockRejectedValueOnce(failure);
+                await expect(session.initialize()).rejects.toBe(failure);
+                expect(prepareDriverConnectionString).toHaveBeenCalledOnce();
+                expect(Worker).not.toHaveBeenCalled();
+                expect(ClustersClient.getLatchReason(clusterId)).toBe('credentialsRejected');
+            });
+        });
+    });
+
+    describe('worker token relay environment binding', () => {
+        const originalEnvironment = {
+            providerId: 'microsoft-sovereign-cloud',
+            cloudName: 'CustomCloud',
+            authority: 'https://authority.example.com/original/',
+        };
+        const resolvedResource = {
+            resource: 'https://database.example.com',
+            scope: 'https://database.example.com/.default',
+            cloudCategory: 'custom',
+            reason: 'customLoginHost',
+            details: {
+                flow: 'interactive',
+                tokenResource: 'https://database.example.com',
+            },
+        } as const;
+
+        function createRelay(clusterId: string): WorkerTokenRelay {
+            return new WorkerTokenRelay(
+                clusterId,
+                {
+                    type: 'init',
+                    requestId: '',
+                    connectionString: 'mongodb://cluster.mongocluster.cosmos.azure.com/',
+                    clientOptions: {},
+                    databaseName: 'test',
+                    authMechanism: 'MicrosoftEntraID',
+                },
+                ClustersClient.getEpoch(clusterId),
+                'relay-id',
+                undefined,
+            );
+        }
+
+        it.each([
+            ['provider', (environment: typeof originalEnvironment) => ({ ...environment, providerId: 'changed' })],
+            ['cloud', (environment: typeof originalEnvironment) => ({ ...environment, cloudName: 'AzureCloud' })],
+            [
+                'authority',
+                (environment: typeof originalEnvironment) => ({
+                    ...environment,
+                    authority: 'https://authority.example.com/changed/',
+                }),
+            ],
+        ] as const)('rejects later %s drift against the cached audience environment', async (_name, change) => {
+            let environment: typeof originalEnvironment = originalEnvironment;
+            const environmentSpy = vi
+                .spyOn(entraSession, 'readEntraSignInEnvironment')
+                .mockImplementation(() => environment);
+            const resolver = vi
+                .spyOn(tokenResource, 'resolveInteractiveTokenResource')
+                .mockResolvedValue(resolvedResource);
+            const lookup = vi.spyOn(entraSession, 'getEntraSession').mockResolvedValue({
+                id: 'session-id',
+                accessToken: 'access-token',
+                account: { id: 'account-id', label: 'Account' },
+                scopes: [],
+            });
+            const relay = createRelay(`relay-environment-${_name}`);
+            const responses: MainToWorkerMessage[] = [];
+            try {
+                await relay.relay(
+                    { type: 'tokenRequest', requestId: 'first' },
+                    (response) => responses.push(response),
+                    () => true,
+                );
+                environment = change(environment);
+                await relay.relay(
+                    { type: 'tokenRequest', requestId: 'second' },
+                    (response) => responses.push(response),
+                    () => true,
+                );
+
+                expect(responses).toEqual([
+                    { type: 'tokenResponse', requestId: 'first', accessToken: 'access-token' },
+                    expect.objectContaining({
+                        type: 'tokenError',
+                        requestId: 'second',
+                        reason: 'signInRequired',
+                    }),
+                ]);
+                expect(resolver).toHaveBeenCalledTimes(1);
+                expect(lookup).toHaveBeenCalledTimes(1);
+            } finally {
+                environmentSpy.mockRestore();
+                resolver.mockRestore();
+                lookup.mockRestore();
+            }
+        });
+
+        it('fails closed when the cached audience environment cannot be read later', async () => {
+            let readable = true;
+            const environmentSpy = vi.spyOn(entraSession, 'readEntraSignInEnvironment').mockImplementation(() => {
+                if (!readable) {
+                    throw new Error('private-configuration-cause');
+                }
+                return originalEnvironment;
+            });
+            const resolver = vi
+                .spyOn(tokenResource, 'resolveInteractiveTokenResource')
+                .mockResolvedValue(resolvedResource);
+            const lookup = vi.spyOn(entraSession, 'getEntraSession').mockResolvedValue({
+                id: 'session-id',
+                accessToken: 'access-token',
+                account: { id: 'account-id', label: 'Account' },
+                scopes: [],
+            });
+            const relay = createRelay('relay-unreadable-environment');
+            const responses: MainToWorkerMessage[] = [];
+            try {
+                await relay.relay(
+                    { type: 'tokenRequest', requestId: 'first' },
+                    (response) => responses.push(response),
+                    () => true,
+                );
+                readable = false;
+                await relay.relay(
+                    { type: 'tokenRequest', requestId: 'second' },
+                    (response) => responses.push(response),
+                    () => true,
+                );
+
+                expect(responses.at(-1)).toMatchObject({
+                    type: 'tokenError',
+                    requestId: 'second',
+                    reason: 'signInRequired',
+                });
+                expect(resolver).toHaveBeenCalledTimes(1);
+                expect(lookup).toHaveBeenCalledTimes(1);
+                expect(JSON.stringify(responses)).not.toContain('private-configuration-cause');
+            } finally {
+                environmentSpy.mockRestore();
+                resolver.mockRestore();
+                lookup.mockRestore();
+            }
+        });
+
+        it('validates the environment when the Entra lookup rejects', async () => {
+            const clusterId = 'relay-rejected-lookup';
+            let environment: typeof originalEnvironment = originalEnvironment;
+            const environmentSpy = vi
+                .spyOn(entraSession, 'readEntraSignInEnvironment')
+                .mockImplementation(() => environment);
+            const resolver = vi
+                .spyOn(tokenResource, 'resolveInteractiveTokenResource')
+                .mockResolvedValue(resolvedResource);
+            const lookup = vi.spyOn(entraSession, 'getEntraSession').mockImplementation(async () => {
+                environment = {
+                    ...environment,
+                    authority: 'https://authority.example.com/changed/',
+                };
+                throw new Error('private-lookup-cause');
+            });
+            const relay = createRelay(clusterId);
+            const responses: MainToWorkerMessage[] = [];
+            const startupProperties: Record<string, string> = {};
+            recordEntraTokenFailure(clusterId, { cloudCategory: 'custom', authMethod: 'interactive' });
+            const priorFailure = getRecentEntraTokenFailure(clusterId);
+            try {
+                await relay.relay(
+                    { type: 'tokenRequest', requestId: 'rejected' },
+                    (response) => responses.push(response),
+                    () => true,
+                    undefined,
+                    { startupCorrelationId: 'relay-startup', surface: 'playground', startupProperties },
+                );
+
+                expect(responses).toEqual([
+                    expect.objectContaining({
+                        type: 'tokenError',
+                        requestId: 'rejected',
+                        reason: 'signInRequired',
+                    }),
+                ]);
+                expect(getRecentEntraTokenFailure(clusterId)).toBe(priorFailure);
+                expect(startupProperties.entraFailureKind).not.toBe('tokenAcquisitionFailed');
+                expect(JSON.stringify(responses)).not.toContain('private-lookup-cause');
+            } finally {
+                resetEntraTokenFailuresForTests();
+                environmentSpy.mockRestore();
+                resolver.mockRestore();
+                lookup.mockRestore();
+            }
+        });
+
+        it.each(['oldWorker', 'epoch'] as const)(
+            'does not validate or diagnose a rejected lookup from a stale %s',
+            async (staleBy) => {
+                const clusterId = `relay-stale-${staleBy}`;
+                let current = true;
+                const environmentSpy = vi
+                    .spyOn(entraSession, 'readEntraSignInEnvironment')
+                    .mockReturnValue(originalEnvironment);
+                const resolver = vi
+                    .spyOn(tokenResource, 'resolveInteractiveTokenResource')
+                    .mockResolvedValue(resolvedResource);
+                let signalStarted!: () => void;
+                const started = new Promise<void>((resolve) => {
+                    signalStarted = resolve;
+                });
+                let rejectLookup!: () => void;
+                const lookup = vi.spyOn(entraSession, 'getEntraSession').mockImplementation(
+                    async () =>
+                        await new Promise<vscode.AuthenticationSession | undefined>((_, reject) => {
+                            rejectLookup = () => reject(new Error('obsolete lookup failure'));
+                            signalStarted();
+                        }),
+                );
+                const relay = createRelay(clusterId);
+                const responses: MainToWorkerMessage[] = [];
+                recordEntraTokenFailure(clusterId, { cloudCategory: 'china', authMethod: 'interactive' });
+                const priorFailure = getRecentEntraTokenFailure(clusterId);
+                try {
+                    const relaying = relay.relay(
+                        { type: 'tokenRequest', requestId: 'stale' },
+                        (response) => responses.push(response),
+                        () => current,
+                    );
+                    const outcome =
+                        staleBy === 'epoch' ? expect(relaying).rejects.toBeInstanceOf(UserCancelledError) : relaying;
+                    await started;
+                    const readsBeforeRejection = environmentSpy.mock.calls.length;
+                    if (staleBy === 'oldWorker') {
+                        current = false;
+                    } else {
+                        ClustersClient.invalidate(clusterId);
+                    }
+                    rejectLookup();
+                    await outcome;
+
+                    expect(responses).toEqual([]);
+                    expect(environmentSpy).toHaveBeenCalledTimes(readsBeforeRejection);
+                    expect(getRecentEntraTokenFailure(clusterId)).toBe(priorFailure);
+                } finally {
+                    resetEntraTokenFailuresForTests();
+                    environmentSpy.mockRestore();
+                    resolver.mockRestore();
+                    lookup.mockRestore();
+                }
+            },
+        );
     });
 
     describe('startup tracking', () => {
@@ -799,6 +1218,258 @@ describe('WorkerSessionManager', () => {
             const initMessage = worker.postMessage.mock.calls.at(-1)?.[0] as MainToWorkerMessage;
             return { manager, initPromise, requestId: initMessage.requestId, worker };
         }
+
+        it.each([true, false])(
+            'counts only checked post-startup Entra relay outcomes (persistent=%s)',
+            async (persistent) => {
+                const clusterId = 'test-cluster';
+                const environment = {
+                    providerId: 'microsoft',
+                    cloudName: 'AzureCloud',
+                    authority: 'https://login.microsoftonline.com/',
+                };
+                const readEnvironment = vi
+                    .spyOn(entraSession, 'readEntraSignInEnvironment')
+                    .mockReturnValue(environment);
+                const resolveResource = vi.spyOn(tokenResource, 'resolveInteractiveTokenResource').mockResolvedValue({
+                    cloudCategory: 'public',
+                    reason: 'host',
+                    scope: 'test-scope',
+                    resource: 'test-resource',
+                    details: {},
+                });
+                const account = { id: 'test-account', label: 'Test account' };
+                const now = 1_800_000_000;
+                vi.setSystemTime(now * 1000);
+                const accessToken = `header.${Buffer.from(JSON.stringify({ iat: now - 60, exp: now + 3540 })).toString('base64url')}.signature`;
+                const session = { id: 'test-session', account, accessToken, scopes: [] };
+                const getSession = vi.spyOn(entraSession, 'getEntraSession').mockResolvedValue(session);
+                const relay = new WorkerTokenRelay(
+                    clusterId,
+                    {
+                        type: 'init',
+                        requestId: '',
+                        connectionString: 'mongodb://example.mongocluster.cosmos.azure.com/',
+                        clientOptions: {},
+                        databaseName: 'test',
+                        authMechanism: AuthMethodId.MicrosoftEntraID,
+                        persistent,
+                    },
+                    ClustersClient.getEpoch(clusterId),
+                    'relay-id',
+                    undefined,
+                );
+                const onTokenRequest = vi.fn<NonNullable<WorkerSessionCallbacks['onTokenRequest']>>(
+                    relay.relay.bind(relay),
+                );
+                callbacks.onTokenRequest = onTokenRequest;
+                const manager = new WorkerSessionManager(callbacks);
+                try {
+                    const active = await startWorker(persistent, {}, manager);
+                    const request = async (requestId: string): Promise<void> => {
+                        active.worker._emit('message', { type: 'tokenRequest', requestId });
+                        await onTokenRequest.mock.results.at(-1)?.value;
+                    };
+                    const renewalEvents = (): RecordedTelemetry[] =>
+                        mockTelemetryEvents.filter(({ eventName }) => eventName === 'connection.tokenRenewal');
+                    await request('startup-lookup');
+                    await request('another-startup-lookup');
+                    expect(renewalEvents()).toEqual([]);
+                    active.worker._emit('message', { type: 'initResult', requestId: active.requestId, success: true });
+                    await active.initPromise;
+
+                    await request('renewal-with-lifetime');
+                    getSession.mockResolvedValueOnce({ ...session, accessToken: 'opaque-test-token' });
+                    await request('opaque-renewal');
+                    getSession.mockResolvedValueOnce(undefined);
+                    await request('missing-session');
+                    getSession.mockResolvedValueOnce({ ...session, account: { ...account, id: 'different-account' } });
+                    await request('identity-mismatch');
+                    readEnvironment.mockReturnValueOnce({ ...environment, providerId: 'microsoft-sovereign-cloud' });
+                    await request('provider-changed');
+                    getSession.mockRejectedValueOnce(new Error('test provider failure'));
+                    await request('refresh-failed');
+                    getSession.mockRejectedValueOnce(new UserCancelledError());
+                    await request('canceled-lookup');
+                    const driverAbortFlag = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT);
+                    getSession.mockImplementationOnce(async () => {
+                        Atomics.store(new Int32Array(driverAbortFlag), 0, 1);
+                        return session;
+                    });
+                    active.worker._emit('message', {
+                        type: 'tokenRequest',
+                        requestId: 'driver-stopped-waiting',
+                        driverAbortFlag,
+                    });
+                    await onTokenRequest.mock.results.at(-1)?.value;
+                    ClustersClient.invalidate(clusterId);
+                    await expect(request('stale-lookup')).rejects.toBeInstanceOf(UserCancelledError);
+
+                    const surface = persistent ? 'shell' : 'playground';
+                    expect(
+                        renewalEvents().map(({ telemetry, error }) => [
+                            telemetry.properties,
+                            telemetry.measurements,
+                            error,
+                        ]),
+                    ).toEqual([
+                        [
+                            { surface, renewalOutcome: 'returned', result: 'Succeeded' },
+                            { tokenLifetimeSeconds: 3600, duration: 0 },
+                            undefined,
+                        ],
+                        [{ surface, renewalOutcome: 'returned', result: 'Succeeded' }, { duration: 0 }, undefined],
+                        [{ surface, renewalOutcome: 'noSession', result: 'Succeeded' }, { duration: 0 }, undefined],
+                        [
+                            { surface, renewalOutcome: 'identityMismatch', result: 'Succeeded' },
+                            { duration: 0 },
+                            undefined,
+                        ],
+                        [{ surface, renewalOutcome: 'noSession', result: 'Succeeded' }, { duration: 0 }, undefined],
+                        [{ surface, renewalOutcome: 'failed', result: 'Succeeded' }, { duration: 0 }, undefined],
+                        [{ surface, renewalOutcome: 'timedOut', result: 'Succeeded' }, { duration: 0 }, undefined],
+                    ]);
+                } finally {
+                    manager.dispose();
+                    getSession.mockRestore();
+                    resolveResource.mockRestore();
+                    readEnvironment.mockRestore();
+                }
+            },
+        );
+
+        it.each(['signInRequired', 'identityMismatch', 'destinationRejected', 'refreshFailed'] as const)(
+            'reconstructs %s at both boundaries and marks a warm worker broken',
+            async (reason): Promise<void> => {
+                const failed = await startWorker();
+                failed.worker._emit('message', {
+                    type: 'initResult',
+                    requestId: failed.requestId,
+                    success: false,
+                    authReason: reason,
+                });
+                await expect(failed.initPromise).rejects.toSatisfy(
+                    (error: unknown) => getWorkerAuthReason(error) === reason,
+                );
+
+                const active = await startWorker();
+                active.worker._emit('message', { type: 'initResult', requestId: active.requestId, success: true });
+                await active.initPromise;
+                const evaluating = active.manager.sendEval({
+                    type: 'eval',
+                    requestId: '',
+                    code: '1',
+                    databaseName: 'test',
+                    displayBatchSize: 20,
+                });
+                const worker = vi.mocked(Worker).mock.results.at(-1)?.value as { postMessage: Mock };
+                const evaluation = worker.postMessage.mock.calls.at(-1)?.[0] as MainToWorkerMessage;
+                active.worker._emit('message', {
+                    type: 'evalError',
+                    requestId: evaluation.requestId,
+                    authReason: reason,
+                });
+                await expect(evaluating).rejects.toSatisfy((error: unknown) => getWorkerAuthReason(error) === reason);
+                expect(active.manager.authFailure).toBe(reason);
+                active.manager.dispose();
+            },
+        );
+
+        it.each(['returned', 'failed'] as const)(
+            'cancels a still-attached worker when an invalidated token lookup %s',
+            async (outcome): Promise<void> => {
+                const clusterId = 'test-cluster';
+                const connectionString = 'mongodb://cluster.mongocluster.cosmos.azure.com/';
+                const resolver = vi.spyOn(tokenResource, 'resolveManagedIdentityTokenResource').mockResolvedValue({
+                    cloudCategory: 'public',
+                    reason: 'host',
+                    resource: 'https://ossrdbms-aad.database.windows.net',
+                    scope: 'https://ossrdbms-aad.database.windows.net/.default',
+                    details: {},
+                });
+                type Token = Awaited<ReturnType<typeof managedIdentityProvider.getManagedIdentityAccessToken>>;
+                let signalStarted!: () => void;
+                const started = new Promise<void>((resolve) => {
+                    signalStarted = resolve;
+                });
+                let finishLookup!: () => void;
+                const lookup = new Promise<Token>((resolve, reject) => {
+                    finishLookup = (): void => {
+                        if (outcome === 'returned') {
+                            resolve({ accessToken: 'must-not-send', expiresOnTimestamp: 0 });
+                        } else {
+                            reject(new Error('obsolete provider failure'));
+                        }
+                    };
+                });
+                const provider = vi
+                    .spyOn(managedIdentityProvider, 'getManagedIdentityAccessToken')
+                    .mockImplementation(() => {
+                        signalStarted();
+                        return lookup;
+                    });
+                const relay = new WorkerTokenRelay(
+                    clusterId,
+                    {
+                        type: 'init',
+                        requestId: '',
+                        connectionString,
+                        clientOptions: {},
+                        databaseName: 'test',
+                        authMechanism: AuthMethodId.ManagedIdentity,
+                    },
+                    ClustersClient.getEpoch(clusterId),
+                    'relay-id',
+                    undefined,
+                );
+                callbacks.onTokenRequest = relay.relay.bind(relay);
+                const manager = new WorkerSessionManager(callbacks);
+                try {
+                    const active = await startWorker(true, {}, manager);
+                    active.worker._emit('message', { type: 'initResult', requestId: active.requestId, success: true });
+                    await active.initPromise;
+                    const evalMessage = {
+                        type: 'eval',
+                        requestId: '',
+                        code: '1',
+                        databaseName: 'test',
+                        displayBatchSize: 20,
+                    } as const;
+                    const evaluating = manager.sendEval(evalMessage);
+                    const canceled = expect(evaluating).rejects.toBeInstanceOf(UserCancelledError);
+                    active.worker._emit('message', { type: 'tokenRequest', requestId: 'obsolete-token' });
+                    await started;
+                    ClustersClient.invalidate(clusterId);
+                    resetEntraTokenFailuresForTests();
+                    if (outcome === 'returned') {
+                        recordEntraTokenFailure(clusterId, { cloudCategory: 'china', authMethod: 'interactive' });
+                    }
+                    const newerFailure = getRecentEntraTokenFailure(clusterId);
+                    finishLookup();
+                    await canceled;
+                    expect(manager.isAlive).toBe(false);
+                    expect(manager.authFailure).toBeUndefined();
+                    expect(getRecentEntraTokenFailure(clusterId)).toBe(newerFailure);
+
+                    const replacement = await startWorker(true, {}, manager);
+                    replacement.worker._emit('message', {
+                        type: 'initResult',
+                        requestId: replacement.requestId,
+                        success: true,
+                    });
+                    await replacement.initPromise;
+                    const worker = vi.mocked(Worker).mock.results.at(-1)?.value as { postMessage: Mock };
+                    const messages = worker.postMessage.mock.calls as [MainToWorkerMessage][];
+                    expect(messages.map(([message]) => message.type)).toEqual(['init', 'eval', 'init']);
+                    expect(manager.isAlive).toBe(true);
+                } finally {
+                    manager.dispose();
+                    resetEntraTokenFailuresForTests();
+                    provider.mockRestore();
+                    resolver.mockRestore();
+                }
+            },
+        );
 
         it('reports a stalled token request with total and stage timings without connection details', async () => {
             const { initPromise, requestId, worker } = await startWorker();

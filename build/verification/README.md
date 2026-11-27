@@ -163,13 +163,13 @@ node build/verification/bson-identity/check.cjs            # identity
 node build/verification/bson-identity/check.cjs --prove    # identity, then the alias-removed control
 ```
 
-[`lowered-import/check.cjs`](./lowered-import/check.cjs) builds the same way (shared
-[`vite-host-probe.cjs`](./vite-host-probe.cjs)) a CommonJS module containing azureauth's lowered
-`Promise.resolve().then(() => require('@azure/arm-resources-subscriptions'))` and requires the
-result to expose `SubscriptionClient` (G5-I01, [Vite rationale](../vite/README.md)). Its negative
-control removes the package's CommonJS alias; Rolldown 1.0.3 then emits a call to the ESM
-initializer, and the result must be `undefined`. Both run in `npm run test:verification`; add
-`--prove` to the standalone command for the control.
+### Azure ARM ESM (runtime)
+
+[`lowered-import/check.cjs`](./lowered-import/check.cjs) uses the same production host probe to
+bundle the three ARM subscription subpaths azureauth v6 imports. It checks that the bundle
+exports `createSubscription` and both list functions, and that the ARM modules in its graph
+come from `dist/esm`. This runs in `npm run test:verification` and replaces the historical
+G5-I01 alias-removal control, which no longer reproduced after the SDK upgrade.
 
 These probes build and run bundles instead of inspecting the packaged artifact, so they are not part of L1,
 which stays offline and build-free for the ADO release build.

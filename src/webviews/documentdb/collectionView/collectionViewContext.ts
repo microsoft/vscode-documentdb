@@ -6,6 +6,7 @@
 import { createContext } from 'react';
 import { DocumentViewMode as Views } from '../../../documentdb/DocumentViewMode';
 import { type AIIndexRecommendation } from '../../../services/ai/types';
+import { type ConnectionUnavailableDetails } from '../../_integration/connectionUnavailable';
 import { type QueryInsightsStage1Response, type QueryInsightsStage2Response } from './types/queryInsights';
 import { type QueryInsightsStreamUsage } from './types/queryInsightsStream';
 
@@ -186,8 +187,10 @@ export interface QueryInsightsStage3Model {
  *   - `s1Loading`    — Stage 1 fetch in flight (dedupe signal for prefetch
  *                       vs. tab-fallback fetch).
  *   - `s1Error`      — Stage 1 fetch failed.
+ *   - `s1Cancelled`  — Stage 1 was interrupted by connection unavailability.
  *   - `s2Loading`    — Stage 2 fetch in flight. Carries Stage 1's result.
  *   - `s2Error`      — Stage 2 fetch failed.
+ *   - `s2Cancelled`  — Stage 2 was interrupted; retains Stage 1's result.
  *   - `s3Idle`       — Stage 2 succeeded; user is looking at the
  *                       "Get AI Performance Insights" button. The system is
  *                       *not* doing anything in the background.
@@ -212,8 +215,10 @@ export type QueryInsightsState =
     | { kind: 'idle' }
     | { kind: 's1Loading' }
     | ({ kind: 's1Error' } & ErrorInfo)
+    | { kind: 's1Cancelled' }
     | ({ kind: 's2Loading' } & WithStage1)
     | ({ kind: 's2Error' } & WithStage1 & ErrorInfo)
+    | ({ kind: 's2Cancelled' } & WithStage1)
     | ({ kind: 's3Idle' } & WithStage12)
     | ({ kind: 's3Loading' } & WithStage12 & { requestKey: string; streaming: QueryInsightsStage3Streaming })
     | ({ kind: 's3Success' } & WithStage12 & {
@@ -232,7 +237,7 @@ export type QueryInsightsState =
 // regardless of how the union evolves later.
 
 /** Variant kinds that DO NOT carry Stage 1 data. */
-export type QueryInsightsKindWithoutStage1 = 'idle' | 's1Loading' | 's1Error';
+export type QueryInsightsKindWithoutStage1 = 'idle' | 's1Loading' | 's1Error' | 's1Cancelled';
 
 /** Variant kinds that DO carry Stage 1 data (`stage1` field present). */
 export type QueryInsightsKindWithStage1 = Exclude<QueryInsightsState['kind'], QueryInsightsKindWithoutStage1>;
@@ -246,7 +251,7 @@ export type QueryInsightsKindWithStage12 = Extract<
 export function hasStage1Data(
     s: QueryInsightsState,
 ): s is Extract<QueryInsightsState, { stage1: QueryInsightsStage1Response }> {
-    return s.kind !== 'idle' && s.kind !== 's1Loading' && s.kind !== 's1Error';
+    return s.kind !== 'idle' && s.kind !== 's1Loading' && s.kind !== 's1Error' && s.kind !== 's1Cancelled';
 }
 
 export function hasStage2Data(
@@ -326,6 +331,12 @@ export type CollectionViewContextType = {
     isAiRowVisible: boolean; // Controls visibility of the AI prompt row in QueryEditor
     /** See {@link QueryInsightsState} for the pipeline shape and usage rules. */
     queryInsights: QueryInsightsState;
+    readonly lifecycle: {
+        readonly unavailable?: ConnectionUnavailableDetails;
+        readonly beginOperation: () => number | undefined;
+        readonly isOperationCurrent: (revision: number) => boolean;
+        readonly showUnavailable: (unavailable: ConnectionUnavailableDetails) => void;
+    };
 };
 
 export const DefaultCollectionViewContext: CollectionViewContextType = {
@@ -358,6 +369,11 @@ export const DefaultCollectionViewContext: CollectionViewContextType = {
     // query; flipping `s1Loading` again from elsewhere is the dedupe
     // signal the QueryInsightsTab fallback fetch uses to short-circuit.
     queryInsights: { kind: 'idle' },
+    lifecycle: {
+        beginOperation: () => 0,
+        isOperationCurrent: () => true,
+        showUnavailable: () => undefined,
+    },
 };
 
 export const CollectionViewContext = createContext<

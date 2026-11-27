@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type FieldEntry } from '@documentdb-js/schema-analyzer';
+import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
@@ -12,7 +13,11 @@ import { ext } from '../extensionVariables';
 import { getDataAtPath } from '../utils/slickgrid/mongo/toSlickGridTable';
 import { toSlickGridTree, type TreeData } from '../utils/slickgrid/mongo/toSlickGridTree';
 import { type QueryInsightsStage2Response } from '../webviews/documentdb/collectionView/types/queryInsights';
-import { ClustersClient, type FindQueryParams } from './ClustersClient';
+import { ClustersClient, type ConnectionBinding, type FindQueryParams } from './ClustersClient';
+import { isRetiredConnectionBinding } from './connectionBindingRetirement';
+import { classifyConnectionFailure } from './connectionFailures';
+import { ConnectionUnavailableError } from './ConnectionUnavailableError';
+import { runWithClient } from './runWithClient';
 import { SchemaStore } from './SchemaStore';
 import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
 import { parseDocumentId } from './utils/parseDocumentId';
@@ -70,15 +75,69 @@ export class ClusterSession {
      * Private constructor to enforce the use of `initNewSession` for creating new sessions.
      * This ensures that sessions are properly initialized and managed.
      */
-    private constructor(
-        private _client: ClustersClient,
-        private readonly _clusterId: string,
-    ) {
-        return;
+    private constructor(private readonly binding: ConnectionBinding) {}
+
+    public getBinding(): ConnectionBinding {
+        return this.binding;
     }
 
-    public getClient(): ClustersClient {
-        return this._client;
+    public async getClient(): Promise<ClustersClient> {
+        return ClustersClient.resolveBoundClient(this.binding, { trigger: 'collectionView' });
+    }
+
+    public getEpoch(): number {
+        return ClustersClient.getEpoch(this.binding.clusterId);
+    }
+
+    private isCurrent(epoch: number): boolean {
+        const { clusterId, fingerprint } = this.binding;
+        return (
+            epoch === ClustersClient.getEpoch(clusterId) &&
+            !isRetiredConnectionBinding(this.binding) &&
+            ClustersClient.getLatchReason(clusterId) === undefined &&
+            ClustersClient.getBinding(clusterId)?.fingerprint === fingerprint
+        );
+    }
+
+    public assertCurrent(epoch: number, signal?: AbortSignal): void {
+        if (signal?.aborted || !this.isCurrent(epoch)) {
+            throw new UserCancelledError('staleCollectionViewOperation');
+        }
+    }
+
+    public assertAvailable(signal?: AbortSignal): void {
+        if (signal?.aborted) {
+            throw new UserCancelledError('staleCollectionViewOperation');
+        }
+        const reason = isRetiredConnectionBinding(this.binding)
+            ? 'credentialsChanged'
+            : ClustersClient.getLatchReason(this.binding.clusterId);
+        if (reason) {
+            throw new ConnectionUnavailableError(reason);
+        }
+        const current = ClustersClient.getBinding(this.binding.clusterId);
+        if (current?.fingerprint !== this.binding.fingerprint) {
+            throw new ConnectionUnavailableError(current ? 'identityChanged' : 'unreachable');
+        }
+    }
+
+    // Keep the existing procedure return types until the routers map unavailable results.
+    public async runWithClient<T>(
+        operation: (client: ClustersClient, epoch: number) => Promise<T>,
+        epoch = this.getEpoch(),
+    ): Promise<T> {
+        const result = await runWithClient(
+            this.binding,
+            async (client) => {
+                this.assertCurrent(epoch);
+                return { value: await operation(client, epoch) };
+            },
+            { trigger: 'collectionView' },
+        );
+        if ('unavailable' in result) {
+            throw new ConnectionUnavailableError(result.unavailable.reason);
+        }
+        return result.value;
     }
 
     /**
@@ -114,7 +173,6 @@ export class ClusterSession {
 
     /**
      * Query Insights caching
-     * Note: QueryInsightsApis instance is accessed via this._client.queryInsightsApis
      *
      * Timestamps are included for potential future features:
      * - Time-based cache invalidation (e.g., expire after N seconds)
@@ -248,6 +306,7 @@ export class ClusterSession {
         pageNumber: number,
         pageSize: number,
         executionIntent: 'initial' | 'refresh' | 'pagination' = 'pagination',
+        signal?: AbortSignal,
     ): Promise<number> {
         const querySkip = queryParams.skip ?? 0;
         const queryLimit = queryParams.limit ?? 0;
@@ -261,9 +320,11 @@ export class ClusterSession {
         // Early return if trying to skip beyond the query limit
         // Note: queryLimit=0 means no limit, so only check when queryLimit > 0
         if (queryLimit > 0 && pageOffset >= queryLimit) {
-            // We're trying to page beyond the query's limit - return empty results
-            this._currentRawDocuments = [];
-            return 0;
+            return this.runWithClient((_client, epoch) => {
+                this.assertCurrent(epoch, signal);
+                this._currentRawDocuments = [];
+                return Promise.resolve(0);
+            });
         }
 
         // Calculate effective limit:
@@ -275,18 +336,6 @@ export class ClusterSession {
             dbLimit = Math.min(pageSize, remainingInWindow);
         }
 
-        // Check if the user's query has changed (not pagination, just the actual query)
-        this.resetCachesIfUserQueryChanged(queryParams);
-
-        // Check if page size has changed (invalidates accumulation strategy)
-        this.resetAccumulationIfPageSizeChanged(pageSize);
-
-        // Force clear query insights caches for initial/refresh operations
-        // This ensures fresh performance data when user explicitly requests it
-        if (executionIntent === 'initial' || executionIntent === 'refresh') {
-            this.clearQueryInsightsCaches();
-        }
-
         // Build final query parameters with computed skip/limit
         const paginatedQueryParams: FindQueryParams = {
             ...queryParams,
@@ -294,14 +343,45 @@ export class ClusterSession {
             limit: dbLimit,
         };
 
-        // Track execution time for query insights
-        const startTime = performance.now();
-        const documents: WithId<Document>[] = await this._client.runFindQuery(
-            databaseName,
-            collectionName,
-            paginatedQueryParams,
-        );
-        this._lastExecutionTimeMs = performance.now() - startTime;
+        const epoch = this.getEpoch();
+        let ran: ConnectionBinding | undefined;
+        let ranAuthMethod: ClustersClient['authMethod'] | undefined;
+        let queryResult: { documents: WithId<Document>[]; executionTimeMs: number };
+        try {
+            queryResult = await this.runWithClient(async (client) => {
+                this.assertCurrent(epoch, signal);
+                const startTime = performance.now();
+                ran = client.binding;
+                ranAuthMethod = client.authMethod;
+                const documents = await client.runFindQuery(databaseName, collectionName, paginatedQueryParams);
+                return { documents, executionTimeMs: performance.now() - startTime };
+            }, epoch);
+        } catch (error) {
+            if (
+                error instanceof Error &&
+                ran !== undefined &&
+                classifyConnectionFailure(error, ranAuthMethod).generation === 'replaceOnNextForeground' &&
+                !signal?.aborted &&
+                ClustersClient.getEpoch(ran.clusterId) === epoch &&
+                ClustersClient.getBinding(ran.clusterId) === ran &&
+                !ClustersClient.hasReusableClient(ran.clusterId) &&
+                ClustersClient.getLatchReason(ran.clusterId) === undefined
+            ) {
+                throw new Error(`${error.message} ${l10n.t('Run the query again to retry the connection.')}`, {
+                    cause: error,
+                });
+            }
+            throw error;
+        }
+        const { documents, executionTimeMs } = queryResult;
+
+        this.assertCurrent(epoch, signal);
+        this.resetCachesIfUserQueryChanged(queryParams);
+        this.resetAccumulationIfPageSizeChanged(pageSize);
+        if (executionIntent === 'initial' || executionIntent === 'refresh') {
+            this.clearQueryInsightsCaches();
+        }
+        this._lastExecutionTimeMs = executionTimeMs;
 
         // Update current page documents (always replace, not accumulate)
         this._currentRawDocuments = documents;
@@ -313,10 +393,11 @@ export class ClusterSession {
         // Feed documents to the shared SchemaStore
         if (documents.length > 0) {
             const store = SchemaStore.getInstance();
-            store.addDocuments(this._clusterId, databaseName, collectionName, documents);
+            const { clusterId } = this.binding;
+            store.addDocuments(clusterId, databaseName, collectionName, documents);
 
             ext.outputChannel.trace(
-                `[SchemaStore] Fed ${String(documents.length)} documents, ${String(store.getDocumentCount(this._clusterId, databaseName, collectionName))} total, ${String(store.getKnownFields(this._clusterId, databaseName, collectionName).length)} known fields`,
+                `[SchemaStore] Fed ${String(documents.length)} documents, ${String(store.getDocumentCount(clusterId, databaseName, collectionName))} total, ${String(store.getKnownFields(clusterId, databaseName, collectionName).length)} known fields`,
             );
         }
 
@@ -331,10 +412,19 @@ export class ClusterSession {
         return toSlickGridTree(this._currentRawDocuments);
     }
 
-    async deleteDocuments(databaseName: string, collectionName: string, documentIds: string[]): Promise<boolean> {
-        const acknowledged = await this._client.deleteDocuments(databaseName, collectionName, documentIds);
+    public async deleteDocuments(
+        databaseName: string,
+        collectionName: string,
+        documentIds: string[],
+        epoch = this.getEpoch(),
+    ): Promise<boolean> {
+        const acknowledged = await this.runWithClient(
+            (client) => client.deleteDocuments(databaseName, collectionName, documentIds),
+            epoch,
+        );
 
-        if (acknowledged) {
+        // Acknowledge a completed write, but don't update the page from an old operation.
+        if (acknowledged && this.isCurrent(epoch)) {
             this._currentRawDocuments = this._currentRawDocuments.filter((doc) => {
                 return !documentIds.some((id) => {
                     const parsedId = parseDocumentId(id);
@@ -356,7 +446,12 @@ export class ClusterSession {
             path: path,
             headers:
                 this._databaseName && this._collectionName
-                    ? store.getPropertyNamesAtLevel(this._clusterId, this._databaseName, this._collectionName, path)
+                    ? store.getPropertyNamesAtLevel(
+                          this.binding.clusterId,
+                          this._databaseName,
+                          this._collectionName,
+                          path,
+                      )
                     : [],
             data: getDataAtPath(this._currentRawDocuments, path),
         };
@@ -372,7 +467,11 @@ export class ClusterSession {
         if (!this._databaseName || !this._collectionName) {
             return [];
         }
-        return SchemaStore.getInstance().getKnownFields(this._clusterId, this._databaseName, this._collectionName);
+        return SchemaStore.getInstance().getKnownFields(
+            this.binding.clusterId,
+            this._databaseName,
+            this._collectionName,
+        );
     }
 
     // ============================================================================
@@ -393,6 +492,8 @@ export class ClusterSession {
      * @returns Explain output from queryPlanner verbosity
      */
     public async getQueryPlannerInfo(
+        client: ClustersClient,
+        epoch: number,
         databaseName: string,
         collectionName: string,
         filter: Document,
@@ -402,14 +503,16 @@ export class ClusterSession {
             skip?: number;
             limit?: number;
         },
+        signal?: AbortSignal,
     ): Promise<Document> {
+        this.assertCurrent(epoch, signal);
         // Check cache
         if (this._queryPlannerCache) {
             return this._queryPlannerCache.result;
         }
 
         // Execute explain("queryPlanner") using QueryInsightsApis from ClustersClient
-        const rawResult = await this._client.queryInsightsApis.explainFind(databaseName, collectionName, filter, {
+        const rawResult = await client.queryInsightsApis.explainFind(databaseName, collectionName, filter, {
             verbosity: 'queryPlanner',
             sort: options?.sort,
             projection: options?.projection,
@@ -418,10 +521,11 @@ export class ClusterSession {
         });
 
         // Apply Azure DocumentDB explain fixup (see fixupDocumentDbExplain for details)
-        const clusterMetadata = await this._client.getClusterMetadata();
+        const clusterMetadata = await client.getClusterMetadata();
         const explainResult = fixupDocumentDbExplain(rawResult, clusterMetadata) ?? rawResult;
 
         // Cache result
+        this.assertCurrent(epoch, signal);
         this._queryPlannerCache = {
             result: explainResult,
             timestamp: Date.now(),
@@ -447,6 +551,8 @@ export class ClusterSession {
      * @returns Explain output with executionStats
      */
     public async getExecutionStats(
+        client: ClustersClient,
+        epoch: number,
         databaseName: string,
         collectionName: string,
         filter: Document,
@@ -456,7 +562,9 @@ export class ClusterSession {
             skip?: number;
             limit?: number;
         },
+        signal?: AbortSignal,
     ): Promise<Document> {
+        this.assertCurrent(epoch, signal);
         // Check cache
         if (this._executionStatsCache) {
             return this._executionStatsCache.result;
@@ -464,7 +572,7 @@ export class ClusterSession {
 
         // Determine verbosity based on cluster type
         // Azure DocumentDB clusters support allPlansExecution for richer plan data
-        const clusterMetadata = await this._client.getClusterMetadata();
+        const clusterMetadata = await client.getClusterMetadata();
         const verbosity =
             clusterMetadata.domainInfo_isAzure === 'true' && clusterMetadata.domainInfo_api === 'vCore'
                 ? 'allPlansExecution'
@@ -472,7 +580,8 @@ export class ClusterSession {
 
         // Execute explain using QueryInsightsApis from ClustersClient
         // This re-runs the query to get authoritative execution metrics
-        const rawResult = await this._client.queryInsightsApis.explainFind(databaseName, collectionName, filter, {
+        this.assertCurrent(epoch, signal);
+        const rawResult = await client.queryInsightsApis.explainFind(databaseName, collectionName, filter, {
             verbosity,
             sort: options?.sort,
             projection: options?.projection,
@@ -484,6 +593,7 @@ export class ClusterSession {
         const explainResult = fixupDocumentDbExplain(rawResult, clusterMetadata) ?? rawResult;
 
         // Cache result
+        this.assertCurrent(epoch, signal);
         this._executionStatsCache = {
             result: explainResult,
             timestamp: Date.now(),
@@ -606,7 +716,13 @@ export class ClusterSession {
      * Caches the transformed Stage 2 response and total collection docs
      * for use by Stage 3 when building the static analysis summary.
      */
-    public setStage2Response(response: QueryInsightsStage2Response, totalCollectionDocs?: number): void {
+    public setStage2Response(
+        epoch: number,
+        response: QueryInsightsStage2Response,
+        totalCollectionDocs?: number,
+        signal?: AbortSignal,
+    ): void {
+        this.assertCurrent(epoch, signal);
         this._stage2ResponseCache = { response, totalCollectionDocs };
     }
 
@@ -635,7 +751,7 @@ export class ClusterSession {
      *
      * @remarks
      * This method will be implemented in Phase 3. The AI service is accessed via
-     * this._client.queryInsightsAIService (similar to queryInsightsApis pattern).
+     * the resolved client's Query Insights service.
      */
     public getAIRecommendations(
         _databaseName: string,
@@ -649,7 +765,7 @@ export class ClusterSession {
         }
 
         // TODO: Phase 3 implementation
-        // const recommendations = await this._client.queryInsightsAIService.generateRecommendations(
+        // const recommendations = await client.queryInsightsAIService.generateRecommendations(
         //     databaseName,
         //     collectionName,
         //     filter,
@@ -692,7 +808,7 @@ export class ClusterSession {
 
         const sessionId = Math.random().toString(16).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
-        const session = new ClusterSession(client, clusterId);
+        const session = new ClusterSession(client.binding);
 
         ClusterSession._sessions.set(sessionId, session);
 

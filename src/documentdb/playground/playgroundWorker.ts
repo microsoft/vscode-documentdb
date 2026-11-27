@@ -30,8 +30,16 @@ import {
     createOidcDestinationPolicy,
     type OidcDestinationPolicy,
 } from '../auth/oidcClientOptions';
-import { expiresInSecondsFromTimestamp } from '../auth/tokenExpiry';
-import { type MainToWorkerMessage, type WorkerStartupStage, type WorkerToMainMessage } from './workerTypes';
+import { expiresInSecondsFromTimestamp, readJwtTimes } from '../auth/tokenExpiry';
+import {
+    getWorkerAuthReason,
+    isWorkerAuthReason,
+    workerAuthErrorName,
+    type MainToWorkerMessage,
+    type WorkerAuthReason,
+    type WorkerStartupStage,
+    type WorkerToMainMessage,
+} from './workerTypes';
 
 if (!parentPort) {
     throw new Error('playgroundWorker.ts must be run as a worker_thread');
@@ -41,6 +49,17 @@ if (!parentPort) {
 
 let mongoClient: MongoClientType | undefined;
 let shellRuntime: DocumentDBShellRuntime | undefined;
+// Some driver/runtime error paths discard the original callback error (including its cause).
+let callbackFailure: WorkerAuthReason | undefined;
+
+function relayError(reason: WorkerAuthReason): Error {
+    if (reason === 'destinationRejected') {
+        return new EntraDestinationRejectedError({ hostCount: 0 });
+    }
+    const error = new Error(reason);
+    error.name = workerAuthErrorName(reason);
+    return error;
+}
 
 /**
  * Tracks the requestId of the currently executing eval message.
@@ -75,6 +94,7 @@ parentPort.on('message', (msg: MainToWorkerMessage) => {
                     requestId: msg.requestId,
                     success: false,
                     error: errorMessage,
+                    authReason: getWorkerAuthReason(err) ?? callbackFailure,
                     ...(err instanceof EntraDestinationRejectedError
                         ? { errorName: 'EntraDestinationRejectedError' as const }
                         : {}),
@@ -98,6 +118,7 @@ parentPort.on('message', (msg: MainToWorkerMessage) => {
                     error: errorMessage,
                     stack,
                     code,
+                    authReason: getWorkerAuthReason(err) ?? callbackFailure,
                 };
                 parentPort!.postMessage(response);
             });
@@ -120,6 +141,7 @@ parentPort.on('message', (msg: MainToWorkerMessage) => {
 // ─── Init handler ────────────────────────────────────────────────────────────
 
 async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): Promise<void> {
+    callbackFailure = undefined;
     let connecting = true;
     const reportTiming = (activity: 'databaseConnect' | 'tokenWait', activityId: string, started: boolean): void => {
         if (connecting) {
@@ -186,17 +208,32 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
             connectionString,
             policy,
             baseOptions: options,
-            oidcCallback: async (): Promise<{ accessToken: string; expiresInSeconds: number }> => {
+            oidcCallback: async ({ timeoutContext }): Promise<{ accessToken: string; expiresInSeconds: number }> => {
                 const requestId = randomUUID();
                 const tokenPromise = new Promise<string>((resolve, reject) => {
                     pendingTokenRequests.set(requestId, { resolve, reject });
                 });
+                const driverAbortFlag =
+                    !usesManagedIdentity && timeoutContext
+                        ? new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT)
+                        : undefined;
+                const abortFlag = driverAbortFlag && new Int32Array(driverAbortFlag);
+                const markAborted = (): void => {
+                    if (abortFlag) Atomics.store(abortFlag, 0, 1);
+                };
+                if (abortFlag) {
+                    timeoutContext.addEventListener('abort', markAborted, { once: true });
+                    if (timeoutContext.aborted) {
+                        markAborted();
+                    }
+                }
                 const tokenRequest: WorkerToMainMessage = {
                     type: 'tokenRequest',
                     requestId,
                     tenantId: msg.tenantId,
                     source: usesManagedIdentity ? 'managedIdentity' : 'vscode',
                     clientId: usesManagedIdentity ? msg.managedIdentityClientId : undefined,
+                    ...(driverAbortFlag ? { driverAbortFlag } : {}),
                 };
                 reportProgress('acquiringToken');
                 reportTiming('tokenWait', requestId, true);
@@ -205,6 +242,9 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
                 try {
                     accessToken = await tokenPromise;
                 } finally {
+                    if (abortFlag) {
+                        timeoutContext.removeEventListener('abort', markAborted);
+                    }
                     reportTiming('tokenWait', requestId, false);
                 }
                 reportProgress('authenticating');
@@ -212,26 +252,29 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
                 // Parse the JWT exp claim for a meaningful cache duration.
                 // This avoids re-acquiring the token on every database operation
                 // in persistent shell sessions.
-                let expiresInSeconds = 3500; // Conservative default (~1 hour)
-                try {
-                    const payload = accessToken.split('.')[1];
-                    if (payload) {
-                        const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString()) as {
-                            exp?: number;
-                        };
-                        if (typeof decoded.exp === 'number') {
-                            expiresInSeconds = expiresInSecondsFromTimestamp(decoded.exp * 1000);
-                        }
-                    }
-                } catch {
-                    // JWT parsing failed — use conservative default
-                }
+                const { expSec } = readJwtTimes(accessToken);
+                const expiresInSeconds = expSec === undefined ? 3500 : expiresInSecondsFromTimestamp(expSec * 1000);
 
                 return { accessToken, expiresInSeconds };
             },
         });
         connectionString = configuration.connectionString;
         options = configuration.options;
+        const authProperties = options.authMechanismProperties;
+        const oidcCallback = authProperties?.OIDC_CALLBACK;
+        if (oidcCallback) {
+            authProperties.OIDC_CALLBACK = async (params) => {
+                if (callbackFailure) {
+                    throw relayError(callbackFailure);
+                }
+                try {
+                    return await oidcCallback(params);
+                } catch (error) {
+                    callbackFailure ??= getWorkerAuthReason(error) ?? 'refreshFailed';
+                    throw error;
+                }
+            };
+        }
         if (configuration.ignoredTlsBypass) {
             log('info', '[Auth] TLS validation bypass parameters are ignored for Microsoft Entra ID connections.');
         }
@@ -274,6 +317,7 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
         type: 'initResult',
         requestId: msg.requestId,
         success: true,
+        authReason: callbackFailure,
     };
     parentPort!.postMessage(response);
 }
@@ -281,6 +325,9 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
 // ─── Eval handler ────────────────────────────────────────────────────────────
 
 async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): Promise<void> {
+    if (callbackFailure) {
+        throw relayError(callbackFailure);
+    }
     if (!mongoClient || !shellRuntime) {
         throw new Error('Worker not initialized — call init first');
     }
@@ -333,6 +380,7 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
     const response: WorkerToMainMessage = {
         type: 'evalResult',
         requestId: msg.requestId,
+        authReason: callbackFailure,
         result: {
             type: result.type,
             printable: printableStr,
@@ -384,11 +432,12 @@ function handleTokenResponse(msg: Extract<MainToWorkerMessage, { type: 'tokenRes
 function handleTokenError(msg: Extract<MainToWorkerMessage, { type: 'tokenError' }>): void {
     const pending = pendingTokenRequests.get(msg.requestId);
     if (pending) {
-        pending.reject(
-            msg.errorName === 'EntraDestinationRejectedError'
-                ? new EntraDestinationRejectedError({ hostCount: 0 })
-                : new Error(msg.error),
-        );
+        const reason = isWorkerAuthReason(msg.reason)
+            ? msg.reason
+            : msg.errorName === 'EntraDestinationRejectedError'
+              ? 'destinationRejected'
+              : 'refreshFailed';
+        pending.reject(relayError(reason));
         pendingTokenRequests.delete(msg.requestId);
     }
 }
@@ -404,6 +453,7 @@ process.on('uncaughtException', (error: Error) => {
             requestId: currentEvalRequestId,
             error: `Uncaught exception: ${error.message}`,
             stack: error.stack,
+            authReason: getWorkerAuthReason(error) ?? callbackFailure,
         };
         parentPort!.postMessage(response);
         currentEvalRequestId = undefined;
@@ -436,6 +486,7 @@ process.on('unhandledRejection', (reason: unknown) => {
             requestId: currentEvalRequestId,
             error: `Unhandled rejection: ${message}`,
             stack,
+            authReason: getWorkerAuthReason(reason) ?? callbackFailure,
         };
         parentPort!.postMessage(response);
         currentEvalRequestId = undefined;

@@ -13,6 +13,11 @@ import {
 } from 'mongodb';
 import { describe, expect, it, vi } from 'vitest';
 import { allowListedErrorType, innermostCauseTypeOf } from '../../utils/telemetryErrorType';
+import {
+    EntraIdentityMismatchError,
+    EntraSignInRequiredError,
+    TokenCallbackError,
+} from '../auth/entraErrors/entraCallbackErrors';
 import { applyStartupFailureTelemetry, classifyStartupFailure } from './startupFailureTelemetry';
 
 vi.mock('vscode', async (importOriginal) => {
@@ -101,6 +106,17 @@ describe('classifyStartupFailure', (): void => {
 });
 
 describe('applyStartupFailureTelemetry', (): void => {
+    it.each([
+        ['a direct token callback error', new TokenCallbackError(nodeError('ECONNRESET'))],
+        ['a wrapped sign-in requirement', new Error('Wrapper', { cause: new EntraSignInRequiredError('noSession') })],
+        ['a server selection error wrapping an account mismatch', selectionError(new EntraIdentityMismatchError())],
+    ])('attributes %s to Entra during startup', (_label, error): void => {
+        const properties: ITelemetryContext['properties'] = { entraFailureKind: 'none' };
+        applyStartupFailureTelemetry(properties, error);
+        expect(properties.startupFailureCategory).toBe('entraToken');
+        expect(properties.entraFailureKind).toBe('none');
+    });
+
     it('records only allow-listed values under names whole-error masking keeps', (): void => {
         const properties: ITelemetryContext['properties'] = {};
         applyStartupFailureTelemetry(properties, new Error('private-host private-user'));

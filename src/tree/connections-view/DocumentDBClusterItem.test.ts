@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
+    UserCancelledError,
     type AzureWizard,
     type callWithTelemetryAndErrorHandling,
     type IActionContext,
@@ -74,7 +75,10 @@ vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
         });
         try {
             return await callback(context);
-        } catch {
+        } catch (error) {
+            if (error instanceof UserCancelledError) {
+                context.telemetry.properties.result = 'Canceled';
+            }
             return undefined;
         }
     },
@@ -84,10 +88,22 @@ vi.mock('../../services/connectionStorageService', async (importOriginal) => ({
     ConnectionStorageService: { get: vi.fn(), save: vi.fn() },
 }));
 vi.mock('../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: vi.fn(), deleteClient: vi.fn(), exists: vi.fn() },
+    addEstablishedConnectionContext: vi.fn(),
+    ClustersClient: {
+        connectInteractive: vi.fn(),
+        deleteClient: vi.fn(),
+        exists: vi.fn(),
+        getEpoch: vi.fn(() => 0),
+        getLatchReason: vi.fn(),
+    },
 }));
 vi.mock('../../documentdb/CredentialCache', () => ({
-    CredentialCache: { hasCredentials: vi.fn(), setAuthCredentials: vi.fn(), deleteCredentials: vi.fn() },
+    CredentialCache: {
+        hasCredentials: vi.fn(),
+        setAuthCredentials: vi.fn(),
+        deleteCredentials: vi.fn(),
+        getCredentials: vi.fn(),
+    },
 }));
 vi.mock('../../services/connectionReachabilityService', () => ({
     ConnectionReachabilityService: { ensureReachable: vi.fn() },
@@ -120,7 +136,9 @@ describe('saved connection destination authentication', () => {
     beforeEach((): void => {
         vi.clearAllMocks();
         vi.mocked(CredentialCache.hasCredentials).mockReturnValue(false);
-        vi.mocked(ClustersClient.getClient).mockResolvedValue({ connectionCorrelationId: 'attempt' } as ClustersClient);
+        vi.mocked(ClustersClient.connectInteractive).mockResolvedValue({
+            connectionCorrelationId: 'attempt',
+        } as ClustersClient);
         vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
             inspect: vi.fn(),
         } as unknown as vscode.WorkspaceConfiguration);
@@ -132,12 +150,34 @@ describe('saved connection destination authentication', () => {
         );
     });
 
+    it.each([StorageZone.Clusters, StorageZone.Emulators])(
+        'reads the current %s stored endpoint without preparing or authenticating it',
+        async (storageZone): Promise<void> => {
+            const item = makeItem();
+            item.cluster.storageZone = storageZone;
+            item.cluster.connectionString = 'mongodb://stale-model/';
+            const getCredentials = vi.spyOn(item, 'getCredentials');
+            vi.mocked(ConnectionStorageService.get)
+                .mockResolvedValueOnce(makeConnection('mongodb://user:password@current-host/'))
+                .mockResolvedValueOnce(undefined);
+            expect(await item.getUnauthenticatedEndpoint()).toBe('mongodb://user:password@current-host/');
+            expect(await item.getUnauthenticatedEndpoint()).toBeUndefined();
+            expect(ConnectionStorageService.get).toHaveBeenCalledWith('stable-id', storageZone);
+            expect(getCredentials).not.toHaveBeenCalled();
+            expect(ConnectionReachabilityService.ensureReachable).not.toHaveBeenCalled();
+            expect(CredentialCache.getCredentials).not.toHaveBeenCalled();
+            expect(CredentialCache.setAuthCredentials).not.toHaveBeenCalled();
+            expect(ConnectionStorageService.save).not.toHaveBeenCalled();
+            expect(ClustersClient.connectInteractive).not.toHaveBeenCalled();
+        },
+    );
+
     it.each([AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity])(
         'reports a forced saved %s rejection without opening a picker or falling back',
         async (method): Promise<void> => {
             const connection = makeConnection('mongodb://other.example.com/', method);
             vi.mocked(ConnectionStorageService.get).mockResolvedValue(connection);
-            vi.mocked(ClustersClient.getClient).mockRejectedValue(
+            vi.mocked(ClustersClient.connectInteractive).mockRejectedValue(
                 new EntraDestinationRejectedError(evaluateEntraDestination(connection.secrets.connectionString)),
             );
             const item = makeItem();
@@ -147,7 +187,7 @@ describe('saved connection destination authentication', () => {
             expect(wizardCreated).not.toHaveBeenCalled();
             expect(prompt).not.toHaveBeenCalled();
             expect(showQuickPick).not.toHaveBeenCalled();
-            expect(ClustersClient.getClient).toHaveBeenCalledTimes(1);
+            expect(ClustersClient.connectInteractive).toHaveBeenCalledTimes(1);
             expect(CredentialCache.setAuthCredentials).toHaveBeenCalledWith(
                 'stable-id',
                 method,
@@ -216,7 +256,7 @@ describe('saved connection destination authentication', () => {
             const error = new EntraDestinationRejectedError(
                 evaluateEntraDestination(connection.secrets.connectionString),
             );
-            vi.mocked(ClustersClient.getClient).mockRejectedValue(error);
+            vi.mocked(ClustersClient.connectInteractive).mockRejectedValue(error);
             showErrorMessage.mockResolvedValueOnce('Learn More');
             if (outcome === 'false') {
                 vi.mocked(vscode.env.openExternal).mockResolvedValueOnce(false);
@@ -259,7 +299,7 @@ describe('connect request telemetry', () => {
     // The request returns no client after a failed connection, which the wrapper reports as
     // Succeeded; the outcome and the failed attempt's ID must be explicit.
     it('reports a failed connection with the ID of the attempt that failed', async (): Promise<void> => {
-        vi.mocked(ClustersClient.getClient).mockImplementation(async (_clusterId, _signal, onStartup) => {
+        vi.mocked(ClustersClient.connectInteractive).mockImplementation(async (_clusterId, _signal, onStartup) => {
             onStartup?.('failed-attempt');
             throw new Error('Authentication failed.');
         });
@@ -269,12 +309,75 @@ describe('connect request telemetry', () => {
         expect(connectEvent()).toMatchObject({ connectionResult: 'failed', connectionCorrelationId: 'failed-attempt' });
     });
 
+    it('cancels the decoded-password retry without reporting another failure or clearing shared state', async (): Promise<void> => {
+        const connection = makeConnection('mongodb://localhost:27017/', AuthMethodId.NativeAuth);
+        connection.secrets.nativeAuthConfig = { connectionUser: 'test-user', connectionPassword: 'test%40password' };
+        vi.mocked(ConnectionStorageService.get).mockResolvedValue(connection);
+        const connectInteractive = vi.mocked(ClustersClient.connectInteractive);
+        connectInteractive
+            .mockRejectedValueOnce(new Error('Authentication failed.'))
+            .mockRejectedValueOnce(new UserCancelledError());
+        showErrorMessage.mockResolvedValueOnce('Try with decoded password');
+        const item = makeItem();
+
+        await expect(item.connect()).resolves.toBeNull();
+
+        expect(connectInteractive).toHaveBeenCalledTimes(2);
+        expect(showErrorMessage).toHaveBeenCalledExactlyOnceWith(
+            expect.any(String),
+            expect.objectContaining({ modal: true }),
+            'Try with decoded password',
+        );
+        const deleteClient = vi.mocked(ClustersClient.deleteClient);
+        expect(deleteClient).toHaveBeenCalledExactlyOnceWith('stable-id');
+        expect(deleteClient.mock.invocationCallOrder[0]).toBeLessThan(connectInteractive.mock.invocationCallOrder[1]);
+        expect(CredentialCache.deleteCredentials).not.toHaveBeenCalled();
+        expect(item.lastConnectionOutcome).toBe('canceled');
+        expect(connectEvent()).toMatchObject({
+            result: 'Canceled',
+            connectionResult: 'cancelled',
+            urlDecodePasswordResult: 'cancelled',
+        });
+    });
+
+    it('does not save the decoded password when the saved-credentials offer is dismissed', async (): Promise<void> => {
+        const connection = makeConnection('mongodb://localhost:27017/', AuthMethodId.NativeAuth);
+        connection.secrets.nativeAuthConfig = { connectionUser: 'test-user', connectionPassword: 'test%40password' };
+        vi.mocked(ConnectionStorageService.get).mockResolvedValue(connection);
+        vi.mocked(ClustersClient.connectInteractive)
+            .mockRejectedValueOnce(new Error('Authentication failed.'))
+            .mockResolvedValueOnce({ connectionCorrelationId: 'retry' } as ClustersClient);
+        showErrorMessage.mockResolvedValueOnce('Try with decoded password');
+        vi.mocked(vscode.window.showInformationMessage).mockResolvedValueOnce(undefined);
+
+        await expect(makeItem().connect()).resolves.toMatchObject({ connectionCorrelationId: 'retry' });
+
+        expect(vscode.window.showInformationMessage).toHaveBeenCalledExactlyOnceWith(
+            'Connected to "Saved connection" using the decoded password. Would you like to update your saved credentials with the correctly formatted password?',
+            { modal: false },
+            'Update saved password',
+        );
+        expect(ConnectionStorageService.save).not.toHaveBeenCalled();
+    });
+
     it('reports a successful connection with its connection ID', async (): Promise<void> => {
-        vi.mocked(ClustersClient.getClient).mockResolvedValue({ connectionCorrelationId: 'attempt' } as ClustersClient);
+        vi.mocked(ClustersClient.connectInteractive).mockResolvedValue({
+            connectionCorrelationId: 'attempt',
+        } as ClustersClient);
 
         await expect(makeItem().connect()).resolves.toMatchObject({ connectionCorrelationId: 'attempt' });
 
         expect(connectEvent()).toMatchObject({ connectionResult: 'success', connectionCorrelationId: 'attempt' });
+    });
+
+    it('does not drop startup settings for a transient connection error', async (): Promise<void> => {
+        vi.mocked(ClustersClient.connectInteractive).mockRejectedValue(
+            Object.assign(new Error('connection refused'), { code: 'ECONNREFUSED' }),
+        );
+        await expect(makeItem().connect()).resolves.toBeNull();
+        expect(ClustersClient.deleteClient).toHaveBeenCalledExactlyOnceWith('stable-id');
+        expect(CredentialCache.deleteCredentials).not.toHaveBeenCalled();
+        expect(connectEvent()).toMatchObject({ connectionFailureKind: 'transient' });
     });
 });
 

@@ -52,6 +52,7 @@ treat `status: historical` or `status: superseded` as current.
 | [sovereign-clouds](./features/sovereign-clouds/README.md)                 | Entra sign-in in Azure Government and China: per-cloud token audience, Entra error classifier            | implemented; sovereign checks pending     |
 | [Diagnose connection](./features/connectivity-troubleshooter/README.md)   | Read-only connection diagnosis, a server summary and readable Markdown diagnostics (#100)                | implemented; handover blocked on operator |
 | [deep-links](./features/deep-links/README.md)                             | `vscode://` links: action routing, `/connect`, `/local`, `/connect/azure` for Azure portal links         | active; iteration 3 implemented           |
+| [connection-lifecycle](./features/connection-lifecycle/README.md)         | Connections that survive token expiry and idle drops; reconnect, disconnect and identity-bound tabs      | planned (#1102)                           |
 
 Everything else is a single file at this root, such as:
 

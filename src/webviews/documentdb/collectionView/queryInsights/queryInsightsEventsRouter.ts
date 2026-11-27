@@ -23,6 +23,7 @@ import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microso
 import * as l10n from '@vscode/l10n';
 import { type QueryObject } from '../../../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import { ClusterSession } from '../../../../documentdb/ClusterSession';
+import { ConnectionUnavailableError } from '../../../../documentdb/ConnectionUnavailableError';
 import { buildStaticAnalysisSummary } from '../../../../documentdb/queryInsights/staticAnalysisSummary';
 import { StreamingResponseParser } from '../../../../documentdb/queryInsights/streamingResponseParser';
 import { ext } from '../../../../extensionVariables';
@@ -204,6 +205,8 @@ export const queryInsightsEventsRouter = router({
             };
 
             try {
+                const session = ClusterSession.getSession(sessionId);
+                const epoch = session.getEpoch();
                 ext.outputChannel.trace(
                     l10n.t('[Query Insights Stage 3 stream] Started for {db}.{collection} (requestKey: {key})', {
                         db: databaseName,
@@ -229,19 +232,20 @@ export const queryInsightsEventsRouter = router({
                 // the (now-deleted) buffered Stage 3 procedure used to build.
                 // Kept structurally identical so the dedicated completion
                 // telemetry (§7) records the same shape of inputs.
-                const session: ClusterSession = ClusterSession.getSession(sessionId);
-
                 // Record the platform on the dedicated completion event so
                 // it lines up with the buffered procedure's rpc event. Best
                 // effort — a metadata fetch failure here must not abort
                 // Stage 3 streaming (the buffered procedure has the same
                 // contract).
-                try {
-                    const clusterMetadata = await session.getClient().getClusterMetadata();
-                    completionTelemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
-                } catch {
-                    completionTelemetry.properties.platform = 'unknown';
+                const clusterMetadata = await session.runWithClient(
+                    (client) => client.getClusterMetadata().catch(() => undefined),
+                    epoch,
+                );
+                completionTelemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
+                if (abortController.signal.aborted) {
+                    return;
                 }
+                session.assertCurrent(epoch);
 
                 const parsedQueryParams = session.getCurrentFindQueryParamsWithObjects();
                 const queryObject: QueryObject = {
@@ -591,6 +595,10 @@ export const queryInsightsEventsRouter = router({
                 // the `finally` runs cleanup.
                 outcome = 'success';
             } catch (err) {
+                if (err instanceof ConnectionUnavailableError) {
+                    yield { type: 'unavailable', unavailable: myCtx.describeUnavailable(err.reason).unavailable };
+                    return;
+                }
                 // F7: the dedicated completion event is the canonical
                 // Stage 3 telemetry source (the auto rpc event has ~0
                 // duration), so error metadata MUST be recorded here.

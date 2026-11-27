@@ -63,6 +63,27 @@ Rules:
 - Never assume a stable ID is also a tree path unless the provider explicitly guarantees `clusterId === treeId`.
 - Never change tree construction without checking reverse lookup from `clusterId`.
 
+## Connection Binding Contract
+
+A long-lived surface binds to `{ clusterId, fingerprint, generation }`, not to a `ClustersClient`
+instance. Resolve the client for every operation through the binding with
+`ClustersClient.resolveBoundClient()` or `runWithClient()`. Never retain a `ClustersClient` in view,
+router, shell, playground, task, or clipboard state.
+
+- A new generation with the same fingerprint is a transparent same-connection replacement.
+- A different fingerprint is an identity or settings change. Never rebind an existing surface.
+- Check latches and the binding again at operation and async-reply boundaries.
+- An operation may hold the resolved client only for the duration of that operation. A stale reply
+  must not mutate the new connection or replay a failed write.
+- Shell and playground workers may keep their own connection, but pin the originating identity and
+  obey the same fingerprint and epoch checks when they respawn.
+
+The failure-row **Open shell without authentication** entry is separate from normal authenticated
+Shell startup. It binds to a sanitized endpoint and re-reads it with epoch/latch checks, without
+`CredentialCache`, an authentication pin or a token relay. Only credential-rejection/sign-in/missing
+credential holds may be bypassed; Disconnect, removal and updates still block it. Keep local
+completion behavior, but exclude shared authenticated metadata and credential-backed explainers.
+
 ## Design Rendering and Lookup Together
 
 When adding a cluster hierarchy or a tree/list mode, specify these four functions before coding:
@@ -187,16 +208,25 @@ If a command is intentionally unavailable, gate it explicitly with context value
 The tree shows **actions, never error or information rows**. When expanding a cluster fails, the
 reason goes in a **modal** (`showErrorMessage(..., { modal: true, detail })`, translated through
 `ErrorExplanationService` where available). The children are only recovery actions:
-"Diagnose connection…", "Open shell" (on every failure, so experts can debug
+"Diagnose connection…", "Open shell without authentication" (on every failure, so experts can debug
 in the shell even when connecting or sign-in failed), and provider-owned
 actions such as "Update credentials…" via `errorRecoveryActions`
 (`ClusterItemBase.createErrorRecoveryChildren`).
 
 Keep a fixed relative order: configuration/targeted repairs, diagnosis/inspection, shell,
 destructive recovery, and **Retry always last** (including "Retry setup…").
-Providers prepend repairs; Update connection string precedes Update credentials when both exist.
+Providers prepend repairs; **Update connection string** precedes **Update credentials** when both
+exist. Then `ClusterItemBase` renders **Retry sign-in** when a verified Entra identity can recover,
+followed by **Diagnose connection…** and **Open shell without authentication**. **Retry** is last. When **Retry sign-in** or
+the stored-credential rejection action replaces Retry, do not add an ordinary Retry row too.
 Failure classification changes availability, never ordering. When healthy resources coexist with
 recovery actions, render the healthy resources first and the recovery block last.
+
+A connected cluster's `TreeItem.contextValue` includes the `connected` tag while a client exists
+and no lifecycle latch blocks it. Preserve the base context value and use this tag to gate
+Disconnect. A user-disconnected cluster renders its single **Reconnect** action instead of database
+children; Remove and rejected credentials use their own states and must not be exposed as
+user-disconnected.
 
 Do not add a child whose purpose is to show a message (an error label, a "sign-in required" row,
 a tooltip-only info node), even with an icon. Better wording belongs in the modal and in the
@@ -210,6 +240,8 @@ Before approving a cluster tree change, answer yes to all:
 - [ ] Base cluster context tag is preserved.
 - [ ] `clusterId`, `treeId`, and `viewId` have documented owners.
 - [ ] Credentials and clients use `clusterId` only.
+- [ ] Long-lived surfaces retain bindings, not `ClustersClient` instances.
+- [ ] Per-operation resolution checks the fingerprint and generation.
 - [ ] Every rendered layout has a reverse lookup strategy.
 - [ ] Cluster and collection lookup share one resolver.
 - [ ] Synthetic ownership is exact and isolated from stored lookup.
@@ -217,3 +249,5 @@ Before approving a cluster tree change, answer yes to all:
 - [ ] A real render-to-lookup round-trip test covers every layout.
 - [ ] Standard cluster commands work or are explicitly gated off.
 - [ ] Failures show a modal; tree children are recovery actions only, never error or info rows.
+- [ ] Recovery actions keep provider repairs first, diagnosis and shell next, and Retry last.
+- [ ] The `connected` context tag gates Disconnect and disappears while a lifecycle latch applies.

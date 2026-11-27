@@ -11,6 +11,7 @@ import { type PlaygroundConnection } from './types';
 // Access the vscode mock (aliased to test/vitest/vscode.ts)
 import * as vscode from 'vscode';
 
+import { ClustersClient } from '../ClustersClient';
 import { CredentialCache } from '../CredentialCache';
 
 vi.mock('../CredentialCache', () => ({
@@ -24,6 +25,16 @@ describe('PlaygroundService', () => {
 
     const mockUri = { toString: () => 'untitled:playground-1.documentdb.js' } as vscode.Uri;
 
+    function getCloseDocHandler(): (doc: Partial<vscode.TextDocument>) => void {
+        const calls = vi.mocked(vscode.workspace.onDidCloseTextDocument).mock.calls;
+        return calls[calls.length - 1][0];
+    }
+
+    function getOpenDocHandler(): (doc: Partial<vscode.TextDocument>) => void {
+        const calls = vi.mocked(vscode.workspace.onDidOpenTextDocument).mock.calls;
+        return calls[calls.length - 1][0];
+    }
+
     beforeEach(() => {
         // Reset singleton between tests
         service = PlaygroundService.getInstance();
@@ -31,6 +42,7 @@ describe('PlaygroundService', () => {
 
     afterEach(() => {
         service.dispose();
+        vi.restoreAllMocks();
     });
 
     describe('singleton', () => {
@@ -108,6 +120,72 @@ describe('PlaygroundService', () => {
             expect(service.getConnection(uri2)).toBe(connection2);
             expect(service.getDisplayName(mockUri)).toBe('MyCluster / orders');
             expect(service.getDisplayName(uri2)).toBe('OtherCluster / products');
+        });
+
+        it('captures the host binding when a tree selection is bound', () => {
+            const identity = {
+                kind: 'entra',
+                providerId: 'microsoft',
+                accountId: 'account',
+                accountLabel: 'Account',
+                tenantId: 'tenant',
+            } as const;
+            vi.spyOn(ClustersClient, 'getBinding').mockReturnValue({
+                clusterId: connection.clusterId,
+                fingerprint: 'fingerprint',
+                generation: 1,
+            });
+            vi.spyOn(ClustersClient, 'getLastVerifiedIdentity').mockReturnValue(identity);
+
+            const bound = service.setConnectionFromHost(mockUri, connection);
+
+            expect(bound).toEqual({
+                ...connection,
+                fingerprint: 'fingerprint',
+                entraIdentity: identity,
+            });
+            expect(service.getConnection(mockUri)).toBe(bound);
+        });
+
+        it('marks only the explicitly re-picked document for one failed-worker replacement', () => {
+            const uri2 = { toString: () => 'untitled:playground-2.documentdb.js' } as vscode.Uri;
+            vi.spyOn(ClustersClient, 'getBinding').mockReturnValue({
+                clusterId: connection.clusterId,
+                fingerprint: 'new-fingerprint',
+                generation: 2,
+            });
+            vi.spyOn(ClustersClient, 'getLastVerifiedIdentity').mockReturnValue(undefined);
+            service.setConnection(mockUri, connection);
+            service.setConnection(uri2, connection);
+
+            const repicked = service.setConnectionFromHost(mockUri, {
+                ...connection,
+                databaseName: 'replacement',
+            });
+
+            expect(repicked.workerReplacement).toEqual({ fingerprint: 'new-fingerprint' });
+            expect(service.getConnection(uri2)).toEqual({
+                ...connection,
+                fingerprint: 'new-fingerprint',
+            });
+            expect(service.getConnection(uri2)?.workerReplacement).toBeUndefined();
+        });
+
+        it('captures a worker binding only while the original document binding is current', () => {
+            service.setConnection(mockUri, connection);
+            const replacement = { ...connection, databaseName: 'replacement' };
+            const captured = service.captureWorkerBinding(mockUri, connection, {
+                fingerprint: 'worker-fingerprint',
+            });
+            expect(captured?.fingerprint).toBe('worker-fingerprint');
+
+            service.setConnection(mockUri, replacement);
+            expect(
+                service.captureWorkerBinding(mockUri, connection, {
+                    fingerprint: 'stale-fingerprint',
+                }),
+            ).toBeUndefined();
+            expect(service.getConnection(mockUri)).toBe(replacement);
         });
 
         it('getActiveClusterIds returns all unique cluster IDs', () => {
@@ -245,6 +323,16 @@ describe('PlaygroundService', () => {
             clusterDisplayName: 'MyCluster',
             databaseName: 'orders',
         };
+        const learnedBinding = {
+            fingerprint: 'worker-fingerprint',
+            entraIdentity: {
+                kind: 'entra',
+                providerId: 'microsoft',
+                accountId: 'worker-account',
+                accountLabel: 'Worker Account',
+                tenantId: 'tenant',
+            },
+        } as const;
 
         function getSaveDocHandler(): (doc: Partial<vscode.TextDocument>) => void {
             const calls = (vscode.workspace.onDidSaveTextDocument as Mock).mock.calls;
@@ -312,6 +400,48 @@ describe('PlaygroundService', () => {
             expect(service.isConnected(newFile.uri as vscode.Uri)).toBe(true);
             expect(service.getConnection(newFile.uri as vscode.Uri)).toEqual(connection);
             expect(service.isConnected(oldFile.uri as vscode.Uri)).toBe(false);
+        });
+
+        it('remembers the first worker binding at the new URI after Save As', () => {
+            hasCredentialsMock.mockReturnValue(true);
+            const content = 'db.orders.find({})';
+            const source = makeFileDoc('file:///home/u/orders.documentdb.js', content);
+            const saved = makeFileDoc('file:///home/u/orders-copy.documentdb.js', content);
+            const sourceUri = source.uri as vscode.Uri;
+            const savedUri = saved.uri as vscode.Uri;
+            const original = service.setConnectionFromHost(sourceUri, connection);
+            expect(original.fingerprint).toBeUndefined();
+            setOpenDocuments([source, saved]);
+            getSaveDocHandler()(saved);
+            getCloseDocHandler()(source);
+            expect(service.getConnection(savedUri)).toBe(original);
+
+            const bound = service.captureWorkerBinding(sourceUri, original, learnedBinding);
+
+            expect(bound).toEqual({ ...original, ...learnedBinding });
+            expect(service.getConnection(savedUri)).toBe(bound);
+            getCloseDocHandler()(saved);
+            getOpenDocHandler()(saved);
+            getOpenDocHandler()(source);
+            expect(service.getConnection(savedUri)).toBe(bound);
+            expect(service.getConnection(sourceUri)).toBeUndefined();
+        });
+
+        it('rejects a worker binding after re-picking the same unpinned target at the saved URI', () => {
+            const content = 'db.orders.find({})';
+            const source = makeFileDoc('file:///home/u/orders.documentdb.js', content);
+            const saved = makeFileDoc('file:///home/u/orders-copy.documentdb.js', content);
+            const sourceUri = source.uri as vscode.Uri;
+            const savedUri = saved.uri as vscode.Uri;
+            const original = service.setConnectionFromHost(sourceUri, connection);
+            setOpenDocuments([source, saved]);
+            getSaveDocHandler()(saved);
+            const repicked = service.setConnectionFromHost(savedUri, original);
+
+            expect(service.captureWorkerBinding(sourceUri, original, learnedBinding)).toBeUndefined();
+            expect(repicked).not.toBe(original);
+            expect(service.getConnection(savedUri)).toBe(repicked);
+            expect(repicked.fingerprint).toBeUndefined();
         });
 
         it('is a no-op when saving a file that already has a connection (regular save)', () => {
@@ -382,16 +512,6 @@ describe('PlaygroundService', () => {
             clusterDisplayName: 'MyCluster',
             databaseName: 'orders',
         };
-
-        function getCloseDocHandler(): (doc: Partial<vscode.TextDocument>) => void {
-            const calls = (vscode.workspace.onDidCloseTextDocument as Mock).mock.calls;
-            return calls[calls.length - 1][0] as (doc: Partial<vscode.TextDocument>) => void;
-        }
-
-        function getOpenDocHandler(): (doc: Partial<vscode.TextDocument>) => void {
-            const calls = (vscode.workspace.onDidOpenTextDocument as Mock).mock.calls;
-            return calls[calls.length - 1][0] as (doc: Partial<vscode.TextDocument>) => void;
-        }
 
         const reopenDoc: Partial<vscode.TextDocument> = { uri: mockUri, languageId: 'documentdb-playground' };
 

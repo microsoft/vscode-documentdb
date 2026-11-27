@@ -3,6 +3,36 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+/** Reads timing metadata only; this does not validate the token. */
+export function readJwtTimes(token: string): { iatSec?: number; expSec?: number } {
+    const parts = token.split('.');
+    if (parts.length !== 3 || !parts[1]) {
+        return {};
+    }
+    try {
+        const claims: unknown = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+        if (typeof claims !== 'object' || claims === null) {
+            return {};
+        }
+        return {
+            ...('iat' in claims && typeof claims.iat === 'number' && Number.isFinite(claims.iat)
+                ? { iatSec: claims.iat }
+                : {}),
+            ...('exp' in claims && typeof claims.exp === 'number' && Number.isFinite(claims.exp)
+                ? { expSec: claims.exp }
+                : {}),
+        };
+    } catch {
+        return {};
+    }
+}
+
+/** The JWT's full lifetime, not its remaining validity or an opaque-token fallback. */
+export function jwtLifetimeSeconds({ iatSec, expSec }: ReturnType<typeof readJwtTimes>): number | undefined {
+    const lifetime = iatSec !== undefined && expSec !== undefined ? expSec - iatSec : undefined;
+    return lifetime !== undefined && Number.isFinite(lifetime) && lifetime > 0 ? lifetime : undefined;
+}
+
 /**
  * Seconds until an absolute expiry timestamp (milliseconds since the epoch), floored at zero.
  *

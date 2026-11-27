@@ -7,9 +7,15 @@ import { type MongoClientOptions, type OIDCCallbackFunction, type OIDCResponse }
 import { checkServerIdentity, type PeerCertificate } from 'tls';
 import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString';
 import {
+    EntraIdentityMismatchError,
+    EntraSignInRequiredError,
+    TokenCallbackError,
+} from './entraErrors/entraCallbackErrors';
+import {
     EntraDestinationRejectedError,
     evaluateEntraDestination,
     isEntraDestinationHostAllowed,
+    isEntraDestinationRejectedError,
 } from './oidcAllowedHosts';
 
 const TLS_BYPASS_KEYS = new Set([
@@ -97,6 +103,7 @@ export function buildOidcClientConfiguration(input: {
     connectionString: string;
     policy: OidcDestinationPolicy;
     oidcCallback: OIDCCallbackFunction;
+    callbackAuthMethod?: TokenCallbackError['authMethod'];
     baseOptions?: MongoClientOptions;
 }): {
     connectionString: string;
@@ -149,10 +156,23 @@ export function buildOidcClientConfiguration(input: {
             authMechanismProperties: {
                 ALLOWED_HOSTS: [...input.policy.allowedHostPatterns],
                 OIDC_CALLBACK: async (params): Promise<OIDCResponse> => {
-                    input.policy.assertAllowed();
-                    const response = await input.oidcCallback(params);
-                    input.policy.assertAllowed();
-                    return response;
+                    try {
+                        input.policy.assertAllowed();
+                        const response = await input.oidcCallback(params);
+                        input.policy.assertAllowed();
+                        return response;
+                    } catch (error) {
+                        if (
+                            input.callbackAuthMethod === undefined ||
+                            error instanceof EntraSignInRequiredError ||
+                            error instanceof EntraIdentityMismatchError ||
+                            error instanceof TokenCallbackError ||
+                            isEntraDestinationRejectedError(error)
+                        ) {
+                            throw error;
+                        }
+                        throw new TokenCallbackError(error, input.callbackAuthMethod);
+                    }
                 },
             },
             tls: true,

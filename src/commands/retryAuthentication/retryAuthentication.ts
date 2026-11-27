@@ -3,13 +3,19 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { l10n } from 'vscode';
-import { ClustersClient } from '../../documentdb/ClustersClient';
+import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { l10n, window } from 'vscode';
+import { classifyResolutionFailure } from '../../connectionDiagnostics/checks/resolveTarget';
+import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import { addEstablishedConnectionContext, ClustersClient } from '../../documentdb/ClustersClient';
+import { CredentialCache } from '../../documentdb/CredentialCache';
 import { inferViewIdFromTreeId, Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
+import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
+import { ConnectionSourceUnavailableError } from '../../tree/documentdb/diagnosticCredentialRead';
 import { type TreeElement } from '../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../tree/TreeElementWithContextValue';
+import { isTreeElementWithExplicitReload } from '../../tree/TreeElementWithExplicitReload';
 
 const containsDelimited = (fullContext: string | undefined, value: string): boolean => {
     if (!fullContext) {
@@ -18,7 +24,13 @@ const containsDelimited = (fullContext: string | undefined, value: string): bool
     return new RegExp(`\\b${value}\\b`, 'i').test(fullContext);
 };
 
-type RetryableTreeNode = TreeElement & Partial<TreeElementWithContextValue>;
+type RetryableTreeNode = TreeElement &
+    Partial<
+        TreeElementWithContextValue &
+            Pick<ClusterItemBase, 'canRetryRejectedCredentials' | 'lastConnectionFailureKind' | 'readReplacementKey'>
+    > & {
+        readonly cluster?: { readonly clusterId: string };
+    };
 
 function getViewId(node: RetryableTreeNode): Views | undefined {
     if (containsDelimited(node.contextValue, Views.ConnectionsView)) {
@@ -65,6 +77,162 @@ export async function retryAuthentication(context: IActionContext, node: Retryab
         context.telemetry.properties.failedStartupCorrelationId = failedStartupCorrelationId;
     }
 
+    const clusterId = node.cluster?.clusterId;
+    if (clusterId) {
+        const viewId = getViewId(node);
+        const supportsRefresh =
+            viewId === Views.ConnectionsView ||
+            viewId === Views.DiscoveryView ||
+            (viewId === Views.AzureResourcesView &&
+                (containsDelimited(node.contextValue, 'ruBranch') ||
+                    containsDelimited(node.contextValue, 'documentDbBranch')));
+        let epoch = ClustersClient.getEpoch(clusterId);
+        const latch = ClustersClient.getLatchReason(clusterId);
+        const kind = latch === 'credentialsRejected' ? latch : node.lastConnectionFailureKind;
+        if (latch && latch !== 'credentialsRejected') {
+            if (!supportsRefresh) {
+                return;
+            }
+            refreshAuthenticationNode(node);
+            if (latch === 'connectionRemoved' || latch === 'credentialsChanged' || latch === 'identityChanged') {
+                context.errorHandling.suppressDisplay = true;
+                void window.showErrorMessage(
+                    latch === 'connectionRemoved'
+                        ? l10n.t('This connection was removed. Choose another connection.')
+                        : l10n.t('This connection changed. Refresh the tree and try again.'),
+                    { modal: true },
+                );
+            }
+            return;
+        }
+        addEstablishedConnectionContext(context.telemetry, clusterId);
+        if (kind) {
+            context.telemetry.properties.connectionFailureKind = kind;
+        }
+        if (latch === 'credentialsRejected') {
+            if (!node.readReplacementKey) {
+                if (
+                    !node.canRetryRejectedCredentials?.() ||
+                    !ClustersClient.clearCredentialRejection(clusterId, epoch)
+                ) {
+                    return;
+                }
+                CredentialCache.deleteCredentials(clusterId);
+                refreshAuthenticationNode(node);
+                return;
+            }
+            context.telemetry.maskEntireErrorMessage = true;
+            CredentialCache.deleteCredentials(clusterId);
+            let credentials: Awaited<ReturnType<NonNullable<ClusterItemBase['readReplacementKey']>>>;
+            try {
+                credentials = await node.readReplacementKey(context);
+            } catch (error) {
+                if (ClustersClient.getEpoch(clusterId) !== epoch) {
+                    if (!supportsRefresh) {
+                        return;
+                    }
+                    refreshAuthenticationNode(node);
+                    const reason = ClustersClient.getLatchReason(clusterId);
+                    if (
+                        !(error instanceof UserCancelledError) &&
+                        (reason === 'connectionRemoved' ||
+                            reason === 'credentialsChanged' ||
+                            reason === 'identityChanged')
+                    ) {
+                        context.errorHandling.suppressDisplay = true;
+                        void window.showErrorMessage(
+                            reason === 'connectionRemoved'
+                                ? l10n.t('This connection was removed. Choose another connection.')
+                                : l10n.t('This connection changed. Refresh the tree and try again.'),
+                            { modal: true },
+                        );
+                    }
+                    return;
+                }
+                if (error instanceof UserCancelledError) {
+                    throw error;
+                }
+                const finding = classifyResolutionFailure(new ConnectionSourceUnavailableError('azure', error));
+                const signInNeeded =
+                    finding.code === 'target.sourceInaccessible' && finding.data?.reason === 'signInRequired';
+                context.telemetry.properties.azureKeyReadFailure = signInNeeded ? 'signInRequired' : 'other';
+                context.errorHandling.suppressDisplay = true;
+                void window.showErrorMessage(
+                    signInNeeded
+                        ? l10n.t('Azure sign-in needed')
+                        : l10n.t('Could not read the database key from Azure.'),
+                    {
+                        modal: true,
+                        detail: signInNeeded
+                            ? l10n.t('Sign in to Azure and try Retry again.')
+                            : l10n.t('Check access to the Azure resource and try again.'),
+                    },
+                );
+                throw error;
+            }
+            if (ClustersClient.getEpoch(clusterId) !== epoch) {
+                if (!supportsRefresh) {
+                    return;
+                }
+                refreshAuthenticationNode(node);
+                const reason = ClustersClient.getLatchReason(clusterId);
+                if (reason === 'connectionRemoved' || reason === 'credentialsChanged' || reason === 'identityChanged') {
+                    context.errorHandling.suppressDisplay = true;
+                    void window.showErrorMessage(
+                        reason === 'connectionRemoved'
+                            ? l10n.t('This connection was removed. Choose another connection.')
+                            : l10n.t('This connection changed. Refresh the tree and try again.'),
+                        { modal: true },
+                    );
+                }
+                return;
+            }
+            // One fresh ARM read per explicit click. A subsequent database rejection re-latches in
+            // the tree; it cannot start another ARM read.
+            if (
+                credentials.nativeAuthConfig?.connectionPassword &&
+                ClustersClient.clearCredentialRejection(clusterId, epoch)
+            ) {
+                CredentialCache.setAuthCredentials(
+                    clusterId,
+                    AuthMethodId.NativeAuth,
+                    credentials.connectionString,
+                    credentials.nativeAuthConfig,
+                );
+            } else {
+                return;
+            }
+        } else if (
+            (kind === 'signInRequired' || kind === 'credentialsRejected' || kind === 'clientClosed') &&
+            !ClustersClient.hasReusableClient(clusterId)
+        ) {
+            const closing = ClustersClient.deleteClient(clusterId);
+            epoch = ClustersClient.getEpoch(clusterId);
+            await closing;
+            if (ClustersClient.getEpoch(clusterId) !== epoch) {
+                if (!supportsRefresh) {
+                    return;
+                }
+                refreshAuthenticationNode(node);
+                const reason = ClustersClient.getLatchReason(clusterId);
+                if (reason === 'connectionRemoved' || reason === 'credentialsChanged' || reason === 'identityChanged') {
+                    context.errorHandling.suppressDisplay = true;
+                    void window.showErrorMessage(
+                        reason === 'connectionRemoved'
+                            ? l10n.t('This connection was removed. Choose another connection.')
+                            : l10n.t('This connection changed. Refresh the tree and try again.'),
+                        { modal: true },
+                    );
+                }
+                return;
+            }
+        }
+    }
+
+    refreshAuthenticationNode(node);
+}
+
+export function refreshAuthenticationNode(node: RetryableTreeNode): void {
     const contextValue = node.contextValue;
     const viewId = getViewId(node);
 
@@ -74,6 +242,9 @@ export async function retryAuthentication(context: IActionContext, node: Retryab
             return ext.connectionsBranchDataProvider.refresh(node);
 
         case Views.DiscoveryView:
+            if (isTreeElementWithExplicitReload(node)) {
+                node.prepareExplicitReload();
+            }
             ext.discoveryBranchDataProvider.resetNodeErrorState(node.id);
             return ext.discoveryBranchDataProvider.refresh(node);
 

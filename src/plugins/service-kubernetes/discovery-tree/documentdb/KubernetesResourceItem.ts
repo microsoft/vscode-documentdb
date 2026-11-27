@@ -257,6 +257,8 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
      */
     protected async authenticateAndConnect(): Promise<ClustersClient | null> {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
+            const { ClustersClient } = await import('../../../../documentdb/ClustersClient');
+            const epoch = ClustersClient.getEpoch(this.cluster.clusterId);
             this.populateTelemetry(context);
             context.telemetry.properties.connectionInitiatedFrom = 'discoveryView';
 
@@ -367,9 +369,7 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
                     context,
                 });
 
-                const { ClustersClient } = await import('../../../../documentdb/ClustersClient');
-                await ClustersClient.deleteClient(this.cluster.clusterId);
-                CredentialCache.deleteCredentials(this.cluster.clusterId);
+                await this.finishFailedStartup(context, error, epoch);
 
                 return null;
             }

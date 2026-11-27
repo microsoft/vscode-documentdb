@@ -6,13 +6,19 @@
 import * as vscode from 'vscode';
 import { type DeepLinkTelemetry } from '../../../deepLinks/deepLinkTelemetry';
 
+import { ClusterSession } from '../../../documentdb/ClusterSession';
+import { registerConnectionSurface } from '../../../documentdb/connectionSurfaces';
+import { type ConnectionUnavailableReason } from '../../../documentdb/ConnectionUnavailableError';
 import { type DocumentViewMode } from '../../../documentdb/DocumentViewMode';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { LiveConfigService } from '../../../services/LiveConfigService';
 import { SettingsService } from '../../../services/SettingsService';
 import { settingsKeys } from '../../../settingsKeys';
+import { type ConnectionUnavailableMessage } from '../../_integration/connectionUnavailable';
+import { describeUnavailableConnection } from '../../_integration/describeUnavailableConnection';
 import { type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
+import { recoverBoundView } from '../boundViewOperations';
 import { type RouterContext } from './collectionViewRouter';
 
 export type CollectionViewWebviewConfigurationType = {
@@ -74,6 +80,18 @@ export function openCollectionWebview(
         enableAIQueryGeneration,
     };
 
+    const binding = ClusterSession.getSession(initialData.sessionId).getBinding();
+
+    const postUnavailable = (reason: ConnectionUnavailableReason): void => {
+        const message: ConnectionUnavailableMessage = {
+            type: 'collectionView.connectionUnavailable',
+            unavailable: describeUnavailableConnection(reason).unavailable,
+        };
+        if (!controller.isDisposed) {
+            void controller.panel.webview.postMessage(message);
+        }
+    };
+
     const trpcContext: RouterContext = {
         ...deepLink,
         dbExperience: API.DocumentDB,
@@ -84,9 +102,12 @@ export function openCollectionWebview(
         viewId: initialData.viewId,
         databaseName: initialData.databaseName,
         collectionName: initialData.collectionName,
+        describeUnavailable: describeUnavailableConnection,
+        recoverUnavailable: (request) =>
+            recoverBoundView(binding, 'collectionView', () => controller.dispose(), request),
     };
 
-    return openAppWebview({
+    const controller: AppWebviewController<CollectionViewWebviewConfigurationType> = openAppWebview({
         title,
         webviewName: 'collectionView',
         panelViewType: 'vscode-documentdb-collection-view',
@@ -107,4 +128,16 @@ export function openCollectionWebview(
             dark: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'collection-view-dark.svg'),
         },
     });
+
+    const registration = registerConnectionSurface({
+        clusterId: initialData.clusterId,
+        kind: 'collectionView',
+        disable: postUnavailable,
+        dispose: () => controller.dispose(),
+    });
+    controller.onDisposed((): void => {
+        registration.dispose();
+    });
+
+    return controller;
 }

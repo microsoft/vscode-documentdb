@@ -7,6 +7,7 @@ import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsof
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
+import { canSignInAgainForWorker, signInAgainForWorker } from '../../commands/signInAgain/signInAgain';
 import { type DeepLinkTelemetry, trackDeepLinkTelemetry } from '../../deepLinks/deepLinkTelemetry';
 import { ext } from '../../extensionVariables';
 import { ErrorExplanationService } from '../../services/errorExplanationService';
@@ -17,9 +18,14 @@ import { COMPLETION_OFFERED_EVENT, type CompletionCategory } from '../../telemet
 import { accumulateTelemetry } from '../../utils/accumulatingTelemetry';
 import { classifyCommand, extractRunCommandName } from '../../utils/classifyCommand';
 import { ClustersClient } from '../ClustersClient';
+import { ConnectionUnavailableError, type ConnectionUnavailableReason } from '../ConnectionUnavailableError';
 import { CredentialCache } from '../CredentialCache';
 import { deserializeResultForSchema, feedResultToSchemaStore } from '../feedResultToSchemaStore';
-import { type SerializableExecutionResult } from '../playground/workerTypes';
+import {
+    getWorkerAuthReason,
+    type SerializableExecutionResult,
+    type WorkerAuthReason,
+} from '../playground/workerTypes';
 import { SchemaStore } from '../SchemaStore';
 import { getHostsFromConnectionString } from '../utils/connectionStringHelpers';
 import { addDomainInfoToProperties } from '../utils/getClusterMetadata';
@@ -31,7 +37,12 @@ import { findCommonPrefix, renderCompletionList } from './ShellCompletionRendere
 import { ShellGhostText } from './ShellGhostText';
 import { ShellInputHandler } from './ShellInputHandler';
 import { extractErrorCode, ShellOutputFormatter } from './ShellOutputFormatter';
-import { type ShellConnectionInfo, type ShellSessionCallbacks, ShellSessionManager } from './ShellSessionManager';
+import {
+    type ShellConnectionInfo,
+    type ShellSessionCallbacks,
+    ShellSessionManager,
+    type UnauthenticatedShellEndpoint,
+} from './ShellSessionManager';
 import { ShellSpinner } from './ShellSpinner';
 import {
     ACTION_LINE_PREFIX,
@@ -49,6 +60,7 @@ const COMPACT_CONNECTION_SUMMARY_MIN_COLUMNS = 100;
  * Configuration for the interactive shell Pseudoterminal.
  */
 export interface DocumentDBShellPtyOptions {
+    readonly unauthenticated?: UnauthenticatedShellEndpoint;
     readonly deepLink?: DeepLinkTelemetry;
     /** Connection parameters for the shell session. */
     readonly connectionInfo: ShellConnectionInfo;
@@ -80,6 +92,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private readonly _inputHandler: ShellInputHandler;
     private readonly _outputFormatter: ShellOutputFormatter;
     private readonly _connectionInfo: ShellConnectionInfo;
+    private readonly _unauthenticated: UnauthenticatedShellEndpoint | undefined;
 
     /** Current database name — updated when `use <db>` changes it. */
     private _currentDatabase: string;
@@ -89,6 +102,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private _evaluating = false;
     /** Whether the shell has been closed. */
     private _closed = false;
+    private readonly _deferredFeedback: string[] = [];
     /** Whether the current evaluation was cancelled by Ctrl+C. */
     private _interrupted = false;
     /** Spinner shown during long-running evaluations. */
@@ -122,6 +136,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     /** Unique session ID for correlating all events within this shell session. */
     private readonly _shellSessionId: string = randomUUID();
+    private _disconnectRevision = 0;
     /** Extension client whose metadata describes this cluster, captured once when the shell is created. */
     private readonly _connectionCorrelationId?: string;
     /** Running count of commands evaluated in this session (for commandIndex measurement). */
@@ -137,6 +152,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     constructor(options: DocumentDBShellPtyOptions) {
         this._deepLink = options.deepLink;
         this._connectionInfo = options.connectionInfo;
+        this._unauthenticated = options.unauthenticated;
         this._currentDatabase = options.connectionInfo.databaseName;
         this._initialInput = options.initialInput;
 
@@ -175,13 +191,18 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             },
         };
 
-        this._connectionCorrelationId = ClustersClient.getExistingClient(
-            options.connectionInfo.clusterId,
-        )?.connectionCorrelationId;
-        this._sessionManager = new ShellSessionManager(options.connectionInfo, sessionCallbacks, {
-            shellSessionId: this._shellSessionId,
-            connectionCorrelationId: this._connectionCorrelationId,
-        });
+        this._connectionCorrelationId = options.unauthenticated
+            ? undefined
+            : ClustersClient.getExistingClient(options.connectionInfo.clusterId)?.connectionCorrelationId;
+        this._sessionManager = new ShellSessionManager(
+            options.connectionInfo,
+            sessionCallbacks,
+            {
+                shellSessionId: this._shellSessionId,
+                connectionCorrelationId: this._connectionCorrelationId,
+            },
+            options.unauthenticated,
+        );
 
         this._outputFormatter = new ShellOutputFormatter();
 
@@ -230,6 +251,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     close(): void {
         this._closed = true;
+        this._deferredFeedback.length = 0;
         this._spinner?.stop();
         this._spinner = undefined;
         if (this._ghostTextTimer) {
@@ -260,6 +282,35 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         if (this._terminal) {
             unregisterShellTerminal(this._terminal);
             this._terminal = undefined;
+        }
+    }
+
+    /** Keep the terminal and its scrollback, but stop the database worker. */
+    public disconnect(): void {
+        const wasEvaluating = this._evaluating;
+        const retainPartialInput = !wasEvaluating && !this._inputHandler.isInMultiLineMode;
+        const partialInput = retainPartialInput ? this._inputHandler.getBuffer() : '';
+        const partialCursor = retainPartialInput ? this._inputHandler.getCursor() : 0;
+
+        this._disconnectRevision += 1;
+        this._deferredFeedback.length = 0;
+        this.clearGhostState();
+        this._spinner?.stop();
+        this._spinner = undefined;
+        this._evaluating = false;
+        this._inputHandler.clearPendingInput();
+        if (!wasEvaluating) {
+            this._inputHandler.handleInput('\x1b[F');
+            this.writeLine('');
+        }
+        this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Disconnected')));
+        this._sessionManager.killWorker();
+        this._inputHandler.setEnabled(true);
+        if (!this._closed) {
+            this.showPrompt();
+            if (partialInput.length > 0) {
+                this._inputHandler.restoreLine(partialInput, partialCursor);
+            }
         }
     }
 
@@ -484,6 +535,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     // ─── Private: Session initialization ─────────────────────────────────────
 
     private async initializeSession(): Promise<void> {
+        const disconnectRevision = this._disconnectRevision;
         try {
             const metadata = await callWithTelemetryAndErrorHandling('shell.sessionStart', async (context) => {
                 context.errorHandling.suppressDisplay = true;
@@ -502,14 +554,19 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 Object.assign(context.telemetry.properties, domainProps);
                 return metadata;
             });
+            if (disconnectRevision !== this._disconnectRevision) {
+                return;
+            }
             if (!metadata) {
                 throw new UserCancelledError('shell.sessionStart');
             }
 
-            void this._completionProvider.prewarmCollections({
-                clusterId: this._connectionInfo.clusterId,
-                databaseName: this._currentDatabase,
-            });
+            if (!this._unauthenticated) {
+                void this._completionProvider.prewarmCollections({
+                    clusterId: this._connectionInfo.clusterId,
+                    databaseName: this._currentDatabase,
+                });
+            }
 
             // Stop the connection spinner
             this._spinner?.stop();
@@ -605,9 +662,18 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 this._initialInput = undefined;
             }
         } catch (error: unknown) {
+            if (disconnectRevision !== this._disconnectRevision) {
+                return;
+            }
             // Stop the connection spinner on failure
             this._spinner?.stop();
             this._spinner = undefined;
+
+            if (this.handleWorkerFailure(error)) {
+                this._inputHandler.setEnabled(true);
+                this.showPrompt();
+                return;
+            }
 
             const rawMessage = error instanceof Error ? error.message : String(error);
             // Strip technical error codes for clean user-facing output;
@@ -617,10 +683,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
             // Written as a separate line rather than merged into the message above, so the raw text
             // stays intact for extractErrorCode and the SettingsHintError check below.
-            const explanation = await ErrorExplanationService.explain({
-                clusterId: this._connectionInfo.clusterId,
-                error,
-            });
+            const explanation = this._unauthenticated
+                ? undefined
+                : await ErrorExplanationService.explain({
+                      clusterId: this._connectionInfo.clusterId,
+                      error,
+                  });
             if (explanation) {
                 this.writeLine(this._outputFormatter.formatError(explanation.message));
             }
@@ -642,13 +710,15 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
             // A notification as well: the terminal may be in the background, or closed by the user
             // before they read it.
-            void vscode.window.showErrorMessage(
-                explanation?.message ??
-                    l10n.t('Failed to connect to "{cluster}": {error}', {
-                        cluster: this._connectionInfo.clusterDisplayName,
-                        error: errorMessage,
-                    }),
-            );
+            if (!this._unauthenticated) {
+                void vscode.window.showErrorMessage(
+                    explanation?.message ??
+                        l10n.t('Failed to connect to "{cluster}": {error}', {
+                            cluster: this._connectionInfo.clusterDisplayName,
+                            error: errorMessage,
+                        }),
+                );
+            }
 
             // Deliberately no _closeEmitter.fire(): disposing the terminal would take the message
             // with it. The session is still uninitialized, so ShellSessionManager.evaluate() re-runs
@@ -666,6 +736,15 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     // ─── Private: Line handling ──────────────────────────────────────────────
 
     private async handleLineInput(line: string): Promise<void> {
+        const disconnectRevision = this._disconnectRevision;
+        const latchReason = this._sessionManager.getBlockingLatchReason();
+        if (latchReason) {
+            this.handleWorkerFailure(new ConnectionUnavailableError(latchReason));
+            if (!this._closed) {
+                this.showPrompt();
+            }
+            return;
+        }
         const trimmed = line.trim();
 
         // Empty line — just show a new prompt
@@ -687,33 +766,37 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         try {
             await this.evaluateInput(trimmed);
         } catch (error: unknown) {
-            await this.handleEvalError(error);
-        } finally {
-            // Stop the spinner before writing results or the next prompt.
-            this._spinner?.stop();
-            this._spinner = undefined;
-
-            this._evaluating = false;
-
-            // If Ctrl+C was pressed, the interrupt handler already re-enabled
-            // input and showed a prompt — don't duplicate.
-            if (!this._interrupted) {
-                this._inputHandler.setEnabled(true);
-
-                if (!this._closed) {
-                    this.showPrompt();
-
-                    // Process any input that was queued during execution
-                    // (e.g., remaining lines from a multi-line paste).
-                    this._inputHandler.processPendingInput();
-                }
+            if (disconnectRevision === this._disconnectRevision) {
+                await this.handleEvalError(error);
             }
+        } finally {
+            if (disconnectRevision === this._disconnectRevision) {
+                this._spinner?.stop();
+                this._spinner = undefined;
 
-            this._interrupted = false;
+                this._evaluating = false;
+
+                // If Ctrl+C was pressed, the interrupt handler already re-enabled
+                // input and showed a prompt — don't duplicate.
+                if (!this._interrupted) {
+                    this._inputHandler.setEnabled(true);
+
+                    if (!this._closed) {
+                        this.showPrompt();
+
+                        // Process any input that was queued during execution
+                        // (e.g., remaining lines from a multi-line paste).
+                        this._inputHandler.processPendingInput();
+                    }
+                }
+
+                this._interrupted = false;
+            }
         }
     }
 
     private async evaluateInput(input: string): Promise<void> {
+        const disconnectRevision = this._disconnectRevision;
         this._commandCount++;
         const commandIndex = this._commandCount;
         const commandCategory = classifyCommand(input);
@@ -739,24 +822,25 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             try {
                 result = await this._sessionManager.evaluate(input, this._columns);
             } catch (evalError) {
-                // Ctrl+C kills the worker, producing a "Worker terminated" error.
-                // Re-classify as user cancellation for accurate telemetry.
-                if (this._interrupted) {
+                // Ctrl+C and Disconnect both kill the worker, producing a
+                // "Worker terminated" error. Re-classify intentional
+                // cancellation for accurate telemetry and UI behavior.
+                if (this._interrupted || disconnectRevision !== this._disconnectRevision) {
                     throw new UserCancelledError('shell.eval');
                 }
                 throw evalError;
+            }
+
+            // If this eval was cancelled by Ctrl+C, skip output — the interrupt
+            // handler already showed ^C and a new prompt.
+            if (this._interrupted || disconnectRevision !== this._disconnectRevision) {
+                return;
             }
 
             // Stop the spinner before writing any output so the spinner
             // character doesn't collide with the result text.
             this._spinner?.stop();
             this._spinner = undefined;
-
-            // If this eval was cancelled by Ctrl+C, skip output — the interrupt
-            // handler already showed ^C and a new prompt.
-            if (this._interrupted) {
-                return;
-            }
 
             // ── Post-eval telemetry ──────────────────────────────────────
             context.telemetry.properties.resultType = result.type ?? 'null';
@@ -794,9 +878,13 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         this._spinner?.stop();
         this._spinner = undefined;
 
-        // Suppress errors from intentional Ctrl+C cancellation — the interrupt
-        // handler already showed ^C and a new prompt.
-        if (this._interrupted) {
+        // Suppress errors from intentional cancellation. Ctrl+C renders its own
+        // prompt, while Disconnect renders its own terminal status.
+        if (this._interrupted || error instanceof UserCancelledError) {
+            return;
+        }
+
+        if (this.handleWorkerFailure(error)) {
             return;
         }
 
@@ -810,10 +898,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         // talks to gets stopped, a port-forward drops — and the next command is where they find
         // out. Written as a separate line so the raw text above stays intact for extractErrorCode
         // and the checks below.
-        const explanation = await ErrorExplanationService.explain({
-            clusterId: this._connectionInfo.clusterId,
-            error,
-        });
+        const explanation = this._unauthenticated
+            ? undefined
+            : await ErrorExplanationService.explain({
+                  clusterId: this._connectionInfo.clusterId,
+                  error,
+              });
         if (explanation) {
             this.writeLine(this._outputFormatter.formatError(explanation.message));
         }
@@ -831,6 +921,147 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 ),
             );
         }
+    }
+
+    private handleWorkerFailure(error: unknown): boolean {
+        const authReason = getWorkerAuthReason(error);
+        if (authReason) {
+            this.writeBoundedWorkerFailure(authReason);
+            return true;
+        }
+        if (error instanceof ConnectionUnavailableError) {
+            this.writeLine(this._outputFormatter.formatError(this.unavailableMessage(error.reason)));
+            return true;
+        }
+        return false;
+    }
+
+    private unavailableMessage(reason: ConnectionUnavailableReason): string {
+        switch (reason) {
+            case 'userDisconnected':
+                return l10n.t('Disconnected. Reconnect from the tree, then run your command again.');
+            case 'unreachable':
+                return l10n.t(
+                    'The connection is unavailable. Check the server or network, then run your command again.',
+                );
+            case 'credentialsRejected':
+                return l10n.t(
+                    'The saved credentials were rejected. Update them from the tree, then run your command again.',
+                );
+            case 'credentialsUpdating':
+                return l10n.t('This connection is being updated. Run your command again when the update finishes.');
+            case 'connectionRemoved':
+                return l10n.t('This connection was removed. Open a shell from another connection.');
+            case 'credentialsChanged':
+            case 'identityChanged':
+                return l10n.t('This shell is bound to the previous connection. Open a new shell from the tree.');
+            default:
+                return l10n.t('This connection is unavailable. Reconnect from the tree, then run your command again.');
+        }
+    }
+
+    private writeBoundedWorkerFailure(reason: WorkerAuthReason): void {
+        const pin = this._sessionManager.pinnedEntraIdentity;
+        if (reason === 'signInRequired' && pin && canSignInAgainForWorker(this._connectionInfo.clusterId, pin)) {
+            const message = l10n.t('Microsoft sign-in expired for this shell. Sign in again to continue.');
+            this.writeLine(this._outputFormatter.formatError(message));
+            this.offerShellSignInAgain(pin, message);
+            return;
+        }
+
+        let message: string;
+        switch (reason) {
+            case 'signInRequired':
+                message = l10n.t('Microsoft sign-in expired for this shell. Open a new shell from the tree.');
+                break;
+            case 'identityMismatch':
+                message = l10n.t(
+                    'This shell is bound to a different Microsoft account. Open a new shell from the tree.',
+                );
+                break;
+            case 'destinationRejected':
+                message = l10n.t(
+                    'This shell is not allowed to sign in to this connection. Review the trusted server settings, then reconnect from the tree.',
+                );
+                break;
+            case 'refreshFailed':
+                message = l10n.t(
+                    'The sign-in token could not be refreshed. Run the next command to reconnect with the same connection.',
+                );
+                break;
+        }
+        this.writeLine(this._outputFormatter.formatError(message));
+    }
+
+    private offerShellSignInAgain(
+        identity: NonNullable<ShellSessionManager['pinnedEntraIdentity']>,
+        message: string,
+    ): void {
+        const action = l10n.t('Sign in again');
+        const { clusterId } = this._connectionInfo;
+        const revision = this._disconnectRevision;
+        const epoch = ClustersClient.getEpoch(clusterId);
+        void vscode.window.showWarningMessage(message, action).then(async (choice) => {
+            if (
+                choice !== action ||
+                this._closed ||
+                revision !== this._disconnectRevision ||
+                ClustersClient.getEpoch(clusterId) !== epoch
+            ) {
+                if (choice === action && !this._closed && revision === this._disconnectRevision) {
+                    const reason = ClustersClient.getLatchReason(clusterId);
+                    if (
+                        reason === 'connectionRemoved' ||
+                        reason === 'credentialsChanged' ||
+                        reason === 'identityChanged'
+                    ) {
+                        this.writeAsyncFeedback(this._outputFormatter.formatError(this.unavailableMessage(reason)));
+                    }
+                }
+                return;
+            }
+            try {
+                await callWithTelemetryAndErrorHandling('shell.signInAgain', async (context) => {
+                    context.errorHandling.suppressDisplay = true;
+                    context.errorHandling.rethrow = true;
+                    context.telemetry.properties.shellSessionId = this._shellSessionId;
+                    const result = await signInAgainForWorker(context, clusterId, identity);
+                    if (
+                        !result ||
+                        this._closed ||
+                        revision !== this._disconnectRevision ||
+                        ClustersClient.getEpoch(clusterId) !== result.epoch
+                    ) {
+                        if (!this._closed && revision === this._disconnectRevision) {
+                            const reason = ClustersClient.getLatchReason(clusterId);
+                            if (
+                                reason === 'connectionRemoved' ||
+                                reason === 'credentialsChanged' ||
+                                reason === 'identityChanged'
+                            ) {
+                                this.writeAsyncFeedback(
+                                    this._outputFormatter.formatError(this.unavailableMessage(reason)),
+                                );
+                            }
+                        }
+                        return;
+                    }
+                    this._sessionManager.resetAfterSignIn(result.identity, result.epoch);
+                    this.writeAsyncFeedback(
+                        this._outputFormatter.formatSystemMessage(l10n.t('Sign-in restored. Run your command again.')),
+                    );
+                });
+            } catch (error) {
+                if (error instanceof UserCancelledError) {
+                    return;
+                }
+                if (!this._closed && revision === this._disconnectRevision) {
+                    void vscode.window.showWarningMessage(
+                        l10n.t('Could not sign in again. Open a new shell from the tree.'),
+                    );
+                }
+            }
+        });
     }
 
     /**
@@ -890,10 +1121,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         if (newDb) {
             this._currentDatabase = newDb;
             this._sessionManager.setActiveDatabase(newDb);
-            void this._completionProvider.prewarmCollections({
-                clusterId: this._connectionInfo.clusterId,
-                databaseName: newDb,
-            });
+            if (!this._unauthenticated) {
+                void this._completionProvider.prewarmCollections({
+                    clusterId: this._connectionInfo.clusterId,
+                    databaseName: newDb,
+                });
+            }
             this.updateTerminalTitle();
         }
     }
@@ -938,7 +1171,41 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             this._ghostTextTimer = undefined;
         }
 
+        if (!this._closed) {
+            for (const line of this._deferredFeedback.splice(0)) {
+                this.writeLine(line);
+            }
+        }
         this._writeEmitter.fire(prompt);
+    }
+
+    private writeAsyncFeedback(line: string): void {
+        if (this._closed) {
+            return;
+        }
+        if (this._evaluating || !this._inputHandler.isEnabled) {
+            this._deferredFeedback.push(line);
+            return;
+        }
+
+        const text = this._inputHandler.buffer;
+        const cursor = this._inputHandler.cursor;
+        this.clearGhostState();
+        if (this._ghostTextTimer) {
+            clearTimeout(this._ghostTextTimer);
+            this._ghostTextTimer = undefined;
+        }
+        this._completionListVisible = false;
+
+        // Use the old render origin to move past all wrapped input before writing feedback.
+        this._inputHandler.restoreLine(text, text.length);
+        this._writeEmitter.fire('\r\n');
+        this.writeLine(line);
+
+        const prompt = this._inputHandler.isInMultiLineMode ? '┆ > ' : `${this._currentDatabase}> `;
+        this._inputHandler.setPromptWidth(terminalDisplayWidth(prompt));
+        this._writeEmitter.fire(prompt);
+        this._inputHandler.restoreLine(text, cursor);
     }
 
     /**
@@ -1056,6 +1323,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * Failures are silently ignored — schema feeding is best-effort.
      */
     private maybeFeedSchemaStore(result: SerializableExecutionResult): void {
+        if (this._unauthenticated) {
+            return;
+        }
         // Only Cursor and Document results with a namespace are worth parsing
         if (result.type !== 'Cursor' && result.type !== 'Document') {
             return;
@@ -1183,6 +1453,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         return this._completionProvider.getCompletions(buffer, cursor, {
             clusterId: this._connectionInfo.clusterId,
             databaseName: this._currentDatabase,
+            ...(this._unauthenticated ? { includeClusterMetadata: false } : {}),
         });
     }
 
@@ -1343,7 +1614,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         // No completions inside a method argument — show schema hint only if
         // SchemaStore has no fields for this collection (not just a typo/no match)
-        if (result.candidates.length === 0) {
+        if (!this._unauthenticated && result.candidates.length === 0) {
             const ctx = this._completionProvider.detectContext(buffer, cursor);
             if (ctx.kind === 'method-argument') {
                 const fields = SchemaStore.getInstance().getKnownFields(
@@ -1542,6 +1813,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     /** Cached secrets for this cluster, so they can be redacted before anything is logged. */
     private credentialSecrets(): string[] {
+        if (this._unauthenticated) {
+            return [this._unauthenticated.connectionString];
+        }
         const credentials = CredentialCache.getCredentials(this._connectionInfo.clusterId);
         return [credentials?.nativeAuthConfig?.connectionPassword, credentials?.connectionString].filter(
             (secret): secret is string => !!secret,
@@ -1554,11 +1828,13 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      */
     private collectShellDomainTelemetry(properties: Record<string, string | undefined>): void {
         try {
-            const credentials = CredentialCache.getCredentials(this._connectionInfo.clusterId);
-            if (!credentials?.connectionString) {
+            const connectionString = this._unauthenticated
+                ? this._unauthenticated.connectionString
+                : CredentialCache.getCredentials(this._connectionInfo.clusterId)?.connectionString;
+            if (!connectionString) {
                 return;
             }
-            const hosts = getHostsFromConnectionString(credentials.connectionString);
+            const hosts = getHostsFromConnectionString(connectionString);
             addDomainInfoToProperties(hosts, properties);
         } catch {
             // Domain info is best-effort — don't fail telemetry if parsing fails

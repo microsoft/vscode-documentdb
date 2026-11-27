@@ -5,10 +5,9 @@
 
 import { Views } from '../../../documentdb/Views';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
-import {
-    clusterId as buildQuickStartClusterId,
-    DEFAULT_ALIAS,
-} from '../../../services/localQuickStart/quickStartTypes';
+import { isQuickStartClusterId } from '../../../services/localQuickStart/quickStartTypes';
+
+export { isQuickStartClusterId };
 
 /** Builds the tree ID of the Quick Start root node. */
 export function buildQuickStartTreeId(parentId: string = Views.ConnectionsView): string {
@@ -18,11 +17,6 @@ export function buildQuickStartTreeId(parentId: string = Views.ConnectionsView):
 /** Builds the tree ID of the single managed instance. */
 export function buildQuickStartInstanceTreeId(parentId: string = Views.ConnectionsView): string {
     return `${buildQuickStartTreeId(parentId)}/instance`;
-}
-
-/** Whether the stable cluster ID belongs to the currently supported managed instance. */
-export function isQuickStartClusterId(clusterId: string): boolean {
-    return clusterId === buildQuickStartClusterId(DEFAULT_ALIAS);
 }
 
 /**

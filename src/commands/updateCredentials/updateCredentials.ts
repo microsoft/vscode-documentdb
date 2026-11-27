@@ -5,7 +5,6 @@
 
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import * as vscode from 'vscode';
 import {
     AuthMethodId,
     authMethodFromString,
@@ -15,7 +14,6 @@ import {
 import { evaluateEntraDestinationFromSettings } from '../../documentdb/auth/entraDestinationSettings';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
-import { getRegisteredShellTerminals } from '../../documentdb/shell/ShellTerminalLinkProvider';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
 import { SelectEntraTokenSourceStep } from '../../documentdb/wizards/authenticate/SelectEntraTokenSourceStep';
@@ -23,8 +21,8 @@ import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, isConnection } from '../../services/connectionStorageService';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
 import { resolveStorageZone } from '../../tree/connections-view/models/ConnectionClusterModel';
-import { shutdownEvaluator } from '../playground/executePlaygroundCode';
 import { refreshView } from '../refreshView/refreshView';
+import { offerShellDisconnect, saveConnectionEdit } from '../saveConnectionEdit';
 import { PromptAuthMethodStep } from '../updateCredentials/PromptAuthMethodStep';
 import { ExecuteStep } from './ExecuteStep';
 import { PromptPasswordStep } from './PromptPasswordStep';
@@ -57,6 +55,12 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
     }
+    const clusterId = node.cluster.clusterId;
+    const epoch = ClustersClient.getEpoch(clusterId);
+    const recoveringRejection = ClustersClient.getLatchReason(clusterId) === 'credentialsRejected';
+    const isRecoveryCurrent = recoveringRejection
+        ? (): boolean => ClustersClient.getEpoch(clusterId) === epoch
+        : undefined;
     // The failed attempt these credentials replace; the reconnect's `connect.startup` names it in
     // `previousFailedStartupCorrelationId`, so it shows whether the new credentials worked.
     const failedStartupCorrelationId = ClustersClient.getLastFailedStartupCorrelationId(node.cluster.clusterId);
@@ -72,6 +76,9 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     const resourceType = resolveStorageZone(node.cluster);
 
     const storedItem = await ConnectionStorageService.get(node.storageId, resourceType);
+    if (isRecoveryCurrent?.() === false) {
+        return;
+    }
     // Type guard ensures we have connection properties (not a folder)
     const connectionCredentials = storedItem && isConnection(storedItem) ? storedItem : undefined;
     const connectionString = connectionCredentials?.secrets?.connectionString || '';
@@ -115,6 +122,7 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
         storageId: node.storageId,
         isErrorState,
         reconnectAfterError: false,
+        isRecoveryCurrent,
     };
 
     const wizard = new AzureWizard(wizardContext, {
@@ -137,47 +145,46 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     });
 
     await wizard.prompt();
-    await wizard.execute();
-
-    await ClustersClient.deleteClient(node.cluster.clusterId);
-
-    const updatedStoredItem = await ConnectionStorageService.get(node.storageId, resourceType);
-    const updatedConnection = updatedStoredItem && isConnection(updatedStoredItem) ? updatedStoredItem : undefined;
-    const authMethod = authMethodFromString(updatedConnection?.properties.selectedAuthMethod);
-    const username = updatedConnection?.secrets.nativeAuthConfig?.connectionUser;
-    const password = updatedConnection?.secrets.nativeAuthConfig?.connectionPassword;
-    if (updatedConnection && authMethod && !(authMethod === AuthMethodId.NativeAuth && (!username || !password))) {
-        const connectionString = new DocumentDBConnectionString(updatedConnection.secrets.connectionString);
-
-        CredentialCache.setAuthCredentials(
-            node.cluster.clusterId,
-            authMethod,
-            connectionString.toString(),
-            username && password ? { connectionUser: username, connectionPassword: password } : undefined,
-            node.cluster.emulatorConfiguration,
-            updatedConnection.secrets.entraIdAuthConfig,
-            updatedConnection.secrets.managedIdentityAuthConfig,
-        );
-    } else {
-        // Clear stale credentials so the tree can prompt from storage.
-        CredentialCache.deleteCredentials(node.cluster.clusterId);
+    if (isRecoveryCurrent?.() === false) {
+        return;
     }
-
-    shutdownEvaluator(node.cluster.clusterId);
-
-    if (getRegisteredShellTerminals().some(({ info }) => info.clusterId === node.cluster.clusterId)) {
-        void vscode.window.showInformationMessage(
-            l10n.t(
-                "Credentials updated. New connections will use them. Open shells for '{cluster}' keep their current connection until you close them.",
-                { cluster: node.cluster.name },
-            ),
-            { modal: true },
-        );
-    }
+    const changed = await saveConnectionEdit(
+        node,
+        async (isCurrent) => {
+            wizardContext.isRecoveryCurrent = isCurrent;
+            await wizard.execute();
+            return wizardContext.credentialsSaved === true;
+        },
+        {
+            canStart: isRecoveryCurrent,
+            publishCredentials: (updated): void => {
+                if (!updated || !isConnection(updated)) {
+                    return;
+                }
+                const authMethod = authMethodFromString(updated.properties.selectedAuthMethod);
+                const native = updated.secrets.nativeAuthConfig;
+                if (
+                    !authMethod ||
+                    (authMethod === AuthMethodId.NativeAuth && (!native?.connectionUser || !native.connectionPassword))
+                ) {
+                    return;
+                }
+                CredentialCache.setAuthCredentials(
+                    clusterId,
+                    authMethod,
+                    new DocumentDBConnectionString(updated.secrets.connectionString).toString(),
+                    native?.connectionUser && native.connectionPassword ? native : undefined,
+                    node.cluster.emulatorConfiguration,
+                    updated.secrets.entraIdAuthConfig,
+                    updated.secrets.managedIdentityAuthConfig,
+                );
+            },
+        },
+    );
 
     // When the node is in an error state, only clear it if the user chose to reconnect.
     // Clearing the error state triggers a fresh connection attempt on refresh.
-    if (node.id && wizardContext.isErrorState) {
+    if (wizardContext.credentialsSaved && node.id && wizardContext.isErrorState) {
         if (wizardContext.reconnectAfterError) {
             ext.connectionsBranchDataProvider.resetNodeErrorState(node.id);
             context.telemetry.properties.reconnected = 'true';
@@ -185,4 +192,7 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     }
 
     await refreshView(context, Views.ConnectionsView);
+    if (changed) {
+        await offerShellDisconnect(node);
+    }
 }

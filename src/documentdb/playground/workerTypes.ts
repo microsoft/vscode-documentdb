@@ -64,6 +64,63 @@ export interface SerializableOidcDestinationPolicy {
     readonly revoked: SharedArrayBuffer;
 }
 
+export type WorkerAuthReason = 'signInRequired' | 'identityMismatch' | 'destinationRejected' | 'refreshFailed';
+
+const authErrorNames = {
+    signInRequired: 'EntraSignInRequiredError',
+    identityMismatch: 'EntraIdentityMismatchError',
+    destinationRejected: 'EntraDestinationRejectedError',
+    refreshFailed: 'TokenCallbackError',
+} as const satisfies Record<WorkerAuthReason, string>;
+
+export function isWorkerAuthReason(reason: unknown): reason is WorkerAuthReason {
+    return typeof reason === 'string' && Object.hasOwn(authErrorNames, reason);
+}
+
+export function workerAuthErrorName(reason: WorkerAuthReason): string {
+    return authErrorNames[reason];
+}
+
+/** Recognize only bounded callback failures, not driver message text. */
+export function getWorkerAuthReason(error: unknown): WorkerAuthReason | undefined {
+    const visited = new Set<object>();
+    const pending = [error];
+    let reason: WorkerAuthReason | undefined;
+    while (pending.length) {
+        const current = pending.pop();
+        if (typeof current !== 'object' || current === null || visited.has(current)) {
+            continue;
+        }
+        visited.add(current);
+        if ('name' in current) {
+            switch (current.name) {
+                case authErrorNames.signInRequired:
+                    return 'signInRequired';
+                case authErrorNames.identityMismatch:
+                    return 'identityMismatch';
+                case authErrorNames.destinationRejected:
+                    return 'destinationRejected';
+                case authErrorNames.refreshFailed:
+                    reason = 'refreshFailed';
+            }
+        }
+        if ('cause' in current) {
+            pending.push(current.cause);
+        }
+        // MongoServerSelectionError keeps per-server errors on its topology description.
+        if ('reason' in current) {
+            pending.push(current.reason);
+        }
+        if ('servers' in current && current.servers instanceof Map) {
+            pending.push(...current.servers.values());
+        }
+        if ('error' in current) {
+            pending.push(current.error);
+        }
+    }
+    return reason;
+}
+
 export type MainToWorkerMessage =
     | {
           readonly type: 'init';
@@ -111,6 +168,7 @@ export type MainToWorkerMessage =
           readonly requestId: string;
           readonly error: string;
           readonly errorName?: 'EntraDestinationRejectedError';
+          readonly reason?: WorkerAuthReason;
       };
 
 // ─── Worker → Main messages ─────────────────────────────────────────────────
@@ -142,11 +200,13 @@ export type WorkerToMainMessage =
           readonly success: boolean;
           readonly error?: string;
           readonly errorName?: 'EntraDestinationRejectedError';
+          readonly authReason?: WorkerAuthReason;
       }
     | {
           readonly type: 'evalResult';
           readonly requestId: string;
           readonly result: SerializableExecutionResult;
+          readonly authReason?: WorkerAuthReason;
       }
     | {
           readonly type: 'evalError';
@@ -155,6 +215,7 @@ export type WorkerToMainMessage =
           readonly stack?: string;
           /** Error code from the database (e.g. 50 for MaxTimeMSExpired). */
           readonly code?: number;
+          readonly authReason?: WorkerAuthReason;
       }
     | {
           readonly type: 'shutdownComplete';
@@ -168,6 +229,8 @@ export type WorkerToMainMessage =
           readonly source?: 'vscode' | 'managedIdentity';
           /** Client ID of a user-assigned managed identity, when `source` is 'managedIdentity'. */
           readonly clientId?: string;
+          /** One shared Int32 set to 1 if the driver stops waiting for this Entra lookup. Telemetry only. */
+          readonly driverAbortFlag?: SharedArrayBuffer;
       }
     | {
           readonly type: 'log';

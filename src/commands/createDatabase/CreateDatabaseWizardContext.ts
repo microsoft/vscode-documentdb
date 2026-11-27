@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { type ConnectionBinding } from '../../documentdb/ClustersClient';
 
 export interface CreateDatabaseWizardContext extends IActionContext {
     /**
@@ -11,6 +12,7 @@ export interface CreateDatabaseWizardContext extends IActionContext {
      * This should be `cluster.clusterId` (NOT treeId).
      */
     credentialsId: string;
+    readonly binding?: ConnectionBinding;
     clusterName: string;
     nodeId: string;
 

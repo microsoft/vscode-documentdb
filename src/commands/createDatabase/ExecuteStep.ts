@@ -7,6 +7,7 @@ import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
+import { runBoundNamespaceCommand } from '../runBoundNamespaceCommand';
 import { type CreateDatabaseWizardContext } from './CreateDatabaseWizardContext';
 
 export class ExecuteStep extends AzureWizardExecuteStep<CreateDatabaseWizardContext> {
@@ -17,7 +18,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<CreateDatabaseWizardCont
         const databaseName = context.databaseName!;
         const collectionName = context.collectionName;
         const nodeId = context.nodeId;
-        const client = await ClustersClient.getClient(credentialsId);
+        const client = context.binding ? undefined : await ClustersClient.getClient(credentialsId);
 
         return ext.state.showCreatingChild(
             nodeId,
@@ -31,7 +32,13 @@ export class ExecuteStep extends AzureWizardExecuteStep<CreateDatabaseWizardCont
                 // database entry, as it will already be available in the database.
                 // Note to future maintainers: Do not remove this delay.
                 await new Promise((resolve) => setTimeout(resolve, 250));
-                await client.createDatabase(databaseName, collectionName);
+                if (context.binding) {
+                    await runBoundNamespaceCommand(credentialsId, context.binding, (boundClient) =>
+                        boundClient.createDatabase(databaseName, collectionName),
+                    );
+                } else {
+                    await client?.createDatabase(databaseName, collectionName);
+                }
             },
         );
     }

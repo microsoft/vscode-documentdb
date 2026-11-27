@@ -35,6 +35,7 @@ vi.mock('../../utils/accumulatingTelemetry', () => ({
 vi.mock('../../documentdb/ClustersClient', () => ({
     ClustersClient: {
         getClient: vi.fn(),
+        reportFailure: vi.fn(),
     },
     getIndexExclusionReason: vi.fn(() => undefined),
 }));
@@ -98,7 +99,7 @@ describe('compareIndexNames', () => {
 
 describe('IndexesItem - async index loading', () => {
     const cluster = {
-        treeId: 'cluster1',
+        treeId: 'folder/cluster1',
         clusterId: 'cluster1',
         dbExperience: { api: 'MongoDB' } as unknown as Experience,
     } as TreeCluster<BaseClusterModel>;
@@ -122,9 +123,26 @@ describe('IndexesItem - async index loading', () => {
         listSearchIndexesMock = vi.fn().mockRejectedValue(new Error('not supported'));
 
         (ClustersClient.getClient as Mock).mockResolvedValue({
+            binding: { clusterId: cluster.clusterId, fingerprint: 'identity', generation: 1 },
             listIndexes: listIndexesMock,
             listSearchIndexesForAtlas: listSearchIndexesMock,
         });
+    });
+
+    it('reports only foreground index failures and preserves the original error', async (): Promise<void> => {
+        const error = new Error('List indexes failed');
+        listIndexesMock.mockRejectedValue(error);
+        const item = new IndexesItem(cluster, databaseInfo, collectionInfo);
+        item.loadIndexCount();
+        await flushAsync();
+        expect(ClustersClient.reportFailure).not.toHaveBeenCalled();
+
+        await expect(item.getChildren()).rejects.toBe(error);
+        expect(ClustersClient.reportFailure).toHaveBeenCalledExactlyOnceWith(
+            { clusterId: cluster.clusterId, fingerprint: 'identity', generation: 1 },
+            error,
+        );
+        expect(listIndexesMock).toHaveBeenCalledTimes(2);
     });
 
     function flushAsync(): Promise<void> {
@@ -137,6 +155,9 @@ describe('IndexesItem - async index loading', () => {
         item.loadIndexCount();
         await flushAsync();
 
+        expect(ClustersClient.getClient).toHaveBeenCalledWith(cluster.clusterId, undefined, undefined, 'treeChildren', {
+            background: true,
+        });
         expect(listIndexesMock).toHaveBeenCalledTimes(1);
         expect(notifyChildrenChangedMock).toHaveBeenCalledWith(item.id);
         expect(item.getTreeItem().description).toContain('3');
@@ -158,6 +179,7 @@ describe('IndexesItem - async index loading', () => {
 
         const children = await item.getChildren();
 
+        expect(ClustersClient.getClient).toHaveBeenCalledWith(cluster.clusterId, undefined, undefined, 'treeChildren');
         expect(listIndexesMock).toHaveBeenCalledTimes(1);
         expect(children).toHaveLength(3);
         expect(item.getTreeItem().description).toContain('3');

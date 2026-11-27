@@ -35,6 +35,10 @@ export class AzureDiscoveryProvider extends Disposable implements DiscoveryProvi
         this.azureSubscriptionProvider = new AzureSubscriptionProviderWithFilters();
     }
 
+    public prepareExplicitReload(): void {
+        this.azureSubscriptionProvider.requestFreshListing();
+    }
+
     getDiscoveryTreeRootItem(parentId: string): TreeElement {
         return new AzureServiceRootItem(this.azureSubscriptionProvider, parentId);
     }
@@ -76,6 +80,10 @@ export class AzureDiscoveryProvider extends Disposable implements DiscoveryProvi
             // Use the new Azure credentials configuration wizard
             const { configureAzureCredentials } = await import('../api-shared/azure/credentialsManagement');
             await configureAzureCredentials(context, this.azureSubscriptionProvider, node);
+
+            if (context.telemetry.properties.credentialsManagementResult === 'Succeeded') {
+                this.prepareExplicitReload();
+            }
 
             if (node) {
                 // Tree context: refresh specific node

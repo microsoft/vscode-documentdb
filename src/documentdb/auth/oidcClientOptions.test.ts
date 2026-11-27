@@ -14,6 +14,10 @@ import {
     createOidcDestinationPolicy,
 } from './oidcClientOptions';
 
+vi.mock('vscode', () => {
+    throw new Error('Node workers must be able to load OIDC options without the VS Code host module.');
+});
+
 const host = 'cluster.mongocluster.cosmos.azure.com';
 const connectionString = `mongodb://${host}/`;
 const patterns = ['*.mongocluster.cosmos.azure.com'];

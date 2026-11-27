@@ -1,6 +1,6 @@
 {
   "name": "vscode-documentdb",
-  "version": "1.1.1-alpha.0",
+  "version": "1.1.1-alpha.4",
   "releaseNotesUrl": "https://github.com/microsoft/vscode-documentdb/discussions/1089",
   "aiKey": "0c6ae279ed8443289764825290e4f9e2-1a736e7c-1324-4338-be46-fc2a58ae4d14-7255",
   "publisher": "ms-azuretools",
@@ -168,10 +168,10 @@
     "@fluentui/react-components": "~9.75.1",
     "@fluentui/react-icons": "~2.0.345",
     "@kubernetes/client-node": "1.4.0",
-    "@microsoft/vscode-azext-azureauth": "~4.1.1",
-    "@microsoft/vscode-azext-azureutils": "~4.2.0",
-    "@microsoft/vscode-azext-utils": "~4.1.0",
-    "@microsoft/vscode-azureresources-api": "~2.5.0",
+    "@microsoft/vscode-azext-azureauth": "6.1.0-alpha.2",
+    "@microsoft/vscode-azext-azureutils": "~5.1.0",
+    "@microsoft/vscode-azext-utils": "~5.1.0",
+    "@microsoft/vscode-azureresources-api": "~3.1.1",
     "@microsoft/vscode-container-client": "^0.5.4",
     "@microsoft/vscode-ext-webview": "*",
     "@microsoft/vscode-ext-webview-fluentui": "*",
@@ -603,6 +603,11 @@
         "title": "Diagnose Connection…"
       },
       {
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.disconnect",
+        "title": "%connections.disconnect%"
+      },
+      {
         "//": "[DiscoveryView] Rename Kubernetes kubeconfig source",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.discoveryView.kubernetes.renameSource",
@@ -798,10 +803,6 @@
         "title": "Copy Collection"
       },
       {
-        "command": "vscode-documentdb.command.clusterDashboard.context.pasteCollection",
-        "title": "Paste Collection"
-      },
-      {
         "command": "vscode-documentdb.command.clusterDashboard.context.exportDocuments",
         "title": "Export Documents"
       },
@@ -936,6 +937,12 @@
         "title": "Show Schema Store Stats"
       },
       {
+        "//": "[Diagnostics] Show Connection Stats",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.showConnectionStats",
+        "title": "%diagnostics.showConnectionStats%"
+      },
+      {
         "//": "[Diagnostics] Show Worker Stats",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.showWorkerStats",
@@ -994,11 +1001,6 @@
           "group": "3_open@2"
         },
         {
-          "command": "vscode-documentdb.command.clusterDashboard.context.pasteCollection",
-          "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == database",
-          "group": "4_transfer@1"
-        },
-        {
           "command": "vscode-documentdb.command.clusterDashboard.context.deleteDatabase",
           "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == database",
           "group": "9_delete@1"
@@ -1032,11 +1034,6 @@
           "command": "vscode-documentdb.command.clusterDashboard.context.copyCollection",
           "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == collection",
           "group": "3_transfer@1"
-        },
-        {
-          "command": "vscode-documentdb.command.clusterDashboard.context.pasteCollection",
-          "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == collection",
-          "group": "3_transfer@2"
         },
         {
           "command": "vscode-documentdb.command.clusterDashboard.context.exportDocuments",
@@ -1355,6 +1352,11 @@
           "group": "2@2"
         },
         {
+          "command": "vscode-documentdb.command.disconnect",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && viewItem =~ /\\bconnected\\b/ && !listMultiSelection",
+          "group": "2@3"
+        },
+        {
           "//": "[Account] Open Interactive Shell",
           "command": "vscode-documentdb.command.shell.open",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
@@ -1580,6 +1582,10 @@
       "explorer/context": [],
       "commandPalette": [
         {
+          "command": "vscode-documentdb.command.disconnect",
+          "when": "false"
+        },
+        {
           "command": "vscode-documentdb.debug.survey.showInvitation",
           "when": "documentdb-development-mode"
         },
@@ -1625,10 +1631,6 @@
         },
         {
           "command": "vscode-documentdb.command.clusterDashboard.context.copyCollection",
-          "when": "never"
-        },
-        {
-          "command": "vscode-documentdb.command.clusterDashboard.context.pasteCollection",
           "when": "never"
         },
         {
@@ -2031,6 +2033,22 @@
               }
             },
             "additionalProperties": false
+          },
+          "documentDB.connections.openTabsOnDisconnect": {
+            "order": 6,
+            "type": "string",
+            "default": "ask",
+            "description": "Choose what happens to open tabs when you disconnect or remove a connection. Closing tabs with unsaved document changes always requires confirmation.",
+            "enum": [
+              "ask",
+              "closeAll",
+              "keepOpenDisabled"
+            ],
+            "enumDescriptions": [
+              "Ask whether to close or keep open tabs.",
+              "Close all tabs for the connection.",
+              "Keep tabs open but disable database operations."
+            ]
           }
         }
       },

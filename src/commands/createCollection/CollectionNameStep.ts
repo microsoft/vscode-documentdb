@@ -6,7 +6,9 @@
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { ClustersClient } from '../../documentdb/ClustersClient';
+import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
 import { ext } from '../../extensionVariables';
+import { runBoundNamespaceCommand } from '../runBoundNamespaceCommand';
 import { type CreateCollectionWizardContext } from './CreateCollectionWizardContext';
 
 export class CollectionNameStep extends AzureWizardPromptStep<CreateCollectionWizardContext> {
@@ -71,13 +73,19 @@ export class CollectionNameStep extends AzureWizardPromptStep<CreateCollectionWi
         }
 
         try {
-            const client = await ClustersClient.getClient(context.credentialsId);
-            const collections = await client.listCollections(context.databaseId);
+            const collections = context.binding
+                ? await runBoundNamespaceCommand(context.credentialsId, context.binding, (client) =>
+                      client.listCollections(context.databaseId),
+                  )
+                : await (await ClustersClient.getClient(context.credentialsId)).listCollections(context.databaseId);
 
             if (collections.filter((c) => c.name === name).length > 0) {
                 return l10n.t('The collection "{0}" already exists in the database "{1}".', name, context.databaseId);
             }
         } catch (error) {
+            if (context.binding && error instanceof ConnectionUnavailableError) {
+                throw error;
+            }
             const errorMessage = error instanceof Error ? error.message : String(error);
             ext.outputChannel.error(l10n.t('Error validating collection name availability: {0}', errorMessage));
             return undefined; // we don't want to block the user from continuing if we can't validate the name

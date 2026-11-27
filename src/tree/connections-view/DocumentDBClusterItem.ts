@@ -54,6 +54,11 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
         return this.cluster.storageId;
     }
 
+    public override async getUnauthenticatedEndpoint(): Promise<string | undefined> {
+        const connection = await ConnectionStorageService.get(this.storageId, resolveStorageZone(this.cluster));
+        return connection && isConnection(connection) ? connection.secrets.connectionString : undefined;
+    }
+
     public async getCredentials(options?: GetCredentialsOptions): Promise<EphemeralClusterCredentials | undefined> {
         const connectionType = resolveStorageZone(this.cluster);
         const connectionCredentials = await ConnectionStorageService.get(this.storageId, connectionType);
@@ -262,6 +267,8 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
             );
 
             let clustersClient: ClustersClient;
+            const clusterId = this.cluster.clusterId;
+            let epoch = ClustersClient.getEpoch(clusterId);
 
             // Attempt to create the client with the provided credentials
             try {
@@ -288,6 +295,10 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                     context,
                 });
 
+                if (ClustersClient.getEpoch(clusterId) !== epoch) {
+                    return null;
+                }
+                let failure: unknown = error;
                 if (decodedPassword) {
                     context.valuesToMask.push(decodedPassword);
 
@@ -300,7 +311,12 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                         connectionCredentials.secrets.entraIdAuthConfig,
                     );
 
-                    await ClustersClient.deleteClient(this.cluster.clusterId);
+                    const closing = ClustersClient.deleteClient(clusterId);
+                    epoch = ClustersClient.getEpoch(clusterId);
+                    await closing;
+                    if (ClustersClient.getEpoch(clusterId) !== epoch) {
+                        return null;
+                    }
 
                     // Narrow try/catch to the connection attempt only so that errors
                     // from credential persistence don't discard a successful connection.
@@ -308,6 +324,13 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                     try {
                         retryClient = await this.getClientWithProgress(this.cluster.clusterId);
                     } catch (retryErr: unknown) {
+                        failure = retryErr;
+                        if (retryErr instanceof UserCancelledError) {
+                            context.telemetry.properties.connectionResult = 'cancelled';
+                            context.telemetry.properties.urlDecodePasswordResult = 'cancelled';
+                            throw retryErr;
+                        }
+
                         const retryError = retryErr instanceof Error ? retryErr : new Error(String(retryErr));
                         ext.outputChannel.appendLine(l10n.t('Retry Error: {error}', { error: retryError.message }));
                         context.telemetry.properties.urlDecodePasswordResult = 'failed';
@@ -334,20 +357,23 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                         const updateButton = l10n.t('Update saved password');
                         const saveChoice = await vscode.window.showInformationMessage(
                             l10n.t(
-                                'Connected to "{cluster}" using the decoded password. Would you like to update your saved credentials?',
+                                'Connected to "{cluster}" using the decoded password. Would you like to update your saved credentials with the correctly formatted password?',
                                 { cluster: this.cluster.name },
                             ),
                             { modal: false },
                             updateButton,
                         );
 
-                        if (saveChoice === updateButton) {
+                        if (saveChoice === updateButton && ClustersClient.getEpoch(clusterId) === epoch) {
                             try {
                                 connectionCredentials.secrets.nativeAuthConfig = {
                                     connectionUser: username ?? '',
                                     connectionPassword: decodedPassword,
                                 };
                                 await ConnectionStorageService.save(connectionType, connectionCredentials, true);
+                                if (ClustersClient.getEpoch(clusterId) !== epoch) {
+                                    return null;
+                                }
                                 context.telemetry.properties.urlDecodePasswordSaved = 'true';
                             } catch (saveErr: unknown) {
                                 const saveError = saveErr instanceof Error ? saveErr.message : String(saveErr);
@@ -359,13 +385,11 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                             }
                         }
 
-                        return retryClient;
+                        return ClustersClient.getEpoch(clusterId) === epoch ? retryClient : null;
                     }
                 }
 
-                // If connection fails, remove cached credentials
-                await ClustersClient.deleteClient(this.cluster.clusterId);
-                CredentialCache.deleteCredentials(this.cluster.clusterId);
+                await this.finishFailedStartup(context, failure, epoch);
 
                 // Return null to indicate failure
                 return null;
@@ -463,6 +487,10 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
      * @returns The TreeItem object.
      */
     getTreeItem(): vscode.TreeItem {
-        return buildClusterTreeItem({ id: this.id, contextValue: this.contextValue, cluster: this.cluster });
+        return buildClusterTreeItem({
+            id: this.id,
+            contextValue: this.getClusterTreeItemContextValue(),
+            cluster: this.cluster,
+        });
     }
 }

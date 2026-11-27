@@ -462,6 +462,10 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
 
     // Handler for AI query generation
     const handleGenerateQuery = async () => {
+        const lifecycleRevision = currentContext.lifecycle.beginOperation();
+        if (lifecycleRevision === undefined) {
+            return;
+        }
         if (!aiPromptValue.trim()) {
             return; // Don't generate if prompt is empty
         }
@@ -490,7 +494,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
             });
 
             // Check if this request was aborted while waiting for response
-            if (abortController.signal.aborted) {
+            if (abortController.signal.aborted || !currentContext.lifecycle.isOperationCurrent(lifecycleRevision)) {
                 return; // Ignore the response if we aborted
             }
 
@@ -513,7 +517,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
             setAiPromptValue('');
         } catch (error) {
             // Check if this request was aborted
-            if (abortController.signal.aborted) {
+            if (abortController.signal.aborted || !currentContext.lifecycle.isOperationCurrent(lifecycleRevision)) {
                 return; // Ignore errors from aborted requests
             }
 
@@ -523,13 +527,20 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                 cause: error instanceof Error ? error.message : String(error),
             });
         } finally {
-            // Only clear active state if this request wasn't aborted
-            if (!abortController.signal.aborted) {
+            if (aiGenerationAbortControllerRef.current === abortController) {
                 setIsAiActive(false);
                 aiGenerationAbortControllerRef.current = null;
             }
         }
     };
+
+    useEffect(() => {
+        if (currentContext.lifecycle.unavailable) {
+            aiGenerationAbortControllerRef.current?.abort();
+            aiGenerationAbortControllerRef.current = null;
+            setIsAiActive(false);
+        }
+    }, [currentContext.lifecycle.unavailable]);
 
     // Helper button component for the AI input's contentAfter slot
     const SendButton: React.FC = () => {

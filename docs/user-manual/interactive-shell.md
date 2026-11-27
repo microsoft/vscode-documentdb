@@ -54,6 +54,9 @@ Type "help" for available commands.
 myDatabase>
 ```
 
+For token renewal, Microsoft sign-in recovery, Disconnect, and the limits of reusing an existing
+shell after a connection change, see [Keep connections usable](./connecting-to-databases#keep-connections-usable).
+
 ## Shell Commands
 
 The following built-in commands are available at the prompt:
@@ -250,4 +253,4 @@ The help output also prints the full Settings search query for manual access.
 
 ---
 
-> **Related**: [Query Playground](./query-playground) | [How It Works Behind the Scenes](./query-runtime)
+> **Related**: [Query Playground](./query-playground) | [Connection lifecycle](./connecting-to-databases#keep-connections-usable) | [How It Works Behind the Scenes](./query-runtime)

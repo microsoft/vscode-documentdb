@@ -113,18 +113,20 @@ export async function openClusterDashboard(
     // run the same authentication the tree runs. Cached credentials make this a no-op.
     context.telemetry.properties.wasSignedIn = String(CredentialCache.hasCredentials(node.cluster.clusterId));
 
+    let client: ClustersClient;
     if (node instanceof DatabaseItem) {
         // Database nodes are only rendered after their cluster connected, so reuse that client.
-        await ClustersClient.getClient(node.cluster.clusterId, undefined, undefined, 'clusterDashboard');
+        client = await ClustersClient.getClient(node.cluster.clusterId, undefined, undefined, 'clusterDashboard');
     } else {
-        const client = await node.connect();
-        if (!client) {
+        const connectedClient = await node.connect();
+        if (!connectedClient) {
             // `connect()` has already surfaced the reason, or the user cancelled the prompt.
             context.telemetry.properties.connectionResult = 'failed';
             const canceled = node.lastConnectionOutcome === 'canceled';
             context.telemetry.properties.result = canceled ? 'Canceled' : 'Failed';
             return { opened: false, canceled };
         }
+        client = connectedClient;
     }
 
     // Extract viewId from the cluster model, or infer from treeId prefix
@@ -153,7 +155,9 @@ export async function openClusterDashboard(
                     ? context.telemetry.properties.journeyCorrelationId
                     : undefined,
         },
+        client.binding,
         options?.deepLink,
+        options?.activationSource === 'autoOpenOnConnect',
     );
 
     context.telemetry.properties.viewId = viewId;

@@ -85,7 +85,20 @@ vi.mock('../../services/connectionStorageService', async (importOriginal) => ({
     ConnectionStorageService: { get: vi.fn(), save: vi.fn() },
 }));
 vi.mock('../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: vi.fn(), deleteClient: vi.fn(), exists: vi.fn() },
+    addEstablishedConnectionContext: vi.fn(),
+    ClustersClient: {
+        connectInteractive: vi.fn(),
+        deleteClient: vi.fn(),
+        exists: vi.fn(),
+        getEpoch: vi.fn(() => 0),
+        getLatchReason: vi.fn(),
+        getExistingClient: vi.fn(),
+        latch: vi.fn(),
+        unlatch: vi.fn(),
+        retireBoundViews: vi.fn(),
+        clearLastVerifiedIdentity: vi.fn(),
+        discardEntraPinForDifferentTenant: vi.fn(),
+    },
 }));
 vi.mock('../../services/connectionReachabilityService', () => ({
     ConnectionReachabilityService: { ensureReachable: vi.fn() },
@@ -166,7 +179,7 @@ describe('updateConnectionString rejected-destination recovery', () => {
             items.find((entry) => entry.authMethod === AuthMethodId.NoAuth),
         );
         CredentialCache.setAuthCredentials('stable-id', AuthMethodId.ManagedIdentity, originalUri);
-        vi.mocked(ClustersClient.getClient).mockRejectedValue(
+        vi.mocked(ClustersClient.connectInteractive).mockRejectedValue(
             new EntraDestinationRejectedError({ firstHost: 'old.example.com', hostCount: 1 }),
         );
     });
@@ -192,7 +205,9 @@ describe('updateConnectionString rejected-destination recovery', () => {
             await updateConnectionString(makeContext(), item);
 
             expect(capturedContexts[0].connectionStringSaved).toBe(true);
-            expect(ClustersClient.deleteClient).toHaveBeenCalledExactlyOnceWith('stable-id');
+            expect(ClustersClient.deleteClient).toHaveBeenCalledExactlyOnceWith('stable-id', {
+                alreadyInvalidated: true,
+            });
             expect(deleteCredentials).toHaveBeenCalledExactlyOnceWith('stable-id');
             expect(resetError).toHaveBeenCalledExactlyOnceWith(item.id);
             expect(provider.hasNodeErrorState(item.id)).toBe(false);
@@ -205,14 +220,16 @@ describe('updateConnectionString rejected-destination recovery', () => {
             expect(deleteCredentials.mock.invocationCallOrder[0]).toBeLessThan(resetError.mock.invocationCallOrder[0]);
             expect(resetError.mock.invocationCallOrder[0]).toBeLessThan(refresh.mock.invocationCallOrder[0]);
             const client = { listDatabases: vi.fn().mockResolvedValue([]), connectionCorrelationId: 'retry' };
-            vi.mocked(ClustersClient.getClient).mockImplementation(async (clusterId): Promise<ClustersClient> => {
-                expect(clusterId).toBe('stable-id');
-                expect(CredentialCache.getCredentials(clusterId)).toMatchObject({
-                    connectionString: newUri,
-                    authMechanism: expectedMethod,
-                });
-                return client as unknown as ClustersClient;
-            });
+            vi.mocked(ClustersClient.connectInteractive).mockImplementation(
+                async (clusterId): Promise<ClustersClient> => {
+                    expect(clusterId).toBe('stable-id');
+                    expect(CredentialCache.getCredentials(clusterId)).toMatchObject({
+                        connectionString: newUri,
+                        authMechanism: expectedMethod,
+                    });
+                    return client as unknown as ClustersClient;
+                },
+            );
 
             const retriedChildren = await provider.getChildren(item);
 
@@ -263,21 +280,38 @@ describe('updateConnectionString rejected-destination recovery', () => {
         },
     );
 
-    it('leaves the existing connected-edit lifecycle unchanged after a successful ordinary edit', async (): Promise<void> => {
+    it('retires the old client and bindings after an ordinary saved edit', async (): Promise<void> => {
         const resetError = vi.spyOn(provider, 'resetNodeErrorState');
         const refresh = vi.spyOn(provider, 'refresh');
         item.lastConnectionOutcome = 'connected';
-        const cachedCredentials = CredentialCache.getCredentials('stable-id');
 
         await updateConnectionString(makeContext(), item);
 
         expect(capturedContexts[0].connectionStringSaved).toBe(true);
         expect(storedConnection.secrets.connectionString).toBe(approvedUri);
-        expect(ClustersClient.deleteClient).not.toHaveBeenCalled();
-        expect(deleteCredentials).not.toHaveBeenCalled();
+        expect(ClustersClient.retireBoundViews).toHaveBeenCalledExactlyOnceWith('stable-id');
+        expect(ClustersClient.deleteClient).toHaveBeenCalledExactlyOnceWith('stable-id', { alreadyInvalidated: true });
+        expect(deleteCredentials).toHaveBeenCalledExactlyOnceWith('stable-id');
         expect(resetError).not.toHaveBeenCalled();
-        expect(CredentialCache.getCredentials('stable-id')).toBe(cachedCredentials);
+        expect(CredentialCache.getCredentials('stable-id')).toBeUndefined();
         expect(item.lastConnectionOutcome).toBe('connected');
+        expect(refresh).toHaveBeenCalledOnce();
+    });
+
+    it('saves an ordinary edit when the epoch changes while the input is open', async (): Promise<void> => {
+        const refresh = vi.spyOn(provider, 'refresh');
+        item.lastConnectionOutcome = 'connected';
+        showInputBox.mockImplementationOnce(async (): Promise<string> => {
+            vi.mocked(ClustersClient.getEpoch).mockReturnValue(1);
+            return approvedUri;
+        });
+
+        await updateConnectionString(makeContext(), item);
+
+        expect(storedConnection.secrets.connectionString).toBe(approvedUri);
+        expect(capturedContexts[0].connectionStringSaved).toBe(true);
+        expect(ClustersClient.retireBoundViews).toHaveBeenCalledExactlyOnceWith('stable-id');
+        expect(deleteCredentials).toHaveBeenCalledExactlyOnceWith('stable-id');
         expect(refresh).toHaveBeenCalledOnce();
     });
 });

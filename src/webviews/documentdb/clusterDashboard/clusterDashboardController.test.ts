@@ -3,20 +3,23 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 import { describe, expect, it, vi, type Mock } from 'vitest';
 
 vi.mock('@vscode/l10n', () => ({
     t: vi.fn((message: string) => message),
 }));
 
-vi.mock('vscode', () => ({
+vi.mock('vscode', async (importOriginal) => ({
+    ...(await importOriginal<typeof vscode>()),
     ViewColumn: { One: 1 },
     Uri: { joinPath: vi.fn((base: unknown, ...parts: string[]) => ({ base, parts })) },
     commands: { registerCommand: vi.fn(), executeCommand: vi.fn() },
     window: { showErrorMessage: vi.fn() },
 }));
 
-vi.mock('@microsoft/vscode-azext-utils', () => ({
+vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
+    ...(await importOriginal<{ callWithTelemetryAndErrorHandling: typeof callWithTelemetryAndErrorHandling }>()),
     callWithTelemetryAndErrorHandling: vi.fn(async (_eventId: string, callback: (context: unknown) => Promise<void>) =>
         callback({ telemetry: { properties: {}, measurements: {} }, errorHandling: {} }),
     ),
@@ -34,16 +37,41 @@ vi.mock('../../../commands/openCollectionView/openCollectionView', () => ({
     openCollectionViewInternal: vi.fn(async () => undefined),
 }));
 
+vi.mock('../../../commands/copyReference/copyReference', () => ({
+    copyNamespaceReference: vi.fn(),
+}));
+
+vi.mock('../../../documentdb/ClustersClient', () => ({
+    ClustersClient: {
+        getBinding: vi.fn(),
+        getEpoch: vi.fn(),
+        getLatchReason: vi.fn(),
+        resolveBoundClient: vi.fn(),
+        unlatch: vi.fn(),
+    },
+}));
+vi.mock('../../../documentdb/CredentialCache', () => ({ CredentialCache: { getCredentials: vi.fn() } }));
+
 vi.mock('./resolveNamespaceNode', () => ({
     resolveNamespaceNode: vi.fn(async () => ({ id: 'tree-node' })),
     describeMissingNamespace: vi.fn(() => 'missing-namespace-explanation'),
 }));
 
 import * as vscode from 'vscode';
+import { copyNamespaceReference } from '../../../commands/copyReference/copyReference';
 import { openCollectionViewInternal } from '../../../commands/openCollectionView/openCollectionView';
+import { ClustersClient } from '../../../documentdb/ClustersClient';
+import { getConnectionSurfaces } from '../../../documentdb/connectionSurfaces';
+import { ConnectionUnavailableError } from '../../../documentdb/ConnectionUnavailableError';
+import { CredentialCache } from '../../../documentdb/CredentialCache';
 import { openAppWebview } from '../../_integration/openAppWebview';
 import { CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS } from './clusterDashboardContextMenu';
-import { openClusterDashboardWebview, registerClusterDashboardContextMenuCommands } from './clusterDashboardController';
+import {
+    openClusterDashboardWebview,
+    registerClusterDashboardContextMenuCommands,
+    type ClusterDashboardWebviewConfigurationType,
+} from './clusterDashboardController';
+import { type RouterContext } from './clusterDashboardRouter';
 import { resolveNamespaceNode } from './resolveNamespaceNode';
 
 /**
@@ -80,16 +108,20 @@ function createFakeController(): FakeController {
 }
 
 const CLUSTER = 'cluster-under-test';
+const binding = { clusterId: CLUSTER, fingerprint: 'host-only-dashboard-fingerprint', generation: 1 };
 
 function open(clusterId: string, selectedDatabaseName?: string): FakeController {
-    return openClusterDashboardWebview({
-        clusterId,
-        clusterDisplayName: clusterId,
-        viewId: 'connectionsView',
-        refreshIntervalMs: 5_000,
-        showDashboardOnConnect: false,
-        selectedDatabaseName,
-    }) as unknown as FakeController;
+    return openClusterDashboardWebview(
+        {
+            clusterId,
+            clusterDisplayName: clusterId,
+            viewId: 'connectionsView',
+            refreshIntervalMs: 5_000,
+            showDashboardOnConnect: false,
+            selectedDatabaseName,
+        },
+        { ...binding, clusterId },
+    ) as unknown as FakeController;
 }
 
 describe('openClusterDashboardWebview panel lifecycle', () => {
@@ -102,16 +134,19 @@ describe('openClusterDashboardWebview panel lifecycle', () => {
             refreshIntervalMs: 5000,
             showDashboardOnConnect: false,
         };
+        const firstBinding = { ...binding, clusterId: config.clusterId };
         const firstLink = { deepLinkCorrelationId: 'first-click', deepLinkSource: 'portal' };
-        const first = openClusterDashboardWebview(config, firstLink);
-        const second = openClusterDashboardWebview(config, {
-            deepLinkCorrelationId: 'second-click',
-            deepLinkSource: 'docs',
-        });
+        const first = openClusterDashboardWebview(config, firstBinding, firstLink);
+        const second = openClusterDashboardWebview(
+            config,
+            { ...firstBinding, fingerprint: 'replacement' },
+            { deepLinkCorrelationId: 'second-click', deepLinkSource: 'docs' },
+        );
         expect(second).toBe(first);
         expect(openAppWebview).toHaveBeenCalledExactlyOnceWith(
             expect.objectContaining({
-                context: expect.objectContaining(firstLink),
+                context: expect.objectContaining({ ...firstLink, binding: firstBinding }),
+                config: expect.not.objectContaining({ binding: expect.anything() }),
             }),
         );
         first.dispose();
@@ -127,6 +162,38 @@ describe('openClusterDashboardWebview panel lifecycle', () => {
 
         first.dispose();
     });
+
+    it.each([
+        ['userDisconnected', binding, true, true],
+        ['userDisconnected', { ...binding, fingerprint: 'other-identity' }, true, false],
+        ['credentialsChanged', binding, true, false],
+        ['userDisconnected', binding, false, false],
+    ] as const)(
+        'resumes only the auto-opened Dashboard after an explicit same-identity reconnect (%s, %j, %s)',
+        (reason, connectedBinding, autoOpen, resumes): void => {
+            vi.clearAllMocks();
+            const panel = open(CLUSTER);
+            const { context, config } = vi.mocked(openAppWebview).mock.calls[0][0];
+            (context as RouterContext).describeUnavailable(reason);
+
+            openClusterDashboardWebview(
+                config as ClusterDashboardWebviewConfigurationType,
+                { ...connectedBinding, generation: 2 },
+                undefined,
+                autoOpen,
+            );
+
+            expect(panel.revealToForeground).toHaveBeenCalledOnce();
+            if (resumes) {
+                expect(panel.panel.webview.postMessage).toHaveBeenCalledExactlyOnceWith({
+                    type: 'clusterDashboard.retryAfterReconnect',
+                });
+            } else {
+                expect(panel.panel.webview.postMessage).not.toHaveBeenCalled();
+            }
+            panel.dispose();
+        },
+    );
 
     it('opens separate panels for different databases in the same cluster', () => {
         const first = open(CLUSTER, 'sales');
@@ -148,6 +215,112 @@ describe('openClusterDashboardWebview panel lifecycle', () => {
 
         second.dispose();
     });
+
+    it('registers the dashboard, pushes an unavailable payload and unregisters on dispose', () => {
+        vi.clearAllMocks();
+        vi.mocked(ClustersClient.getBinding).mockReturnValue(binding);
+        vi.mocked(ClustersClient.getLatchReason).mockReturnValue(undefined);
+        const controller = open(CLUSTER);
+        const [surface] = getConnectionSurfaces(CLUSTER);
+
+        expect(surface).toMatchObject({ kind: 'clusterDashboard' });
+        surface.disable('userDisconnected');
+        expect(controller.panel.webview.postMessage).toHaveBeenCalledWith({
+            type: 'clusterDashboard.connectionUnavailable',
+            unavailable: {
+                reason: 'userDisconnected',
+                title: expect.any(String),
+                detail: expect.any(String),
+                action: 'retry',
+            },
+        });
+
+        controller.dispose();
+        expect(getConnectionSurfaces(CLUSTER)).toEqual([]);
+    });
+});
+
+describe('cluster dashboard unavailable recovery', () => {
+    function openRecoveryContext(): { readonly controller: FakeController; readonly context: RouterContext } {
+        vi.clearAllMocks();
+        vi.mocked(ClustersClient.getBinding).mockReturnValue(binding);
+        vi.mocked(ClustersClient.getLatchReason).mockReturnValue(undefined);
+        vi.mocked(CredentialCache.getCredentials).mockReturnValue(undefined);
+        const controller = open(CLUSTER);
+        const options = vi.mocked(openAppWebview).mock.calls.at(-1)?.[0];
+        return { controller, context: options?.context as RouterContext };
+    }
+
+    it('resumes the same identity without reloading the dashboard', async () => {
+        const { controller, context } = openRecoveryContext();
+        vi.mocked(ClustersClient.resolveBoundClient).mockResolvedValue({
+            binding: { ...binding, generation: 2 },
+        } as never);
+
+        context.describeUnavailable('userDisconnected');
+        await expect(context.recoverUnavailable({ action: 'retry' })).resolves.toEqual({
+            recovered: { text: 'Reconnected' },
+        });
+        expect(context.binding).toEqual(binding);
+        expect(ClustersClient.unlatch).not.toHaveBeenCalled();
+        expect(ClustersClient.resolveBoundClient).toHaveBeenCalledExactlyOnceWith(binding, {
+            trigger: 'clusterDashboard',
+        });
+        expect(controller.panel.webview.postMessage).not.toHaveBeenCalled();
+        controller.dispose();
+    });
+
+    it('does not clear a newer removal or credential rejection latch', async () => {
+        for (const latchReason of ['connectionRemoved', 'credentialsRejected'] as const) {
+            const { controller, context } = openRecoveryContext();
+            context.describeUnavailable('userDisconnected');
+            vi.mocked(ClustersClient.getLatchReason).mockReturnValue(latchReason);
+
+            await expect(context.recoverUnavailable({ action: 'retry' })).resolves.toMatchObject({
+                unavailable: { reason: latchReason, action: latchReason === 'connectionRemoved' ? 'close' : 'retry' },
+            });
+            expect(ClustersClient.unlatch).not.toHaveBeenCalled();
+            expect(ClustersClient.resolveBoundClient).not.toHaveBeenCalled();
+            controller.dispose();
+        }
+    });
+
+    it('keeps a latch that appears while Retry is resolving', async () => {
+        const { controller, context } = openRecoveryContext();
+        let latchReason: 'connectionRemoved' | undefined;
+        vi.mocked(ClustersClient.getLatchReason).mockImplementation(() => latchReason);
+        vi.mocked(ClustersClient.resolveBoundClient).mockImplementation(async () => {
+            latchReason = 'connectionRemoved';
+            return { binding } as never;
+        });
+        context.describeUnavailable('userDisconnected');
+
+        await expect(context.recoverUnavailable({ action: 'retry' })).resolves.toMatchObject({
+            unavailable: { reason: 'connectionRemoved', action: 'close' },
+        });
+        expect(context.binding).toEqual(binding);
+        controller.dispose();
+    });
+
+    it('keeps the overlay if sign-in is needed or the connection identity changes', async () => {
+        const { controller, context } = openRecoveryContext();
+        vi.mocked(ClustersClient.resolveBoundClient).mockRejectedValueOnce(
+            new ConnectionUnavailableError('signInRequired'),
+        );
+
+        const described = context.describeUnavailable('signInRequired');
+        await expect(context.recoverUnavailable({ action: 'retry' })).resolves.toEqual(described);
+
+        const replacement = { ...binding, fingerprint: 'identity-b', generation: 2 };
+        vi.mocked(ClustersClient.getBinding).mockReturnValue(replacement);
+        vi.mocked(ClustersClient.resolveBoundClient).mockResolvedValue({ binding: replacement } as never);
+        await expect(context.recoverUnavailable({ action: 'retry' })).resolves.toMatchObject({
+            unavailable: { reason: 'identityChanged', action: 'close' },
+        });
+        expect(context.binding).toEqual(binding);
+        expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+        controller.dispose();
+    });
 });
 
 describe('cluster dashboard native context menu commands', () => {
@@ -156,6 +329,9 @@ describe('cluster dashboard native context menu commands', () => {
         controller: FakeController;
     } {
         vi.clearAllMocks();
+        vi.mocked(ClustersClient.getBinding).mockReturnValue(binding);
+        vi.mocked(ClustersClient.getEpoch).mockReturnValue(0);
+        vi.mocked(ClustersClient.getLatchReason).mockReturnValue(undefined);
         const handlers = new Map<string, (context: unknown) => Promise<void>>();
         vi.mocked(vscode.commands.registerCommand).mockImplementation((commandId, handler) => {
             handlers.set(commandId, handler as (context: unknown) => Promise<void>);
@@ -205,7 +381,7 @@ describe('cluster dashboard native context menu commands', () => {
             'vscode-documentdb.command.dropCollection',
             { id: 'tree-node' },
             null,
-            { source: 'webview;clusterDashboard' },
+            { source: 'webview;clusterDashboard', binding },
         );
         expect(controller.panel.webview.postMessage).toHaveBeenNthCalledWith(1, {
             type: 'clusterDashboard.namespaceBusy',
@@ -229,26 +405,79 @@ describe('cluster dashboard native context menu commands', () => {
         controller.dispose();
     });
 
-    it('refreshes inventory after paste returns', async () => {
+    it('does not forward a delete if the connection latches during its busy message', async () => {
         const { handlers, controller } = registerAndOpen();
+        controller.panel.webview.postMessage.mockImplementationOnce(async () => {
+            vi.mocked(ClustersClient.getLatchReason).mockReturnValue('userDisconnected');
+            return true;
+        });
 
-        await handlers.get(CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.pasteCollection)?.({
+        await handlers.get(CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.deleteCollection)?.({
             clusterDashboardClusterId: CLUSTER,
             clusterDashboardSelectedDatabase: 'sales',
             clusterDashboardDatabase: 'sales',
+            clusterDashboardCollection: 'orders',
         });
 
-        expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
-            'vscode-documentdb.command.pasteCollection',
-            { id: 'tree-node' },
-            null,
-            { source: 'webview;clusterDashboard' },
+        expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+        expect(controller.panel.webview.postMessage).toHaveBeenLastCalledWith({
+            type: 'clusterDashboard.connectionUnavailable',
+            unavailable: {
+                reason: 'userDisconnected',
+                title: expect.any(String),
+                detail: expect.any(String),
+                action: 'retry',
+            },
+        });
+        controller.dispose();
+    });
+
+    it('does not register Dashboard Paste', () => {
+        const { handlers, controller } = registerAndOpen();
+
+        expect(handlers.has('vscode-documentdb.command.clusterDashboard.context.pasteCollection')).toBe(false);
+        controller.dispose();
+    });
+
+    it('keeps only local reference copying available in this panel until Retry succeeds', async () => {
+        const { handlers, controller } = registerAndOpen();
+        const other = open(CLUSTER, 'inventory');
+        const dashboardContext = vi.mocked(openAppWebview).mock.calls[0][0].context as RouterContext;
+        const row = {
+            clusterDashboardClusterId: CLUSTER,
+            clusterDashboardSelectedDatabase: 'sales',
+            clusterDashboardDatabase: 'sales',
+            clusterDashboardCollection: 'orders',
+        };
+        const exportRow = handlers.get(CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.exportDocuments);
+        dashboardContext.describeUnavailable('unreachable');
+
+        await exportRow?.(row);
+        await handlers.get(CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.copyReference)?.(row);
+        expect(copyNamespaceReference).toHaveBeenCalledWith(expect.anything(), 'sales', 'orders');
+        expect(resolveNamespaceNode).not.toHaveBeenCalled();
+        expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+        expect(controller.panel.webview.postMessage).toHaveBeenCalledExactlyOnceWith({
+            type: 'clusterDashboard.connectionUnavailable',
+            unavailable: expect.objectContaining({ reason: 'unreachable' }),
+        });
+
+        vi.mocked(ClustersClient.resolveBoundClient).mockRejectedValueOnce(
+            new ConnectionUnavailableError('unreachable'),
         );
-        expect(controller.panel.webview.postMessage).toHaveBeenCalledWith({
-            type: 'clusterDashboard.inventoryChanged',
-            databaseName: 'sales',
-        });
+        await expect(dashboardContext.recoverUnavailable({ action: 'retry' })).resolves.toHaveProperty('unavailable');
+        await exportRow?.(row);
+        expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
 
+        await exportRow?.({ ...row, clusterDashboardSelectedDatabase: 'inventory' });
+        expect(vscode.commands.executeCommand).toHaveBeenCalledOnce();
+
+        vi.mocked(ClustersClient.resolveBoundClient).mockResolvedValueOnce({ binding } as ClustersClient);
+        await expect(dashboardContext.recoverUnavailable({ action: 'retry' })).resolves.toHaveProperty('recovered');
+        expect(vscode.commands.executeCommand).toHaveBeenCalledOnce(); // No replay.
+        await exportRow?.(row);
+        expect(vscode.commands.executeCommand).toHaveBeenCalledTimes(2);
+        other.dispose();
         controller.dispose();
     });
 
@@ -262,6 +491,12 @@ describe('cluster dashboard native context menu commands', () => {
             clusterDashboardCollection: 'orders',
         });
 
+        expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+            'vscode-documentdb.command.importDocuments',
+            { id: 'tree-node' },
+            null,
+            { source: 'webview;clusterDashboard', binding },
+        );
         expect(controller.panel.webview.postMessage).toHaveBeenCalledWith({
             type: 'clusterDashboard.inventoryChanged',
             databaseName: 'sales',
@@ -280,6 +515,12 @@ describe('cluster dashboard native context menu commands', () => {
             clusterDashboardCollection: 'orders',
         });
 
+        expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+            'vscode-documentdb.command.exportDocuments',
+            { id: 'tree-node' },
+            null,
+            { source: 'webview;clusterDashboard', binding },
+        );
         expect(controller.panel.webview.postMessage).not.toHaveBeenCalled();
 
         controller.dispose();
@@ -300,6 +541,26 @@ describe('cluster dashboard native context menu commands', () => {
         expect(vscode.window.showErrorMessage).toHaveBeenCalledWith('missing-namespace-explanation');
         expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
 
+        controller.dispose();
+    });
+
+    it('restores the recovery dialog for a row action when its client is no longer cached', async () => {
+        const { handlers, controller } = registerAndOpen();
+        vi.mocked(ClustersClient.getBinding).mockReturnValueOnce(undefined);
+
+        await handlers.get(CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.exportDocuments)?.({
+            clusterDashboardClusterId: CLUSTER,
+            clusterDashboardSelectedDatabase: 'sales',
+            clusterDashboardDatabase: 'sales',
+            clusterDashboardCollection: 'orders',
+        });
+
+        expect(controller.panel.webview.postMessage).toHaveBeenCalledWith({
+            type: 'clusterDashboard.connectionUnavailable',
+            unavailable: expect.objectContaining({ reason: 'unreachable', action: 'retry' }),
+        });
+        expect(resolveNamespaceNode).not.toHaveBeenCalled();
+        expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
         controller.dispose();
     });
 

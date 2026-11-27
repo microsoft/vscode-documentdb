@@ -13,7 +13,7 @@ import path from 'path';
 import * as vscode from 'vscode';
 import { type IconPath } from 'vscode';
 import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
-import { type ClustersClient } from '../../../documentdb/ClustersClient';
+import { ClustersClient } from '../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../documentdb/CredentialCache';
 import { maskSensitiveValuesInTelemetry } from '../../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
@@ -315,7 +315,11 @@ class QuickStartClusterItem extends ClusterItemBase<ConnectionClusterModel> {
      * state label (e.g. "Running").
      */
     public override getTreeItem(): vscode.TreeItem {
-        const treeItem = buildClusterTreeItem({ id: this.id, contextValue: this.contextValue, cluster: this.cluster });
+        const treeItem = buildClusterTreeItem({
+            id: this.id,
+            contextValue: this.getClusterTreeItemContextValue(),
+            cluster: this.cluster,
+        });
         return {
             ...treeItem,
             description: this.descriptionOverride,
@@ -327,7 +331,13 @@ class QuickStartClusterItem extends ClusterItemBase<ConnectionClusterModel> {
     }
 
     public override async getChildren(): Promise<TreeElement[]> {
+        if (ClustersClient.getLatchReason(this.cluster.clusterId) === 'userDisconnected') {
+            return super.getChildren();
+        }
         const preflight: QuickStartConnectionPreflightResult = await QuickStartService.prepareForConnection(this.alias);
+        if (ClustersClient.getLatchReason(this.cluster.clusterId) === 'userDisconnected') {
+            return super.getChildren();
+        }
         if (preflight !== 'ready') {
             return buildPreflightChildren(this.id, preflight);
         }
@@ -382,7 +392,10 @@ class QuickStartClusterItem extends ClusterItemBase<ConnectionClusterModel> {
         return result ?? null;
     }
 
-    protected override async getClientWithProgress(clusterId: string): Promise<ClustersClient> {
+    protected override async getClientWithProgress(
+        clusterId: string,
+        onReuse?: (client: ClustersClient | undefined) => void,
+    ): Promise<ClustersClient> {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
             context.errorHandling.rethrow = true;
             context.errorHandling.suppressDisplay = true;
@@ -391,7 +404,7 @@ class QuickStartClusterItem extends ClusterItemBase<ConnectionClusterModel> {
             if (connectionString) {
                 maskSensitiveValuesInTelemetry(context, new DocumentDBConnectionString(connectionString));
             }
-            return super.getClientWithProgress(clusterId);
+            return super.getClientWithProgress(clusterId, onReuse);
         });
         return nonNullValue(result, 'connected client', 'QuickStartClusterItem.getClientWithProgress');
     }

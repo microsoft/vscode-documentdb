@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
+import { getSessionFromVSCode, type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../extensionVariables';
@@ -53,7 +53,7 @@ export async function resolveAzureSubscription(
     ext.outputChannel.trace('[DeepLink] Checking Azure sign-in');
     report?.(vscode.l10n.t('Checking Azure sign-in…'));
     const isSignedIn = await measureDeepLinkPhase(context, 'azureSignInCheck', () =>
-        azureSubscriptionProvider.isSignedIn(),
+        azureSubscriptionProvider.signIn(undefined, { promptIfNeeded: false }),
     );
     ext.outputChannel.trace(`[DeepLink] Azure sign-in: ${isSignedIn ? 'signed in' : 'sign-in required'}`);
     context.telemetry.properties.azureSignInRequired = isSignedIn ? 'false' : 'true';
@@ -72,7 +72,9 @@ export async function resolveAzureSubscription(
         );
         if (
             choice !== signInButton ||
-            !(await measureDeepLinkPhase(context, 'azureSignIn', () => azureSubscriptionProvider.signIn()))
+            !(await measureDeepLinkPhase(context, 'azureSignIn', () =>
+                azureSubscriptionProvider.signIn(undefined, { clearSessionPreference: true }),
+            ))
         ) {
             ext.outputChannel.trace('[DeepLink] Azure sign-in stopped');
             cancelDeepLink(context, 'AzureSignIn');
@@ -83,11 +85,17 @@ export async function resolveAzureSubscription(
 
     context.telemetry.properties.failureStage = 'resolveSubscription';
     context.telemetry.properties.tenantSignInRequired = 'false';
-    for (let attempt = 0; attempt < 2; attempt++) {
+    let lookupAttempts = 0;
+    async function lookupSubscription(noCache = false): Promise<AzureSubscription | undefined> {
         ext.outputChannel.trace('[DeepLink] Listing subscriptions');
         report?.(vscode.l10n.t('Looking for the subscription…'));
+        context.telemetry.measurements.subscriptionLookupAttempts = ++lookupAttempts;
         const subscriptions = await measureDeepLinkPhase(context, 'subscriptionLookup', () =>
-            azureSubscriptionProvider.getSubscriptions(false),
+            azureSubscriptionProvider.getAvailableSubscriptions({
+                filter: false,
+                maximumTenants: Number.POSITIVE_INFINITY,
+                ...(noCache ? { noCache: true } : {}),
+            }),
         );
         const candidates = subscriptions.filter(
             (subscription) =>
@@ -97,18 +105,17 @@ export async function resolveAzureSubscription(
         );
         ext.outputChannel.trace(`[DeepLink] ${candidates.length} matching subscription(s) found`);
         context.telemetry.measurements.subscriptionAccountCount = candidates.length;
-        context.telemetry.measurements.subscriptionLookupAttempts = attempt + 1;
-        const subscription =
+        return (
             candidates.find((candidate) => !isTenantFilteredOut(candidate.tenantId, candidate.account.id)) ??
-            candidates[0];
-        if (subscription) {
-            return subscription;
-        }
+            candidates[0]
+        );
+    }
 
-        if (attempt > 0 || request.tenantId === undefined) {
-            break;
-        }
-
+    const subscription = (await lookupSubscription()) ?? (await lookupSubscription(true));
+    if (subscription) {
+        return subscription;
+    }
+    if (request.tenantId !== undefined) {
         context.telemetry.properties.tenantSignInRequired = 'true';
         const tenantId = request.tenantId;
         ext.outputChannel.trace('[DeepLink] Tenant sign-in offered');
@@ -134,12 +141,16 @@ export async function resolveAzureSubscription(
         }
         report?.(vscode.l10n.t('Signing in to tenant…'));
         const signedIn = await measureDeepLinkPhase(context, 'azureSignIn', () =>
-            azureSubscriptionProvider.signIn(tenantId),
+            getSessionFromVSCode(undefined, tenantId, { createIfNone: true, clearSessionPreference: true }),
         );
         if (!signedIn) {
             ext.outputChannel.trace('[DeepLink] Tenant sign-in stopped');
             cancelDeepLink(context, 'AzureTenantSignIn');
             return undefined;
+        }
+        const tenantSubscription = await lookupSubscription(true);
+        if (tenantSubscription) {
+            return tenantSubscription;
         }
     }
 

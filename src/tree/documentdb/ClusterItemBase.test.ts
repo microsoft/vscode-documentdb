@@ -11,10 +11,16 @@ import {
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { connectDisconnected, disconnect } from '../../commands/disconnect/disconnect';
+import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { EntraDestinationRejectedError } from '../../documentdb/auth/oidcAllowedHosts';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
-import { ShellCommandIds } from '../../documentdb/shell/constants';
+import { teardownConnection } from '../../documentdb/connectionTeardown';
+import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
+import { CredentialCache } from '../../documentdb/CredentialCache';
+import { Views } from '../../documentdb/Views';
 import { type Experience } from '../../DocumentDBExperiences';
+import { ext } from '../../extensionVariables';
 import { containsRetryNode, RETRY_NODE_ID_SUFFIX } from '../api/retryNode';
 import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
@@ -67,13 +73,28 @@ const mockGetSetting = vi.fn().mockReturnValue(false);
 vi.mock('../../documentdb/CredentialCache', () => ({
     CredentialCache: {
         hasCredentials: (...args: unknown[]) => mockHasCredentials(...args),
+        getCredentials: vi.fn(),
+        deleteCredentials: vi.fn(),
     },
 }));
 
 vi.mock('../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: vi.fn(), exists: vi.fn().mockReturnValue(false), getExistingClient: vi.fn() },
+    addEstablishedConnectionContext: vi.fn(),
+    ClustersClient: {
+        connectInteractive: vi.fn(),
+        exists: vi.fn().mockReturnValue(false),
+        getExistingClient: vi.fn(),
+        getLatchReason: vi.fn(),
+        unlatch: vi.fn(),
+        getEpoch: vi.fn(() => 0),
+        getLastVerifiedIdentity: vi.fn(),
+        reportFailure: vi.fn(),
+    },
 }));
 
+vi.mock('../../documentdb/connectionTeardown', () => ({ teardownConnection: vi.fn() }));
+
+const notifyChildrenChanged = vi.fn();
 vi.mock('../../extensionVariables', () => ({
     ext: {
         settingsKeys: {
@@ -83,6 +104,11 @@ vi.mock('../../extensionVariables', () => ({
             appendLine: vi.fn(),
             debug: vi.fn(),
         },
+        state: { notifyChildrenChanged: (...args: unknown[]) => notifyChildrenChanged(...args) },
+        connectionsBranchDataProvider: { resetNodeErrorState: vi.fn(), refresh: vi.fn() },
+        discoveryBranchDataProvider: { resetNodeErrorState: vi.fn(), refresh: vi.fn() },
+        azureResourcesRUBranchDataProvider: { resetNodeErrorState: vi.fn(), refresh: vi.fn() },
+        azureResourcesVCoreBranchDataProvider: { resetNodeErrorState: vi.fn(), refresh: vi.fn() },
     },
 }));
 
@@ -166,6 +192,21 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
         ClustersClientMock.exists.mockReturnValue(false);
     });
 
+    it('reads only the available model endpoint without authentication or client acquisition', async (): Promise<void> => {
+        const cluster: TreeCluster<BaseClusterModel> = {
+            ...makeCluster(),
+            connectionString: 'mongodb://user:password@host/',
+        };
+        const item = new TestClusterItem(cluster, null);
+        const credentials = vi.spyOn(item, 'getCredentials');
+        expect(await item.getUnauthenticatedEndpoint()).toBe(cluster.connectionString);
+        cluster.connectionString = undefined;
+        expect(await item.getUnauthenticatedEndpoint()).toBeUndefined();
+        expect(credentials).not.toHaveBeenCalled();
+        expect(CredentialCache.getCredentials).not.toHaveBeenCalled();
+        expect(ClustersClientMock.connectInteractive).not.toHaveBeenCalled();
+    });
+
     it('returns a retry node (and records telemetry) when listDatabases is rejected', async () => {
         const listDatabases = vi
             .fn()
@@ -198,8 +239,8 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
 
         expect(children[1].id).toBe('cluster-1/open-shell');
         expect(children[1].contextValue).toBe('error');
-        expect(children[1].label).toBe('Open shell');
-        expect(children[1].commandId).toBe(ShellCommandIds.open);
+        expect(children[1].label).toBe('Open shell without authentication');
+        expect(children[1].commandId).toBe('vscode-documentdb.command.internal.shell.openWithoutAuthentication');
         expect(children[1].commandArgs).toEqual([item]);
 
         // The branch data provider detects (and caches) the error state via hasRetryNode().
@@ -216,7 +257,10 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
             'cluster-1/open-shell',
             'cluster-1/retry',
         ]);
-        expect(children[1]).toMatchObject({ commandId: ShellCommandIds.open, commandArgs: [item] });
+        expect(children[1]).toMatchObject({
+            commandId: 'vscode-documentdb.command.internal.shell.openWithoutAuthentication',
+            commandArgs: [item],
+        });
     });
 
     it.each(['authentication', 'listDatabases'] as const)(
@@ -348,7 +392,7 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
     it('does not reopen the dashboard on refresh or when the tree node is recreated', async () => {
         mockGetSetting.mockReturnValue(true);
         const client = makeClient(vi.fn().mockResolvedValue([{ name: 'database' }]));
-        ClustersClientMock.getClient.mockResolvedValue(client);
+        ClustersClientMock.connectInteractive.mockResolvedValue(client);
         const item = new TestClusterItem(makeCluster(), client);
 
         await item.getChildren();
@@ -365,7 +409,7 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
         mockGetSetting.mockReturnValue(true);
         mockHasCredentials.mockReturnValue(true);
         const client = makeClient(vi.fn().mockResolvedValue([{ name: 'database' }]));
-        ClustersClientMock.getClient.mockResolvedValue(client);
+        ClustersClientMock.connectInteractive.mockResolvedValue(client);
         ClustersClientMock.exists.mockReturnValueOnce(true).mockReturnValueOnce(false);
         const item = new TestClusterItem(makeCluster(), client);
 
@@ -424,7 +468,7 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
         mockHasCredentials.mockReturnValue(true);
 
         // jest-mock-vscode's withProgress is a no-op vi.fn(); make it actually run the task so
-        // getClientWithProgress() exercises ClustersClient.getClient() and surfaces its rejection.
+        // getClientWithProgress() exercises ClustersClient.connectInteractive() and surfaces its rejection.
         (vscode.window.withProgress as unknown as Mock).mockImplementation(
             (
                 _options: unknown,
@@ -436,8 +480,216 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
         );
     });
 
+    it('shows only Connect while user-disconnected and uses cached settings on the same node after the click', async () => {
+        const node = new TestClusterItem({ ...makeCluster(), treeId: 'connectionsView/folder/cluster-1' }, null);
+        const context = {} as IActionContext;
+        const stableId = node.cluster.clusterId;
+        const treeId = node.id;
+        ClustersClientMock.exists.mockReturnValue(true);
+        expect(node.getTreeItem().contextValue?.split(';')).toContain('connected');
+        ClustersClientMock.exists.mockReturnValue(false);
+        ClustersClientMock.getLatchReason.mockReturnValue('userDisconnected');
+
+        try {
+            expect(await node.getChildren()).toEqual([
+                expect.objectContaining({ label: 'Reconnect', id: `${treeId}/connect`, commandArgs: [node] }),
+            ]);
+            expect(node.getTreeItem().contextValue?.split(';')).not.toContain('connected');
+            expect(mockHasCredentials).not.toHaveBeenCalled();
+            expect(ClustersClientMock.connectInteractive).not.toHaveBeenCalled();
+            expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+
+            connectDisconnected(context, node);
+            expect(ClustersClientMock.unlatch).toHaveBeenCalledExactlyOnceWith(stableId);
+            expect(notifyChildrenChanged).toHaveBeenCalledExactlyOnceWith(treeId);
+
+            ClustersClientMock.getLatchReason.mockReturnValue(undefined);
+            ClustersClientMock.connectInteractive.mockResolvedValueOnce(
+                makeClient(vi.fn().mockResolvedValue([{ name: 'database' }])),
+            );
+            expect(await node.getChildren()).toEqual([expect.objectContaining({ id: 'database' })]);
+            expect(ClustersClientMock.connectInteractive).toHaveBeenCalledExactlyOnceWith(
+                stableId,
+                expect.any(AbortSignal),
+                expect.any(Function),
+                'treeConnect',
+            );
+            expect(node.getTreeItem().id).toBe(treeId);
+
+            ClustersClientMock.getLatchReason.mockReturnValue('connectionRemoved');
+            connectDisconnected(context, node);
+            expect(ClustersClientMock.unlatch).toHaveBeenCalledOnce();
+        } finally {
+            ClustersClientMock.getLatchReason.mockReturnValue(undefined);
+        }
+    });
+
+    it('clears and refreshes only the owning discovery provider after Disconnect', async () => {
+        const node = new TestClusterItem({ ...makeCluster(), treeId: 'discoveryView/custom-source/cluster-1' }, null);
+        const context = { telemetry: { suppressAll: false } } as IActionContext;
+        ClustersClientMock.exists.mockReturnValue(true);
+        ClustersClientMock.getLatchReason.mockReturnValue(undefined);
+
+        await disconnect(context, node);
+
+        expect(teardownConnection).toHaveBeenCalledExactlyOnceWith(
+            node.cluster.clusterId,
+            'userDisconnected',
+            expect.any(Function),
+        );
+        const refreshTree = vi.mocked(teardownConnection).mock.calls[0][2];
+        refreshTree();
+
+        expect(ext.discoveryBranchDataProvider.resetNodeErrorState).toHaveBeenCalledExactlyOnceWith(node.id);
+        expect(ext.discoveryBranchDataProvider.refresh).toHaveBeenCalledExactlyOnceWith(node);
+        expect(ext.connectionsBranchDataProvider.resetNodeErrorState).not.toHaveBeenCalled();
+        expect(ext.connectionsBranchDataProvider.refresh).not.toHaveBeenCalled();
+    });
+
+    it.each(['signInRequired', 'credentialsRejected'] as const)(
+        'offers Retry sign-in instead of Retry for %s and keeps the failed-expansion marker',
+        async (reason): Promise<void> => {
+            if (reason === 'credentialsRejected') {
+                ClustersClientMock.getLatchReason.mockReturnValueOnce(reason);
+            }
+            ClustersClientMock.connectInteractive.mockRejectedValueOnce(new ConnectionUnavailableError(reason));
+            vi.mocked(CredentialCache.getCredentials).mockReturnValue({
+                clusterId: 'cluster-1',
+                connectionString: 'mongodb://example.test',
+                authMechanism: AuthMethodId.MicrosoftEntraID,
+            });
+            ClustersClientMock.getLastVerifiedIdentity.mockReturnValue({
+                kind: 'entra',
+                providerId: 'microsoft',
+                accountLabel: 'test',
+                accountId: 'id',
+            });
+            const item = new TestClusterItem(makeCluster(), null);
+
+            const children = await item.getChildren();
+
+            expect(children.map(({ id }) => id)).toEqual([
+                'cluster-1/sign-in-again',
+                'cluster-1/diagnose',
+                'cluster-1/open-shell',
+            ]);
+            expect(children[0]).toMatchObject({ label: 'Retry sign-in' });
+            if (reason === 'credentialsRejected') {
+                expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(expect.any(String), {
+                    modal: true,
+                    detail: 'The database rejected the credentials. Choose Retry sign-in to continue.',
+                });
+            }
+            expect(item.hasRetryNode(children)).toBe(true);
+            expect(ClustersClientMock.reportFailure).not.toHaveBeenCalled();
+            expect(CredentialCache.deleteCredentials).not.toHaveBeenCalled();
+            vi.mocked(CredentialCache.getCredentials).mockReset();
+            ClustersClientMock.getLastVerifiedIdentity.mockReset();
+        },
+    );
+
+    it('does not publish a database listing from a different identity', async (): Promise<void> => {
+        const binding = { clusterId: 'cluster-1', fingerprint: 'old', generation: 1 };
+        const client = {
+            ...makeClient(vi.fn().mockResolvedValue([{ name: 'old-database' }])),
+            binding,
+        } as ClustersClient;
+        const replacement = { ...client, fingerprint: 'new' } as ClustersClient;
+        ClustersClientMock.connectInteractive.mockResolvedValueOnce(client);
+        ClustersClientMock.getExistingClient.mockReturnValueOnce(replacement);
+
+        expect(await new TestClusterItem(makeCluster(), null).getChildren()).toEqual([]);
+        expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+    });
+
+    it.each(['diagnose', 'sign-in-again'])(
+        'does not mistake a database named %s for a recovery action',
+        (name): void => {
+            const item = new TestClusterItem(makeCluster(), null);
+            const child = {
+                id: `cluster-1/${name}`,
+                contextValue: 'treeItem_documentdbdatabase',
+                getTreeItem: (): vscode.TreeItem => ({ label: name }),
+            };
+
+            expect(item.hasRetryNode([child])).toBe(false);
+        },
+    );
+
+    it('keeps actionable recovery children without an inert Retry for stored credentials', async (): Promise<void> => {
+        ClustersClientMock.getLatchReason.mockReturnValue('credentialsRejected');
+        ClustersClientMock.connectInteractive.mockRejectedValueOnce(
+            new ConnectionUnavailableError('credentialsRejected'),
+        );
+        const item = new TestClusterItem({ ...makeCluster(), viewId: Views.ConnectionsView }, null);
+        try {
+            const children = await item.getChildren();
+
+            expect(children.map(({ id }) => id)).toEqual(['cluster-1/diagnose', 'cluster-1/open-shell']);
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(expect.any(String), {
+                modal: true,
+                detail: 'The database rejected the credentials. Choose Update credentials to continue.',
+            });
+            expect(item.hasRetryNode(children)).toBe(true);
+        } finally {
+            ClustersClientMock.getLatchReason.mockReset();
+        }
+    });
+
+    it('keeps Retry for a synthetic Connections view item without a credential editor', async (): Promise<void> => {
+        ClustersClientMock.getLatchReason.mockReturnValue('credentialsRejected');
+        ClustersClientMock.connectInteractive.mockRejectedValueOnce(
+            new ConnectionUnavailableError('credentialsRejected'),
+        );
+        const item = new TestClusterItem({ ...makeCluster(), viewId: Views.ConnectionsView }, null);
+        item.contextValue = 'treeItem_quickStartInstance';
+        try {
+            expect((await item.getChildren()).map(({ id }) => id)).toEqual([
+                'cluster-1/diagnose',
+                'cluster-1/open-shell',
+                'cluster-1/retry',
+            ]);
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(expect.any(String), {
+                modal: true,
+                detail: 'The database rejected the credentials. Choose Retry to reload them.',
+            });
+        } finally {
+            ClustersClientMock.getLatchReason.mockReset();
+        }
+    });
+
+    it('explains how to reload a rejected Azure key', async (): Promise<void> => {
+        ClustersClientMock.getLatchReason.mockReturnValue('credentialsRejected');
+        ClustersClientMock.connectInteractive.mockRejectedValueOnce(
+            new ConnectionUnavailableError('credentialsRejected'),
+        );
+        const item = new TestClusterItem({ ...makeCluster(), viewId: Views.AzureResourcesView }, null);
+        item.readReplacementKey = vi.fn();
+        try {
+            await item.getChildren();
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(expect.any(String), {
+                modal: true,
+                detail: 'The database rejected the key. Choose Retry to read the key from Azure again.',
+            });
+        } finally {
+            ClustersClientMock.getLatchReason.mockReset();
+        }
+    });
+
+    it('reports the binding that executed listDatabases, not the current cache entry', async (): Promise<void> => {
+        const error = new Error('deprecated generation');
+        const binding = { clusterId: 'cluster-1', fingerprint: 'old', generation: 1 };
+        const client = { ...makeClient(vi.fn().mockRejectedValue(error)), binding } as ClustersClient;
+        ClustersClientMock.connectInteractive.mockResolvedValueOnce(client);
+        ClustersClientMock.reportFailure.mockReturnValueOnce(undefined);
+
+        expect(await new TestClusterItem(makeCluster(), null).getChildren()).toEqual([]);
+        expect(ClustersClientMock.reportFailure).toHaveBeenCalledExactlyOnceWith(binding, error);
+        expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+    });
+
     it('returns a retry node when reusing the cached client fails (without listing databases)', async () => {
-        (ClustersClientMock.getClient as Mock).mockRejectedValue(new Error('server down'));
+        (ClustersClientMock.connectInteractive as Mock).mockRejectedValue(new Error('server down'));
 
         // listDatabases must never be reached when the cached client cannot connect.
         const listDatabases = vi.fn();
@@ -456,7 +708,7 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
     });
 
     it('uses the trusted-server modal and preserves action-only recovery for a cached rejection', async (): Promise<void> => {
-        ClustersClientMock.getClient.mockRejectedValue(
+        ClustersClientMock.connectInteractive.mockRejectedValue(
             new EntraDestinationRejectedError({ firstHost: 'other.example.com:27017', hostCount: 2 }),
         );
         const cluster = makeCluster();
@@ -465,7 +717,7 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
 
         const children = await item.getChildren();
 
-        expect(ClustersClientMock.getClient).toHaveBeenCalledWith(
+        expect(ClustersClientMock.connectInteractive).toHaveBeenCalledWith(
             'cluster-1',
             expect.anything(),
             expect.any(Function),
@@ -492,19 +744,19 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
         ]);
         expect(children.map((child) => (child as TreeElement & { commandId: string }).commandId)).toEqual([
             'vscode-documentdb.command.diagnoseConnection',
-            'vscode-documentdb.command.shell.open',
+            'vscode-documentdb.command.internal.shell.openWithoutAuthentication',
             'vscode-documentdb.command.internal.retry',
         ]);
     });
 
     it('clears the destination rejection reason after a successful cached retry', async (): Promise<void> => {
         const item = new TestClusterItem(makeCluster(), null);
-        ClustersClientMock.getClient.mockRejectedValueOnce(
+        ClustersClientMock.connectInteractive.mockRejectedValueOnce(
             new EntraDestinationRejectedError({ firstHost: 'other.example.com', hostCount: 1 }),
         );
         await item.getChildren();
         expect(item.lastConnectionFailureReason).toBe('entraDestinationRejected');
-        ClustersClientMock.getClient.mockResolvedValueOnce(makeClient(vi.fn().mockResolvedValue([])));
+        ClustersClientMock.connectInteractive.mockResolvedValueOnce(makeClient(vi.fn().mockResolvedValue([])));
 
         await item.getChildren();
 
@@ -513,7 +765,7 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
     });
 
     it('surfaces a modal and records telemetry with failurePhase=cachedClientConnect', async () => {
-        (ClustersClientMock.getClient as Mock).mockRejectedValue(new Error('server down'));
+        (ClustersClientMock.connectInteractive as Mock).mockRejectedValue(new Error('server down'));
 
         const item = new TestClusterItem(makeCluster(), makeClient(vi.fn()));
 
@@ -536,7 +788,7 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
     });
 
     it('returns an empty array (no retry node) when the user cancels the cached connection', async () => {
-        (ClustersClientMock.getClient as Mock).mockRejectedValue(new UserCancelledError());
+        (ClustersClientMock.connectInteractive as Mock).mockRejectedValue(new UserCancelledError());
 
         const item = new TestClusterItem(makeCluster(), makeClient(vi.fn()));
 
@@ -601,7 +853,7 @@ describe('ClusterItemBase.connect', () => {
         mockTelemetryEvents.length = 0;
 
         // jest-mock-vscode's withProgress is a no-op vi.fn(); make it run the task so the
-        // cached path actually reaches ClustersClient.getClient().
+        // cached path actually reaches ClustersClient.connectInteractive().
         (vscode.window.withProgress as unknown as Mock).mockImplementation(
             (
                 _options: unknown,
@@ -619,7 +871,7 @@ describe('ClusterItemBase.connect', () => {
         const item = new ConnectTestClusterItem(makeCluster(), null);
         item.lastConnectionOutcome = 'canceled';
         item.lastConnectionCorrelationId = 'previous-attempt';
-        ClustersClientMock.getClient.mockImplementationOnce(
+        ClustersClientMock.connectInteractive.mockImplementationOnce(
             async (_clusterId, _signal, onAttempt): Promise<ClustersClient> => {
                 expect(item.lastConnectionOutcome).toBeUndefined();
                 expect(item.lastConnectionCorrelationId).toBeUndefined();
@@ -640,7 +892,7 @@ describe('ClusterItemBase.connect', () => {
     it('keys the credential cache and the client on clusterId, never on the tree position', async () => {
         mockHasCredentials.mockReturnValue(true);
         const cached = makeClient(vi.fn());
-        (ClustersClientMock.getClient as Mock).mockResolvedValue(cached);
+        (ClustersClientMock.connectInteractive as Mock).mockResolvedValue(cached);
 
         const cluster = makeMovedCluster();
         const item = new ConnectTestClusterItem(cluster, null);
@@ -651,7 +903,7 @@ describe('ClusterItemBase.connect', () => {
         // Keying either lookup on the tree position opens a second, duplicate connection.
         expect(mockHasCredentials).toHaveBeenCalledWith(cluster.clusterId);
         expect(mockHasCredentials).not.toHaveBeenCalledWith(cluster.treeId);
-        expect(ClustersClientMock.getClient).toHaveBeenCalledWith(
+        expect(ClustersClientMock.connectInteractive).toHaveBeenCalledWith(
             cluster.clusterId,
             expect.anything(),
             expect.any(Function),
@@ -667,12 +919,12 @@ describe('ClusterItemBase.connect', () => {
         await expect(item.connect()).resolves.toBe(fresh);
         expect(item.authenticateCalls).toBe(1);
         expect(item.beforeCachedCalls).toBe(0);
-        expect(ClustersClientMock.getClient).not.toHaveBeenCalled();
+        expect(ClustersClientMock.connectInteractive).not.toHaveBeenCalled();
     });
 
     it('returns null when the user cancels the progress notification on the cached path', async () => {
         mockHasCredentials.mockReturnValue(true);
-        (ClustersClientMock.getClient as Mock).mockRejectedValue(new UserCancelledError());
+        (ClustersClientMock.connectInteractive as Mock).mockRejectedValue(new UserCancelledError());
 
         const item = new ConnectTestClusterItem(makeCluster(), null);
 
@@ -684,7 +936,7 @@ describe('ClusterItemBase.connect', () => {
 
     it('propagates a genuine failure on the cached path so the command can report it', async () => {
         mockHasCredentials.mockReturnValue(true);
-        (ClustersClientMock.getClient as Mock).mockRejectedValue(new Error('server down'));
+        (ClustersClientMock.connectInteractive as Mock).mockRejectedValue(new Error('server down'));
 
         const item = new ConnectTestClusterItem(makeCluster(), null);
 
@@ -694,7 +946,7 @@ describe('ClusterItemBase.connect', () => {
 
     it('reports a cached destination rejection through the same modal without reauthenticating', async (): Promise<void> => {
         mockHasCredentials.mockReturnValue(true);
-        ClustersClientMock.getClient.mockRejectedValue(
+        ClustersClientMock.connectInteractive.mockRejectedValue(
             new EntraDestinationRejectedError({ firstHost: 'other.example.com', hostCount: 1 }),
         );
         const item = new ConnectTestClusterItem(makeMovedCluster(), null);
