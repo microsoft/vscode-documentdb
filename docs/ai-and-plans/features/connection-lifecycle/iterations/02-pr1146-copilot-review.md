@@ -461,7 +461,7 @@ Assert both visible redraw and the exact next submitted command, with no automat
 
 **Author decision (2026-11-27):** selected the bounded asynchronous-output helper using C07's
 restore primitive, preserving multiline state and deferring output during evaluation to a safe
-prompt boundary. Apply to delayed success and failure feedback. Implementation pending.
+prompt boundary. Apply to delayed success and failure feedback.
 
 **Implementation refinement (advised claude-opus-5.5, 2026-11-27, 90% confidence):** the existing
 `setPromptWidth` already resets only the physical render-origin row, preserving logical input,
@@ -471,6 +471,19 @@ at the new prompt row before emitting the prompt and restoring text/cursor. Do n
 `showPrompt` or `resetLine` for idle asynchronous feedback. Queue while evaluating or input-disabled;
 flush at the next safe `showPrompt` boundary and discard queued feedback on Disconnect.
 This answers the C07 review's wrapped-row concern without expanding the accepted scope.
+
+**Done (2026-11-27), commit `b32d0a0dc` (local, not pushed):** gpt-6.1-sol separates late
+sign-in feedback from the live prompt, restores its input/cursor without clearing multiline/history
+state, and queues feedback while evaluation or disabled input owns the terminal. Disconnect/close
+discard obsolete queued messages. Existing identity/lifecycle guards, synchronous messages and
+C10 behavior remain unchanged. Added 21 focused cases; input/PTY suites: 249 passed.
+Six existing late-failure assertions now include the deliberately redrawn prompt while retaining
+the original message and no-reset/no-replay assertions. Advised (claude-opus-5.5): exact revision
+approved at 90% confidence. Final Case 1 build and all 652 targeted tests passed.
+Bounded residual: feedback queued during a paste-choice dialog dismissed without a new prompt
+appears at the next prompt. This timing edge was noted by the advisor as non-blocking, not expanded
+into additional handling. Real-terminal visual checks remain pending.
+[Thread reply](https://github.com/microsoft/vscode-documentdb/pull/1146#discussion_r4722358367).
 
 ## C10. Anonymous command result is discarded on host-client churn
 
@@ -658,3 +671,135 @@ Author decisions are recorded inline above. At lead-run intake the nine selected
 unimplemented; all nine are in scope after the operator's correction. Subsequent commits and
 verification belong in the corresponding item's progress note. No GitHub thread was resolved
 by recording these selections.
+
+## Lead outcome (2026-11-27, 17:53 UTC snapshot)
+
+### Unverified live checks first
+
+- **C02:** on a real Azure VM node, fail a connection on a custom port, then open the diagnostic
+  Shell and verify its banner/target uses that port. Refresh/recreate the node and verify an unknown
+  attempted endpoint reports unavailable rather than using 27017. Do not run destructive commands.
+- **C07/C09:** in the installed terminal, check idle/mid-line/wrapped cursor restoration on Disconnect;
+  check delayed sign-in success/failure with partially typed and multiline input, and while evaluating.
+  Verify visible text and the next submitted read-only command agree.
+- Unit tests exercised PTY output and mocked VM attempts, not a running workbench, live authentication
+  or real VM networking. Try these checks before pushing.
+
+### Endpoint and completed work
+
+**Local implementation complete:** all nine accepted fixes have separate code commits and passed
+the final Case 1 checks. The source plan was committed before coding; progress notes were committed
+separately from code. No push, PR-status change, thread resolution, or Case 2 handoff was performed.
+The remote PR head remains `dec9ac64c`; the new code is local.
+
+| Item | Code commit (local) | Actual coding model | Outcome |
+| --- | --- | --- | --- |
+| C01 | `476e65176` | gpt-6.1-sol | Diagnostic startup capability across the worker boundary |
+| C02 | `e3bd77b21` | gpt-6.1-sol | Sanitized attempted VM endpoint, unknown fails closed |
+| C03 | `c952e9624` | mai-code-2 | Current-state stale diagnostic feedback and supported refresh |
+| C04 | `1fdcfd43d` | mai-code-2 | Playground document-connection feedback ownership |
+| C06 | `2688f86ca` | gpt-6.1-sol | Genuine dismissal separated from internal stale acquisition |
+| C07 | `ce2cf8d8b` | mai-code-2 | Retained input cursor restored with wrap-aware rendering |
+| C08 | `bd70e3298` | mai-code-2 | Anonymous errors stay terminal-only |
+| C09 | `b32d0a0dc` | gpt-6.1-sol | Asynchronous feedback preserves input and defers safely |
+| C11 | `61f09ffcd` | mai-code-2 | Exact callback error-presentation ownership |
+
+C05, C10 and C12 retain their operator-selected no-code outcomes.
+**All 12 comments received individual replies in their own Copilot review threads**; links are
+recorded inline. No omnibus PR comment was posted. Earlier replies and done notes stating that
+the batch build was pending describe their posting-time snapshot; this final verification supersedes
+that pending status for all nine code commits.
+
+Models match the advisor recommendations; no substitutions or unavailable-model retries occurred.
+The C08/C07 same-file chain reused one MAI Code 2 agent with a commit between items.
+Technical decisions are recorded inline: operator selections; advisor-approved interfaces and logic;
+the leader's C08 mechanical review; C02's rejected silent catch and revised new test; and C09's use of
+the existing render-origin reset rather than a new API. No unresolved technical question was parked.
+The operator's initial C01/C02 skip was withdrawn before coding.
+
+Advisor work: two planning consultations plus ten logic-review consultations across nine advisor
+contexts, including the C02 follow-ups. C08's one-line guard had the advisor-approved design and a
+leader mechanical review. All final logic revisions received approval; C02's initial approval was
+not treated as sufficient after the leader found the silent catch. C07's Home-output assertion and
+C09's redrawn-prompt assertions changed only to match selected behavior, not to weaken contracts.
+
+### Final verification
+
+- `npm run build`: **passed**, exit 0.
+- One focused Vitest run: **13 files, 652 tests passed, 0 skipped, 0 failures**, exit 0;
+  Vitest duration **17.58 seconds**.
+- Build ran before the root tests. Combined build/test tool span was about **1m04s**;
+  build elapsed time was not separately reported.
+- No TDD-prefixed contract failed. No dependencies were installed or changed.
+- Source user-facing localization keys were unchanged; generation, formatting, lint, strict
+  package-test checks, full Vitest and packaging were not run for this Case 1 endpoint.
+- The feature README and user manual still describe the selected recovery behavior; the README
+  now links this review/progress record. No documentation drift sweep was performed.
+- Tracked worktree was clean at verification. Only the two pre-existing untracked
+  `.copilot-connection-*` directories remained, untouched.
+
+Final command:
+
+```bash
+npx vitest run \
+  src/documentdb/playground/WorkerSessionManager.test.ts \
+  src/documentdb/shell/ShellSessionManager.test.ts \
+  src/documentdb/playground/PlaygroundEvaluator.test.ts \
+  src/commands/openInteractiveShell/openInteractiveShell.test.ts \
+  src/plugins/service-azure-vm/discovery-tree/vm/AzureVMResourceItem.test.ts \
+  src/tree/documentdb/diagnosticCredentialRead.test.ts \
+  src/tree/documentdb/ClusterItemBase.test.ts \
+  src/commands/playground/executePlaygroundCode.test.ts \
+  src/commands/signInAgain/signInAgain.test.ts \
+  src/documentdb/shell/ShellInputHandler.test.ts \
+  src/documentdb/shell/DocumentDBShellPty.test.ts \
+  src/utils/commandErrorHandling.test.ts \
+  src/commands/index.shared/indexCommandFeedback.test.ts \
+  --maxWorkers=2
+```
+
+Full Case 2 remains for an explicit review handoff. This run does not claim completion of all
+CONTRIBUTING section 6 initial-review/validation/sweep requirements or the pending live checks.
+
+### Usage snapshot
+
+Window: **2026-11-27T17:17:00.522Z through the host's 17:53 UTC snapshot** (about 36 minutes).
+This is the current lead run only, not the earlier implementation/review sessions.
+The final response and subsequent report-persistence operations are excluded.
+AIU are usage units, not dollars. Model-request spans overlap and are not wall-clock elapsed time.
+
+| Model | Role | Requests | Summed model time | AIU | AIU share |
+| --- | --- | ---: | ---: | ---: | ---: |
+| claude-opus-5.5 | advisor | 106 | 11m09s | 522.2 | 56.9% |
+| gpt-6.1-sol | leader | 73 | 21m07s | 249.0 | 27.1% |
+| gpt-6.1-sol | coding | 52 | 8m19s | 102.1 | 11.1% |
+| mai-code-2 | coding | 66 | 10m23s | 43.8 | 4.8% |
+| mai-code-2-flash | checks | 3 | 12s | 0.1 | 0.0% |
+
+| Role | Requests | Summed model time | AIU | AIU share |
+| --- | ---: | ---: | ---: | ---: |
+| leader | 73 | 21m07s | 249.0 | 27.1% |
+| coding | 118 | 18m42s | 145.8 | 15.9% |
+| advisor | 106 | 11m09s | 522.2 | 56.9% |
+| checks | 3 | 12s | 0.1 | 0.0% |
+
+**Totals:** leader **249.0 AIU**, subagents **668.2 AIU**, run **917.2 AIU**.
+Rounding individual rows can differ from these host totals.
+
+| Model | Role | Input | Output | Cache read | Cache write | Reasoning |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| claude-opus-5.5 | advisor | 7,417,828 | 66,866 | 6,917,519 | 500,069 | 32,299 |
+| gpt-6.1-sol | leader | 16,168,987 | 62,617 | 16,066,066 | 102,702 | 27,412 |
+| gpt-6.1-sol | coding | 2,599,223 | 29,702 | 2,405,939 | 193,128 | 9,412 |
+| mai-code-2 | coding | 3,261,276 | 35,323 | 2,697,728 | 0 | 17,143 |
+| mai-code-2-flash | checks | 49,634 | 798 | 31,744 | 0 | 310 |
+
+Cache and reasoning fields may overlap input/output; they must not be added into a purported
+token total. Figures are copied from the host session-log helper with explicit agent roles.
+The helper's multi-turn elapsed summaries are not used as per-item wall-clock measurements.
+
+**Optimization note:** advising was the largest measured category (56.9%), followed by leading
+(27.1%). The planning context alone accounted for 334.5 AIU, including its late C09 follow-up.
+Future runs could use a smaller planning packet and a fresh, narrowly scoped context for late
+interface questions instead of rehydrating a large planning context. C02 needed one bounded
+implementation rework and a final re-review; no coding model was silently downgraded to reduce cost.
