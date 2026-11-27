@@ -3,6 +3,7 @@ feature: accessibility
 kind: plan
 status: active
 created: 2026-11-27
+prs: [1147]
 ---
 
 # Accessibility work items
@@ -22,6 +23,10 @@ updated implementation before making additional changes.
 The plan for work items 3-6 is in
 [iterations/01-plan-work-items-3-6.md](./iterations/01-plan-work-items-3-6.md); the
 operator's decisions are in [decisions.md](./decisions.md).
+
+Implementation is published in draft [#1147](https://github.com/microsoft/vscode-documentdb/pull/1147),
+targeting `main` with milestone `1.2.0`. Case 1 applies; full review-ready checks
+and the remaining workbench gates are deferred.
 
 The grid update is documented under [data-grid](../data-grid/README.md). The two
 VS Code-owned reports remain a separate upstream-tracking bucket, not presumed fixes

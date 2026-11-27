@@ -3,6 +3,7 @@ feature: accessibility
 kind: plan
 status: active
 created: 2026-11-27
+prs: [1147]
 ---
 
 # Plan: work items 3-6
@@ -521,9 +522,9 @@ here. The issues stay open until the TCS/C+AI testers verify them.
 
 Four accepted work items are complete; work item 4 is partial: #770 is implemented
 and #769 remains deferred on operator evidence. Work items 1 and 2 remain parked.
-All implementation and documentation changes are committed on
-`dev/tnaum/a11y-issues`. No push or PR was required or performed. Issues were not
-closed.
+All implementation and documentation changes were committed on
+`dev/tnaum/a11y-issues` at the initial implementation snapshot. No push or PR
+had been performed at that point. Issues were not closed.
 
 | Work item | Outcome | Implementation commit(s) | Actual coding model |
 | --- | --- | --- | --- |
@@ -536,8 +537,9 @@ closed.
 
 ### Checks and remaining gates
 
-Case 1 applied: no PR exists and this was implementation, not a ready-for-review
-handoff. `npm run build` passed. The final focused Vitest selection passed 225
+Case 1 applied: no PR existed at the initial implementation snapshot, and this
+was implementation, not a ready-for-review handoff. `npm run build` passed.
+The final focused Vitest selection passed 225
 tests in 18 files (56.54 seconds). The browser-manifest selection passed 49 tests
 (1.83 seconds). The exact selections were:
 
@@ -631,3 +633,32 @@ tool time without completing the check. A future run should bound the initial
 advisor source sweep and checkpoint payload, and perform an origin/CSP preflight
 with a real Playwright page before repeated browser attempts. This is a scope
 and orchestration improvement, not a quality ranking of unlike model assignments.
+
+### Draft publication (2026-11-27)
+
+The operator subsequently authorized publishing this branch and opening a draft
+against `main` for milestone `1.2.0`. The branch was published and
+[#1147](https://github.com/microsoft/vscode-documentdb/pull/1147) was created as
+an open draft with that base and milestone. The description references
+#768, #770, #772, #773 and #774 without automatic closing keywords, and explicitly
+leaves #769 and the grid-dependent work out of scope.
+
+Case 1 still applies. The existing checks cover the unchanged implementation;
+no code or tests changed for publication. Full Case 2 checks, including
+`prettier-fix` and localization generation, remain deferred until ready for
+review. The operator workbench gates and formal review-ready requirements are
+not claimed complete.
+
+Publication-only usage window: 2026-11-27 21:45:51.611 UTC to
+21:49:38.264 UTC (approximately 3m47s wall-clock). The host snapshot reports
+`gpt-6.1-sol` leading only: 6 requests, 3m23s summed model time, 208.5 AIU
+(100%). No subagents were launched; subagent AIU were not reported by the host.
+Reported tokens: input 1,919,812; output 8,786; cache read 1,592,845; cache
+write 326,949; reasoning 7,244. Counts may overlap. This separate follow-up
+window excludes later publication-record and final-response overhead; it is
+not added to the earlier snapshot as a purported cumulative total.
+
+Separate cumulative snapshot, 2026-11-27 21:51:41.468 UTC, for the whole run
+since 17:22:28.744 UTC: leader 797.5 AIU, subagents 1097.8 AIU, run 1895.2 AIU;
+leader 125 requests and 62m24s summed model time. This includes implementation
+and follow-up activity through that snapshot, not just publication.
