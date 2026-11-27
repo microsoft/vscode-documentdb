@@ -234,6 +234,10 @@ L3 installed and activated the VSIX in isolated VS Code 1.123.0, with final comm
 registered and clean logs; the injected activation failure was correctly rejected.
 `mai-code-2-flash` used 1.1 AIU (18 requests). G2 was then raised for hands-on testing.
 
+**A10 passed (2026-11-27).** The [sweep report](#wi-10-sweep-report) records all 54 browser
+routes and the post-change selection reruns, plus L1/L3 for the updated VSIX. Manual
+workbench and assistive-technology checks remain open; this is not a review-ready handoff.
+
 ### Escalations
 
 | ID  | Trigger                                                                                                                                    | Operator chooses                                                                                          |
@@ -1281,6 +1285,39 @@ passed. The existing VSIX is the G2 baseline, not an artifact containing these f
   emulated forced colours; narrow width and zoom; no console errors or CSP violations; L1 and L3.
 - Output: a "Sweep report" section in this document, verified and not verified, for G3.
 
+#### WI-10 sweep report
+
+**Verified**
+
+- At `dc2d3886`, all 54 Collection View L2-dev routes reported ready across dark, light
+  and high contrast; 684/684 assertions passed, with no reported browser or harness errors.
+  Light paging was recovered separately after the initial output was truncated. After
+  WI-G2-5, the affected `selection` route passed 28/28 in every theme, including 13 new
+  checks per theme. The held-key probe verified that repeat does not exit the grid.
+- In the Windows Integrated Browser, plain click replaced selection, Ctrl-click toggled,
+  Shift-click selected a range, and Space deselected a row. The action toolbar respected
+  the resulting selection. At 640 × 700 CSS px with forced colors active, Table and Tree
+  keyboard journeys retained focus and escaped to the picker; Enter expanded Tree.
+- L1 and L3 passed for `vscode-documentdb-1.1.1-alpha.0-a10.vsix`, packaged at `0c4f4876`
+  (9,217,597 bytes, SHA-256
+  `087CEDD2AF50248103EFA3A95D487584FFB9882C3342BEB6F724E36A47A864E7`). L1 isolated RDG
+  to Collection View. L3 installed and activated it in isolated VS Code 1.123.0; the final
+  commands registered, and there were no unrelated or unattributed host errors. The G2
+  VSIX was not overwritten.
+
+**Not verified here**
+
+- Physical workbench zoom, macOS Cmd-click, Narrator/NVDA announcements, and actual Windows
+  contrast themes. The narrow viewport and forced-colors checks were browser emulation,
+  not a substitute for those checks.
+- Manual interaction in the new packaged build, including access to full values on projected
+  rows without actionable IDs. The G2 panel-isolation result is prior workbench evidence.
+  Generated localization and full Case 2 checks remain for A11.
+
+> **Done (2026-11-27):** A10 released. Sweep assessment: 8.7 AIU on `mai-code-2` (11 requests);
+> shared browser sweep and Escape retest: 53.1 AIU on `gpt-6.1-terra` (52); updated package,
+> L1 and L3: 0.8 AIU on `mai-code-2-flash` (12).
+
 **WI-11: clean-up and documentation** · `gpt-6-luna`
 
 - Owns: this feature's `README.md` and a new `design.md`; the SlickGrid notes in
@@ -1422,5 +1459,6 @@ stable workbench smoke, a real collection, screen readers and high-contrast were
 Step 1 is complete. A1–A7 passed; the Table works through WI-8, including nested actions and
 the held late query. WI-9 Tree and WI-9b keyboard navigation are complete. The separate
 resize fix and approved E3 viewport setup passed A8 in all three themes. A9 passed at
-`20c1c7ab`. The operator completed the workbench check and released G2 after approving the
-follow-up schedule. No draft PR has been opened.
+`20c1c7ab`. The operator released G2 after hands-on testing and approving the follow-up
+schedule. All five G2 follow-ups and WI-10/WI-11 are complete, and A10 passed. WI-12 awaits
+authorization to push and open a draft PR. No draft PR has been opened.
