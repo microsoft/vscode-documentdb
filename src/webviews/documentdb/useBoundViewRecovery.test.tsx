@@ -64,7 +64,7 @@ let root: Root;
 let mounted: boolean;
 
 function TestView(options: TestOptions): JSX.Element | null {
-    state = useBoundViewRecovery({
+    const recovery = useBoundViewRecovery({
         recovery: { mutate: recoverUnavailable },
         common: {
             explainOperationFailure: { query: explainOperationFailure },
@@ -74,7 +74,10 @@ function TestView(options: TestOptions): JSX.Element | null {
         onShowUnavailable,
         ...options,
     });
-    const { showUnavailable, disposedRef } = state;
+    useEffect(() => {
+        state = recovery;
+    }, [recovery]);
+    const { showUnavailable, disposedRef } = recovery;
     useEffect(() => {
         const handleMessage = (event: MessageEvent<unknown>): void => {
             if (isConnectionUnavailableMessage(event.data)) {

@@ -27,24 +27,25 @@ const recordedTelemetry = vi.hoisted(() => ({
     events: [] as RecordedTelemetryEvent[],
 }));
 
-vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('@microsoft/vscode-azext-utils')>();
+vi.mock(import('@microsoft/vscode-azext-utils'), async (importOriginal) => {
+    const actual = await importOriginal();
     return {
         ...actual,
-        callWithTelemetryAndErrorHandling: vi.fn(
-            (callbackId: string, callback: (context: IActionContext) => unknown): Promise<unknown> => {
-                const context = {
-                    telemetry: { properties: {}, measurements: {} },
-                    errorHandling: { suppressDisplay: false },
-                } as unknown as IActionContext;
-                const result = callback(context);
-                recordedTelemetry.events.push({
-                    callbackId,
-                    measurements: { ...context.telemetry.measurements },
-                });
-                return Promise.resolve(result);
-            },
-        ),
+        callWithTelemetryAndErrorHandling: <T>(
+            callbackId: string,
+            callback: (context: IActionContext) => T | PromiseLike<T>,
+        ): Promise<T> => {
+            const context = {
+                telemetry: { properties: {}, measurements: {} },
+                errorHandling: { suppressDisplay: false },
+            } as unknown as IActionContext;
+            const result = callback(context);
+            recordedTelemetry.events.push({
+                callbackId,
+                measurements: { ...context.telemetry.measurements },
+            });
+            return Promise.resolve(result);
+        },
     };
 });
 
