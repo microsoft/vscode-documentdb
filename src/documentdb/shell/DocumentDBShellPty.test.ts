@@ -858,6 +858,26 @@ describe('DocumentDBShellPty', () => {
             expect(mockEvaluate).toHaveBeenCalledExactlyOnceWith('db.stats', 80);
         });
 
+        it('should preserve the logical cursor in partially typed single-line input after disconnect', async () => {
+            mockEvaluate.mockResolvedValue({
+                type: 'string',
+                printable: '"continued"',
+                durationMs: 1,
+            });
+            pty.handleInput('abcdef');
+            pty.handleInput('\x1b[H');
+            pty.handleInput('\x1b[C');
+            pty.handleInput('\x1b[C');
+
+            pty.disconnect();
+
+            expect(mockEvaluate).not.toHaveBeenCalled();
+            pty.handleInput('X');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            expect(mockEvaluate).toHaveBeenCalledExactlyOnceWith('abXcdef', 80);
+        });
+
         it('should move to the end of a wrapped partial line before disconnect output', () => {
             const input = 'db.collection.find()';
             expect(input).toHaveLength(20);
@@ -868,7 +888,9 @@ describe('DocumentDBShellPty', () => {
 
             pty.disconnect();
 
-            expect(written).toBe(`\r\x1b[8C${input}\x1b[J\r\nDisconnected\r\ntestdb> \r\x1b[8C${input}\x1b[J`);
+            expect(written).toBe(
+                `\r\x1b[8C${input}\x1b[J\r\nDisconnected\r\ntestdb> \r\x1b[8C${input}\x1b[J\r\x1b[1A\x1b[8C`,
+            );
             expect(mockEvaluate).not.toHaveBeenCalled();
         });
 
