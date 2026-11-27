@@ -1029,6 +1029,28 @@ export const collectionViewContracts = {
                 expected: '',
             }),
         ),
+        {
+            kind: 'text',
+            name: 'TDD: M7 Enter on a no-ID object cell steps in',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            includes: ['Nested browse-only result'],
+            excludes: ['Browse only'],
+            waitForText: true,
+            steps: [
+                { action: 'focus', role: 'gridcell', name: '{...}' },
+                { action: 'press', key: 'Enter' },
+            ],
+        },
+        {
+            kind: 'focused',
+            name: 'TDD: M7 keyboard step-in focuses a no-ID row',
+            requiresGrid: 'grid',
+            target: {
+                selector:
+                    '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="1"]',
+            },
+        },
     ],
     'first-load': [],
     'step-in': [
@@ -1080,6 +1102,34 @@ export const collectionViewContracts = {
                 { action: 'focus', role: 'gridcell', name: '{...}' },
                 { action: 'press', key: 'Enter' },
             ],
+        },
+        {
+            kind: 'focused',
+            name: 'TDD: M7 keyboard step-in focuses the same row\'s _id cell',
+            requiresGrid: 'grid',
+            target: {
+                selector:
+                    '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="1"]',
+            },
+        },
+        {
+            kind: 'focused',
+            name: 'TDD: M7 arrow keys continue after keyboard step-in',
+            requiresGrid: 'grid',
+            target: {
+                selector:
+                    '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="2"]',
+            },
+            steps: [{ action: 'press', key: 'ArrowRight' }],
+        },
+        {
+            kind: 'attribute',
+            name: 'TDD: M7 Space selects after keyboard step-in',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="row"][aria-rowindex="2"]',
+            attribute: 'aria-selected',
+            expected: 'true',
+            steps: [{ action: 'press', key: 'Space' }],
         },
         {
             kind: 'text',
@@ -1484,6 +1534,18 @@ export const collectionViewContracts = {
             input: '"heterogeneous-2"',
             count: 1,
             steps: [{ action: 'click', role: 'button', name: 'View selected document' }],
+        },
+        {
+            kind: 'focused',
+            name: 'TDD: M7 late keyboard step-in does not steal focus from the view picker',
+            requiresGrid: 'grid',
+            target: { selector: '.collectionDocumentViewSwitcher [role="combobox"]' },
+            steps: [
+                { action: 'focus', role: 'gridcell', name: '{...}' },
+                { action: 'press', key: 'Enter' },
+                { action: 'focus', role: 'combobox', name: 'Select view type' },
+                { action: 'releaseReply', tag: 'old-details' },
+            ],
         },
     ],
     'loading-to-results': [

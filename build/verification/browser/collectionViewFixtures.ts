@@ -376,12 +376,14 @@ const noIdPage: TablePageOutput = {
     columns: [
         { key: ROOT_ID_COLUMN_KEY, label: '_id' },
         { key: fieldColumnKey('name'), label: 'name' },
+        { key: fieldColumnKey('details'), label: 'details' },
     ],
     rows: [
         {
             rowKey: 'pos:0',
             cells: {
                 [fieldColumnKey('name')]: { display: 'Browse only', type: 'string' },
+                [fieldColumnKey('details')]: { display: '{...}', type: 'object' },
             },
         },
         {
@@ -390,6 +392,30 @@ const noIdPage: TablePageOutput = {
             cells: {
                 [ROOT_ID_COLUMN_KEY]: { display: 'ordinary-target', type: 'string' },
                 [fieldColumnKey('name')]: { display: 'Ordinary target', type: 'string' },
+            },
+        },
+    ],
+};
+
+const noIdNestedPage: TablePageOutput = {
+    path: ['details'],
+    columns: [
+        { key: ROOT_ID_COLUMN_KEY, label: '_id' },
+        { key: fieldColumnKey('nestedName'), label: 'nestedName' },
+    ],
+    rows: [
+        {
+            rowKey: 'pos:0',
+            cells: {
+                [fieldColumnKey('nestedName')]: { display: 'Nested browse-only result', type: 'string' },
+            },
+        },
+        {
+            rowKey: 'id:"ordinary-target"',
+            documentId: '"ordinary-target"',
+            cells: {
+                [ROOT_ID_COLUMN_KEY]: { display: 'ordinary-target', type: 'string' },
+                [fieldColumnKey('nestedName')]: { display: 'Nested ordinary target', type: 'string' },
             },
         },
     ],
@@ -637,6 +663,7 @@ export const collectionViewFixtures = {
             'mongoClusters.collectionView.getCurrentPageAsTable': {
                 type: 'query',
                 results: [noIdPage],
+                cases: [{ input: ['details'], results: [noIdNestedPage] }],
             },
         },
     },

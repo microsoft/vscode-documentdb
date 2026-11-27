@@ -19,7 +19,17 @@ interface DataViewPanelTableProps {
     readonly page: TablePage | undefined;
     readonly selectedRowKeys: readonly string[];
     readonly onSelectedRowKeysChange: (rowKeys: readonly string[]) => void;
-    readonly onStepIn: (rowKey: string, columnKey: ColumnKey) => void;
+    readonly onStepIn: (
+        rowKey: string,
+        columnKey: ColumnKey,
+        gesture: 'keyboard' | 'pointer',
+    ) => void;
+    readonly focusRequest?: DataViewPanelTableFocusRequest;
+}
+
+export interface DataViewPanelTableFocusRequest {
+    readonly page: TablePage;
+    readonly rowKey: string;
 }
 
 const defaultColumnOptions: DefaultColumnOptions<TableRow, unknown> = {
@@ -31,9 +41,11 @@ export function DataViewPanelTable({
     selectedRowKeys,
     onSelectedRowKeysChange,
     onStepIn,
+    focusRequest,
 }: DataViewPanelTableProps): React.JSX.Element {
     const [currentContext] = React.useContext(CollectionViewContext);
     const gridRef = React.useRef<DataGridHandle>(null);
+    const handledFocusRequestRef = React.useRef<DataViewPanelTableFocusRequest | undefined>(undefined);
     const anchorRef = React.useRef<string | undefined>(undefined);
     const selectionScopeRef = React.useRef({
         query: currentContext.activeQuery,
@@ -41,6 +53,23 @@ export function DataViewPanelTable({
     });
     const selectedRows = React.useMemo(() => new Set(selectedRowKeys), [selectedRowKeys]);
     React.useEffect(() => (): void => onSelectedRowKeysChange([]), [onSelectedRowKeysChange]);
+    React.useLayoutEffect(() => {
+        if (
+            focusRequest === undefined ||
+            handledFocusRequestRef.current === focusRequest ||
+            focusRequest.page !== page
+        ) {
+            return;
+        }
+        handledFocusRequestRef.current = focusRequest;
+        const rowIdx = focusRequest.page.rows.findIndex((row) => row.rowKey === focusRequest.rowKey);
+        const grid = gridRef.current?.element;
+        const activeElement = document.activeElement;
+        if (rowIdx === -1 || !grid || (activeElement !== document.body && !grid.contains(activeElement))) {
+            return;
+        }
+        gridRef.current?.setActivePosition({ idx: 0, rowIdx }, { shouldFocus: true });
+    }, [focusRequest, page]);
 
     function selectRow(row: TableRow, gesture: 'replace' | 'toggle' | 'extend'): void {
         const rows = page?.rows;
@@ -107,7 +136,7 @@ export function DataViewPanelTable({
             gridRef.current?.setActivePosition({ idx: columnIndex, rowIdx: rowIndex }, { shouldFocus: false });
             if (event.key === 'Enter') {
                 if (!event.shiftKey) {
-                    onStepIn(row.rowKey, columnKey);
+                    onStepIn(row.rowKey, columnKey, 'keyboard');
                 }
             } else {
                 selectRow(row, event.shiftKey ? 'extend' : 'toggle');
@@ -158,7 +187,7 @@ export function DataViewPanelTable({
                 }
                 const columnKey = page?.columns[column.idx]?.key;
                 if (columnKey !== undefined) {
-                    onStepIn(row.rowKey, columnKey);
+                    onStepIn(row.rowKey, columnKey, 'pointer');
                 }
             }}
             renderers={{

@@ -7,6 +7,7 @@ import { EJSON } from 'bson';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { fieldColumnKey } from '../../../src/utils/documentGrid/types';
 import { collectionViewFixtures } from './collectionViewFixtures';
 import { type TypedRpcFixtures } from './core/fixtures';
 import { diagnosticsRowLabels, fixtures, type DiagnosticsRow } from './fixtures';
@@ -146,6 +147,18 @@ describe('TDD: Collection View grid contracts', (): void => {
         expect(assertions.map((assertion): string => assertion.name ?? '')).not.toContainEqual(
             expect.stringMatching(/cross.collection|cross.panel/i),
         );
+        expect(collectionViewContracts['late-query'].at(-1)).toEqual({
+            kind: 'focused',
+            name: 'TDD: M7 late keyboard step-in does not steal focus from the view picker',
+            requiresGrid: 'grid',
+            target: { selector: '.collectionDocumentViewSwitcher [role="combobox"]' },
+            steps: [
+                { action: 'focus', role: 'gridcell', name: '{...}' },
+                { action: 'press', key: 'Enter' },
+                { action: 'focus', role: 'combobox', name: 'Select view type' },
+                { action: 'releaseReply', tag: 'old-details' },
+            ],
+        });
     });
 
     it('keeps identity fixtures canonical and synchronized with document action inputs', (): void => {
@@ -200,6 +213,98 @@ describe('TDD: Collection View grid contracts', (): void => {
                 texts: ['', 'null', 'Ab', 'false', '0'],
             }),
         );
+    });
+
+    it('pins uninterrupted M7 focus restoration and positional no-ID keyboard step-in', (): void => {
+        const firstEnter = collectionViewContracts['step-in'].findIndex(
+            (assertion): boolean => assertion.name === 'TDD: M7 Enter on an object cell steps in',
+        );
+        expect(firstEnter).toBeGreaterThanOrEqual(0);
+        expect(collectionViewContracts['step-in'].slice(firstEnter + 1, firstEnter + 4)).toEqual([
+            {
+                kind: 'focused',
+                name: "TDD: M7 keyboard step-in focuses the same row's _id cell",
+                requiresGrid: 'grid',
+                target: {
+                    selector:
+                        '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="1"]',
+                },
+            },
+            {
+                kind: 'focused',
+                name: 'TDD: M7 arrow keys continue after keyboard step-in',
+                requiresGrid: 'grid',
+                target: {
+                    selector:
+                        '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="2"]',
+                },
+                steps: [{ action: 'press', key: 'ArrowRight' }],
+            },
+            {
+                kind: 'attribute',
+                name: 'TDD: M7 Space selects after keyboard step-in',
+                requiresGrid: 'grid',
+                selector: '[role="grid"] [role="row"][aria-rowindex="2"]',
+                attribute: 'aria-selected',
+                expected: 'true',
+                steps: [{ action: 'press', key: 'Space' }],
+            },
+        ]);
+
+        expect(collectionViewContracts['step-in'][firstEnter + 4]?.name).toBe(
+            'TDD: M2 Level up returns to the parent data',
+        );
+
+        const noId = collectionViewFixtures['no-id'];
+        expect(noId.tablePage.rows[0]).toMatchObject({
+            rowKey: 'pos:0',
+            cells: {
+                [fieldColumnKey('details')]: { display: '{...}', type: 'object' },
+            },
+        });
+        expect(noId.tablePage.rows[0]).not.toHaveProperty('documentId');
+        expect(noId.rpc['mongoClusters.collectionView.getCurrentPageAsTable'].cases).toContainEqual(
+            expect.objectContaining({
+                input: ['details'],
+                results: [
+                    expect.objectContaining({
+                        path: ['details'],
+                        rows: [
+                            expect.objectContaining({ rowKey: 'pos:0' }),
+                            expect.objectContaining({
+                                rowKey: 'id:"ordinary-target"',
+                                documentId: '"ordinary-target"',
+                            }),
+                        ],
+                    }),
+                ],
+            }),
+        );
+
+        expect(collectionViewContracts['no-id'].slice(-2)).toEqual([
+            {
+                kind: 'text',
+                name: 'TDD: M7 Enter on a no-ID object cell steps in',
+                requiresGrid: 'grid',
+                selector: '[role="grid"]',
+                includes: ['Nested browse-only result'],
+                excludes: ['Browse only'],
+                waitForText: true,
+                steps: [
+                    { action: 'focus', role: 'gridcell', name: '{...}' },
+                    { action: 'press', key: 'Enter' },
+                ],
+            },
+            {
+                kind: 'focused',
+                name: 'TDD: M7 keyboard step-in focuses a no-ID row',
+                requiresGrid: 'grid',
+                target: {
+                    selector:
+                        '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="1"]',
+                },
+            },
+        ]);
     });
 
     it('pins Enter tree activation without weakening the hierarchy or array viewport contract', (): void => {
