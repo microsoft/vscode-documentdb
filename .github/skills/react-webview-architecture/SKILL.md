@@ -1,6 +1,6 @@
 ---
 name: react-webview-architecture
-description: Architecture patterns for React-based webviews in the vscode-documentdb extension. Use when creating new webview components, modifying existing views (CollectionView, DocumentView), working with state management (Context API), integrating Fluent UI components, handling Monaco Editor or SlickGrid, solving stale closure bugs with refs, or debugging webview rendering issues. Does NOT cover tRPC messaging (see webview-trpc-messaging skill) or accessibility/ARIA (see accessibility-aria-expert skill).
+description: Architecture patterns for React-based webviews in the vscode-documentdb extension. Use when creating new webview components, modifying existing views (CollectionView, DocumentView), working with state management (Context API), integrating Fluent UI components or React Data Grid, handling Monaco, or debugging webview rendering issues. Does NOT cover tRPC messaging (see webview-trpc-messaging skill) or accessibility/ARIA (see accessibility-aria-expert skill).
 ---
 
 # React Webview Architecture
@@ -19,7 +19,7 @@ Patterns and conventions for React webviews in vscode-documentdb.
 - Creating or modifying a webview (DocumentView, CollectionView)
 - Adding new components inside `src/webviews/`
 - Working with CollectionView context or state management
-- Integrating Monaco Editor or SlickGrid
+- Integrating Monaco Editor or Collection View's React Data Grid
 - Debugging stale closure issues in event handlers
 
 ## Rendering Pipeline
@@ -115,23 +115,24 @@ setCurrentContext((prev) => ({
 }));
 ```
 
-## Stale Closure Pattern (CRITICAL)
+## Event Handler Freshness
 
-Third-party components (SlickGrid) bind event handlers at initialization — they don't update when state changes. **Always use refs** to access current data in those handlers:
+React event handlers passed through component props are refreshed during rendering; do not add
+refs by default. Use a ref only when a long-lived subscription or imperative API requires a stable
+callback, and keep it synchronized with the current value. Prefer correct effect dependencies and
+cleanup when the API permits replacing the callback.
 
-```tsx
-const dataRef = useRef(data);
-useEffect(() => {
-  dataRef.current = data;
-}, [data]);
+## Collection View Grid
 
-const onCellDblClick = useCallback((event) => {
-  const item = dataRef.current[event.detail.args.row]; // ✅ always current
-  // NOT: data[event.detail.args.row]; ❌ stale closure
-}, []); // stable deps only
-```
+The Table and Tree use the exact-pinned `react-data-grid@7.0.0-beta.64`. Keep their data boundary
+grid-neutral (`src/utils/documentGrid/`): `TablePage` and `TreeNode` carry display values and
+identity metadata, not RDG-specific row models. The Tree is flattened and expanded by the
+application; do not replace it with `TreeDataGrid` without revisiting arbitrary-depth behavior,
+keyboard contracts, and accessibility verification.
 
-**Why**: SlickGrid binds handlers once at init time. Without refs, handlers see the data from initialization, not the latest state. This caused multiple hard-to-debug issues.
+Row keys identify rendered rows; they do not by themselves authorize document actions. Resolve
+selected keys against the current Table page and require its safe `documentId` before exposing or
+running document actions. Position-keyed rows remain browsable and selectable.
 
 ## Monaco Editor
 

@@ -1289,6 +1289,13 @@ passed. The existing VSIX is the G2 baseline, not an artifact containing these f
   (through the `writing-release-notes` skill).
 - Not: `CHANGELOG.md` history and older release notes.
 
+> **Done (2026-11-27):** Updated the feature README, design, feature index, React webview
+> guidance, test strategy, and Collection View user manual. The docs distinguish A9
+> activation from the still-pending packaged interaction and screen-reader checks.
+> `docs/release-notes/1.2.md` is an unpublished 1.2.0 draft without screenshots, as the
+> operator requested. No changelog, manifest version, public index link, or announcement
+> changed. Documentation: 13.7 AIU on `gpt-6-luna` (53 requests).
+
 **WI-12: AI pre-review** · `gpt-6-astra`, then `claude-opus-5.5` in a fresh context
 
 - CONTRIBUTING §6.1 stages 1–4 into `iterations/03-rdg-migration-review.md`. Stage 1 by

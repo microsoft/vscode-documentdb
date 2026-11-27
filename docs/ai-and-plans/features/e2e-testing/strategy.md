@@ -634,9 +634,9 @@ of the heuristic sprawl.
 | Unit-test frame selection against **stubbed** `Frame` objects                                           | Verifies the gnarly logic without launching an editor                                                                                |
 | `keyboard.insertText` instead of per-character typing for Monaco                                        | Make it the default; per-character typing triggers IntelliSense                                                                      |
 | `toPass` around the whole **scroll-then-assert** block for virtualised grids                            | Retry the action, not just the assertion                                                                                             |
-| `dispatchEvent(new Event('scroll', { bubbles: true }))` after setting `scrollTop`                       | SlickGrid listens for the event; a programmatic assignment does not reliably produce one in a headless renderer                      |
+| Drive virtualized-grid scrolling through a visible browser input (wheel or keyboard)                    | Avoid relying on library-specific synthetic-scroll workarounds; assert that the target value is reachable                           |
 | Assert "at least N rows" or "this value is reachable after scrolling" — never exact counts              | Row counts are a function of viewport height, which is a function of the runner                                                      |
-| Scope row selectors to the grid canvas                                                                  | SlickGrid gives its header `role="row"`, so `getByRole('row')` silently returns one extra — an off-by-one that looks like a data bug |
+| Scope row selectors to the result grid and distinguish header from data rows                            | A grid header can also have `role="row"`; unscoped row queries can silently include it                                               |
 | Assert on the **absence of a bad state** (e.g. poll that the count of "Disconnected" status items is 0) | Frequently more robust than waiting for a good state to appear                                                                       |
 
 **The single most valuable comment in their entire E2E codebase** documents an IntelliSense failure:
@@ -1279,7 +1279,7 @@ the interest payment.
 | Wire the harness **assertions** into CI; screenshots stay artifacts          | §4.4      | High   | S          | Low    | Neither reference project split this, and both lost the assertions |
 | **Mutation test on the suite itself**, as a script not a sentence            | **#867**  | High   | S          | None   | The one practice we would export rather than import (§4.5)         |
 | Scenario ownership in `dev/`; `as const satisfies`; registry-drift assertion | Ref1      | Medium | S          | Low    | Three idioms; adopt all three                                      |
-| SlickGrid / Monaco interaction patterns                                      | Ref1      | Medium | S          | Low    | Mostly knowledge transfer, not code                                |
+| Monaco input and completion patterns                                         | Ref1      | Medium | S          | Low    | Monaco lessons transfer; grid behavior follows the current RDG contracts |
 | Regression-only growth policy + explicit cap                                 | Ref1      | High   | S          | None   | A written rule is the cheapest High-value item on this page        |
 | Seeded workspace fixture + `restartVsCode()`                                 | Ref1      | Medium | M          | Medium | Only if settings-scope or persistence bugs appear                  |
 | Coverage collection from E2E                                                 | Cosmos DB | Low    | M          | Low    | Interesting, not load-bearing                                      |
