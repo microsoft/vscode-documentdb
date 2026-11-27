@@ -361,16 +361,12 @@ function getPlaygroundRecovery(error: unknown, connection: PlaygroundConnection)
     }
     if (error.reason === 'userDisconnected') {
         return {
-            message: l10n.t(
-                'This connection is disconnected. Reconnect from the tree, then run the script again.',
-            ),
+            message: l10n.t('This connection is disconnected. Reconnect from the tree, then run the script again.'),
         };
     }
     if (error.reason === 'unreachable') {
         return {
-            message: l10n.t(
-                'The connection is unavailable. Check the server or network, then run the script again.',
-            ),
+            message: l10n.t('The connection is unavailable. Check the server or network, then run the script again.'),
         };
     }
     if (error.reason === 'credentialsRejected') {
@@ -382,9 +378,7 @@ function getPlaygroundRecovery(error: unknown, connection: PlaygroundConnection)
     }
     if (error.reason === 'credentialsUpdating') {
         return {
-            message: l10n.t(
-                'This connection is being updated. Run the script again when the update finishes.',
-            ),
+            message: l10n.t('This connection is being updated. Run the script again when the update finishes.'),
         };
     }
     if (error.reason === 'connectionRemoved') {
@@ -426,15 +420,8 @@ function offerPlaygroundRecovery(
                 vscode.workspace.textDocuments.some((d) => d.uri.toString() === documentUri.toString())
             ) {
                 const reason = ClustersClient.getLatchReason(clusterId);
-                if (
-                    reason === 'connectionRemoved' ||
-                    reason === 'credentialsChanged' ||
-                    reason === 'identityChanged'
-                ) {
-                    const currentRecovery = getPlaygroundRecovery(
-                        new ConnectionUnavailableError(reason),
-                        connection,
-                    );
+                if (reason === 'connectionRemoved' || reason === 'credentialsChanged' || reason === 'identityChanged') {
+                    const currentRecovery = getPlaygroundRecovery(new ConnectionUnavailableError(reason), connection);
                     if (currentRecovery) {
                         void vscode.window.showWarningMessage(currentRecovery.message);
                     }

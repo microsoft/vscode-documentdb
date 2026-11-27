@@ -7,8 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockIn
 
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
-import { CredentialCache } from '../../documentdb/CredentialCache';
 import { ClustersClient } from '../../documentdb/ClustersClient';
+import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBShellPty, type DocumentDBShellPtyOptions } from '../../documentdb/shell/DocumentDBShellPty';
 import { registerShellTerminal } from '../../documentdb/shell/ShellTerminalLinkProvider';
 import * as unauthenticatedEndpoint from '../../documentdb/shell/unauthenticatedEndpoint';
@@ -22,8 +22,12 @@ vi.mock('../../documentdb/ClustersClient', () => {
         ClustersClient: {
             getEpoch: vi.fn(() => 0),
             getLatchReason: vi.fn((clusterId: string) => latches.get(clusterId)),
-            latch: vi.fn((clusterId: string, reason: string): void => { latches.set(clusterId, reason); }),
-            unlatch: vi.fn((clusterId: string): void => { latches.delete(clusterId); }),
+            latch: vi.fn((clusterId: string, reason: string): void => {
+                latches.set(clusterId, reason);
+            }),
+            unlatch: vi.fn((clusterId: string): void => {
+                latches.delete(clusterId);
+            }),
         },
     };
 });
@@ -167,10 +171,10 @@ describe('openInteractiveShell', () => {
 
     describe('unauthenticated failure-row entry', () => {
         function expectPreTerminalModal(detail: string): void {
-            expect(mockShowErrorMessage).toHaveBeenCalledExactlyOnceWith(
-                'Unable to complete this tree action.',
-                { modal: true, detail },
-            );
+            expect(mockShowErrorMessage).toHaveBeenCalledExactlyOnceWith('Unable to complete this tree action.', {
+                modal: true,
+                detail,
+            });
             expect(mockCreateTerminal).not.toHaveBeenCalled();
             expect(CredentialCache.hasCredentials).not.toHaveBeenCalled();
             expect(CredentialCache.getCredentials).not.toHaveBeenCalled();
@@ -197,7 +201,11 @@ describe('openInteractiveShell', () => {
             expect(CredentialCache.hasCredentials).not.toHaveBeenCalled();
             expect(node.getCredentials).not.toHaveBeenCalled();
             expect(node.getCredentialsForDiagnostics).not.toHaveBeenCalled();
-            expect(registerShellTerminal).toHaveBeenCalledWith(expect.anything(), expect.any(Function), expect.any(Function));
+            expect(registerShellTerminal).toHaveBeenCalledWith(
+                expect.anything(),
+                expect.any(Function),
+                expect.any(Function),
+            );
             expect(mockShowTerminal).toHaveBeenCalledOnce();
         });
 
@@ -246,20 +254,24 @@ describe('openInteractiveShell', () => {
             },
         );
 
-        it.each(['userDisconnected', 'credentialsUpdating', 'connectionRemoved', 'identityChanged', 'unreachable', 'credentialsChanged'] as const)(
-            'blocks the %s hold before reading an endpoint',
-            async (reason): Promise<void> => {
-                const node = makeAnonymousNode();
-                ClustersClient.latch(node.cluster.clusterId, reason);
-                try {
-                    await expect(openUnauthenticatedShell(mockContext as never, node)).rejects.toMatchObject({ reason });
-                    expect(node.getUnauthenticatedEndpoint).not.toHaveBeenCalled();
-                    expectPreTerminalModal('The connection is unavailable.');
-                } finally {
-                    ClustersClient.unlatch(node.cluster.clusterId);
-                }
-            },
-        );
+        it.each([
+            'userDisconnected',
+            'credentialsUpdating',
+            'connectionRemoved',
+            'identityChanged',
+            'unreachable',
+            'credentialsChanged',
+        ] as const)('blocks the %s hold before reading an endpoint', async (reason): Promise<void> => {
+            const node = makeAnonymousNode();
+            ClustersClient.latch(node.cluster.clusterId, reason);
+            try {
+                await expect(openUnauthenticatedShell(mockContext as never, node)).rejects.toMatchObject({ reason });
+                expect(node.getUnauthenticatedEndpoint).not.toHaveBeenCalled();
+                expectPreTerminalModal('The connection is unavailable.');
+            } finally {
+                ClustersClient.unlatch(node.cluster.clusterId);
+            }
+        });
 
         it('honors Disconnect during the endpoint read', async (): Promise<void> => {
             const node = makeAnonymousNode();
@@ -269,7 +281,9 @@ describe('openInteractiveShell', () => {
             });
 
             try {
-                await expect(openUnauthenticatedShell(mockContext as never, node)).rejects.toMatchObject({ reason: 'userDisconnected' });
+                await expect(openUnauthenticatedShell(mockContext as never, node)).rejects.toMatchObject({
+                    reason: 'userDisconnected',
+                });
                 expectPreTerminalModal('The connection is unavailable.');
             } finally {
                 ClustersClient.unlatch(node.cluster.clusterId);
@@ -300,10 +314,14 @@ describe('openInteractiveShell', () => {
                     vi.mocked(node.getUnauthenticatedEndpoint).mockRejectedValueOnce(error);
                 } else if (phase === 'sanitization') {
                     vi.spyOn(unauthenticatedEndpoint, 'toUnauthenticatedConnectionString').mockImplementationOnce(
-                        (): never => { throw error; },
+                        (): never => {
+                            throw error;
+                        },
                     );
                 } else {
-                    vi.mocked(DocumentDBShellPty).mockImplementationOnce(function (): never { throw error; });
+                    vi.mocked(DocumentDBShellPty).mockImplementationOnce(function (): never {
+                        throw error;
+                    });
                 }
                 await expect(openUnauthenticatedShell(mockContext as never, node)).rejects.toBe(error);
                 expectPreTerminalModal(error.message);

@@ -25,18 +25,18 @@ const {
     contexts,
     createEvaluator,
 } = vi.hoisted(() => ({
-        evaluate: vi.fn(),
-        dispose: vi.fn(),
-        setExecuting: vi.fn(),
-        showResult: vi.fn(),
-        getConnection: vi.fn<() => PlaygroundConnection | undefined>(),
-        getLatchReason: vi.fn(),
-        getEpoch: vi.fn<() => number>(),
-        canRecover: vi.fn(),
-        recover: vi.fn(),
-        contexts: new Map<string, IActionContext>(),
-        createEvaluator: vi.fn(),
-    }));
+    evaluate: vi.fn(),
+    dispose: vi.fn(),
+    setExecuting: vi.fn(),
+    showResult: vi.fn(),
+    getConnection: vi.fn<() => PlaygroundConnection | undefined>(),
+    getLatchReason: vi.fn(),
+    getEpoch: vi.fn<() => number>(),
+    canRecover: vi.fn(),
+    recover: vi.fn(),
+    contexts: new Map<string, IActionContext>(),
+    createEvaluator: vi.fn(),
+}));
 
 vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
     ...(await importOriginal<{ UserCancelledError: typeof UserCancelledError }>()),
@@ -108,26 +108,14 @@ describe('executePlaygroundCode', () => {
     });
 
     it.each([
-        [
-            'userDisconnected',
-            'This connection is disconnected. Reconnect from the tree, then run the script again.',
-        ],
-        [
-            'unreachable',
-            'The connection is unavailable. Check the server or network, then run the script again.',
-        ],
+        ['userDisconnected', 'This connection is disconnected. Reconnect from the tree, then run the script again.'],
+        ['unreachable', 'The connection is unavailable. Check the server or network, then run the script again.'],
         [
             'credentialsRejected',
             'The saved credentials were rejected. Update them from the tree, then run the script again.',
         ],
-        [
-            'credentialsUpdating',
-            'This connection is being updated. Run the script again when the update finishes.',
-        ],
-        [
-            'connectionRemoved',
-            'This connection was removed. Choose another connection for this playground.',
-        ],
+        ['credentialsUpdating', 'This connection is being updated. Run the script again when the update finishes.'],
+        ['connectionRemoved', 'This connection was removed. Choose another connection for this playground.'],
         [
             'credentialsChanged',
             'This playground is bound to the previous connection. Re-pick its connection from the tree.',
@@ -136,14 +124,8 @@ describe('executePlaygroundCode', () => {
             'identityChanged',
             'This playground is bound to the previous connection. Re-pick its connection from the tree.',
         ],
-        [
-            'credentialsMissing',
-            'This connection is unavailable. Reconnect from the tree, then run the script again.',
-        ],
-        [
-            'signInRequired',
-            'This connection is unavailable. Reconnect from the tree, then run the script again.',
-        ],
+        ['credentialsMissing', 'This connection is unavailable. Reconnect from the tree, then run the script again.'],
+        ['signInRequired', 'This connection is unavailable. Reconnect from the tree, then run the script again.'],
     ] as const)('uses %s guidance for latch and worker failures', async (reason, message) => {
         getLatchReason.mockReturnValueOnce(reason);
         const showWarning = vi.spyOn(vscode.window, 'showWarningMessage');
@@ -350,9 +332,10 @@ describe('executePlaygroundCode', () => {
             openDocuments = vscode.workspace.textDocuments as vscode.TextDocument[];
             openDocuments.push({ uri: vscode.Uri.parse(uri.toString()) } as vscode.TextDocument);
             warning = vi.spyOn(vscode.window, 'showWarningMessage').mockImplementationOnce(
-                () => new Promise<vscode.MessageItem | undefined>((resolve) => {
-                    chooseAction = resolve;
-                }),
+                () =>
+                    new Promise<vscode.MessageItem | undefined>((resolve) => {
+                        chooseAction = resolve;
+                    }),
             );
             modal = vi.spyOn(vscode.window, 'showErrorMessage');
             vi.spyOn(vscode.window, 'withProgress').mockImplementation((_options, task) =>
@@ -385,12 +368,36 @@ describe('executePlaygroundCode', () => {
         });
 
         it.each([
-            ['before click', 'connectionRemoved', 'This connection was removed. Choose another connection for this playground.'],
-            ['before click', 'credentialsChanged', 'This playground is bound to the previous connection. Re-pick its connection from the tree.'],
-            ['before click', 'identityChanged', 'This playground is bound to the previous connection. Re-pick its connection from the tree.'],
-            ['during sign-in', 'connectionRemoved', 'This connection was removed. Choose another connection for this playground.'],
-            ['during sign-in', 'credentialsChanged', 'This playground is bound to the previous connection. Re-pick its connection from the tree.'],
-            ['during sign-in', 'identityChanged', 'This playground is bound to the previous connection. Re-pick its connection from the tree.'],
+            [
+                'before click',
+                'connectionRemoved',
+                'This connection was removed. Choose another connection for this playground.',
+            ],
+            [
+                'before click',
+                'credentialsChanged',
+                'This playground is bound to the previous connection. Re-pick its connection from the tree.',
+            ],
+            [
+                'before click',
+                'identityChanged',
+                'This playground is bound to the previous connection. Re-pick its connection from the tree.',
+            ],
+            [
+                'during sign-in',
+                'connectionRemoved',
+                'This connection was removed. Choose another connection for this playground.',
+            ],
+            [
+                'during sign-in',
+                'credentialsChanged',
+                'This playground is bound to the previous connection. Re-pick its connection from the tree.',
+            ],
+            [
+                'during sign-in',
+                'identityChanged',
+                'This playground is bound to the previous connection. Re-pick its connection from the tree.',
+            ],
         ] as const)('explains %s %s for the existing document only', async (stage, reason, message): Promise<void> => {
             if (stage === 'before click') {
                 getEpoch.mockReturnValue(1);
@@ -439,58 +446,65 @@ describe('executePlaygroundCode', () => {
             ['during sign-in', 'unproven no latch'],
             ['during sign-in', 're-picked healthy'],
             ['during sign-in', 'already completed'],
-        ] as const)('keeps %s %s quiet without replacing the worker or result', async (stage, outcome): Promise<void> => {
-            const supersede = (): void => {
-                if (outcome === 'closed' || outcome === 'disposed') {
-                    openDocuments.splice(0);
-                    openDocuments.push({ uri: vscode.Uri.file('another.documentdb.js') } as vscode.TextDocument);
-                }
-                if (outcome === 'disposed') {
-                    stopPlaygroundEvaluator('cluster');
-                    dispose.mockClear();
-                }
-                if (outcome === 're-picked healthy' || outcome === 'unproven no latch') {
-                    getConnection.mockReturnValue({ ...connection, clusterId: 'healthy-cluster', entraIdentity: undefined });
-                }
-                getEpoch.mockReturnValue(2);
-                getLatchReason.mockReturnValue(
-                    outcome === 'closed' || outcome === 'disposed' || outcome === 'cancelled'
-                        ? 'connectionRemoved'
-                        : undefined,
-                );
-            };
-            if (stage === 'before click') {
-                supersede();
-            } else {
-                recover.mockImplementationOnce(async () => {
-                    supersede();
-                    if (outcome === 'cancelled') {
-                        throw new UserCancelledError('playground.signInAgain');
+        ] as const)(
+            'keeps %s %s quiet without replacing the worker or result',
+            async (stage, outcome): Promise<void> => {
+                const supersede = (): void => {
+                    if (outcome === 'closed' || outcome === 'disposed') {
+                        openDocuments.splice(0);
+                        openDocuments.push({ uri: vscode.Uri.file('another.documentdb.js') } as vscode.TextDocument);
                     }
-                    return outcome === 'unproven no latch'
+                    if (outcome === 'disposed') {
+                        stopPlaygroundEvaluator('cluster');
+                        dispose.mockClear();
+                    }
+                    if (outcome === 're-picked healthy' || outcome === 'unproven no latch') {
+                        getConnection.mockReturnValue({
+                            ...connection,
+                            clusterId: 'healthy-cluster',
+                            entraIdentity: undefined,
+                        });
+                    }
+                    getEpoch.mockReturnValue(2);
+                    getLatchReason.mockReturnValue(
+                        outcome === 'closed' || outcome === 'disposed' || outcome === 'cancelled'
+                            ? 'connectionRemoved'
+                            : undefined,
+                    );
+                };
+                if (stage === 'before click') {
+                    supersede();
+                } else {
+                    recover.mockImplementationOnce(async () => {
+                        supersede();
+                        if (outcome === 'cancelled') {
+                            throw new UserCancelledError('playground.signInAgain');
+                        }
+                        return outcome === 'unproven no latch'
+                            ? undefined
+                            : { identity: connection.entraIdentity, epoch: 1 };
+                    });
+                }
+
+                chooseAction(
+                    stage === 'before click' && outcome === 'cancelled'
                         ? undefined
-                        : { identity: connection.entraIdentity, epoch: 1 };
-                });
-            }
+                        : ('Sign in again' as unknown as vscode.MessageItem),
+                );
+                await new Promise((resolve) => setTimeout(resolve, 20));
 
-            chooseAction(
-                stage === 'before click' && outcome === 'cancelled'
-                    ? undefined
-                    : 'Sign in again' as unknown as vscode.MessageItem,
-            );
-            await new Promise((resolve) => setTimeout(resolve, 20));
-
-            expect(warning).toHaveBeenCalledOnce();
-            expect(modal).not.toHaveBeenCalled();
-            expect(recover).toHaveBeenCalledTimes(stage === 'before click' ? 0 : 1);
-            expect(evaluate).toHaveBeenCalledOnce();
-            expect(createEvaluator).toHaveBeenCalledOnce();
-            expect(dispose).not.toHaveBeenCalled();
-            expect(showResult).toHaveBeenCalledOnce();
-            expect(canRecover).toHaveBeenCalledTimes(2);
-            for (const call of connectionStateCalls) {
-                expect(call).not.toHaveBeenCalled();
-            }
-        });
+                expect(warning).toHaveBeenCalledOnce();
+                expect(modal).not.toHaveBeenCalled();
+                expect(recover).toHaveBeenCalledTimes(stage === 'before click' ? 0 : 1);
+                expect(evaluate).toHaveBeenCalledOnce();
+                expect(createEvaluator).toHaveBeenCalledOnce();
+                expect(dispose).not.toHaveBeenCalled();
+                expect(showResult).toHaveBeenCalledOnce();
+                expect(canRecover).toHaveBeenCalledTimes(2);
+                for (const call of connectionStateCalls) {
+                    expect(call).not.toHaveBeenCalled();
+                }
+            },
+        );
     });
 });

@@ -193,7 +193,10 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
     });
 
     it('reads only the available model endpoint without authentication or client acquisition', async (): Promise<void> => {
-        const cluster: TreeCluster<BaseClusterModel> = { ...makeCluster(), connectionString: 'mongodb://user:password@host/' };
+        const cluster: TreeCluster<BaseClusterModel> = {
+            ...makeCluster(),
+            connectionString: 'mongodb://user:password@host/',
+        };
         const item = new TestClusterItem(cluster, null);
         const credentials = vi.spyOn(item, 'getCredentials');
         expect(await item.getUnauthenticatedEndpoint()).toBe(cluster.connectionString);

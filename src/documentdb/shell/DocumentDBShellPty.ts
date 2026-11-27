@@ -949,9 +949,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                     break;
                 case 'credentialsChanged':
                 case 'identityChanged':
-                    message = l10n.t(
-                        'This shell is bound to the previous connection. Open a new shell from the tree.',
-                    );
+                    message = l10n.t('This shell is bound to the previous connection. Open a new shell from the tree.');
                     break;
                 default:
                     message = l10n.t(

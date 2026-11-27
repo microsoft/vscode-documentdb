@@ -358,8 +358,8 @@ export class ShellSessionManager implements vscode.Disposable {
             isEmulator:
                 (this._unauthenticated
                     ? this._unauthenticated.emulatorConfiguration?.isEmulator
-                    : CredentialCache.getCredentials(this._connectionInfo.clusterId)?.emulatorConfiguration?.isEmulator) ??
-                false,
+                    : CredentialCache.getCredentials(this._connectionInfo.clusterId)?.emulatorConfiguration
+                          ?.isEmulator) ?? false,
             username,
             displayName: this._displayName,
         };

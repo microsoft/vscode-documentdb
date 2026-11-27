@@ -8,17 +8,22 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockIn
 import { type UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
+import { ErrorExplanationService } from '../../services/errorExplanationService';
 import { accumulateTelemetry } from '../../utils/accumulatingTelemetry';
 import { AuthMethodId } from '../auth/AuthMethod';
 import { ClustersClient } from '../ClustersClient';
 import { ConnectionUnavailableError } from '../ConnectionUnavailableError';
 import { CredentialCache } from '../CredentialCache';
 import { SchemaStore } from '../SchemaStore';
-import { ErrorExplanationService } from '../../services/errorExplanationService';
 import { DocumentDBShellPty, type DocumentDBShellPtyOptions } from './DocumentDBShellPty';
 import { ShellCompletionProvider } from './ShellCompletionProvider';
+import {
+    ShellSessionManager,
+    type ShellConnectionInfo,
+    type ShellSessionCallbacks,
+    type UnauthenticatedShellEndpoint,
+} from './ShellSessionManager';
 import { ShellSpinner } from './ShellSpinner';
-import { ShellSessionManager, type ShellConnectionInfo, type ShellSessionCallbacks, type UnauthenticatedShellEndpoint } from './ShellSessionManager';
 
 const mockSessionTelemetry: Record<string, string | undefined>[] = [];
 const workerSignIn = vi.hoisted(() => ({
@@ -130,7 +135,8 @@ vi.mock('./ShellSessionManager', () => ({
             isInitialized: true,
             getBlockingLatchReason: (): ReturnType<typeof ClustersClient.getLatchReason> => {
                 const reason = ClustersClient.getLatchReason(connectionInfo.clusterId);
-                return unauthenticated && reason &&
+                return unauthenticated &&
+                    reason &&
                     ['credentialsRejected', 'signInRequired', 'credentialsMissing'].includes(reason)
                     ? undefined
                     : reason;
@@ -229,9 +235,14 @@ describe('DocumentDBShellPty', () => {
             noExplanation = vi.spyOn(ErrorExplanationService, 'explain');
             noPrewarm = vi.spyOn(ShellCompletionProvider.prototype, 'prewarmCollections');
             pty = new DocumentDBShellPty({ ...defaultOptions, unauthenticated });
-            pty.onDidWrite((data): void => { written += data; });
+            pty.onDidWrite((data): void => {
+                written += data;
+            });
             mockInitialize.mockResolvedValueOnce({
-                host: 'anonymous-host', additionalHostCount: 0, authMechanism: 'NoAuth', isEmulator: false,
+                host: 'anonymous-host',
+                additionalHostCount: 0,
+                authMechanism: 'NoAuth',
+                isEmulator: false,
             });
             mockEvaluate.mockResolvedValue({ type: 'string', printable: '"x"', durationMs: 1 });
         });
@@ -256,7 +267,9 @@ describe('DocumentDBShellPty', () => {
             pty.handleInput('hel');
             await new Promise((resolve) => setTimeout(resolve, 80));
             expect(completions).toHaveBeenCalledWith('hel', 3, {
-                clusterId: 'test-cluster-id', databaseName: 'testdb', includeClusterMetadata: false,
+                clusterId: 'test-cluster-id',
+                databaseName: 'testdb',
+                includeClusterMetadata: false,
             });
             pty.handleInput('\t');
             pty.handleInput('\r');
@@ -310,7 +323,9 @@ describe('DocumentDBShellPty', () => {
             pty.handleInput('\r');
             await new Promise((resolve) => setTimeout(resolve, 20));
             mockEvaluate.mockResolvedValueOnce({
-                type: 'Document', printable: '{"_id":1,"name":"value"}', durationMs: 1,
+                type: 'Document',
+                printable: '{"_id":1,"name":"value"}',
+                durationMs: 1,
                 source: { namespace: { db: 'next', collection: 'users' } },
             });
             pty.handleInput('db.users.find()');
@@ -335,8 +350,10 @@ describe('DocumentDBShellPty', () => {
             expect(written).toContain('Server requires authentication');
             expect(ext.outputChannel.error).toHaveBeenCalled();
             mockInitialize.mockResolvedValue({
-                host: 'test-host.documents.azure.com:10255', additionalHostCount: 0,
-                authMechanism: 'NativeAuth', isEmulator: false,
+                host: 'test-host.documents.azure.com:10255',
+                additionalHostCount: 0,
+                authMechanism: 'NativeAuth',
+                isEmulator: false,
             });
         });
     });
@@ -424,9 +441,10 @@ describe('DocumentDBShellPty', () => {
                 pty.open(undefined);
                 await new Promise((resolve) => setTimeout(resolve, 10));
                 warning = vi.spyOn(vscode.window, 'showWarningMessage').mockImplementationOnce(
-                    () => new Promise<vscode.MessageItem | undefined>((resolve) => {
-                        chooseAction = resolve;
-                    }),
+                    () =>
+                        new Promise<vscode.MessageItem | undefined>((resolve) => {
+                            chooseAction = resolve;
+                        }),
                 );
                 modal = vi.spyOn(vscode.window, 'showErrorMessage');
                 mockEvaluate.mockRejectedValueOnce(
@@ -455,44 +473,71 @@ describe('DocumentDBShellPty', () => {
             });
 
             it.each([
-                ['before click', 'connectionRemoved', 'This connection was removed. Open a shell from another connection.'],
-                ['before click', 'credentialsChanged', 'This shell is bound to the previous connection. Open a new shell from the tree.'],
-                ['before click', 'identityChanged', 'This shell is bound to the previous connection. Open a new shell from the tree.'],
-                ['during sign-in', 'connectionRemoved', 'This connection was removed. Open a shell from another connection.'],
-                ['during sign-in', 'credentialsChanged', 'This shell is bound to the previous connection. Open a new shell from the tree.'],
-                ['during sign-in', 'identityChanged', 'This shell is bound to the previous connection. Open a new shell from the tree.'],
-            ] as const)('explains %s %s on the existing terminal only', async (stage, reason, message): Promise<void> => {
-                if (stage === 'before click') {
-                    getEpoch.mockReturnValue(1);
-                    getLatchReason.mockReturnValue(reason);
-                } else {
-                    workerSignIn.recover.mockImplementationOnce(async (): Promise<undefined> => {
+                [
+                    'before click',
+                    'connectionRemoved',
+                    'This connection was removed. Open a shell from another connection.',
+                ],
+                [
+                    'before click',
+                    'credentialsChanged',
+                    'This shell is bound to the previous connection. Open a new shell from the tree.',
+                ],
+                [
+                    'before click',
+                    'identityChanged',
+                    'This shell is bound to the previous connection. Open a new shell from the tree.',
+                ],
+                [
+                    'during sign-in',
+                    'connectionRemoved',
+                    'This connection was removed. Open a shell from another connection.',
+                ],
+                [
+                    'during sign-in',
+                    'credentialsChanged',
+                    'This shell is bound to the previous connection. Open a new shell from the tree.',
+                ],
+                [
+                    'during sign-in',
+                    'identityChanged',
+                    'This shell is bound to the previous connection. Open a new shell from the tree.',
+                ],
+            ] as const)(
+                'explains %s %s on the existing terminal only',
+                async (stage, reason, message): Promise<void> => {
+                    if (stage === 'before click') {
+                        getEpoch.mockReturnValue(1);
                         getLatchReason.mockReturnValue(reason);
-                        return undefined;
-                    });
-                }
+                    } else {
+                        workerSignIn.recover.mockImplementationOnce(async (): Promise<undefined> => {
+                            getLatchReason.mockReturnValue(reason);
+                            return undefined;
+                        });
+                    }
 
-                chooseAction('Sign in again' as unknown as vscode.MessageItem);
-                await vi.waitFor(() => expect(written).toContain(message));
+                    chooseAction('Sign in again' as unknown as vscode.MessageItem);
+                    await vi.waitFor(() => expect(written).toContain(message));
 
-                expect(written.trim()).toBe(message);
-                expect(warning).toHaveBeenCalledExactlyOnceWith(
-                    'Microsoft sign-in expired for this shell. Sign in again to continue.',
-                    'Sign in again',
-                );
-                expect(modal).not.toHaveBeenCalled();
-                expect(workerSignIn.recover).toHaveBeenCalledTimes(stage === 'before click' ? 0 : 1);
-                expect(mockEvaluate).toHaveBeenCalledOnce();
-                expect(mockResetAfterSignIn).not.toHaveBeenCalled();
-                expect(mockInitialize).not.toHaveBeenCalled();
-                expect(ShellSessionManager).not.toHaveBeenCalled();
-                expect(mockKillWorker).not.toHaveBeenCalled();
-                expect(mockDispose).not.toHaveBeenCalled();
-                expect(workerSignIn.canRecover).toHaveBeenCalledOnce();
-                for (const call of connectionStateCalls) {
-                    expect(call).not.toHaveBeenCalled();
-                }
-            });
+                    expect(written.trim()).toBe(message);
+                    expect(warning).toHaveBeenCalledExactlyOnceWith(
+                        'Microsoft sign-in expired for this shell. Sign in again to continue.',
+                        'Sign in again',
+                    );
+                    expect(modal).not.toHaveBeenCalled();
+                    expect(workerSignIn.recover).toHaveBeenCalledTimes(stage === 'before click' ? 0 : 1);
+                    expect(mockEvaluate).toHaveBeenCalledOnce();
+                    expect(mockResetAfterSignIn).not.toHaveBeenCalled();
+                    expect(mockInitialize).not.toHaveBeenCalled();
+                    expect(ShellSessionManager).not.toHaveBeenCalled();
+                    expect(mockKillWorker).not.toHaveBeenCalled();
+                    expect(mockDispose).not.toHaveBeenCalled();
+                    expect(workerSignIn.canRecover).toHaveBeenCalledOnce();
+                    for (const call of connectionStateCalls) {
+                        expect(call).not.toHaveBeenCalled();
+                    }
+                },
+            );
 
             it.each([
                 ['before click', 'cancelled'],
@@ -533,16 +578,14 @@ describe('DocumentDBShellPty', () => {
                             const { UserCancelledError } = await import('@microsoft/vscode-azext-utils');
                             throw new UserCancelledError('shell.signInAgain');
                         }
-                        return outcome === 'unproven no latch'
-                            ? undefined
-                            : { identity: workerSignIn.pin, epoch: 1 };
+                        return outcome === 'unproven no latch' ? undefined : { identity: workerSignIn.pin, epoch: 1 };
                     });
                 }
 
                 chooseAction(
                     stage === 'before click' && outcome === 'cancelled'
                         ? undefined
-                        : 'Sign in again' as unknown as vscode.MessageItem,
+                        : ('Sign in again' as unknown as vscode.MessageItem),
                 );
                 await new Promise((resolve) => setTimeout(resolve, 20));
 
@@ -821,9 +864,7 @@ describe('DocumentDBShellPty', () => {
 
             pty.disconnect();
 
-            expect(written).toBe(
-                `\r\x1b[8C${input}\x1b[J\r\nDisconnected\r\ntestdb> \r\x1b[8C${input}\x1b[J`,
-            );
+            expect(written).toBe(`\r\x1b[8C${input}\x1b[J\r\nDisconnected\r\ntestdb> \r\x1b[8C${input}\x1b[J`);
             expect(mockEvaluate).not.toHaveBeenCalled();
         });
 
@@ -933,14 +974,8 @@ describe('DocumentDBShellPty', () => {
         });
 
         it.each([
-            [
-                'userDisconnected',
-                'Disconnected. Reconnect from the tree, then run your command again.',
-            ],
-            [
-                'unreachable',
-                'The connection is unavailable. Check the server or network, then run your command again.',
-            ],
+            ['userDisconnected', 'Disconnected. Reconnect from the tree, then run your command again.'],
+            ['unreachable', 'The connection is unavailable. Check the server or network, then run your command again.'],
             [
                 'credentialsRejected',
                 'The saved credentials were rejected. Update them from the tree, then run your command again.',
@@ -950,22 +985,13 @@ describe('DocumentDBShellPty', () => {
                 'This connection is being updated. Run your command again when the update finishes.',
             ],
             ['connectionRemoved', 'This connection was removed. Open a shell from another connection.'],
-            [
-                'credentialsChanged',
-                'This shell is bound to the previous connection. Open a new shell from the tree.',
-            ],
-            [
-                'identityChanged',
-                'This shell is bound to the previous connection. Open a new shell from the tree.',
-            ],
+            ['credentialsChanged', 'This shell is bound to the previous connection. Open a new shell from the tree.'],
+            ['identityChanged', 'This shell is bound to the previous connection. Open a new shell from the tree.'],
             [
                 'credentialsMissing',
                 'This connection is unavailable. Reconnect from the tree, then run your command again.',
             ],
-            [
-                'signInRequired',
-                'This connection is unavailable. Reconnect from the tree, then run your command again.',
-            ],
+            ['signInRequired', 'This connection is unavailable. Reconnect from the tree, then run your command again.'],
         ] as const)('uses %s guidance for latch and worker failures', async (reason, message) => {
             vi.spyOn(ClustersClient, 'getLatchReason').mockReturnValueOnce(reason).mockReturnValue(undefined);
 

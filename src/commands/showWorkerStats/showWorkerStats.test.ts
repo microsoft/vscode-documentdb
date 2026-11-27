@@ -58,7 +58,9 @@ it('prints explicit zero counts and shared record headings', (): void => {
 it('distinguishes shell and playground worker state from missing session values', (): void => {
     vi.mocked(getRegisteredShellTerminals).mockReturnValueOnce([
         {
-            terminal: { name: 'DocumentDB Shell' } as ReturnType<typeof getRegisteredShellTerminals>[number]['terminal'],
+            terminal: { name: 'DocumentDB Shell' } as ReturnType<
+                typeof getRegisteredShellTerminals
+            >[number]['terminal'],
             info: {
                 clusterId: 'shell-cluster',
                 clusterDisplayName: 'Shell Cluster',
@@ -74,9 +76,7 @@ it('distinguishes shell and playground worker state from missing session values'
     const evaluator = new PlaygroundEvaluator();
     vi.spyOn(evaluator, 'workerState', 'get').mockReturnValue('idle');
     vi.spyOn(evaluator, 'isAlive', 'get').mockReturnValue(false);
-    vi.mocked(getPlaygroundEvaluators).mockReturnValueOnce(
-        new Map([['playground-cluster', evaluator]]),
-    );
+    vi.mocked(getPlaygroundEvaluators).mockReturnValueOnce(new Map([['playground-cluster', evaluator]]));
 
     showWorkerStats({} as IActionContext);
 

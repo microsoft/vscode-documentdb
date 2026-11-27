@@ -11,9 +11,9 @@ import {
     type DeepLinkOpenOptions,
     type DeepLinkOpenResult,
 } from '../../deepLinks/deepLinkTelemetry';
-import { CredentialCache } from '../../documentdb/CredentialCache';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
+import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBShellPty } from '../../documentdb/shell/DocumentDBShellPty';
 import { type ShellConnectionInfo } from '../../documentdb/shell/ShellSessionManager';
 import { registerShellTerminal } from '../../documentdb/shell/ShellTerminalLinkProvider';

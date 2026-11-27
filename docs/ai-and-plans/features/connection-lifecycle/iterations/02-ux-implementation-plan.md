@@ -546,16 +546,16 @@ Before calling this iteration complete:
 
 ## Progress
 
-| WI | Status | Outcome / decision / verification |
-| --- | --- | --- |
-| WI-0 | Gates approved; F7 live evidence pending | Current-code baseline checked; no live reproduction claim |
-| WI-1 | Implemented and locally verified; expansion deferred | `57f96b23b`, `c77ba2115`, `0a01a24e4`; F3 expansion follows #1143 |
-| WI-2 | Implemented and locally verified; terminal check pending | `a2eba522a`, `9d434732d`; final Shell suite 134 passed |
-| WI-3 | Implemented and locally verified | `6d2e10715`, fixture `039c1cbd8`; 24 source routes passed |
-| WI-4 | Implemented and locally verified; live presentation pending | `5d00558cb`; generated localization current |
-| WI-5 | Implemented and locally verified | `e4a6ad337`; Batch 1 build/tests passed |
-| WI-6 | Implemented and locally verified | `aea08108a`; full-path approval 88%, final hunk 90% |
-| WI-7 | Deferred pending operator reproduction | No speculative code change; exact live sequence recorded |
+| WI   | Status                                                      | Outcome / decision / verification                                 |
+| ---- | ----------------------------------------------------------- | ----------------------------------------------------------------- |
+| WI-0 | Gates approved; F7 live evidence pending                    | Current-code baseline checked; no live reproduction claim         |
+| WI-1 | Implemented and locally verified; expansion deferred        | `57f96b23b`, `c77ba2115`, `0a01a24e4`; F3 expansion follows #1143 |
+| WI-2 | Implemented and locally verified; terminal check pending    | `a2eba522a`, `9d434732d`; final Shell suite 134 passed            |
+| WI-3 | Implemented and locally verified                            | `6d2e10715`, fixture `039c1cbd8`; 24 source routes passed         |
+| WI-4 | Implemented and locally verified; live presentation pending | `5d00558cb`; generated localization current                       |
+| WI-5 | Implemented and locally verified                            | `e4a6ad337`; Batch 1 build/tests passed                           |
+| WI-6 | Implemented and locally verified                            | `aea08108a`; full-path approval 88%, final hunk 90%               |
+| WI-7 | Deferred pending operator reproduction                      | No speculative code change; exact live sequence recorded          |
 
 ## Outcome
 
@@ -619,32 +619,32 @@ Model-request spans below sum to 162m20s; overlapping model/tool/check spans are
 Build and localization durations were not separately reported. The final response and subsequent
 progress-record writes are excluded from this snapshot. AIU are not dollars.
 
-| Model | Role | Requests | Summed model time | AIU | Share |
-| --- | --- | ---: | ---: | ---: | ---: |
-| claude-opus-5.5 | advisor | 146 | 21m16s | 1277.8 | 47.6% |
-| gpt-6-luna | coding | 13 | 1m13s | 2.0 | 0.1% |
-| gpt-6.1-sol | leader | 135 | 95m58s | 1019.3 | 37.9% |
-| gpt-6.1-sol | coding | 123 | 23m46s | 321.0 | 11.9% |
-| mai-code-2 | coding | 89 | 16m13s | 64.5 | 2.4% |
-| mai-code-2-flash | checks | 41 | 3m54s | 1.7 | 0.1% |
+| Model            | Role    | Requests | Summed model time |    AIU | Share |
+| ---------------- | ------- | -------: | ----------------: | -----: | ----: |
+| claude-opus-5.5  | advisor |      146 |            21m16s | 1277.8 | 47.6% |
+| gpt-6-luna       | coding  |       13 |             1m13s |    2.0 |  0.1% |
+| gpt-6.1-sol      | leader  |      135 |            95m58s | 1019.3 | 37.9% |
+| gpt-6.1-sol      | coding  |      123 |            23m46s |  321.0 | 11.9% |
+| mai-code-2       | coding  |       89 |            16m13s |   64.5 |  2.4% |
+| mai-code-2-flash | checks  |       41 |             3m54s |    1.7 |  0.1% |
 
-| Role | Requests | Summed model time | AIU | Share |
-| --- | ---: | ---: | ---: | ---: |
-| leader | 135 | 95m58s | 1019.3 | 37.9% |
-| coding | 225 | 41m12s | 387.5 | 14.4% |
-| advisor | 146 | 21m16s | 1277.8 | 47.6% |
-| checks | 41 | 3m54s | 1.7 | 0.1% |
+| Role    | Requests | Summed model time |    AIU | Share |
+| ------- | -------: | ----------------: | -----: | ----: |
+| leader  |      135 |            95m58s | 1019.3 | 37.9% |
+| coding  |      225 |            41m12s |  387.5 | 14.4% |
+| advisor |      146 |            21m16s | 1277.8 | 47.6% |
+| checks  |       41 |             3m54s |    1.7 |  0.1% |
 
 **Totals:** leader 1019.3 AIU; subagents 1667.0 AIU; run 2686.3 AIU.
 
-| Model / role | Input | Output | Cache read | Cache write | Reasoning |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| claude-opus-5.5 / advisor | 11,507,254 | 125,393 | 9,846,990 | 1,659,908 | 66,048 |
-| gpt-6-luna / coding | 723,017 | 9,623 | 653,250 | 69,728 | 6,183 |
-| gpt-6.1-sol / leader | 30,887,461 | 244,993 | 30,106,530 | 780,526 | 174,956 |
-| gpt-6.1-sol / coding | 10,009,918 | 77,779 | 9,413,490 | 596,059 | 27,223 |
-| mai-code-2 / coding | 5,329,087 | 47,245 | 4,499,968 | 0 | 20,975 |
-| mai-code-2-flash / checks | 923,922 | 9,468 | 708,096 | 0 | 4,554 |
+| Model / role              |      Input |  Output | Cache read | Cache write | Reasoning |
+| ------------------------- | ---------: | ------: | ---------: | ----------: | --------: |
+| claude-opus-5.5 / advisor | 11,507,254 | 125,393 |  9,846,990 |   1,659,908 |    66,048 |
+| gpt-6-luna / coding       |    723,017 |   9,623 |    653,250 |      69,728 |     6,183 |
+| gpt-6.1-sol / leader      | 30,887,461 | 244,993 | 30,106,530 |     780,526 |   174,956 |
+| gpt-6.1-sol / coding      | 10,009,918 |  77,779 |  9,413,490 |     596,059 |    27,223 |
+| mai-code-2 / coding       |  5,329,087 |  47,245 |  4,499,968 |           0 |    20,975 |
+| mai-code-2-flash / checks |    923,922 |   9,468 |    708,096 |           0 |     4,554 |
 
 Cache/reasoning fields may overlap input/output; do not sum them into a purported token total.
 
@@ -655,30 +655,30 @@ operator-reported authentication restoration. The original blocked edit succeede
 no alternative access route was used while it was denied. This window is a subset of the
 cumulative run, not an additional charge to add to it.
 
-| Model | Role | Requests | Summed model time | AIU | Share |
-| --- | --- | ---: | ---: | ---: | ---: |
-| claude-opus-5.5 | advisor | 47 | 6m25s | 503.8 | 30.8% |
-| gpt-6.1-sol | leader | 72 | 72m44s | 849.7 | 52.0% |
-| gpt-6.1-sol | coding | 89 | 18m37s | 250.9 | 15.4% |
-| mai-code-2 | coding | 45 | 6m34s | 28.6 | 1.7% |
-| mai-code-2-flash | checks | 36 | 3m36s | 1.4 | 0.1% |
+| Model            | Role    | Requests | Summed model time |   AIU | Share |
+| ---------------- | ------- | -------: | ----------------: | ----: | ----: |
+| claude-opus-5.5  | advisor |       47 |             6m25s | 503.8 | 30.8% |
+| gpt-6.1-sol      | leader  |       72 |            72m44s | 849.7 | 52.0% |
+| gpt-6.1-sol      | coding  |       89 |            18m37s | 250.9 | 15.4% |
+| mai-code-2       | coding  |       45 |             6m34s |  28.6 |  1.7% |
+| mai-code-2-flash | checks  |       36 |             3m36s |   1.4 |  0.1% |
 
-| Role | Requests | Summed model time | AIU | Share |
-| --- | ---: | ---: | ---: | ---: |
-| leader | 72 | 72m44s | 849.7 | 52.0% |
-| coding | 134 | 25m11s | 279.5 | 17.1% |
-| advisor | 47 | 6m25s | 503.8 | 30.8% |
-| checks | 36 | 3m36s | 1.4 | 0.1% |
+| Role    | Requests | Summed model time |   AIU | Share |
+| ------- | -------: | ----------------: | ----: | ----: |
+| leader  |       72 |            72m44s | 849.7 | 52.0% |
+| coding  |      134 |            25m11s | 279.5 | 17.1% |
+| advisor |       47 |             6m25s | 503.8 | 30.8% |
+| checks  |       36 |             3m36s |   1.4 |  0.1% |
 
 **Resumed totals:** leader 849.7 AIU; subagents 784.7 AIU; run 1634.4 AIU.
 
-| Model / role | Input | Output | Cache read | Cache write | Reasoning |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| claude-opus-5.5 / advisor | 3,209,592 | 37,413 | 2,449,519 | 759,947 | 19,439 |
-| gpt-6.1-sol / leader | 23,416,229 | 178,087 | 22,779,798 | 636,215 | 147,875 |
-| gpt-6.1-sol / coding | 7,974,254 | 62,647 | 7,521,903 | 452,084 | 21,678 |
-| mai-code-2 / coding | 2,962,098 | 17,172 | 2,607,104 | 0 | 7,978 |
-| mai-code-2-flash / checks | 836,803 | 9,122 | 674,304 | 0 | 4,476 |
+| Model / role              |      Input |  Output | Cache read | Cache write | Reasoning |
+| ------------------------- | ---------: | ------: | ---------: | ----------: | --------: |
+| claude-opus-5.5 / advisor |  3,209,592 |  37,413 |  2,449,519 |     759,947 |    19,439 |
+| gpt-6.1-sol / leader      | 23,416,229 | 178,087 | 22,779,798 |     636,215 |   147,875 |
+| gpt-6.1-sol / coding      |  7,974,254 |  62,647 |  7,521,903 |     452,084 |    21,678 |
+| mai-code-2 / coding       |  2,962,098 |  17,172 |  2,607,104 |           0 |     7,978 |
+| mai-code-2-flash / checks |    836,803 |   9,122 |    674,304 |           0 |     4,476 |
 
 **Optimization:** advising was the largest cumulative category (47.6%); leading was the largest
 resumed category (52.0%). Repeated contract clarification, broad initial reading and long leader

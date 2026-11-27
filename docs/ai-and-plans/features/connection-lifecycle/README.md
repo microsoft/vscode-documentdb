@@ -113,15 +113,15 @@ entries are unpublished drafts and do not represent a shipped release.
 
 ## Documents
 
-| Document                                                                            | Kind      |
-| ----------------------------------------------------------------------------------- | --------- |
-| [research-findings.md](./research-findings.md)                                      | research  |
-| [decisions.md](./decisions.md)                                                      | decisions |
-| [iterations/01-implementation-plan.md](./iterations/01-implementation-plan.md)     | plan      |
-| [iterations/01-dev-plan.md](./iterations/01-dev-plan.md)                            | plan      |
+| Document                                                                             | Kind      |
+| ------------------------------------------------------------------------------------ | --------- |
+| [research-findings.md](./research-findings.md)                                       | research  |
+| [decisions.md](./decisions.md)                                                       | decisions |
+| [iterations/01-implementation-plan.md](./iterations/01-implementation-plan.md)       | plan      |
+| [iterations/01-dev-plan.md](./iterations/01-dev-plan.md)                             | plan      |
 | [iterations/02-ux-implementation-plan.md](./iterations/02-ux-implementation-plan.md) | plan      |
-| [iterations/01-pr1136-final-review.md](./iterations/01-pr1136-final-review.md)     | review    |
-| [iterations/01-pr1136-ux-review.md](./iterations/01-pr1136-ux-review.md)            | ux-review |
+| [iterations/01-pr1136-final-review.md](./iterations/01-pr1136-final-review.md)       | review    |
+| [iterations/01-pr1136-ux-review.md](./iterations/01-pr1136-ux-review.md)             | ux-review |
 
 ## Decisions index
 

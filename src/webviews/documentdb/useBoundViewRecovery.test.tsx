@@ -304,9 +304,7 @@ it.each([new Error('driver failure'), 'driver failure'])(
 
 it('resets retry failure for another attempt so each failure can be announced again', async (): Promise<void> => {
     const nextRetry = deferred<RecoveryResponse>();
-    recoverUnavailable
-        .mockResolvedValueOnce({ unavailable: newerUnavailable })
-        .mockReturnValueOnce(nextRetry.promise);
+    recoverUnavailable.mockResolvedValueOnce({ unavailable: newerUnavailable }).mockReturnValueOnce(nextRetry.promise);
     await render();
     await show();
     await act(async () => state.handleUnavailableAction('retry'));
@@ -392,33 +390,30 @@ it('drops a close failure invalidated while its explanation is in flight', async
     expect(state.recovering).toBe(false);
 });
 
-it.each(['typed', 'thrown'])(
-    'keeps an obsolete %s retry failure quiet',
-    async (failureType): Promise<void> => {
-        const retry = deferred<RecoveryResponse>();
-        recoverUnavailable.mockReturnValueOnce(retry.promise);
-        await render();
-        await show();
-        await act(async () => state.handleUnavailableAction('retry'));
-        await show(newerUnavailable);
+it.each(['typed', 'thrown'])('keeps an obsolete %s retry failure quiet', async (failureType): Promise<void> => {
+    const retry = deferred<RecoveryResponse>();
+    recoverUnavailable.mockReturnValueOnce(retry.promise);
+    await render();
+    await show();
+    await act(async () => state.handleUnavailableAction('retry'));
+    await show(newerUnavailable);
 
-        await act(async () => {
-            if (failureType === 'typed') {
-                retry.resolve({ unavailable });
-            } else {
-                retry.reject(new Error('driver failure'));
-            }
-        });
+    await act(async () => {
+        if (failureType === 'typed') {
+            retry.resolve({ unavailable });
+        } else {
+            retry.reject(new Error('driver failure'));
+        }
+    });
 
-        expect(state.unavailable).toBe(newerUnavailable);
-        expect(state.unavailableRef.current).toBe(newerUnavailable);
-        expect(state.recoveryFailure).toBeUndefined();
-        expect(state.retryOffered).toBe(true);
-        expect(state.recoveryAnnouncement).toBeUndefined();
-        expect(explainOperationFailure).not.toHaveBeenCalled();
-        expect(displayErrorMessage).not.toHaveBeenCalled();
-    },
-);
+    expect(state.unavailable).toBe(newerUnavailable);
+    expect(state.unavailableRef.current).toBe(newerUnavailable);
+    expect(state.recoveryFailure).toBeUndefined();
+    expect(state.retryOffered).toBe(true);
+    expect(state.recoveryAnnouncement).toBeUndefined();
+    expect(explainOperationFailure).not.toHaveBeenCalled();
+    expect(displayErrorMessage).not.toHaveBeenCalled();
+});
 
 it('keeps same-render retry submissions state-gated rather than ref-locked', async (): Promise<void> => {
     const firstRetry = deferred<RecoveryResponse>();

@@ -220,8 +220,12 @@ describe('ShellSessionManager', () => {
             expect(ensureWorker()).toHaveBeenCalledWith(
                 clusterId,
                 {
-                    type: 'init', requestId: '', connectionString: endpoint, databaseName: 'test',
-                    authMechanism: 'NoAuth', persistent: true,
+                    type: 'init',
+                    requestId: '',
+                    connectionString: endpoint,
+                    databaseName: 'test',
+                    authMechanism: 'NoAuth',
+                    persistent: true,
                     clientOptions: { serverSelectionTimeoutMS: 4000, tlsAllowInvalidCertificates: true },
                 },
                 expect.anything(),
@@ -261,7 +265,8 @@ describe('ShellSessionManager', () => {
             );
             await expect(manager.initialize()).resolves.toMatchObject({ isEmulator: false });
             expect(ensureWorker().mock.calls[0][1]).toMatchObject({
-                connectionString, authMechanism: 'NoAuth',
+                connectionString,
+                authMechanism: 'NoAuth',
                 clientOptions: { tlsAllowInvalidCertificates: tls, serverSelectionTimeoutMS: timeout },
             });
         });
@@ -287,18 +292,22 @@ describe('ShellSessionManager', () => {
             },
         );
 
-        it.each(['credentialsUpdating', 'credentialsChanged', 'identityChanged', 'userDisconnected', 'connectionRemoved', 'unreachable'] as const)(
-            'blocks %s before endpoint reads, initialization and evaluation',
-            async (reason): Promise<void> => {
-                ClustersClient.latch(clusterId, reason);
-                expect(manager.getBlockingLatchReason()).toBe(reason);
-                await expect(manager.initialize()).rejects.toMatchObject({ reason });
-                await expect(manager.evaluate('db.stats()')).rejects.toMatchObject({ reason });
-                expect(reread).not.toHaveBeenCalled();
-                expect(ensureWorker()).not.toHaveBeenCalled();
-                expect(sendEval).not.toHaveBeenCalled();
-            },
-        );
+        it.each([
+            'credentialsUpdating',
+            'credentialsChanged',
+            'identityChanged',
+            'userDisconnected',
+            'connectionRemoved',
+            'unreachable',
+        ] as const)('blocks %s before endpoint reads, initialization and evaluation', async (reason): Promise<void> => {
+            ClustersClient.latch(clusterId, reason);
+            expect(manager.getBlockingLatchReason()).toBe(reason);
+            await expect(manager.initialize()).rejects.toMatchObject({ reason });
+            await expect(manager.evaluate('db.stats()')).rejects.toMatchObject({ reason });
+            expect(reread).not.toHaveBeenCalled();
+            expect(ensureWorker()).not.toHaveBeenCalled();
+            expect(sendEval).not.toHaveBeenCalled();
+        });
 
         it.each([
             [undefined, 'connectionRemoved'],
@@ -312,18 +321,24 @@ describe('ShellSessionManager', () => {
         it.each([
             [undefined, 'connectionRemoved'],
             ['mongodb://other-host/test', 'credentialsChanged'],
-        ] as const)('blocks endpoint %s changed during worker initialization', async (current, reason): Promise<void> => {
-            reread.mockResolvedValueOnce(endpoint).mockResolvedValueOnce(current);
-            await expect(manager.initialize()).rejects.toMatchObject({ reason });
-            expect(manager.isInitialized).toBe(false);
-        });
+        ] as const)(
+            'blocks endpoint %s changed during worker initialization',
+            async (current, reason): Promise<void> => {
+                reread.mockResolvedValueOnce(endpoint).mockResolvedValueOnce(current);
+                await expect(manager.initialize()).rejects.toMatchObject({ reason });
+                expect(manager.isInitialized).toBe(false);
+            },
+        );
 
         it.each(['endpointRead', 'workerInitialization'] as const)(
             'honors a superseding epoch during %s',
             async (phase): Promise<void> => {
                 let epoch = 0;
                 vi.spyOn(ClustersClient, 'getEpoch').mockImplementation(() => epoch);
-                const changeEpoch = async (): Promise<string> => { epoch++; return endpoint; };
+                const changeEpoch = async (): Promise<string> => {
+                    epoch++;
+                    return endpoint;
+                };
                 if (phase === 'endpointRead') {
                     reread.mockImplementationOnce(changeEpoch);
                 } else {
@@ -359,9 +374,11 @@ describe('ShellSessionManager', () => {
         it('permits password-only edits on respawn but never switches endpoints', async (): Promise<void> => {
             await manager.initialize();
             manager.killWorker();
-            reread.mockResolvedValue(toUnauthenticatedConnectionString(
-                'mongodb://user:new-password@localhost:27017/test?tls=true&tlsCAFile=trust.pem&authSource=admin',
-            ));
+            reread.mockResolvedValue(
+                toUnauthenticatedConnectionString(
+                    'mongodb://user:new-password@localhost:27017/test?tls=true&tlsCAFile=trust.pem&authSource=admin',
+                ),
+            );
             await manager.evaluate('password-edit');
             manager.killWorker();
             reread.mockResolvedValue('mongodb://other-host/');
@@ -397,7 +414,10 @@ describe('ShellSessionManager', () => {
         );
         const manager = new ShellSessionManager({ clusterId, clusterDisplayName: 'Cluster', databaseName: 'test' });
         const worker = vi.mocked(WorkerSessionManager).mock.results.at(-1)?.value as { ensureWorker: Mock };
-        await expect(manager.initialize()).resolves.toMatchObject({ authMechanism: 'NativeAuth', username: 'saved-user' });
+        await expect(manager.initialize()).resolves.toMatchObject({
+            authMechanism: 'NativeAuth',
+            username: 'saved-user',
+        });
         expect(worker.ensureWorker.mock.calls[0][1]).toMatchObject({
             authMechanism: 'NativeAuth',
             connectionString: 'mongodb://saved-user:saved-password@native.example.com/?tls=true',

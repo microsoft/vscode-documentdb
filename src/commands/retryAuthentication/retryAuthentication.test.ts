@@ -578,7 +578,9 @@ describe('retryAuthentication', () => {
 
             expect(ClustersClient.deleteClient).toHaveBeenCalledExactlyOnceWith('stale');
             expect(ext.connectionsBranchDataProvider.refresh).toHaveBeenCalledExactlyOnceWith(node);
-            expect(ext.connectionsBranchDataProvider.refresh).toHaveBeenCalledBefore(vi.mocked(window.showErrorMessage));
+            expect(ext.connectionsBranchDataProvider.refresh).toHaveBeenCalledBefore(
+                vi.mocked(window.showErrorMessage),
+            );
             expect(window.showErrorMessage).toHaveBeenCalledExactlyOnceWith(
                 reason === 'connectionRemoved'
                     ? 'This connection was removed. Choose another connection.'
