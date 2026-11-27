@@ -138,6 +138,18 @@ const EVENT_CASES: readonly EventCase[] = [
         measurements: { attempt: 2 },
     },
     {
+        label: 'feedback route opening',
+        name: 'survey.openFeedbackRoute',
+        report: (telemetry): boolean =>
+            telemetry.reportOpenFeedbackRoute('reportBug', 'success', { source: 'helpAndFeedbackView' }, INVITATION_ID),
+        properties: {
+            activationSource: 'helpAndFeedbackView',
+            feedbackRoute: 'reportBug',
+            openResult: 'success',
+        },
+        measurements: {},
+    },
+    {
         label: 'invitation resolution',
         name: 'survey.invitationResolved',
         report: (telemetry): boolean => telemetry.reportInvitationResolved(INVITATION_ID, 'opened', true),

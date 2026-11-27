@@ -15,6 +15,8 @@ export interface SurveyInvitationStrings {
     readonly englishNote: string;
     readonly askLater: string;
     readonly neverAgain: string;
+    readonly reportBug: string;
+    readonly suggestFeature: string;
     readonly why: string;
     readonly usage: string;
     readonly manuallyOpened: string;
@@ -85,7 +87,7 @@ export function buildSurveyInvitationHtml(options: SurveyInvitationHtmlOptions):
 <style nonce="${text(nonce)}">
 * { box-sizing: border-box; }
 body { margin: 0; padding: 0; color: var(--vscode-editor-foreground, var(--vscode-foreground)); background: var(--vscode-editor-background); font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); line-height: 1.5; overflow-wrap: anywhere; }
-main { min-height: 100vh; }
+main { display: flex; flex-direction: column; min-height: 100vh; }
 header { padding: 8px 16px; background: var(--vscode-tree-tableOddRowsBackground, var(--vscode-sideBar-background, var(--vscode-editorWidget-background))); border-bottom: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, var(--vscode-editorWidget-border))); }
 .identity { display: flex; align-items: center; gap: 12px; max-width: 448px; margin: 0 auto; }
 img { flex: 0 0 auto; width: 36px; height: 36px; object-fit: contain; }
@@ -93,7 +95,7 @@ img { flex: 0 0 auto; width: 36px; height: 36px; object-fit: contain; }
 body.vscode-dark .logo-light, body.vscode-high-contrast:not(.vscode-high-contrast-light) .logo-light { display: none; }
 body.vscode-dark .logo-dark, body.vscode-high-contrast:not(.vscode-high-contrast-light) .logo-dark { display: block; }
 h1 { flex: 1 1 auto; min-width: 0; font-size: 18px; font-weight: 600; line-height: 24px; margin: 0; }
-.content { max-width: 480px; margin: 0 auto; padding: 24px 16px; }
+.content { display: flex; flex: 1; flex-direction: column; max-width: 480px; margin: 0 auto; padding: 24px 16px; width: 100%; }
 h2 { font-size: 16px; font-weight: 600; line-height: 24px; margin: 0; }
 p { margin: 8px 0; }
 .note { color: var(--vscode-descriptionForeground); font-size: 12px; line-height: 16px; margin: 8px 0; }
@@ -115,6 +117,7 @@ button:disabled, button[aria-disabled="true"] { opacity: .65; cursor: default; }
 .choices button { flex: 1 1 140px; }
 .secondary { color: var(--vscode-button-secondaryForeground); background: var(--vscode-button-secondaryBackground); font-weight: 400; }
 .secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
+.feedback-routes { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; margin-top: auto; padding-top: 16px; font-size: 12px; line-height: 16px; }
 details { margin-top: 24px; }
 summary { cursor: pointer; font-weight: 400; }
 details p { color: var(--vscode-descriptionForeground); font-size: 12px; line-height: 16px; }
@@ -136,6 +139,11 @@ button:focus-visible, .star:has(input:focus-visible), summary:focus-visible, a:f
 ${choices}
 </div>
 <details><summary>${text(strings.why)}</summary><p>${text(usage)}</p>${reminder}<p>${text(manuallyOpened ? strings.manualTelemetry : strings.telemetry)}</p><a href="#" data-action="privacy">${text(strings.privacy)}</a></details>
+<div class="feedback-routes">
+<a href="#" data-action="reportBug">${text(strings.reportBug)}</a>
+<span aria-hidden="true">·</span>
+<a href="#" data-action="suggestFeature">${text(strings.suggestFeature)}</a>
+</div>
 </div>
 </main>
 <script nonce="${text(nonce)}">
@@ -204,7 +212,7 @@ document.querySelectorAll('[data-action]').forEach(control => {
         event.preventDefault();
         const action = control.dataset.action;
         const message = { type: action };
-        if (action !== 'privacy') {
+        if (action === 'openForm' || action === 'askLater' || action === 'neverAgain') {
             if (busy) return;
             busy = true;
             hoveredRating = undefined;

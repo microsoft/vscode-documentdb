@@ -5,6 +5,7 @@
 
 import { randomBytes } from 'crypto';
 import * as vscode from 'vscode';
+import { isFeedbackRoute } from '../../../utils/feedbackRoutes';
 import { type SurveyService } from '../SurveyService';
 import { traceSurvey } from '../surveyDiagnostics';
 import {
@@ -228,6 +229,19 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
                 }
                 return;
             }
+            case 'reportBug':
+            case 'suggestFeature': {
+                if (!isFeedbackRoute(message.type)) {
+                    return;
+                }
+                const opened = await invitation.callbacks.onOpenFeedbackRoute(message.type);
+                if (!opened) {
+                    await vscode.window.showErrorMessage(
+                        vscode.l10n.t("We couldn't open the feedback link in your browser. Please try again."),
+                    );
+                }
+                return;
+            }
             case 'openForm': {
                 if (invitation.busy) {
                     return;
@@ -356,6 +370,8 @@ export function getSurveyInvitationStrings(): SurveyInvitationStrings {
         englishNote: vscode.l10n.t('The survey is in English.'),
         askLater: vscode.l10n.t('Remind me later'),
         neverAgain: vscode.l10n.t("Don't ask again"),
+        reportBug: vscode.l10n.t('Report a bug'),
+        suggestFeature: vscode.l10n.t('Suggest a feature'),
         why: vscode.l10n.t('Why am I seeing this?'),
         usage: vscode.l10n.t(
             "You've used the DocumentDB extension on {0} days, so we'd love to hear how it's going. This count stays on your device.",
@@ -365,7 +381,7 @@ export function getSurveyInvitationStrings(): SurveyInvitationStrings {
         ),
         close: vscode.l10n.t('Close'),
         manualTelemetry: vscode.l10n.t(
-            "If VS Code telemetry is on, we record whether you continue to the survey and the rating you picked here. We don't record your name or your answers in the survey.",
+            "If VS Code telemetry is on, we record whether you continue to the survey, open a bug report or feature request, and the rating you picked here. We don't record your name or your answers in the survey.",
         ),
         reminders: {
             opened: vscode.l10n.t("It's been a while since you last opened the survey, so we're checking in again."),
@@ -373,7 +389,7 @@ export function getSurveyInvitationStrings(): SurveyInvitationStrings {
             dismissed: vscode.l10n.t('You closed this invitation a while ago, so we are asking once more.'),
         },
         telemetry: vscode.l10n.t(
-            "If VS Code telemetry is on, we record whether you qualified, whether this invitation was shown, what you chose, and the rating you picked when you continue to the survey. We don't record your name, your answers in the survey, or your usage count.",
+            "If VS Code telemetry is on, we record whether you qualified, whether this invitation was shown, what you chose, whether you open a bug report or feature request, and the rating you picked when you continue to the survey. We don't record your name, your answers in the survey, or your usage count.",
         ),
         privacy: vscode.l10n.t('Privacy Statement'),
     };

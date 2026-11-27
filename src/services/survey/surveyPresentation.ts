@@ -10,6 +10,7 @@
  */
 
 import type * as vscode from 'vscode';
+import { type FeedbackRoute } from '../../utils/feedbackRoutes';
 import { type SurveyEligibilityExplanation, type SurveyOpenFormResult, type SurveyRating } from './surveyTypes';
 
 export interface SurveyInvitationRequest {
@@ -46,6 +47,8 @@ export interface SurveyInvitationCallbacks {
      * and the user can choose "Continue to survey" again.
      */
     onOpenForm(selectedRating?: SurveyRating): Promise<SurveyOpenFormResult>;
+    /** Opens a specific GitHub feedback route without resolving the survey invitation. */
+    onOpenFeedbackRoute(route: FeedbackRoute): Promise<boolean>;
     /**
      * Ends the invitation. For `neverAgain` the promise settles after the opt-out has been
      * saved or, if saving failed, honored in memory. The service disposes the handle afterwards.
