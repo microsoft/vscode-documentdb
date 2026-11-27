@@ -762,16 +762,26 @@ export class ClustersClient {
     ): Promise<void> {
         const authProperties = options.authMechanismProperties;
         const callback = authProperties?.OIDC_CALLBACK;
-        if (interactiveEntra && callback) {
+        if (callback) {
             options = {
                 ...options,
                 authMechanismProperties: {
                     ...authProperties,
                     OIDC_CALLBACK: async (params): Promise<OIDCResponse> => {
-                        const response = await callback(params);
-                        const { expSec } = readJwtTimes(response.accessToken);
-                        this._lastEntraTokenExpiresAt =
-                            expSec === undefined ? undefined : (new Date(expSec * 1000).toJSON() ?? undefined);
+                        let response: OIDCResponse;
+                        try {
+                            response = await callback(params);
+                        } catch (error) {
+                            if (this._binding) {
+                                this._replacement ??= 'replaceOnNextForeground';
+                            }
+                            throw error;
+                        }
+                        if (interactiveEntra) {
+                            const { expSec } = readJwtTimes(response.accessToken);
+                            this._lastEntraTokenExpiresAt =
+                                expSec === undefined ? undefined : (new Date(expSec * 1000).toJSON() ?? undefined);
+                        }
                         return response;
                     },
                 },
@@ -1117,6 +1127,7 @@ export class ClustersClient {
         if (epoch !== ClustersClient.getEpoch(clusterId)) {
             client._closed = true;
             void client._mongoClient.close().catch(() => {
+                meterSilentCatch('ClustersClient_supersededClientClose');
                 ext.outputChannel.debug(
                     `[ClustersClient] startup=${id} superseded client cleanup failed surface=extension`,
                 );
@@ -1190,6 +1201,7 @@ export class ClustersClient {
                     ClustersClient.latch(clusterId, 'credentialsRejected');
                 }
                 void ClustersClient.deleteClient(clusterId).catch(() => {
+                    meterSilentCatch('ClustersClient_evictedClientClose');
                     ext.outputChannel.debug('[ClustersClient] failed to close an evicted client');
                 });
                 break;

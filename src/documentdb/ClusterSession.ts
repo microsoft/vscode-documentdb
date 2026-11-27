@@ -15,6 +15,7 @@ import { toSlickGridTree, type TreeData } from '../utils/slickgrid/mongo/toSlick
 import { type QueryInsightsStage2Response } from '../webviews/documentdb/collectionView/types/queryInsights';
 import { ClustersClient, type ConnectionBinding, type FindQueryParams } from './ClustersClient';
 import { isRetiredConnectionBinding } from './connectionBindingRetirement';
+import { classifyConnectionFailure } from './connectionFailures';
 import { ConnectionUnavailableError } from './ConnectionUnavailableError';
 import { runWithClient } from './runWithClient';
 import { SchemaStore } from './SchemaStore';
@@ -343,12 +344,36 @@ export class ClusterSession {
         };
 
         const epoch = this.getEpoch();
-        const { documents, executionTimeMs } = await this.runWithClient(async (client) => {
-            this.assertCurrent(epoch, signal);
-            const startTime = performance.now();
-            const documents = await client.runFindQuery(databaseName, collectionName, paginatedQueryParams);
-            return { documents, executionTimeMs: performance.now() - startTime };
-        }, epoch);
+        let ran: ConnectionBinding | undefined;
+        let ranAuthMethod: ClustersClient['authMethod'] | undefined;
+        let queryResult: { documents: WithId<Document>[]; executionTimeMs: number };
+        try {
+            queryResult = await this.runWithClient(async (client) => {
+                this.assertCurrent(epoch, signal);
+                const startTime = performance.now();
+                ran = client.binding;
+                ranAuthMethod = client.authMethod;
+                const documents = await client.runFindQuery(databaseName, collectionName, paginatedQueryParams);
+                return { documents, executionTimeMs: performance.now() - startTime };
+            }, epoch);
+        } catch (error) {
+            if (
+                error instanceof Error &&
+                ran !== undefined &&
+                classifyConnectionFailure(error, ranAuthMethod).generation === 'replaceOnNextForeground' &&
+                !signal?.aborted &&
+                ClustersClient.getEpoch(ran.clusterId) === epoch &&
+                ClustersClient.getBinding(ran.clusterId) === ran &&
+                !ClustersClient.hasReusableClient(ran.clusterId) &&
+                ClustersClient.getLatchReason(ran.clusterId) === undefined
+            ) {
+                throw new Error(`${error.message} ${l10n.t('Run the query again to retry the connection.')}`, {
+                    cause: error,
+                });
+            }
+            throw error;
+        }
+        const { documents, executionTimeMs } = queryResult;
 
         this.assertCurrent(epoch, signal);
         this.resetCachesIfUserQueryChanged(queryParams);

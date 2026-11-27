@@ -94,8 +94,7 @@ export class WorkerTokenRelay {
             driverAbortFlag instanceof SharedArrayBuffer && driverAbortFlag.byteLength === Int32Array.BYTES_PER_ELEMENT
                 ? new Int32Array(driverAbortFlag)
                 : undefined;
-        const shouldObserve = (): boolean =>
-            postStartup && authMechanism === 'MicrosoftEntraID' && (!abortFlag || Atomics.load(abortFlag, 0) === 0);
+        const shouldObserve = (): boolean => postStartup && authMechanism === 'MicrosoftEntraID';
         const surface = persistent ? 'shell' : 'playground';
         const assertDestination = (): void => {
             const decision = evaluateEntraDestinationFromSettings(connectionString);
@@ -245,10 +244,14 @@ export class WorkerTokenRelay {
                 traceAuthFlow('workerTokenRelay.completed', { mode, outcome: 'returned' }, requestId, activeTrace());
                 postResponse({ type: 'tokenResponse', requestId, accessToken });
                 if (shouldObserve()) {
-                    emitTokenRenewal(surface, {
-                        outcome: 'returned',
-                        lifetimeSeconds: jwtLifetimeSeconds(readJwtTimes(accessToken)),
-                    });
+                    if (abortFlag && Atomics.load(abortFlag, 0) !== 0) {
+                        emitTokenRenewal(surface, { outcome: 'timedOut' });
+                    } else {
+                        emitTokenRenewal(surface, {
+                            outcome: 'returned',
+                            lifetimeSeconds: jwtLifetimeSeconds(readJwtTimes(accessToken)),
+                        });
+                    }
                 }
             } catch (error) {
                 if (!canReply()) {
@@ -283,8 +286,10 @@ export class WorkerTokenRelay {
                         : {}),
                 });
                 if (shouldObserve() && !isUserCancelledError(error)) {
-                    let outcome: 'noSession' | 'identityMismatch' | 'failed' = 'failed';
-                    if (reason === 'signInRequired') {
+                    let outcome: 'noSession' | 'identityMismatch' | 'failed' | 'timedOut' = 'failed';
+                    if (abortFlag && Atomics.load(abortFlag, 0) !== 0) {
+                        outcome = 'timedOut';
+                    } else if (reason === 'signInRequired') {
                         outcome = 'noSession';
                     } else if (reason === 'identityMismatch') {
                         outcome = 'identityMismatch';

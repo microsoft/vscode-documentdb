@@ -76,6 +76,8 @@ entries are unpublished drafts and do not represent a shipped release.
   authentication, prompt only on a user click, never from a token callback. Separately, an Azure
   Resource Manager challenge can prompt during Azure Discovery. Subscription listing keeps
   successful results and records a sanitized diagnostic if an account or tenant cannot be listed.
+  A partial listing shows one warning with a **Show Output** action, and telemetry counts
+  skipped accounts and tenants without identifying them.
 - **Keep one client per cluster.** Surfaces resolve it per operation and check its identity
   fingerprint and generation. The fingerprint is keyed for equality within one extension host;
   neither the fingerprint nor its key is persisted.
@@ -109,6 +111,7 @@ entries are unpublished drafts and do not represent a shipped release.
 | [decisions.md](./decisions.md)                                                 | decisions |
 | [iterations/01-implementation-plan.md](./iterations/01-implementation-plan.md) | plan      |
 | [iterations/01-dev-plan.md](./iterations/01-dev-plan.md)                       | plan      |
+| [iterations/01-pr1136-final-review.md](./iterations/01-pr1136-final-review.md) | review    |
 
 ## Decisions index
 

@@ -11,10 +11,6 @@ import { debounce } from 'es-toolkit';
 import * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api'; // eslint-disable-line import/no-internal-modules
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import {
-    type ConnectionRecoveryAction,
-    type ConnectionRecoveryResponse,
-    type ConnectionUnavailableDetails,
-    type ConnectionUnavailableResponse,
     isConnectionUnavailableMessage,
     isConnectionUnavailableResponse,
 } from '../../_integration/connectionUnavailable';
@@ -24,6 +20,7 @@ import { Announcer } from '../../components/accessibility';
 import { DisconnectedOverlay } from '../../components/DisconnectedOverlay';
 import { MonacoEditor } from '../../components/MonacoEditor';
 import { useSelectiveContextMenuPrevention } from '../../components/useSelectiveContextMenuPrevention';
+import { explainRecoveryFailure, useBoundViewRecovery } from '../useBoundViewRecovery';
 import { ToolbarDocuments } from './components/toolbarDocuments';
 import { type DocumentsViewWebviewConfigurationType } from './documentsViewController';
 import './documentView.scss';
@@ -75,9 +72,6 @@ export const DocumentView = (): JSX.Element => {
     const [isDirty, setIsDirty] = useState(configuration.mode === 'add');
     const dirtyRef = useRef(configuration.mode === 'add');
     const [documentLoaded, setDocumentLoaded] = useState(configuration.mode === 'add');
-    const [unavailable, setUnavailable] = useState<ConnectionUnavailableDetails>();
-    const [recovering, setRecovering] = useState(false);
-    const [recoveryAnnouncement, setRecoveryAnnouncement] = useState<string>();
 
     // Ref for the Save button to manage focus
     const saveButtonRef = useRef<HTMLButtonElement>(null);
@@ -89,9 +83,25 @@ export const DocumentView = (): JSX.Element => {
     const pendingContentRef = useRef<string | null>(null);
     const settingContentRef = useRef(false);
     const editorRevisionRef = useRef(0);
-    const operationRevisionRef = useRef(0);
-    const unavailableRef = useRef<ConnectionUnavailableDetails | undefined>(undefined);
-    const disposedRef = useRef(false);
+    const onShowUnavailable = useCallback((): void => {
+        setIsLoading(false);
+    }, []);
+    const {
+        unavailable,
+        setUnavailable,
+        unavailableRef,
+        revisionRef: operationRevisionRef,
+        disposedRef,
+        recovering,
+        recoveryAnnouncement,
+        showUnavailable,
+        isOperationCurrent: isCurrentOperation,
+        handleUnavailableAction,
+    } = useBoundViewRecovery({
+        recovery: trpcClient.mongoClusters.documentView.recoverUnavailable,
+        common: trpcClient.common,
+        onShowUnavailable,
+    });
     const pendingDocumentIdRef = useRef(configuration.documentId || undefined);
     const updateDirty = (dirty: boolean): void => {
         if (dirtyRef.current === dirty) {
@@ -116,15 +126,6 @@ export const DocumentView = (): JSX.Element => {
         }
         settingContentRef.current = false;
     };
-    const showUnavailable = useCallback((failure: ConnectionUnavailableDetails): void => {
-        operationRevisionRef.current += 1;
-        unavailableRef.current = failure;
-        setUnavailable(failure);
-        setRecoveryAnnouncement(undefined);
-        setIsLoading(false);
-    }, []);
-    const isCurrentOperation = (revision: number): boolean =>
-        !disposedRef.current && revision === operationRevisionRef.current && unavailableRef.current === undefined;
     const startOperation = (): number | undefined => {
         if (unavailableRef.current) {
             setUnavailable(unavailableRef.current);
@@ -399,7 +400,7 @@ export const DocumentView = (): JSX.Element => {
                     return;
                 }
                 const cause = error instanceof Error ? error.message : String(error);
-                const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
+                const explained = await explainRecoveryFailure(trpcClient.common, cause);
                 if (!isCurrentOperation(revision)) {
                     return;
                 }
@@ -431,50 +432,6 @@ export const DocumentView = (): JSX.Element => {
     }
 
     function handleOnValidateRequest(): void {}
-
-    const handleUnavailableAction = (action: ConnectionRecoveryAction): void => {
-        const current = unavailableRef.current;
-        if (!current || recovering) {
-            return;
-        }
-
-        const revision = ++operationRevisionRef.current;
-        setRecovering(true);
-        void trpcClient.mongoClusters.documentView.recoverUnavailable
-            .mutate({ action })
-            .then((response: ConnectionUnavailableResponse | ConnectionRecoveryResponse) => {
-                if (disposedRef.current || revision !== operationRevisionRef.current || action === 'close') {
-                    return;
-                }
-                if ('unavailable' in response) {
-                    unavailableRef.current = response.unavailable;
-                    setUnavailable(response.unavailable);
-                    return;
-                }
-                unavailableRef.current = undefined;
-                setUnavailable(undefined);
-                setRecoveryAnnouncement(response.recovered.text);
-            })
-            .catch(async (error) => {
-                if (disposedRef.current || revision !== operationRevisionRef.current) {
-                    return;
-                }
-                const cause = error instanceof Error ? error.message : String(error);
-                const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
-                if (!disposedRef.current && revision === operationRevisionRef.current) {
-                    void trpcClient.common.displayErrorMessage.mutate({
-                        message: explained ?? l10n.t('Unable to recover the connection'),
-                        modal: false,
-                        cause,
-                    });
-                }
-            })
-            .finally(() => {
-                if (!disposedRef.current) {
-                    setRecovering(false);
-                }
-            });
-    };
 
     // Accessibility: Handle Escape key to exit Monaco editor
     const handleEscapeEditor = useCallback(() => {

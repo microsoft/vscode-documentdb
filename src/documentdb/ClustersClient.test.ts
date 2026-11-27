@@ -401,6 +401,52 @@ describe('regular connection startup diagnostics', () => {
         expect(runFind).toHaveBeenCalledOnce();
     });
 
+    it('adds retry guidance when the query marks its current client for replacement', async (): Promise<void> => {
+        const client = await ClustersClient.connectInteractive(clusterId);
+        const session = ClusterSession.getSession(await ClusterSession.initNewSession(clusterId));
+        const failure = new MongoNotConnectedError('private-query-connection-closed');
+        mockToArray.mockImplementationOnce(async () => {
+            poolEvents.emit('topologyClosed');
+            throw failure;
+        });
+
+        let caught: unknown;
+        try {
+            await session.runFindQueryWithCache('db', 'items', { filter: '{}' }, 1, 10);
+        } catch (error) {
+            caught = error;
+        }
+
+        expect(caught).toBeInstanceOf(Error);
+        if (!(caught instanceof Error)) {
+            throw new Error('Expected the query to fail.');
+        }
+        expect(caught).not.toBe(failure);
+        expect(caught.message).toBe('private-query-connection-closed Run the query again to retry the connection.');
+        expect(caught.cause).toBe(failure);
+        expect(ClustersClient.getBinding(clusterId)).toBe(client.binding);
+        expect(ClustersClient.hasReusableClient(clusterId)).toBe(false);
+
+        mockToArray.mockResolvedValueOnce([{ _id: 'retried' }]);
+        await expect(session.runFindQueryWithCache('db', 'items', { filter: '{}' }, 1, 10)).resolves.toBe(1);
+        expect(ClustersClient.getBinding(clusterId)).toMatchObject({
+            generation: client.generation + 1,
+        });
+    });
+
+    it('does not add retry guidance when classifier-equivalent replacement startup fails before the query', async (): Promise<void> => {
+        const client = await ClustersClient.connectInteractive(clusterId);
+        const session = ClusterSession.getSession(await ClusterSession.initNewSession(clusterId));
+        ClustersClient.reportFailure(client.binding, new MongoNotConnectedError('previous connection closed'));
+        const failure = new MongoNotConnectedError('private-replacement-connection-closed');
+        mockConnect.mockRejectedValueOnce(failure);
+
+        await expect(session.runFindQueryWithCache('db', 'items', { filter: '{}' }, 1, 10)).rejects.toBe(failure);
+        expect(failure.message).toBe('private-replacement-connection-closed');
+        expect(mockToArray).not.toHaveBeenCalled();
+        expect(mockConnect).toHaveBeenCalledTimes(2);
+    });
+
     it('rejects a changed identity before a session can submit a write', async (): Promise<void> => {
         await ClustersClient.connectInteractive(clusterId);
         const session = ClusterSession.getSession(await ClusterSession.initNewSession(clusterId));
@@ -491,9 +537,9 @@ describe('regular connection startup diagnostics', () => {
         const callback = vi
             .fn<Mongodb.OIDCCallbackFunction>()
             .mockResolvedValueOnce(first)
-            .mockRejectedValueOnce(missingSession)
+            .mockResolvedValueOnce({ accessToken: 'opaque-test-token' })
             .mockResolvedValueOnce(renewed)
-            .mockResolvedValueOnce({ accessToken: 'opaque-test-token' });
+            .mockRejectedValueOnce(missingSession);
         vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockResolvedValueOnce({
             connectionString: 'mongodb://private-host:27017',
             options: { authMechanismProperties: { OIDC_CALLBACK: callback } },
@@ -511,12 +557,12 @@ describe('regular connection startup diagnostics', () => {
         await expect(driverCallback!(params)).resolves.toBe(first);
         expect(expiry()).toBe(new Date(firstExpiry * 1000).toISOString());
         expect(JSON.stringify(ClustersClient.getDiagnosticsSnapshot())).not.toContain(first.accessToken);
-        await expect(driverCallback!(params)).rejects.toBe(missingSession);
-        expect(expiry()).toBe(new Date(firstExpiry * 1000).toISOString());
-        await expect(driverCallback!(params)).resolves.toBe(renewed);
-        expect(expiry()).toBe(new Date(renewedExpiry * 1000).toISOString());
         await driverCallback!(params);
         expect(expiry()).toBeUndefined();
+        await expect(driverCallback!(params)).resolves.toBe(renewed);
+        expect(expiry()).toBe(new Date(renewedExpiry * 1000).toISOString());
+        await expect(driverCallback!(params)).rejects.toBe(missingSession);
+        expect(expiry()).toBe(new Date(renewedExpiry * 1000).toISOString());
     });
 
     it('shows a superseded startup and a hold even without a cached client', async (): Promise<void> => {
@@ -747,6 +793,39 @@ describe('regular connection startup diagnostics', () => {
         expect(mockConnect).toHaveBeenCalledOnce();
     });
 
+    it.each([AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity])(
+        'replaces a bound %s client after a rejected callback on the next direct foreground acquisition',
+        async (authMethod): Promise<void> => {
+            CredentialCache.setAuthCredentials(clusterId, authMethod, 'mongodb://private-host:27017');
+            const handler =
+                authMethod === AuthMethodId.ManagedIdentity ? ManagedIdentityAuthHandler : MicrosoftEntraIDAuthHandler;
+            const error = new Error('private-token-lookup-failure');
+            const callback = vi.fn<Mongodb.OIDCCallbackFunction>().mockRejectedValueOnce(error);
+            vi.mocked(handler.prototype.configureAuth).mockResolvedValueOnce({
+                connectionString: 'mongodb://private-host:27017',
+                options: { authMechanismProperties: { OIDC_CALLBACK: callback } },
+                ...(authMethod === AuthMethodId.MicrosoftEntraID ? { verifiedIdentity } : {}),
+            });
+            const client = await ClustersClient.connectInteractive(clusterId);
+            const driverCallback = vi.mocked(MongoClient).mock.lastCall?.[1]?.authMechanismProperties?.OIDC_CALLBACK;
+            const params: Mongodb.OIDCCallbackParams = { version: 1, timeoutContext: new AbortController().signal };
+
+            await expect(driverCallback!(params)).rejects.toBe(error);
+            expect(callback).toHaveBeenCalledExactlyOnceWith(params);
+            expect(ClustersClient.getExistingClient(clusterId)).toBe(client);
+            expect(ClustersClient.hasReusableClient(clusterId)).toBe(false);
+            expect(ClustersClient.getLatchReason(clusterId)).toBeUndefined();
+            expect(mockClose).not.toHaveBeenCalled();
+
+            const replacement = await ClustersClient.getClient(clusterId);
+            expect(replacement).not.toBe(client);
+            expect(replacement.binding).toEqual({ ...client.binding, generation: client.generation + 1 });
+            expect(mockConnect).toHaveBeenCalledTimes(2);
+            expect(MongoClient).toHaveBeenCalledTimes(2);
+            expect(mockClose).toHaveBeenCalledExactlyOnceWith(true);
+        },
+    );
+
     it.each([
         ['transient', new TokenCallbackError(new Error('IMDS unavailable'), AuthMethodId.ManagedIdentity)],
         ['clientClosed', new MongoNotConnectedError('driver closed')],
@@ -796,17 +875,27 @@ describe('regular connection startup diagnostics', () => {
     });
 
     it('holds a sign-in miss for explicit recovery and does not let a pending replacement bypass it', async () => {
+        const signInMiss = new EntraSignInRequiredError('noSession');
+        const callback = vi.fn<Mongodb.OIDCCallbackFunction>().mockRejectedValueOnce(signInMiss);
+        vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockResolvedValueOnce({
+            connectionString: 'mongodb://private-host:27017',
+            options: { authMechanismProperties: { OIDC_CALLBACK: callback } },
+            verifiedIdentity,
+        });
         const client = await ClustersClient.connectInteractive(clusterId);
+        const driverCallback = vi.mocked(MongoClient).mock.lastCall?.[1]?.authMechanismProperties?.OIDC_CALLBACK;
         const pin = ClustersClient.getLastVerifiedIdentity(clusterId);
         const credentials = CredentialCache.getCredentials(clusterId);
-        ClustersClient.reportFailure(client.binding, new MongoNotConnectedError('driver closed'));
+        await expect(driverCallback!({ version: 1, timeoutContext: new AbortController().signal })).rejects.toBe(
+            signInMiss,
+        );
+        expect(ClustersClient.getExistingClient(clusterId)).toBe(client);
+        expect(mockClose).not.toHaveBeenCalled();
         const handshake = pauseNextConnect();
         const pending = ClustersClient.getClient(clusterId);
         await handshake.started;
 
-        expect(ClustersClient.reportFailure(client.binding, new EntraSignInRequiredError('noSession'))).toBe(
-            'signInRequired',
-        );
+        expect(ClustersClient.reportFailure(client.binding, signInMiss)).toBe('signInRequired');
         handshake.resolve();
         await expect(pending).rejects.toMatchObject({ reason: 'signInRequired' });
         await expect(ClustersClient.getClient(clusterId)).rejects.toMatchObject({ reason: 'signInRequired' });
@@ -1514,21 +1603,7 @@ describe('regular connection startup diagnostics', () => {
         vi.advanceTimersByTime(600_000);
         getSession.mockResolvedValueOnce({ ...session, accessToken: 'opaque-test-token' });
         await expect(lookup()).resolves.toEqual({ accessToken: 'opaque-test-token' });
-        getSession.mockResolvedValueOnce(undefined);
-        await expect(lookup()).rejects.toBeInstanceOf(EntraSignInRequiredError);
-
         await getCallback()({ ...params, timeoutContext: AbortSignal.abort() });
-        expect(
-            renewalEvents().map(({ telemetry, error }) => [telemetry.properties, telemetry.measurements, error]),
-        ).toEqual([
-            [
-                { surface: 'extension', renewalOutcome: 'returned', result: 'Succeeded' },
-                { tokenLifetimeSeconds: 3600, duration: 0 },
-                undefined,
-            ],
-            [{ surface: 'extension', renewalOutcome: 'returned', result: 'Succeeded' }, { duration: 0 }, undefined],
-            [{ surface: 'extension', renewalOutcome: 'noSession', result: 'Succeeded' }, { duration: 0 }, undefined],
-        ]);
 
         const didStart = deferred();
         const finish = deferred();
@@ -1545,11 +1620,11 @@ describe('regular connection startup diagnostics', () => {
         ClustersClient.unlatch(clusterId);
         finish.resolve();
         await spanningSave;
-        expect(renewalEvents()).toHaveLength(3);
+        expect(renewalEvents()).toHaveLength(2);
         expect(ClustersClient.getExistingClient(clusterId)).toBe(client);
 
         await lookup();
-        expect(renewalEvents()).toHaveLength(4);
+        expect(renewalEvents()).toHaveLength(3);
 
         const retiredLookup = getCallback();
         ClustersClient.reportFailure(client.binding, new MongoNotConnectedError('driver closed'));
@@ -1559,6 +1634,27 @@ describe('regular connection startup diagnostics', () => {
         const closedLookup = getCallback();
         await ClustersClient.deleteClient(clusterId);
         await closedLookup(params);
+        expect(renewalEvents()).toHaveLength(3);
+
+        await ClustersClient.getClient(clusterId);
+        getSession.mockResolvedValueOnce(undefined);
+        await expect(lookup()).rejects.toBeInstanceOf(EntraSignInRequiredError);
+        expect(
+            renewalEvents().map(({ telemetry, error }) => [telemetry.properties, telemetry.measurements, error]),
+        ).toEqual([
+            [
+                { surface: 'extension', renewalOutcome: 'returned', result: 'Succeeded' },
+                { tokenLifetimeSeconds: 3600, duration: 0 },
+                undefined,
+            ],
+            [{ surface: 'extension', renewalOutcome: 'returned', result: 'Succeeded' }, { duration: 0 }, undefined],
+            [
+                { surface: 'extension', renewalOutcome: 'returned', result: 'Succeeded' },
+                { tokenLifetimeSeconds: 3600, duration: 0 },
+                undefined,
+            ],
+            [{ surface: 'extension', renewalOutcome: 'noSession', result: 'Succeeded' }, { duration: 0 }, undefined],
+        ]);
         expect(renewalEvents()).toHaveLength(4);
     });
 

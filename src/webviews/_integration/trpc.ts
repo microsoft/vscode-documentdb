@@ -59,6 +59,7 @@ import {
 } from '../../deepLinks/deepLinkTelemetry';
 import { innermostCauseTypeOf } from '../../utils/telemetryErrorType';
 import { WEBVIEW_CONFIG } from './configuration';
+import { isConnectionUnavailableResponse } from './connectionUnavailable';
 
 /**
  * The single tRPC instance for this extension, bound to the framework's
@@ -168,6 +169,12 @@ const documentDbTelemetryRunner: TelemetryRunner<RpcEnrichment> = {
                 if (causeType !== undefined) {
                     actionContext.telemetry.properties.causeType = causeType;
                 }
+            } else if (
+                middlewareResult.ok &&
+                'data' in middlewareResult &&
+                isConnectionUnavailableResponse(middlewareResult.data)
+            ) {
+                actionContext.telemetry.properties.unavailableReason = middlewareResult.data.unavailable.reason;
             }
 
             return middlewareResult;

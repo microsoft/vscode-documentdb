@@ -330,6 +330,109 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         ]);
     });
 
+    it.each([false, true])(
+        'reports a pending driver timeout once without changing the callback (later epoch change=%s)',
+        async (changeEpoch): Promise<void> => {
+            let epoch = 0;
+            const onTokenLookup = vi.fn((): void => {
+                throw new Error('test lookup observer failure');
+            });
+            const onCallbackTokenObserved = vi.fn();
+            const { options } = await new MicrosoftEntraIDAuthHandler(
+                buildCredentials('mongodb://cluster.mongocluster.cosmos.azure.com/'),
+                {
+                    interactive: true,
+                    getTokenLookupEpoch: (): number => epoch,
+                    onTokenLookup,
+                    observer: { onCallbackTokenObserved },
+                },
+            ).configureAuth();
+            let finish!: (value: typeof session) => void;
+            getSessionFromVSCode.mockReturnValueOnce(
+                new Promise<typeof session>((resolve) => {
+                    finish = resolve;
+                }),
+            );
+            const controller = new AbortController();
+            const pending = options.authMechanismProperties!.OIDC_CALLBACK!({
+                version: 1,
+                timeoutContext: controller.signal,
+            });
+            await vi.waitFor(() => expect(getSessionFromVSCode).toHaveBeenCalledTimes(2));
+            expect(onTokenLookup).not.toHaveBeenCalled();
+            expect(onCallbackTokenObserved).not.toHaveBeenCalled();
+
+            expect(() => controller.abort()).not.toThrow();
+            expect(onTokenLookup.mock.calls).toEqual([[{ outcome: 'timedOut' }]]);
+            if (changeEpoch) {
+                epoch++;
+            }
+            finish(session);
+            await expect(pending).resolves.toEqual({ accessToken: session.accessToken });
+            expect(onTokenLookup.mock.calls).toEqual([[{ outcome: 'timedOut' }]]);
+            expect(onCallbackTokenObserved).toHaveBeenCalledExactlyOnceWith({
+                outcome: 'acquired',
+                accessToken: session.accessToken,
+                tenantId: 'tenant',
+            });
+            expect(getSessionFromVSCode.mock.calls[1]?.[2]).toEqual({ silent: true, account });
+        },
+    );
+
+    it('does not report a timeout after the pending lookup becomes stale', async (): Promise<void> => {
+        let epoch = 0;
+        const onTokenLookup = vi.fn();
+        const { options } = await new MicrosoftEntraIDAuthHandler(
+            buildCredentials('mongodb://cluster.mongocluster.cosmos.azure.com/'),
+            { interactive: true, getTokenLookupEpoch: (): number => epoch, onTokenLookup },
+        ).configureAuth();
+        let finish!: (value: typeof session) => void;
+        getSessionFromVSCode.mockReturnValueOnce(
+            new Promise<typeof session>((resolve) => {
+                finish = resolve;
+            }),
+        );
+        const controller = new AbortController();
+        const pending = options.authMechanismProperties!.OIDC_CALLBACK!({
+            version: 1,
+            timeoutContext: controller.signal,
+        });
+        await vi.waitFor(() => expect(getSessionFromVSCode).toHaveBeenCalledTimes(2));
+        epoch++;
+        controller.abort();
+        expect(onTokenLookup).not.toHaveBeenCalled();
+        finish(session);
+        await expect(pending).resolves.toEqual({ accessToken: session.accessToken });
+        expect(onTokenLookup).not.toHaveBeenCalled();
+    });
+
+    it.each(['returned', 'failed'] as const)(
+        'does not report a timeout after the callback has %s',
+        async (outcome): Promise<void> => {
+            const onTokenLookup = vi.fn();
+            const { options } = await new MicrosoftEntraIDAuthHandler(
+                buildCredentials('mongodb://cluster.mongocluster.cosmos.azure.com/'),
+                { interactive: true, getTokenLookupEpoch: (): number => 0, onTokenLookup },
+            ).configureAuth();
+            if (outcome === 'failed') {
+                getSessionFromVSCode.mockRejectedValueOnce(new Error('test provider failure'));
+            }
+            const controller = new AbortController();
+            const result = options.authMechanismProperties!.OIDC_CALLBACK!({
+                version: 1,
+                timeoutContext: controller.signal,
+            });
+            if (outcome === 'failed') {
+                await expect(result).rejects.toBeInstanceOf(TokenCallbackError);
+            } else {
+                await expect(result).resolves.toEqual({ accessToken: session.accessToken });
+            }
+            expect(onTokenLookup.mock.calls).toEqual([[{ outcome }]]);
+            controller.abort();
+            expect(onTokenLookup.mock.calls).toEqual([[{ outcome }]]);
+        },
+    );
+
     it('rechecks destination trust before the silent callback and applies the existing TLS hook', async (): Promise<void> => {
         let suffix: string | undefined = 'database.example.com';
         vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({

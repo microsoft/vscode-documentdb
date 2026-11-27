@@ -9,6 +9,7 @@ import { randomUUID } from 'crypto';
 import { type OIDCCallbackParams, type OIDCResponse } from 'mongodb';
 import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
+import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
 import { traceAuthFlow, traceAuthOperation, traceEntraDestination, type AuthTraceContext } from '../../utils/authTrace';
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { withTokenAcquisitionTiming, type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
@@ -73,6 +74,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         try {
             return this.policy.onTokenLookup ? this.policy.getTokenLookupEpoch?.() : undefined;
         } catch {
+            meterSilentCatch('MicrosoftEntraIDAuthHandler_getTokenLookupEpoch');
             // Telemetry eligibility must not affect authentication.
             return undefined;
         }
@@ -288,19 +290,25 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         if ((this.policy.onTokenLookup || this.policy.observer?.onCallbackTokenObserved) && properties && callback) {
             properties.OIDC_CALLBACK = async (params): Promise<OIDCResponse> => {
                 const lookupEpoch = this.getTokenLookupEpoch();
+                const signal = params.timeoutContext;
                 const notifyLookup = (observation: EntraTokenLookupObservation): void => {
                     if (
                         lookupEpoch !== undefined &&
-                        !params.timeoutContext?.aborted &&
+                        (observation.outcome === 'timedOut' || !signal?.aborted) &&
                         this.getTokenLookupEpoch() === lookupEpoch
                     ) {
                         try {
                             this.policy.onTokenLookup?.(observation);
                         } catch {
+                            meterSilentCatch('MicrosoftEntraIDAuthHandler_onTokenLookup');
                             // Observers never change the auth flow.
                         }
                     }
                 };
+                const onAbort = (): void => notifyLookup({ outcome: 'timedOut' });
+                if (lookupEpoch !== undefined && signal && !signal.aborted) {
+                    signal.addEventListener('abort', onAbort, { once: true });
+                }
                 try {
                     // Report acquisition only after the configured callback re-checks destination trust.
                     const response = await callback(params);
@@ -340,6 +348,8 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                         this.notify((observer) => observer.onCallbackTokenObserved?.({ outcome: 'failed', error }));
                     }
                     throw error;
+                } finally {
+                    signal?.removeEventListener('abort', onAbort);
                 }
             };
         }

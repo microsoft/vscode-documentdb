@@ -34,6 +34,7 @@ import { showClusterConnectFailure } from '../../documentdb/showClusterConnectFa
 import { ext } from '../../extensionVariables';
 import { SettingsService } from '../../services/SettingsService';
 import { ErrorExplanationService } from '../../services/errorExplanationService';
+import { isQuickStartClusterId } from '../../services/localQuickStart/quickStartTypes';
 import { settingsKeys } from '../../settingsKeys';
 import { regionToDisplayName } from '../../utils/regionToDisplayName';
 import { withDelayedProgress } from '../../utils/withProgress';
@@ -331,6 +332,21 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
 
     /** Only the two Azure RU item types can replace a rejected database key from ARM. */
     public readReplacementKey?(context: IActionContext): Promise<EphemeralClusterCredentials>;
+
+    public canRetryRejectedCredentials(): boolean {
+        const { clusterId, viewId } = this.cluster;
+        if (viewId === String(Views.ConnectionsView)) {
+            return isQuickStartClusterId(clusterId);
+        }
+        if (viewId !== String(Views.DiscoveryView) && viewId !== String(Views.AzureResourcesView)) {
+            return false;
+        }
+        const credentials = CredentialCache.getCredentials(clusterId);
+        return (
+            credentials !== undefined &&
+            (credentials.authMechanism ?? AuthMethodId.NativeAuth) === AuthMethodId.NativeAuth
+        );
+    }
 
     private classifyTreeFailure(error: unknown): ConnectionFailure {
         const method = CredentialCache.getCredentials(this.cluster.clusterId)?.authMechanism ?? AuthMethodId.NativeAuth;

@@ -504,6 +504,11 @@ Keep renewal, client age and entry generation, and ARM challenge queries for a s
 Do not add an instrumentation path or keep a socket-only comparison in this release. CP-5 still
 checks pre-release ingestion and records that the late-failure trend is unmeasured.
 
+**Bounded amendment (2026-11-26):** The operator accepted [final review F3](./iterations/01-pr1136-final-review.md#f3-blocked-webview-operations-look-like-successes-in-telemetry-medium).
+A valid unavailable RPC response now adds only the allowlisted `unavailableReason` property to
+the existing event. The SDK result does not change. The cross-release comparison stays
+deferred; CP-5 checks ingestion of the new property for a single prerelease.
+
 ## 0021. Key the in-memory connection fingerprint per extension host
 
 The operator chose HMAC-SHA-256 with a random key held only by the extension host.

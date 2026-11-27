@@ -5,9 +5,12 @@
 
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import {
+    MongoAzureError,
+    MongoGCPError,
     MongoNetworkError,
     MongoNetworkTimeoutError,
     MongoNotConnectedError,
+    MongoOIDCError,
     MongoOperationTimeoutError,
     MongoServerError,
     MongoServerSelectionError,
@@ -91,6 +94,37 @@ describe('classifyConnectionFailure', (): void => {
             });
         },
     );
+
+    it.each([
+        new MongoOIDCError('OIDC callback timed out after 60000ms.'),
+        new Error('Wrapper', { cause: selectionError(new MongoOIDCError('OIDC callback timed out after 12345ms.')) }),
+    ])('replaces a client after the driver callback timeout: %s', (error): void => {
+        expect(classifyConnectionFailure(error, entra)).toEqual({
+            kind: 'transient',
+            generation: 'replaceOnNextForeground',
+        });
+    });
+
+    it('does not reclassify other OIDC errors or derived error classes', (): void => {
+        for (const error of [
+            new MongoOIDCError('OIDC callback returned an invalid response.'),
+            new MongoOIDCError('OIDC callback timed out after 60000ms'),
+            new MongoOIDCError('Unexpected OIDC callback timed out after 60000ms.'),
+            new MongoOIDCError('OIDC callback timed out after 60000ms. extra'),
+            Object.assign(new MongoOIDCError(''), { message: undefined }),
+            new MongoAzureError('OIDC callback timed out after 60000ms.'),
+            new MongoGCPError('OIDC callback timed out after 60000ms.'),
+            new Error('OIDC callback timed out after 60000ms.'),
+        ]) {
+            expect(classifyConnectionFailure(error, entra)).toEqual({ kind: 'other', generation: 'keep' });
+        }
+    });
+
+    it('continues classifying the cause of a non-timeout OIDC error', (): void => {
+        const error = new MongoOIDCError('OIDC callback returned an invalid response.');
+        error.cause = network;
+        expect(classifyConnectionFailure(error, entra)).toEqual({ kind: 'transient', generation: 'keep' });
+    });
 
     it('classifies code 18 for native or RU key auth, including through real selection errors', (): void => {
         const error = selectionError(rejected, null, new MongoServerError({ code: 18 }));

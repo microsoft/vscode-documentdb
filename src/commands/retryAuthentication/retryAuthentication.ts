@@ -11,7 +11,6 @@ import { addEstablishedConnectionContext, ClustersClient } from '../../documentd
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { inferViewIdFromTreeId, Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
-import { isQuickStartClusterId } from '../../services/localQuickStart/quickStartTypes';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { ConnectionSourceUnavailableError } from '../../tree/documentdb/diagnosticCredentialRead';
 import { type TreeElement } from '../../tree/TreeElement';
@@ -26,7 +25,10 @@ const containsDelimited = (fullContext: string | undefined, value: string): bool
 };
 
 type RetryableTreeNode = TreeElement &
-    Partial<TreeElementWithContextValue & Pick<ClusterItemBase, 'lastConnectionFailureKind' | 'readReplacementKey'>> & {
+    Partial<
+        TreeElementWithContextValue &
+            Pick<ClusterItemBase, 'canRetryRejectedCredentials' | 'lastConnectionFailureKind' | 'readReplacementKey'>
+    > & {
         readonly cluster?: { readonly clusterId: string };
     };
 
@@ -89,14 +91,10 @@ export async function retryAuthentication(context: IActionContext, node: Retryab
         }
         if (latch === 'credentialsRejected') {
             if (!node.readReplacementKey) {
-                const view = getViewId(node);
-                const credentials = CredentialCache.getCredentials(clusterId);
-                const quickStart = view === Views.ConnectionsView && isQuickStartClusterId(clusterId);
-                const nativeDiscovery =
-                    (view === Views.DiscoveryView || view === Views.AzureResourcesView) &&
-                    credentials !== undefined &&
-                    (credentials.authMechanism ?? AuthMethodId.NativeAuth) === AuthMethodId.NativeAuth;
-                if ((!quickStart && !nativeDiscovery) || !ClustersClient.clearCredentialRejection(clusterId, epoch)) {
+                if (
+                    !node.canRetryRejectedCredentials?.() ||
+                    !ClustersClient.clearCredentialRejection(clusterId, epoch)
+                ) {
                     return;
                 }
                 CredentialCache.deleteCredentials(clusterId);

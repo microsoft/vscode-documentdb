@@ -11,9 +11,10 @@ import { window } from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
+import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
 import { DEFAULT_ALIAS, clusterId as quickStartClusterId } from '../../services/localQuickStart/quickStartTypes';
-import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
+import { ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { retryAuthentication } from './retryAuthentication';
 
 vi.mock('../../extensionVariables', () => ({
@@ -71,8 +72,20 @@ describe('retryAuthentication', () => {
     };
     const getTreeItem = vi.fn();
 
+    function withRetryCapability<T extends { cluster: { clusterId: string } }>(
+        node: T,
+        viewId: Views,
+    ): T & { cluster: { clusterId: string; viewId: Views }; canRetryRejectedCredentials(): boolean } {
+        return {
+            ...node,
+            cluster: { ...node.cluster, viewId },
+            canRetryRejectedCredentials: ClusterItemBase.prototype.canRetryRejectedCredentials,
+        };
+    }
+
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.mocked(CredentialCache.getCredentials).mockReset();
     });
 
     // The next connect.startup names the same attempt in previousFailedStartupCorrelationId.
@@ -170,24 +183,37 @@ describe('retryAuthentication', () => {
         await retryAuthentication(actionContext as never, node);
 
         expect(CredentialCache.deleteCredentials).toHaveBeenCalledExactlyOnceWith('ru');
+        expect(CredentialCache.getCredentials).not.toHaveBeenCalled();
         expect(node.readReplacementKey).toHaveBeenCalledTimes(1);
+        expect(CredentialCache.deleteCredentials).toHaveBeenCalledBefore(node.readReplacementKey);
+        expect(node.readReplacementKey).toHaveBeenCalledBefore(vi.mocked(ClustersClient.clearCredentialRejection));
+        expect(ClustersClient.clearCredentialRejection).toHaveBeenCalledExactlyOnceWith('ru', 0);
+        expect(ClustersClient.clearCredentialRejection).toHaveBeenCalledBefore(
+            vi.mocked(CredentialCache.setAuthCredentials),
+        );
         expect(CredentialCache.setAuthCredentials).toHaveBeenCalledExactlyOnceWith(
             'ru',
             AuthMethodId.NativeAuth,
             'mongodb://test',
             nativeAuthConfig,
         );
+        expect(CredentialCache.setAuthCredentials).toHaveBeenCalledBefore(
+            vi.mocked(ext.discoveryBranchDataProvider.refresh),
+        );
+        expect(ext.discoveryBranchDataProvider.resetNodeErrorState).toHaveBeenCalledBefore(
+            vi.mocked(ext.discoveryBranchDataProvider.refresh),
+        );
         expect(ext.discoveryBranchDataProvider.refresh).toHaveBeenCalledExactlyOnceWith(node);
     });
 
     it.each([
-        ['discoveryView', AuthMethodId.NativeAuth, true],
-        ['discoveryView', AuthMethodId.MicrosoftEntraID, false],
-        ['connectionsView', AuthMethodId.NativeAuth, false],
+        [Views.DiscoveryView, AuthMethodId.NativeAuth, true],
+        [Views.DiscoveryView, AuthMethodId.MicrosoftEntraID, false],
+        [Views.ConnectionsView, AuthMethodId.NativeAuth, false],
     ] as const)(
         'allows the existing discovery credential setup only for Native auth (%s, %s)',
         async (view, authMechanism, shouldRefresh): Promise<void> => {
-            const node = { id: `${view}/test`, cluster: { clusterId: 'test' }, getTreeItem };
+            const node = withRetryCapability({ id: `${view}/test`, cluster: { clusterId: 'test' }, getTreeItem }, view);
             vi.mocked(CredentialCache.getCredentials).mockReturnValueOnce({
                 clusterId: 'test',
                 connectionString: 'mongodb://test',
@@ -215,11 +241,143 @@ describe('retryAuthentication', () => {
         },
     );
 
+    it.each([
+        [
+            'native Azure Resources credentials',
+            {
+                id: '_subscriptions_test_resourceGroups_test_providers_Microsoft.DocumentDB_mongoClusters_native',
+                contextValue: 'treeItem_documentdbcluster;documentDbBranch;azureResourcesView',
+                cluster: { clusterId: 'native-resources' },
+                getTreeItem,
+            },
+            {
+                clusterId: 'native-resources',
+                connectionString: 'mongodb://native-resources',
+                authMechanism: AuthMethodId.NativeAuth,
+            },
+            'azureResources',
+            Views.AzureResourcesView,
+        ],
+        [
+            'implicit Native auth in Discovery',
+            {
+                id: 'discoveryView/azure/implicit-native',
+                contextValue: 'treeItem_documentdbcluster;discoveryView',
+                cluster: { clusterId: 'implicit-native' },
+                getTreeItem,
+            },
+            {
+                clusterId: 'implicit-native',
+                connectionString: 'mongodb://implicit-native',
+            },
+            'discovery',
+            Views.DiscoveryView,
+        ],
+        [
+            'missing credentials in Discovery',
+            {
+                id: 'discoveryView/azure/missing-credentials',
+                contextValue: 'treeItem_documentdbcluster;discoveryView',
+                cluster: { clusterId: 'missing-credentials' },
+                getTreeItem,
+            },
+            undefined,
+            undefined,
+            Views.DiscoveryView,
+        ],
+        [
+            'native credentials in Azure Workspace',
+            {
+                id: 'azureWorkspaceView/native-resource',
+                contextValue: 'treeItem_documentdbcluster;azureWorkspaceView',
+                cluster: { clusterId: 'workspace-native' },
+                getTreeItem,
+            },
+            {
+                clusterId: 'workspace-native',
+                connectionString: 'mongodb://workspace-native',
+                authMechanism: AuthMethodId.NativeAuth,
+            },
+            undefined,
+            Views.AzureWorkspaceView,
+        ],
+    ] as const)(
+        'characterizes rejected credential recovery for %s',
+        async (_description, nodeDefinition, credentials, refreshTarget, viewId): Promise<void> => {
+            const node = withRetryCapability(nodeDefinition, viewId);
+            vi.mocked(CredentialCache.getCredentials).mockReturnValueOnce(credentials);
+            vi.mocked(ClustersClient.getLatchReason).mockReturnValueOnce('credentialsRejected');
+            if (refreshTarget) {
+                vi.mocked(ClustersClient.clearCredentialRejection).mockReturnValueOnce(true);
+            }
+
+            await retryAuthentication(actionContext as never, node);
+
+            if (!refreshTarget) {
+                expect(ClustersClient.clearCredentialRejection).not.toHaveBeenCalled();
+                expect(CredentialCache.deleteCredentials).not.toHaveBeenCalled();
+                expect(CredentialCache.setAuthCredentials).not.toHaveBeenCalled();
+                expect(ClustersClient.deleteClient).not.toHaveBeenCalled();
+                expect(ext.connectionsBranchDataProvider.resetNodeErrorState).not.toHaveBeenCalled();
+                expect(ext.connectionsBranchDataProvider.refresh).not.toHaveBeenCalled();
+                expect(ext.discoveryBranchDataProvider.resetNodeErrorState).not.toHaveBeenCalled();
+                expect(ext.discoveryBranchDataProvider.refresh).not.toHaveBeenCalled();
+                expect(ext.azureResourcesRUBranchDataProvider.resetNodeErrorState).not.toHaveBeenCalled();
+                expect(ext.azureResourcesRUBranchDataProvider.refresh).not.toHaveBeenCalled();
+                expect(ext.azureResourcesVCoreBranchDataProvider.resetNodeErrorState).not.toHaveBeenCalled();
+                expect(ext.azureResourcesVCoreBranchDataProvider.refresh).not.toHaveBeenCalled();
+                expect(window.showErrorMessage).not.toHaveBeenCalled();
+                return;
+            }
+
+            expect(ClustersClient.clearCredentialRejection).toHaveBeenCalledExactlyOnceWith(node.cluster.clusterId, 0);
+            expect(CredentialCache.deleteCredentials).toHaveBeenCalledExactlyOnceWith(node.cluster.clusterId);
+            expect(ClustersClient.clearCredentialRejection).toHaveBeenCalledBefore(
+                vi.mocked(CredentialCache.deleteCredentials),
+            );
+
+            if (refreshTarget === 'discovery') {
+                expect(CredentialCache.deleteCredentials).toHaveBeenCalledBefore(
+                    vi.mocked(ext.discoveryBranchDataProvider.resetNodeErrorState),
+                );
+                expect(ext.discoveryBranchDataProvider.resetNodeErrorState).toHaveBeenCalledExactlyOnceWith(node.id);
+                expect(ext.discoveryBranchDataProvider.resetNodeErrorState).toHaveBeenCalledBefore(
+                    vi.mocked(ext.discoveryBranchDataProvider.refresh),
+                );
+                expect(ext.discoveryBranchDataProvider.refresh).toHaveBeenCalledExactlyOnceWith(node);
+                expect(ext.azureResourcesVCoreBranchDataProvider.resetNodeErrorState).not.toHaveBeenCalled();
+                expect(ext.azureResourcesVCoreBranchDataProvider.refresh).not.toHaveBeenCalled();
+            } else {
+                expect(CredentialCache.deleteCredentials).toHaveBeenCalledBefore(
+                    vi.mocked(ext.azureResourcesVCoreBranchDataProvider.resetNodeErrorState),
+                );
+                expect(ext.azureResourcesVCoreBranchDataProvider.resetNodeErrorState).toHaveBeenCalledExactlyOnceWith(
+                    node.id,
+                );
+                expect(ext.azureResourcesVCoreBranchDataProvider.resetNodeErrorState).toHaveBeenCalledBefore(
+                    vi.mocked(ext.azureResourcesVCoreBranchDataProvider.refresh),
+                );
+                expect(ext.azureResourcesVCoreBranchDataProvider.refresh).toHaveBeenCalledExactlyOnceWith(node);
+                expect(ext.discoveryBranchDataProvider.resetNodeErrorState).not.toHaveBeenCalled();
+                expect(ext.discoveryBranchDataProvider.refresh).not.toHaveBeenCalled();
+            }
+
+            expect(ext.connectionsBranchDataProvider.resetNodeErrorState).not.toHaveBeenCalled();
+            expect(ext.connectionsBranchDataProvider.refresh).not.toHaveBeenCalled();
+            expect(ext.azureResourcesRUBranchDataProvider.resetNodeErrorState).not.toHaveBeenCalled();
+            expect(ext.azureResourcesRUBranchDataProvider.refresh).not.toHaveBeenCalled();
+            expect(window.showErrorMessage).not.toHaveBeenCalled();
+        },
+    );
+
     it.each([true, false])(
         'reloads Quick Start with an empty cache only if the rejection can be cleared (%s)',
         async (cleared): Promise<void> => {
             const clusterId = quickStartClusterId(DEFAULT_ALIAS);
-            const node = { id: 'connectionsView/localQuickStart/instance', cluster: { clusterId }, getTreeItem };
+            const node = withRetryCapability(
+                { id: 'connectionsView/localQuickStart/instance', cluster: { clusterId }, getTreeItem },
+                Views.ConnectionsView,
+            );
             vi.mocked(ClustersClient.getEpoch).mockReturnValueOnce(7);
             vi.mocked(ClustersClient.getLatchReason).mockReturnValueOnce('credentialsRejected');
             vi.mocked(CredentialCache.getCredentials).mockReturnValueOnce(undefined);

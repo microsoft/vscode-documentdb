@@ -41,16 +41,13 @@ import { type ClusterHealthSample, type ClusterStorageStats } from '../../../doc
 import {
     isConnectionUnavailableMessage,
     isConnectionUnavailableResponse,
-    type ConnectionRecoveryAction,
-    type ConnectionRecoveryResponse,
-    type ConnectionUnavailableDetails,
-    type ConnectionUnavailableResponse,
 } from '../../_integration/connectionUnavailable';
 import { type ViewFirstDataOutcome } from '../../_integration/observability/viewLoadTelemetry';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { useViewLoadTelemetry } from '../../_integration/useViewLoadTelemetry';
 import { Announcer } from '../../components/accessibility';
 import { DisconnectedOverlay } from '../../components/DisconnectedOverlay';
+import { useBoundViewRecovery } from '../useBoundViewRecovery';
 import './clusterDashboard.scss';
 import { isInventoryChangedMessage, isNamespaceBusyMessage } from './clusterDashboardContextMenu';
 import { type ClusterDashboardWebviewConfigurationType } from './clusterDashboardController';
@@ -115,32 +112,32 @@ export const ClusterDashboard = (): JSX.Element => {
     const [inventoryViewState, setInventoryViewState] = useState<InventoryViewState>(() =>
         createInventoryViewState(configuration.selectedDatabaseName),
     );
-    const [unavailable, setUnavailable] = useState<ConnectionUnavailableDetails>();
     const [recoveryDialogDismissed, setRecoveryDialogDismissed] = useState(false);
-    const [recovering, setRecovering] = useState(false);
-    const [recoveryAnnouncement, setRecoveryAnnouncement] = useState<string>();
-    const unavailableRef = useRef<ConnectionUnavailableDetails | undefined>(undefined);
-    const operationRevisionRef = useRef(0);
-    const disposedRef = useRef(false);
 
-    const showUnavailable = useCallback((failure: ConnectionUnavailableDetails): void => {
-        operationRevisionRef.current += 1;
-        unavailableRef.current = failure;
-        setUnavailable(failure);
+    const onShowUnavailable = useCallback((): void => {
         setRecoveryDialogDismissed(false);
-        setRecovering(false);
-        setRecoveryAnnouncement(undefined);
         setIsRefreshingStorage(false);
         setIsManuallyRefreshingStorage(false);
         setIsCreatingNamespace(false);
         setIsExporting(false);
         setBusyNamespaces([]);
     }, []);
-    const isOperationCurrent = useCallback(
-        (revision: number): boolean =>
-            !disposedRef.current && revision === operationRevisionRef.current && unavailableRef.current === undefined,
-        [],
-    );
+    const {
+        unavailable,
+        unavailableRef,
+        revisionRef: operationRevisionRef,
+        disposedRef,
+        recovering,
+        recoveryAnnouncement,
+        showUnavailable,
+        isOperationCurrent,
+        handleUnavailableAction,
+    } = useBoundViewRecovery({
+        recovery: trpcClient.clusterDashboard.recoverUnavailable,
+        common: trpcClient.common,
+        onShowUnavailable,
+        resetRecoveringOnUnavailable: true,
+    });
     const startOperation = useCallback((revealUnavailable = false): number | undefined => {
         if (unavailableRef.current !== undefined) {
             if (revealUnavailable) {
@@ -724,53 +721,6 @@ export const ClusterDashboard = (): JSX.Element => {
             startOperation,
             trpcClient,
         ],
-    );
-
-    const handleUnavailableAction = useCallback(
-        (action: ConnectionRecoveryAction): void => {
-            const current = unavailableRef.current;
-            if (!current || recovering) {
-                return;
-            }
-
-            const revision = ++operationRevisionRef.current;
-            setRecovering(true);
-            void trpcClient.clusterDashboard.recoverUnavailable
-                .mutate({ action })
-                .then((response: ConnectionUnavailableResponse | ConnectionRecoveryResponse) => {
-                    if (disposedRef.current || revision !== operationRevisionRef.current || action === 'close') {
-                        return;
-                    }
-                    if ('unavailable' in response) {
-                        unavailableRef.current = response.unavailable;
-                        setUnavailable(response.unavailable);
-                        return;
-                    }
-                    unavailableRef.current = undefined;
-                    setUnavailable(undefined);
-                    setRecoveryAnnouncement(response.recovered.text);
-                })
-                .catch(async (error: unknown) => {
-                    if (disposedRef.current || revision !== operationRevisionRef.current) {
-                        return;
-                    }
-                    const cause = error instanceof Error ? error.message : String(error);
-                    const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
-                    if (!disposedRef.current && revision === operationRevisionRef.current) {
-                        void trpcClient.common.displayErrorMessage.mutate({
-                            message: explained ?? l10n.t('Unable to recover the connection'),
-                            modal: false,
-                            cause,
-                        });
-                    }
-                })
-                .finally(() => {
-                    if (!disposedRef.current && revision === operationRevisionRef.current) {
-                        setRecovering(false);
-                    }
-                });
-        },
-        [recovering, trpcClient],
     );
 
     useEffect(() => {

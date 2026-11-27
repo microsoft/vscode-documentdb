@@ -1161,6 +1161,7 @@ describe('WorkerSessionManager', () => {
                         ],
                         [{ surface, renewalOutcome: 'noSession', result: 'Succeeded' }, { duration: 0 }, undefined],
                         [{ surface, renewalOutcome: 'failed', result: 'Succeeded' }, { duration: 0 }, undefined],
+                        [{ surface, renewalOutcome: 'timedOut', result: 'Succeeded' }, { duration: 0 }, undefined],
                     ]);
                 } finally {
                     manager.dispose();

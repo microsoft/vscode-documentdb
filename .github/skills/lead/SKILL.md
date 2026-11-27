@@ -69,6 +69,14 @@ and in the final report. Never resolve an always-ask question yourself.
 
 A step a work item states explicitly (for example `npm run l10n`) overrides the Case 1 limits.
 
+**Endpoint.** At intake, identify what the operator asked to receive: local work, a draft PR, or a
+review handoff. Finishing the work items, passing local verification, reporting CI and marking a PR
+ready are separate endpoints; none implies the others. Wording such as "defer Case 2 until all work
+items are complete" sets the earliest point Case 2 may start; it does not authorize starting it.
+Ask only when the endpoint is genuinely unclear and the answer would change your next action. If
+the operator cannot be asked, stop at the narrowest endpoint the request supports and say so. See
+Checks for what each endpoint requires.
+
 ## Models
 
 The tier names here count as the operator naming the models. Coding subagents use the tiers. Your
@@ -225,18 +233,31 @@ Use one subagent per work item, except for coupled follow-ups and chains (above)
 
 ## Advisor
 
-**Initial planning consultation.** If the operator asks the advisor to analyze or revise the plan
-and prepare work items, do that before coding. Include the source plan, accepted decisions,
-constraints and the Models rules in the first packet. Ask for a numbered breakdown with each
-item's goal, scope, dependencies, interfaces where needed, acceptance criteria, tests, and a
-**recommended coding model (full model ID) with a short reason**. The advisor must assign a model
-to every item, not leave model selection as a later leader-only step.
+**Initial planning consultation.** When the operator asks for one, or the item-breakdown gate below
+applies, run it before coding. Include the source document, accepted decisions, constraints and the
+Models rules in the first packet. Scale its depth to how settled the plan is:
 
-Keep the response concise per item; the 250-word verdict limit below applies to ordinary decision
-packets, not the whole planning breakdown. Present and record the proposed items and model
-assignments with the plan. Preserve accepted decisions, operator-specified models, model permission
-gates and the Input approval rules; asking for plan analysis alone is not approval to implement
-new or changed scope.
+- **Accepted plan or review:** the document is the source of truth. Ask for a compact work-item
+  mapping: each item's scope, dependencies and file overlap, acceptance checks and the tests that
+  pin them, and a **recommended coding model (full model ID) with a short reason**. Ask for exact
+  interfaces only where they are needed. Ask for targeted source or dependency reads only where
+  the evidence could change the fix: uncertain driver or library behaviour, lifecycle or
+  concurrency invariants, cross-module contracts, or a real conflict with an accepted decision.
+  Spot-check straightforward items against the code without reopening their rationale. Blockers
+  and material assumptions need file:line evidence. Stop once the implementation questions are
+  answered.
+- **Unapproved plan, conflicting decisions, or unsettled design:** ask for a full numbered
+  breakdown: each item's goal, scope, dependencies, interfaces where needed, acceptance criteria,
+  tests and recommended coding model with a short reason, plus options and a recommendation where
+  the design is open. Conflicts with recorded decisions go to the operator (see Decisions).
+
+The advisor must assign a model to every item, not leave model selection as a later leader-only
+step. Keep the response concise per item; the 250-word verdict limit below applies to ordinary
+decision packets, not the whole planning breakdown. Present and record the proposed items and model
+assignments with the plan. A lighter consultation narrows the investigation, not the review
+standard: the advisor stays read-only, and the advisor gates, logic reviews, accepted decisions,
+operator-specified models, model permission gates and the Input approval rules all still apply.
+Asking for plan analysis alone is not approval to implement new or changed scope.
 
 **Advisor gates.** Consult the advisor, whatever your confidence, for:
 
@@ -368,8 +389,18 @@ Use the two verification cases in `copilot-instructions.md`. You decide when to 
 run checks after every commit.**
 
 - **Case 1** (build plus focused Vitest runs): run it after larger items or after a batch of items.
-- **Case 2:** run the full list **once, at the end**, when the work is being handed over for
-  review, or when the PR is already out of draft.
+  It is the only case for local work and for draft-only delivery.
+- **Local or draft-only endpoint:** once the requested work passes Case 1, push the draft head if
+  the operator authorized it, report the CI status for that head and stop. Do not wait for CI
+  unless asked. Completing every work item does not authorize Case 2 or marking the PR ready. If
+  pushing was not authorized, stop after the last permitted local step.
+- **Case 2:** only for an explicit review handoff, or when the PR is already out of draft. Run
+  the full list **once**, at the point `copilot-instructions.md` and the prepare-pull-request
+  skill specify, even if another handoff requirement is still missing. "Run Case 2 but leave the
+  PR in draft" is a valid endpoint: run it, report the results, and leave the PR in draft.
+  Marking a PR ready needs the operator's authorization (see Decisions) and every readiness gate:
+  Case 2 passed and the AI pre-review file committed with the author's decisions. Report manual,
+  workbench or live checks as pending unless they were actually performed.
 - Track `vscode.l10n.t` strings added or removed; if any, remind the operator that Case 2 needs
   `npm run l10n`.
 - If a check changes files (prettier, l10n), commit those changes separately (`chore: …`).
@@ -382,9 +413,11 @@ Before the report, check that the user documentation and the feature README stil
 changed behaviour. Search them for statements about what the items changed, not only for quoted
 strings, and fix them in a docs-only commit.
 
-End with a short report:
+End with a short report, then stop:
 
 - items that still need a workbench check, listed first, with the steps to try;
+- the endpoint reached (local, draft pushed, Case 2 run, ready) and, for a pushed head, its SHA
+  and CI status at report time;
 - each work item, its commit SHA, and its model;
 - the decisions made, who made each, with confidence;
 - the questions you escalated and the questions you parked;

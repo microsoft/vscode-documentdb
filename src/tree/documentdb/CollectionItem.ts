@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import { ClustersClient, type CollectionItemModel, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
+import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
 import { createConcurrencyLimiter, type LimitedRunner } from '../../utils/concurrencyLimiter';
 import { getCountPrefix } from '../../utils/countPrefix';
 import { formatDocumentCount } from '../../utils/formatDocumentCount';
@@ -138,6 +139,7 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
                 return client.estimateDocumentCount(dbName, collName);
             });
         } catch {
+            meterSilentCatch('CollectionItem_documentCount');
             // On error, fall through and let the post-await stale-check decide
             // whether to record the failure on this instance.
             result = null;
