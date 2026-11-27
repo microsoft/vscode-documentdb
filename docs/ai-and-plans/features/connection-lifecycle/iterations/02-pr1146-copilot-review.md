@@ -199,12 +199,23 @@ There is no evidence that a destructive command was actually executed against an
 different port, and node recreation. Unknown endpoint must never silently fall back to 27017.
 
 **Author decision (2026-11-27):** selected retaining the credential-free attempted VM endpoint
-with an overridden reader that fails closed when the endpoint is unknown. Implementation pending.
+with an overridden reader that fails closed when the endpoint is unknown.
 
 **Deferred by operator (2026-11-27):** skip C02 for this lead run. The accepted fix remains pending.
 
 **Deferral withdrawn by operator (2026-11-27):** the skip instruction was for a different
-project. C02's accepted fix is included in this lead run; implementation pending.
+project. C02's accepted fix is included in this lead run.
+
+**Done (2026-11-27), commit `e3bd77b21` (local, not pushed):** gpt-6.1-sol retains the sanitized
+actually attempted VM endpoint, including its selected port. Unknown/recreated nodes fail closed;
+later attempts update the reader; cache eviction and diagnostics-only reads do not redirect it.
+Added eight focused cases; three targeted files: 69 passed. Advised (claude-opus-5.5): final revision
+approved with high confidence. The leader rejected the first revision's silent sanitizer catch;
+the advisor confirmed that the already-parsed input can use normal outer failure handling.
+The revised new test verifies cleared endpoint, no client startup and bounded failure presentation
+instead of silent diagnostic failure. No pre-existing or TDD test was weakened.
+Real VM/provider node-lifetime checks and final batch build remain pending.
+[Thread reply](https://github.com/microsoft/vscode-documentdb/pull/1146#discussion_r4722266137).
 
 ## C03. Stale diagnostic Shell click has generic feedback
 
@@ -230,7 +241,14 @@ tracker just for this command. **Acceptance:** removed/changed supported nodes, 
 cancelled work, and epoch-only supersession without a false "connection changed" claim.
 
 **Author decision (2026-11-27):** selected the recommended supported-view refresh and typed
-removed/changed feedback, without speculative epoch attribution. Implementation pending.
+removed/changed feedback, without speculative epoch attribution.
+
+**Done (2026-11-27), commit `c952e9624` (local, not pushed):** mai-code-2 refreshes supported
+nodes and selects existing actionable copy only from the current removed/changed latch.
+Unknown, epoch-only and unsupported-view failures retain generic feedback; cancellation stays quiet
+and the original error is preserved. Added five focused cases; 34 passed.
+Advised (claude-opus-5.5): approved at 85% confidence after checking routing and reason attribution.
+Final batch build remains pending. [Thread reply](https://github.com/microsoft/vscode-documentdb/pull/1146#discussion_r4722266186).
 
 ## C04. Old Playground sign-in can warn a new connection
 
@@ -378,7 +396,14 @@ current feature intent expressly says later failures stay in the terminal. Do no
 reinterpret the approved boundary just because normal Shells deliberately notify.
 
 **Author decision (2026-11-27):** selected the anonymous-only host-notification guard, retaining
-normal Shell notifications and terminal feedback. Implementation pending.
+normal Shell notifications and terminal feedback.
+
+**Done (2026-11-27), commit `bd70e3298` (local, not pushed):** mai-code-2 guarded only the
+anonymous startup host notification. Terminal output, safe logging and retained retry prompt stay
+unchanged; normal Shell failures still notify. Added assertions to two existing tests rather than
+new suites; all 134 PTY tests passed. Advised design (claude-opus-5.5): 95% confidence; the leader's
+mechanical diff review confirmed the exact guard and retained behaviors at 95% confidence.
+Final batch build remains pending. [Thread reply](https://github.com/microsoft/vscode-documentdb/pull/1146#discussion_r4722276450).
 
 ## C09. Late Shell sign-in output corrupts the visible prompt
 
