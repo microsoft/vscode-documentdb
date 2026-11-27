@@ -1236,6 +1236,15 @@ passed. The existing VSIX is the G2 baseline, not an artifact containing these f
 > and reached `ten[9]`. Dark deep-nesting and dark/light arrays were ready and passed
 > without reported errors. Coding: 2.4 AIU on `mai-code-2` (5 requests).
 
+> **WI-G2-3 done (2026-11-27):** Only the value span clips and ellipsizes; the BSON indicator
+> stays beside it. A resized column showed 429 px of value text in a 16 px slot without
+> covering the glyph or changing the full DOM text. The short-value control fit, no focus
+> stops were added, and the dark literal-text and mixed-types contracts passed. The build
+> and 25 focused tests passed for the WI-G2-1/3 batch. Coding: 6.8 AIU on `mai-code-2`
+> (12 requests); shared checks: 0.2 AIU on `mai-code-2-flash` (3) and 14.2 AIU on
+> `gpt-6.1-terra` (19). The keyboard path to full values in View/JSON still merits a
+> workbench check, especially for projected rows without an actionable ID.
+
 ### Step 4
 
 **WI-10: automated sweep** · `mai-code-2` (fallback `gpt-6.1-sol`), runs by `mai-code-2-flash`

@@ -48,7 +48,11 @@ const useStyles = makeStyles({
         minBlockSize: '1lh',
     },
     value: {
+        flexShrink: 1,
         minWidth: 0,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
     },
     type: {
         flexShrink: 0,
