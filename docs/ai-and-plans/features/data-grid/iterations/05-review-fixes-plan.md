@@ -186,7 +186,24 @@ Document View type-fidelity work is included.
 
 ### 2. S1–S5 — simplify `CollectionView.tsx` (decision 0004)
 
-**Status:** Pending. Intended to preserve behavior; not yet proven by execution.
+**Status:** Implemented; focused and affected-source-browser evidence complete.
+
+> **Done (2026-11-27), commit `bf7285d3`:** applied S1-S5 and the matching Table/Tree
+> Tab-exit comments. Removed live `isRootId` metadata, redundant request guards and repeated
+> selection/action code while retaining stable callbacks, next-selection commands,
+> late-delete targeting and Escape/popup behavior. Added one active-query/held-reply
+> preservation contract; existing `TDD:` expectations were not changed (cell-test props
+> only removed `isRootId`). Decisions: operator approved the refactor in 0004; advisor
+> `claude-opus-5.5` approved the exact production revision at 85% and the unchanged runner
+> subset invocation at 85%; operator authorized the below-threshold baseline retry and
+> stable-viewport paging retry; leader kept the pre-existing README edit outside the code
+> commit. Focused tests: 29/29 unit and 146/146 harness; `npm run build` passed.
+> Affected source journeys completed across three themes: 21/21 ready, 228/228 assertions,
+> 411 RPC calls and zero errors, combining the six earlier passing dark routes with the
+> authorized dark paging retry and the remaining light/high-contrast runs. Existing gesture
+> failures and execution-setup retries remain recorded below; this was not one uninterrupted
+> clean run. Source request-invalidation reasoning is not host cache isolation or
+> render-to-effect runtime proof. No Case 2, formatting, packaging, push or thread reply.
 
 **Execution progress (2026-11-27):** `mai-code-2` added a new active-query/held-nested-reply
 preservation contract without changing existing `TDD:` assertions. Pre-refactor focused
@@ -242,6 +259,50 @@ all seven filtered routes reported `setTimeout is not defined`. The source-uncha
 helper was then rerun with the existing timer primitive, producing the affected-subset results
 recorded above. This execution-setup retry was previously omitted from the report; it is not
 a product fix or evidence of clean full-suite execution.
+
+**Implementation/review progress (2026-11-27):** `mai-code-2` returned the S1-S5 refactor.
+The advisor approved the exact diff at 85% confidence, including stable selection callbacks,
+next-selection command resolution and late-delete subtraction of the originally requested
+IDs from the latest page. Correct setter references: paging is in
+`ToolbarViewNavigation.tsx:25,54,81,105`; path navigation is in
+`ToolbarTableNavigation.tsx:34,60`; query action-bar setters are at
+`CollectionQueryActionBar.tsx:67,84,116`; editor execution is in `CollectionView.tsx:836`,
+and step-in at `:687`. Mount's initial-query setter remains cached-query-gated. The source
+invalidation argument is not a runtime proof of the render-to-effect interval or end-to-end
+host cache isolation. The advisor's README scope question is resolved by the existing file
+ownership instruction: leave the pre-existing user edit out of WI-G3-2. Post-refactor checks
+are still pending; no implementation commit yet.
+
+**Post-refactor checks (2026-11-27), `mai-code-2-flash`:** focused unit tests passed **29/29**,
+focused harness tests **146/146**, and `npm run build` passed. The exact seven-route dark
+subset stopped in `paging`: the `50` option became detached/unstable during the page-size
+gesture. Six routes were ready; **65/65 executed assertions passed**, with 89 RPC calls and
+one harness error. `no-id` and the new active-query contract passed. No failed assertion was
+recorded before the gesture error, and light/high-contrast were not run after it. The worker
+reported built-in viewport drift from 934 x 813 to 713 x 813 without issuing a resize.
+The advisor is assessing the bounded next step; no retry, test repair or implementation
+commit is authorized by this result, and clean three-theme evidence remains incomplete.
+
+**Paging retry gate (2026-11-27):** the advisor recommends a fixed-viewport, unchanged isolated
+dark `paging` retry at approximately 80% confidence. Source review found no new render/state
+ordering on the page-size path; a pre-existing loading/table-reply timing risk remains, and
+no cause is established from the gesture error alone. The operator authorized pinning the
+built-in page to 713 x 813 via its API if supported, avoiding panel interaction during the
+single retry. Unsupported viewport setup or repeat failure must stop rather than bypass the
+gate. A stable passing retry permits the already-authorized affected light/high-contrast
+journeys to resume; the advisor's suggestion of fresh authorization for those is not followed
+because G3-browser already provides it. No source or behavior-contract change is authorized.
+
+**Final affected-source-browser evidence (2026-11-27), `mai-code-2-flash`:** supported API setup
+pinned 713 x 813; the subsequent reported DPR was approximately 1.0 rather than the earlier
+1.5. The isolated dark `paging` retry passed **15/15 assertions**, with 73 RPC calls and
+zero errors. The preceding six dark routes contributed 61 passing assertions and 64 RPC
+calls. Light and high-contrast each then passed seven routes / 76 assertions / 137 RPC calls
+with zero errors. Combined completed coverage is **21/21 ready, 228/228 assertions, 411 RPC
+calls, zero errors**; the new active-query contract passed all three themes. No forced click,
+focus repair, source modification or unapproved retry was used. The existing server stayed
+running. The viewport setup and multi-attempt evidence must not be described as an unchanged
+single-run baseline at the original DPR.
 
 **Execution design, advised (`claude-opus-5.5`, 2026-11-27):** keep the selection callback stable
 because Table's effect cleanup depends on it. `commandsFor` is a module-local pure function;
@@ -517,6 +578,9 @@ AI-review/operator gates are not waived by completing these fixes.
 
 # Outcome
 
-Plan prepared against the current source and accepted dispositions. No product changes, runtime
-verification, commits, pushes or review replies were performed by this planning task. All work
-items remain pending. Case 2 checks, including `prettier-fix`, remain deferred until handover.
+Execution is in progress. WI-G3-1 (`8cc23e15`) and WI-G3-2 (`bf7285d3`) are implemented with
+their focused evidence recorded inline. WI-G3-3 through WI-G3-6 remain pending; WI-G3-7 requires
+push/reply authorization. Browser setup and intermittent gesture failures are retained above,
+including the distinction between combined affected-scenario coverage and clean full runs.
+No push, thread reply, package, formatting or gate release has occurred. #1142 remains draft
+Case 1; full Case 2 checks, including `prettier-fix`, remain deferred until handover.
