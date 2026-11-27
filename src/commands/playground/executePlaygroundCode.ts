@@ -421,6 +421,25 @@ function offerPlaygroundRecovery(
     const action = l10n.t('Sign in again');
     void vscode.window.showWarningMessage(recovery.message, action).then(async (choice) => {
         if (choice !== action || ClustersClient.getEpoch(clusterId) !== epoch || !stillOwnsAction()) {
+            if (
+                choice === action &&
+                vscode.workspace.textDocuments.some((d) => d.uri.toString() === documentUri.toString())
+            ) {
+                const reason = ClustersClient.getLatchReason(clusterId);
+                if (
+                    reason === 'connectionRemoved' ||
+                    reason === 'credentialsChanged' ||
+                    reason === 'identityChanged'
+                ) {
+                    const currentRecovery = getPlaygroundRecovery(
+                        new ConnectionUnavailableError(reason),
+                        connection,
+                    );
+                    if (currentRecovery) {
+                        void vscode.window.showWarningMessage(currentRecovery.message);
+                    }
+                }
+            }
             return;
         }
         await callWithTelemetryAndErrorHandling('playground.signInAgain', async (context) => {
@@ -429,6 +448,22 @@ function offerPlaygroundRecovery(
             try {
                 const result = await signInAgainForWorker(context, clusterId, identity);
                 if (!result || ClustersClient.getEpoch(clusterId) !== result.epoch || !stillOwnsAction()) {
+                    if (vscode.workspace.textDocuments.some((d) => d.uri.toString() === documentUri.toString())) {
+                        const reason = ClustersClient.getLatchReason(clusterId);
+                        if (
+                            reason === 'connectionRemoved' ||
+                            reason === 'credentialsChanged' ||
+                            reason === 'identityChanged'
+                        ) {
+                            const currentRecovery = getPlaygroundRecovery(
+                                new ConnectionUnavailableError(reason),
+                                connection,
+                            );
+                            if (currentRecovery) {
+                                void vscode.window.showWarningMessage(currentRecovery.message);
+                            }
+                        }
+                    }
                     return;
                 }
                 stopPlaygroundEvaluator(clusterId);

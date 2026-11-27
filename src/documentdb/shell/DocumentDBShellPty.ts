@@ -1001,6 +1001,16 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 revision !== this._disconnectRevision ||
                 ClustersClient.getEpoch(clusterId) !== epoch
             ) {
+                if (choice === action && !this._closed && revision === this._disconnectRevision) {
+                    const reason = ClustersClient.getLatchReason(clusterId);
+                    if (
+                        reason === 'connectionRemoved' ||
+                        reason === 'credentialsChanged' ||
+                        reason === 'identityChanged'
+                    ) {
+                        this.handleWorkerFailure(new ConnectionUnavailableError(reason));
+                    }
+                }
                 return;
             }
             try {
@@ -1015,6 +1025,16 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                         revision !== this._disconnectRevision ||
                         ClustersClient.getEpoch(clusterId) !== result.epoch
                     ) {
+                        if (!this._closed && revision === this._disconnectRevision) {
+                            const reason = ClustersClient.getLatchReason(clusterId);
+                            if (
+                                reason === 'connectionRemoved' ||
+                                reason === 'credentialsChanged' ||
+                                reason === 'identityChanged'
+                            ) {
+                                this.handleWorkerFailure(new ConnectionUnavailableError(reason));
+                            }
+                        }
                         return;
                     }
                     this._sessionManager.resetAfterSignIn(result.identity, result.epoch);

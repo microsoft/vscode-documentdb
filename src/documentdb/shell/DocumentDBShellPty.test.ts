@@ -398,6 +398,171 @@ describe('DocumentDBShellPty', () => {
             },
         );
 
+        describe('stale sign-in notifications', () => {
+            let chooseAction: (choice: vscode.MessageItem | undefined) => void;
+            let warning: MockInstance;
+            let modal: MockInstance;
+            let getLatchReason: MockInstance;
+            let getEpoch: MockInstance;
+            let connectionStateCalls: MockInstance[];
+
+            beforeEach(async (): Promise<void> => {
+                workerSignIn.pin = {
+                    kind: 'entra',
+                    providerId: 'microsoft',
+                    accountId: 'account',
+                    accountLabel: 'Account',
+                    tenantId: 'tenant',
+                };
+                workerSignIn.canRecover.mockReturnValue(true);
+                getEpoch = vi.spyOn(ClustersClient, 'getEpoch').mockReturnValue(0);
+                getLatchReason = vi.spyOn(ClustersClient, 'getLatchReason').mockReturnValue(undefined);
+                pty = new DocumentDBShellPty(defaultOptions);
+                pty.onDidWrite((data): void => {
+                    written += data;
+                });
+                pty.open(undefined);
+                await new Promise((resolve) => setTimeout(resolve, 10));
+                warning = vi.spyOn(vscode.window, 'showWarningMessage').mockImplementationOnce(
+                    () => new Promise<vscode.MessageItem | undefined>((resolve) => {
+                        chooseAction = resolve;
+                    }),
+                );
+                modal = vi.spyOn(vscode.window, 'showErrorMessage');
+                mockEvaluate.mockRejectedValueOnce(
+                    Object.assign(new Error('private session miss'), { name: 'EntraSignInRequiredError' }),
+                );
+                pty.handleInput('db.stats()');
+                pty.handleInput('\r');
+                await vi.waitFor(() => expect(warning).toHaveBeenCalledOnce());
+                await new Promise((resolve) => setTimeout(resolve, 10));
+                written = '';
+                mockInitialize.mockClear();
+                vi.mocked(ShellSessionManager).mockClear();
+                connectionStateCalls = [
+                    vi.spyOn(CredentialCache, 'getCredentials'),
+                    vi.spyOn(CredentialCache, 'setCredentials'),
+                    vi.spyOn(CredentialCache, 'deleteCredentials'),
+                    vi.spyOn(ClustersClient, 'getLastVerifiedIdentity'),
+                    vi.spyOn(ClustersClient, 'clearLastVerifiedIdentity'),
+                    vi.spyOn(ClustersClient, 'getClient'),
+                    vi.spyOn(ClustersClient, 'startAfterSignIn'),
+                    vi.spyOn(ClustersClient, 'deleteClient'),
+                    vi.spyOn(ClustersClient, 'latch'),
+                    vi.spyOn(ClustersClient, 'unlatch'),
+                    vi.spyOn(ClustersClient, 'invalidate'),
+                ];
+            });
+
+            it.each([
+                ['before click', 'connectionRemoved', 'This connection was removed. Open a shell from another connection.'],
+                ['before click', 'credentialsChanged', 'This shell is bound to the previous connection. Open a new shell from the tree.'],
+                ['before click', 'identityChanged', 'This shell is bound to the previous connection. Open a new shell from the tree.'],
+                ['during sign-in', 'connectionRemoved', 'This connection was removed. Open a shell from another connection.'],
+                ['during sign-in', 'credentialsChanged', 'This shell is bound to the previous connection. Open a new shell from the tree.'],
+                ['during sign-in', 'identityChanged', 'This shell is bound to the previous connection. Open a new shell from the tree.'],
+            ] as const)('explains %s %s on the existing terminal only', async (stage, reason, message): Promise<void> => {
+                if (stage === 'before click') {
+                    getEpoch.mockReturnValue(1);
+                    getLatchReason.mockReturnValue(reason);
+                } else {
+                    workerSignIn.recover.mockImplementationOnce(async (): Promise<undefined> => {
+                        getLatchReason.mockReturnValue(reason);
+                        return undefined;
+                    });
+                }
+
+                chooseAction('Sign in again' as unknown as vscode.MessageItem);
+                await vi.waitFor(() => expect(written).toContain(message));
+
+                expect(written.trim()).toBe(message);
+                expect(warning).toHaveBeenCalledExactlyOnceWith(
+                    'Microsoft sign-in expired for this shell. Sign in again to continue.',
+                    'Sign in again',
+                );
+                expect(modal).not.toHaveBeenCalled();
+                expect(workerSignIn.recover).toHaveBeenCalledTimes(stage === 'before click' ? 0 : 1);
+                expect(mockEvaluate).toHaveBeenCalledOnce();
+                expect(mockResetAfterSignIn).not.toHaveBeenCalled();
+                expect(mockInitialize).not.toHaveBeenCalled();
+                expect(ShellSessionManager).not.toHaveBeenCalled();
+                expect(mockKillWorker).not.toHaveBeenCalled();
+                expect(mockDispose).not.toHaveBeenCalled();
+                expect(workerSignIn.canRecover).toHaveBeenCalledOnce();
+                for (const call of connectionStateCalls) {
+                    expect(call).not.toHaveBeenCalled();
+                }
+            });
+
+            it.each([
+                ['before click', 'cancelled'],
+                ['before click', 'closed'],
+                ['before click', 'revision changed'],
+                ['before click', 'epoch only'],
+                ['before click', 'unproven no latch'],
+                ['before click', 'already completed'],
+                ['during sign-in', 'cancelled'],
+                ['during sign-in', 'closed'],
+                ['during sign-in', 'revision changed'],
+                ['during sign-in', 'epoch only'],
+                ['during sign-in', 'unproven no latch'],
+                ['during sign-in', 'already completed'],
+            ] as const)('keeps %s %s quiet without reviving the worker', async (stage, outcome): Promise<void> => {
+                const supersede = (): void => {
+                    if (outcome === 'closed') {
+                        pty.close();
+                    } else if (outcome === 'revision changed') {
+                        pty.disconnect();
+                    }
+                    getEpoch.mockReturnValue(2);
+                    getLatchReason.mockReturnValue(
+                        outcome === 'closed' || outcome === 'revision changed' || outcome === 'cancelled'
+                            ? 'connectionRemoved'
+                            : undefined,
+                    );
+                    written = '';
+                    mockDispose.mockClear();
+                    mockKillWorker.mockClear();
+                };
+                if (stage === 'before click') {
+                    supersede();
+                } else {
+                    workerSignIn.recover.mockImplementationOnce(async () => {
+                        supersede();
+                        if (outcome === 'cancelled') {
+                            const { UserCancelledError } = await import('@microsoft/vscode-azext-utils');
+                            throw new UserCancelledError('shell.signInAgain');
+                        }
+                        return outcome === 'unproven no latch'
+                            ? undefined
+                            : { identity: workerSignIn.pin, epoch: 1 };
+                    });
+                }
+
+                chooseAction(
+                    stage === 'before click' && outcome === 'cancelled'
+                        ? undefined
+                        : 'Sign in again' as unknown as vscode.MessageItem,
+                );
+                await new Promise((resolve) => setTimeout(resolve, 20));
+
+                expect(written).toBe('');
+                expect(warning).toHaveBeenCalledOnce();
+                expect(modal).not.toHaveBeenCalled();
+                expect(workerSignIn.recover).toHaveBeenCalledTimes(stage === 'before click' ? 0 : 1);
+                expect(mockEvaluate).toHaveBeenCalledOnce();
+                expect(mockResetAfterSignIn).not.toHaveBeenCalled();
+                expect(mockInitialize).not.toHaveBeenCalled();
+                expect(ShellSessionManager).not.toHaveBeenCalled();
+                expect(mockKillWorker).not.toHaveBeenCalled();
+                expect(mockDispose).not.toHaveBeenCalled();
+                expect(workerSignIn.canRecover).toHaveBeenCalledOnce();
+                for (const call of connectionStateCalls) {
+                    expect(call).not.toHaveBeenCalled();
+                }
+            });
+        });
+
         it('carries URL attribution into actual shell startup', async (): Promise<void> => {
             const deepLink = { deepLinkCorrelationId: 'link-attempt', deepLinkSource: 'docs' };
             pty = new DocumentDBShellPty({ ...defaultOptions, deepLink });
