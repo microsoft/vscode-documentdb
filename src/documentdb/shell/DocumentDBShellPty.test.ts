@@ -783,6 +783,96 @@ describe('DocumentDBShellPty', () => {
             written = ''; // Reset to capture only subsequent output
         });
 
+        it('should put a disconnect while idle on its own line with one new prompt', () => {
+            pty.disconnect();
+
+            expect(written).toBe('\r\nDisconnected\r\ntestdb> ');
+            expect(written.match(/Disconnected/g)).toHaveLength(1);
+            expect(written.match(/testdb> /g)).toHaveLength(1);
+        });
+
+        it('should preserve and visibly redraw partially typed single-line input after disconnect', async () => {
+            mockEvaluate.mockResolvedValue({
+                type: 'string',
+                printable: '"continued"',
+                durationMs: 1,
+            });
+            pty.handleInput('db.stats');
+            written = '';
+
+            pty.disconnect();
+
+            expect(written).toBe('\r\nDisconnected\r\ntestdb> \r\x1b[8Cdb.stats\x1b[J');
+            expect(written.match(/Disconnected/g)).toHaveLength(1);
+            expect(written.match(/testdb> /g)).toHaveLength(1);
+
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            expect(mockEvaluate).toHaveBeenCalledExactlyOnceWith('db.stats', 80);
+        });
+
+        it('should move to the end of a wrapped partial line before disconnect output', () => {
+            const input = 'db.collection.find()';
+            expect(input).toHaveLength(20);
+            pty.setDimensions({ columns: 20, rows: 24 });
+            pty.handleInput(input);
+            pty.handleInput('\x1b[H');
+            written = '';
+
+            pty.disconnect();
+
+            expect(written).toBe(
+                `\r\x1b[8C${input}\x1b[J\r\nDisconnected\r\ntestdb> \r\x1b[8C${input}\x1b[J`,
+            );
+            expect(mockEvaluate).not.toHaveBeenCalled();
+        });
+
+        it('should stop an evaluation without an extra newline or late output after disconnect', async () => {
+            let rejectEvaluation: (error: Error) => void = () => {
+                throw new Error('Expected evaluation to be pending');
+            };
+            mockEvaluate.mockImplementation(
+                () =>
+                    new Promise((_resolve, reject) => {
+                        rejectEvaluation = reject;
+                    }),
+            );
+
+            pty.handleInput('db.test.find()');
+            pty.handleInput('\r');
+            written = '';
+            pty.disconnect();
+
+            expect(written).toBe('Disconnected\r\ntestdb> ');
+            rejectEvaluation(new Error('Worker terminated'));
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            expect(written).toBe('Disconnected\r\ntestdb> ');
+            expect(mockEvaluate).toHaveBeenCalledExactlyOnceWith('db.test.find()', 80);
+        });
+
+        it('should keep prior multi-line output but discard the pending line on disconnect', async () => {
+            pty.handleInput('db.test.find({');
+            pty.handleInput('\r');
+            pty.handleInput('name: "partial"');
+            const priorOutput = written;
+
+            pty.disconnect();
+
+            const disconnectOutput = written.slice(priorOutput.length);
+            expect(written.startsWith(priorOutput)).toBe(true);
+            expect(disconnectOutput).toBe('\r\nDisconnected\r\ntestdb> ');
+
+            mockEvaluate.mockResolvedValue({
+                type: null,
+                printable: '"fresh"',
+                durationMs: 1,
+            });
+            pty.handleInput('fresh()');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            expect(mockEvaluate).toHaveBeenCalledExactlyOnceWith('fresh()', 80);
+        });
+
         it('should show new prompt on empty Enter', async () => {
             pty.handleInput('\r');
             await new Promise((resolve) => setTimeout(resolve, 10));

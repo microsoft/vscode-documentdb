@@ -285,16 +285,28 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     /** Keep the terminal and its scrollback, but stop the database worker. */
     public disconnect(): void {
+        const wasEvaluating = this._evaluating;
+        const partialInput =
+            !wasEvaluating && !this._inputHandler.isInMultiLineMode ? this._inputHandler.getBuffer() : '';
+
         this._disconnectRevision += 1;
+        this.clearGhostState();
         this._spinner?.stop();
         this._spinner = undefined;
         this._evaluating = false;
         this._inputHandler.clearPendingInput();
+        if (!wasEvaluating) {
+            this._inputHandler.handleInput('\x1b[F');
+            this.writeLine('');
+        }
         this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Disconnected')));
         this._sessionManager.killWorker();
         this._inputHandler.setEnabled(true);
         if (!this._closed) {
             this.showPrompt();
+            if (partialInput.length > 0) {
+                this._inputHandler.insertText(partialInput);
+            }
         }
     }
 
