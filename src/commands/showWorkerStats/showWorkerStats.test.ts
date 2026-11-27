@@ -119,7 +119,7 @@ it('does not print identifying or credential values that are not worker fields',
 
     showWorkerStats({} as IActionContext);
 
-    const output = vi.mocked(ext.outputChannel.appendLog).mock.calls.flat().join('\n');
+    const output = JSON.stringify(vi.mocked(ext.outputChannel.appendLog).mock.calls);
     expect(output).toContain('Username: existing-username');
     expect(output).not.toContain('password');
     expect(output).not.toContain('secret-access-token');

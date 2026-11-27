@@ -94,10 +94,10 @@ async function signInAgainInternal(
         closedReported = true;
         if (node) {
             if (
-                node.cluster.viewId !== Views.ConnectionsView &&
-                node.cluster.viewId !== Views.DiscoveryView &&
+                node.cluster.viewId !== String(Views.ConnectionsView) &&
+                node.cluster.viewId !== String(Views.DiscoveryView) &&
                 !(
-                    node.cluster.viewId === Views.AzureResourcesView &&
+                    node.cluster.viewId === String(Views.AzureResourcesView) &&
                     /\bruBranch\b|\bdocumentDbBranch\b/i.test(node.contextValue)
                 )
             ) {

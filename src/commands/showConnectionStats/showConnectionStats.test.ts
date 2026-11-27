@@ -103,7 +103,7 @@ it('does not expose values outside the diagnostics fields', (): void => {
 
     showConnectionStats({} as IActionContext);
 
-    const output = vi.mocked(ext.outputChannel.appendLog).mock.calls.flat().join('\n');
+    const output = JSON.stringify(vi.mocked(ext.outputChannel.appendLog).mock.calls);
     expect(output).not.toContain('password');
     expect(output).not.toContain('secret-access-token');
     expect(output).not.toContain('mongodb://');

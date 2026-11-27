@@ -50,7 +50,7 @@ describe('tree disconnect recovery', () => {
                 const context = actionContext();
                 const node = clusterNode();
 
-                await command(context, node);
+                command(context, node);
 
                 expect(ClustersClient.getLatchReason).toHaveBeenCalledWith('stable-cluster');
                 expect(refreshAuthenticationNode).toHaveBeenCalledExactlyOnceWith(node);
@@ -103,7 +103,7 @@ describe('tree disconnect recovery', () => {
     it('disconnects the stable identity and delegates its single refresh to teardown', async (): Promise<void> => {
         const node = clusterNode();
         vi.mocked(teardownConnection).mockImplementationOnce(async (_clusterId, _reason, refresh): Promise<void> => {
-            await refresh?.();
+            refresh?.();
         });
 
         await disconnect(actionContext(), node);
@@ -139,7 +139,7 @@ describe('tree disconnect recovery', () => {
                     UserCancelledError,
                 );
             } else {
-                await command(actionContext(), clusterNode(Views.AzureWorkspaceView));
+                command(actionContext(), clusterNode(Views.AzureWorkspaceView));
             }
 
             expect(refreshAuthenticationNode).not.toHaveBeenCalled();

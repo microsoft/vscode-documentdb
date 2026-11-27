@@ -27,10 +27,10 @@ export async function disconnect(context: IActionContext, node?: TreeElement): P
     const reason = ClustersClient.getLatchReason(clusterId);
     if (!ClustersClient.exists(clusterId) || reason) {
         if (
-            node.cluster.viewId !== Views.ConnectionsView &&
-            node.cluster.viewId !== Views.DiscoveryView &&
+            node.cluster.viewId !== String(Views.ConnectionsView) &&
+            node.cluster.viewId !== String(Views.DiscoveryView) &&
             !(
-                node.cluster.viewId === Views.AzureResourcesView &&
+                node.cluster.viewId === String(Views.AzureResourcesView) &&
                 /\bruBranch\b|\bdocumentDbBranch\b/i.test(node.contextValue)
             )
         ) {
@@ -59,10 +59,10 @@ export function connectDisconnected(context: IActionContext, node?: TreeElement)
     const reason = ClustersClient.getLatchReason(node.cluster.clusterId);
     if (reason !== 'userDisconnected') {
         if (
-            node.cluster.viewId !== Views.ConnectionsView &&
-            node.cluster.viewId !== Views.DiscoveryView &&
+            node.cluster.viewId !== String(Views.ConnectionsView) &&
+            node.cluster.viewId !== String(Views.DiscoveryView) &&
             !(
-                node.cluster.viewId === Views.AzureResourcesView &&
+                node.cluster.viewId === String(Views.AzureResourcesView) &&
                 /\bruBranch\b|\bdocumentDbBranch\b/i.test(node.contextValue)
             )
         ) {

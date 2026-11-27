@@ -16,12 +16,12 @@ import { ErrorExplanationService } from '../services/errorExplanationService';
 import { registerCommandWithTreeNodeUnwrappingAndDiagnostics, UserFacingError } from './commandErrorHandling';
 
 vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('@microsoft/vscode-azext-utils')>();
+    const actual = await importOriginal<Record<string, unknown>>();
     return { ...actual, registerCommand: vi.fn() };
 });
 
 vi.mock('vscode', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('vscode') & { default: Record<string, unknown> }>();
+    const actual = await importOriginal<Record<string, unknown> & { default: Record<string, unknown> }>();
     // The shared VS Code mock omits this constructor, which the real parseError uses.
     class CancellationError extends Error {}
     actual.default.CancellationError = CancellationError;
@@ -78,7 +78,7 @@ describe('tree command failure feedback', () => {
 
     it('shows one translated tree modal with separate detail and rethrows the original error', async () => {
         const cause = Object.freeze(new Error('Original cause'));
-        const error = Object.freeze(new Error('Driver failure', { cause }));
+        const error: Error = Object.freeze(new Error('Driver failure', { cause }));
         const handler = vi.fn(() => {
             throw error;
         });
@@ -106,9 +106,7 @@ describe('tree command failure feedback', () => {
         { error: new Error('Driver failure'), detail: 'Driver failure' },
         { error: { error: { message: 'Structured driver failure' } }, detail: 'Structured driver failure' },
     ])('shows one fallback tree modal with parsed detail: $detail', async ({ error, detail }) => {
-        const command = registerHandler(() => {
-            throw error;
-        });
+        const command = registerHandler(vi.fn().mockRejectedValue(error));
 
         await expect(command(context, node, [node])).rejects.toBe(error);
 
@@ -221,9 +219,7 @@ describe('tree command failure feedback', () => {
     ])('rethrows cancellation silently without changing suppression: %#', async ({ error, suppressDisplay }) => {
         context.errorHandling.suppressDisplay = suppressDisplay;
         vi.mocked(ErrorExplanationService.explain).mockResolvedValue(explanation);
-        const command = registerHandler(() => {
-            throw error;
-        });
+        const command = registerHandler(vi.fn().mockRejectedValue(error));
 
         await expect(command(context, node, [node])).rejects.toBe(error);
 
