@@ -370,7 +370,17 @@ Do not change the separately approved behavior that drops incomplete multiline/q
 input on Disconnect. No reconnect or replay is part of this restoration.
 
 **Author decision (2026-11-27):** selected restoring the partial input's logical cursor together
-with its text through the wrap-aware renderer, shared with C09. Implementation pending.
+with its text through the wrap-aware renderer, shared with C09.
+
+**Done (2026-11-27), commit `ce2cf8d8b` (local, not pushed):** mai-code-2 added `restoreLine`
+and captures the idle single-line cursor before Disconnect moves to End. The next edit submits
+the intended command; multiline/evaluating discard and C08's notification guard are unchanged.
+Added five focused cases; input/PTY suites: 228 passed. The wrapped Home exact-output expectation
+was updated for the selected cursor restoration; the End-position assertion stays unchanged.
+Advised (claude-opus-5.5): approved at 90% confidence after checking wrap-row tracking and no replay.
+The leader requested a C09 render-origin refinement before dispatch, because a newly emitted prompt
+must not inherit the old wrapped cursor row. Final batch build and live terminal checks remain pending.
+[Thread reply](https://github.com/microsoft/vscode-documentdb/pull/1146#discussion_r4722303779).
 
 ## C08. Anonymous startup failure also notifies the host
 
