@@ -547,6 +547,7 @@ Case 2 is also where the AI pre-review in [§6](#6-ai-assisted-review-workflow) 
 - **`npm run l10n`** regenerates the localization bundle from the strings passed to `vscode.l10n.t()`. **Never resolve a conflict in `l10n/bundle.l10n.json` by hand** — the file is generated. Take either side, or delete it, then re-run `npm run l10n` and commit the result.
 - **`npm run l10n:check`** validates localization against the source without regenerating files. Run it even when no strings changed, matching CI.
 - **`npm run prettier-fix`** covers Markdown as well as source, so documentation formatting does not drift whenever a file is touched. Fenced code blocks are left exactly as authored: they are often partial or illustrative, and reformatting them to the Markdown tab width would leave every example disagreeing with the code it documents.
+- **`npm run lint`** checks the current checkout, including new source files, and skips nested Git worktrees and clones. To lint another worktree, run the command from that worktree.
 - **`npm run typecheck:tests`** checks every participating workspace's tests with its own TypeScript configuration, including strict checks that the root build and Vitest runtime do not cover.
 - **`npm run package`** catches Vite host and webview bundling issues and missing assets that unit tests alone will not surface.
 
