@@ -9,6 +9,49 @@
         block-size: 100%;
         min-block-size: 0;
         scrollbar-gutter: stable;
+
+        .treeExpanderButton,
+        .treeExpanderSlot {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            inline-size: 24px;
+            block-size: 24px;
+            flex: 0 0 24px;
+            vertical-align: middle;
+        }
+
+        .treeExpanderButton {
+            appearance: none;
+            margin: 0;
+            padding: 0;
+            border: 0;
+            background: transparent;
+            color: currentColor;
+            cursor: pointer;
+        }
+
+        .treeExpanderIcon {
+            color: currentColor;
+            transform: rotate(0deg);
+        }
+
+        .treeExpanderButton[aria-expanded='true'] .treeExpanderIcon {
+            transform: rotate(90deg);
+        }
+
+        @media (prefers-reduced-motion: no-preference) {
+            .treeExpanderIcon {
+                transition: transform 100ms ease-out;
+            }
+        }
+
+        @media (forced-colors: active) {
+            .treeExpanderIcon {
+                color: CanvasText;
+            }
+        }
     }
 
     // RDG remembers its active cell on blur. That memory is not a second focus indicator.

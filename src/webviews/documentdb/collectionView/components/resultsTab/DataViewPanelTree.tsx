@@ -5,6 +5,7 @@
 
 import * as React from 'react';
 import * as l10n from '@vscode/l10n';
+import { ChevronRight12Regular } from '@fluentui/react-icons';
 import {
     Cell,
     DataGrid,
@@ -35,6 +36,7 @@ export const DataViewPanelTree = ({ nodes }: DataViewPanelTreeProps): React.JSX.
                         <span aria-hidden="true">{'\u00a0\u00a0'.repeat(row.depth)}</span>
                         {row.expandable ? (
                             <button
+                                className="treeExpanderButton"
                                 type="button"
                                 tabIndex={-1}
                                 aria-label={
@@ -58,10 +60,13 @@ export const DataViewPanelTree = ({ nodes }: DataViewPanelTreeProps): React.JSX.
                                     setExpanded(row, !expandedKeys.has(row.key));
                                 }}
                             >
-                                <span aria-hidden="true">{expandedKeys.has(row.key) ? '▾' : '▸'}</span>
+                                <ChevronRight12Regular
+                                    className="treeExpanderIcon"
+                                    aria-hidden="true"
+                                />
                             </button>
                         ) : (
-                            <span aria-hidden="true">{'\u00a0\u00a0'}</span>
+                            <span className="treeExpanderSlot" aria-hidden="true" />
                         )}
                         {row.field}
                     </>

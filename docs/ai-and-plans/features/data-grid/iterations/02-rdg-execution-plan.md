@@ -1236,6 +1236,15 @@ passed. The existing VSIX is the G2 baseline, not an artifact containing these f
 > and reached `ten[9]`. Dark deep-nesting and dark/light arrays were ready and passed
 > without reported errors. Coding: 2.4 AIU on `mai-code-2` (5 requests).
 
+> **WI-G2-2 done (2026-11-27):** The transparent 24 px expander and leaf slot align the
+> field text. The Fluent chevron rotates 90° over 100 ms, with no transition when reduced
+> motion is enabled. Enter and pointer activation retain Field focus. The build,
+> 102 targeted tests and both dark Tree contracts passed. After a scoped `CanvasText`
+> correction, the icon measured 21:1 against the actual gridcell in both emulated
+> forced-colors palettes, including hover and expanded states. Windows contrast themes
+> remain a packaged workbench check. Coding: 7.0 AIU on `mai-code-2` (15 requests);
+> corrective browser checks: 5.4 AIU on `gpt-6.1-terra` (7), plus the shared checks below.
+
 > **WI-G2-3 done (2026-11-27):** Only the value span clips and ellipsizes; the BSON indicator
 > stays beside it. A resized column showed 429 px of value text in a 16 px slot without
 > covering the glyph or changing the full DOM text. The short-value control fit, no focus
