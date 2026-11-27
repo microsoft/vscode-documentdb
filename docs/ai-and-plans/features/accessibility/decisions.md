@@ -17,6 +17,8 @@ created: 2026-11-27
 | 0004 | After a run, focus moves to the result only in screen-reader mode         | Accepted | Picks option B for `auto`; rejects C' as the default        | 2026-11-27 | —   |
 | 0005 | A dedicated Accessibility page in the user manual                         | Accepted | New; not in the plan                                        | 2026-11-27 | —   |
 | 0006 | Work items 4-6 and #768 proceed as recommended in the plan                | Accepted | Accepted as proposed                                        | 2026-11-27 | —   |
+| 0007 | Playground telemetry groups indistinguishable invocation surfaces       | Accepted | Amends the plan's five-surface attribution requirement       | 2026-11-27 | —   |
+| 0008 | Declare keyborg directly for the Document focus helper                   | Accepted | Rejects relying on the transitive dependency                 | 2026-11-27 | —   |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -144,3 +146,30 @@ the extension offers.
 - #770: a shared helper that focuses an element with a visible indicator.
 - #769: reproduce first; record it under upstream tracking if the F6 target belongs to
   VS Code.
+
+## 0007 — Playground telemetry groups indistinguishable invocation surfaces
+
+**Decision.** During `/lead` implementation on 2026-11-27, the operator approved
+"honest grouped values (CodeLens, editor menu, screen-reader shortcut, other)" and
+approved recording the decision. Use bounded attribution rather than infer whether
+indistinguishable arguments came from the editor title, context menu, palette or
+ordinary shortcut. Preserve the existing `playgroundCodeLens` value.
+
+**Reason for the proposal.** The Opus advisor found that VS Code passes the same
+argument shapes for some entry points. Grouping avoids reporting an unobserved
+surface as fact. This amends the separate-surface requirement in the plan's
+section 3.2; it does not change command availability or user behavior.
+
+**Rejected alternative.** Add distinct command entry points solely to identify all
+five surfaces. The operator selected grouped attribution instead.
+
+## 0008 — Declare keyborg directly for the Document focus helper
+
+**Decision.** During `/lead` implementation on 2026-11-27, the operator selected
+"Declare keyborg as a direct dependency" rather than import the installed
+transitive dependency without declaring it.
+
+**Additional instruction.** Inspect `vscode-cosmosdb` for potential focus-helper
+ideas, not as best practice. Any relevant idea must still fit this extension's
+Fluent UI behavior and the accepted scope; inspection alone does not approve
+adopting another implementation.

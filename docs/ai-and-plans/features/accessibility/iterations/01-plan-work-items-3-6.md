@@ -28,6 +28,17 @@ before relying on them.
 One PR per work item keeps each fix independently verifiable by the TCS/C+AI testers,
 who close the issues. Items 5 and 6 are small enough to share a PR if preferred.
 
+**Implementation dispatch (2026-11-27).** The operator requested implementation
+on this branch and allowed bundling simple work. Opus (`claude-opus-5.5`) is the
+read-only advisor. Its coding recommendations and actual assignments are
+`mai-code-2` for 5, 6, the Playground foundation (3a-3c), the header and manual
+documentation (3e, 7), and Document initial focus (4a); `gpt-6.1-sol` for the
+Playground result lifecycle (3d). The setting/keybindings and result lifecycle
+stay together so their commit builds without a placeholder API. Lightweight
+coordination, exploration and checks use `mai-code-2-flash`. Document workbench
+verification (4b) is last. These splits do not add accepted scope; work items
+1 and 2 remain parked.
+
 ## 5. Explorer tree accessible names (#768)
 
 **Finding.** `DocumentsItem.getTreeItem()` sets a static string tooltip,
@@ -55,6 +66,12 @@ label. Optionally a small guard test over tree items that use a plain-string too
 
 **Before starting.** @Jacquelinezhong volunteered on the issue and no PR exists (checked
 2026-11-27). Ask on #768 whether they still plan to submit it.
+
+**Coordination (2026-11-27).** The required question was
+[posted](https://github.com/microsoft/vscode-documentdb/issues/768#issuecomment-7224367147)
+before implementation. The accepted prerequisite is to ask, not to require a
+reply. Indexes still needs a real Accessibility Insights check; a unit assertion
+is not that verification.
 
 ## 6. Index-creation completion announcement (#772)
 
@@ -124,6 +141,13 @@ hidden element such as Monaco's aria container or a Fluent portal.
 this). A browser scenario for the Document view can assert the initial
 `document.activeElement` and the focus-visible state.
 
+**Operator test gates (2026-11-27).** The operator explicitly left workbench
+checks pending. Before any #769 fix, capture `document.activeElement.outerHTML`
+and `document.hasFocus()` after F6 in Webview DevTools and compare Markdown
+preview. Do not infer upstream ownership or add a speculative redirect.
+Initial Save focus-ring verification also remains pending. The operator chose
+a direct keyborg dependency for the accepted focus helper (decision 0008).
+
 ## 3. Query Playground keyboard workflow (#773, #774)
 
 The two issues describe one workflow: connect, write a query, run it, read the result,
@@ -181,6 +205,12 @@ Required groundwork, independent of the decisions below:
   `copilot-instructions.md`).
 - Record `activationSource` per surface (`codeLens`, `editorTitle`, `editorContext`,
   `commandPalette`, `keybinding`) so we can see which surfaces people use.
+
+**Amendment (2026-11-27).** The operator approved honest grouped attribution
+instead of guessing indistinguishable VS Code invocation surfaces; see
+[decision 0007](../decisions.md#0007--playground-telemetry-groups-indistinguishable-invocation-surfaces).
+The coding interface uses bounded CodeLens, editor-menu, screen-reader-shortcut
+and other buckets, preserving existing CodeLens telemetry.
 
 **Decision 3a: which surfaces to add.** **Decided 2026-11-27
 ([decisions 0002](../decisions.md#0002--playground-actions-use-standard-vs-code-surfaces-no-new-keybindings)):**
@@ -345,6 +375,13 @@ All decisions from this plan are recorded in [decisions.md](../decisions.md)
 2. Ask on #774 which configuration the testers verify with. If they test keyboard-only,
    the first-run notification fallback for `auto` needs a new decision.
 3. Ask @Jacquelinezhong on #768 whether they still plan a PR.
+
+**Coordination update (2026-11-27).** Questions 2 and 3 were posted on
+[#774](https://github.com/microsoft/vscode-documentdb/issues/774#issuecomment-7224367128)
+and [#768](https://github.com/microsoft/vscode-documentdb/issues/768#issuecomment-7224367147).
+Replies are pending. The accepted `auto` behavior is unchanged; a keyboard-only
+fallback still requires a new operator decision. Context-key and shortcut-args
+inspection remains an operator workbench gate before review handoff.
 
 ## Verification and closure
 
