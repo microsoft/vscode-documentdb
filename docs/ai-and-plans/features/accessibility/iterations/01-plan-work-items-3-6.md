@@ -178,6 +178,41 @@ Document panel had no explicit initial-focus or F6 handling. This is a candidate
 to identify during the F6 reproduction, not evidence of the root cause or a
 recommended implementation. No bumper or focus-trap change is authorized here.
 
+> **Done (2026-11-27), commit `0274a8dd` (4a, #770):** `mai-code-2`
+> added the shared visible-focus helper, the optional Reload ref and a once-only
+> initial-focus effect that preserves an already-focused control. Escape uses
+> the same enabled Save/Reload candidates. The operator approved the helper
+> (0006) and direct dependency (0008); keyborg remains the single existing
+> `3.498.0` copy, with only its direct declaration added to the manifest/lock.
+> Advised (`claude-opus-5.5`), 85% confidence: lifecycle and focus-polyfill
+> behavior approved without rework. Four focused tests and two new mode/theme
+> scenario contracts were added. Final Case 1 build passed, 225 focused tests
+> passed, and 49 browser-manifest tests passed. All nine actual Document View
+> routes passed readiness/assertions; six explicit add/view focus checks passed
+> across dark, light and high-contrast, including the focused target,
+> `data-fui-focus-visible`, nonzero bounds and computed indicator styles.
+> No browser console/page errors remained. Pristine-edit fallback is
+> source-reviewed; the explicit browser focus checks covered add/view.
+>
+> **Verification deviation:** port 18080 was already occupied by a process this
+> run did not start. The operator approved temporary port 18081 without file
+> edits. A port-only override left Vite's asset origin unchanged. Opus advised
+> a supported runtime `createServer` origin/HMR override (80% confidence).
+> A subsequent preflight incorrectly treated the retained CSP entry as a
+> blocker; correcting that check allowed the real Playwright run to pass.
+> All assets came from the test server, CSP was not weakened, and no repository
+> configuration was changed. All owned servers/browser contexts and exact
+> scratch logs were stopped/cleaned; the existing process was not touched.
+
+> **Deferred, escalated (2026-11-27), WI4b/G4 (#769):** the operator explicitly
+> left installed-workbench checks pending. No F6 redirect, bumper removal or
+> upstream classification was implemented. Capture the focused element and
+> `document.hasFocus()` through prepared focus-event logging after F6, compare
+> Markdown preview, and cover initial focus, Tab and Shift+Tab together.
+> If the target is extension-owned, review a scoped fix; if VS Code-owned,
+> record upstream tracking. The recommendation is to reproduce first, not
+> choose either explanation without evidence.
+
 ## 3. Query Playground keyboard workflow (#773, #774)
 
 The two issues describe one workflow: connect, write a query, run it, read the result,
@@ -481,3 +516,118 @@ inspection remains an operator workbench gate before review handoff.
 
 Each PR follows Case 1 while in draft and Case 2 when handed over. No fix is claimed
 here. The issues stay open until the TCS/C+AI testers verify them.
+
+## Outcome (2026-11-27)
+
+Four accepted work items are complete; work item 4 is partial: #770 is implemented
+and #769 remains deferred on operator evidence. Work items 1 and 2 remain parked.
+All implementation and documentation changes are committed on
+`dev/tnaum/a11y-issues`. No push or PR was required or performed. Issues were not
+closed.
+
+| Work item | Outcome | Implementation commit(s) | Actual coding model |
+| --- | --- | --- | --- |
+| 5, #768 | Explicit Documents name; Indexes guard; real AT check pending | `04affdf7` | `mai-code-2` |
+| 6, #772 | Persistent success/error announcements and retained button focus | `91dd07c4` | `mai-code-2` |
+| 3, #773/#774 | Keyboard surfaces, header, result preferences and focus navigation | `9bee0fb6`, `58c679d3`, `4c65547f` | `mai-code-2` foundation/header; `gpt-6.1-sol` result lifecycle |
+| 7 | Central manual page, related links and verified docs preview | `66f64d92` | `mai-code-2` |
+| 4a, #770 | Visible initial focus and enabled fallback | `0274a8dd` | `mai-code-2` |
+| 4b, #769 | Deferred pending workbench reproduction | none | none |
+
+### Checks and remaining gates
+
+Case 1 applied: no PR exists and this was implementation, not a ready-for-review
+handoff. `npm run build` passed. The final focused Vitest selection passed 225
+tests in 18 files (56.54 seconds). The browser-manifest selection passed 49 tests
+(1.83 seconds). The exact selections were:
+
+```powershell
+npx vitest run src\tree\documentdb\DocumentsItem.test.ts src\tree\documentdb\IndexesItem.test.ts src\webviews\documentdb\collectionView\queryInsightsTab\components\optimizationCards src\commands\playground src\documentdb\playground\statementDetector.test.ts src\documentdb\playground\PlaygroundCodeLensProvider.test.ts src\documentdb\playground\PlaygroundContextKeys.test.ts src\documentdb\playground\afterRun.test.ts src\documentdb\playground\PlaygroundResultProvider.test.ts src\documentdb\playground\resultFormatter.test.ts src\documentdb\playground\PlaygroundEvaluator.test.ts src\webviews\components\accessibility src\webviews\documentdb\documentView
+npx vitest run --config build\verification\browser\vitest.config.ts build\verification\browser\scenarios.test.ts
+```
+
+Root `npx tsc --noEmit -p .` passed in the coding checks. No `TDD:` failure was
+encountered. The actual typed Playwright runner passed all nine Document View
+routes, and the docs preview passed light/dark, navigation, table and link checks.
+Generated-style stat/EOL churn was cleared only after proving its normalized
+hash identical to HEAD; no source content was reverted or committed.
+
+Case 2 was not run: localization generation, `prettier-fix`, `l10n:check`, lint,
+`typecheck:tests`, the full runtime suite and packaging remain deferred until a
+review handoff. No full-CI, formal AI pre-review or review-ready claim is made.
+
+Operator gates still open:
+
+- G2: inspect `accessibilityModeEnabled` and confirm that both screen-reader
+  shortcut contributions win with `afterRun: auto` in the development host.
+- G3: tester configuration on #774 is unanswered. A keyboard-only fallback still
+  needs a new operator decision; the accepted default was not silently changed.
+- G4: reproduce #769 with the focus evidence described under work item 4.
+- G5: verify initial Document focus and actual NVDA announcements/Explorer names
+  in the installed workbench before pushing for tester review.
+
+The contributor question on #768 was posted before implementation; a reply is
+pending but was not an accepted prerequisite to taking the one-line fix.
+
+### Advisor and coordination decisions
+
+Five fresh advisor contexts and eight same-item follow-up packets were used
+(13 consultations): planning/interfaces, WI6, WI3 foundation, WI3 results and WI4.
+Final technical approvals were followed. Two recommendations were not adopted:
+the inaccurate null-as-absence shortcut was replaced by source-backed metadata
+preservation, and localization generation was deferred under Case 1. The optional
+long-run active-editor focus guard was not accepted and was not added.
+
+Operator decisions 0002-0009 remain authoritative. The leader scheduled the
+manifest-overlapping work sequentially and put Document focus last after the
+direct dependency choice; no intended behavior was changed by scheduling.
+Worktree publication remains optional. Native workbench evidence is required
+before interpreting the F6 target or closing tester-owned issues.
+
+### Usage snapshot
+
+Window: 2026-11-27 17:22:28.744 UTC to 19:49:56.160 UTC, approximately
+2h27m27s wall-clock. This is the parent task's window, including its status
+question and retries, not an unrelated cumulative session total. The snapshot
+excludes subsequent record/report overhead and the final response. Summed model
+request time was 2h05m32s; it is not additive with overlapping tool/check time.
+Build and live-browser wall times were not separately reported by the host;
+the focused and manifest test times are given above. No CI was run. AIU are not
+dollars.
+
+| Model | Role | Requests | Model time | AIU | AIU share |
+| --- | --- | ---: | ---: | ---: | ---: |
+| claude-opus-5.5 | advisor | 119 | 17m32s | 829.7 | 52.3% |
+| gpt-6.1-sol | leader | 111 | 50m02s | 489.7 | 30.8% |
+| gpt-6.1-sol | coding | 45 | 10m35s | 119.6 | 7.5% |
+| mai-code-2 | coding | 163 | 28m34s | 134.0 | 8.4% |
+| mai-code-2-flash | checks | 173 | 18m12s | 14.3 | 0.9% |
+| mai-code-2-flash | exploration | 9 | 37s | 0.2 | 0.0% |
+
+| Role | Requests | Model time | AIU | AIU share |
+| --- | ---: | ---: | ---: | ---: |
+| leader | 111 | 50m02s | 489.7 | 30.8% |
+| coding | 208 | 39m09s | 253.6 | 16.0% |
+| advisor | 119 | 17m32s | 829.7 | 52.3% |
+| checks | 173 | 18m12s | 14.3 | 0.9% |
+| exploration | 9 | 37s | 0.2 | 0.0% |
+
+| Model | Role | Input | Output | Cache read | Cache write | Reasoning |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| claude-opus-5.5 | advisor | 13,148,767 | 104,957 | 12,405,259 | 743,244 | 63,071 |
+| gpt-6.1-sol | leader | 18,820,937 | 134,398 | 18,264,239 | 556,365 | 82,891 |
+| gpt-6.1-sol | coding | 4,745,297 | 37,158 | 4,599,531 | 145,631 | 12,310 |
+| mai-code-2 | coding | 14,612,884 | 94,054 | 13,056,512 | 0 | 31,026 |
+| mai-code-2-flash | checks | 15,964,795 | 52,121 | 14,858,752 | 0 | 22,345 |
+| mai-code-2-flash | exploration | 103,941 | 2,585 | 81,920 | 0 | 671 |
+
+Cache and reasoning counts may overlap input/output and must not be summed into
+a token total. All displayed fields were reported; zero is not a missing-data
+substitute. Totals: leader 489.7 AIU, subagents 1097.8 AIU, run 1587.5 AIU.
+
+**Optimization note.** Advising was the largest measured cost category (52.3%),
+followed by leading (30.8%). The runtime-origin/CDP retry also consumed substantial
+tool time without completing the check. A future run should bound the initial
+advisor source sweep and checkpoint payload, and perform an origin/CSP preflight
+with a real Playwright page before repeated browser attempts. This is a scope
+and orchestration improvement, not a quality ranking of unlike model assignments.

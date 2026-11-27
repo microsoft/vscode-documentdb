@@ -81,7 +81,7 @@ result focus (decisions 0002-0004).
 
 ### 4. New Document focus management
 
-**Status:** available now.
+**Status:** initial focus (#770) implemented in `0274a8dd`; automated/browser checks passed. F6 (#769) remains deferred pending installed-workbench reproduction.
 **Issues:** [#769](https://github.com/microsoft/vscode-documentdb/issues/769),
 [#770](https://github.com/microsoft/vscode-documentdb/issues/770).
 
@@ -89,6 +89,10 @@ result focus (decisions 0002-0004).
 - Save must show a visible focus indicator when initially focused, not only after
   navigating away and back.
 - Cover initial opening and subsequent F6, Tab, and Shift+Tab navigation together.
+
+No F6 redirect or focus-bumper change was made, and the target has not been
+classified as extension-owned or VS Code-owned. The remaining reproduction is
+an operator gate, not an assumed upstream issue.
 
 ### 5. Explorer tree accessible names
 
