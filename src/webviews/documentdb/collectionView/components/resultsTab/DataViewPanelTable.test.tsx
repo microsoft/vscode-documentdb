@@ -6,7 +6,7 @@
 // @vitest-environment jsdom
 
 import { act, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
-import type { Column, DataGridHandle, DataGridProps, RenderRowProps } from 'react-data-grid';
+import { type Column, type DataGridHandle, type DataGridProps, type RenderRowProps } from 'react-data-grid';
 import { createRoot, type Root } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -37,7 +37,7 @@ vi.mock('react-data-grid', async () => {
         readonly children: ReactNode;
         readonly onKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => void;
     }): React.JSX.Element => (
-        <div role="row" onKeyDown={onKeyDown}>
+        <div role="row" onKeyDown={onKeyDown} tabIndex={-1}>
             {children}
         </div>
     );

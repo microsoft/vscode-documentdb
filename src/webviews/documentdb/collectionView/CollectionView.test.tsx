@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fieldColumnKey, ROOT_ID_COLUMN_KEY, type ColumnKey, type TablePage } from '../../../utils/documentGrid/types';
 import { CollectionView } from './CollectionView';
 import { Views } from './collectionViewContext';
-import type { DataViewPanelTableFocusRequest } from './components/resultsTab/DataViewPanelTable';
+import { type DataViewPanelTableFocusRequest } from './components/resultsTab/DataViewPanelTable';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -99,7 +99,12 @@ const client = vi.hoisted(() => {
                     getCurrentPageAsTree: { query: vi.fn(async (): Promise<[]> => []) },
                     getFieldCompletionData: { query: vi.fn(async (): Promise<[]> => []) },
                     queryInsights: {
-                        getQueryInsightsStage1: { query: vi.fn(async (): Promise<never> => Promise.reject()) },
+                        getQueryInsightsStage1: {
+                            query: vi.fn(
+                                async (): Promise<never> =>
+                                    Promise.reject(new Error('Query Insights is not used in this test')),
+                            ),
+                        },
                     },
                     runFindQuery: {
                         query: vi.fn(async (): Promise<{ documentCount: number }> => ({ documentCount: 1 })),

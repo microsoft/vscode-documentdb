@@ -759,7 +759,6 @@ export const CollectionView = (): JSX.Element => {
             const initiatingArea = resultsDisplayAreaRef.current;
             if (initiatingArea !== undefined && initiatingArea !== null) {
                 let listening = true;
-                let intent: PendingTableFocusIntent;
                 const dispose = (): void => {
                     if (listening) {
                         document.removeEventListener('focusin', onFocusIn, true);
@@ -775,7 +774,7 @@ export const CollectionView = (): JSX.Element => {
                         cancelPendingTableFocusIntent();
                     }
                 };
-                intent = {
+                const intent: PendingTableFocusIntent = {
                     rowKey,
                     activeQuery: context.activeQuery,
                     destinationPath: newPath,
