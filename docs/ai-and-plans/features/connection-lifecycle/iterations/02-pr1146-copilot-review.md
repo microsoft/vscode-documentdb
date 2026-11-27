@@ -99,7 +99,7 @@ Tests use the root Vitest configuration with `--maxWorkers=2`.
 | C06 | gpt-6.1-sol | signInAgain and its test; final cross-surface checks after other edits | 80% |
 | C07 | mai-code-2 | ShellInputHandler and DocumentDBShellPty with their tests, after C08 | 90% |
 | C08 | mai-code-2 | DocumentDBShellPty and its test | 95% |
-| C09 | gpt-6.1-sol | DocumentDBShellPty and tests, using C07's input restore method | 85% |
+| C09 | gpt-6.1-sol | DocumentDBShellPty and tests, using C07's input restore method | 90% after render-origin refinement |
 | C11 | mai-code-2 | commandErrorHandling; three index callbacks; wrapper and focused index tests | 90% |
 
 Approved implementation interfaces supplied by the advisor:
@@ -458,6 +458,15 @@ Assert both visible redraw and the exact next submitted command, with no automat
 **Author decision (2026-11-27):** selected the bounded asynchronous-output helper using C07's
 restore primitive, preserving multiline state and deferring output during evaluation to a safe
 prompt boundary. Apply to delayed success and failure feedback. Implementation pending.
+
+**Implementation refinement (advised claude-opus-5.5, 2026-11-27, 90% confidence):** the existing
+`setPromptWidth` already resets only the physical render-origin row, preserving logical input,
+multiline and history state. No additional input API is needed. First move to End using the old
+origin, separate/write the message, then call `setPromptWidth(terminalDisplayWidth(prompt))`
+at the new prompt row before emitting the prompt and restoring text/cursor. Do not call
+`showPrompt` or `resetLine` for idle asynchronous feedback. Queue while evaluating or input-disabled;
+flush at the next safe `showPrompt` boundary and discard queued feedback on Disconnect.
+This answers the C07 review's wrapped-row concern without expanding the accepted scope.
 
 ## C10. Anonymous command result is discarded on host-client churn
 
