@@ -1312,6 +1312,15 @@ export const collectionViewContracts = {
             steps: [{ action: 'click', role: 'button', name: 'Delete selected document(s)' }],
         },
         {
+            kind: 'text',
+            name: 'TDD: K2 acknowledged deletion removes the deleted rows locally',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            includes: [],
+            excludes: ['heterogeneous-[123]', 'Alpha', 'Beta'],
+            waitForText: true,
+        },
+        {
             kind: 'attribute',
             name: 'TDD: K2 acknowledged deletion clears selection',
             requiresGrid: 'grid',
@@ -1326,14 +1335,6 @@ export const collectionViewContracts = {
             selector: '.collectionView :is(button,[role="button"])[aria-label="Delete selected document(s)"]',
             attribute: 'disabled',
             expected: '',
-        },
-        {
-            kind: 'text',
-            name: 'TDD: K2 acknowledged deletion removes the deleted rows locally',
-            requiresGrid: 'grid',
-            selector: '[role="grid"]',
-            includes: [],
-            excludes: ['heterogeneous-[123]', 'Alpha', 'Beta'],
         },
     ],
     identity: [
