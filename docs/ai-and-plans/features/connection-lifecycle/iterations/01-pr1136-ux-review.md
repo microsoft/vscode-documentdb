@@ -30,6 +30,11 @@ created: 2026-11-27
   remain follow-ups #1105, #1119 and #1106, respectively.
 - **Review date:** 2026-11-27.
 
+**For a wording-and-message review, start with
+[Appendix C: the scenario walkthrough](#appendix-c--message-walkthrough-what-the-user-sees-and-when).**
+It follows a person from first connection through failure, repair, retained work and
+removal, quoting the actual messages rather than only naming their surfaces.
+
 ## How this review was run
 
 **Preparation only so far. No hands-on observations have been made in this review.**
@@ -541,3 +546,744 @@ do not treat fixture success as the hands-on review.
 
 After merge, add a reconciliation note pointing to the current manual and final
 pre-merge review so this snapshot is not mistaken for current behavior.
+
+## Appendix C — message walkthrough: what the user sees, and when
+
+This is a **script for the hands-on review, not a record of runtime results**.
+The source snapshot is unchanged from the preparation above. Quoted wording is the
+English source wording; `Orders`, `inventory` and `reviews` are fictional display
+names used to instantiate templates. `{error}`, `{host}` and similar placeholders
+mean variable content, not literal words the user sees. Driver error text, timestamps,
+account labels and authentication-provider/browser prompts vary; examples of these
+are explicitly identified rather than presented as guaranteed screenshots.
+
+Repeated families are grouped, but each group includes concrete examples. The inventory
+covers the PR's lifecycle journeys and representative adjacent feedback encountered
+along them, not every pre-existing database, index or diagnostics message in the extension.
+Links identify the renderer or caller that selects each message.
+
+### C0. Know which surface you are reviewing
+
+| Surface | What the person experiences | Example in this walkthrough |
+| --- | --- | --- |
+| Notification | VS Code information/warning/error message; does not block the whole window | “Could not sign in again. Open a new shell from the tree.” |
+| Progress notification | Cancellable progress, possibly delayed; not a success or error toast | `Connecting to "Orders"…` |
+| Host modal | A VS Code dialog with a heading, optional detail and buttons; interrupts the window | “Disconnect?” / “Close all” / “Keep open (disabled)” |
+| Tree recovery action | Clickable child under a failed/disconnected node; not a paragraph explaining the failure | “Retry sign-in”, “Diagnose connection…”, “Reconnect” |
+| In-view overlay/dialog | Modal **inside** a Collection, Document or Dashboard webview; existing contents stay mounted behind it | “Connection changed” with “Close view” |
+| Persistent inline message | MessageBar or panel error that stays in the view, rather than a transient notification | “Failed to read cluster information: {error}” with “Retry” |
+| Picker/input validation | Quick Pick title, row, detail or input validation inside an ongoing wizard | “Retry loading tenants” / “Loading tenants timed out after 5 seconds.” |
+| Terminal output | Shell scrollback, connection banner, prompt and spinner; separate from host notifications | “Sign-in restored. Run your command again.” |
+| Playground result document | Read-only execution output next to the source file; survives a dismissed notification | “Error executing query” plus a bounded recovery message |
+| Badge, CodeLens, tooltip or accessible name | Smaller state and action cues; some are read aloud rather than shown as prose | “Disconnected”, “Running…”, “Dismiss dialog to copy view contents” |
+| Screen-reader announcement | Live-region message; **not** necessarily visible text or a toast | “Reconnected”, “Lost connection to the cluster.” |
+| Output channel only | Detail is available if the person opens Output; not an acknowledgement on its own | “Skipped an Azure tenant because its subscriptions could not be listed.” |
+| Deliberate silence | No new message on successful silent renewal, cancellation or obsolete replies | A successful operation simply continues after token renewal |
+
+“Error nodes” in the lifecycle tree are the action rows above, sometimes internally
+tagged `error`. They are **not** passive error-summary rows. Read the failure modal
+first, then review whether the surviving action labels are enough to guide recovery.
+
+### C1. “I expand Orders and connect for the first time”
+
+Start with a saved scratch connection. Expand it, then repeat with a connection slow
+enough to expose progress. Finally repeat with an empty server.
+
+1. **While connecting:** after the operation has lasted about **2 seconds**, a
+   cancellable progress notification can appear:
+
+   > Connecting to "Orders"…
+
+   A fast connection shows no such notification. Cancelling it does not produce an
+   error dialog just to report the cancellation.
+   Sources: [tree progress](../../../../../src/tree/documentdb/ClusterItemBase.ts#L263)
+   and [delay helper](../../../../../src/utils/withProgress.ts#L8).
+2. **When it succeeds:** the tree shows databases. If none exist, the child is
+   **“Create Database…”**, not “No databases found”. Inside an empty database the
+   equivalent action is **“Create Collection…”**. Those entries start creation
+   wizards, rather than merely explaining the empty state.
+3. **A Dashboard may open automatically:** its status badge reads **“Connecting…”**,
+   **“Connected”** or **“Disconnected”**, based on ping samples. Its tooltip says:
+
+   > Connection status based on periodic ping commands to this cluster.
+
+   The initial successful connection does not have a dedicated lifecycle “Connected
+   successfully” toast. Tree contents, the optional Dashboard and its badge are the
+   visible completion.
+4. **If the person checks Output:** examples include
+   `Loading cluster details for "Orders"`, `Reusing active connection for "Orders".`
+   and `Could not connect to "Orders".` These are Output messages, not three separate
+   pop-ups.
+
+Sources: [tree success/empty state](../../../../../src/tree/documentdb/ClusterItemBase.ts#L626),
+[database empty state](../../../../../src/tree/documentdb/DatabaseItem.ts#L97),
+[Dashboard badge](../../../../../src/webviews/documentdb/clusterDashboard/components/DashboardHeader.tsx#L271).
+
+**Review checkpoint:** did the operation feel complete without a toast? Was the
+automatic Dashboard opening expected? Was cancellation quiet without leaving the
+person unsure what the remaining recovery rows mean?
+
+### C2. “The server rejects my connection; now what do I read?”
+
+Use an intentionally incorrect password on a scratch connection. Read the modal before
+dismissing it, then inspect the tree and try its recovery actions.
+
+**First failure, no provider-specific explanation:** the host error modal uses:
+
+> **Failed to connect to "Orders"**
+>
+> Revisit connection details and try again.
+>
+> Error: {driver message}
+
+The heading has no period in this template. `{driver message}` is the actual variable
+error, not a normalized friendly summary. On a cached-connection failure the fallback
+heading is also `Failed to connect to "Orders"`; if connection acquisition succeeded
+but database enumeration failed, it is `Failed to load databases for "Orders"`.
+That cached/expansion path normally places the raw error directly in the detail,
+without the first-connect “Revisit connection details…” preface.
+
+**An explanation can replace the heading.** For example, a failed connection to a
+managed local instance can say:
+
+> DocumentDB Local does not appear to be running. Start it from the Connections view, then try again.
+
+If that container was removed, another heading is:
+
+> We cannot find the DocumentDB Local container. It was very likely removed outside VS Code. You can create it again from the Connections view.
+
+These are existing infrastructure explanations reused by the lifecycle, not new
+automatic repair steps. In the first-connect modal the raw failure remains in detail.
+Sources: [modal composition](../../../../../src/documentdb/showClusterConnectFailure.ts#L81),
+[cached expansion](../../../../../src/tree/documentdb/ClusterItemBase.ts#L503),
+[local explanations](../../../../../src/services/localQuickStart/QuickStartErrorExplainer.ts#L38).
+
+**After dismissing the modal, review the action rows.** Examples:
+
+| Failed state | Example children, in order | Important absence |
+| --- | --- | --- |
+| Stored Native credentials rejected | “Update connection string…”, “Update credentials…”, “Diagnose connection…”, “Open shell” | No ordinary Retry while the stored-credential rejection latch requires editing |
+| Recoverable verified Entra sign-in failure on a stored connection | Provider repair rows when applicable, then “Retry sign-in”, “Diagnose connection…”, “Open shell” | No ordinary Retry beside Retry sign-in |
+| Ordinary retryable failure | Provider repair rows when applicable, then “Diagnose connection…”, “Open shell”, “Retry” | No passive row containing the full driver error |
+| Explicit user Disconnect | “Reconnect” | Not the failed-authentication repair block |
+
+Sources: [base recovery rows](../../../../../src/tree/documentdb/ClusterItemBase.ts#L402),
+[stored repair rows](../../../../../src/tree/connections-view/ConnectionsBranchDataProvider.ts#L124),
+[canonical Retry](../../../../../src/tree/api/retryNode.ts#L45).
+
+For an already-unavailable acquisition, the expansion modal can use a bounded detail
+instead of the raw rejection:
+
+| Condition | Detail text |
+| --- | --- |
+| Sign-in required | “Sign in again to continue using this connection.” |
+| Verified Entra credentials rejected | “The database rejected the credentials. Choose Retry sign-in to continue.” |
+| Azure replacement-key path | “The database rejected the key. Choose Retry to read the key from Azure again.” |
+| Stored credentials need editing | “The database rejected the credentials. Choose Update credentials to continue.” |
+| Other reloadable credentials | “The database rejected the credentials. Choose Retry to reload them.” |
+
+Source: [credential rejection wording](../../../../../src/tree/documentdb/ClusterItemBase.ts#L374).
+These details are conditional branches, not five messages shown in succession.
+
+**Now click Open shell.** If the failed startup already evicted cached credentials,
+a non-modal error says **“Not signed in to Orders. Please authenticate first.”**
+and no terminal opens ([Shell entry guard](../../../../../src/commands/openInteractiveShell/openInteractiveShell.ts#L63)).
+This is F1: compare what the action promises with what it actually lets the person do.
+
+**Optional password-encoding branch:** if a Native password appears URL-encoded, the
+failure modal adds this detail and a **“Try with decoded password”** button:
+
+> 💡 Your password appears to contain URL-encoded characters (e.g. %40 instead of @). This often happens when copying a password from a connection string URL. Would you like to retry with the decoded version?
+
+Only accepting the button attempts the decoded value. If that works, a non-modal
+information message asks:
+
+> Connected to "Orders" using the decoded password. Would you like to update your saved credentials?
+
+The action is **“Update saved password”**.
+Sources: [decoding offer](../../../../../src/documentdb/auth/urlEncodedPassword.ts#L101),
+[successful retry](../../../../../src/tree/connections-view/DocumentDBClusterItem.ts#L350).
+
+**Review checkpoint:** read the modal, dismiss it, and explain the next step using only
+the remaining rows. Compare a cluster failure with a database/Indexes expansion failure:
+the latter's explained failure is a **notification**, formatted as
+`{explanation} ({cause})`, not the same modal (F3;
+[provider catch](../../../../../src/tree/BaseExtendedTreeDataProvider.ts#L606)).
+
+### C3. “My Microsoft sign-in expires while I am working”
+
+First distinguish the two stories: **silent renewal succeeds**, so no authentication
+message appears and the operation continues; or **interactive recovery is needed**, so
+the person gets a surface-specific message. Authentication/browser consent UI comes
+from VS Code's configured provider; its precise wording is not owned by this extension.
+
+| Where the failure is encountered | Exact extension wording | Where / next action |
+| --- | --- | --- |
+| Tree, typed expired sign-in explanation | “Your Microsoft sign-in for this connection expired. Sign in again to continue.” | Explanation heading in failure modal; tree offers “Retry sign-in” when the verified identity can recover |
+| Tree, unexpected identity returned | “A different Microsoft account was returned for this connection. Sign in with the account you originally used for this connection, then try again.” | Explanation heading in failure modal |
+| Existing webview | “Sign-in required” / “Sign in from the connection tree, then click Retry.” | In-view dialog, not a Sign in again button; repair is in the tree |
+| Shell, explicit worker recovery available | “Microsoft sign-in expired for this shell. Sign in again to continue.” | Terminal error **and** warning notification with “Sign in again” |
+| Playground, explicit worker recovery available | “Microsoft sign-in expired for this playground. Sign in again to continue.” | Failed result document **and** warning notification with “Sign in again” |
+
+Sources: [typed Entra explanation](../../../../../src/documentdb/auth/entraErrors/EntraSignInRequiredErrorExplainer.ts#L24),
+[Shell auth feedback](../../../../../src/documentdb/shell/DocumentDBShellPty.ts#L907),
+[Playground auth feedback](../../../../../src/commands/playground/executePlaygroundCode.ts#L313),
+[provider invocation](../../../../../src/documentdb/auth/entraSession.ts#L30).
+
+**Accept sign-in once, then stop and look for the ending:**
+
+- **Tree:** successful recovery refreshes the tree; no dedicated “Sign-in restored”
+  notification is issued by this command. Retained tabs still check their bindings.
+- **Shell:** terminal output explicitly says
+  **“Sign-in restored. Run your command again.”**
+- **Playground:** successful recovery stops the old evaluator but supplies no
+  equivalent completion/rerun message; the failed result is still there (F6).
+- **Cancel:** the interrupted command is not replayed. A stale warning action may
+  produce no additional feedback if its original connection has changed (F5).
+
+If interactive recovery fails, the tree fallback heading is **“Could not sign in again.”**
+unless an explanation replaces it. Shell warns
+**“Could not sign in again. Open a new shell from the tree.”**;
+Playground warns
+**“Could not sign in again. Re-pick the playground connection from the tree.”**
+Sources: [tree action](../../../../../src/commands/signInAgain/signInAgain.ts#L181),
+[Shell completion/failure](../../../../../src/documentdb/shell/DocumentDBShellPty.ts#L959),
+[Playground completion/failure](../../../../../src/commands/playground/executePlaygroundCode.ts#L393).
+
+**Other bounded worker-authentication branches** use the following messages. These are
+alternatives selected by the failure reason, not extra generic driver errors appended
+to every failure:
+
+| Reason | Shell terminal message | Playground result message |
+| --- | --- | --- |
+| Expired, no safe in-place sign-in action | “Microsoft sign-in expired for this shell. Open a new shell from the tree.” | “Microsoft sign-in expired for this playground. Re-pick its connection from the tree.” |
+| Different account | “This shell is bound to a different Microsoft account. Open a new shell from the tree.” | “This playground is bound to a different Microsoft account. Re-pick its connection from the tree.” |
+| Destination not trusted | “This shell is not allowed to sign in to this connection. Review the trusted server settings, then reconnect from the tree.” | “This connection is not allowed for Microsoft sign-in. Review the trusted server settings, then re-pick the playground connection.” |
+| Token refresh failed for another reason | “The sign-in token could not be refreshed. Run the next command to reconnect with the same connection.” | “The sign-in token could not be refreshed. Run the query again to reconnect with the same connection.” |
+
+Two **tree sign-in modal exceptions** are worth a separate read:
+
+- **“The connection was closed while you were signing in.”** when a sign-in attempt
+  finishes against a superseded connection.
+- Heading **“The Azure cloud or sign-in provider changed.”**, detail:
+  **“Restore "microsoft-sovereign-cloud.environment" to the setting used when this connection was established, then choose Retry sign-in. If it used the Azure public cloud, reset the setting.”**
+
+Source: [sign-in race and provider checks](../../../../../src/commands/signInAgain/signInAgain.ts#L114).
+
+For an untrusted destination on the host's connect path, the modal instead says:
+
+> **Microsoft Entra ID isn't allowed for this server.**
+>
+> Microsoft Entra ID is available only for Azure DocumentDB
+> or servers allowed by the trusted-server setting.
+>
+> Server: {host}
+
+It offers **“Learn More”**; multiple hosts use **“Server: {host} and {count} more”**.
+If the link cannot open, the follow-up warning is **“We couldn't open this link.”**
+([destination modal](../../../../../src/documentdb/showClusterConnectFailure.ts#L40)).
+
+**Review checkpoint:** can the person tell whether to use the tree, the warning's
+Sign in again button, or the tab's Retry? Does each successful route visibly end?
+Do not deliberately change shared accounts or cloud configuration for this test.
+
+### C4. “The server or network stops answering”
+
+On an operator-owned scratch server, compare the **same cause** across a tree expand,
+a view operation and a worker command. Do not expect every network error to become a
+“Connection lost” overlay: classification and call site decide whether it is an
+unavailable state or an ordinary operation error.
+
+- **Tree:** the modal from C2, with a translated heading when applicable.
+- **Retained view:** a mapped unavailable reason can show
+  **“Connection lost”** / **“Check the network or server, then click Retry.”**
+  Other failures keep the existing operation-specific error handling.
+- **Shell initial connection, ordinary error:** terminal text starts
+  **“Failed to connect: {error}”**, can add an infrastructure explanation, and ends
+  **“Run a command to try connecting again, or close this terminal.”**
+  A non-modal error also says `Failed to connect to "Orders": {error}`, or uses the
+  explanation instead. Typed worker/lifecycle failures take their bounded paths in C3/C8
+  rather than necessarily displaying this generic notification too.
+- **Playground ordinary execution failure:** the result document retains the error;
+  a non-modal error uses the explanation or
+  **“Query playground execution failed: {error}”**.
+- **Kubernetes explanation example, missing tunnel:** the shared text template is
+  **“We cannot find an active port-forward tunnel to {target}, so localhost:{port} very likely does not reach the cluster right now. Collapse and expand the connection again to re-establish the tunnel.”**
+  `{target}` expands like `"reviews" in namespace "dev"`; the port varies. This is
+  diagnostic wording, not a promise of broader tunnel recovery in this PR.
+
+Sources: [Shell ordinary startup failure](../../../../../src/documentdb/shell/DocumentDBShellPty.ts#L634),
+[Playground ordinary failure](../../../../../src/commands/playground/executePlaygroundCode.ts#L286),
+[tunnel explanation](../../../../../src/plugins/service-kubernetes/KubernetesErrorExplainer.ts#L89),
+[typed view operation boundary](../../../../../src/documentdb/runWithClient.ts#L25).
+
+**The Dashboard has additional, non-overlay ways to say something is wrong:**
+
+| When | Message / affordance | Where it remains |
+| --- | --- | --- |
+| Periodic health samples fail | Badge becomes “Disconnected” after two consecutive failed samples; one failed sample does not immediately switch it to Disconnected | Header; screen-reader announcement “Lost connection to the cluster.” |
+| Initial cluster-information read fails ordinarily | “Failed to read cluster information: {error}” with “Retry” | Persistent inline MessageBar |
+| Storage read fails but previous database rows exist | “Failed to read storage statistics: {error}” with “Retry” | Persistent inline MessageBar above retained inventory |
+| Manual storage refresh throws | “Failed to read storage statistics.” plus the cause | Non-modal host error; also an accessible failure announcement |
+| Another Dashboard action throws | For example “Failed to open the interactive shell.”, “Failed to copy the connection string.” or “Failed to export diagnostics.”, plus cause | Non-modal host error |
+
+Sources: [health polling](../../../../../src/webviews/documentdb/clusterDashboard/ClusterDashboard.tsx#L348),
+[threshold](../../../../../src/webviews/documentdb/clusterDashboard/ClusterDashboard.tsx#L62),
+[inline errors](../../../../../src/webviews/documentdb/clusterDashboard/ClusterDashboard.tsx#L879),
+[manual refresh](../../../../../src/webviews/documentdb/clusterDashboard/ClusterDashboard.tsx#L248).
+The shared [notification renderer](../../../../../src/webviews/_integration/appRouter.ts#L248)
+appends a non-empty cause in parentheses; for example, an illustrative raw cause gives
+`Failed to read storage statistics. (ECONNREFUSED)`. The cause is not always that short.
+
+**Review checkpoint:** compare the modal, toast, persistent banner, badge and retained
+result. Which is still visible after attention moves elsewhere? Can “Disconnected”
+from failed pings be distinguished from an explicit user Disconnect?
+
+### C5. “I choose Disconnect, but I need to keep my work”
+
+Open the three view types, edit a scratch document without saving, and keep a Shell
+and Playground open. Right-click the connected cluster and choose **“Disconnect”**.
+
+1. **If a transfer is active, stop here:** C10's task-blocking modal appears first.
+   The tab-choice modal is not shown and the task is not stopped.
+2. **With open registered views and `openTabsOnDisconnect=ask`:** a warning modal:
+
+   > **Disconnect?**
+   >
+   > What should happen to the open tabs for this connection?
+
+   Choices: **“Close all”**, **“Keep open (disabled)”**, or VS Code's dismissal/cancel.
+   With a configured `closeAll` or `keepOpenDisabled` default, this question is skipped.
+   With no registered views, there is no tab-choice question even if workers exist.
+3. **Choose Close all while a Document View is dirty:** a second warning modal:
+
+   > **Discard unsaved document changes?**
+   >
+   > Closing these tabs will discard their unsaved changes.
+
+   Explicit action: **“Discard changes”**. Cancelling leaves the teardown uncommitted.
+   The configured tab default does **not** bypass this warning.
+4. **Choose Keep open (disabled) instead:** each retained webview gets C6's
+   **“Disconnected”** dialog. The tree's child becomes **“Reconnect”**.
+   Shell prints **“Disconnected”** and keeps its terminal; the Playground file remains
+   open. Their workers stop regardless of the webview tab choice.
+5. **Observe completion:** there is no separate “Disconnected successfully” toast.
+   The action row, retained dialogs and Shell line are the completion cues.
+6. **Reconnect in the tree:** it resumes the tree connection flow from C1. Other
+   retained views require Retry; auto-opening the existing same-identity Dashboard
+   can retry that Dashboard automatically. No interrupted query or write is replayed.
+
+Sources: [tab/discard questions](../../../../../src/documentdb/connectionTeardown.ts#L55),
+[surface/worker teardown](../../../../../src/documentdb/connectionTeardown.ts#L147),
+[Reconnect](../../../../../src/commands/disconnect/disconnect.ts#L32),
+[Dashboard reveal retry](../../../../../src/webviews/documentdb/clusterDashboard/clusterDashboardController.ts#L410).
+
+**Review checkpoint:** does “open tabs” sound like it includes the Shell terminal or
+Playground file, even though neither closes? Is the two-modal Close all → Discard
+sequence understandable? Capture what the person thinks Reconnect will resume.
+
+### C6. “There is a dialog over my old results or unsaved document”
+
+This is the shared **in-view** modal for Collection View, Document View and Dashboard.
+It is not a host notification. It shades/blocks the mounted contents while open.
+Here is the complete reason-to-copy inventory, including repeated titles:
+
+| Trigger / reason | Title | Detail | Footer buttons |
+| --- | --- | --- | --- |
+| Sign-in must be repaired | “Sign-in required” | “Sign in from the connection tree, then click Retry.” | Retry; Close view |
+| Database rejected credentials | “Authentication failed” | “Repair the connection in the tree, then click Retry.” | Retry; Close view |
+| Credentials are unavailable | “Disconnected” | “Connect from the connection tree, then click Retry.” | Retry; Close view |
+| Person explicitly disconnected | “Disconnected” | “Reconnect from the connection tree, then click Retry.” | Retry; Close view |
+| Connection edit is in progress | “Connection update in progress” | “Wait for the update to finish, then click Retry.” | Retry; Close view |
+| Saved settings changed | “Connection changed” | “This view is tied to the previous connection settings. Close it and reopen it from the tree.” | Close view |
+| Bound identity changed | “Connection changed” | “This view is tied to the previous connection settings. Close it and reopen it from the tree.” | Close view |
+| Saved connection was removed | “Connection removed” | “This connection is no longer in the tree. Close this view.” | Close view |
+| Bound connection is unreachable | “Connection lost” | “Check the network or server, then click Retry.” | Retry; Close view |
+
+Source: [all mapped titles/details](../../../../../src/webviews/_integration/describeUnavailableConnection.ts#L11).
+These are available mappings, not a promise that each reason can be reproduced by
+every surface or that every low-level error is mapped.
+
+**Now walk all three actions:**
+
+- **X:** its accessible label is **“Dismiss dialog to copy view contents”**. Dismissing
+  is not reconnecting. The contents become accessible for copying; attempting another
+  database operation reveals the reason again. Confirm this distinction without
+  assuming a visible disabled toolbar persists after dismissal.
+- **Retry:** while pending, Retry, Close view and the X are disabled/focusable.
+  Their labels do not change to “Retrying…” and this component adds no recovery spinner.
+  On success the overlay disappears and a live region announces **“Reconnected”**;
+  this is not a success toast and does not mean the old operation ran again.
+  A typed failure updates/retains the dialog. An unclassified exception keeps the old
+  dialog and raises the non-modal **“Unable to recover the connection”** or an
+  infrastructure explanation, followed by the cause in parentheses (F4).
+- **Close view:** this first asks a **host confirmation**, even for a clean view:
+
+  > **Close this view?**
+  >
+  > Dismiss the connection dialog instead if you need to copy anything from the view.
+
+  Explicit action: **“Close view”**. For a dirty Document View the detail instead is
+  **“Closing this view discards unsaved changes.”** The same dirty warning also appears
+  as a paragraph inside the overlay before closing. If the confirmation request itself
+  fails, an inline alert in the overlay reads
+  **“Unable to confirm closing the view. Try again.”**
+
+Sources: [overlay controls and confirmations](../../../../../src/webviews/components/DisconnectedOverlay.tsx#L37),
+[Retry outcomes](../../../../../src/webviews/documentdb/useBoundViewRecovery.ts#L100),
+[recovery success text](../../../../../src/webviews/documentdb/boundViewOperations.ts#L39),
+[host confirmation contract](../../../../../src/webviews/_integration/appRouter.ts#L266).
+
+**Review checkpoint:** can the person copy without accidentally closing or reconnecting?
+Can they hear the title/detail, reach X by keyboard, and distinguish “Retry the binding”
+from “rerun the query”? Try Escape: the controlled overlay only accepts the explicit
+trigger-click dismissal, not every close request.
+
+### C7. “I save changed credentials or a new connection string”
+
+Start an edit with dirty/open views and an existing Shell. Repeat with cancel,
+unchanged values, a password-only edit, and changed destination/identity.
+
+1. The credential wizard asks **“Select an authentication method”**. From an error
+   state it also asks **“Would you like to reconnect with the updated credentials?”**:
+   **“Yes”** / **“Reconnect now with the updated credentials”** versus
+   **“No”** / **“Save credentials without reconnecting”**.
+   These are picker rows, not a post-save notification.
+2. A successful save can show an information **operation summary**:
+   **“Credentials updated successfully.”** or **“Connection updated successfully.”**
+   The summary respects `showOperationSummaries`; hiding summaries does not suppress
+   every warning or modal in this journey.
+3. When saved settings actually changed, old webviews receive **“Connection changed”**
+   from C6, including password-only changes. There is **no** Disconnect-style
+   Close all / Keep open question for this edit path.
+4. If Shell terminals exist, a separate information **modal** says:
+
+   > Open shells are still using the previous connection settings.
+
+   Its explicit action is **“Disconnect”**. Dismissing it leaves those workers running
+   on their previous settings. Accepting it prints **“Disconnected”** in the terminals.
+5. An unchanged/cancelled edit does not permanently retire existing views. Distinguish
+   transient “Connection update in progress” from permanent “Connection changed”.
+
+Sources: [authentication picker](../../../../../src/commands/updateCredentials/PromptAuthMethodStep.ts#L57),
+[reconnect picker](../../../../../src/commands/updateCredentials/PromptReconnectStepForErrorNodes.ts#L22),
+[credential save](../../../../../src/commands/updateCredentials/ExecuteStep.ts#L106),
+[string save](../../../../../src/commands/updateConnectionString/ExecuteStep.ts#L94),
+[edit reconciliation and Shell notice](../../../../../src/commands/saveConnectionEdit.ts#L76).
+
+**Failure and special-case copy to read on this journey:**
+
+| Condition | Exact message | Surface |
+| --- | --- | --- |
+| Cannot read original saved connection | “The connection could not be read from storage.” | Error notification |
+| Credential save fails | “Failed to save credentials.” | Error notification; technical detail goes to Output |
+| Connection-string save fails | “Failed to update the connection.” | Error notification; technical detail goes to Output |
+| Cannot verify what persisted | “Could not verify the saved connection settings.” | Output warning only |
+| Persisted settings differ but save is incomplete/unverified | “The connection update may be incomplete. Check the saved settings before reconnecting.” | Warning notification; old views may still be disabled for safety |
+| New destination no longer supports the selected Entra method | “Connection updated. Microsoft Entra ID isn't available for the new server, so choose another method when you connect.” | Information notification instead of the ordinary string-update summary |
+| Concurrent edit/removal already owns the connection | “A connection is already being updated or removed. Try again when it finishes.” | Thrown error, reported by caller/command handling |
+
+**Review checkpoint:** can “updated successfully” be mistaken for “old tabs are usable”?
+Does the later Shell modal explain why Shell and webviews differ? Save success, reconnect
+success and permission/identity continuity are three separate facts.
+
+### C8. “I keep my Shell open and try the next command”
+
+Before any failures, review the Shell's ordinary state cues. Its initial terminal spinner
+says **“Connecting and authenticating...”**. A successful banner includes, for example:
+
+```text
+Connected to: Orders ({host})
+Identity: {identity} | Authentication: Username and Password (SCRAM) | Database: inventory
+Type "help" for available commands.
+```
+
+Line wrapping varies with terminal width; absent identity omits that field. Other
+authentication labels are **“Microsoft Entra ID (Account)”**,
+**“Microsoft Entra ID (Managed Identity)”**, and **“No Authentication”**.
+Worker restart can change the spinner label to **“Reconnecting...”**.
+Source: [Shell banner/spinner](../../../../../src/documentdb/shell/DocumentDBShellPty.ts#L549).
+
+**Then disconnect and type before reconnecting.** The bounded terminal messages are:
+
+| State when the command is attempted | Shell terminal wording |
+| --- | --- |
+| Explicitly disconnected | “Disconnected. Reconnect from the tree, then open a new shell.” |
+| Different identity/settings binding | “This shell is bound to the previous connection. Open a new shell from the tree.” |
+| Other typed unavailable state | “This connection is unavailable. Reconnect from the tree, then open a new shell.” |
+
+Source: [lifecycle worker failure](../../../../../src/documentdb/shell/DocumentDBShellPty.ts#L889).
+These are output lines, not full-view overlays or necessarily host toasts. C3 lists
+the separate authentication variants.
+
+After reconnecting with unchanged settings, try the **same** terminal: a new worker can
+start without opening a new Shell. The more restrictive wording above is F2, not the
+intended rule. Scrollback and the selected database remain; worker-local variables and
+cursors are not preserved. An unexpected worker exit can instead print
+**“Shell session ended unexpectedly.”**
+
+**Review checkpoint:** does the person trust the text or discover the less restrictive
+working path? Are initial-connect error, explicit Disconnect, renewal failure and
+worker restart distinguishable in scrollback?
+
+### C9. “I run the Playground before and after a connection problem”
+
+1. **Before a connection exists**, the top CodeLens reads **“Connect”**; its tooltip is
+   **“Connect this playground to a database”**. Run All on an unbound file also starts
+   the picker: **“Select a database to connect this playground to”**.
+   Cancelling does not execute the code.
+2. **Once bound**, the CodeLens shows a display string such as `Orders / inventory`
+   and its tooltip says **“Connected to Orders / inventory”**. This describes the
+   retained binding, not a live health probe.
+3. **Click that connection display:** an information modal reads:
+
+   > **This playground is connected to Orders / inventory.**
+   >
+   > Disconnect and connect this playground to a different database?
+
+   Action: **“Connect to a different database…”**. Cancelling the following picker
+   preserves the original binding.
+4. **Run:** a cancellable **“Query Playground”** progress notification reports
+   **“Initializing…”**, **“Authenticating…”**, **“Running query…”** as the evaluator
+   reaches those phases. The CodeLens changes from **“Run All”** / **“Run”** to
+   **“Running…”**; its busy tooltip says
+   **“The worker for this cluster is busy executing a playground”**.
+   Another run on that cluster can produce the information notification
+   **“A playground is already running on this cluster. Wait for it to finish.”**
+5. **If failure happens during execution**, a read-only result document shows this
+   shape (timestamp, query preview and duration vary):
+
+   ```text
+   // Orders / inventory
+   // {timestamp}
+   //
+   // ▶ {query preview}
+   // ❌ Error executing query
+   // Executed in {duration}ms
+   // ─────────────────────────
+
+   Microsoft sign-in expired for this playground. Sign in again to continue.
+   ```
+
+   That example uses C3's explicit sign-in path; its warning also offers
+   **“Sign in again”**. Other bounded result messages include:
+   **“This playground is bound to the previous connection. Re-pick its connection from the tree.”**
+   and **“This connection is unavailable. Reconnect from the tree, then re-pick it here.”**
+6. **If it is already latched as unavailable before the run starts**, the bounded
+   message is a **warning notification**, and that early exit does not create the
+   execution-error result document. This matters when comparing seemingly identical
+   failures: the previous result can remain on screen.
+7. **Recover and look again before rerunning:** sign-in does not replace the error
+   result or rerun the source. Same-settings reconnect can use the retained Playground
+   without a new pick; its generic message still requests a re-pick (F2/F6).
+
+Sources: [CodeLens](../../../../../src/documentdb/playground/PlaygroundCodeLensProvider.ts#L85),
+[display-name meaning](../../../../../src/documentdb/playground/PlaygroundService.ts#L339),
+[connection modal/picker](../../../../../src/commands/playground/connectDatabase.ts#L35),
+[preflight and execution progress](../../../../../src/commands/playground/executePlaygroundCode.ts#L106),
+[phase text](../../../../../src/documentdb/playground/PlaygroundEvaluator.ts#L265),
+[result formatting](../../../../../src/documentdb/playground/resultFormatter.ts#L87).
+
+**Review checkpoint:** read the connection CodeLens, old result and current warning
+together. Do they tell a consistent story about binding versus live connectivity?
+Can a person tell whether the latest click executed any code?
+
+### C10. “I disconnect or remove while work is running, then remove for real”
+
+Start a scratch transfer and try Disconnect, a saved edit, or removal. The task guard
+shows a **host error modal**, for example:
+
+```text
+Cannot disconnect this connection
+
+The following tasks are currently using connection "{clusterId}":
+ • {taskName} ({taskType})
+
+Please stop these tasks first before proceeding.
+```
+
+The connection-level resource description currently uses the **cluster ID**, not
+necessarily the friendly `Orders` label. The title varies to
+**“Cannot remove this connection”** or **“Cannot update this connection”** for those
+operations. The modal tells the person to stop tasks; it does not itself stop them.
+Source: [task guard](../../../../../src/services/taskService/resourceUsageHelper.ts#L19).
+
+After the transfer finishes, remove a saved connection:
+
+1. **Destructive confirmation first:** title **“Are you sure?”**, message
+   `Delete "Orders"?` followed by **“This cannot be undone.”** For multiple selections,
+   the message is, for example, **“Delete 2 connections?”**.
+2. **The confirmation-style setting changes the surface.** The default word input adds:
+   **“Please enter the word "delete" to confirm the operation.”** and
+   **“Note: This confirmation type can be configured in the extension settings.”**
+   Challenge mode uses a warning modal with **“Pick "{number}" to confirm and continue.”**
+   and three numeric buttons. Button mode uses a warning modal with a **Yes** action.
+   Incorrect word input repeats the word instruction as validation.
+3. **Then the retained-tab choice can appear:** same detail/buttons as Disconnect,
+   but the heading is **“Remove the connection?”**. A Close all choice can still lead
+   to the separate unsaved-document discard modal. These are sequential questions,
+   not alternative wording for the destructive confirmation.
+4. **Success:** information summary **“The selected connection has been removed.”**
+   or, for example, **“All 2 connections have been removed.”** Retained views show
+   **“Connection removed”** / **“This connection is no longer in the tree. Close this view.”**
+   They do not offer Retry.
+5. **Partial failure:** a summary can say
+   **“Removed 1 of 2 connections. 1 failed.”**; per-connection detail is in Output as
+   `Failed to remove connection "Orders": {error}`.
+6. **All failed:** an error notification says
+   **“Failed to remove the selected connection. See the output channel for details.”**
+   or `Failed to remove all 2 connections. See the output channel for details.`
+   Success/partial summaries respect `showOperationSummaries`; this all-failed error
+   does not go through that summary switch.
+
+Sources: [removal sequence and feedback](../../../../../src/commands/removeConnection/removeConnection.ts#L57),
+[confirmation styles](../../../../../src/utils/dialogs/getConfirmation.ts#L55),
+[summary switch](../../../../../src/utils/dialogs/showConfirmation.ts#L9).
+
+**Folder variant:** the confirmation message can be
+`Delete folder "reviews"?`, then `This will also delete 2 connections.`, then
+**“This cannot be undone.”** It uses the same confirmation styles and descendant
+teardown/tab choice. On success the summary is
+**“The selected folder has been removed.”**
+Sources: [folder confirmation](../../../../../src/commands/connections-view/deleteFolder/ConfirmDeleteStep.ts#L18),
+[folder summary](../../../../../src/commands/connections-view/deleteFolder/deleteFolder.ts#L63).
+
+**Review checkpoint:** count the prompts a person actually encounters. Is each asking a
+different understandable question? Are partial failures visible with summaries disabled?
+Do not interpret “delete connection” as deleting the database service itself.
+
+### C11. “Azure Discovery is empty or only some subscriptions appear”
+
+Expand/refresh the Azure provider without changing shared account state just to force
+a test. Separate “nothing returned”, “partial results” and “tenant-picker lookup failed”.
+
+**Nothing returned:** an information **modal** says:
+
+> **No Azure Subscriptions Found**
+>
+> To connect to Azure resources, you need to sign in to Azure accounts.
+>
+> If you are already signed in, your subscription or tenant filters may be hiding results.
+
+Actions: **“Manage Accounts”**, **“Adjust Filters”**; dismissal leaves a **“Retry”** row.
+The filtering wizard can suppress Adjust Filters to avoid a loop, in which case only
+the sign-in paragraph is used.
+Sources: [empty-state modal](../../../../../src/plugins/api-shared/azure/askToConfigureCredentials.ts#L26),
+[provider continuation](../../../../../src/plugins/service-azure-mongo-vcore/discovery-tree/AzureServiceRootItem.ts#L51).
+
+**Some account/tenant listings fail:** successful subscriptions remain visible and a
+non-modal warning says:
+
+> Some Azure accounts or tenants could not be listed, so some subscriptions may be missing.
+
+Action: **“Show Output”**. There the corresponding sanitized warnings are
+**“Skipped an Azure account because its tenants could not be listed.”** and
+**“Skipped an Azure tenant because its subscriptions could not be listed.”**
+These intentionally do not name which account/tenant.
+Source: [partial listing](../../../../../src/plugins/api-shared/azure/AzureSubscriptionProviderWithFilters.ts#L107).
+
+**Manage Accounts:** the picker placeholder is **“Azure accounts used for service discovery”**,
+with loading text **“Loading Azure Accounts Used for Service Discovery…”**.
+With no accounts it offers **“Sign in to Azure to continue…”**, detail
+**“Not signed in to Azure”**, and **“Exit”**. With accounts, examples include
+**“1 tenant available (0 signed in)”** and **“Sign in with a different account…”**.
+Inside an account, tenant rows say **“Signed in”** or **“Select to sign in”**
+(with codicons). An empty tenant list has **“No tenants available for this account”**
+as a separator and actionable **“Back to account selection”** / **“Exit”**.
+Successful explicit tenant authentication notifies, for example,
+**“Successfully signed in to {tenantName}”**.
+Sources: [account picker](../../../../../src/plugins/api-shared/azure/credentialsManagement/SelectAccountStep.ts#L49),
+[tenant picker](../../../../../src/plugins/api-shared/azure/credentialsManagement/AccountTenantsStep.ts#L41).
+
+**New/edit Entra connection tenant selection:** a different picker says
+**“Select a tenant for Microsoft Entra ID authentication”**, initially
+**“Loading Tenants…”**. Both keep **“Manually enter a custom tenant ID”** available,
+but their account-management rows currently use different wording: new connections
+show **“Manage Azure Accounts…”**, detail
+**“Sign in to additional accounts or authenticate with other tenants to see more options.”**;
+credential edits show **“Sign in to other Azure accounts to access more tenants”**.
+When no tenants load, an actionable
+**“Retry loading tenants”** row carries one of:
+
+- **“Loading tenants timed out after 5 seconds.”** initially, or
+  **“Loading tenants timed out after 30 seconds.”** after explicit retry.
+- **“Unable to load tenants. See the DocumentDB output for details.”**
+- **“No tenants were returned for the available Azure accounts.”**
+
+Manual input asks **“Enter the tenant ID (GUID)”**. Empty input validates as
+**“Tenant ID cannot be empty”**; invalid format says
+**“Please enter a valid tenant ID in GUID format (e.g., 12345678-1234-1234-1234-123456789012 or 12345678123412341234123456789012)”**.
+Sources: [new-connection tenant step](../../../../../src/commands/newConnection/PromptTenantStep.ts#L32),
+[edit tenant step](../../../../../src/commands/updateCredentials/PromptTenantStep.ts).
+
+**Separate Azure RU key-recovery branch:** clicking Retry after a rejected key can
+produce either **“Azure sign-in needed”** / **“Sign in to Azure and try Retry again.”**
+or **“Could not read the database key from Azure.”** /
+**“Check access to the Azure resource and try again.”**, both host error modals
+([key read](../../../../../src/commands/retryAuthentication/retryAuthentication.ts#L107)).
+This is Azure resource access, not necessarily expired database sign-in from C3.
+
+**Review checkpoint:** can the person tell missing resources from hidden filters,
+failed discovery and expired database authentication? Does Show Output provide enough
+detail to act without disclosing account identities in the warning itself?
+
+### C12. “I choose Diagnose, copy a report, or rely on assistive feedback”
+
+These are adjacent surfaces the person can reach while following the recovery story.
+
+- **Diagnose opens a separate panel**, headed **“Connection Diagnostics”**, subtitle
+  **“Check a connection step by step and review the results.”** During a run, status
+  can say **“Checking the connection…”**, **“Diagnosis cancelled”** or
+  **“Diagnosis did not finish”**. The principal run controls are **“Cancel”** and
+  **“Re-run”**; completed reports offer **“Show report”** and **“Share report”**.
+- **Opening an already-open completed diagnostics panel** can produce an inline
+  information bar: **“Connection Diagnostics is already open for this connection. Run the diagnosis again?”**
+  with **“Re-run”** and a dismiss action. This is not a connection-error modal.
+- **Report sharing with identifiers included** asks a host warning confirmation:
+  **“This report includes host and identity details.”**, detail
+  **“Host names, addresses and the username are not hidden. To hide them, cancel, select Hide identifiers in the report, and then share again.”**,
+  action **“Copy report”** or **“Save report”**.
+  The panel itself says **“Review the report before sharing.”** and, depending on the
+  selection, **“The report will replace host and identity details with placeholders.”**
+  or **“The report will include host and identity details.”**
+- **Report-action failure** stays as an inline error, for example
+  **“Could not copy the report: {error}”**; successful copying announces
+  **“Report copied”** through a live region.
+
+Source: [diagnostics UI and sharing](../../../../../src/webviews/documentdb/connectionDiagnostics/ConnectionDiagnostics.tsx#L420).
+Detailed check/result wording belongs to the diagnostics feature, not a second full
+diagnostics review in this PR.
+
+**Messages a sighted reviewer may not notice:** successful retained-view Retry
+announces **“Reconnected”**. Dashboard transitions announce
+**“Connected to the cluster.”** / **“Lost connection to the cluster.”**; manual storage
+refresh can announce **“Refreshing storage statistics…”**, then, for example,
+**“Storage statistics refreshed. 2 databases.”** These are live-region messages,
+not guaranteed visible banners. Check them with a real screen reader; source ARIA or
+a browser accessibility tree does not establish what is actually spoken.
+Sources: [recovery announcement](../../../../../src/webviews/documentdb/useBoundViewRecovery.ts#L122),
+[Dashboard announcements](../../../../../src/webviews/documentdb/clusterDashboard/ClusterDashboard.tsx#L210).
+
+**Output/debug-only examples:** Show Connection Stats opens Output and begins
+`[Connection Stats] Extension-host cache entries: {count}`. It also explains
+**“Each cached client can own multiple sockets. Socket counts are not tracked here. For Shell and Playground, use Show Worker Stats.”**
+Generation, held state and token-expiry diagnostics are evidence for the operator;
+they are not normal end-user lifecycle notifications
+([stats command](../../../../../src/commands/showConnectionStats/showConnectionStats.ts#L32)).
+
+### C13. Capture the story, not just isolated strings
+
+For each scenario, dictate a short sequence using this review card:
+
+| Question | What to record |
+| --- | --- |
+| What did I click / what changed externally? | Entry point, connection type, open views/workers, relevant setting |
+| What appeared first, second, and after dismissal? | Exact title/detail/action labels; notification vs modal vs inline vs Output |
+| Did two surfaces disagree? | For example, a bound Playground CodeLens, a failed old result and a current sign-in warning |
+| Could I explain the next action without opening docs? | Which button/row I expected to use, and what it actually did |
+| How did I know it finished? | View enabled, result changed, live announcement, tree refreshed, or no visible completion |
+| What was preserved or lost? | Draft, result, query text, scrollback, worker variables; whether anything unexpectedly replayed |
+| Is this observed or only inferred? | Runtime evidence versus a source-only branch; link an existing F-item where applicable |
+
+The six seeded Flags remain suggestions pending this walkthrough. No new UX decisions,
+runtime findings or implementation fixes are implied by adding this message inventory.
