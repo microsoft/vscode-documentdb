@@ -65,7 +65,6 @@ const useStyles = makeStyles({
 
 export interface TypedValueCellProps {
     readonly value: GridCellValue | undefined;
-    readonly isRootId: boolean;
 }
 
 export function TypedValueCell({ value }: TypedValueCellProps): JSX.Element {

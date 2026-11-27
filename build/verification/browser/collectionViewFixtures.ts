@@ -37,18 +37,18 @@ type CollectionViewFixture = {
 const mixedTypesPage: TablePageOutput = {
     path: [],
     columns: [
-        { key: ROOT_ID_COLUMN_KEY, label: '_id', isRootId: true },
-        { key: fieldColumnKey('text'), label: 'text', isRootId: false },
-        { key: fieldColumnKey('count'), label: 'count', isRootId: false },
-        { key: fieldColumnKey('active'), label: 'active', isRootId: false },
-        { key: fieldColumnKey('created'), label: 'created', isRootId: false },
-        { key: fieldColumnKey('amount'), label: 'amount', isRootId: false },
-        { key: fieldColumnKey('objectId'), label: 'objectId', isRootId: false },
-        { key: fieldColumnKey('uuid'), label: 'uuid', isRootId: false },
-        { key: fieldColumnKey('binary'), label: 'binary', isRootId: false },
-        { key: fieldColumnKey('array'), label: 'array', isRootId: false },
-        { key: fieldColumnKey('object'), label: 'object', isRootId: false },
-        { key: fieldColumnKey('legacyUuid'), label: 'legacyUuid', isRootId: false },
+        { key: ROOT_ID_COLUMN_KEY, label: '_id' },
+        { key: fieldColumnKey('text'), label: 'text' },
+        { key: fieldColumnKey('count'), label: 'count' },
+        { key: fieldColumnKey('active'), label: 'active' },
+        { key: fieldColumnKey('created'), label: 'created' },
+        { key: fieldColumnKey('amount'), label: 'amount' },
+        { key: fieldColumnKey('objectId'), label: 'objectId' },
+        { key: fieldColumnKey('uuid'), label: 'uuid' },
+        { key: fieldColumnKey('binary'), label: 'binary' },
+        { key: fieldColumnKey('array'), label: 'array' },
+        { key: fieldColumnKey('object'), label: 'object' },
+        { key: fieldColumnKey('legacyUuid'), label: 'legacyUuid' },
     ],
     rows: [
         {
@@ -104,8 +104,8 @@ const mixedTypesPage: TablePageOutput = {
 const missingVsNullPage: TablePageOutput = {
     path: [],
     columns: [
-        { key: ROOT_ID_COLUMN_KEY, label: '_id', isRootId: true },
-        { key: fieldColumnKey('value'), label: 'value', isRootId: false },
+        { key: ROOT_ID_COLUMN_KEY, label: '_id' },
+        { key: fieldColumnKey('value'), label: 'value' },
     ],
     rows: [
         {
@@ -139,11 +139,11 @@ const missingVsNullPage: TablePageOutput = {
 const heterogeneousPage: TablePageOutput = {
     path: [],
     columns: [
-        { key: ROOT_ID_COLUMN_KEY, label: '_id', isRootId: true },
-        { key: fieldColumnKey('name'), label: 'name', isRootId: false },
-        { key: fieldColumnKey('quantity'), label: 'quantity', isRootId: false },
-        { key: fieldColumnKey('details'), label: 'details', isRootId: false },
-        { key: fieldColumnKey('tags'), label: 'tags', isRootId: false },
+        { key: ROOT_ID_COLUMN_KEY, label: '_id' },
+        { key: fieldColumnKey('name'), label: 'name' },
+        { key: fieldColumnKey('quantity'), label: 'quantity' },
+        { key: fieldColumnKey('details'), label: 'details' },
+        { key: fieldColumnKey('tags'), label: 'tags' },
     ],
     rows: [
         {
@@ -338,8 +338,8 @@ const page500Rows: TableRow[] = Array.from({ length: 500 }, (_, index): TableRow
 const page500: TablePageOutput = {
     path: [],
     columns: [
-        { key: ROOT_ID_COLUMN_KEY, label: '_id', isRootId: true },
-        { key: fieldColumnKey('position'), label: 'position', isRootId: false },
+        { key: ROOT_ID_COLUMN_KEY, label: '_id' },
+        { key: fieldColumnKey('position'), label: 'position' },
     ],
     rows: page500Rows,
 };
@@ -347,8 +347,8 @@ const page500: TablePageOutput = {
 const htmlValuesPage: TablePageOutput = {
     path: [],
     columns: [
-        { key: ROOT_ID_COLUMN_KEY, label: '_id', isRootId: true },
-        { key: fieldColumnKey('displayText'), label: 'displayText', isRootId: false },
+        { key: ROOT_ID_COLUMN_KEY, label: '_id' },
+        { key: fieldColumnKey('displayText'), label: 'displayText' },
     ],
     rows: [
         {
@@ -367,15 +367,15 @@ const htmlValuesPage: TablePageOutput = {
 
 const emptyPage: TablePageOutput = {
     path: [],
-    columns: [{ key: ROOT_ID_COLUMN_KEY, label: '_id', isRootId: true }],
+    columns: [{ key: ROOT_ID_COLUMN_KEY, label: '_id' }],
     rows: [],
 };
 
 const noIdPage: TablePageOutput = {
     path: [],
     columns: [
-        { key: ROOT_ID_COLUMN_KEY, label: '_id', isRootId: true },
-        { key: fieldColumnKey('name'), label: 'name', isRootId: false },
+        { key: ROOT_ID_COLUMN_KEY, label: '_id' },
+        { key: fieldColumnKey('name'), label: 'name' },
     ],
     rows: [
         {
@@ -410,9 +410,9 @@ const stepInPage: TablePageOutput = {
 const nestedPage: TablePageOutput = {
     path: ['details'],
     columns: [
-        { key: ROOT_ID_COLUMN_KEY, label: '_id', isRootId: true },
-        { key: fieldColumnKey('nestedName'), label: 'nestedName', isRootId: false },
-        { key: fieldColumnKey('child'), label: 'child', isRootId: false },
+        { key: ROOT_ID_COLUMN_KEY, label: '_id' },
+        { key: fieldColumnKey('nestedName'), label: 'nestedName' },
+        { key: fieldColumnKey('child'), label: 'child' },
     ],
     rows: stepInPage.rows.map((row, index): TablePageOutput['rows'][number] => ({
         rowKey: row.rowKey,
@@ -431,8 +431,8 @@ const leafPage: TablePageOutput = {
     ...nestedPage,
     path: ['details', 'child'],
     columns: [
-        { key: ROOT_ID_COLUMN_KEY, label: '_id', isRootId: true },
-        { key: fieldColumnKey('leafName'), label: 'leafName', isRootId: false },
+        { key: ROOT_ID_COLUMN_KEY, label: '_id' },
+        { key: fieldColumnKey('leafName'), label: 'leafName' },
     ],
     rows: nestedPage.rows.map((row, index): TablePageOutput['rows'][number] => ({
         rowKey: row.rowKey,
@@ -458,8 +458,8 @@ const stepInRpc = {
 const identityPage: TablePageOutput = {
     path: [],
     columns: [
-        { key: ROOT_ID_COLUMN_KEY, label: '_id', isRootId: true },
-        { key: fieldColumnKey('name'), label: 'name', isRootId: false },
+        { key: ROOT_ID_COLUMN_KEY, label: '_id' },
+        { key: fieldColumnKey('name'), label: 'name' },
     ],
     rows: [
         { id: 'null', display: 'null', type: 'null', name: 'Null ID' },
@@ -480,8 +480,8 @@ const identityPage: TablePageOutput = {
 const arrayTablePage: TablePageOutput = {
     path: [],
     columns: [
-        { key: ROOT_ID_COLUMN_KEY, label: '_id', isRootId: true },
-        { key: fieldColumnKey('ten'), label: 'ten', isRootId: false },
+        { key: ROOT_ID_COLUMN_KEY, label: '_id' },
+        { key: fieldColumnKey('ten'), label: 'ten' },
     ],
     rows: [
         {

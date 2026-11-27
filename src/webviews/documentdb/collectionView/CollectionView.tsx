@@ -7,12 +7,11 @@ import { Button, ProgressBar, Tab, TabList } from '@fluentui/react-components';
 import { EmojiRegular } from '@fluentui/react-icons';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
-import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
+import { type JSX, type KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
 import {
     type ColumnKey,
     fieldFromColumnKey,
     getCell,
-    ROOT_ID_COLUMN_KEY,
     type TablePage,
     type TreeNode,
 } from '../../../utils/documentGrid/types';
@@ -26,6 +25,7 @@ import {
     CollectionViewContext,
     type CollectionViewContextType,
     DefaultCollectionViewContext,
+    type DocumentTarget,
     resolveDocumentTargets,
     Views,
 } from './collectionViewContext';
@@ -51,6 +51,17 @@ interface QueryResults {
 
     /** Number of documents returned by the query (for screen reader announcements) */
     documentCount?: number;
+}
+
+function commandsFor(
+    targets: readonly DocumentTarget[] | undefined,
+): CollectionViewContextType['commands'] {
+    return {
+        disableAddDocument: false,
+        disableViewDocument: targets?.length !== 1,
+        disableEditDocument: targets?.length !== 1,
+        disableDeleteDocument: !targets?.length,
+    };
 }
 
 export const CollectionView = (): JSX.Element => {
@@ -168,7 +179,6 @@ export const CollectionView = (): JSX.Element => {
     const currentContextRef = useRef(currentContext);
     const dataRequestRef = useRef(0);
     const cachedQueryRef = useRef<CollectionViewContextType['activeQuery'] | undefined>(undefined);
-    const tablePageQueryRef = useRef<CollectionViewContextType['activeQuery'] | undefined>(undefined);
     const tablePageRequestRef = useRef<number | undefined>(undefined);
     currentQueryResultsRef.current = currentQueryResults;
     currentContextRef.current = currentContext;
@@ -179,35 +189,34 @@ export const CollectionView = (): JSX.Element => {
             !context.isLoading &&
             context.currentView === Views.TABLE &&
             page !== undefined &&
-            tablePageQueryRef.current === context.activeQuery &&
             tablePageRequestRef.current === dataRequestRef.current &&
             JSON.stringify(page.path) === JSON.stringify(context.currentViewState?.currentPath ?? [])
         );
     }, []);
+
+    const getSelectedTargets = useCallback(
+        (context: CollectionViewContextType): DocumentTarget[] | undefined =>
+            isCurrentTablePage(context)
+                ? resolveDocumentTargets(currentQueryResultsRef.current?.tablePage, context.dataSelection.selectedRowKeys)
+                : undefined,
+        [isCurrentTablePage],
+    );
 
     const handleSelectedRowKeysChange = useCallback(
         (selectedRowKeys: readonly string[]): void => {
             setCurrentContext((prev) => {
                 const isCurrentPage = isCurrentTablePage(prev);
                 const nextRowKeys = isCurrentPage ? [...selectedRowKeys] : [];
-                const targets = isCurrentPage
-                    ? resolveDocumentTargets(currentQueryResultsRef.current?.tablePage, nextRowKeys)
-                    : undefined;
                 const next = {
                     ...prev,
                     dataSelection: { selectedRowKeys: nextRowKeys },
-                    commands: {
-                        disableAddDocument: false,
-                        disableViewDocument: targets?.length !== 1,
-                        disableEditDocument: targets?.length !== 1,
-                        disableDeleteDocument: !targets?.length,
-                    },
                 };
-                currentContextRef.current = next;
-                return next;
+                const withSelection = { ...next, commands: commandsFor(getSelectedTargets(next)) };
+                currentContextRef.current = withSelection;
+                return withSelection;
             });
         },
-        [isCurrentTablePage],
+        [getSelectedTargets, isCurrentTablePage],
     );
 
     /**
@@ -337,23 +346,16 @@ export const CollectionView = (): JSX.Element => {
         }
         const request = ++dataRequestRef.current;
         handleSelectedRowKeysChange([]);
-        const query = currentContextRef.current.activeQuery;
         const path = [...(currentContextRef.current.currentViewState?.currentPath ?? [])];
-        const isCurrentRequest = (): boolean =>
-            request === dataRequestRef.current &&
-            query === currentContextRef.current.activeQuery &&
-            selectedView === currentContextRef.current.currentView &&
-            (selectedView !== Views.TABLE ||
-                JSON.stringify(path) === JSON.stringify(currentContextRef.current.currentViewState?.currentPath ?? []));
+        const isCurrentRequest = (): boolean => request === dataRequestRef.current;
         switch (selectedView) {
             case Views.TABLE: {
                 trpcClient.mongoClusters.collectionView.getCurrentPageAsTable
                     .query(path)
                     .then((result) => {
-                        if (!isCurrentRequest() || JSON.stringify(result.path) !== JSON.stringify(path)) {
+                        if (!isCurrentRequest()) {
                             return;
                         }
-                        tablePageQueryRef.current = query;
                         tablePageRequestRef.current = request;
                         currentQueryResultsRef.current = { ...currentQueryResultsRef.current, tablePage: result };
                         setCurrentQueryResults((prev) => ({
@@ -575,14 +577,7 @@ export const CollectionView = (): JSX.Element => {
     };
 
     function handleDeleteDocumentRequest(): void {
-        const context = currentContextRef.current;
-        if (!isCurrentTablePage(context)) {
-            return;
-        }
-        const targets = resolveDocumentTargets(
-            currentQueryResultsRef.current?.tablePage,
-            context.dataSelection.selectedRowKeys,
-        );
+        const targets = getSelectedTargets(currentContextRef.current);
         if (!targets?.length) {
             return;
         }
@@ -615,21 +610,13 @@ export const CollectionView = (): JSX.Element => {
                 setCurrentQueryResults((prev) => ({ ...prev, tablePage: nextPage }));
                 setCurrentContext((prev) => {
                     const selectedRowKeys = prev.dataSelection.selectedRowKeys.filter((key) => !removedKeys.has(key));
-                    const remainingTargets = isCurrentTablePage(prev)
-                        ? resolveDocumentTargets(currentQueryResultsRef.current?.tablePage, selectedRowKeys)
-                        : undefined;
                     const next = {
                         ...prev,
                         dataSelection: { selectedRowKeys },
-                        commands: {
-                            disableAddDocument: false,
-                            disableViewDocument: remainingTargets?.length !== 1,
-                            disableEditDocument: remainingTargets?.length !== 1,
-                            disableDeleteDocument: !remainingTargets?.length,
-                        },
                     };
-                    currentContextRef.current = next;
-                    return next;
+                    const withSelection = { ...next, commands: commandsFor(getSelectedTargets(next)) };
+                    currentContextRef.current = withSelection;
+                    return withSelection;
                 });
             })
             .catch((error) => {
@@ -641,19 +628,12 @@ export const CollectionView = (): JSX.Element => {
             });
     }
 
-    function handleViewDocumentRequest(): void {
-        const context = currentContextRef.current;
-        if (!isCurrentTablePage(context)) {
-            return;
-        }
-        const targets = resolveDocumentTargets(
-            currentQueryResultsRef.current?.tablePage,
-            context.dataSelection.selectedRowKeys,
-        );
+    function openSelectedDocument(open: (documentId: string) => Promise<unknown>): void {
+        const targets = getSelectedTargets(currentContextRef.current);
         if (targets?.length !== 1) {
             return;
         }
-        trpcClient.mongoClusters.collectionView.viewDocumentById.mutate(targets[0].documentId).catch((error) => {
+        open(targets[0].documentId).catch((error) => {
             void trpcClient.common.displayErrorMessage.mutate({
                 message: l10n.t('Error opening the document view'),
                 modal: false,
@@ -662,25 +642,16 @@ export const CollectionView = (): JSX.Element => {
         });
     }
 
-    function handleEditDocumentRequest(): void {
-        const context = currentContextRef.current;
-        if (!isCurrentTablePage(context)) {
-            return;
-        }
-        const targets = resolveDocumentTargets(
-            currentQueryResultsRef.current?.tablePage,
-            context.dataSelection.selectedRowKeys,
+    function handleViewDocumentRequest(): void {
+        openSelectedDocument((documentId) =>
+            trpcClient.mongoClusters.collectionView.viewDocumentById.mutate(documentId),
         );
-        if (targets?.length !== 1) {
-            return;
-        }
-        trpcClient.mongoClusters.collectionView.editDocumentById.mutate(targets[0].documentId).catch((error) => {
-            void trpcClient.common.displayErrorMessage.mutate({
-                message: l10n.t('Error opening the document view'),
-                modal: false,
-                cause: error instanceof Error ? error.message : String(error),
-            });
-        });
+    }
+
+    function handleEditDocumentRequest(): void {
+        openSelectedDocument((documentId) =>
+            trpcClient.mongoClusters.collectionView.editDocumentById.mutate(documentId),
+        );
     }
 
     function handleAddDocumentRequest(): void {
@@ -703,10 +674,9 @@ export const CollectionView = (): JSX.Element => {
             !page ||
             !row ||
             !isCurrentTablePage(context) ||
-            columnKey === ROOT_ID_COLUMN_KEY ||
             field === undefined ||
+            // O1 keeps nested _id fields hidden; only the root ID column is shown.
             field === '_id' ||
-            !page.columns.some((column) => column.key === columnKey && !column.isRootId) ||
             getCell(row, columnKey)?.type !== 'object'
         ) {
             return;
@@ -734,6 +704,39 @@ export const CollectionView = (): JSX.Element => {
             .catch((error) => {
                 console.debug('Failed to report an event:', error);
             });
+    }
+
+    function handleResultsKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
+        const picker = viewPickerRef.current;
+        if (
+            event.key !== 'Escape' ||
+            event.defaultPrevented ||
+            event.altKey ||
+            event.ctrlKey ||
+            event.metaKey ||
+            event.shiftKey ||
+            !(event.target instanceof HTMLElement) ||
+            !event.target.matches('[role="gridcell"], [role="columnheader"]') ||
+            !event.target.closest('[role="grid"], [role="treegrid"]') ||
+            !picker ||
+            picker.disabled
+        ) {
+            return;
+        }
+        // Bubble after cell/popup handlers; only grid cells can request this exit.
+        event.preventDefault();
+        event.stopPropagation();
+        if (currentContext.currentView === Views.TABLE) {
+            // A held Escape must not clear selection and then leave the grid.
+            if (event.repeat) {
+                return;
+            }
+            if (currentContext.dataSelection.selectedRowKeys.length > 0) {
+                handleSelectedRowKeysChange([]);
+                return;
+            }
+        }
+        picker.focus();
     }
 
     return (
@@ -886,38 +889,7 @@ export const CollectionView = (): JSX.Element => {
                                         ? JSON.stringify({ focusable: { ignoreKeydown: { Tab: true } } })
                                         : undefined
                                 }
-                                onKeyDown={(event): void => {
-                                    const picker = viewPickerRef.current;
-                                    if (
-                                        event.key !== 'Escape' ||
-                                        event.defaultPrevented ||
-                                        event.altKey ||
-                                        event.ctrlKey ||
-                                        event.metaKey ||
-                                        event.shiftKey ||
-                                        !(event.target instanceof HTMLElement) ||
-                                        !event.target.matches('[role="gridcell"], [role="columnheader"]') ||
-                                        !event.target.closest('[role="grid"], [role="treegrid"]') ||
-                                        !picker ||
-                                        picker.disabled
-                                    ) {
-                                        return;
-                                    }
-                                    // Bubble after cell/popup handlers; only grid cells can request this exit.
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    if (currentContext.currentView === Views.TABLE) {
-                                        // A held Escape must not clear selection and then leave the grid.
-                                        if (event.repeat) {
-                                            return;
-                                        }
-                                        if (currentContext.dataSelection.selectedRowKeys.length > 0) {
-                                            handleSelectedRowKeysChange([]);
-                                            return;
-                                        }
-                                    }
-                                    picker.focus();
-                                }}
+                                onKeyDown={handleResultsKeyDown}
                             >
                                 {
                                     {

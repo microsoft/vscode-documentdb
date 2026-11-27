@@ -1442,6 +1442,20 @@ export const collectionViewContracts = {
     'late-query': [
         {
             kind: 'text',
+            name: "TDD: K2 late nested data cannot replace a newer query's results",
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            includes: ['Alpha', 'Beta'],
+            excludes: ['nested Alpha'],
+            waitForText: true,
+            steps: [
+                { action: 'dblclick', role: 'gridcell', name: '{...}' },
+                { action: 'click', role: 'button', name: 'Find Query: execute the current editor values' },
+                { action: 'releaseReply', tag: 'old-details' },
+            ],
+        },
+        {
+            kind: 'text',
             name: 'TDD: K2 an old nested request can remain pending while returning to Root',
             requiresGrid: 'grid',
             selector: '[aria-label="Document field path"]',

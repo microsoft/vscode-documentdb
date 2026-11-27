@@ -123,7 +123,7 @@ export const DataViewPanelTree = ({ nodes }: DataViewPanelTreeProps): React.JSX.
                         onFocusCapture={(event): void => {
                             props.onFocusCapture?.(event);
                             if (!event.defaultPrevented && event.target === event.currentTarget) {
-                                // Keep Cell's own bubbling onFocus for native roving focus.
+                                // Native Tab exit uses the remembered position, not the focused DOM cell.
                                 props.setActivePosition({ rowIdx: props.rowIdx, idx: props.column.idx });
                             }
                         }}

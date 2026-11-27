@@ -458,9 +458,9 @@ const rows: TableRow[] = [
 const table: CollectionOutputs['getCurrentPageAsTable'] = {
     path: [],
     columns: [
-        { key: 'root:_id', label: '_id', isRootId: true },
-        { key: 'field:name', label: 'name', isRootId: false },
-        { key: 'field:quantity', label: 'quantity', isRootId: false },
+        { key: 'root:_id', label: '_id' },
+        { key: 'field:name', label: 'name' },
+        { key: 'field:quantity', label: 'quantity' },
     ],
     rows,
 };

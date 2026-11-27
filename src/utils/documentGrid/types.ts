@@ -26,7 +26,6 @@ export function fieldFromColumnKey(key: ColumnKey): string | undefined {
 export interface TableColumn {
     readonly key: ColumnKey;
     readonly label: string;
-    readonly isRootId: boolean;
 }
 
 export interface TableRow {

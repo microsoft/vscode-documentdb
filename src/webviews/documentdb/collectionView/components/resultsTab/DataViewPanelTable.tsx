@@ -121,9 +121,7 @@ export function DataViewPanelTable({
                 (column): Column<TableRow> => ({
                     key: column.key,
                     name: column.label,
-                    renderCell: ({ row }): React.ReactNode => (
-                        <TypedValueCell value={getCell(row, column.key)} isRootId={column.isRootId} />
-                    ),
+                    renderCell: ({ row }): React.ReactNode => <TypedValueCell value={getCell(row, column.key)} />,
                 }),
             ),
         [page?.columns],
@@ -158,7 +156,7 @@ export function DataViewPanelTable({
                 if (event.defaultPrevented || event.button !== 0) {
                     return;
                 }
-                const columnKey = page?.columns.find((candidate) => candidate.key === column.key)?.key;
+                const columnKey = page?.columns[column.idx]?.key;
                 if (columnKey !== undefined) {
                     onStepIn(row.rowKey, columnKey);
                 }

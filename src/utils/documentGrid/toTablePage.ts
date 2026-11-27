@@ -32,10 +32,10 @@ export function toTablePage(
     return {
         path: [...path],
         columns: [
-            { key: ROOT_ID_COLUMN_KEY, label: '_id', isRootId: true },
+            { key: ROOT_ID_COLUMN_KEY, label: '_id' },
             ...headers
                 .filter((field) => field !== '_id')
-                .map((field) => ({ key: fieldColumnKey(field), label: field, isRootId: false })),
+                .map((field) => ({ key: fieldColumnKey(field), label: field })),
         ],
         rows: documents.map((document, index) => {
             const cells: Partial<Record<ColumnKey, GridCellValue>> = {};

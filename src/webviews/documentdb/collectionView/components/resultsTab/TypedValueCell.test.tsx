@@ -46,7 +46,7 @@ afterEach(async () => {
 
 describe('TypedValueCell', () => {
     it('renders the formatted value with its existing type glyph and accessible full type name', async () => {
-        const host = await render(<TypedValueCell value={{ display: '12.50', type: 'decimal128' }} isRootId={false} />);
+        const host = await render(<TypedValueCell value={{ display: '12.50', type: 'decimal128' }} />);
         const cell = host.firstElementChild;
 
         expect(host.textContent).toBe('12.50d128');
@@ -56,9 +56,9 @@ describe('TypedValueCell', () => {
     });
 
     it('keeps missing and explicit null as distinct accessible cell states', async () => {
-        const missingHost = await render(<TypedValueCell value={undefined} isRootId={false} />);
+        const missingHost = await render(<TypedValueCell value={undefined} />);
         const missing = missingHost.firstElementChild;
-        const nullHost = await render(<TypedValueCell value={{ display: 'null', type: 'null' }} isRootId={false} />);
+        const nullHost = await render(<TypedValueCell value={{ display: 'null', type: 'null' }} />);
         const explicitNull = nullHost.firstElementChild;
 
         expect(missingHost.textContent).toBe('');
@@ -71,7 +71,7 @@ describe('TypedValueCell', () => {
 
     it('renders untrusted display strings only as React text', async () => {
         const value = '<strong>display-only text</strong> <img src=x onerror=alert(1)>';
-        const host = await render(<TypedValueCell value={{ display: value, type: 'string' }} isRootId={false} />);
+        const host = await render(<TypedValueCell value={{ display: value, type: 'string' }} />);
 
         expect(host.textContent).toBe(`${value}Ab`);
         expect(host.querySelector('strong, img, script')).toBeNull();
