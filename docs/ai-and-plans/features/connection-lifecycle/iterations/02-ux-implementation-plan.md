@@ -220,6 +220,17 @@ duplicating framework behavior.
 > The initial wrapper-selection blocker was resolved by preserving registrations and
 > changing Diagnostics itself; no public argument contract changed. F5/WI-1c remains open.
 
+> **Done (2026-11-27), WI-1c-tree commit `c77ba2115`:** supported explicit stale recovery
+> actions refresh first, then show one accurate removed/changed modal. Other stale states
+> refresh quietly; a connection disconnected during sign-in retains the existing closed
+> explanation. Worker sign-in entry points, identity checks, key/latch mutations and unsupported
+> Azure Workspace guards are unchanged. Decisions: operator, explicit F5 option C; advised
+> (`claude-opus-5.5`), 85% approval of the exact revision. Actual/recommended model:
+> `gpt-6.1-sol`; the worker verified preserved invariants at 97%. Forty-four focused cases
+> were added across the three command test files; 73 tests passed. Epoch-only presentation
+> assertions intentionally became quiet, retaining no-auth-start assertions. No helper export
+> or helper expansion was added. Worker notification handling remains a separate follow-up.
+
 ## WI-2: Correct worker recovery guidance and Shell status output (F2, F8)
 
 **Depends on:** none.  
@@ -489,7 +500,7 @@ Before calling this iteration complete:
 | WI | Status | Outcome / decision / verification |
 | --- | --- | --- |
 | WI-0 | Gates approved; F7 live evidence pending | Current-code baseline checked; no live reproduction claim |
-| WI-1 | Commands implemented; stale tree actions in progress; expansion deferred | WI-1b `57f96b23b`; F3 expansion follows #1143; unproven worker cases remain parked |
+| WI-1 | Tree commands implemented; worker notification follow-up pending | WI-1b `57f96b23b`, WI-1c-tree `c77ba2115`; F3 expansion follows #1143 |
 | WI-2 | Guidance implemented; system output pending | WI-2a `a2eba522a`; 118 focused tests passed; WI-2b queued last |
 | WI-3 | Implemented; final batch/browser checks pending | `6d2e10715`; 23 focused tests; exact revision advised at 88% |
 | WI-4 | Implemented; localization/live checks pending | `5d00558cb`; Batch 1 build/tests passed |
