@@ -67,6 +67,11 @@ why it is unavailable:
 - Use the **X** to dismiss the dialog when you need to inspect or copy view contents. Database operations stay
   disabled, and the next operation shows the dialog again.
 
+Once **Retry** is offered, it remains available while that connection problem is unresolved,
+even if the reason changes or you dismiss and reopen the dialog. Attempts still check the original
+binding and cannot bypass a blocked connection or switch identity. After successful recovery,
+a later problem can offer **Close view** only.
+
 Use the cluster's **Reconnect** action in the tree to restore the same connection. If reconnect
 automatically opens the retained Dashboard for that connection, it retries on its own. If it
 stays disabled, select **Retry**, as you would in other retained webviews.

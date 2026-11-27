@@ -305,6 +305,18 @@ and Dashboard if their shared integration wiring differs.
 > recovery ends the episode; a later initially Close-only episode does not inherit Retry.
 > New terminal reasons remain truthful, but cannot remove Retry already offered in that episode.
 
+> **Done (2026-11-27), commit `6d2e10715`:** failed Retry feedback stays in the existing dialog.
+> The current unavailable reason updates when the host reports a different reason/action; a
+> separate bounded alert announces every failed attempt. Retry, once offered, remains through
+> failures, runtime updates and dismissal/reopening of the same unavailable episode. Successful
+> recovery resets availability for a later episode. Retained Retry explicitly dispatches `retry`,
+> never `close`, and no original operation is replayed. Decisions: operator, explicit 2.A
+> qualification and 1A episode scope; advised (`claude-opus-5.5`), 88% approval of the exact
+> corrected revision. Recommended Terra, actual `mai-code-2` per the approved substitution.
+> Eight focused tests were added across the two existing files; 23 tests passed. The interim
+> type-check encountered concurrent WI-6 edits; WI-6 subsequently reported a successful root
+> type-check. Final batch build and browser scenarios remain pending.
+
 ## WI-4: Clarify teardown and retained-content wording (F9–F11)
 
 **Depends on:** none.  
@@ -479,7 +491,7 @@ Before calling this iteration complete:
 | WI-0 | Gates approved; F7 live evidence pending | Current-code baseline checked; no live reproduction claim |
 | WI-1 | Commands implemented; stale tree actions in progress; expansion deferred | WI-1b `57f96b23b`; F3 expansion follows #1143; unproven worker cases remain parked |
 | WI-2 | Guidance implemented; system output pending | WI-2a `a2eba522a`; 118 focused tests passed; WI-2b queued last |
-| WI-3 | Sticky-Retry rework in progress | Episode scope approved 1A; truthful reasons and retained Retry required |
+| WI-3 | Implemented; final batch/browser checks pending | `6d2e10715`; 23 focused tests; exact revision advised at 88% |
 | WI-4 | Implemented; localization/live checks pending | `5d00558cb`; Batch 1 build/tests passed |
 | WI-5 | Implemented and locally verified | `e4a6ad337`; Batch 1 build/tests passed |
 | WI-6 | Anonymous startup in progress | Parser and metadata-only completion scope approved |
