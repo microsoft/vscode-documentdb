@@ -37,7 +37,6 @@ export function DataViewPanelTable({
     onStepIn,
 }: DataViewPanelTableProps): React.JSX.Element {
     const [currentContext] = React.useContext(CollectionViewContext);
-    void onStepIn;
     const gridRef = React.useRef<DataGridHandle>(null);
     const anchorRef = React.useRef<string | undefined>(undefined);
     const selectionScopeRef = React.useRef({
@@ -85,10 +84,9 @@ export function DataViewPanelTable({
     }
 
     function handleRowKeyDown(row: TableRow, event: React.KeyboardEvent<HTMLDivElement>): void {
-        if (event.key !== ' ') {
+        if (event.key !== ' ' && event.key !== 'Enter') {
             return;
         }
-        // RDG's native Shift+Space toggles its active row; use the actually focused row instead.
         event.stopPropagation();
         if (
             event.defaultPrevented ||
@@ -105,17 +103,24 @@ export function DataViewPanelTable({
         if (!event.repeat) {
             const columnIndex = Number(event.target.getAttribute('aria-colindex')) - 1;
             const rowIndex = page?.rows.indexOf(row) ?? -1;
+            const columnKey = page?.columns[columnIndex]?.key;
             if (
                 rowIndex === -1 ||
                 !Number.isInteger(columnIndex) ||
                 columnIndex < 0 ||
-                columnIndex >= columns.length
+                columnKey === undefined
             ) {
                 return;
             }
-            // Keep subsequent native arrow navigation aligned when a cell was focused directly.
+            // RDG's active position can lag direct focus, so sync it from the actual focused cell.
             gridRef.current?.setActivePosition({ idx: columnIndex, rowIdx: rowIndex }, { shouldFocus: false });
-            selectRow(row, event.shiftKey ? 'extend' : 'toggle');
+            if (event.key === 'Enter') {
+                if (!event.shiftKey) {
+                    onStepIn(row.rowKey, columnKey);
+                }
+            } else {
+                selectRow(row, event.shiftKey ? 'extend' : 'toggle');
+            }
         }
     }
 
@@ -156,6 +161,15 @@ export function DataViewPanelTable({
                     selectRow(row, 'extend');
                 } else {
                     selectRow(row, event.ctrlKey || event.metaKey ? 'toggle' : 'replace');
+                }
+            }}
+            onCellDoubleClick={({ column, row }, event): void => {
+                if (event.defaultPrevented || event.button !== 0) {
+                    return;
+                }
+                const columnKey = page?.columns.find((candidate) => candidate.key === column.key)?.key;
+                if (columnKey !== undefined) {
+                    onStepIn(row.rowKey, columnKey);
                 }
             }}
             renderers={{

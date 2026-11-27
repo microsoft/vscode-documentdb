@@ -172,13 +172,22 @@ export const CollectionView = (): JSX.Element => {
     currentQueryResultsRef.current = currentQueryResults;
     currentContextRef.current = currentContext;
 
+    const isCurrentTablePage = useCallback((context: CollectionViewContextType): boolean => {
+        const page = currentQueryResultsRef.current?.tablePage;
+        return (
+            !context.isLoading &&
+            context.currentView === Views.TABLE &&
+            page !== undefined &&
+            tablePageQueryRef.current === context.activeQuery &&
+            tablePageRequestRef.current === dataRequestRef.current &&
+            JSON.stringify(page.path) ===
+                JSON.stringify(context.currentViewState?.currentPath ?? [])
+        );
+    }, []);
+
     const handleSelectedRowKeysChange = useCallback((selectedRowKeys: readonly string[]): void => {
         setCurrentContext((prev) => {
-            const isCurrentPage =
-                !prev.isLoading &&
-                prev.currentView === Views.TABLE &&
-                tablePageQueryRef.current === prev.activeQuery &&
-                tablePageRequestRef.current === dataRequestRef.current;
+            const isCurrentPage = isCurrentTablePage(prev);
             const nextRowKeys = isCurrentPage ? [...selectedRowKeys] : [];
             const targets = isCurrentPage
                 ? resolveDocumentTargets(currentQueryResultsRef.current?.tablePage, nextRowKeys)
@@ -196,7 +205,7 @@ export const CollectionView = (): JSX.Element => {
             currentContextRef.current = next;
             return next;
         });
-    }, []);
+    }, [isCurrentTablePage]);
 
     /**
      * Reset query insights when query changes (not on pagination)
@@ -565,12 +574,7 @@ export const CollectionView = (): JSX.Element => {
 
     function handleDeleteDocumentRequest(): void {
         const context = currentContextRef.current;
-        if (
-            context.isLoading ||
-            context.currentView !== Views.TABLE ||
-            tablePageQueryRef.current !== context.activeQuery ||
-            tablePageRequestRef.current !== dataRequestRef.current
-        ) {
+        if (!isCurrentTablePage(context)) {
             return;
         }
         const targets = resolveDocumentTargets(
@@ -609,13 +613,9 @@ export const CollectionView = (): JSX.Element => {
                 setCurrentQueryResults((prev) => ({ ...prev, tablePage: nextPage }));
                 setCurrentContext((prev) => {
                     const selectedRowKeys = prev.dataSelection.selectedRowKeys.filter((key) => !removedKeys.has(key));
-                    const remainingTargets =
-                        !prev.isLoading &&
-                        prev.currentView === Views.TABLE &&
-                        tablePageQueryRef.current === prev.activeQuery &&
-                        tablePageRequestRef.current === dataRequestRef.current
-                            ? resolveDocumentTargets(currentQueryResultsRef.current?.tablePage, selectedRowKeys)
-                            : undefined;
+                    const remainingTargets = isCurrentTablePage(prev)
+                        ? resolveDocumentTargets(currentQueryResultsRef.current?.tablePage, selectedRowKeys)
+                        : undefined;
                     const next = {
                         ...prev,
                         dataSelection: { selectedRowKeys },
@@ -641,12 +641,7 @@ export const CollectionView = (): JSX.Element => {
 
     function handleViewDocumentRequest(): void {
         const context = currentContextRef.current;
-        if (
-            context.isLoading ||
-            context.currentView !== Views.TABLE ||
-            tablePageQueryRef.current !== context.activeQuery ||
-            tablePageRequestRef.current !== dataRequestRef.current
-        ) {
+        if (!isCurrentTablePage(context)) {
             return;
         }
         const targets = resolveDocumentTargets(
@@ -669,12 +664,7 @@ export const CollectionView = (): JSX.Element => {
 
     function handleEditDocumentRequest(): void {
         const context = currentContextRef.current;
-        if (
-            context.isLoading ||
-            context.currentView !== Views.TABLE ||
-            tablePageQueryRef.current !== context.activeQuery ||
-            tablePageRequestRef.current !== dataRequestRef.current
-        ) {
+        if (!isCurrentTablePage(context)) {
             return;
         }
         const targets = resolveDocumentTargets(
@@ -714,10 +704,7 @@ export const CollectionView = (): JSX.Element => {
         if (
             !page ||
             !row ||
-            context.isLoading ||
-            context.currentView !== Views.TABLE ||
-            tablePageQueryRef.current !== context.activeQuery ||
-            JSON.stringify(page.path) !== JSON.stringify(path) ||
+            !isCurrentTablePage(context) ||
             columnKey === ROOT_ID_COLUMN_KEY ||
             field === undefined ||
             field === '_id' ||

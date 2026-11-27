@@ -16,7 +16,7 @@ import {
 } from '@fluentui/react-components';
 import { ArrowUp16Filled } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { useContext } from 'react';
+import { Fragment, useContext } from 'react';
 import { useTrpcClient } from '../../../../_integration/useTrpcClient';
 import { CollectionViewContext, Views } from '../../collectionViewContext';
 
@@ -114,10 +114,12 @@ export const ToolbarTableNavigation = (): React.JSX.Element => {
 
             <Breadcrumb aria-label={l10n.t('Small breadcrumb example with buttons')} size="small">
                 {items?.map((item, index) => (
-                    <BreadcrumbItem key={item.key}>
-                        <BreadcrumbButton onClick={() => jumpToLevel(index)}>{item.item}</BreadcrumbButton>
+                    <Fragment key={item.key}>
+                        <BreadcrumbItem>
+                            <BreadcrumbButton onClick={() => jumpToLevel(index)}>{item.item}</BreadcrumbButton>
+                        </BreadcrumbItem>
                         {index < items.length - 1 && <BreadcrumbDivider />}
-                    </BreadcrumbItem>
+                    </Fragment>
                 ))}
             </Breadcrumb>
             <InfoLabel

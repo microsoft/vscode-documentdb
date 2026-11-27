@@ -198,14 +198,25 @@ tests passed. Cross-collection panel isolation is a G2 workbench check, per the 
 keyboard, focus and ARIA checks in the VS Code Insiders Integrated Browser. The spike verifies
 browser behavior, not screen reader announcements or the shipped UI.
 
-**A5 evidence (2026-11-26), not yet released.** The build, 25 focused tests, 75 scenario unit
+**A5 passed (2026-11-27).** The build, 25 focused tests, 75 scenario unit
 tests and browser TypeScript passed. After the approved E3 test setup correction, the Insiders
 Integrated Browser reported 237 passing assertions across 30 Table routes in dark, light and
 high contrast, with all routes ready and no reported errors. This covers the table core,
 typed values, paging, column and cell navigation, loading/empty states and 500-row
-virtualization. The root-ID shaping test passes, but the nested K3/K4 journey still needs
-WI-7 document actions and WI-8 step-in. Run those pinned assertions alongside A7 before
-releasing A5; do not treat incidental K2 passes before selection exists as A6 evidence.
+virtualization. The root-ID shaping test passed. When WI-8 made the nested journey reachable,
+all three themes passed the pinned K3/K4 checks, including opening the root document from a
+nested row. The separate M7 timing failure does not invalidate those earlier assertions.
+
+**A6 passed (2026-11-27).** The WI-7 logic review approved at 85% confidence. In the
+Integrated Browser, 49 assertions passed per theme across selection, no-ID, identity,
+late-delete and paging. Once WI-8 enabled the held nested query, all three late-query
+assertions passed in each theme. Cross-collection panel isolation and gesture feel remain G2
+workbench checks.
+
+**A7 passed (2026-11-27).** All 10 `step-in` assertions passed in each Integrated Browser
+theme with no reported console, page or CSP errors. Each run recorded `common.reportEvent`
+`stepIn` calls in order: `step-in-button` depths 1 and 2, `step-out-button` depth 1,
+`step-in-button` depth 2, and `breadcrumb` depths 1 and 0.
 
 ### Escalations
 
@@ -1042,7 +1053,7 @@ through `mai-code-2-flash` after each pair of items, not after every commit.
 > and guarded action eligibility against the current table request. The build and 33 focused
 > tests passed. In each theme, 49 assertions passed across selection, no-ID, identity,
 > late-delete and paging. `claude-opus-5.5` approved the action logic (85% confidence).
-> Run the pinned late-query scenario with WI-8 before closing A6. G2 should confirm modifier
+> The pinned late-query scenario passed with WI-8, closing A6. G2 should confirm modifier
 > clicks and whether re-extending toward the anchor should keep the already selected rows
 > (current behavior) or shrink the range; no gesture choice changed here.
 > Coding: 39.1 AIU (15 requests). Shared A6/A8 first pass: 235.7 AIU advisor (39 requests),
@@ -1055,12 +1066,35 @@ through `mai-code-2-flash` after each pair of items, not after every commit.
 - Scope rows M1–M2, M7. Telemetry kept.
 - Acceptance: A7.
 
+> **Done (2026-11-27):** `mai-code-2` implemented step-in with Enter and double-click,
+> shared the current-table path guard with document actions, and corrected the breadcrumb
+> divider markup. The named `gpt-6.1-sol` fallback diagnosed the intermittent M7 read of the
+> parent rows without changing production code. The operator approved an E3 bounded wait for
+> the same M7 text outcome, with no repeated key press or changes to other contracts.
+> Build, 33 focused tests, 100 browser-runner tests, browser TypeScript and A7 passed.
+> Coding: 23.0 AIU on `mai-code-2` (21 requests), 23.0 AIU fallback (7); E3 test coding
+> 17.7 AIU on `gpt-6.1-sol` (8); A7 terminal 0.4 AIU (7), Integrated Browser 24.8 AIU (25).
+
 **WI-9: accessible document tree** · `gpt-6.1-sol` · after WI-6 and A4; beside WI-7/WI-8
 
 - Owns: `DataViewPanelTree.tsx`, a new tree hook file and its tests. It must not touch
   `CollectionView.tsx`; if it needs to, it stops and asks.
 - Scope rows M4–M5; D7.
 - Acceptance: A8, including the advisor's logic review. Two failures of A8: E1.
+
+> **A8 blocked; E1 raised (2026-11-26).** The first dark run did not expand the directly
+> focused Field cell. The advisor-guided retry fixed that keyboard path and restored Field
+> sorting for roots; `claude-opus-5.5` approved the revision at 85% confidence. On the retry,
+> deep-nesting passed all 10 executed assertions, but both dark routes reported a
+> `ResizeObserver` page error, and the ten-element array assertion could see `ten[0]` through
+> `ten[7]`, not `ten[9]`. Light and high contrast were not rerun. The cause of the resize
+> loop and whether the last array rows are merely outside the mounted viewport are not yet
+> established. No pinned contract changed. Further tree work and A9/G2 await the E1 decision.
+> The operator authorized the bounded `hydrafusion-max` retry and asked to consider a visual
+> confirmation. In the dark Integrated Browser array scenario, the operator confirmed that
+> `ten[9]` appeared after scrolling and the grid stayed stable. This rules out a missing row
+> in that observation; it does not clear the recorded page error or authorize a pin or contract
+> change. Pause after the current checks to collect the operator's other accessibility feedback.
 
 ### Step 3
 
@@ -1206,7 +1240,8 @@ published artifacts, scratch Chromium 142/148 and Insiders behavior, Vite CSS de
 packaged-theme caveat. The operator accepted release metadata for the support floor; the exact
 stable workbench smoke, a real collection, screen readers and high-contrast were not run.
 
-Step 1 is complete. A2, A3 and A4 passed. The product Table renders real rows and typed cells
-after WI-5/WI-6. A5 still needs the nested journey that becomes reachable after WI-7/WI-8.
-WI-7 selection and WI-9 Tree are the next parallel lanes; the Tree remains a placeholder until
-WI-9. G2 remains the next operator gate.
+Step 1 is complete. A1–A7 passed; the Table works through WI-8, including nested actions and
+the held late query. WI-9 is not accepted: A8 remains under E1, with the operator confirming
+that the end of the ten-element array can be reached by scrolling. Pause to collect the
+operator's accessibility feedback before taking another implementation step. A9 and G2 are
+not reached, and no draft PR has been opened.
