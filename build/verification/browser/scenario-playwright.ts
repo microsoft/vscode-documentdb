@@ -27,8 +27,13 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
     const onError = (error: Error): void => {
         errors.push(`pageerror: ${error.message}`);
     };
-    const wait = async <A>(predicate: (argument: A) => boolean, argument: A, description: string): Promise<void> => {
-        const deadline = Date.now() + 60000;
+    const wait = async <A>(
+        predicate: (argument: A) => boolean,
+        argument: A,
+        description: string,
+        timeoutMs = 60000,
+    ): Promise<void> => {
+        const deadline = Date.now() + timeoutMs;
         while (!(await page.evaluate(predicate, argument))) {
             if (Date.now() > deadline) {
                 throw new Error(`Timed out waiting for ${description}`);
@@ -223,6 +228,33 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
                                 expected: { follows: true, gap: '>= 0' },
                             });
                         } else if (assertion.kind === 'text') {
+                            let synchronized = true;
+                            if (assertion.waitForText) {
+                                try {
+                                    await wait(
+                                        (expected: typeof assertion): boolean => {
+                                            if (document.documentElement.dataset.ready === 'failed') {
+                                                throw new Error(`Page failed while waiting for ${expected.name}`);
+                                            }
+                                            const element = document.querySelector(expected.selector);
+                                            if (!element) return false;
+                                            const text = (
+                                                element instanceof HTMLElement ? element.innerText : (element.textContent ?? '')
+                                            )
+                                                .replace(/\s+/g, ' ')
+                                                .trim();
+                                            return expected.includes.every((value): boolean => text.includes(value)) &&
+                                                expected.excludes.every((pattern): boolean => !new RegExp(pattern, 'i').test(text));
+                                        },
+                                        assertion,
+                                        assertion.name,
+                                        3000,
+                                    );
+                                } catch (error) {
+                                    synchronized = false;
+                                    errors.push(error instanceof Error ? error.message : String(error));
+                                }
+                            }
                             const text = await page.evaluate((selector: string): string | null => {
                                 const element = document.querySelector(selector);
                                 if (!element) {
@@ -246,7 +278,7 @@ export async function runScenario(page: IntegratedPage, origin: string, route: S
                                       );
                             assertions.push({
                                 name: assertion.name,
-                                passed: text !== null && missing.length === 0 && found.length === 0,
+                                passed: synchronized && text !== null && missing.length === 0 && found.length === 0,
                                 actual: { text, missing, found },
                                 expected: { includes: assertion.includes, excludes: assertion.excludes },
                             });

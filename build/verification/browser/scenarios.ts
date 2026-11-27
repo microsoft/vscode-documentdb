@@ -110,6 +110,8 @@ interface TextAssertion {
     readonly includes: readonly string[];
     readonly excludes: readonly string[];
     readonly steps?: readonly ScenarioStep[];
+    /** Poll the same text condition for up to 3 seconds after the steps instead of snapshotting once. */
+    readonly waitForText?: boolean;
 }
 
 /**
@@ -509,6 +511,7 @@ export const collectionViewContracts = {
             steps: [{ action: 'click', role: 'gridcell', name: 'nested Alpha' }, { action: 'click', role: 'button', name: 'View selected document' }] },
         { kind: 'text', name: 'TDD: M7 Enter on an object cell steps in',
             requiresGrid: 'grid', selector: '[role="grid"]', includes: ['leaf Alpha'], excludes: ['nested Alpha'],
+            waitForText: true,
             steps: [{ action: 'focus', role: 'gridcell', name: '{...}' }, { action: 'press', key: 'Enter' }] },
         { kind: 'text', name: 'TDD: M2 Level up returns to the parent data',
             requiresGrid: 'grid', selector: '[role="grid"]', includes: ['nested Alpha'], excludes: ['leaf Alpha'],

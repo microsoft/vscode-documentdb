@@ -106,6 +106,7 @@ describe('L2-dev readiness', (): void => {
 describe('L2-dev layout assertions', (): void => {
     afterEach((): void => {
         vi.restoreAllMocks();
+        vi.useRealTimers();
         document.body.innerHTML = '';
     });
 
@@ -128,6 +129,7 @@ describe('L2-dev layout assertions', (): void => {
         listTop: number,
         assertions: readonly ScenarioAssertion[],
         html?: string,
+        expectedErrors: readonly string[] = [],
     ): Promise<Awaited<ReturnType<typeof runScenario>>['assertions']> {
         document.body.innerHTML =
             html ??
@@ -213,7 +215,7 @@ describe('L2-dev layout assertions', (): void => {
                 ),
         };
         const report = await runScenario(page, 'http://localhost:18080', route);
-        expect(report.errors).toEqual([]);
+        expect(report.errors).toEqual(expectedErrors);
         return report.assertions;
     }
 
@@ -260,6 +262,68 @@ describe('L2-dev layout assertions', (): void => {
         }], '<div id="list" role="treegrid"><span id="value">Pending</span></div>');
         expect(result.passed).toBe(true);
         expect(release).toHaveBeenCalledOnce();
+    });
+
+    it.each([false, true])('synchronizes text only when opted in (%s), without repeating its steps', async (waitForText): Promise<void> => {
+        vi.useFakeTimers();
+        const release = vi.fn((): boolean => {
+            const value = document.getElementById('value');
+            if (!value) throw new Error('Missing text result target');
+            setTimeout((): void => { value.textContent = 'leaf Alpha nested Alpha'; }, 100);
+            setTimeout((): void => { value.textContent = 'leaf \n Alpha'; }, 200);
+            return true;
+        });
+        window.__releaseScenarioReply = release;
+        const run = measure([], 100, [{
+            kind: 'text', name: 'step-in result', selector: '#value',
+            includes: ['leaf Alpha'], excludes: ['NESTED Alpha'],
+            ...(waitForText ? { waitForText: true } : {}),
+            steps: [{ action: 'releaseReply', tag: 'step-in' }],
+        }], '<span id="value">nested Alpha</span>');
+        await vi.advanceTimersByTimeAsync(250);
+        expect((await run)[0]).toEqual({
+            name: 'step-in result',
+            passed: waitForText,
+            actual: waitForText
+                ? { text: 'leaf Alpha', missing: [], found: [] }
+                : { text: 'nested Alpha', missing: ['leaf Alpha'], found: ['NESTED Alpha'] },
+            expected: { includes: ['leaf Alpha'], excludes: ['NESTED Alpha'] },
+        });
+        expect(release).toHaveBeenCalledOnce();
+    });
+
+    it.each([false, true])('keeps a synchronized text assertion failing on timeout or page failure (%s)', async (pageFails): Promise<void> => {
+        vi.useFakeTimers();
+        const release = vi.fn((): boolean => {
+            if (pageFails) {
+                setTimeout((): void => {
+                    const value = document.getElementById('value');
+                    if (!value) throw new Error('Missing text result target');
+                    value.textContent = 'leaf Alpha';
+                    document.documentElement.dataset.ready = 'failed';
+                }, 100);
+            }
+            return true;
+        });
+        window.__releaseScenarioReply = release;
+        const run = measure([], 100, [{
+            kind: 'text', name: 'step-in result', selector: '#value',
+            includes: ['leaf Alpha'], excludes: ['nested Alpha'], waitForText: true,
+            steps: [{ action: 'releaseReply', tag: 'step-in' }],
+        }], '<span id="value">nested Alpha</span>', [
+            pageFails ? 'Page failed while waiting for step-in result' : 'Timed out waiting for step-in result',
+        ]);
+        await vi.advanceTimersByTimeAsync(3100);
+        expect((await run)[0]).toEqual({
+            name: 'step-in result',
+            passed: false,
+            actual: pageFails
+                ? { text: 'leaf Alpha', missing: [], found: [] }
+                : { text: 'nested Alpha', missing: ['leaf Alpha'], found: ['nested Alpha'] },
+            expected: { includes: ['leaf Alpha'], excludes: ['nested Alpha'] },
+        });
+        expect(release).toHaveBeenCalledOnce();
+        expect(document.documentElement.dataset.ready).toBe('failed');
     });
 
     it('reports an unavailable contract target as an assertion result, not a harness failure', async (): Promise<void> => {
