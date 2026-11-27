@@ -85,6 +85,8 @@ describe('retryAuthentication', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.mocked(ClustersClient.getEpoch).mockReturnValue(0);
+        vi.mocked(ClustersClient.getLatchReason).mockReturnValue(undefined);
         vi.mocked(CredentialCache.getCredentials).mockReset();
     });
 
@@ -404,7 +406,8 @@ describe('retryAuthentication', () => {
         await retryAuthentication(actionContext as never, node);
         expect(ClustersClient.clearCredentialRejection).not.toHaveBeenCalled();
         expect(CredentialCache.setAuthCredentials).not.toHaveBeenCalled();
-        expect(ext.discoveryBranchDataProvider.refresh).not.toHaveBeenCalled();
+        expect(ext.discoveryBranchDataProvider.refresh).toHaveBeenCalledExactlyOnceWith(node);
+        expect(window.showErrorMessage).not.toHaveBeenCalled();
     });
 
     it('refreshes without closing a healthy client that replaced the one that failed', async (): Promise<void> => {
@@ -422,7 +425,7 @@ describe('retryAuthentication', () => {
         expect(ext.connectionsBranchDataProvider.refresh).toHaveBeenCalledExactlyOnceWith(node);
     });
 
-    it('does not refresh an old Retry after the client was replaced while its close was pending', async (): Promise<void> => {
+    it('refreshes an old Retry quietly after the client was replaced while its close was pending', async (): Promise<void> => {
         const node = {
             id: 'connectionsView/stale',
             cluster: { clusterId: 'stale' },
@@ -435,7 +438,8 @@ describe('retryAuthentication', () => {
         await retryAuthentication(actionContext as never, node);
 
         expect(ClustersClient.deleteClient).toHaveBeenCalledExactlyOnceWith('stale');
-        expect(ext.connectionsBranchDataProvider.refresh).not.toHaveBeenCalled();
+        expect(ext.connectionsBranchDataProvider.refresh).toHaveBeenCalledExactlyOnceWith(node);
+        expect(window.showErrorMessage).not.toHaveBeenCalled();
     });
 
     it.each([new UserCancelledError(), Object.assign(new Error('ARM rejected access'), { statusCode: 401 })])(
@@ -452,6 +456,138 @@ describe('retryAuthentication', () => {
             }
             expect(ClustersClient.clearCredentialRejection).not.toHaveBeenCalled();
             expect(ext.discoveryBranchDataProvider.refresh).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each(['connectionRemoved', 'credentialsChanged', 'identityChanged', 'userDisconnected'] as const)(
+        'refreshes a stale Retry for %s without clearing another latch or doing auth work',
+        async (reason): Promise<void> => {
+            const node = ruNode();
+            const context = {
+                telemetry: { properties: {}, measurements: {} },
+                errorHandling: { suppressDisplay: false },
+            };
+            vi.mocked(ClustersClient.getLatchReason).mockReturnValue(reason);
+
+            await retryAuthentication(context as never, node);
+
+            expect(ext.discoveryBranchDataProvider.refresh).toHaveBeenCalledExactlyOnceWith(node);
+            if (reason === 'userDisconnected') {
+                expect(window.showErrorMessage).not.toHaveBeenCalled();
+            } else {
+                expect(ext.discoveryBranchDataProvider.refresh).toHaveBeenCalledBefore(
+                    vi.mocked(window.showErrorMessage),
+                );
+                expect(window.showErrorMessage).toHaveBeenCalledExactlyOnceWith(
+                    reason === 'connectionRemoved'
+                        ? 'This connection was removed. Choose another connection.'
+                        : 'This connection changed. Refresh the tree and try again.',
+                    { modal: true },
+                );
+                expect(context.errorHandling.suppressDisplay).toBe(true);
+            }
+            expect(node.readReplacementKey).not.toHaveBeenCalled();
+            expect(ClustersClient.clearCredentialRejection).not.toHaveBeenCalled();
+            expect(ClustersClient.deleteClient).not.toHaveBeenCalled();
+            expect(CredentialCache.deleteCredentials).not.toHaveBeenCalled();
+            expect(CredentialCache.setAuthCredentials).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each(['connectionRemoved', 'credentialsChanged', 'identityChanged', undefined] as const)(
+        'discards a replacement key when %s supersedes the read',
+        async (reason): Promise<void> => {
+            const node = ruNode();
+            vi.mocked(ClustersClient.getLatchReason).mockReturnValueOnce('credentialsRejected');
+            node.readReplacementKey.mockImplementationOnce(async () => {
+                vi.mocked(ClustersClient.getEpoch).mockReturnValue(1);
+                vi.mocked(ClustersClient.getLatchReason).mockReturnValue(reason);
+                return {
+                    connectionString: 'mongodb://test',
+                    availableAuthMethods: [AuthMethodId.NativeAuth],
+                    nativeAuthConfig: { connectionUser: 'test', connectionPassword: 'replacement' },
+                };
+            });
+
+            await retryAuthentication(actionContext as never, node);
+
+            expect(ext.discoveryBranchDataProvider.refresh).toHaveBeenCalledExactlyOnceWith(node);
+            if (reason) {
+                expect(ext.discoveryBranchDataProvider.refresh).toHaveBeenCalledBefore(
+                    vi.mocked(window.showErrorMessage),
+                );
+                expect(window.showErrorMessage).toHaveBeenCalledExactlyOnceWith(
+                    reason === 'connectionRemoved'
+                        ? 'This connection was removed. Choose another connection.'
+                        : 'This connection changed. Refresh the tree and try again.',
+                    { modal: true },
+                );
+            } else {
+                expect(window.showErrorMessage).not.toHaveBeenCalled();
+            }
+            expect(ClustersClient.clearCredentialRejection).not.toHaveBeenCalled();
+            expect(CredentialCache.setAuthCredentials).not.toHaveBeenCalled();
+            expect(CredentialCache.deleteCredentials).toHaveBeenCalledExactlyOnceWith('ru');
+            expect(node.readReplacementKey).toHaveBeenCalledTimes(1);
+        },
+    );
+
+    it.each([false, true])(
+        'refreshes a superseded failed key read with cancellation kept quiet (%s)',
+        async (cancelled): Promise<void> => {
+            const node = ruNode();
+            vi.mocked(ClustersClient.getLatchReason).mockReturnValueOnce('credentialsRejected');
+            node.readReplacementKey.mockImplementationOnce(async () => {
+                vi.mocked(ClustersClient.getEpoch).mockReturnValue(1);
+                vi.mocked(ClustersClient.getLatchReason).mockReturnValue('connectionRemoved');
+                throw cancelled ? new UserCancelledError() : new Error('obsolete ARM failure');
+            });
+
+            await retryAuthentication(actionContext as never, node);
+
+            expect(ext.discoveryBranchDataProvider.refresh).toHaveBeenCalledExactlyOnceWith(node);
+            if (cancelled) {
+                expect(window.showErrorMessage).not.toHaveBeenCalled();
+            } else {
+                expect(window.showErrorMessage).toHaveBeenCalledExactlyOnceWith(
+                    'This connection was removed. Choose another connection.',
+                    { modal: true },
+                );
+            }
+            expect(ClustersClient.clearCredentialRejection).not.toHaveBeenCalled();
+            expect(CredentialCache.setAuthCredentials).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each(['connectionRemoved', 'credentialsChanged', 'identityChanged'] as const)(
+        'refreshes and explains %s after an obsolete client close without closing again',
+        async (reason): Promise<void> => {
+            const node = {
+                id: 'connectionsView/folder/stale',
+                cluster: { clusterId: 'stale' },
+                getTreeItem,
+                lastConnectionFailureKind: 'clientClosed' as const,
+            };
+            vi.mocked(ClustersClient.hasReusableClient).mockReturnValueOnce(false);
+            vi.mocked(ClustersClient.deleteClient).mockImplementationOnce(async () => {
+                vi.mocked(ClustersClient.getEpoch).mockReturnValueOnce(0).mockReturnValueOnce(1);
+                vi.mocked(ClustersClient.getLatchReason).mockReturnValue(reason);
+            });
+
+            await retryAuthentication(actionContext as never, node);
+
+            expect(ClustersClient.deleteClient).toHaveBeenCalledExactlyOnceWith('stale');
+            expect(ext.connectionsBranchDataProvider.refresh).toHaveBeenCalledExactlyOnceWith(node);
+            expect(ext.connectionsBranchDataProvider.refresh).toHaveBeenCalledBefore(vi.mocked(window.showErrorMessage));
+            expect(window.showErrorMessage).toHaveBeenCalledExactlyOnceWith(
+                reason === 'connectionRemoved'
+                    ? 'This connection was removed. Choose another connection.'
+                    : 'This connection changed. Refresh the tree and try again.',
+                { modal: true },
+            );
+            expect(ClustersClient.clearCredentialRejection).not.toHaveBeenCalled();
+            expect(CredentialCache.deleteCredentials).not.toHaveBeenCalled();
+            expect(CredentialCache.setAuthCredentials).not.toHaveBeenCalled();
         },
     );
 });

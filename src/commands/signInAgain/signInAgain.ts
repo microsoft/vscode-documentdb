@@ -19,6 +19,7 @@ import { addEstablishedConnectionContext, ClustersClient } from '../../documentd
 import { classifyConnectionFailure } from '../../documentdb/connectionFailures';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { showClusterConnectFailure } from '../../documentdb/showClusterConnectFailure';
+import { Views } from '../../documentdb/Views';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { refreshAuthenticationNode } from '../retryAuthentication/retryAuthentication';
 
@@ -85,7 +86,47 @@ async function signInAgainInternal(
     }
     const epoch = ClustersClient.getEpoch(clusterId);
     const reason = ClustersClient.getLatchReason(clusterId);
+    let closedReported = false;
+    const reportClosed = (): void => {
+        if (expectedIdentity || closedReported) {
+            return;
+        }
+        closedReported = true;
+        if (node) {
+            if (
+                node.cluster.viewId !== Views.ConnectionsView &&
+                node.cluster.viewId !== Views.DiscoveryView &&
+                !(
+                    node.cluster.viewId === Views.AzureResourcesView &&
+                    /\bruBranch\b|\bdocumentDbBranch\b/i.test(node.contextValue)
+                )
+            ) {
+                return;
+            }
+            refreshAuthenticationNode(node);
+        }
+        const currentReason = ClustersClient.getLatchReason(clusterId);
+        if (
+            currentReason === 'connectionRemoved' ||
+            currentReason === 'credentialsChanged' ||
+            currentReason === 'identityChanged'
+        ) {
+            context.errorHandling.suppressDisplay = true;
+            void vscode.window.showErrorMessage(
+                currentReason === 'connectionRemoved'
+                    ? vscode.l10n.t('This connection was removed. Choose another connection.')
+                    : vscode.l10n.t('This connection changed. Refresh the tree and try again.'),
+                { modal: true },
+            );
+        } else if (currentReason === 'userDisconnected' && reason !== 'userDisconnected') {
+            context.errorHandling.suppressDisplay = true;
+            void vscode.window.showErrorMessage(vscode.l10n.t('The connection was closed while you were signing in.'), {
+                modal: true,
+            });
+        }
+    };
     if (reason && reason !== 'credentialsRejected') {
+        reportClosed();
         return;
     }
     const storedIdentity = ClustersClient.getLastVerifiedIdentity(clusterId);
@@ -112,14 +153,6 @@ async function signInAgainInternal(
         const currentIdentity = ClustersClient.getLastVerifiedIdentity(clusterId);
         return currentIdentity?.kind === 'entra' && sameEntraIdentity(currentIdentity, expectedIdentity);
     };
-    const reportClosed = (): void => {
-        if (!expectedIdentity) {
-            void vscode.window.showErrorMessage(vscode.l10n.t('The connection was closed while you were signing in.'), {
-                modal: true,
-            });
-        }
-    };
-
     let starting = false;
     let establishedClient: ClustersClient | undefined;
     try {
@@ -180,6 +213,9 @@ async function signInAgainInternal(
         }
         return auth.verifiedIdentity ? { identity: auth.verifiedIdentity, epoch: startupEpoch } : undefined;
     } catch (error) {
+        if (closedReported) {
+            throw error;
+        }
         if (!starting && !isCurrent()) {
             reportClosed();
             return undefined;

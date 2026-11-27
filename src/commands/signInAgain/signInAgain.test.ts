@@ -16,6 +16,9 @@ import { getEntraSession } from '../../documentdb/auth/entraSession';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { showClusterConnectFailure } from '../../documentdb/showClusterConnectFailure';
+import { Views } from '../../documentdb/Views';
+import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
+import { refreshAuthenticationNode } from '../retryAuthentication/retryAuthentication';
 import { signInAgain, signInAgainForWorker } from './signInAgain';
 
 const pin = {
@@ -67,6 +70,9 @@ function actionContext(): IActionContext {
 describe('signInAgain', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.mocked(ClustersClient.getEpoch).mockReturnValue(1);
+        vi.mocked(ClustersClient.getLatchReason).mockReturnValue('credentialsRejected');
+        vi.mocked(ClustersClient.getLastVerifiedIdentity).mockReturnValue(pin);
         mocks.configureAuth.mockImplementation(
             async (_timings: undefined, _trace: undefined, acquire: typeof getEntraSession): Promise<unknown> => {
                 const session = await acquire({
@@ -158,10 +164,7 @@ describe('signInAgain', () => {
         });
         await signInAgain(actionContext(), { clusterId });
         expect(ClustersClient.startAfterSignIn).not.toHaveBeenCalled();
-        expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
-            'The connection was closed while you were signing in.',
-            { modal: true },
-        );
+        expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
         vi.mocked(ClustersClient.getEpoch).mockReturnValue(1);
     });
 
@@ -203,6 +206,172 @@ describe('signInAgain', () => {
         vi.mocked(ClustersClient.getLastVerifiedIdentity).mockReturnValue(undefined);
         await expect(signInAgainForWorker(actionContext(), clusterId, pin)).resolves.toBeUndefined();
         expect(getEntraSession).not.toHaveBeenCalled();
+        expect(ClustersClient.startAfterSignIn).not.toHaveBeenCalled();
+    });
+
+    function treeNode(viewId: Views = Views.ConnectionsView): ClusterItemBase {
+        return {
+            id: `${viewId}/folder/cluster`,
+            contextValue: `${viewId};treeItem_documentdbcluster`,
+            cluster: { clusterId, treeId: `${viewId}/folder/cluster`, viewId, name: 'test' },
+        } as ClusterItemBase;
+    }
+
+    it.each(['connectionRemoved', 'credentialsChanged', 'identityChanged'] as const)(
+        'refreshes and explains an explicit stale tree sign-in for %s without auth work',
+        async (reason): Promise<void> => {
+            const context = actionContext();
+            const node = treeNode();
+            vi.mocked(ClustersClient.getLatchReason).mockReturnValue(reason);
+
+            await signInAgain(context, node);
+
+            expect(refreshAuthenticationNode).toHaveBeenCalledExactlyOnceWith(node);
+            expect(refreshAuthenticationNode).toHaveBeenCalledBefore(vi.mocked(vscode.window.showErrorMessage));
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledExactlyOnceWith(
+                reason === 'connectionRemoved'
+                    ? 'This connection was removed. Choose another connection.'
+                    : 'This connection changed. Refresh the tree and try again.',
+                { modal: true },
+            );
+            expect(context.errorHandling.suppressDisplay).toBe(true);
+            expect(getEntraSession).not.toHaveBeenCalled();
+            expect(mocks.configureAuth).not.toHaveBeenCalled();
+            expect(ClustersClient.startAfterSignIn).not.toHaveBeenCalled();
+            expect(showClusterConnectFailure).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each([
+        ['connectionRemoved', 'This connection was removed. Choose another connection.'],
+        ['credentialsChanged', 'This connection changed. Refresh the tree and try again.'],
+        ['identityChanged', 'This connection changed. Refresh the tree and try again.'],
+        ['userDisconnected', 'The connection was closed while you were signing in.'],
+    ] as const)(
+        'refreshes before the accurate modal when %s supersedes a pending tree sign-in',
+        async (reason, message): Promise<void> => {
+            const node = treeNode();
+            vi.mocked(getEntraSession).mockImplementationOnce(async () => {
+                vi.mocked(ClustersClient.getEpoch).mockReturnValue(2);
+                vi.mocked(ClustersClient.getLatchReason).mockReturnValue(reason);
+                return { account: { id: pin.accountId, label: pin.accountLabel } } as vscode.AuthenticationSession;
+            });
+
+            await signInAgain(actionContext(), node);
+
+            expect(refreshAuthenticationNode).toHaveBeenCalledExactlyOnceWith(node);
+            expect(refreshAuthenticationNode).toHaveBeenCalledBefore(vi.mocked(vscode.window.showErrorMessage));
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledExactlyOnceWith(message, { modal: true });
+            expect(ClustersClient.startAfterSignIn).not.toHaveBeenCalled();
+            expect(showClusterConnectFailure).not.toHaveBeenCalled();
+        },
+    );
+
+    it('refreshes an epoch-only stale tree sign-in quietly', async (): Promise<void> => {
+        const node = treeNode();
+        vi.mocked(getEntraSession).mockImplementationOnce(async () => {
+            vi.mocked(ClustersClient.getEpoch).mockReturnValue(2);
+            vi.mocked(ClustersClient.getLatchReason).mockReturnValue(undefined);
+            return { account: { id: pin.accountId, label: pin.accountLabel } } as vscode.AuthenticationSession;
+        });
+
+        await signInAgain(actionContext(), node);
+
+        expect(refreshAuthenticationNode).toHaveBeenCalledExactlyOnceWith(node);
+        expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+        expect(ClustersClient.startAfterSignIn).not.toHaveBeenCalled();
+    });
+
+    it('refreshes an already disconnected tree sign-in quietly', async (): Promise<void> => {
+        const node = treeNode();
+        vi.mocked(ClustersClient.getLatchReason).mockReturnValue('userDisconnected');
+
+        await signInAgain(actionContext(), node);
+
+        expect(refreshAuthenticationNode).toHaveBeenCalledExactlyOnceWith(node);
+        expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+        expect(getEntraSession).not.toHaveBeenCalled();
+    });
+
+    it('does not refresh or show a stale modal for an unsupported Workspace node', async (): Promise<void> => {
+        vi.mocked(ClustersClient.getLatchReason).mockReturnValue('connectionRemoved');
+
+        await signInAgain(actionContext(), treeNode(Views.AzureWorkspaceView));
+
+        expect(refreshAuthenticationNode).not.toHaveBeenCalled();
+        expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+        expect(getEntraSession).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        [Views.DiscoveryView, 'discoveryView;treeItem_documentdbcluster'],
+        [Views.AzureResourcesView, 'azureResourcesView;ruBranch;treeItem_documentdbcluster'],
+        [Views.AzureResourcesView, 'azureResourcesView;documentDbBranch;treeItem_documentdbcluster'],
+    ] as const)(
+        'refreshes eligible stale nodes using their existing %s routing tags (%s)',
+        async (viewId, contextValue): Promise<void> => {
+            const node = Object.assign(treeNode(viewId), { contextValue });
+            vi.mocked(ClustersClient.getLatchReason).mockReturnValue('connectionRemoved');
+
+            await signInAgain(actionContext(), node);
+
+            expect(refreshAuthenticationNode).toHaveBeenCalledExactlyOnceWith(node);
+            expect(refreshAuthenticationNode).toHaveBeenCalledBefore(vi.mocked(vscode.window.showErrorMessage));
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledExactlyOnceWith(
+                'This connection was removed. Choose another connection.',
+                { modal: true },
+            );
+            expect(getEntraSession).not.toHaveBeenCalled();
+            expect(ClustersClient.startAfterSignIn).not.toHaveBeenCalled();
+        },
+    );
+
+    it('propagates an unexpected stale refresh failure without a second refresh or modal', async (): Promise<void> => {
+        const error = new Error('refresh failed');
+        vi.mocked(refreshAuthenticationNode).mockImplementationOnce(() => {
+            throw error;
+        });
+        vi.mocked(getEntraSession).mockImplementationOnce(async () => {
+            vi.mocked(ClustersClient.getEpoch).mockReturnValue(2);
+            vi.mocked(ClustersClient.getLatchReason).mockReturnValue('connectionRemoved');
+            return { account: { id: pin.accountId, label: pin.accountLabel } } as vscode.AuthenticationSession;
+        });
+
+        await expect(signInAgain(actionContext(), treeNode())).rejects.toBe(error);
+
+        expect(refreshAuthenticationNode).toHaveBeenCalledTimes(1);
+        expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+        expect(showClusterConnectFailure).not.toHaveBeenCalled();
+        expect(ClustersClient.startAfterSignIn).not.toHaveBeenCalled();
+    });
+
+    it.each(['connectionRemoved', 'credentialsChanged', 'identityChanged', 'userDisconnected'] as const)(
+        'keeps stale worker recovery quiet for %s',
+        async (reason): Promise<void> => {
+            vi.mocked(ClustersClient.getLatchReason).mockReturnValue(reason);
+
+            await expect(signInAgainForWorker(actionContext(), clusterId, pin)).resolves.toBeUndefined();
+
+            expect(refreshAuthenticationNode).not.toHaveBeenCalled();
+            expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+            expect(getEntraSession).not.toHaveBeenCalled();
+            expect(ClustersClient.startAfterSignIn).not.toHaveBeenCalled();
+        },
+    );
+
+    it('keeps an obsolete pending worker sign-in quiet without restarting', async (): Promise<void> => {
+        vi.mocked(ClustersClient.getLatchReason).mockReturnValue(undefined);
+        vi.mocked(getEntraSession).mockImplementationOnce(async () => {
+            vi.mocked(ClustersClient.getEpoch).mockReturnValue(2);
+            vi.mocked(ClustersClient.getLatchReason).mockReturnValue('connectionRemoved');
+            return { account: { id: pin.accountId, label: pin.accountLabel } } as vscode.AuthenticationSession;
+        });
+
+        await expect(signInAgainForWorker(actionContext(), clusterId, pin)).resolves.toBeUndefined();
+
+        expect(refreshAuthenticationNode).not.toHaveBeenCalled();
+        expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+        expect(showClusterConnectFailure).not.toHaveBeenCalled();
         expect(ClustersClient.startAfterSignIn).not.toHaveBeenCalled();
     });
 });
