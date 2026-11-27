@@ -12,6 +12,7 @@ import * as vscode from 'vscode';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
 import { isFeedbackPermitted } from '../../utils/feedbackPermission';
+import { FEEDBACK_ROUTE_URLS } from '../../utils/feedbackRoutes';
 import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
 import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue } from '../TreeElementWithContextValue';
@@ -127,9 +128,7 @@ export class HelpAndFeedbackBranchDataProvider extends BaseExtendedTreeDataProvi
                 label: vscode.l10n.t('Suggest a Feature'),
                 iconPath: new vscode.ThemeIcon('lightbulb'),
                 commandId: 'vscode-documentdb.command.internal.helpAndFeedback.openUrl',
-                commandArgs: [
-                    'https://github.com/microsoft/vscode-documentdb/issues/new?assignees=&labels=user%20feedback',
-                ],
+                commandArgs: [FEEDBACK_ROUTE_URLS.suggestFeature],
             }) as TreeElement,
 
             createGenericElement({
@@ -138,9 +137,7 @@ export class HelpAndFeedbackBranchDataProvider extends BaseExtendedTreeDataProvi
                 label: vscode.l10n.t('Report a Bug'),
                 iconPath: new vscode.ThemeIcon('bug'),
                 commandId: 'vscode-documentdb.command.internal.helpAndFeedback.openUrl',
-                commandArgs: [
-                    'https://github.com/microsoft/vscode-documentdb/issues/new?assignees=&labels=user%20feedback,bug',
-                ],
+                commandArgs: [FEEDBACK_ROUTE_URLS.reportBug],
             }) as TreeElement,
 
             createGenericElement({
