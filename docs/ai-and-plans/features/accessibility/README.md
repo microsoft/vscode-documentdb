@@ -67,7 +67,7 @@ a shared implementation root cause.
 
 ### 3. Query Playground keyboard workflow
 
-**Status:** keyboard-command foundation implemented in `9bee0fb6`; result lifecycle and documentation in progress; workbench verification pending.
+**Status:** implemented in `9bee0fb6`, `58c679d3` and `4c65547f`; manual-page preview in progress; workbench verification pending.
 **Issues:** [#773](https://github.com/microsoft/vscode-documentdb/issues/773),
 [#774](https://github.com/microsoft/vscode-documentdb/issues/774).
 

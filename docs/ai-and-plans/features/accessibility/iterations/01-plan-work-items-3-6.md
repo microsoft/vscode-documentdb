@@ -378,6 +378,26 @@ Rules:
 Everyone who does not use screen-reader-optimized mode keeps today's edit-run loop
 unless they change the setting.
 
+> **Result lifecycle done (2026-11-27), commit `4c65547f` (3d):**
+> `gpt-6.1-sol` implemented the operator's 0004 setting matrix, equivalent
+> screen-reader shortcut contributions, bidirectional focus commands and a
+> completion notification that does not hold progress open. Initial Opus review
+> (85% confidence) required guarding closed untitled sources and correcting
+> false no-return announcements for untyped values. The source-backed proposal
+> (80%) carries existing undefined metadata into an optional internal field,
+> leaving printable values and serialized formats unchanged (operator-approved
+> constraint 0009). Revised lifecycle review approved these fixes at 90%.
+> The leader also required preserving full localized result-header keys rather
+> than using English output as a proxy; final formatter review approved the
+> restored original body at 92%. Advised (`claude-opus-5.5`).
+> The final focused run passed 169 tests across ten files, including 112
+> additions over the original selection. Root `npx tsc --noEmit -p .` passed.
+> Existing error, cancellation, progress and formatted-byte assertions remain;
+> new tests cover null versus undefined, closed/hidden untitled sources and
+> non-English translation ordering. The advisor's localization-generation
+> suggestion was deferred under Case 1, not run. Real shortcut/context-key
+> verification and tester configuration remain pending.
+
 **Fallback if the testers do not use screen-reader mode.** With `auto`, nothing changes
 for a keyboard-only tester. Ask on #774 which configuration they verify with before
 implementing. If the answer is "keyboard only", change `auto` so that runs outside
