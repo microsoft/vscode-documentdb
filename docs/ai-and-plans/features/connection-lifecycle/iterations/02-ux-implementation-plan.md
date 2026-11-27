@@ -156,6 +156,15 @@ behavior gates.
 marked blocked; F7 has reproduction evidence and a disposition. Do not silently resolve
 any of these gates in implementation.
 
+> **Baseline verified; live evidence pending (2026-11-27):** advisor
+> `claude-opus-5.5` revalidated the relevant current source against `dd11ca7d3`.
+> The operator explicitly decided F1/F4/F5 and approved the model mapping.
+> The connected context tag still requires a cached client without a lifecycle hold;
+> credential-save completion releases the update hold. Source inspection did not
+> establish an F7 defect and is not a reproduction. The operator selected **Leave
+> pending for operator testing; no speculative fix**. WI-0 is not claimed fully
+> verified until that live evidence is supplied.
+
 ## WI-1: Align tree-action failures and stale explicit recovery (F3, F5)
 
 **Depends on:** WI-0 for F5; F3's tree-modal direction is already approved.  
@@ -198,6 +207,18 @@ duplicating framework behavior.
 > [#1143](https://github.com/microsoft/vscode-documentdb/issues/1143) until foreground
 > attribution is supported. No expansion code was changed. The issue records Azure
 > scenarios, benefits, background-noise risks and host-coordination trade-offs.
+
+> **Done (2026-11-27), WI-1b commit `57f96b23b`:** explicit cluster-associated
+> tree-command failures use one modal with an explained/localized heading and separate
+> error detail. The Diagnostics wrapper was changed in place; command registrations and
+> webview/no-cluster feedback are unchanged. Decisions: operator, explicit tree-origin
+> policy; advised (`claude-opus-5.5`), 90% approval of the exact implementation after
+> checking callers, cancellation, original error identity and single-feedback ownership.
+> The worker (`gpt-6.1-sol`, as recommended) verified the installed azext runtime at
+> 99% confidence. Fourteen focused tests were added and passed. Batch 1
+> `npm run build` passed; seven touched test files passed (67 tests). No Case 2 checks ran.
+> The initial wrapper-selection blocker was resolved by preserving registrations and
+> changing Diagnostics itself; no public argument contract changed. F5/WI-1c remains open.
 
 ## WI-2: Correct worker recovery guidance and Shell status output (F2, F8)
 
@@ -293,6 +314,9 @@ copy and action, accessible name, and blocked-operation behavior.
 > The original generic F10 prompt was a leader error, corrected before commit.
 > Batch build/localization and live workbench presentation checks remain pending.
 
+> **Verification update (2026-11-27):** Batch 1 build and focused tests passed. Localization
+> generation will run once after all string-changing items. Live presentation remains pending.
+
 ## WI-5: Unify human-readable debug-stat formatting (F12)
 
 **Depends on:** none.  
@@ -325,6 +349,9 @@ that is not user-visible.
 > approved substitution. Five tests were added across the two stats test files; all
 > nine focused tests passed. Review replaced an `as never` evaluator fixture with a real,
 > typed evaluator using a mocked worker. Batch build remains pending.
+
+> **Verification update (2026-11-27):** Batch 1 `npm run build` passed; both stats files were
+> included in the seven-file focused test run (67 tests total).
 
 ## WI-6: Offer an unauthenticated Shell from connection failure rows (F1)
 
@@ -371,6 +398,14 @@ connected cluster item exposes Disconnect; disconnected/error items do not.
 **Tests if fixed:** regression test the exact state transition and ensure the menu remains
 hidden when no connected client is present or a latch applies.
 
+> **Deferred, escalated (2026-11-27), operator decision:** leave F7 pending live testing
+> with no speculative implementation. On the current build, try failed saved-password
+> connection → Update Credentials → **Yes, reconnect now** → databases appear →
+> right-click the refreshed cluster. Capture whether **Disconnect** is present, the cached
+> client/held state from **Show Connection Stats**, and whether collapse/expand or Refresh
+> changes the menu. Record the actual build/commit and state; do not label a source-only
+> check **not reproducible**.
+
 ## Cross-workstream verification
 
 For code changes, follow the repository's Case 1 checks while implementation is in
@@ -396,11 +431,11 @@ Before calling this iteration complete:
 
 | WI | Status | Outcome / decision / verification |
 | --- | --- | --- |
-| WI-0 | Pending operator review | |
-| WI-1 | Commands/stale actions in progress; expansion deferred | F3 expansion follows #1143, operator decision |
+| WI-0 | Gates approved; F7 live evidence pending | Current-code baseline checked; no live reproduction claim |
+| WI-1 | Commands implemented; stale actions pending; expansion deferred | WI-1b `57f96b23b`; F3 expansion follows #1143 |
 | WI-2 | Pending | |
 | WI-3 | Pending operator decision | |
-| WI-4 | Implemented; batch/live checks pending | `5d00558cb`; 26 focused tests passed |
-| WI-5 | Implemented; batch checks pending | `e4a6ad337`; nine focused tests passed |
+| WI-4 | Implemented; localization/live checks pending | `5d00558cb`; Batch 1 build/tests passed |
+| WI-5 | Implemented and locally verified | `e4a6ad337`; Batch 1 build/tests passed |
 | WI-6 | Pending operator decision | |
-| WI-7 | Conditional on reproduction | |
+| WI-7 | Deferred pending operator reproduction | No speculative code change; exact live sequence recorded |
