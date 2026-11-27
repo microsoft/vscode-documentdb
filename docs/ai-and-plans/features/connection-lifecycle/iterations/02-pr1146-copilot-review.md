@@ -310,6 +310,10 @@ Disconnect/reconnect, and concurrent successful sign-in without guessing.
 **Author decision (2026-11-27):** selected the recommended won't-fix/defer outcome: retain quiet
 supersession and refreshed tree state; do not add richer completed-edit attribution this round.
 
+**No-code outcome recorded (2026-11-27):** no implementation change; the selected safe
+supersession behavior remains. [Individual thread reply](https://github.com/microsoft/vscode-documentdb/pull/1146#discussion_r4722321228)
+records the tradeoff. The thread was not resolved.
+
 ## C06. Genuine sign-in dismissal can show a stale modal
 
 **Comment:** [Copilot C06](https://github.com/microsoft/vscode-documentdb/pull/1146#discussion_r4721515749).
@@ -508,6 +512,10 @@ recommendation. Operator instruction: **"c10, ignore/wont fix."** No C10 guard, 
 or message changes are selected. The existing behavior and safety fences remain unchanged.
 No additional rationale was supplied.
 
+**No-code outcome recorded (2026-11-27):** the operator's override is retained without changing
+guards or wording. [Individual thread reply](https://github.com/microsoft/vscode-documentdb/pull/1146#discussion_r4722321276)
+records the selected outcome, not an implemented fix. The thread was not resolved.
+
 ## C11. Index failures can show two tree modals
 
 **Comment:** [Copilot C11](https://github.com/microsoft/vscode-documentdb/pull/1146#discussion_r4721516084).
@@ -595,6 +603,10 @@ Do not return a recovered/success-shaped result for cancelled work or remove the
 
 **Author decision (2026-11-27):** selected the recommended won't-fix/defer outcome: retain the
 bounded Retry-failure feedback and do not introduce a typed cancellation protocol this round.
+
+**No-code outcome recorded (2026-11-27):** no protocol or UI change; retained-view safety guards
+and bounded Retry feedback remain. [Individual thread reply](https://github.com/microsoft/vscode-documentdb/pull/1146#discussion_r4722321308)
+records the tradeoff. The thread was not resolved.
 
 ## Verification and outcome
 
