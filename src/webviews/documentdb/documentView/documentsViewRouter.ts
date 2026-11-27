@@ -80,13 +80,6 @@ export const documentsViewRouter = router({
             // eslint-disable-next-line
             const documentBson: Document = EJSON.parse(input.documentContent);
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            let documentId: any;
-            if (documentBson['_id']) {
-                // eslint-disable-next-line , @typescript-eslint/no-unsafe-assignment
-                documentId = documentBson['_id'];
-            }
-
             // run query
             const client: ClustersClient = await ClustersClient.getClient(
                 myCtx.clusterId,
@@ -100,7 +93,9 @@ export const documentsViewRouter = router({
             const upsertResult = await client.upsertDocument(
                 myCtx.databaseName,
                 myCtx.collectionName,
-                documentId ? EJSON.stringify(documentId) : '',
+                Object.prototype.hasOwnProperty.call(documentBson, '_id')
+                    ? EJSON.stringify(documentBson._id)
+                    : '',
                 documentBson,
             );
 

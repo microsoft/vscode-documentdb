@@ -26,6 +26,11 @@ function isSafeIdentityValue(value: unknown): boolean {
             if (prototype !== null && prototype !== Object.prototype) {
                 return false;
             }
+            const keys = Object.keys(value as object);
+            // Integer-like keys can be reordered on read, changing embedded-document field order (0005).
+            if (keys.length > 1 && keys.some((key) => /^(0|[1-9]\d*)$/.test(key))) {
+                return false;
+            }
         }
         return Object.entries(value as object).every(
             ([key, child]) => !key.startsWith('$') && isSafeIdentityValue(child),

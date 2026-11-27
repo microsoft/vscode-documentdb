@@ -163,6 +163,15 @@ describe('toTablePage', () => {
         expect(duplicate.rows.every((row) => !Object.hasOwn(row, 'documentId'))).toBe(true);
     });
 
+    it('keeps display cells visible when an unsafe object ID withholds actions', () => {
+        const page = toTablePage([{ _id: { '1': 2, b: 3 }, value: 'kept' }], [], ['value'], true);
+
+        expect(page.rows[0]).toMatchObject({ rowKey: 'pos:0' });
+        expect(page.rows[0]).not.toHaveProperty('documentId');
+        expect(getCell(page.rows[0], ROOT_ID_COLUMN_KEY)).toBeDefined();
+        expect(getCell(page.rows[0], fieldColumnKey('value'))).toEqual({ display: 'kept', type: 'string' });
+    });
+
     it('leaves formatter failures blank without failing the page or logging the user value', () => {
         const page = toTablePage(
             [{ _id: 'root', invalidDate: new Date(NaN), explicitUndefined: undefined }],

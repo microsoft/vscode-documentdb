@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { EJSON, ObjectId } from 'bson';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { UserCancelledError, type IActionContext, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import type * as Mongodb from 'mongodb';
@@ -113,6 +114,95 @@ vi.mock('./utils/tlsException', async () => {
 describe('ClustersClient', () => {
     it('should be defined', () => {
         expect(ClustersClient).toBeDefined();
+    });
+});
+
+describe('ClustersClient upsertDocument', () => {
+    type ReplaceOneMock = Mock<
+        (
+            filter: Mongodb.Filter<Mongodb.Document>,
+            replacement: Mongodb.WithoutId<Mongodb.Document>,
+            options: Mongodb.ReplaceOptions,
+        ) => Promise<Mongodb.UpdateResult>
+    >;
+    type FindOneMock = Mock<
+        (filter: Mongodb.Filter<Mongodb.Document>) => Promise<Mongodb.WithId<Mongodb.Document> | null>
+    >;
+
+    function createUpsertClient(): {
+        client: ClustersClient;
+        replaceOne: ReplaceOneMock;
+        findOne: FindOneMock;
+    } {
+        const replaceOne = createReplaceOneMock();
+        const findOne = createFindOneMock();
+        const collection = { replaceOne, findOne };
+        const mongoClient = {
+            db: vi.fn(() => ({
+                collection: vi.fn(() => collection),
+            })),
+        } as unknown as MongoClient;
+        const client = Object.create(ClustersClient.prototype) as ClustersClient;
+        Reflect.set(client, '_mongoClient', mongoClient);
+        return { client, replaceOne, findOne };
+    }
+
+    function createReplaceOneMock(): ReplaceOneMock {
+        return vi.fn(
+            async (
+                _filter: Mongodb.Filter<Mongodb.Document>,
+                _replacement: Mongodb.WithoutId<Mongodb.Document>,
+                _options: Mongodb.ReplaceOptions,
+            ): Promise<Mongodb.UpdateResult> => ({
+                acknowledged: true,
+                matchedCount: 1,
+                modifiedCount: 1,
+                upsertedCount: 0,
+                upsertedId: null,
+            }),
+        );
+    }
+
+    function createFindOneMock(): FindOneMock {
+        return vi.fn(
+            async (filter: Mongodb.Filter<Mongodb.Document>): Promise<Mongodb.WithId<Mongodb.Document> | null> => {
+                const { _id } = filter as { _id: unknown };
+                return { _id, value: 'saved' } as Mongodb.WithId<Mongodb.Document>;
+            },
+        );
+    }
+
+    it.each([
+        ['zero', 0],
+        ['false', false],
+        ['empty string', ''],
+        ['null', null],
+        ['ObjectId', new ObjectId('000000000000000000000030')],
+    ])('uses the original %s _id for both database filters', async (_label, id) => {
+        const { client, replaceOne, findOne } = createUpsertClient();
+
+        const result = await client.upsertDocument('database', 'collection', EJSON.stringify(id), {
+            _id: id,
+            value: 'saved',
+        });
+
+        const replaceFilter = replaceOne.mock.calls[0][0] as { _id: unknown };
+        const findFilter = findOne.mock.calls[0][0] as { _id: unknown };
+        expect(replaceFilter).toEqual({ _id: id });
+        expect(findFilter._id).toBe(replaceFilter._id);
+        expect(result.documentId).toBe(replaceFilter._id);
+    });
+
+    it('uses one newly generated ObjectId for both database filters on Add', async () => {
+        const { client, replaceOne, findOne } = createUpsertClient();
+
+        const result = await client.upsertDocument('database', 'collection', '', { value: 'new' });
+
+        const replaceFilter = replaceOne.mock.calls[0][0] as { _id: unknown };
+        const findFilter = findOne.mock.calls[0][0] as { _id: unknown };
+        expect(replaceFilter._id).toBeInstanceOf(ObjectId);
+        expect(findFilter._id).toBe(replaceFilter._id);
+        expect(result.documentId).toBe(replaceFilter._id);
     });
 });
 

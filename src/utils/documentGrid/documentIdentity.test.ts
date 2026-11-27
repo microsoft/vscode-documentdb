@@ -86,6 +86,23 @@ describe('documentIdentity', () => {
         expect(toDocumentId({ _id: { a: 1, b: 2 } })).not.toBe(toDocumentId({ _id: { b: 2, a: 1 } }));
     });
 
+    it('withholds object IDs with integer-like keys at any depth', () => {
+        for (const id of [
+            { '1': 2, b: 3 },
+            { nested: { '0': 1, b: 2 } },
+            { items: [{ '2': 1, b: 2 }] },
+            { '4294967295': 1, b: 2 },
+        ]) {
+            expect(toDocumentId({ _id: id })).toBeUndefined();
+        }
+    });
+
+    it('preserves safe object IDs and array indexes', () => {
+        for (const id of [{ '1': 2 }, { '01': 1, b: 2 }, { a: 1, b: 2 }, { a: [1, 2] }]) {
+            expect(toDocumentId({ _id: id })).toBe(EJSON.stringify(id, { relaxed: false }));
+        }
+    });
+
     it('trusts only unchanged projection provenance and simple root flags', () => {
         for (const projection of [undefined, {}, { name: 1 }, { _id: 0 }, { _id: 1 }, { _id: false }, { _id: true }]) {
             expect(isIdentityTrustedForProjection(projection)).toBe(true);
@@ -119,6 +136,13 @@ describe('documentIdentity', () => {
         expect(assignRowIdentities([{ _id: { a: 0 } }, { _id: { a: 0 } }], true)).toEqual([
             { rowKey: 'pos:0' },
             { rowKey: 'pos:1' },
+        ]);
+    });
+
+    it('withholds the action ID only from an unsafe adjacent row', () => {
+        expect(assignRowIdentities([{ _id: { '1': 2, b: 3 } }, { _id: 'safe' }], true)).toEqual([
+            { rowKey: 'pos:0' },
+            { rowKey: 'id:"safe"', documentId: '"safe"' },
         ]);
     });
 });
