@@ -357,7 +357,54 @@ change host cache versioning or claim end-to-end query isolation.
 
 ### 3. R2 — keyboard step-in restores grid focus (decision 0004)
 
-**Status:** Pending.
+**Status:** In progress; clean failing-first browser evidence complete, implementation pending.
+
+**Fresh-run progress (2026-11-27):** resumed from `47539263` at
+`2026-11-27T16:11:34.558Z`, with the operator retaining `mai-code-2` for implementation/docs,
+`mai-code-2-flash` for checks and read-only `claude-opus-5.5` advice. HEAD and draft #1142
+were reverified; only the pre-existing two-line README index edit was dirty. The checks worker
+reverified PID 54856, this checkout's Vite command, HTTP readiness and the existing built-in
+page at 713 x 813 / DPR approximately 1.0. No server restart, viewport change or journey was
+performed during that environment check.
+
+The advisor confirmed the recorded local interfaces and identified missing positional-row
+coverage (high confidence; no numerical figure supplied). Its bounded recommendation adds a
+`details` object and nested reply to the existing `no-id` fixture, with contracts appended after
+the existing assertions. No fixture key or assertion schema changes. The contract worker added
+the three specified uninterrupted M7 assertions, the positional journey and one harness test;
+production is unchanged. Leader review confirmed that existing assertions and runner bytes
+were not edited. Focused harness and six targeted failing-first browser journeys are next.
+Implementation remains blocked until the first new M7 focus contract fails in the real browser.
+
+**Initial failing-first evidence and retry gate (2026-11-27):** focused harness tests passed
+78/78 in 2.23 seconds. Six browser journeys (`step-in` and `no-id`, each in dark, light and
+high-contrast) were ready, with 63/75 assertions passing and 12 failing only the new M7
+contracts: same-row `_id` focus, ArrowRight continuation and Space selection in `step-in`,
+and positional-row focus in `no-id`. No completed journey reported a harness error.
+However, the first wrapper navigated to dark `step-in` and failed before assertions with
+`setTimeout is not defined`; the checks worker retried contrary to its stop instruction.
+It preserved the helper prefix and supplied the external timer via
+`(fn, ms) => page.waitForTimeout(ms).then(() => fn())`. This is recorded as a setup deviation,
+not a clean baseline or an authorized retry. Git HEAD remains `47539263`; `bf7285d3` is the
+production-code baseline, not HEAD.
+
+The leader paused implementation and raised **G3-browser-baseline-retry**. The operator
+selected **`authorize-clean-rerun`**, authorizing one six-route run with the correct timer
+wiring from the outset, unchanged runner/viewport/server, and no further retry. That run is
+pending; production remains unchanged. Previous failures and retry evidence are retained.
+
+**Authorized clean failing-first rerun (2026-11-27):** one guarded targeted helper execution
+ran exactly `/collectionView/step-in/{dark,light,high-contrast}` and
+`/collectionView/no-id/{dark,light,high-contrast}`. All six were ready; **63/75 assertions
+passed, 12 failed**, with 78 RPC calls, zero route errors and 36.460 seconds combined elapsed.
+Only the new M7 contracts failed, including the exact same-row `_id` focus contract in every
+theme. The helper prefix was preserved (marker offset 16,666); only the manifest route array
+was replaced, and the authorized external timer was supplied from the first invocation.
+There was no further retry, focus repair, forced click, server restart or viewport change.
+Full raw assertion/call/error reports are persisted in the fresh session's `files/` as
+`wi-g3-3-before-clean.txt` (30,055 bytes) and `wi-g3-3-before-retry.txt` (24,542 bytes).
+The leader accepted this operator-authorized reproduction gate and dispatched `mai-code-2`
+to implement the recorded design and component tests. No post-fix result is claimed yet.
 
 **Execution design, advised (`claude-opus-5.5`, 2026-11-27, confidence 85%):** use local refs in
 Collection View, not a pure intent module created solely for testing. The intent retains
