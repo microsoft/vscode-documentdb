@@ -20,8 +20,8 @@ The Cluster Dashboard and Collection View also open the same sidebar on explicit
 clicks. This manual mode explains that the user opened it, rather than claiming survey
 eligibility, and does not offer reminder or opt-out actions. A rating selected there is
 reported on the existing `survey.openForm` event only when feedback telemetry is permitted.
-Both manual feedback and automatic invitations also show "Report a bug" and "Suggest a feature"
-links immediately above "Why am I seeing this?". They use the same label-prefilled GitHub issue
+Both manual feedback and automatic invitations also show smaller "Report a bug" and "Suggest a feature"
+links at the bottom, below "Why am I seeing this?". They use the same label-prefilled GitHub issue
 routes as the Help and Feedback tree. Opening either route records only a
 `survey.openFeedbackRoute` telemetry event; it does not close the sidebar or change survey
 outcomes, opt-out state, or cooldowns.

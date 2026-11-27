@@ -119,7 +119,7 @@ describe('survey invitation HTML', (): void => {
         expect(page.querySelector('[data-action="askLater"]')?.textContent).toBe('Close');
     });
 
-    it.each([false, true])('shows GitHub feedback links before the explanation, manual=%s', (manuallyOpened): void => {
+    it.each([false, true])('shows small GitHub feedback links below the explanation, manual=%s', (manuallyOpened): void => {
         const page = parseHtml(
             buildSurveyInvitationHtml({
                 strings,
@@ -137,11 +137,22 @@ describe('survey invitation HTML', (): void => {
             }),
         );
         const links = page.querySelector('.feedback-routes');
+        const details = page.querySelector('details');
         expect(links?.textContent).toContain(strings.reportBug);
         expect(links?.textContent).toContain(strings.suggestFeature);
-        expect(links?.nextElementSibling?.tagName).toBe('DETAILS');
+        expect(details?.nextElementSibling).toBe(links);
         expect(links?.querySelectorAll('a')).toHaveLength(2);
         expect(links?.querySelector('button')).toBeNull();
+        const styledPage = new JSDOM(page.documentElement.outerHTML);
+        const styledLinks = styledPage.window.document.querySelector('.feedback-routes');
+        if (!styledLinks) {
+            throw new Error('Expected feedback routes in rendered HTML.');
+        }
+        const routesStyle = styledPage.window.getComputedStyle(styledLinks);
+        expect(routesStyle.fontSize).toBe('12px');
+        expect(routesStyle.marginTop).toBe('auto');
+        expect(routesStyle.paddingTop).toBe('16px');
+        styledPage.window.close();
     });
 
     it('moves focus to Continue to survey when the host asks', (): void => {
@@ -474,7 +485,8 @@ describe('survey invitation HTML', (): void => {
         expect(styles).toContain('font-size: 18px; font-weight: 600; line-height: 24px');
         expect(styles).toContain('header { padding: 8px 16px;');
         expect(styles).toContain('gap: 12px;');
-        expect(styles).toContain('.content { max-width: 480px; margin: 0 auto; padding: 24px 16px; }');
+        expect(styles).toContain('.content { display: flex; flex: 1; flex-direction: column;');
+        expect(styles).toContain('max-width: 480px; margin: 0 auto; padding: 24px 16px; width: 100%; }');
         expect(styles).toContain('.star-icon { width: 20px; height: 20px; }');
         expect(styles).toContain('.primary { width: 100%; margin-top: 16px; }');
         expect(styles).toContain(
