@@ -1,6 +1,6 @@
 ---
 name: lead
-description: 'Operator-invoked only, with /lead. The leader runs a multi-item coding task: breaks it into work items, delegates coding to subagents on tiered models, consults an operator-named advisor model for technical judgment, reviews changes, commits each item separately, reports progress after every agent return, summarizes costs and tokens by model and role, and records progress inline in the source plan or review document. Never load this skill unless the operator typed /lead.'
+description: 'Operator-invoked only, with /lead. The leader runs a multi-item coding task: breaks it into work items, delegates coding to subagents on tiered models, consults an operator-named advisor model for technical judgment, reviews changes, commits each item separately, announces task launches and returns, visibly marks operator gates, preserves delivery continuity across side requests, summarizes costs and tokens by model and role, and records progress inline in the source plan or review document. Never load this skill unless the operator typed /lead.'
 argument-hint: 'advisor: <model>; then a task description, issue, or path to a plan or review document'
 disable-model-invocation: true
 ---
@@ -77,6 +77,20 @@ Ask only when the endpoint is genuinely unclear and the answer would change your
 the operator cannot be asked, stop at the narrowest endpoint the request supports and say so. See
 Checks for what each endpoint requires.
 
+## Delivery continuity
+
+The approved delivery plan remains the parent task until it is complete or the operator explicitly
+changes or pauses it. Side requests change priority, not the parent goal. After answering a question,
+reporting an experiment, publishing a PR or finishing review fixes, re-evaluate the remaining plan
+and resume the next authorized step. Do not wait for another "continue" or status prompt.
+
+Do not call `task_complete` for a side request, checkpoint, experiment, single work item or PR while
+authorized parent work remains. Waiting for a running agent is not task completion; use the waiting
+notice below and resume on its notification. A required operator pause is not delivery completion:
+name the unmet gate and what it blocks. Continue independent work only where the approved plan
+permits it; never bypass a gate or infer approval from silence. Honor standing authorizations and
+the approved PR workflow rather than inventing another publication or merge gate.
+
 ## Models
 
 The tier names here count as the operator naming the models. Coding subagents use the tiers. Your
@@ -141,10 +155,16 @@ agent with `task(..., mode: "background")` explicitly. Omitting the mode can run
 synchronously and keep the leader from picking up pending steering until the subagent returns.
 Background mode keeps the leader available; it does not relax file ownership or dependency rules.
 
-Record each returned agent ID with its work item and role. Continue only safe, independent leader
-work while it runs. If none remains, end the turn and wait for the completion notification; do not
-block on `read_agent`, poll, sleep, or fill the wait with unnecessary work. After notification, read
-the result once using the known ID and post the normal progress checkpoint.
+At each dispatch, announce **[HH:MM UTC] WI-n · STARTED · role · model** in chat, with the task's
+purpose and what happens after it returns. Record the returned agent ID with its work item and role.
+Continue only safe, independent leader work while it runs. If none remains, post
+**WAITING FOR TASKS — NOT FINISHED**, naming the active tasks and the completion notification that
+will resume work, then end the turn. Do not call `task_complete`, block on `read_agent`, poll, sleep
+or fill the wait with unnecessary work. After notification, read the result once using the known ID,
+post the normal progress checkpoint and advance the item or resume the next authorized step.
+
+These are event-driven chat updates, not periodic heartbeats. Do not rely on VS Code's hidden task
+UI, tool output or plan notes to tell the operator that work started, returned or is waiting.
 
 Process operator steering before the next dispatch or follow-up. Relay relevant changes to a
 running same-task agent with `write_agent` when it supports messages; otherwise arrange a follow-up
@@ -224,8 +244,15 @@ Use one subagent per work item, except for coupled follow-ups and chains (above)
     incidental check (an exact call count) while the assertions that carry the test's intent
     stay; name the kept assertions in the done note;
   - requires pushing, rewriting history, or editing a PR, an issue or another external system.
-- Ask as one concise question with the options and your recommendation. When a confidence figure
-  is close to a threshold, state what would change your mind. Do not round up.
+- Every operator question or test gate must also appear prominently in chat, even when using the
+  question tool. Never leave it only in a form, tool output, PR comment or plan note. Start with
+  **[OPERATOR DECISION NEEDED] gate/WI ID: question** or
+  **[OPERATOR TEST NEEDED] gate/WI ID: test**. Use an existing gate ID, or the work item ID if none.
+  State the options and recommendation (or test steps), the exact reply or evidence needed, what
+  is blocked, and which independent work will continue, if any. If the question tool reports the
+  operator unavailable, keep the gate pending; that is not an answer or approval.
+- When a confidence figure is close to a threshold, state what would change your mind. Do not
+  round up.
 - If a decision depends on how an external API or library behaves, read its source, types or docs
   before deciding. A confidence figure built on an unchecked assumption does not count.
 - For a significant design choice, ask the operator whether to record it in the feature's
@@ -350,10 +377,12 @@ handling), check that its runtime behaviour matches, not only its types.
 
 ## Progress checkpoints
 
-The operator checks in from time to time and needs to see at a glance where the run is. **Post a
-checkpoint in chat each time any agent returns**: coding, advisor, `task` or `explore`, including
-agents that failed, were cancelled or came back blocked. Note the time `/lead` started; pass it as
-`--since`. Get the figures from the host's session log, never from estimates:
+The operator checks in from time to time and needs to see at a glance where the run is. The launch
+and waiting notices above complement these checkpoints. **Post a checkpoint in chat each time any
+agent returns**: coding, advisor, `task` or `explore`, including agents that failed, were cancelled
+or came back blocked. Label the actual outcome; an agent returning does not mean its work item is
+done. Note the time `/lead` started; pass it as `--since`. Get the figures from the host's session
+log, never from estimates:
 
 ```bash
 node .github/skills/lead/scripts/agent-stats.mjs --session <your session folder> \
@@ -367,6 +396,8 @@ and the script finds the session by agent ID. Use the following format:
 > Added cancellation handling and two regression tests.
 > **Plan:** 3/10 done · 2 running · 1 parked · 4 queued (10 accepted items; WI-6 split into
 > 6a/6b).
+> **Running:** WI-5 implementation · WI-6a advisor review.
+> **Operator:** WI-7 decision pending (see **[OPERATOR DECISION NEEDED]** above).
 > **Item:** prompt ✓ → implementation ✓ → **review next** → advisor review → checks → commit.
 > **Agent:** 2m07s elapsed · 27.3 AIU · model requests 13 (2m30s summed) · tool spans 12s (bash
 > 6x/5s, view 23x/3s) · tests/builds 2 runs, 4s, 0 failed.
@@ -377,6 +408,9 @@ and the script finds the session by agent ID. Use the following format:
   change the count silently.
 - The item line shows the stages that item still needs, so "agent returned" does not read as
   "item done".
+- Always include **Running** (work item and role, or "none") and **Operator** (pending gate IDs, or
+  "none"), so the chat itself shows what is active and whether the operator owes a reply. A gate
+  first raised in a checkpoint still needs the prominent question or test message above.
 - Copy figures from the script. Where it prints "not reported by host", say so; never write zero,
   and never derive cost from token counts or model names. Summed model and tool time can exceed
   elapsed time, because calls overlap.

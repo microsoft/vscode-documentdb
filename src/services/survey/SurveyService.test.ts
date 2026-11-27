@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import * as vscode from 'vscode';
 import { DEBUG_SURVEY_ALWAYS_INVITE_ENV } from '../../debug/debugOverrides';
 import { ext } from '../../extensionVariables';
+import { FEEDBACK_ROUTE_URLS } from '../../utils/feedbackRoutes';
 import {
     getSurveyService,
     initializeSurveyService,
@@ -222,6 +223,36 @@ describe('SurveyService', (): void => {
         expect(h.sent('survey.openForm')[0].measurements).toEqual({ attempt: 1, selectedRating: 4 });
         expect(h.sent('survey.invitationShown')).toHaveLength(0);
         expect(h.sent('survey.invitationResolved')).toHaveLength(0);
+    });
+
+    it('opens a feedback route with telemetry but without a survey outcome or cooldown change', async (): Promise<void> => {
+        const h = createHarness();
+        expect(await h.service.showFeedbackForm('helpAndFeedbackView')).toBe(true);
+        const stateBefore = { ...h.state() };
+        expect(await h.callbacks().onOpenFeedbackRoute('reportBug')).toBe(true);
+        expect(h.openExternal).toHaveBeenCalledWith(FEEDBACK_ROUTE_URLS.reportBug);
+        expect(h.sent('survey.openFeedbackRoute')).toEqual([
+            expect.objectContaining({
+                properties: expect.objectContaining({
+                    activationSource: 'helpAndFeedbackView',
+                    feedbackRoute: 'reportBug',
+                    openResult: 'success',
+                }),
+                measurements: {},
+            }),
+        ]);
+        expect(h.state()).toEqual(stateBefore);
+        expect(h.handle.dispose).not.toHaveBeenCalled();
+        expect(h.sent('survey.invitationResolved')).toHaveLength(0);
+    });
+
+    it('opens a feedback route when the survey is disabled without emitting survey telemetry', async (): Promise<void> => {
+        const h = createHarness();
+        h.flags.enabled = false;
+        expect(await h.service.showFeedbackForm()).toBe(true);
+        expect(await h.callbacks().onOpenFeedbackRoute('suggestFeature')).toBe(true);
+        expect(h.openExternal).toHaveBeenCalledWith(FEEDBACK_ROUTE_URLS.suggestFeature);
+        expect(h.sent('survey.openFeedbackRoute')).toHaveLength(0);
     });
 
     it.each(['atlasCredentials', 'localQuickStart', 'connectionDiagnostics', 'helpAndFeedbackView'] as const)(

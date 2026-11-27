@@ -15,6 +15,7 @@
 import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 
 import { isFeedbackPermitted } from '../../utils/feedbackPermission';
+import { isFeedbackRoute, type FeedbackRoute } from '../../utils/feedbackRoutes';
 import { MAX_OPEN_FORM_TELEMETRY_ATTEMPTS } from './surveyConfig';
 import {
     isSurveyRating,
@@ -69,6 +70,8 @@ export const SurveyEventName = {
     FeedbackActivated: 'survey.feedbackActivated',
     /** One attempt to open the external form. Only the first `MAX_OPEN_FORM_TELEMETRY_ATTEMPTS` are reported. */
     OpenForm: 'survey.openForm',
+    /** One attempt to open a specific GitHub feedback route. */
+    OpenFeedbackRoute: 'survey.openFeedbackRoute',
     /** How the invitation ended. Once per invitation; never after permission withdrawal. */
     InvitationResolved: 'survey.invitationResolved',
 } as const;
@@ -100,6 +103,7 @@ export const SurveyTelemetryProperty = {
     Reason: 'reason',
     IsReminder: 'isReminder',
     OpenResult: 'openResult',
+    FeedbackRoute: 'feedbackRoute',
     Outcome: 'outcome',
     WasVisible: 'wasVisible',
     ActivationSource: 'activationSource',
@@ -356,6 +360,36 @@ export class SurveyTelemetry {
             measurements[SurveyTelemetryMeasurement.SelectedRating] = selectedRating;
         }
         return this.send(SurveyEventName.OpenForm, properties, measurements);
+    }
+
+    /** Opens of bug and feature links are telemetry-only and never resolve an invitation. */
+    public reportOpenFeedbackRoute(
+        route: FeedbackRoute,
+        openResult: SurveyOpenFormTelemetryResult,
+        activation: SurveyActivation,
+        invitationSessionId: string | undefined,
+    ): boolean {
+        const provenance = activationProperties(activation);
+        if (
+            !isFeedbackRoute(route) ||
+            !OPEN_FORM_RESULTS.includes(openResult) ||
+            !provenance ||
+            (activation.source === 'automaticInvitation' && !isInvitationSessionId(invitationSessionId))
+        ) {
+            return false;
+        }
+        return this.send(
+            SurveyEventName.OpenFeedbackRoute,
+            {
+                ...provenance,
+                [SurveyTelemetryProperty.FeedbackRoute]: route,
+                [SurveyTelemetryProperty.OpenResult]: openResult,
+                ...(activation.source === 'automaticInvitation'
+                    ? { [SurveyTelemetryProperty.InvitationSessionId]: invitationSessionId }
+                    : {}),
+            },
+            {},
+        );
     }
 
     /** Once per `invitationSessionId`. */

@@ -34,6 +34,21 @@ source of truth for behavior.
 
 ## Invariants
 
+### CI trigger policy is separate from the shared checks
+
+[`main.yml`](../../../../.github/workflows/main.yml) retains automatic PR/push triggers and their
+branch filters. [`ci-requested.yml`](../../../../.github/workflows/ci-requested.yml) accepts the
+one-shot `ci:full-requested` label on any PR target, including personal development branches,
+and owns manual dispatch. Both call [`ci-checks.yml`](../../../../.github/workflows/ci-checks.yml)
+through `workflow_call`; checks, artifact dependencies and PR reporting have one implementation.
+PR checkouts continue to test GitHub's synthetic merge ref, not just the head branch.
+
+The shared pipeline validates the selected tier and returns its gate result. Each caller posts
+the exact top-level `Merge gate` check required by the ruleset and fails if that result is absent
+or not successful. Unrelated labels and manual fast runs must not satisfy this check. Concurrency
+belongs to the entry points only; automatic runs and requested full runs cannot cancel each other.
+Changes to any of these three workflow files select every path-scoped check in the standard tier.
+
 ### One `bson` implementation per entry graph
 
 `bson` exposes separate CommonJS and ESM implementations. Mixing them creates distinct constructors

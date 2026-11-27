@@ -203,6 +203,11 @@ $tab-focus-inset: calc(2 * var(--strokeWidthThick));
         padding-inline: var(--spacingHorizontalMNudge);
     }
 
+    .collectionDocumentViewSwitcher {
+        min-width: 120px;
+        max-width: 120px;
+    }
+
     // ---- Results grid ------------------------------------------------------
     .resultsDisplayArea {
         @extend .selectionDisabled;

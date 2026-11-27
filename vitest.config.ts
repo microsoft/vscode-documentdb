@@ -71,9 +71,9 @@ export default defineConfig({
                         deps: {
                             // Our workspace packages need no entry here: their symlinks resolve to
                             // `packages/*`, outside `node_modules`, and Vitest inlines such files. That
-                            // matters for `@microsoft/vscode-ext-webview-fluentui`, which plain Node cannot
-                            // load (Fluent's packaging; see its README). A copy installed from the registry
-                            // would need `inline` again.
+                            // matters for `@microsoft/vscode-ext-webview-fluentui` with older supported
+                            // Fluent versions, which plain Node cannot load. A copy installed from the
+                            // registry may need `inline`; see the package README.
                             //
                             // `@azure/identity` and `@azure/msal-node` are inlined so `vi.resetModules()`
                             // reloads them, as `jest.resetModules()` did: the managed-identity endpoint

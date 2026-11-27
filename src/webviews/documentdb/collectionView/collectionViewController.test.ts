@@ -5,6 +5,8 @@
 
 import { beforeEach, expect, it, vi } from 'vitest';
 import { getConnectionSurfaces } from '../../../documentdb/connectionSurfaces';
+import { DocumentViewMode } from '../../../documentdb/DocumentViewMode';
+import { LiveConfigService } from '../../../services/LiveConfigService';
 import {
     type AppWebviewController,
     openAppWebview,
@@ -23,6 +25,7 @@ const mocks = vi.hoisted(() => ({
     postMessage: vi.fn(),
     sessionBinding: vi.fn(),
 }));
+const state = vi.hoisted(() => new Map<string, unknown>());
 
 vi.mock('../../../documentdb/ClustersClient', () => ({ ClustersClient: mocks }));
 vi.mock('../../../documentdb/ClusterSession', () => ({
@@ -39,7 +42,19 @@ vi.mock('../../../services/SettingsService', () => ({
 vi.mock('../../_integration/openAppWebview', () => ({ openAppWebview: vi.fn() }));
 vi.mock('../../../extensionVariables', async () => {
     const vscodeMock = await import('vscode');
-    return { ext: { context: { extensionUri: vscodeMock.Uri.file('/fixture/extension') } } };
+    return {
+        ext: {
+            context: {
+                extensionUri: vscodeMock.Uri.file('/fixture/extension'),
+                globalState: {
+                    get: (key: string) => state.get(key),
+                    update: async (key: string, value: unknown) => {
+                        state.set(key, value);
+                    },
+                },
+            },
+        },
+    };
 });
 
 const clusterId = 'cluster';
@@ -50,6 +65,7 @@ let context: RouterContext;
 
 beforeEach((): void => {
     vi.clearAllMocks();
+    state.clear();
     for (const panel of opened.splice(0)) {
         panel.dispose();
     }
@@ -82,14 +98,14 @@ beforeEach((): void => {
     });
 });
 
-function openPanel(): void {
+function openPanel(collectionName = 'collection'): void {
     openCollectionWebview({
         sessionId: 'session',
         clusterId,
         clusterDisplayName: 'Cluster',
         viewId: 'connectionsView',
         databaseName: 'database',
-        collectionName: 'collection',
+        collectionName,
     });
 }
 
@@ -144,4 +160,21 @@ it('does not let stale Retry clear a removal latch', async (): Promise<void> => 
     });
     expect(mocks.unlatch).not.toHaveBeenCalled();
     expect(mocks.resolveBoundClient).not.toHaveBeenCalled();
+});
+
+it('defaults to Table and uses the latest choice when opening or reopening a collection', async (): Promise<void> => {
+    openPanel('first');
+    await LiveConfigService.setCollectionDocumentView(DocumentViewMode.TREE);
+    openPanel('second');
+    await LiveConfigService.setCollectionDocumentView(DocumentViewMode.JSON);
+    openPanel('first');
+    await LiveConfigService.setCollectionDocumentView(DocumentViewMode.TABLE);
+    openPanel('second');
+
+    expect(vi.mocked(openAppWebview).mock.calls.map(([options]) => options.config)).toEqual([
+        expect.objectContaining({ collectionName: 'first', initialDocumentView: DocumentViewMode.TABLE }),
+        expect.objectContaining({ collectionName: 'second', initialDocumentView: DocumentViewMode.TREE }),
+        expect.objectContaining({ collectionName: 'first', initialDocumentView: DocumentViewMode.JSON }),
+        expect.objectContaining({ collectionName: 'second', initialDocumentView: DocumentViewMode.TABLE }),
+    ]);
 });

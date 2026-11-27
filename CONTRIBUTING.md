@@ -33,16 +33,21 @@ CI runs in tiers (see [decision 0002](docs/ai-and-plans/features/build-and-test-
 
 - **Draft pull requests** (to `main`, `release/**` or `feature/**`): build, lint, formatting, type checks and unit tests.
 - **Ready pull requests, and pushes to `main` or a release branch** (`release/**`): the above, plus packaging, VSIX inspection and activation. Checks of the workspace packages and of the verification tooling run when their files change. Pushes cache build sizes for PR comparisons.
-- **Full run on a pull request:** add the `ci:full-requested` label. It runs every check once on the current commit, and the workflow removes the label.
-- **Manual dispatch:** `workflow_dispatch` runs every check with `enforce_full_run`, and only the first tier without it.
+- **Full run on a pull request, targeting any branch:** add the `ci:full-requested` label. It runs every check once on the current commit, and the workflow removes the label. This includes PRs targeting `dev/**`.
+- **Manual dispatch:** select **CI requested** in Actions. It runs every check with `enforce_full_run`, and only the first tier without it.
 
 How to use it:
 
 1. **Open the PR as a draft** while the work is still moving. Every push gets the quick checks, and the automatic Copilot review stays off.
 2. **Click Ready for review** when you hand it over. That run, and every push after it, adds the packaging and VSIX checks. The required `Merge gate` check passes only when every check expected for that run passed.
-3. **Add the `ci:full-requested` label** when you want every check, regardless of which files changed: for example, after changing CI or build configuration, or before a release. The label works on drafts too. Add it again to repeat the run on a later commit.
+3. **Add the `ci:full-requested` label** when you want every check, regardless of which files changed: for example, after changing CI or build configuration, or before a release. The label works on drafts and on PRs targeting development branches too. Add it again to repeat the run on a later commit.
 
 Other labels (such as `on-hold`) do not run CI, and the PR keeps its last `Merge gate` result.
+
+Automatic triggers remain in [main.yml](.github/workflows/main.yml); label and manual triggers live
+in [ci-requested.yml](.github/workflows/ci-requested.yml). Both call the same
+[ci-checks.yml](.github/workflows/ci-checks.yml) pipeline, so their checks do not drift.
+Each entry point keeps a top-level `Merge gate` job to preserve the required check name.
 
 Each same-repository pull request gets one CI report comment, updated on every run: which checks ran and why, code quality and build size.
 
@@ -71,7 +76,7 @@ A `release/<X.Y.Z>` branch is created for one scenario only: a quick patch relea
 
 Large features — those that span multiple PRs, touch core subsystems, or carry meaningful integration risk — live on a `feature/<name>` branch until they are merge-ready as a whole. A maintainer merges individual PRs into the feature branch as work progresses. When the feature is complete and validated end-to-end, a single PR from `feature/<name>` to `main` brings it in.
 
-**Why this helps quality.** The real benefit is that every individual PR against the feature branch receives the full sweep of reviews, the same bar we apply anywhere else. Instead of one massive PR that is hard to review well, the work arrives as scoped, self-contained items that are easy to reason about. By the time the feature branch is ready, each component and contribution has already been reviewed on its own, so we have far more trust in the quality of the whole. The feature branch is still reviewed ahead of merging into `main`, but that final review builds on a foundation of already-vetted pieces rather than starting from scratch. This structure is not a gimmick to keep the process complex, it genuinely helps us keep the product's quality high.
+**Why this helps quality.** Work arrives as scoped, self-contained PRs that run the full feature-branch CI checks instead of one massive, hard-to-review final PR. Focused human review is encouraged where useful, but approvals and code-owner review are not required for merges into the feature branch. The complete feature still needs an approving human review, code checks and end-to-end validation in its final PR to `main`.
 
 > **Example:** The integrated shell was built across more than 10 dedicated PRs, each reviewed and merged into `feature/shell`. Once the feature was complete and validated as a whole, it landed on `main` in a single PR.
 
@@ -101,12 +106,13 @@ To release the hold: remove the `on-hold` label and click **Ready for review**, 
 Shared branches are collaboration surfaces, so an uncoordinated force push can destroy a collaborator's work. The rules below reflect that:
 
 - **`dev/*`** (personal working branches): force pushes are **allowed**. This is where individuals work, so rebasing, squashing, and history cleanup are expected.
-- **`feature/*`** and **`release/*`** (collaboration branches): force pushes are **discouraged but not blocked**. There are legitimate cases where a force push is needed to clean up history. When one is necessary, it MUST be coordinated with everyone working on that branch first.
+- **`feature/*`** and **`release/*`** (collaboration branches): force pushes are blocked by rulesets. If an authorized maintainer genuinely needs to bypass that protection to clean up history, it MUST be coordinated with everyone working on that branch first.
 - **`main`**: protected. No force pushes. PRs only.
 
 **After a PR receives human review, do not force-push its head branch for routine rebasing, squashing, or history cleanup**, regardless of branch type. Add follow-up commits instead so reviewers can see what is new without re-reviewing work they have already checked. If a force-push is genuinely necessary, coordinate with the reviewers first. Afterward, leave a brief PR comment identifying what previously reviewed changes stayed unchanged, what changed while resolving conflicts, and what is new since the review.
 
-The relaxed protection on `feature/*` and `release/*` is a deliberate escape hatch, not an invitation.
+The maintainer bypass available on `feature/*` and `release/*` is a deliberate escape hatch, not an
+invitation.
 
 ## 2. Machine Setup
 

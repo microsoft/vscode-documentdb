@@ -58,18 +58,11 @@ const ATTW = '@arethetypeswrong/cli@0.18.5';
 // CommonJS probe), but TypeScript's node16 CommonJS resolution reports it as dynamic-import-only.
 const ACCEPTED_ATTW_PROBLEMS = new Set(['CJSResolvesToESM']);
 
-// Fluent UI cannot be loaded by plain Node: @fluentui/react-components resolves to CommonJS with
-// no detectable named exports, and @fluentui/react-icons' ESM build uses extensionless imports.
-// The package README documents inlining it in test runners instead. Errors may name a resolved
-// Windows path, hence `[\\/]`.
-const EXPECTED_NODE_LOAD_FAILURES = {
-    '@microsoft/vscode-ext-webview-fluentui': /@fluentui[\\/]/,
-    '@microsoft/vscode-ext-webview-fluentui/components': /@fluentui[\\/]/,
-};
-
-// Packages the Vitest probe inlines: fluentui for the reason above; vscode-ext-webview so the
-// `vscode` alias reaches the `import 'vscode'` in its host entry.
-const VITEST_INLINE = ['@microsoft/vscode-ext-webview', '@microsoft/vscode-ext-webview-fluentui'];
+// Packages the Vitest probe inlines: vscode-ext-webview so the `vscode` alias reaches the
+// `import 'vscode'` in its host entry. The extension's locked Fluent and icons versions load
+// natively in Node, so vscode-ext-webview-fluentui is left to Node. Older supported peers may
+// need inlining; see the package README.
+const VITEST_INLINE = ['@microsoft/vscode-ext-webview'];
 
 const here = import.meta.dirname;
 const repo = path.resolve(here, '../../..');
@@ -341,18 +334,9 @@ try {
             continue;
         }
         for (const result of results) {
-            const owner = ownerOf(result.name, ours);
-            const expected = EXPECTED_NODE_LOAD_FAILURES[result.name];
             const line = result.ok ? `ok: ${result.detail}` : `FAILED: ${result.error}`;
-            if (expected) {
-                const asExpected = !result.ok && !result.loaded && expected.test(result.error);
-                note(owner, `${kind} ${result.name}`, `${asExpected ? 'expected failure' : 'UNEXPECTED'}: ${line}`);
-                if (!asExpected)
-                    failures.push(`${kind} ${result.name}: expected the documented Fluent failure, got ${line}`);
-            } else {
-                note(owner, `${kind} ${result.name}`, line);
-                if (!result.ok) failures.push(`${kind} ${result.name}: ${result.error}`);
-            }
+            note(ownerOf(result.name, ours), `${kind} ${result.name}`, line);
+            if (!result.ok) failures.push(`${kind} ${result.name}: ${result.error}`);
         }
     }
 
@@ -413,8 +397,8 @@ try {
     assert.equal(testControlFailure, 'packed-test-control: packed test files are forbidden: dist/x.test.js');
     report.packedTestControl = { status: 'expected failure', failure: testControlFailure };
 
-    // Control: without inlining, Vitest hands both packages to Node, which must fail exactly as
-    // documented (Fluent's named exports; the host entry's bare `vscode` import).
+    // Control: without inlining, Vitest hands the host entry to Node, which must fail exactly as
+    // documented (its bare `vscode` import).
     if (inline.length < VITEST_INLINE.length) {
         report.vitestWithoutInline = `not applicable: needs ${VITEST_INLINE.join(' and ')}`;
     } else {
@@ -424,10 +408,6 @@ try {
         });
         const controlOutput = `${control.stdout}${control.stderr}`;
         const controlFailures = {
-            fluentNamedExports:
-                /Named export '[^']+' not found\. The requested module '@fluentui\/react-components'|@fluentui[\\/]react-icons/.test(
-                    controlOutput,
-                ),
             hostVscode: /Cannot find (?:package|module) 'vscode'/.test(controlOutput),
         };
         report.vitestWithoutInline = {
@@ -435,7 +415,7 @@ try {
             summary: controlOutput.match(/Tests\s+.*\n/)?.[0]?.trim(),
             ...controlFailures,
         };
-        if (control.status === 0 || !controlFailures.fluentNamedExports || !controlFailures.hostVscode) {
+        if (control.status === 0 || !controlFailures.hostVscode) {
             failures.push(
                 `vitest control without inlining did not fail as documented: ${JSON.stringify(report.vitestWithoutInline)}`,
             );

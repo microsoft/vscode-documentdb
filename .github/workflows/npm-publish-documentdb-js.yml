@@ -2,7 +2,7 @@ name: Publish @documentdb-js packages
 
 # Verifies the workspace packages and dry-runs publication by default, without
 # deployment approval or OIDC permissions. With no selection, dry-run checks all
-# five @documentdb-js/* packages.
+# six @documentdb-js/* packages.
 #
 # Real publication requires dry_run=false and at least one selected package.
 # Only the publish job uses npm Trusted Publishing (OIDC) and the
@@ -44,6 +44,10 @@ on:
                 description: 'Publish @documentdb-js/srv-resolver'
                 type: boolean
                 default: false
+            publish_connection_diagnostics:
+                description: 'Publish @documentdb-js/connection-diagnostics (needs srv-resolver ^1.1.0 on npm)'
+                type: boolean
+                default: false
 
 permissions:
     contents: read
@@ -64,7 +68,8 @@ jobs:
                   !inputs.publish_schema_analyzer &&
                   !inputs.publish_shell_api_types &&
                   !inputs.publish_shell_runtime &&
-                  !inputs.publish_srv_resolver
+                  !inputs.publish_srv_resolver &&
+                  !inputs.publish_connection_diagnostics
                 }}
         steps:
             - name: 🛑 Validate inputs (at least one package selected)
@@ -75,7 +80,8 @@ jobs:
                     !inputs.publish_schema_analyzer &&
                     !inputs.publish_shell_api_types &&
                     !inputs.publish_shell_runtime &&
-                    !inputs.publish_srv_resolver
+                    !inputs.publish_srv_resolver &&
+                    !inputs.publish_connection_diagnostics
                   }}
               run: |
                   echo "::error::No package selected. Enable at least one publish_* input before running this workflow."
@@ -130,6 +136,10 @@ jobs:
               if: ${{ inputs.publish_srv_resolver || env.VERIFY_ALL == 'true' }}
               run: npm publish --dry-run --workspace @documentdb-js/srv-resolver
 
+            - name: 📦 Dry-run @documentdb-js/connection-diagnostics
+              if: ${{ inputs.publish_connection_diagnostics || env.VERIFY_ALL == 'true' }}
+              run: npm publish --dry-run --workspace @documentdb-js/connection-diagnostics
+
             - name: 📦 Pack selected packages for publication
               id: pack
               if: ${{ !inputs.dry_run }}
@@ -139,6 +149,7 @@ jobs:
                   PUBLISH_SHELL_API_TYPES: ${{ inputs.publish_shell_api_types }}
                   PUBLISH_SHELL_RUNTIME: ${{ inputs.publish_shell_runtime }}
                   PUBLISH_SRV_RESOLVER: ${{ inputs.publish_srv_resolver }}
+                  PUBLISH_CONNECTION_DIAGNOSTICS: ${{ inputs.publish_connection_diagnostics }}
               run: |
                   set -euo pipefail
                   selected=()
@@ -147,6 +158,7 @@ jobs:
                   if [[ "$PUBLISH_SHELL_API_TYPES" == 'true' ]]; then selected+=('@documentdb-js/shell-api-types'); fi
                   if [[ "$PUBLISH_SHELL_RUNTIME" == 'true' ]]; then selected+=('@documentdb-js/shell-runtime'); fi
                   if [[ "$PUBLISH_SRV_RESOLVER" == 'true' ]]; then selected+=('@documentdb-js/srv-resolver'); fi
+                  if [[ "$PUBLISH_CONNECTION_DIAGNOSTICS" == 'true' ]]; then selected+=('@documentdb-js/connection-diagnostics'); fi
 
                   mkdir -p publish-tarballs
                   for pkg in "${selected[@]}"; do
@@ -231,6 +243,7 @@ jobs:
                   PUBLISH_SHELL_API_TYPES: ${{ inputs.publish_shell_api_types }}
                   PUBLISH_SHELL_RUNTIME: ${{ inputs.publish_shell_runtime }}
                   PUBLISH_SRV_RESOLVER: ${{ inputs.publish_srv_resolver }}
+                  PUBLISH_CONNECTION_DIAGNOSTICS: ${{ inputs.publish_connection_diagnostics }}
               run: |
                   set -euo pipefail
                   publish_package() {
@@ -248,7 +261,7 @@ jobs:
                           echo "::error::${tarballs[0]} contains $packed_name, expected $name."
                           exit 1
                       fi
-                      npm publish "${tarballs[0]}" --provenance --access public --ignore-scripts
+                      npm publish "./${tarballs[0]}" --provenance --access public --ignore-scripts
                   }
 
                   if [[ "$PUBLISH_OPERATOR_REGISTRY" == 'true' ]]; then publish_package '@documentdb-js/operator-registry'; fi
@@ -256,3 +269,5 @@ jobs:
                   if [[ "$PUBLISH_SHELL_API_TYPES" == 'true' ]]; then publish_package '@documentdb-js/shell-api-types'; fi
                   if [[ "$PUBLISH_SHELL_RUNTIME" == 'true' ]]; then publish_package '@documentdb-js/shell-runtime'; fi
                   if [[ "$PUBLISH_SRV_RESOLVER" == 'true' ]]; then publish_package '@documentdb-js/srv-resolver'; fi
+                  # After srv-resolver: connection-diagnostics depends on it.
+                  if [[ "$PUBLISH_CONNECTION_DIAGNOSTICS" == 'true' ]]; then publish_package '@documentdb-js/connection-diagnostics'; fi

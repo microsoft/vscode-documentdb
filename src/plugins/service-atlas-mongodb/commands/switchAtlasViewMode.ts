@@ -6,30 +6,14 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
-import {
-    DEFAULT_ATLAS_VIEW_MODE,
-    DISCOVERY_PROVIDER_ID,
-    DISCOVERY_VIEW_MODE_STATE_KEY,
-    type AtlasViewMode,
-} from '../config';
+import { LiveConfigService } from '../../../services/LiveConfigService';
+import { DISCOVERY_PROVIDER_ID, type AtlasViewMode } from '../config';
 
-/** Reads the persisted MongoDB Atlas discovery view mode. */
-export function getAtlasViewMode(): AtlasViewMode {
-    return ext.context.globalState.get<AtlasViewMode>(DISCOVERY_VIEW_MODE_STATE_KEY, DEFAULT_ATLAS_VIEW_MODE);
-}
-
-/**
- * Persists the global MongoDB Atlas discovery {@link AtlasViewMode} and refreshes the tree.
- *
- * The mode is global (it applies to the whole MongoDB Atlas discovery provider) and stored
- * directly in globalState, matching the Kubernetes view-mode toggle, so the choice always
- * persists without exposing a user-facing setting.
- */
 async function setAtlasViewMode(context: IActionContext, mode: AtlasViewMode): Promise<void> {
     context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
     context.telemetry.properties.atlasViewMode = mode;
 
-    await ext.context.globalState.update(DISCOVERY_VIEW_MODE_STATE_KEY, mode);
+    await LiveConfigService.setAtlasViewMode(mode);
 
     const rootId = `${Views.DiscoveryView}/${DISCOVERY_PROVIDER_ID}`;
     ext.discoveryBranchDataProvider.resetNodeErrorState(rootId);

@@ -21,9 +21,12 @@ because Vite reports development build errors in the browser overlay.
 
 ## CI
 
-`.github/workflows/main.yml` runs these checks in tiers
-([decision 0002](../../docs/ai-and-plans/features/build-and-test-stack/decisions.md)). Its `plan` job picks the
-tier, and the path-scoped checks from the whole PR diff (for a push, the pushed range).
+[`main.yml`](../../.github/workflows/main.yml) handles automatic CI;
+[`ci-requested.yml`](../../.github/workflows/ci-requested.yml) handles label requests on any PR
+target branch and manual runs. Both call [`ci-checks.yml`](../../.github/workflows/ci-checks.yml),
+which runs these checks in tiers
+([decision 0002](../../docs/ai-and-plans/features/build-and-test-stack/decisions.md)). Its `plan` job
+picks the tier, and the path-scoped checks from the whole PR diff (for a push, the pushed range).
 
 | Job, or step within a job                                             | Runs                                                                         | Fast (draft PR) | Standard (ready PR, push to `main` or `release/**`)                    | Full (`ci:full-requested` label) |
 | --------------------------------------------------------------------- | ---------------------------------------------------------------------------- | --------------- | ---------------------------------------------------------------------- | -------------------------------- |
@@ -34,21 +37,24 @@ tier, and the path-scoped checks from the whole PR diff (for a push, the pushed 
 | `Self-test: ...` and `Test the verification tools` steps              | `prove:vsix`, `test:verification`, `prove:activation` (decision 0003)        | no              | when `build/verification/**`, `build/vite/**` or a Vite config changes | yes                              |
 | `Webview host in unbundled extensions` step (in `VSIX: activate ...`) | `probe:host-unbundled`                                                       | no              | when `packages/vscode-ext-webview/**` changes                          | yes                              |
 
-`package-lock.json`, `main.yml` and `.github/actions/**` count as changes for every path-scoped
-check. Any other label runs nothing. A manual run is full with `enforce_full_run`, fast without it.
+`package-lock.json`, any of the three CI workflow files and `.github/actions/**` count as changes
+for every path-scoped check. Any other label runs nothing. A manual run of **CI requested** is full
+with `enforce_full_run`, fast without it.
 
 After `Plan: choose checks`, the first four jobs above run in parallel; inspection and activation
 wait for `VSIX: build` ([decision 0014](../../docs/ai-and-plans/features/build-and-test-stack/decisions.md)).
 Vitest uses every CPU when `CI` is set and a quarter of them locally. Each job installs through
 [`.github/actions/setup`](../../.github/actions/setup/action.yml), which restores `node_modules`
-from the Actions cache and runs `npm ci` only on a miss. The required `Merge gate`
-fails unless every job the tier expected passed (decision 0013).
+from the Actions cache and runs `npm ci` only on a miss. The shared `Validate expected checks` job
+fails unless every job the tier expected passed (decision 0013). Each caller exposes its result
+under the exact required `Merge gate` name; a failed, cancelled or missing validation fails closed.
+Manual fast runs use a different gate name and cannot satisfy the required check.
 
 Same-repository PRs get one `<!-- ci-report -->` comment, updated in place and composed by
 [`ci-report.cjs`](./ci-report.cjs): every check under its job or step name, with its result or the
 reason it was skipped, then code quality and the [build size section](#size-report-warning-only).
-Adding `ci:full-requested` starts one full run on the current commit; the workflow removes the
-label, and the comment keeps the last full run's commit and result.
+Adding `ci:full-requested` starts one full run on the current commit, including for a PR targeting
+`dev/**`; the workflow removes the label, and the comment keeps the last full run's commit and result.
 
 ## L1: offline inspection
 
@@ -485,11 +491,12 @@ SHA-256 and runs:
   [`vscode-stub.cjs`](./package-checks/vscode-stub.cjs) and runs the Fluent calls under jsdom. A
   package with no calls in `calls.mjs` fails.
 
-Expected and enforced: plain Node cannot load `vscode-ext-webview-fluentui` and its `/components`
-entry, because of Fluent UI's own packaging (see that package's README), so the Node probes require
-exactly that failure. A control run of the Vitest probe without inlining must fail for the same
-reason and for the host entry's bare `vscode` import. Rerun this after any change to a package's
-`package.json`, `tsconfig` or entry points.
+Expected and enforced with the extension's locked Fluent UI 9.75 and
+`@fluentui/react-icons` 2.0.345: every entry point, including `vscode-ext-webview-fluentui`, loads in
+plain Node. The Vitest probe inlines only `vscode-ext-webview`, so this combination is proven to
+work without Fluent inlining. Older supported peers may need inlining; see the package README. A
+control run of the Vitest probe without inlining must fail on the host entry's bare `vscode`
+import. Rerun this after any change to a package's `package.json`, `tsconfig` or entry points.
 
 **Archive mode (offline).** `--archives <dir-or-.tgz>` (repeatable; a directory means every `.tgz`
 in it) checks tarballs that were already packed, instead of building and packing. It never runs
@@ -498,7 +505,7 @@ npm, npx or any tool other than Node, and reads the tarballs with
 Windows agent with only `npm ci` behind it. It runs every check above except `publint` and
 `@arethetypeswrong/cli`, which are not in the lockfile, and says so in its output. The probes cover
 only the archives' entry points (`PROBE_PACKAGES`); the Vitest control without inlining runs when
-both inlined packages are among the archives. The packed-test control writes its tarball directly
+`vscode-ext-webview` is among the archives. The packed-test control writes its tarball directly
 instead of running `npm pack`. The output and `--report` record the checkout commit and each
 archive's SHA-256. [`package-archives.test.cjs`](./package-checks/package-archives.test.cjs) packs
 `vscode-ext-webview` and requires archive mode to pass it, and to reject it with a planted

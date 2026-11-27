@@ -8,7 +8,13 @@ changes; each is listed here with a copyable before/after.
 
 ## `0.10.x` → `0.11.0`
 
-The package is now **ESM-only**. No API, wire-protocol or behaviour changes.
+The package is now **ESM-only**, changing how consumers load it. The tRPC
+wire protocol is unchanged.
+
+This release also adds optional `panelViewType` to `WebviewControllerOptions`:
+it sets the VS Code-facing panel identifier independently of the `viewType`
+render key. Omitting it preserves the `react-webview-${viewType}` identifier.
+See [CHANGELOG.md](./CHANGELOG.md#0110) for the other release changes.
 
 - It declares `"type": "module"` and ships ES modules only. Import through the
   documented entry points (`.`, `./host`, `./webview`, `./react`); deep imports

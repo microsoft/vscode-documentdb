@@ -21,6 +21,8 @@ const strings: SurveyInvitationStrings = {
     englishNote: 'The survey is in English.',
     askLater: 'Ask me later',
     neverAgain: 'Never again',
+    reportBug: 'Report a bug',
+    suggestFeature: 'Suggest a feature',
     why: 'Why am I seeing this?',
     usage: "You've used the DocumentDB extension on {0} days with meaningful extension use. This count stays on your device.",
     manuallyOpened: "You're seeing this because you opened the feedback form.",
@@ -116,6 +118,45 @@ describe('survey invitation HTML', (): void => {
         expect(page.querySelector('[data-action="neverAgain"]')).toBeNull();
         expect(page.querySelector('[data-action="askLater"]')?.textContent).toBe('Close');
     });
+
+    it.each([false, true])(
+        'shows small GitHub feedback links below the explanation, manual=%s',
+        (manuallyOpened): void => {
+            const page = parseHtml(
+                buildSurveyInvitationHtml({
+                    strings,
+                    nonce: 'test-nonce',
+                    cspSource: 'vscode-webview:',
+                    artworkUri: 'vscode-webview://extension/icon.png',
+                    artworkDarkUri: 'vscode-webview://extension/icon-dark.svg',
+                    explanation: {
+                        activeDayCount: 7,
+                        requiredActiveDays: 3,
+                        isReminder: false,
+                        previousOutcome: undefined,
+                    },
+                    manuallyOpened,
+                }),
+            );
+            const links = page.querySelector('.feedback-routes');
+            const details = page.querySelector('details');
+            expect(links?.textContent).toContain(strings.reportBug);
+            expect(links?.textContent).toContain(strings.suggestFeature);
+            expect(details?.nextElementSibling).toBe(links);
+            expect(links?.querySelectorAll('a')).toHaveLength(2);
+            expect(links?.querySelector('button')).toBeNull();
+            const styledPage = new JSDOM(page.documentElement.outerHTML);
+            const styledLinks = styledPage.window.document.querySelector('.feedback-routes');
+            if (!styledLinks) {
+                throw new Error('Expected feedback routes in rendered HTML.');
+            }
+            const routesStyle = styledPage.window.getComputedStyle(styledLinks);
+            expect(routesStyle.fontSize).toBe('12px');
+            expect(routesStyle.marginTop).toBe('auto');
+            expect(routesStyle.paddingTop).toBe('16px');
+            styledPage.window.close();
+        },
+    );
 
     it('moves focus to Continue to survey when the host asks', (): void => {
         const h = interactiveHtml();
@@ -247,6 +288,18 @@ describe('survey invitation HTML', (): void => {
         expect(h.messages).toEqual([{ type: 'rendered' }, { type: 'openForm' }]);
         h.dom.window.close();
     });
+
+    it.each(['reportBug', 'suggestFeature'])(
+        'opens the %s route without selecting the survey funnel',
+        (action): void => {
+            const h = interactiveHtml();
+            h.dom.window.document.querySelector<HTMLInputElement>('input[value="5"]')?.click();
+            h.dom.window.document.querySelector<HTMLElement>(`[data-action="${action}"]`)?.click();
+            expect(h.messages).toEqual([{ type: 'rendered' }, { type: action }]);
+            expect(h.dom.window.document.querySelector<HTMLButtonElement>('#open-survey')?.disabled).toBe(false);
+            h.dom.window.close();
+        },
+    );
 
     it('shows only the hovered or selected rating description, restoring or clearing it on leave', (): void => {
         const h = interactiveHtml();
@@ -435,7 +488,8 @@ describe('survey invitation HTML', (): void => {
         expect(styles).toContain('font-size: 18px; font-weight: 600; line-height: 24px');
         expect(styles).toContain('header { padding: 8px 16px;');
         expect(styles).toContain('gap: 12px;');
-        expect(styles).toContain('.content { max-width: 480px; margin: 0 auto; padding: 24px 16px; }');
+        expect(styles).toContain('.content { display: flex; flex: 1; flex-direction: column;');
+        expect(styles).toContain('max-width: 480px; margin: 0 auto; padding: 24px 16px; width: 100%; }');
         expect(styles).toContain('.star-icon { width: 20px; height: 20px; }');
         expect(styles).toContain('.primary { width: 100%; margin-top: 16px; }');
         expect(styles).toContain(

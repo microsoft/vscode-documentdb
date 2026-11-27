@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { DocumentViewMode } from '../../../src/documentdb/DocumentViewMode';
 import {
     InstanceState,
     type DockerStatusResult,
@@ -65,6 +66,7 @@ const collectionConfig: CollectionViewWebviewConfigurationType = {
     viewId: 'connectionsView',
     databaseName: 'stage0_inventory',
     collectionName: 'stage0_documents',
+    initialDocumentView: DocumentViewMode.TABLE,
     defaultPageSize: 50,
     enableAIQueryGeneration: false,
 };

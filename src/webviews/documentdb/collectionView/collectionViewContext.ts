@@ -4,16 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createContext } from 'react';
+import { DocumentViewMode as Views } from '../../../documentdb/DocumentViewMode';
 import { type AIIndexRecommendation } from '../../../services/ai/types';
 import { type ConnectionUnavailableDetails } from '../../_integration/connectionUnavailable';
 import { type QueryInsightsStage1Response, type QueryInsightsStage2Response } from './types/queryInsights';
 import { type QueryInsightsStreamUsage } from './types/queryInsightsStream';
 
-export enum Views {
-    TABLE = 'Table View',
-    TREE = 'Tree View',
-    JSON = 'JSON View',
-}
+export { Views };
 
 // ============================================================================
 // Query Insights pipeline state

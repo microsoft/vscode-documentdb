@@ -63,7 +63,11 @@ vi.mock('./services/survey/SurveyService', (): object => ({
 }));
 
 it('registers working Give Feedback even when survey initialization throws during activation', async (): Promise<void> => {
-    const context = { subscriptions: [], secrets: {} } as unknown as vscode.ExtensionContext;
+    const context = {
+        subscriptions: [],
+        secrets: {},
+        globalState: { get: vi.fn() },
+    } as unknown as vscode.ExtensionContext;
     await activateInternal(context, { loadStartTime: 0, loadEndTime: 1 });
     expect(initializeSurveyService).toHaveBeenCalled();
     const registration = vi
