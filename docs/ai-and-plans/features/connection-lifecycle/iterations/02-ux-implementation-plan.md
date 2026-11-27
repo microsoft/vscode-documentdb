@@ -686,3 +686,36 @@ turns were substantial overhead compared with coding/checks. For a future run, c
 ownership gates into one compact packet, correct exact interfaces before dispatch, and keep leader
 handoffs short. Preserve the approved model plan; these unlike tasks do not establish a model-quality
 ranking.
+
+## Case 2 follow-up (2026-11-27)
+
+The operator requested committing the work, running the full Case 2 list, addressing failures,
+then pushing once. A dedicated draft head, `dev/tnaum/connection-lifecycle-ux`, targets
+`feature/connection-lifecycle`; the milestone is 1.2.0. The earlier local-only outcome above is
+the record of the preceding endpoint, not the current publishing authorization.
+
+| Command                   | Result                                                |
+| ------------------------- | ----------------------------------------------------- |
+| `npm run l10n`            | Passed                                                |
+| `npm run prettier-fix`    | Passed; 18 formatted files committed as `6a8ad8756`   |
+| `npm run l10n:check`      | Passed                                                |
+| `npm run lint`            | Passed with the default heap after the fixes below    |
+| `npm run build`           | Passed; rerun after the scoped lint fixes             |
+| `npm run typecheck:tests` | Passed (exact strict package-test script)             |
+| `npx vitest run`          | 449 files passed; 10,205 tests passed, 1 skipped      |
+| `npm run package`         | Passed; rerun after fixes, producing the current VSIX |
+
+The first lint run exhausted the default Node heap. The operator identified the main-branch
+worktree exclusion fix, which was ported from `f38e0282f` as `9553a3810`, without merging unrelated
+main changes. Its regression test passed, and lint no longer required an increased heap.
+The now-completing lint run exposed 20 diagnostics in seven changed files; `mai-code-2` corrected
+only type-visible comparisons, mock/error typing, synchronous awaits and log inspection.
+All existing assertions, unknown-error coverage, error identity, view identifiers and redaction
+coverage were retained. Those fixes are committed as `feb640c3f`; targeted lint and 63 focused
+tests passed. Final default-heap lint, build and packaging passed after targeted formatting.
+The added worktree regression passed; its three ported files passed the formatting check.
+
+Readiness remains separate from publishing: there is no committed Section 6 AI pre-review file
+for this UX round. The dedicated PR stays draft. The live workbench/F7/screen-reader checks and
+the explicit #1143 deferral remain as recorded above; no human-review readiness is claimed.
+No unrelated untracked `.copilot-connection-*` directories were changed.
