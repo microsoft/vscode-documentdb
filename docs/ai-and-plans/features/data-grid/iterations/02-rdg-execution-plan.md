@@ -232,7 +232,7 @@ reported. The dark Table regression passed 29/29; computed gutter was `auto` for
 is reachable only from Collection View; all 26 inspection negative controls passed.
 L3 installed and activated the VSIX in isolated VS Code 1.123.0, with final commands
 registered and clean logs; the injected activation failure was correctly rejected.
-`mai-code-2-flash` used 1.1 AIU (18 requests). G2 is raised and awaits operator release.
+`mai-code-2-flash` used 1.1 AIU (18 requests). G2 was then raised for hands-on testing.
 
 ### Escalations
 
@@ -1176,6 +1176,60 @@ through `mai-code-2-flash` after each pair of items, not after every commit.
 Leader runs A9 through `mai-code-2-flash`, then raises **G2**. After release: WI-G2-n items, each
 with a model chosen by the same rules; then the draft PR push if authorised.
 
+#### G2 findings and approved schedule (2026-11-27)
+
+Hands-on testing confirmed the current Table Space/Shift+Space behavior, Tree arrow/Tab/Escape
+navigation, and cross-collection panel isolation. There is no obvious keyboard equivalent of
+clicking a single Table row to replace the selection. The operator also reported stale
+breadcrumb help, Table values clipping or covering their type indicators, a Tree grid using
+only part of the results area, and expanders that look like gray native buttons.
+
+**G2 released (2026-11-27), operator decision.** The operator approved the schedule below
+with chevron rotation included. The follow-ups may start. No draft PR push was authorized
+in the release message.
+
+| Item | When | Accepted scope |
+| ---- | ---- | ---------------- |
+| WI-G2-1: Tree height | After G2, before draft PR | Size Tree to the available results area, like Table, without changing paging, the stable scrollbar gutter, or virtualization. Check short and tall views, a large result, keyboard scrolling, and no observer errors. |
+| WI-G2-2: Tree expander | After WI-G2-1, before draft PR | Use a transparent Fluent-style chevron for branches, with a matching empty slot for leaves. Animate the chevron's rotation on expansion and collapse; use an instant state change with reduced motion. Keep the current named button, pointer hit area, Enter and focus behavior, and high-contrast visibility. |
+| WI-G2-3: Table cell readability | After G2, before draft PR | Reserve space for the type indicator; ellipsize only the overflowing value. Keep full text available through existing document inspection/JSON and preserve the cell's accessible text. Check narrow columns, long strings, and zoom without adding per-cell Tab stops. |
+| WI-G2-4: Breadcrumb help | After G2, before draft PR; carry the same guidance into WI-11 | Update in-product help for Enter or double-click on an object cell, and for Level Up or activating an ancestor breadcrumb. Replace example accessibility labels with product labels and localize changed strings. Any pinned locator changes follow E3. |
+| WI-G2-5: Keyboard-only replace selection | Evaluate at WI-10; decide before G3a | Preserve Space toggle, Shift+Space range, and the current safe-ID rules. Assess a discoverable, conflict-free way to replace the selection with the focused Table row. No binding change until the operator approves one. |
+
+**Implementation notes:**
+
+- **Height:** RDG defaults to a 350 px scrollport. Table overrides that to fill the results
+  container; Tree does not. Reuse that sizing approach for Tree, then verify the larger
+  viewport does not reintroduce the resize or virtualized-array failures from A8.
+- **Expander:** The installed [Fluent Tree](https://storybooks.fluentui.dev/react/?path=/docs/components-tree--docs)
+  uses `ChevronRight12Regular` in a 24 px slot and rotates it 90° when expanded. Its
+  plus/minus story swaps glyphs; the rotation is on the default chevron. The
+  [Cosmos DB results tree](https://github.com/microsoft/vscode-cosmosdb/blob/563c9d47/src/webviews/cosmosdb/QueryEditor/ResultPanel/ReactDataGrid/ResultTabViewTree.tsx)
+  also styles a transparent button inside RDG, swapping right/down icons. Borrow the
+  Fluent chevron and aligned slot, not either widget's focus model. Animate only the
+  icon's transform, not the hit area or rows; do not animate for reduced-motion users.
+  Preserve branch labels, `aria-expanded`, and the single grid focus target.
+  Advisor: `claude-opus-5.5`, 71.8 AIU (15 requests).
+- **Truncation:** Use a single-line visual ellipsis on the value alone; keep the type
+  indicator in a nonshrinking slot and the text intact in the DOM. The
+  [WCAG resize-text guidance](https://www.w3.org/WAI/WCAG22/Understanding/resize-text.html)
+  allows truncation where full content remains available on focus or activation and
+  that route is discoverable. Verify keyboard access to full values through existing
+  View/JSON, including rows without actionable IDs. Don't add hover-only tooltips.
+- **Selection:** Current Table code handles plain Space and Shift+Space, but does not
+  bind Ctrl+Space as a row action. Record the reported experience without treating
+  Ctrl+Space as an existing contract. Evaluate it only as a candidate, alongside
+  discoverability and platform/grid conflicts, before proposing a binding.
+
+**Tree Space behavior:** Keep Space/Shift+Space as scrolling and Ctrl+Space without a
+Tree action; Tree has no row selection and Enter is its activation key. Do not add selection
+or another binding just for parity.
+
+**Verification:** Rerun affected on-demand scenarios and the resize regression before the
+draft. A10 covers the full sweep; G3b retains the packaged screen-reader and Windows contrast
+checks. The G2 feedback did not include a Narrator announcement result; do not mark that check
+passed. The existing VSIX is the G2 baseline, not an artifact containing these follow-ups.
+
 ### Step 4
 
 **WI-10: automated sweep** · `mai-code-2` (fallback `gpt-6.1-sol`), runs by `mai-code-2-flash`
@@ -1318,5 +1372,5 @@ stable workbench smoke, a real collection, screen readers and high-contrast were
 Step 1 is complete. A1–A7 passed; the Table works through WI-8, including nested actions and
 the held late query. WI-9 Tree and WI-9b keyboard navigation are complete. The separate
 resize fix and approved E3 viewport setup passed A8 in all three themes. A9 passed at
-`20c1c7ab` and the verified VSIX is ready for the operator's G2 workbench check. G2 is
-not released, and no draft PR has been opened.
+`20c1c7ab`. The operator completed the workbench check and released G2 after approving the
+follow-up schedule. No draft PR has been opened.
