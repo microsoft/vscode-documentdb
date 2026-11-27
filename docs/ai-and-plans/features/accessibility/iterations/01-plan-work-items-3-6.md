@@ -260,6 +260,18 @@ and other buckets, preserving existing CodeLens telemetry.
 > manual documentation are separate remaining phases. Localization generation
 > and real-workbench verification are deferred.
 
+> **Header done (2026-11-27), commit `58c679d3` (3e):** `mai-code-2`
+> extracted the shared new-playground header and added the accepted palette and
+> context-menu guidance to both creation paths. The leader approved this
+> mechanical implementation of decision 0002 at 99% confidence; shortcut text,
+> query templates and connection calls are preserved. Two cases were appended
+> to the existing header/filename test file without changing its six existing
+> assertions. The leader required real typed service/node fixtures and a
+> platform-portable modifier-key expectation. All eight focused tests passed.
+> An interim type check reported only concurrent result-lifecycle test errors,
+> which belong to the Sol phase. The new guidance string requires Case 2
+> localization generation; manual-page updates remain under work item 7.
+
 **Decision 3a: which surfaces to add.** **Decided 2026-11-27
 ([decisions 0002](../decisions.md#0002--playground-actions-use-standard-vs-code-surfaces-no-new-keybindings)):**
 palette, editor title, context menu and header comment; no new default keybindings.
