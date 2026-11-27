@@ -67,7 +67,7 @@ a shared implementation root cause.
 
 ### 3. Query Playground keyboard workflow
 
-**Status:** implemented in `9bee0fb6`, `58c679d3` and `4c65547f`; manual-page preview in progress; workbench verification pending.
+**Status:** implemented in `9bee0fb6`, `58c679d3` and `4c65547f`; documented in `66f64d92`; workbench verification pending.
 **Issues:** [#773](https://github.com/microsoft/vscode-documentdb/issues/773),
 [#774](https://github.com/microsoft/vscode-documentdb/issues/774).
 
@@ -108,6 +108,16 @@ implementation; the comment alone does not establish that a fix has landed.
 Announce successful index creation from AI Performance Insights without requiring
 users to locate or focus the confirmation manually. This is a distinct status-message
 fix, separate from visual contrast.
+
+### 7. Accessibility manual page
+
+**Status:** implemented in `66f64d92`; local light/dark docs preview passed.
+**Decision:** [0005](./decisions.md#0005--a-dedicated-accessibility-page-in-the-user-manual).
+
+The [Accessibility page](../../../user-manual/accessibility.md) collects keyboard
+entry points, the Playground after-run setting, shell display settings and known
+limitations. Feature guides link to it. It does not claim that the open
+installed-workbench or screen-reader verification gates have passed.
 
 ## Upstream tracking
 

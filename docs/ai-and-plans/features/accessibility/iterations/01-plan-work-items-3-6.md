@@ -446,6 +446,20 @@ Rules: describe only shipped behavior; link from Query Playground and Interactiv
 instead of repeating content; add the page in the PR that ships work item 3, or earlier
 with sections 3-5 only. Preview with the `previewing-docs-site` skill.
 
+> **Done (2026-11-27), commit `66f64d92`:** `mai-code-2` added the central
+> Accessibility page and updated the landing page, Playground/Shell guides and
+> Playground feature README. This follows the operator's 0005 decision. The
+> leader approved the exact setting matrix, current source claims and links at
+> 98% confidence, requiring customer-facing limitation prose rather than
+> internal gate instructions and the full product name on first mention.
+> No tests or runtime behavior changed. `mai-code-2-flash` previewed the final
+> page with the existing Jekyll script in a session-specific work directory:
+> accessibility and linked pages returned HTTP 200; sidebar order, headings,
+> anchors, keyboard/after-run/settings tables and links passed. Light and dark
+> rendering passed with zero console/page errors. Both preview runs were
+> stopped and port 4001 released; preview-created snapshot scratch was cleaned.
+> Real NVDA and installed-workbench checks remain explicitly pending.
+
 ## Decisions
 
 All decisions from this plan are recorded in [decisions.md](../decisions.md)
