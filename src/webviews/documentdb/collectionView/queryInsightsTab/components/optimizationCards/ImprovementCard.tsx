@@ -21,6 +21,7 @@ import { ArrowTrendingSparkleRegular } from '@fluentui/react-icons';
 // import { CopyRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useState } from 'react';
+import { Announcer } from '../../../../../components/accessibility';
 import { type ImprovementCard as ImprovementCardConfig } from '../../../types/queryInsights';
 import './baseOptimizationCard.scss';
 
@@ -277,13 +278,32 @@ export function ImprovementCard({
                             </MessageBar>
                         )}
 
+                        <Announcer
+                            when={!!primaryState.successMessage}
+                            message={primaryState.successMessage ?? ''}
+                        />
+                        <Announcer
+                            when={!!primaryState.errorMessage}
+                            message={l10n.t('Error: {0}', primaryState.errorMessage ?? '')}
+                            politeness="assertive"
+                        />
+                        <Announcer
+                            when={!!secondaryState.successMessage}
+                            message={secondaryState.successMessage ?? ''}
+                        />
+                        <Announcer
+                            when={!!secondaryState.errorMessage}
+                            message={l10n.t('Error: {0}', secondaryState.errorMessage ?? '')}
+                            politeness="assertive"
+                        />
+
                         {/* Action Buttons */}
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                             {config.primaryButton && (
                                 <Button
                                     appearance="primary"
                                     size="small"
-                                    disabled={primaryState.isLoading || !!primaryState.successMessage}
+                                    disabledFocusable={primaryState.isLoading || !!primaryState.successMessage}
                                     onClick={() => void handlePrimaryClick()}
                                 >
                                     {primaryState.isLoading && <Spinner size="tiny" style={{ marginRight: '4px' }} />}
@@ -298,7 +318,7 @@ export function ImprovementCard({
                                 <Button
                                     appearance="subtle"
                                     size="small"
-                                    disabled={secondaryState.isLoading || !!secondaryState.successMessage}
+                                    disabledFocusable={secondaryState.isLoading || !!secondaryState.successMessage}
                                     onClick={() => void handleSecondaryClick()}
                                 >
                                     {secondaryState.isLoading && <Spinner size="tiny" style={{ marginRight: '4px' }} />}
