@@ -660,7 +660,84 @@ removed by decision.
 
 ### 5. R3 — packaged L2 requires Collection View results (decision 0004)
 
-**Status:** Pending.
+**Status:** Implemented; source/harness evidence complete. Fresh packaged normal/negative-control evidence remains authorization-gated.
+
+> **Done (2026-11-27), commit `3ac66077`:** restored the packaged fixture's Alpha/Beta
+> result markers and `display: grid` expectation; non-default source presets retain
+> independent shell readiness, including empty/Tree/loading entry states. Added six
+> runtime/manifest regressions; no existing test or runtime implementation changed.
+> Decisions: operator specified R3 and the model assignments; advisor `claude-opus-5.5`
+> approved the exact revision at approximately 85%; leader preserved the four prior
+> shell selectors and used the previously verified wrapper after checker reset.
+> Failing-first: six expected failures, 133 passes. Authoritative fresh JSON run:
+> 154/154 tests in four files; build passed. Source matrix: 15/15 ready, 177/177
+> assertions, 66 RPC calls, zero errors. Incomplete retained-checker reports and the
+> fresh extraction failure are recorded below, not erased. The source normal case and
+> jsdom CSS control do not prove a fresh packaged VSIX control. No packaging, Case 2,
+> formatting, localization, external operation or G3a/G3b release was performed.
+
+**Tests-first progress (2026-11-27), `mai-code-2`:** six new cases exercise the real
+`stage0Harness.check()` with the actual Collection View fixture requirements: settled shell
+without rows, rows without a grid, zero grid width, zero grid height, removed bundle-grid CSS,
+and strict-default/independent-preset readiness. Test-local DOM geometry isolates the declared
+layout requirements; Monaco worker proof is disabled only in these focused test fixtures.
+No existing test or production fixture/scenario was changed. The leader reviewed the
+bounded additions and dispatched `mai-code-2-flash` to demonstrate the expected failures
+before implementing R3. This is source-harness evidence, not a fresh packaged VSIX or proof
+that the product renders its rows correctly. Packaged normal/broken-CSS checks remain gated.
+
+**Failing-first result (2026-11-27), `mai-code-2-flash`:** the focused command reported
+**six new expected failures and 133 passes (139 tests)** in 6.11 seconds, with no old-test
+or setup failure. The old fixture returned no errors for the missing-row, missing-grid,
+zero-dimension and removed-grid-CSS cases; the default readiness still required only
+`Documents` and four shell selectors. The CSS case had no unrelated diagnostics. The
+reported third file is being clarified so the complete actual execution set is recorded.
+The leader accepted this regression evidence and dispatched the exact fixture restoration
+and explicit four-selector preset readiness. No tests, runtime implementation, public
+format, product behavior or package operation beyond the accepted R3 item are changed.
+
+**Implementation/review and checker reset (2026-11-27):** `mai-code-2` restored the two
+fixture markers and grid display expectation, and separated preset/empty readiness while
+preserving all four old shell selectors and fixture overrides. Advisor `claude-opus-5.5`
+approved the exact four-file revision at approximately 85% confidence. The retained checker
+reported 154 passing tests and a passing build, but its four-file claim listed only three
+names; its browser attempt stopped at `default/dark` with an immediate `Documents missing`
+message and no canonical report. Remaining routes were not run. Those incomplete reports
+are not accepted as complete validation.
+
+The operator asked to reconsider restarting agents and the browser environment. Direct
+leader observation of the same page showed `Documents`, both fixture rows and the Table
+grid. The leader retired the retained checker, reloaded the existing built-in page and
+launched a fresh `mai-code-2-flash` checker for the canonical default-route proof only.
+The shared Vite server was neither stopped nor restarted; no such permission was inferred.
+The implementation commit and final validation remain pending.
+
+The fresh checker initially substituted a named-array guard for the manifest's inline route
+array and stopped before executing the canonical helper: zero assertions/calls and no
+application failure. Its raw error is retained as `files/wi-g3-5-reset-guard-failure.txt`.
+The leader supplied the previously successful inline-array wrapper verbatim, changing only
+the selected route, and authorized one corrected extraction attempt. This is a coordination
+correction (leader, 98% confidence, based on the earlier successful wrapper), not a test
+amendment, product change or server restart.
+
+**Canonical reset proof (2026-11-27):** the exact supplied wrapper passed
+`/collectionView/default/dark`: ready, five/five style assertions, five RPC calls and zero
+errors, including measured `display: grid`. The 45,940-byte source had a 16,666-byte prefix
+and 222 manifest routes; only the selected inline array entry changed. The default showed
+both fixture rows. The fresh checker is now running JSON-reported focused tests/build and
+the complete 15-route readiness matrix. This avoids accepting the retained checker's
+incomplete filename list or ad-hoc `Documents` failure as canonical evidence.
+
+**Authoritative post-fix evidence (2026-11-27):** JSON reporting confirmed four actual
+selected test files: `harness.test.ts` 15, `runtime.test.ts` 34,
+`scenario-runtime.test.ts` 25, and `scenarios.test.ts` 80 — **154/154 passed**.
+The runtime filename filter also selects `scenario-runtime.test.ts`; the fresh JSON
+evidence resolves the earlier omitted-file issue without inventing historical output.
+Build passed. One exact preserved-wrapper matrix ran `default`, `empty`, `deep-nesting`,
+`first-load` and `loading-to-results` in all three themes: **15/15 ready, 177/177
+assertions, 66 RPC calls and zero errors**. Full outputs are persisted as
+`files/wi-g3-5-tests.json.txt` and `files/wi-g3-5-after.txt` in the fresh session.
+Fresh packaged normal/broken-CSS checks remain pending at the separately authorized handover.
 
 - `build/verification/browser/fixtures.ts` `collectionView`: restore
   `content: ['Stage 0 fixture row Alpha', 'Stage 0 fixture row Beta']` (the fixture rows already
@@ -777,8 +854,8 @@ AI-review/operator gates are not waived by completing these fixes.
 # Outcome
 
 Execution is in progress. WI-G3-1 (`8cc23e15`), WI-G3-2 (`bf7285d3`), WI-G3-3 (`9eb782bd`)
-and WI-G3-4 (`c09cdb6d`) are implemented with their focused evidence recorded inline.
-WI-G3-5 and WI-G3-6 remain pending; WI-G3-7 requires
+WI-G3-4 (`c09cdb6d`) and WI-G3-5 (`3ac66077`) are implemented with their focused evidence
+recorded inline. WI-G3-6 remains pending; WI-G3-7 requires
 push/reply authorization. Browser setup and intermittent gesture failures are retained above,
 including the distinction between combined affected-scenario coverage and clean full runs.
 No push, thread reply, package, formatting or gate release has occurred. #1142 remains draft
