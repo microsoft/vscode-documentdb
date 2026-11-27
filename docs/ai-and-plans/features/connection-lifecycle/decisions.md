@@ -29,7 +29,7 @@ created: 2026-11-19
 | 0015 | Use the existing latch to block startup after authentication rejection                                     | Accepted (modified by 0022) | Operator selected A; keep the approach simple and pragmatic                          | 2026-11-23 | Yes; expands the existing latch rather than adding a second hold |
 | 0016 | Keep disconnected webviews open under a full-view overlay                                                  | Accepted (modified by 0017) | Operator chose a simple disabled state with explicit actions                         | 2026-11-24 | Yes; replaces the inline banner and single-action layout         |
 | 0017 | Limit unavailable webview recovery to Retry and Close view                                                 | Accepted (modified by 0018) | Operator wants credential repair in the tree and no extra recovery workflow in a tab | 2026-11-24 | Yes; removes in-view credential repair                           |
-| 0018 | Saved connection edits permanently lock existing views                                                     | Accepted                    | Operator prefers simple reconnect for unchanged settings over recovery after edits   | 2026-11-24 | Yes; removes same-identity recovery after a saved edit           |
+| 0018 | Saved connection edits permanently lock existing views                                                     | Accepted (modified by 0023) | Operator prefers simple reconnect for unchanged settings over recovery after edits   | 2026-11-24 | Yes; removes same-identity recovery after a saved edit           |
 | 0019 | Require a fresh Dashboard delete after Disconnect and keep Paste Collection in the tree                    | Accepted                    | Operator: a lifecycle change cancels the pending delete and never replays it         | 2026-11-24 | —                                                                |
 | 0020 | Defer the cross-release comparison of late failures                                                        | Accepted                    | Operator: keep descriptive telemetry and defer the comparison                        | 2026-11-26 | Yes; removes the WI-9 before/after comparison for 1.2.0          |
 | 0021 | Key the in-memory connection fingerprint per extension host                                                | Accepted                    | Operator: use HMAC and verify CodeQL without dismissing a remaining alert            | 2026-11-26 | Yes; replaces unkeyed SHA-256 without changing identity rules    |
@@ -550,6 +550,15 @@ the missing-endpoint message **Cannot open a shell without authentication for "{
 endpoint is not available.**, and stripping database, proxy and client-certificate
 authentication credentials while preserving server TLS validation.
 
+**Completion boundary (2026-11-27):** the operator questioned disabling already-working
+suggestions, then agreed to metadata-only isolation for the new diagnostic anonymous path.
+Normal Shell behavior remains unchanged. An internal `includeClusterMetadata` capability,
+defaulting to the existing behavior, preserves local methods, commands, operators, history and
+bracket suggestions while excluding shared-client database/collection/field/schema lookups in
+anonymous sessions. Prewarming, schema feeds and credential-backed error explanations are also
+excluded there. No fake cluster IDs or blanket suggestion disablement are authorized.
+The completion provider and its existing tests are directly dependent owned files for WI-6.
+
 **Parse-error clarification (2026-11-27):** the operator selected **1.A**: show
 **Invalid connection string.** when anonymous endpoint parsing fails and discard the
 original parser error/cause completely. Dependency parser errors can contain the credential-bearing
@@ -570,9 +579,19 @@ bound identity, or replay the failed database operation. No additional rationale
 a new Close-only unavailable reason, the operator selected **2.A**, qualified by:
 **when a user had a Retry button visible, it should never be gone after a retry**.
 The displayed reason must remain truthful without removing an already-visible Retry control
-because state changes at runtime. The scope of retained Retry availability across a successful
-recovery and a later unavailable episode is still being clarified. Identity and lifecycle guards
+because state changes at runtime. Identity and lifecycle guards
 continue to reject unsafe attempts; keeping a control visible does not authorize rebinding.
+
+**Episode scope (2026-11-27):** the operator explicitly selected **1A**. An unavailable episode
+persists while its dialog is dismissed and reopened, and ends when recovery succeeds. Once Retry
+has been offered, runtime reason changes or a failed attempt do not remove it within that episode.
+After success, a later initially Close-only episode does not inherit Retry.
+
+This qualifies 0018's visible **Close view**-only policy only for an already-unavailable episode
+that previously offered Retry. Saved edits still permanently block database operations and old
+views never rebind to changed settings. The explicit Retry remains a guarded attempt, not a promise
+that the current reason can recover. This records the operator's qualified instruction; no new
+rationale is inferred.
 
 ## 0024. Classify explicit stale recovery clicks and explain only failed actions
 

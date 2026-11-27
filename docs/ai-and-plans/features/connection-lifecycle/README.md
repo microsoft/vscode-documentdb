@@ -87,6 +87,10 @@ entries are unpublished drafts and do not represent a shipped release.
   the available credentials. Credential repair stays in the tree. Dismissing the dialog with
   its **X** exposes the existing contents for copying without resuming database operations.
   Trying another operation shows the dialog again. **Close view** asks for confirmation.
+- **Do not remove Retry during an unavailable episode once it has been offered.** A failed attempt
+  or a runtime reason change keeps the control, while the reason remains truthful and host guards
+  still reject unsafe recovery. Dismissing the dialog does not reset this choice. Successful
+  recovery ends the episode; a later initially Close-only episode does not inherit Retry.
 - After an explicit Disconnect, the tree offers **Reconnect**. If reconnecting automatically
   opens the existing Dashboard for the same identity, it retries that view without replaying
   an operation. Other retained views still require **Retry**.

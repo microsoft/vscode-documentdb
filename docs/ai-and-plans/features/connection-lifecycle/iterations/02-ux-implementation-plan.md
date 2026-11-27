@@ -249,6 +249,24 @@ connection-lifecycle user manual.
 message tests for unchanged versus changed/removed bindings; relevant manual link/content
 check if available.
 
+> **Execution split (2026-11-27):** WI-2a implements the approved, unit-testable F2 guidance
+> first (`mai-code-2`, substituted for the advisor's Terra recommendation). WI-2b implements
+> F8 system-output/input handling last, after other Shell changes, because terminal timing
+> also needs a live workbench check. This is a coordination split, not additional scope;
+> the accepted work-item count remains seven, plus conditional WI-7. No Shell-writing workers
+> run concurrently.
+
+> **Done (2026-11-27), WI-2a commit `a2eba522a`:** Shell and Playground now give the approved
+> reason-specific recovery guidance. Unchanged Disconnect asks for tree reconnect and a new
+> run in the existing terminal/file; removed and changed bindings keep their stricter guidance.
+> Decisions: operator, explicit approval of the reason-specific copy; leader, 99% confidence
+> after reviewing the message-selector diff and direct-latch reuse that execution guards and
+> no-replay behavior are unchanged. Advised (`claude-opus-5.5`); recommended Terra, actual
+> `mai-code-2` per the approved substitution. Eighteen focused cases were added across the
+> existing two tests, retaining no-start/no-replay assertions; 118 tests passed. The new
+> asynchronous Shell assertions use `vi.waitFor`, not a fixed sleep. Batch build/localization
+> remain pending. WI-2b/F8 output is not implemented.
+
 ## WI-3: Keep failed retained-view Retry feedback in context (F4)
 
 **Depends on:** WI-0 operator decision.  
@@ -281,6 +299,11 @@ and Dashboard if their shared integration wiring differs.
 > with the explicit constraint that an already-visible Retry button must not disappear after
 > Retry or runtime state changes. This is not permission to change identity or bypass a hold.
 > The corrected UI contract is pending; the initial implementation is not marked done.
+
+> **Scope confirmed (2026-11-27):** the operator selected **1A**: retained Retry availability
+> lasts for the current unavailable episode, including dialog dismissal/reopening. Successful
+> recovery ends the episode; a later initially Close-only episode does not inherit Retry.
+> New terminal reasons remain truthful, but cannot remove Retry already offered in that episode.
 
 ## WI-4: Clarify teardown and retained-content wording (F9–F11)
 
@@ -395,6 +418,13 @@ path. Test the anonymous command failure feedback.
 > error/cause discarded entirely. WI-6 implementation resumed with the previously approved
 > zero-cache, endpoint, trust and lifecycle constraints.
 
+> **Completion scope approved (2026-11-27):** the operator questioned blanket removal of
+> working suggestions, then agreed to an internal `includeClusterMetadata` flag that preserves
+> local completion/ghost behavior but excludes authenticated shared metadata from the new
+> anonymous diagnostic path. The completion provider and its existing tests are directly
+> dependent owned files. Normal Shell behavior is unchanged; no fake IDs, new setting or
+> blanket completion disablement is authorized. Implementation is in progress, not complete.
+
 ## WI-7: Investigate F7 only if WI-0 reproduces it
 
 **Depends on:** WI-0 evidence.  
@@ -447,10 +477,10 @@ Before calling this iteration complete:
 | WI | Status | Outcome / decision / verification |
 | --- | --- | --- |
 | WI-0 | Gates approved; F7 live evidence pending | Current-code baseline checked; no live reproduction claim |
-| WI-1 | Commands implemented; stale actions pending; expansion deferred | WI-1b `57f96b23b`; F3 expansion follows #1143 |
-| WI-2 | Pending | |
-| WI-3 | Pending operator decision | |
+| WI-1 | Commands implemented; stale tree actions in progress; expansion deferred | WI-1b `57f96b23b`; F3 expansion follows #1143; unproven worker cases remain parked |
+| WI-2 | Guidance implemented; system output pending | WI-2a `a2eba522a`; 118 focused tests passed; WI-2b queued last |
+| WI-3 | Sticky-Retry rework in progress | Episode scope approved 1A; truthful reasons and retained Retry required |
 | WI-4 | Implemented; localization/live checks pending | `5d00558cb`; Batch 1 build/tests passed |
 | WI-5 | Implemented and locally verified | `e4a6ad337`; Batch 1 build/tests passed |
-| WI-6 | Pending operator decision | |
+| WI-6 | Anonymous startup in progress | Parser and metadata-only completion scope approved |
 | WI-7 | Deferred pending operator reproduction | No speculative code change; exact live sequence recorded |
