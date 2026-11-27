@@ -83,6 +83,43 @@ changed and why, with a commit reference when available: **"always in the thread
 multi-comment."** Do not post an omnibus PR comment. Any local-only commit reference must be
 identified as not yet pushed rather than linked as though available on GitHub.
 
+### Advisor implementation mapping
+
+**Advised (claude-opus-5.5, 2026-11-27):** all nine selected fixes fit the existing code.
+No new user-facing strings or changed authentication identity rules are planned. Each item gets
+its own code commit; C07 precedes C09, and C01 precedes C03. Items sharing the PTY run sequentially.
+Tests use the root Vitest configuration with `--maxWorkers=2`.
+
+| Item | Advisor-recommended / assigned model | Owned implementation and test scope | Confidence |
+| --- | --- | --- | --- |
+| C01 | gpt-6.1-sol | ConnectionUnavailableError; WorkerSessionManager; ShellSessionManager; openInteractiveShell; dependent tests | 85% |
+| C02 | gpt-6.1-sol | AzureVMResourceItem and its focused new test | 80% |
+| C03 | mai-code-2 | openInteractiveShell and its test, after C01 | 85% |
+| C04 | mai-code-2 | executePlaygroundCode and its test | 95% |
+| C06 | gpt-6.1-sol | signInAgain and its test; final cross-surface checks after other edits | 80% |
+| C07 | mai-code-2 | ShellInputHandler and DocumentDBShellPty with their tests, after C08 | 90% |
+| C08 | mai-code-2 | DocumentDBShellPty and its test | 95% |
+| C09 | gpt-6.1-sol | DocumentDBShellPty and tests, using C07's input restore method | 85% |
+| C11 | mai-code-2 | commandErrorHandling; three index callbacks; wrapper and focused index tests | 90% |
+
+Approved implementation interfaces supplied by the advisor:
+
+- C01: `isDiagnosticAuthenticationHold(reason: ConnectionUnavailableReason | undefined): boolean`,
+  with an explicit host-only `allowDiagnosticAuthenticationHold = false` startup parameter passed
+  through worker startup. Shell passes it only for the separate diagnostic path; no wire-message flag.
+- C07: `ShellInputHandler.restoreLine(text: string, cursor: number): void`, clamping the cursor
+  and using the existing renderer without clearing multiline/history state or firing buffer callbacks.
+- C09: private PTY `writeAsyncFeedback(line: string): void`, with queued feedback during evaluation
+  or disabled input, flushed at the next safe prompt. Disconnect clears obsolete queued feedback.
+- C11: `markCommandErrorPresented(context: IActionContext, error: unknown): void`, with exact
+  invocation/error ownership. Skip only additional tree UI, preserving webview behavior, explanation
+  telemetry and presentation for a different cleanup error.
+
+The leader accepts this mapping within the already approved solutions; material deviations still
+return to the advisor/operator. Existing exact-output tests may change only where the accepted
+cursor restoration changes their actual behavior, not merely to make a failing test pass.
+Live checks remain pending: C09 installed-terminal redraw and C02 provider node lifetime/refresh.
+
 ## C01. Diagnostic worker startup rejects authentication holds
 
 **Comment:** [Copilot C01](https://github.com/microsoft/vscode-documentdb/pull/1146#discussion_r4721515405).
