@@ -538,6 +538,40 @@ describe('TDD: Collection View grid contracts', (): void => {
 });
 
 describe('L2-dev manifest and routes', (): void => {
+    it('keeps the packaged Collection View readiness strict without constraining source presets', (): void => {
+        const fixtureRows = ['Stage 0 fixture row Alpha', 'Stage 0 fixture row Beta'];
+        const shellSelectors = [
+            '.collectionView',
+            '.monaco-editor',
+            '.monaco-editor .overflow-guard',
+            '.monaco-editor .view-lines',
+        ];
+
+        expect(scenarios.collectionView.default.readiness).toEqual({
+            content: fixtureRows,
+            selectors: [...shellSelectors, '[role="grid"]'],
+            noProgressbar: true,
+        });
+
+        for (const name of Object.keys(collectionViewFixtures)) {
+            const scenario = scenarios.collectionView[name as keyof typeof scenarios.collectionView];
+            expect(scenario.readiness.content).toEqual([
+                'Documents',
+                ...(name === 'empty' ? ['No results found'] : []),
+            ]);
+            expect(scenario.readiness.selectors).toEqual(
+                name === 'first-load' || name === 'loading-to-results'
+                    ? shellSelectors.slice(0, 2)
+                    : shellSelectors,
+            );
+            expect(scenario.readiness.selectors).not.toContain('[role="grid"]');
+            expect(scenario.readiness.content).not.toEqual(expect.arrayContaining(fixtureRows));
+        }
+
+        expect(scenarios.collectionView['first-load'].readiness.noProgressbar).toBe(false);
+        expect(scenarios.collectionView['loading-to-results'].readiness.noProgressbar).toBe(false);
+    });
+
     it('imports, rather than duplicates, all six settled L2 fixtures', (): void => {
         for (const route of scenarioRoutes().filter((route): boolean => route.scenario === 'default')) {
             const scenario = findScenario(route);

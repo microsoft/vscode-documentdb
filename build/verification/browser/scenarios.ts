@@ -264,6 +264,16 @@ function defaultScenario<V extends WebviewName>(view: V, steps: readonly Scenari
 
 const base = fixtures.localQuickStart;
 const collectionViewBase = defaultScenario('collectionView');
+const collectionViewPresetReadiness: ScenarioReadiness = {
+    content: ['Documents'],
+    selectors: [
+        '.collectionView',
+        '.monaco-editor',
+        '.monaco-editor .overflow-guard',
+        '.monaco-editor .view-lines',
+    ],
+    noProgressbar: true,
+};
 
 function collectionViewScenario(name: keyof typeof collectionViewFixtures): Scenario<'collectionView'> {
     const fixture = collectionViewFixtures[name];
@@ -282,8 +292,8 @@ function collectionViewScenario(name: keyof typeof collectionViewFixtures): Scen
         },
         readiness:
             'readiness' in fixture
-                ? { ...collectionViewBase.readiness, ...fixture.readiness }
-                : collectionViewBase.readiness,
+                ? { ...collectionViewPresetReadiness, ...fixture.readiness }
+                : collectionViewPresetReadiness,
         assertions: collectionViewContracts[name],
     };
 }
@@ -3932,7 +3942,7 @@ export const scenarios = {
         'html-values': collectionViewScenario('html-values'),
         empty: {
             ...collectionViewScenario('empty'),
-            readiness: { ...collectionViewBase.readiness, content: ['Documents', 'No results found'] },
+            readiness: { ...collectionViewPresetReadiness, content: ['Documents', 'No results found'] },
         },
         'no-id': collectionViewScenario('no-id'),
         'first-load': collectionViewScenario('first-load'),

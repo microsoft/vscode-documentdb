@@ -506,12 +506,13 @@ export const fixtures = {
     collectionView: {
         config: collectionConfig,
         monaco: true,
-        content: ['Documents'],
+        content: ['Stage 0 fixture row Alpha', 'Stage 0 fixture row Beta'],
         styles: [
             { selector: '.collectionView', property: 'display', expected: 'flex' },
             { selector: '.monaco-editor', property: 'position', expected: 'relative' },
             { selector: '.monaco-editor .overflow-guard', property: 'overflow', expected: 'hidden' },
             { selector: '.monaco-editor .view-lines', property: 'position', expected: 'absolute' },
+            { selector: '[role="grid"]', property: 'display', expected: 'grid' },
         ],
         rpc: {
             ...common,
