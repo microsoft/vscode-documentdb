@@ -15,7 +15,11 @@ import { EntraIdentityMismatchError } from '../auth/entraErrors/entraCallbackErr
 import { createWorkerAuthError, sameEntraIdentity, WorkerTokenRelay } from '../auth/WorkerTokenRelay';
 import { ClustersClient } from '../ClustersClient';
 import { computeConnectionFingerprint } from '../connectionFingerprint';
-import { ConnectionUnavailableError, type ConnectionUnavailableReason } from '../ConnectionUnavailableError';
+import {
+    ConnectionUnavailableError,
+    isDiagnosticAuthenticationHold,
+    type ConnectionUnavailableReason,
+} from '../ConnectionUnavailableError';
 import { CredentialCache } from '../CredentialCache';
 import {
     WorkerSessionManager,
@@ -317,6 +321,7 @@ export class ShellSessionManager implements vscode.Disposable {
                 initMsg,
                 getConnectionTimeoutMs(),
                 this._telemetryContext,
+                this._unauthenticated !== undefined,
             );
         } catch (error) {
             if (
@@ -461,10 +466,7 @@ export class ShellSessionManager implements vscode.Disposable {
 
     public getBlockingLatchReason(): ConnectionUnavailableReason | undefined {
         const reason = ClustersClient.getLatchReason(this._connectionInfo.clusterId);
-        return this._unauthenticated &&
-            (reason === 'credentialsRejected' || reason === 'signInRequired' || reason === 'credentialsMissing')
-            ? undefined
-            : reason;
+        return this._unauthenticated && isDiagnosticAuthenticationHold(reason) ? undefined : reason;
     }
 
     private assertAuthRecovery(): void {

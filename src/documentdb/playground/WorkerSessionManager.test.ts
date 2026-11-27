@@ -26,6 +26,7 @@ import * as managedIdentityProvider from '../auth/managedIdentityTokenProvider';
 import { EntraDestinationRejectedError } from '../auth/oidcAllowedHosts';
 import { WorkerTokenRelay } from '../auth/WorkerTokenRelay';
 import { ClustersClient } from '../ClustersClient';
+import { ConnectionUnavailableError } from '../ConnectionUnavailableError';
 import { CredentialCache } from '../CredentialCache';
 import { ShellSessionManager } from '../shell/ShellSessionManager';
 import {
@@ -753,6 +754,169 @@ describe('WorkerSessionManager', () => {
             expect(posted.connectionString).toBe(rewrittenUri);
             expect(metadata).toMatchObject({ host: 'cluster.mongocluster.cosmos.azure.us', additionalHostCount: 0 });
             session.dispose();
+        });
+
+        describe('diagnostic Shell startup', (): void => {
+            const clusterId = 'diagnostic-cluster';
+            const authenticationHolds = ['credentialsRejected', 'signInRequired', 'credentialsMissing'] as const;
+            const blockingReasons = [
+                'credentialsUpdating',
+                'credentialsChanged',
+                'identityChanged',
+                'userDisconnected',
+                'connectionRemoved',
+                'unreachable',
+            ] as const;
+            let session: ShellSessionManager;
+            let isolationSpies: MockInstance[];
+            const reread = vi.fn<() => Promise<string | undefined>>();
+
+            beforeEach((): void => {
+                reread.mockReset().mockResolvedValue(originalUri);
+                session = new ShellSessionManager(
+                    { clusterId, clusterDisplayName: 'Cluster', databaseName: 'testdb' },
+                    undefined,
+                    {},
+                    { connectionString: originalUri, reread },
+                );
+                isolationSpies = [
+                    vi.spyOn(ClustersClient, 'getExpectedFingerprint'),
+                    vi.spyOn(ClustersClient, 'getLastVerifiedIdentity'),
+                    vi.spyOn(ClustersClient, 'getClient'),
+                    vi.spyOn(ClustersClient, 'deleteClient'),
+                    vi.spyOn(WorkerTokenRelay.prototype, 'relay'),
+                    vi.spyOn(entraSession, 'getEntraSession'),
+                    vi.spyOn(managedIdentityProvider, 'getManagedIdentityAccessToken'),
+                    vi.spyOn(ClustersClient, 'unlatch'),
+                ];
+            });
+
+            afterEach((): void => {
+                try {
+                    expect(CredentialCache.getCredentials).not.toHaveBeenCalled();
+                    expect(CredentialCache.getConnectionStringWithPassword).not.toHaveBeenCalled();
+                    expect(CredentialCache.getConnectionUser).not.toHaveBeenCalled();
+                    for (const spy of isolationSpies) {
+                        expect(spy).not.toHaveBeenCalled();
+                    }
+                } finally {
+                    session.dispose();
+                    for (const spy of isolationSpies) {
+                        spy.mockRestore();
+                    }
+                    ClustersClient.unlatch(clusterId);
+                }
+            });
+
+            it.each(authenticationHolds)(
+                'spawns the real worker under %s without authentication or clearing the hold',
+                async (reason): Promise<void> => {
+                    ClustersClient.latch(clusterId, reason);
+                    const initializing = session.initialize();
+                    await vi.waitFor(() => expect(Worker).toHaveBeenCalledOnce());
+                    const posted = replyInit();
+                    await expect(initializing).resolves.toMatchObject({
+                        authMechanism: 'NoAuth',
+                        username: undefined,
+                    });
+                    expect(posted).toEqual({
+                        type: 'init',
+                        requestId: expect.any(String),
+                        connectionString: originalUri,
+                        databaseName: 'testdb',
+                        authMechanism: 'NoAuth',
+                        persistent: true,
+                        clientOptions: {
+                            serverSelectionTimeoutMS: undefined,
+                            tlsAllowInvalidCertificates: undefined,
+                            appName: undefined,
+                            tls: undefined,
+                        },
+                        oidcDestinationPolicy: undefined,
+                    });
+                    workerMock()._emit('message', { type: 'tokenRequest', requestId: 'unexpected-token' });
+                    await Promise.resolve();
+                    expect(workerMock().postMessage).toHaveBeenCalledOnce();
+                    expect(session.pinnedEntraIdentity).toBeUndefined();
+                    expect(session.isInitialized).toBe(true);
+                    expect(ClustersClient.getLatchReason(clusterId)).toBe(reason);
+                },
+            );
+
+            it.each(authenticationHolds)(
+                'keeps ordinary NoAuth worker startup strict under %s',
+                async (reason): Promise<void> => {
+                    ClustersClient.latch(clusterId, reason);
+                    const manager = new WorkerSessionManager(callbacks);
+                    try {
+                        await expect(manager.ensureWorker(clusterId, initMessage())).rejects.toMatchObject({ reason });
+                        expect(prepareDriverConnectionString).not.toHaveBeenCalled();
+                        expect(Worker).not.toHaveBeenCalled();
+                        expect(ClustersClient.getLatchReason(clusterId)).toBe(reason);
+                    } finally {
+                        manager.dispose();
+                    }
+                },
+            );
+
+            it.each(blockingReasons)('blocks %s before diagnostic startup', async (reason): Promise<void> => {
+                ClustersClient.latch(clusterId, reason);
+                await expect(session.initialize()).rejects.toMatchObject({ reason });
+                expect(reread).not.toHaveBeenCalled();
+                expect(prepareDriverConnectionString).not.toHaveBeenCalled();
+                expect(Worker).not.toHaveBeenCalled();
+                expect(ClustersClient.getLatchReason(clusterId)).toBe(reason);
+            });
+
+            it.each(blockingReasons)(
+                'blocks %s introduced during diagnostic worker preparation',
+                async (reason): Promise<void> => {
+                    ClustersClient.latch(clusterId, 'credentialsRejected');
+                    const pending = deferred<PreparedDriverConnectionString>();
+                    vi.mocked(prepareDriverConnectionString).mockReturnValueOnce(pending.promise);
+                    const initializing = session.initialize();
+                    await vi.waitFor(() => expect(prepareDriverConnectionString).toHaveBeenCalledOnce());
+                    ClustersClient.latch(clusterId, reason);
+                    pending.resolve({ connectionString: originalUri, options: {}, srvResolution: 'notSrv' });
+                    await expect(initializing).rejects.toBeInstanceOf(ConnectionUnavailableError);
+                    await expect(initializing).rejects.toMatchObject({ reason });
+                    expect(Worker).not.toHaveBeenCalled();
+                    expect(session.isInitialized).toBe(false);
+                    expect(ClustersClient.getLatchReason(clusterId)).toBe(reason);
+                },
+            );
+
+            it.each(['abort', 'epoch'] as const)(
+                'preserves the %s guard during diagnostic worker preparation',
+                async (guard): Promise<void> => {
+                    ClustersClient.latch(clusterId, 'credentialsRejected');
+                    const pending = deferred<PreparedDriverConnectionString>();
+                    vi.mocked(prepareDriverConnectionString).mockReturnValueOnce(pending.promise);
+                    const initializing = session.initialize();
+                    await vi.waitFor(() => expect(prepareDriverConnectionString).toHaveBeenCalledOnce());
+                    if (guard === 'abort') {
+                        session.killWorker();
+                        expect(vi.mocked(prepareDriverConnectionString).mock.calls[0][0].abortSignal?.aborted).toBe(true);
+                    } else {
+                        ClustersClient.invalidate(clusterId);
+                    }
+                    pending.resolve({ connectionString: originalUri, options: {}, srvResolution: 'notSrv' });
+                    await expect(initializing).rejects.toBeInstanceOf(UserCancelledError);
+                    expect(Worker).not.toHaveBeenCalled();
+                    expect(session.isInitialized).toBe(false);
+                    expect(ClustersClient.getLatchReason(clusterId)).toBe('credentialsRejected');
+                },
+            );
+
+            it('preserves the original preparation failure through diagnostic startup', async (): Promise<void> => {
+                ClustersClient.latch(clusterId, 'credentialsRejected');
+                const failure = new Error('DNS preparation failed');
+                vi.mocked(prepareDriverConnectionString).mockRejectedValueOnce(failure);
+                await expect(session.initialize()).rejects.toBe(failure);
+                expect(prepareDriverConnectionString).toHaveBeenCalledOnce();
+                expect(Worker).not.toHaveBeenCalled();
+                expect(ClustersClient.getLatchReason(clusterId)).toBe('credentialsRejected');
+            });
         });
     });
 

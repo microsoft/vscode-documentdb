@@ -27,7 +27,7 @@ import {
 import { createOidcDestinationPolicy } from '../auth/oidcClientOptions';
 import { createWorkerAuthError } from '../auth/WorkerTokenRelay';
 import { ClustersClient } from '../ClustersClient';
-import { ConnectionUnavailableError } from '../ConnectionUnavailableError';
+import { ConnectionUnavailableError, isDiagnosticAuthenticationHold } from '../ConnectionUnavailableError';
 import { SettingsHintError } from '../shell/SettingsHintError';
 import { prepareDriverConnectionString } from '../srv/prepareDriverConnectionString';
 import { ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
@@ -192,6 +192,7 @@ export class WorkerSessionManager implements vscode.Disposable {
         initMsg: MainToWorkerMessage & { type: 'init' },
         initTimeoutMs: number = 30000,
         telemetryContext: WorkerStartupTelemetryContext = {},
+        allowDiagnosticAuthenticationHold: boolean = false,
     ): Promise<void> {
         // If worker is alive but connected to a different cluster, shut it down
         if (this._worker && (this._workerClusterId !== clusterId || this._authFailure || this._shuttingDownWorker)) {
@@ -200,7 +201,13 @@ export class WorkerSessionManager implements vscode.Disposable {
 
         // Callers must not overlap ensureWorker calls because SRV preparation runs before _worker is set.
         if (!this._worker || this._workerState === 'idle') {
-            await this.spawnWorker(clusterId, initMsg, initTimeoutMs, telemetryContext);
+            await this.spawnWorker(
+                clusterId,
+                initMsg,
+                initTimeoutMs,
+                telemetryContext,
+                allowDiagnosticAuthenticationHold,
+            );
         }
     }
 
@@ -269,6 +276,7 @@ export class WorkerSessionManager implements vscode.Disposable {
         initMsg: MainToWorkerMessage & { type: 'init' },
         initTimeoutMs: number,
         telemetryContext: WorkerStartupTelemetryContext,
+        allowDiagnosticAuthenticationHold: boolean,
     ): Promise<void> {
         let originalFailure: { error: unknown } | undefined;
         const controller = new AbortController();
@@ -310,6 +318,7 @@ export class WorkerSessionManager implements vscode.Disposable {
                         startup,
                         controller.signal,
                         telemetryContext,
+                        allowDiagnosticAuthenticationHold,
                     );
                 } catch (error) {
                     if (this._startupAbortController === controller) {
@@ -345,12 +354,13 @@ export class WorkerSessionManager implements vscode.Disposable {
         startup: WorkerStartup,
         abortSignal: AbortSignal,
         telemetryContext: WorkerStartupTelemetryContext,
+        allowDiagnosticAuthenticationHold: boolean,
     ): Promise<void> {
         this._workerState = 'spawning';
         const epoch = ClustersClient.getEpoch(clusterId);
         const assertAvailable = (): void => {
             const reason = ClustersClient.getLatchReason(clusterId);
-            if (reason) {
+            if (reason && !(allowDiagnosticAuthenticationHold && isDiagnosticAuthenticationHold(reason))) {
                 throw new ConnectionUnavailableError(reason);
             }
             if (epoch !== ClustersClient.getEpoch(clusterId) || abortSignal.aborted) {

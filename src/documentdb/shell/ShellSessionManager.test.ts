@@ -230,6 +230,7 @@ describe('ShellSessionManager', () => {
                 },
                 expect.anything(),
                 {},
+                true,
             );
             expect(manager.pinnedEntraIdentity).toBeUndefined();
             const post = vi.fn();

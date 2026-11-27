@@ -12,7 +12,10 @@ import {
     type DeepLinkOpenResult,
 } from '../../deepLinks/deepLinkTelemetry';
 import { ClustersClient } from '../../documentdb/ClustersClient';
-import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
+import {
+    ConnectionUnavailableError,
+    isDiagnosticAuthenticationHold,
+} from '../../documentdb/ConnectionUnavailableError';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBShellPty } from '../../documentdb/shell/DocumentDBShellPty';
 import { type ShellConnectionInfo } from '../../documentdb/shell/ShellSessionManager';
@@ -108,7 +111,7 @@ export async function openUnauthenticatedShell(context: IActionContext, node?: C
         const { clusterId } = node.cluster;
         const assertAvailable = (): void => {
             const reason = ClustersClient.getLatchReason(clusterId);
-            if (reason && !['credentialsRejected', 'signInRequired', 'credentialsMissing'].includes(reason)) {
+            if (reason && !isDiagnosticAuthenticationHold(reason)) {
                 throw new ConnectionUnavailableError(reason);
             }
         };
