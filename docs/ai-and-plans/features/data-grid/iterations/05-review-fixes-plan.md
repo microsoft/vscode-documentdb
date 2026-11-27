@@ -584,3 +584,104 @@ push/reply authorization. Browser setup and intermittent gesture failures are re
 including the distinction between combined affected-scenario coverage and clean full runs.
 No push, thread reply, package, formatting or gate release has occurred. #1142 remains draft
 Case 1; full Case 2 checks, including `prettier-fix`, remain deferred until handover.
+
+## Fresh-session handoff (operator-requested pause, 2026-11-27)
+
+The operator chose `fresh-handoff` after WI-G3-2 and its done note were committed. The parent
+delivery plan is **paused, not complete**: two of seven accepted items are done. No coding,
+advisor or checks agent is still running; retained agents are idle. Do not wait for another
+implementation return or treat this checkpoint as approval to push or release a gate.
+
+**Resume point:** WI-G3-3 (R2). Its production change, three new M7 focus contracts and component
+tests have **not started**. Use the local-ref/request/page-bound design recorded under item 3,
+not the rejected pure test-helper module or cancellation-only-at-completion design. Add the
+three contracts at the exact specified point and demonstrate the first fails in the real
+built-in browser before implementation. Component wiring tests must cover failure/retry,
+superseding query/path, outside-focus-and-return, pointer navigation and listener cleanup.
+Before dispatch, verify how existing fixtures cover keyboard step-in for a browsable positional
+row; resolve any missing-fixture design with the advisor, without changing existing contracts.
+The assigned coding model is `mai-code-2`; technical advisor is `claude-opus-5.5`; all builds,
+tests and browser execution use `mai-code-2-flash`. A substitution to `gpt-6.1-sol` needs the
+operator's authorization, including the recorded R2 escalation trigger.
+
+**Remaining sequence:** WI-G3-3, then WI-G3-4 (R5), WI-G3-5 (R3), and WI-G3-6 final docs.
+Their shared source/scenario files require sequential coding. WI-G3-4 uses existing scenario
+forms plus external exact computed-name/hover evidence, not a new assertion-format schema.
+WI-G3-5's fresh packaged normal/negative-control evidence stays pending until the separately
+authorized handover package exists. WI-G3-7 remains push/reply-gated; do not post, resolve
+threads, enable automation, mark ready or merge.
+
+**Standing authorizations and environment:**
+
+- The approved "do now" implementation and targeted failing-first/post-fix source-browser
+  checks are authorized; #1144 and #1145 remain excluded.
+- Use the built-in browser, not a shell-launched browser. Verified shared Vite server was
+  PID 54856 on port 18080 in this checkout; reuse was explicitly authorized. It was not started
+  by this run and must not be stopped or restarted. Reverify its identity/readiness after a
+  fresh-session pause; do not assume a stale PID still belongs to it.
+- Built-in page ID was `9cc7a269-2e89-4a0f-90c0-dc6517f68e62`. Supported viewport setup pinned
+  713 x 813, with subsequent DPR approximately 1.0. Scope/authorization and multi-attempt
+  evidence are recorded under item 2; do not silently repair focus, force clicks or alter waits.
+- Source helpers contain `runScenario` plus trailing route-list orchestration. For a targeted
+  subset, preserve the fetched function bytes above `\nconst origin = await page.evaluate(`
+  and supply only existing routes; guard the marker and each route first. Execute outside the
+  page with the same timer primitive. Do not run 18 routes and report only seven without
+  recording the full execution set/results.
+- Working branch is `feature/rdg-migration`, base `main`. Latest code commits are `8cc23e15`
+  (WI-G3-1) and `bf7285d3` (WI-G3-2); done-note commit is `a5d146b4`. The handoff commit changes
+  only this source plan.
+- The only pre-existing dirty file is
+  `docs/ai-and-plans/features/data-grid/README.md`: two user-authored lines adding this plan's
+  index link. It was never staged, reverted or overwritten. Read and preserve it when doing
+  the approved final README/docs update; keep it out of unrelated code commits.
+- All verification remains draft **Case 1**. Formatting/full Case 2, fresh packaging,
+  G3a/G3b releases and push/replies are not authorized. The recorded PR integration still
+  reported #1142 as draft, with every automation option off, at handoff.
+
+### Handoff usage and optimization evidence
+
+Window: `/lead` start `2026-11-27T14:58:25.973Z` to host snapshot **2026-11-27 16:06 UTC**.
+Wall-clock elapsed approximately **1h08m**. This is this run only, not cumulative usage from
+other sessions. Later handoff serialization and the final response are excluded from this
+snapshot. Summed model-request spans are **53m28s** and are not wall-clock elapsed; aggregate
+check/CI time is not reported by the host (individual check durations are recorded inline).
+AIU are not dollars.
+
+| Model | Role | Requests | Model time | AIU | AIU share |
+| --- | --- | ---: | ---: | ---: | ---: |
+| claude-opus-5.5 | advisor | 93 | 17m19s | 669.1 | 72.7% |
+| gpt-6.1-sol | leader | 80 | 17m34s | 200.0 | 21.7% |
+| mai-code-2 | coding | 41 | 8m40s | 44.1 | 4.8% |
+| mai-code-2-flash | checks | 71 | 9m55s | 7.0 | 0.8% |
+
+| Role | Requests | Model time | AIU | AIU share |
+| --- | ---: | ---: | ---: | ---: |
+| leader | 80 | 17m34s | 200.0 | 21.7% |
+| coding | 41 | 8m40s | 44.1 | 4.8% |
+| advisor | 93 | 17m19s | 669.1 | 72.7% |
+| checks | 71 | 9m55s | 7.0 | 0.8% |
+
+| Model | Role | Input | Output | Cache read | Cache write | Reasoning |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| claude-opus-5.5 | advisor | 10,704,500 | 104,565 | 10,192,161 | 512,137 | 69,999 |
+| gpt-6.1-sol | leader | 9,281,289 | 48,843 | 9,037,972 | 243,077 | 16,634 |
+| mai-code-2 | coding | 3,341,456 | 29,708 | 2,745,344 | 0 | 12,929 |
+| mai-code-2-flash | checks | 5,575,338 | 32,878 | 4,811,264 | 0 | 14,678 |
+
+Cache/reasoning fields may overlap input/output; do not add them into a purported token total.
+Totals: **leader 200.0 AIU; subagents 720.3 AIU; run 920.3 AIU**.
+
+Three advisor agents handled **eight packets**: initial execution/model assignments plus R2
+clarification (two), WI-G3-1 review/mock correction (two), and WI-G3-2 baseline/runner/review/
+paging decisions (four). The low-confidence 75% baseline retry went to the operator; the
+initial R2 cancellation/helper recommendations were revised before coding. Fresh authorization
+for already-approved light/high-contrast runs was not requested despite that advisor suggestion.
+No coding-model substitution or authorization failure occurred. Rework was the new WI-G3-1
+mock type correction; browser setup and gesture retries are recorded under WI-G3-2.
+
+Largest measured cost category: **advising, 72.7% of reported AIU**, dominated by initial broad
+planning and subsequent clarification/review packets; coding and checks were 5.6% combined.
+A future run can reduce overhead by preparing smaller source-linked decision packets and
+verifying the built-in runner invocation/viewport before dispatch. Preserve the approved model
+plan and mandatory review/operator gates; these figures do not compare model quality on unlike
+work.
