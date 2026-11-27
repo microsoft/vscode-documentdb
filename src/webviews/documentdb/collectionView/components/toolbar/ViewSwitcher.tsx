@@ -5,10 +5,15 @@
 
 import { Dropdown, Option } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
-import { useContext, type JSX } from 'react';
+import { useContext, type JSX, type Ref } from 'react';
 import { CollectionViewContext, Views } from '../../collectionViewContext';
 
-export function ViewSwitcher({ onViewChanged }: { onViewChanged: (view: Views) => void }): JSX.Element {
+interface ViewSwitcherProps {
+    readonly onViewChanged: (view: Views) => void;
+    readonly focusTargetRef?: Ref<HTMLButtonElement>;
+}
+
+export function ViewSwitcher({ onViewChanged, focusTargetRef }: ViewSwitcherProps): JSX.Element {
     const [currentContext] = useContext(CollectionViewContext);
     const labels = {
         [Views.TABLE]: l10n.t('Table View'),
@@ -18,6 +23,7 @@ export function ViewSwitcher({ onViewChanged }: { onViewChanged: (view: Views) =
 
     return (
         <Dropdown
+            ref={focusTargetRef}
             disabled={currentContext.isLoading}
             className="collectionDocumentViewSwitcher"
             value={labels[currentContext.currentView]}

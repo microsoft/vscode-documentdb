@@ -19,10 +19,6 @@ interface TreeRows {
     readonly setExpanded: (node: TreeNode, expanded: boolean) => void;
 }
 
-type TreeKeyAction =
-    | { readonly type: 'expand' | 'collapse'; readonly key: string }
-    | { readonly type: 'focus'; readonly key: string };
-
 export function getVisibleTreeRows(
     nodes: readonly TreeNode[],
     expandedKeys: ReadonlySet<string>,
@@ -73,31 +69,6 @@ export function setTreeNodeExpanded(
         next.delete(node.key);
     }
     return next;
-}
-
-export function getTreeKeyAction(
-    rows: readonly TreeNode[],
-    node: TreeNode,
-    expandedKeys: ReadonlySet<string>,
-    key: string,
-): TreeKeyAction | undefined {
-    if (key === 'ArrowRight' && node.expandable) {
-        if (!expandedKeys.has(node.key)) {
-            return { type: 'expand', key: node.key };
-        }
-        const child = rows.find((row): boolean => row.parentKey === node.key);
-        if (child) {
-            return { type: 'focus', key: child.key };
-        }
-    } else if (key === 'ArrowLeft') {
-        if (node.expandable && expandedKeys.has(node.key)) {
-            return { type: 'collapse', key: node.key };
-        }
-        if (node.parentKey !== null) {
-            return { type: 'focus', key: node.parentKey };
-        }
-    }
-    return undefined;
 }
 
 export function useTreeRows(nodes: readonly TreeNode[]): TreeRows {

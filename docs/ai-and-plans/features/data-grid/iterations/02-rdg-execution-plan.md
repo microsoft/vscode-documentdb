@@ -1096,12 +1096,16 @@ through `mai-code-2-flash` after each pair of items, not after every commit.
 > `ten[9]` appeared after scrolling and the grid stayed stable. This rules out a missing row
 > in that observation; it does not clear the recorded page error or authorize a pin or contract
 > change. Pause after the current checks to collect the operator's other accessibility feedback.
+> The initial WI-9 implementation is committed at `59281cdb`, not accepted. Coding used
+> 49.2 AIU on `gpt-6.1-sol` (17 requests), including the keyboard retry.
 
-> **Resize investigation (E1), still open:** The authorized `hydrafusion-max` model was
-> unavailable, so the diagnosis did not run. Keep the resize error in WI-9, separate from
-> WI-9b. Diagnose it without suppressing page errors or counting the manual scroll check as
-> an A8 pass. If the array assertion needs to navigate to a virtualized row to check its
-> contents, handle that setup change under E3 separately.
+> **Resize investigation (E1), paused:** The authorized `hydrafusion-max` model was unavailable
+> on both attempts; neither did any work. The operator asked to pause this track and receive a
+> detailed prompt for a separate session once the A8 keyboard checks are complete. Keep the
+> resize error separate from WI-9b. It remains open for A8 release; do not suppress page
+> errors or count the manual scroll check as an A8 pass. If the array assertion needs to
+> navigate to a virtualized row to check its contents, handle that setup change under E3
+> separately.
 
 **WI-9b: Table and Tree keyboard navigation** · scheduled in Step 2, before A8/A9 and G2
 
@@ -1128,6 +1132,17 @@ through `mai-code-2-flash` after each pair of items, not after every commit.
   one visible focus ring, and tree expansion and navigation with an unchanged array cap.
   Cover the 500-row Table case and verify the keyboard path and announcements with Narrator at G2.
   Finish the current WI-9 resize track separately; do not edit shared tree files concurrently.
+
+> **Done (2026-11-27), keyboard scope only:** The shared focus ring follows DOM focus without
+> clearing row selection. Scoped Tabster opt-out lets RDG handle forward and reverse Tab
+> inside both grids without changing JSON or the surrounding controls. The build, 30 focused
+> tests, 102 browser-runner tests and browser TypeScript passed. Integrated Browser Table:
+> 29/29 in each theme; 27/27 for the 500-row dark route. Targeted Tree checks for Enter,
+> arrows, Tab, Escape and focus passed in all three themes. The advisor approved the revised
+> keyboard logic (85% confidence). Full Tree checks still stop on the ResizeObserver error,
+> so A8 is not released. The required separate-session investigation is ready for handoff.
+> Coding: 109.5 AIU on `gpt-6.1-sol` (37 requests); advisor: 160.0 AIU on `claude-opus-5.5`
+> (11); browser: 32.0 AIU on `gpt-6.1-terra` (37); terminal: 0.3 AIU on `mai-code-2-flash` (4).
 
 ### Step 3
 
@@ -1274,7 +1289,7 @@ packaged-theme caveat. The operator accepted release metadata for the support fl
 stable workbench smoke, a real collection, screen readers and high-contrast were not run.
 
 Step 1 is complete. A1–A7 passed; the Table works through WI-8, including nested actions and
-the held late query. WI-9 is not accepted: A8 remains under E1 for the resize error, with the
-operator confirming that the end of the ten-element array can be reached by scrolling.
-The navigation feedback is scheduled separately as WI-9b before A8/A9 and G2. Implementation
-remains paused. No draft PR has been opened.
+the held late query. WI-9b keyboard navigation is complete. WI-9 is implemented but not
+accepted: A8 remains under E1 for the resize error, with the operator confirming that the
+end of the ten-element array can be reached by scrolling. The resize investigation remains
+paused for the operator's separate session. A9 and G2 are blocked; no draft PR has been opened.

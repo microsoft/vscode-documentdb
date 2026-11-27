@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as React from 'react';
-import { DataGrid, Row, type Column, type DataGridHandle, type DefaultColumnOptions } from 'react-data-grid';
+import { Cell, DataGrid, Row, type Column, type DataGridHandle, type DefaultColumnOptions } from 'react-data-grid';
 import 'react-data-grid/lib/styles.css';
 import * as l10n from '@vscode/l10n';
 import {
@@ -173,6 +173,19 @@ export function DataViewPanelTable({
                 }
             }}
             renderers={{
+                renderCell: (key, props): React.JSX.Element => (
+                    <Cell
+                        key={key}
+                        {...props}
+                        onFocusCapture={(event): void => {
+                            props.onFocusCapture?.(event);
+                            if (!event.defaultPrevented && event.target === event.currentTarget) {
+                                // Native Tab exit uses the remembered position, not the focused DOM cell.
+                                props.setActivePosition({ rowIdx: props.rowIdx, idx: props.column.idx });
+                            }
+                        }}
+                    />
+                ),
                 renderRow: (key, props): React.JSX.Element => (
                     <Row key={key} {...props} onKeyDown={(event): void => handleRowKeyDown(props.row, event)} />
                 ),

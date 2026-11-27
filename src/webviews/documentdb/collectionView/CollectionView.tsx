@@ -139,6 +139,7 @@ export const CollectionView = (): JSX.Element => {
     // that's the local view of query results
     // TODO: it's a potential data duplication in the end, consider moving it into the global context of the view
     const [currentQueryResults, setCurrentQueryResults] = useState<QueryResults>();
+    const viewPickerRef = useRef<HTMLButtonElement>(null);
 
     // Track which tab is currently active. Honors `configuration.initialTab`
     // so an external caller (e.g. the "Indexes" tree node) can open the view
@@ -874,10 +875,41 @@ export const CollectionView = (): JSX.Element => {
                                     onViewClick={handleViewDocumentRequest}
                                     onAddClick={handleAddDocumentRequest}
                                 />
-                                <ViewSwitcher onViewChanged={handleViewChanged} />
+                                <ViewSwitcher onViewChanged={handleViewChanged} focusTargetRef={viewPickerRef} />
                             </div>
 
-                            <div className="resultsDisplayArea" id="resultsDisplayAreaId">
+                            <div
+                                className="resultsDisplayArea"
+                                id="resultsDisplayAreaId"
+                                data-tabster={
+                                    // RDG owns cell Tab order, not Tabster's DOM-order traversal.
+                                    currentContext.currentView === Views.TABLE || currentContext.currentView === Views.TREE
+                                        ? JSON.stringify({ focusable: { ignoreKeydown: { Tab: true } } })
+                                        : undefined
+                                }
+                                onKeyDown={(event): void => {
+                                    const picker = viewPickerRef.current;
+                                    if (
+                                        event.key !== 'Escape' ||
+                                        event.defaultPrevented ||
+                                        event.altKey ||
+                                        event.ctrlKey ||
+                                        event.metaKey ||
+                                        event.shiftKey ||
+                                        !(event.target instanceof HTMLElement) ||
+                                        !event.target.matches('[role="gridcell"], [role="columnheader"]') ||
+                                        !event.target.closest('[role="grid"], [role="treegrid"]') ||
+                                        !picker ||
+                                        picker.disabled
+                                    ) {
+                                        return;
+                                    }
+                                    // Bubble after cell/popup handlers; only grid cells can request this exit.
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    picker.focus();
+                                }}
+                            >
                                 {
                                     {
                                         'Table View': (

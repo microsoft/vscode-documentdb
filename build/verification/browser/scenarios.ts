@@ -310,6 +310,91 @@ const mixedTypesExpectations: Readonly<Record<number, MixedTypesColumnExpectatio
     12: { indicator: 'U~' },
 };
 
+function resultsGridNavigationContracts(
+    role: 'grid' | 'treegrid',
+    firstHeader: string,
+    columnCount: number,
+    visibleRowCount: number,
+): ScenarioAssertion[] {
+    const grid = `[role="${role}"]`;
+    const contract = role === 'grid' ? 'M6' : 'M5';
+    const cell = (row: number, column: number): string =>
+        `${grid} [role="row"][aria-rowindex="${row}"] [role="gridcell"][aria-colindex="${column}"]`;
+    const focused = (name: string, selector: string, steps: readonly ScenarioStep[]): ScenarioAssertion => ({
+        kind: 'focused', name: `TDD: ${contract} ${name}`, requiresGrid: role, target: { selector }, steps,
+    });
+    return [
+        focused('Ctrl+Home reaches the upper-left header', `${grid} [role="columnheader"][aria-colindex="1"]`, [
+            { action: 'focus', role: 'columnheader', name: firstHeader }, { action: 'press', key: 'Control+Home' },
+        ]),
+        focused('Tab moves to the next header', `${grid} [role="columnheader"][aria-colindex="2"]`, [
+            { action: 'press', key: 'Tab' },
+        ]),
+        focused('Shift+Tab returns to the previous header', `${grid} [role="columnheader"][aria-colindex="1"]`, [
+            { action: 'press', key: 'Shift+Tab' },
+        ]),
+        focused('Tab crosses from headers to the first data cell', cell(2, 1),
+            Array.from({ length: columnCount }, (): ScenarioStep => ({ action: 'press', key: 'Tab' }))),
+        focused('Shift+Tab crosses back to the last header', `${grid} [role="columnheader"][aria-colindex="${columnCount}"]`, [
+            { action: 'press', key: 'Shift+Tab' },
+        ]),
+        focused('Tab crosses a data row boundary', cell(3, 1), [
+            { action: 'press', key: 'Tab' }, { action: 'press', key: 'End' }, { action: 'press', key: 'Tab' },
+        ]),
+        focused('Shift+Tab crosses the same data row boundary backwards', cell(2, columnCount), [
+            { action: 'press', key: 'Shift+Tab' },
+        ]),
+        focused('Ctrl+End reaches the last column at the end of the grid',
+            cell(visibleRowCount + 1, columnCount), [{ action: 'press', key: 'Control+End' }]),
+        focused('Shift+Tab crosses the final data row boundary backwards', cell(visibleRowCount, columnCount), [
+            { action: 'press', key: 'Home' }, { action: 'press', key: 'Shift+Tab' },
+        ]),
+        focused('Tab crosses the final data row boundary forwards', cell(visibleRowCount + 1, 1), [
+            { action: 'press', key: 'Tab' },
+        ]),
+        focused('End returns to the final cell', cell(visibleRowCount + 1, columnCount), [
+            { action: 'press', key: 'End' },
+        ]),
+        focused('Escape focuses the existing view picker', '.collectionDocumentViewSwitcher [role="combobox"]', [
+            { action: 'press', key: 'Escape' },
+        ]),
+        { kind: 'style', name: `TDD: ${contract} the remembered cell has no focus outline after Escape`,
+            requiresGrid: role, selector: `${grid} [role="gridcell"][aria-selected="true"]`,
+            property: 'outline-style', expected: 'none' },
+        focused('Tab reentry preserves the active cell', cell(visibleRowCount + 1, columnCount), [
+            { action: 'press', key: 'Tab' },
+        ]),
+        { kind: 'style', name: `TDD: ${contract} the focused active cell has a focus outline`,
+            requiresGrid: role, selector: `${grid} [role="gridcell"]:focus`,
+            property: 'outline-style', expected: 'solid' },
+        focused('Ctrl+Home returns from the last cell to the upper-left header',
+            `${grid} [role="columnheader"][aria-colindex="1"]`, [{ action: 'press', key: 'Control+Home' }]),
+        focused('Shift+Tab leaves only at the upper-left header', '.collectionDocumentViewSwitcher [role="combobox"]', [
+            { action: 'press', key: 'Shift+Tab' },
+        ]),
+        { kind: 'style', name: `TDD: ${contract} the remembered header has no focus outline after exit`,
+            requiresGrid: role, selector: `${grid} [role="columnheader"][aria-selected="true"]`,
+            property: 'outline-style', expected: 'none' },
+        focused('Tab enters the remembered header', `${grid} [role="columnheader"][aria-colindex="1"]`, [
+            { action: 'press', key: 'Tab' },
+        ]),
+        focused('Escape from a header also focuses the existing view picker', '.collectionDocumentViewSwitcher [role="combobox"]', [
+            { action: 'press', key: 'Escape' },
+        ]),
+        focused('Tab reenters the header after Escape', `${grid} [role="columnheader"][aria-colindex="1"]`, [
+            { action: 'press', key: 'Tab' },
+        ]),
+        focused('Tab leaves at the last cell',
+            ':not([role="grid"], [role="treegrid"], [role="grid"] *, [role="treegrid"] *)', [
+                { action: 'press', key: 'Control+End' }, { action: 'press', key: 'Tab' },
+            ]),
+        { kind: 'attribute', name: `TDD: ${contract} the view picker popup handles its own Escape`,
+            requiresGrid: role, selector: '.collectionDocumentViewSwitcher [role="combobox"]',
+            attribute: 'aria-expanded', expected: 'false',
+            steps: [{ action: 'click', role: 'combobox', name: 'Select view type' }, { action: 'press', key: 'Escape' }] },
+    ];
+}
+
 // These are browser user-outcome contracts, not assertions about the grid package's DOM classes.
 export const collectionViewContracts = {
     'mixed-types': [
@@ -382,6 +467,7 @@ export const collectionViewContracts = {
         { kind: 'focused', name: 'TDD: M6 Up returns to the header',
             requiresGrid: 'grid', target: { role: 'columnheader', name: 'name' },
             steps: [{ action: 'press', key: 'ArrowUp' }, { action: 'press', key: 'ArrowUp' }] },
+        ...resultsGridNavigationContracts('grid', '_id', 5, 3),
     ],
     'deep-nesting': [
         { kind: 'order', name: 'TDD: M4 tree exposes Field, Value and Type columns',
@@ -395,43 +481,86 @@ export const collectionViewContracts = {
         { kind: 'attribute', name: 'TDD: M5 root exposes collapsed state and level',
             requiresGrid: 'treegrid', selector: '[role="treegrid"] [role="row"][aria-level="1"]',
             attribute: 'aria-expanded', expected: 'false' },
-        { kind: 'attribute', name: 'TDD: M5 Right expands a focused root',
+        { kind: 'attribute', name: 'TDD: M5 Right navigates without expanding a focused root',
+            requiresGrid: 'treegrid', selector: '[role="treegrid"] [role="row"][aria-level="1"]',
+            attribute: 'aria-expanded', expected: 'false',
+            steps: [{ action: 'focus', role: 'gridcell', name: '"deep-root"' }, { action: 'press', key: 'ArrowRight' }] },
+        { kind: 'focused', name: 'TDD: M5 Right moves from Field to Value',
+            requiresGrid: 'treegrid', target: { selector: '[role="treegrid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="2"]' } },
+        { kind: 'attribute', name: 'TDD: M5 Enter expands a focused root',
             requiresGrid: 'treegrid', selector: '[role="treegrid"] [role="row"][aria-level="1"]',
             attribute: 'aria-expanded', expected: 'true',
-            steps: [{ action: 'focus', role: 'gridcell', name: '"deep-root"' }, { action: 'press', key: 'ArrowRight' }] },
-        { kind: 'focused', name: 'TDD: M5 Right on expanded parent moves to its first child',
-            requiresGrid: 'treegrid', target: { selector: '[role="treegrid"] [role="row"][aria-level="2"] [role="gridcell"][aria-colindex="1"]' },
+            steps: [{ action: 'press', key: 'ArrowLeft' }, { action: 'press', key: 'Enter' }] },
+        { kind: 'focused', name: 'TDD: M5 expansion keeps focus on the surviving Field cell',
+            requiresGrid: 'treegrid', target: { role: 'gridcell', name: '"deep-root"' } },
+        { kind: 'focused', name: 'TDD: M5 Right on an expanded Field still moves to Value',
+            requiresGrid: 'treegrid', target: { selector: '[role="treegrid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="2"]' },
             steps: [{ action: 'press', key: 'ArrowRight' }] },
-        { kind: 'focused', name: 'TDD: M5 Left on a child moves to its parent',
-            requiresGrid: 'treegrid', target: { role: 'gridcell', name: '"deep-root"' },
-            steps: [{ action: 'press', key: 'ArrowLeft' }] },
-        { kind: 'attribute', name: 'TDD: M5 Left collapses the parent',
+        { kind: 'attribute', name: 'TDD: M5 Left at an expanded Field does not collapse the node',
             requiresGrid: 'treegrid', selector: '[role="treegrid"] [role="row"][aria-level="1"]',
-            attribute: 'aria-expanded', expected: 'false', steps: [{ action: 'press', key: 'ArrowLeft' }] },
+            attribute: 'aria-expanded', expected: 'true',
+            steps: [{ action: 'press', key: 'ArrowLeft' }, { action: 'press', key: 'ArrowLeft' }] },
+        { kind: 'focused', name: 'TDD: M5 Down reaches the next visible child Field',
+            requiresGrid: 'treegrid', target: { selector: '[role="treegrid"] [role="row"][aria-level="2"] [role="gridcell"][aria-colindex="1"]' },
+            steps: [{ action: 'press', key: 'ArrowDown' }] },
+        { kind: 'focused', name: 'TDD: M5 Left at Field stays in the cell rather than focusing the row or parent',
+            requiresGrid: 'treegrid', target: { selector: '[role="treegrid"] [role="row"][aria-level="2"] [role="gridcell"][aria-colindex="1"]' },
+            steps: [{ action: 'press', key: 'ArrowLeft' }] },
+        { kind: 'focused', name: 'TDD: M5 Down visits the next visible sibling rather than a direct child shortcut',
+            requiresGrid: 'treegrid', target: { role: 'gridcell', name: 'profile' },
+            steps: [{ action: 'press', key: 'ArrowDown' }] },
+        { kind: 'focused', name: 'TDD: M5 Up visits the previous visible sibling rather than a direct parent shortcut',
+            requiresGrid: 'treegrid', target: { selector: '[role="treegrid"] [role="row"][aria-level="2"] [role="gridcell"][aria-colindex="1"]' },
+            steps: [{ action: 'press', key: 'ArrowUp' }] },
+        { kind: 'focused', name: 'TDD: M5 Up reaches the preceding visible parent',
+            requiresGrid: 'treegrid', target: { role: 'gridcell', name: '"deep-root"' },
+            steps: [{ action: 'press', key: 'ArrowUp' }] },
+        { kind: 'attribute', name: 'TDD: M5 Enter collapses the parent',
+            requiresGrid: 'treegrid', selector: '[role="treegrid"] [role="row"][aria-level="1"]',
+            attribute: 'aria-expanded', expected: 'false', steps: [{ action: 'press', key: 'Enter' }] },
+        { kind: 'focused', name: 'TDD: M5 collapse keeps focus on the surviving Field cell',
+            requiresGrid: 'treegrid', target: { role: 'gridcell', name: '"deep-root"' } },
         { kind: 'text', name: 'TDD: M4 deeply nested document fields remain browsable',
             requiresGrid: 'treegrid', selector: '[role="treegrid"]', includes: ['latitude', '47.6062', 'longitude', '-122.3321'], excludes: [],
             steps: [
-                { action: 'press', key: 'ArrowRight' },
-                { action: 'focus', role: 'gridcell', name: 'profile' }, { action: 'press', key: 'ArrowRight' },
-                { action: 'focus', role: 'gridcell', name: 'address' }, { action: 'press', key: 'ArrowRight' },
-                { action: 'focus', role: 'gridcell', name: 'location' }, { action: 'press', key: 'ArrowRight' },
-                { action: 'focus', role: 'gridcell', name: 'coordinates' }, { action: 'press', key: 'ArrowRight' },
+                { action: 'press', key: 'Enter' },
+                { action: 'focus', role: 'gridcell', name: 'profile' }, { action: 'press', key: 'Enter' },
+                { action: 'focus', role: 'gridcell', name: 'address' }, { action: 'press', key: 'Enter' },
+                { action: 'focus', role: 'gridcell', name: 'location' }, { action: 'press', key: 'Enter' },
+                { action: 'focus', role: 'gridcell', name: 'coordinates' }, { action: 'press', key: 'Enter' },
             ] },
         { kind: 'text', name: 'TDD: M5 deep children expose the correct hierarchy level',
             requiresGrid: 'treegrid', selector: '[role="treegrid"] [role="row"][aria-level="6"]',
             includes: ['latitude'], excludes: [] },
+        { kind: 'stableText', name: 'TDD: M5 Enter on a leaf does nothing',
+            requiresGrid: 'treegrid', selector: '[role="treegrid"]',
+            steps: [{ action: 'focus', role: 'gridcell', name: 'latitude' }, { action: 'press', key: 'Enter' }] },
+        { kind: 'focused', name: 'TDD: M5 leaf Enter preserves cell focus',
+            requiresGrid: 'treegrid', target: { role: 'gridcell', name: 'latitude' } },
+        { kind: 'focused', name: 'TDD: M5 the pointer chevron collapses and focuses its surviving Field cell',
+            requiresGrid: 'treegrid', target: { role: 'gridcell', name: 'coordinates' },
+            steps: [{ action: 'click', role: 'button', name: 'Collapse fields for coordinates' }] },
+        { kind: 'attribute', name: 'TDD: M5 pointer collapse retains the correct expanded state',
+            requiresGrid: 'treegrid', selector: '[role="treegrid"] [role="row"][aria-level="5"]',
+            attribute: 'aria-expanded', expected: 'false' },
+        { kind: 'text', name: 'TDD: M5 the pointer chevron restores the deep children',
+            requiresGrid: 'treegrid', selector: '[role="treegrid"] [role="row"][aria-level="6"]',
+            includes: ['latitude'], excludes: [],
+            steps: [{ action: 'click', role: 'button', name: 'Expand fields for coordinates' }] },
+        // Nine visible rows: the deep chain is open; the second root remains collapsed.
+        ...resultsGridNavigationContracts('treegrid', 'Field', 3, 9),
     ],
     arrays: [
         { kind: 'text', name: 'TDD: M4 tree summaries retain counts for 0, 10 and 11 elements',
             requiresGrid: 'treegrid', selector: '[role="treegrid"]',
             includes: ['(elements: 0)', '(elements: 10)', '(elements: 11)'], excludes: ['ten[0]', 'eleven[0]'],
-            steps: [{ action: 'focus', role: 'gridcell', name: '"arrays-root"' }, { action: 'press', key: 'ArrowRight' }] },
+            steps: [{ action: 'focus', role: 'gridcell', name: '"arrays-root"' }, { action: 'press', key: 'Enter' }] },
         { kind: 'text', name: 'TDD: M4 arrays of ten expand from the keyboard',
             requiresGrid: 'treegrid', selector: '[role="treegrid"]', includes: ['ten[0]', 'ten[9]'], excludes: ['eleven[0]'],
-            steps: [{ action: 'focus', role: 'gridcell', name: 'ten' }, { action: 'press', key: 'ArrowRight' }] },
+            steps: [{ action: 'focus', role: 'gridcell', name: 'ten' }, { action: 'press', key: 'Enter' }] },
         { kind: 'stableText', name: 'TDD: M4 arrays over ten do not gain children',
             requiresGrid: 'treegrid', selector: '[role="treegrid"]',
-            steps: [{ action: 'focus', role: 'gridcell', name: 'eleven' }, { action: 'press', key: 'ArrowRight' }] },
+            steps: [{ action: 'focus', role: 'gridcell', name: 'eleven' }, { action: 'press', key: 'Enter' }] },
         { kind: 'text', name: 'TDD: M4 JSON view retains the existing document payload',
             requiresGrid: 'treegrid',
             selector: '.monaco-editor:has([role="textbox"][aria-label="JSON results view: Read-only display of query results in JSON format"])',
@@ -454,6 +583,7 @@ export const collectionViewContracts = {
             steps: [{ action: 'focus', role: 'columnheader', name: '_id' }, { action: 'press', key: 'ArrowDown' }, { action: 'press', key: 'Control+End' }] },
         { kind: 'countAtMost', name: 'TDD: K11 mounted rows stay bounded near the last document',
             requiresGrid: 'grid', selector: '[role="grid"] [role="row"]', max: 100 },
+        ...resultsGridNavigationContracts('grid', '_id', 2, 500),
     ],
     'html-values': [
         { kind: 'text', name: 'TDD: K8 HTML-looking data remains literal cell text',

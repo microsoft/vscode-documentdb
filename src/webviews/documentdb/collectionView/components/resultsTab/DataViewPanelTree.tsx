@@ -15,7 +15,7 @@ import {
 import 'react-data-grid/lib/styles.css';
 import { type TreeNode } from '../../../../../utils/documentGrid/types';
 import { bsonStringToDisplayString } from '../../../../utils/documentGrid/typeToDisplayString';
-import { getTreeKeyAction, useTreeRows } from './useTreeRows';
+import { useTreeRows } from './useTreeRows';
 import './dataGridTheme.scss';
 
 interface DataViewPanelTreeProps {
@@ -50,6 +50,7 @@ export const DataViewPanelTree = ({ nodes }: DataViewPanelTreeProps): React.JSX.
                                 onClick={(event): void => {
                                     event.stopPropagation();
                                     // Focus the surviving cell before hiding any active descendant.
+                                    event.currentTarget.closest<HTMLElement>('[role="gridcell"]')?.focus();
                                     gridRef.current?.setActivePosition(
                                         { rowIdx, idx: 0 },
                                         { shouldFocus: true },
@@ -84,12 +85,20 @@ export const DataViewPanelTree = ({ nodes }: DataViewPanelTreeProps): React.JSX.
     function onTreeKeyDown(
         row: TreeNode,
         rowIdx: number,
-        idx: number,
         setActivePosition: DataGridHandle['setActivePosition'],
         event: React.KeyboardEvent<HTMLDivElement>,
     ): void {
+        if (event.target !== event.currentTarget) {
+            return;
+        }
+        // RDG's treegrid Left boundary otherwise selects the whole row (idx: -1).
+        if (event.key === 'ArrowLeft') {
+            event.stopPropagation();
+            event.preventDefault();
+            return;
+        }
         if (
-            (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') ||
+            event.key !== 'Enter' ||
             event.altKey ||
             event.ctrlKey ||
             event.metaKey ||
@@ -98,24 +107,11 @@ export const DataViewPanelTree = ({ nodes }: DataViewPanelTreeProps): React.JSX.
             return;
         }
 
-        const action = getTreeKeyAction(rows, row, expandedKeys, event.key);
-        if (!action) {
-            return;
-        }
-        // Handle the focused row locally, before RDG can use a stale active position.
         event.stopPropagation();
         event.preventDefault();
-        if (action.type === 'focus') {
-            const targetRowIdx = rows.findIndex((node): boolean => node.key === action.key);
-            if (targetRowIdx >= 0) {
-                setActivePosition(
-                    { rowIdx: targetRowIdx, idx },
-                    { shouldFocus: true },
-                );
-            }
-        } else {
-            setActivePosition({ rowIdx, idx }, { shouldFocus: true });
-            setExpanded(row, action.type === 'expand');
+        if (row.expandable && !event.repeat) {
+            setActivePosition({ rowIdx, idx: 0 }, { shouldFocus: true });
+            setExpanded(row, !expandedKeys.has(row.key));
         }
     }
 
@@ -138,7 +134,7 @@ export const DataViewPanelTree = ({ nodes }: DataViewPanelTreeProps): React.JSX.
                         aria-label={props.column.key === 'field' ? props.row.field : undefined}
                         onFocusCapture={(event): void => {
                             props.onFocusCapture?.(event);
-                            if (!event.defaultPrevented) {
+                            if (!event.defaultPrevented && event.target === event.currentTarget) {
                                 // Keep Cell's own bubbling onFocus for native roving focus.
                                 props.setActivePosition({ rowIdx: props.rowIdx, idx: props.column.idx });
                             }
@@ -149,7 +145,6 @@ export const DataViewPanelTree = ({ nodes }: DataViewPanelTreeProps): React.JSX.
                                 onTreeKeyDown(
                                     props.row,
                                     props.rowIdx,
-                                    props.column.idx,
                                     props.setActivePosition,
                                     event,
                                 );
@@ -163,24 +158,6 @@ export const DataViewPanelTree = ({ nodes }: DataViewPanelTreeProps): React.JSX.
                         {...props}
                         aria-level={props.row.depth + 1}
                         aria-expanded={props.row.expandable ? expandedKeys.has(props.row.key) : undefined}
-                        onFocusCapture={(event): void => {
-                            props.onFocusCapture?.(event);
-                            if (!event.defaultPrevented && event.target === event.currentTarget) {
-                                props.setActivePosition({ rowIdx: props.rowIdx, idx: -1 });
-                            }
-                        }}
-                        onKeyDown={(event): void => {
-                            props.onKeyDown?.(event);
-                            if (!event.defaultPrevented && event.target === event.currentTarget) {
-                                onTreeKeyDown(
-                                    props.row,
-                                    props.rowIdx,
-                                    -1,
-                                    props.setActivePosition,
-                                    event,
-                                );
-                            }
-                        }}
                     />
                 ),
             }}

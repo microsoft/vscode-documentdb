@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { type TreeNode } from '../../../../../utils/documentGrid/types';
-import { getTreeKeyAction, getVisibleTreeRows, setTreeNodeExpanded } from './useTreeRows';
+import { getVisibleTreeRows, setTreeNodeExpanded } from './useTreeRows';
 
 const root: TreeNode = {
     key: '["id:\\"z-root\\""]',
@@ -47,7 +47,7 @@ const otherRoot: TreeNode = {
 };
 const nodes: readonly TreeNode[] = [root, sibling, object, leaf, otherRoot];
 
-describe('tree expansion and navigation', () => {
+describe('tree expansion and visible rows', () => {
     it('starts with just document roots in Field-ascending order', () => {
         expect(getVisibleTreeRows(nodes, new Set())).toEqual([otherRoot, root]);
     });
@@ -114,45 +114,5 @@ describe('tree expansion and navigation', () => {
         expect(getVisibleTreeRows(arrayNodes, expanded)).toEqual([root, eleven, empty, ten]);
         expanded = setTreeNodeExpanded(ten, expanded, true);
         expect(getVisibleTreeRows(arrayNodes, expanded)).toEqual([root, eleven, empty, ten, ...elements]);
-        expect(getTreeKeyAction(getVisibleTreeRows(arrayNodes, expanded), eleven, expanded, 'ArrowRight'))
-            .toBeUndefined();
-    });
-
-    it('Right opens a parent, then focuses its first Field-ascending child', () => {
-        const collapsed = new Set<string>();
-        expect(getTreeKeyAction(getVisibleTreeRows(nodes, collapsed), root, collapsed, 'ArrowRight'))
-            .toEqual({ type: 'expand', key: root.key });
-        const expanded = setTreeNodeExpanded(root, collapsed, true);
-        const rows = getVisibleTreeRows(nodes, expanded);
-        expect(getTreeKeyAction(rows, root, expanded, 'ArrowRight'))
-            .toEqual({ type: 'focus', key: object.key });
-        expect(getTreeKeyAction(rows, object, expanded, 'ArrowRight'))
-            .toEqual({ type: 'expand', key: object.key });
-        expect(getTreeKeyAction(rows, sibling, expanded, 'ArrowRight')).toBeUndefined();
-    });
-
-    it('Left collapses an open parent before moving from a closed parent or leaf to its parent', () => {
-        const expanded = new Set([root.key, object.key]);
-        const rows = getVisibleTreeRows(nodes, expanded);
-        expect(getTreeKeyAction(rows, object, expanded, 'ArrowLeft'))
-            .toEqual({ type: 'collapse', key: object.key });
-        expect(getTreeKeyAction(rows, leaf, expanded, 'ArrowLeft'))
-            .toEqual({ type: 'focus', key: object.key });
-        const collapsedObject = setTreeNodeExpanded(object, expanded, false);
-        expect(getTreeKeyAction(getVisibleTreeRows(nodes, collapsedObject), object, collapsedObject, 'ArrowLeft'))
-            .toEqual({ type: 'focus', key: root.key });
-        expect(getTreeKeyAction(rows, root, expanded, 'ArrowLeft'))
-            .toEqual({ type: 'collapse', key: root.key });
-        const collapsedRoot = setTreeNodeExpanded(root, expanded, false);
-        expect(getTreeKeyAction(getVisibleTreeRows(nodes, collapsedRoot), root, collapsedRoot, 'ArrowLeft'))
-            .toBeUndefined();
-    });
-
-    it('does not supply actions for native vertical navigation or Tab', () => {
-        const expanded = new Set([root.key]);
-        const rows = getVisibleTreeRows(nodes, expanded);
-        for (const key of ['ArrowUp', 'ArrowDown', 'Tab', 'Home', 'End']) {
-            expect(getTreeKeyAction(rows, root, expanded, key)).toBeUndefined();
-        }
     });
 });

@@ -4,6 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 .documentDataGrid {
+    // RDG remembers its active cell on blur. That memory is not a second focus indicator.
+    :is([role='gridcell'], [role='columnheader']):not(:focus-within) {
+        outline: none;
+    }
+
     @media (forced-colors: none) {
         --rdg-color: var(--vscode-editor-foreground, var(--vscode-foreground));
         --rdg-background-color: var(--vscode-editor-background);

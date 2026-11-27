@@ -126,6 +126,58 @@ describe('TDD: Collection View grid contracts', (): void => {
         }));
     });
 
+    it('pins Enter tree activation without weakening the hierarchy or array viewport contract', (): void => {
+        const tree: readonly ScenarioAssertion[] = collectionViewContracts['deep-nesting'];
+        expect(tree).toContainEqual(expect.objectContaining({
+            kind: 'attribute', name: 'TDD: M5 Enter expands a focused root',
+            attribute: 'aria-expanded', expected: 'true',
+            steps: [{ action: 'press', key: 'ArrowLeft' }, { action: 'press', key: 'Enter' }],
+        }));
+        expect(tree).toContainEqual(expect.objectContaining({
+            kind: 'focused', name: 'TDD: M5 Up visits the previous visible sibling rather than a direct parent shortcut',
+            steps: [{ action: 'press', key: 'ArrowUp' }],
+        }));
+        expect(tree).toContainEqual(expect.objectContaining({
+            kind: 'text', selector: '[role="treegrid"] [role="row"][aria-level="6"]', includes: ['latitude'],
+        }));
+        expect(collectionViewContracts.arrays).toContainEqual(expect.objectContaining({
+            kind: 'text', name: 'TDD: M4 arrays of ten expand from the keyboard',
+            selector: '[role="treegrid"]', includes: ['ten[0]', 'ten[9]'], excludes: ['eleven[0]'],
+            steps: [{ action: 'focus', role: 'gridcell', name: 'ten' }, { action: 'press', key: 'Enter' }],
+        }));
+        expect(collectionViewContracts.arrays).toContainEqual(expect.objectContaining({
+            kind: 'stableText', name: 'TDD: M4 arrays over ten do not gain children',
+            steps: [{ action: 'focus', role: 'gridcell', name: 'eleven' }, { action: 'press', key: 'Enter' }],
+        }));
+    });
+
+    it('pins symmetric grid traversal, explicit Escape exit and focus-only outlines in both grids', (): void => {
+        for (const [scenario, id, role] of [
+            ['heterogeneous', 'M6', 'grid'],
+            ['deep-nesting', 'M5', 'treegrid'],
+            ['page-500', 'M6', 'grid'],
+        ] as const) {
+            const navigation: readonly ScenarioAssertion[] = collectionViewContracts[scenario];
+            expect(navigation).toContainEqual(expect.objectContaining({
+                kind: 'focused', name: `TDD: ${id} Shift+Tab crosses the same data row boundary backwards`,
+                requiresGrid: role, steps: [{ action: 'press', key: 'Shift+Tab' }],
+            }));
+            expect(navigation).toContainEqual(expect.objectContaining({
+                kind: 'focused', name: `TDD: ${id} Escape focuses the existing view picker`,
+                target: { selector: '.collectionDocumentViewSwitcher [role="combobox"]' },
+                steps: [{ action: 'press', key: 'Escape' }],
+            }));
+            expect(navigation).toContainEqual(expect.objectContaining({
+                kind: 'style', name: `TDD: ${id} the remembered cell has no focus outline after Escape`,
+                property: 'outline-style', expected: 'none',
+            }));
+            expect(navigation).toContainEqual(expect.objectContaining({
+                kind: 'focused', name: `TDD: ${id} Tab leaves at the last cell`,
+                steps: [{ action: 'press', key: 'Control+End' }, { action: 'press', key: 'Tab' }],
+            }));
+        }
+    });
+
     it('pins theme outcomes and honest virtualization evidence in every palette', (): void => {
         const colors = {
             dark: ['rgb(31, 31, 31)', 'rgb(204, 204, 204)'],
