@@ -43,8 +43,8 @@ than attributing new reasoning to the operator. Selection is not implementation.
 
 | Item | Copilot severity | Validity | Assessed severity | Selected action |
 | --- | --- | --- | --- | --- |
-| [C01](#c01-diagnostic-worker-startup-rejects-authentication-holds) | High | Confirmed | High | Accepted fix; deferred by operator for this run |
-| [C02](#c02-vm-diagnostic-shell-can-use-the-wrong-port) | High | Confirmed | Medium | Accepted fix; deferred by operator for this run |
+| [C01](#c01-diagnostic-worker-startup-rejects-authentication-holds) | High | Confirmed | High | Fix: explicit diagnostic startup capability |
+| [C02](#c02-vm-diagnostic-shell-can-use-the-wrong-port) | High | Confirmed | Medium | Fix: retain attempted endpoint; fail closed when unknown |
 | [C03](#c03-stale-diagnostic-shell-click-has-generic-feedback) | Medium | Confirmed, stale-node claim qualified | Low | Fix: supported-view refresh and typed stale feedback |
 | [C04](#c04-old-playground-sign-in-can-warn-a-new-connection) | Medium | Confirmed | Low | Fix: two connection-ownership checks |
 | [C05](#c05-completed-edit-can-silently-supersede-tree-sign-in) | Medium | Confirmed | Low | Won't fix / defer richer change attribution |
@@ -56,16 +56,18 @@ than attributing new reasoning to the operator. Selection is not implementation.
 | [C11](#c11-index-failures-can-show-two-tree-modals) | Medium | Confirmed | Medium | Fix: explicit feedback ownership, not suppressDisplay |
 | [C12](#c12-host-side-stale-retry-cancellation-becomes-an-alert) | Medium | Confirmed | Low | Won't fix / defer typed cancellation outcome |
 
-Suggested implementation order for this run: C11; then the shared C07/C09 input work;
+Suggested implementation order for this run: C01, C02, C11; then the shared C07/C09 input work;
 then cheap C04/C08/C06/C03 feedback refinements. C05 and C12 need no new architecture this round.
-C10 is excluded from implementation. C01 and C02 remain accepted but are skipped for now.
-Seven fixes are in scope for this run; all remain unimplemented at intake.
+C10 is excluded from implementation. The operator withdrew the initial C01/C02 deferral.
+All nine accepted fixes are in scope for this run; all remain unimplemented at intake.
 
 ### Lead run intake (2026-11-27, 17:17 UTC)
 
 The operator requested committing this plan and implementing it as a lead with an advisor,
-with **"we skip work items 1 and 2 for now."** This means C01 and C02; it does not withdraw
-their accepted solutions or classify them as fixed.
+initially with **"we skip work items 1 and 2 for now."** Before coding, the operator corrected
+this as a different-project instruction: **"here we don't skip 1 and 2"**, then confirmed
+**"we work on all decided/accepted work items."** C01 and C02 are included; the initial
+deferral is superseded. C05, C10 and C12 retain their selected won't-fix/defer outcomes.
 
 The operator confirmed the model assignments: **claude-opus-5.5** advisor;
 **mai-code-2** for smaller coding items, **gpt-6.1-sol** for lifecycle/concurrency work;
@@ -116,6 +118,9 @@ and shared narrow authentication-hold predicate. Implementation pending.
 
 **Deferred by operator (2026-11-27):** skip C01 for this lead run. The accepted fix remains pending.
 
+**Deferral withdrawn by operator (2026-11-27):** the skip instruction was for a different
+project. C01's accepted fix is included in this lead run; implementation pending.
+
 ## C02. VM diagnostic Shell can use the wrong port
 
 **Comment:** [Copilot C02](https://github.com/microsoft/vscode-documentdb/pull/1146#discussion_r4721515477).
@@ -152,6 +157,9 @@ different port, and node recreation. Unknown endpoint must never silently fall b
 with an overridden reader that fails closed when the endpoint is unknown. Implementation pending.
 
 **Deferred by operator (2026-11-27):** skip C02 for this lead run. The accepted fix remains pending.
+
+**Deferral withdrawn by operator (2026-11-27):** the skip instruction was for a different
+project. C02's accepted fix is included in this lead run; implementation pending.
 
 ## C03. Stale diagnostic Shell click has generic feedback
 
@@ -525,6 +533,6 @@ Build, lint, packaging and the full Case 2 suite were not rerun for this documen
 This is comment validation with an advisor, not a completed replacement for every
 [CONTRIBUTING section 6 stage](../../../../../CONTRIBUTING.md#6-ai-assisted-review-workflow).
 Author decisions are recorded inline above. At lead-run intake the nine selected fixes were
-unimplemented; C01 and C02 are deferred and seven fixes remain in scope. Subsequent commits and
+unimplemented; all nine are in scope after the operator's correction. Subsequent commits and
 verification belong in the corresponding item's progress note. No GitHub thread was resolved
 by recording these selections.
