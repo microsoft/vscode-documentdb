@@ -19,6 +19,7 @@ created: 2026-11-27
 | 0006 | Work items 4-6 and #768 proceed as recommended in the plan                | Accepted | Accepted as proposed                                        | 2026-11-27 | —   |
 | 0007 | Playground telemetry groups indistinguishable invocation surfaces       | Accepted | Amends the plan's five-surface attribution requirement       | 2026-11-27 | —   |
 | 0008 | Declare keyborg directly for the Document focus helper                   | Accepted | Rejects relying on the transitive dependency                 | 2026-11-27 | —   |
+| 0009 | Preserve undefined metadata for truthful completion summaries            | Accepted | Preserve rendered text while retaining the existing flag     | 2026-11-27 | —   |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -173,3 +174,21 @@ transitive dependency without declaring it.
 ideas, not as best practice. Any relevant idea must still fit this extension's
 Fluent UI behavior and the accepted scope; inspection alone does not approve
 adopting another implementation.
+
+## 0009 — Preserve undefined metadata for truthful completion summaries
+
+**Decision.** During `/lead` implementation on 2026-11-27, the operator approved
+recording this constraint: preserve existing result text and the serialized
+format, but carry the already-sent undefined flag into internal results so
+notifications distinguish null, untyped values and no return value truthfully.
+This introduces no saved or public schema change and no new notification wording.
+
+**Reason for the proposal.** A missing result type does not establish an absent
+value, and null is a valid value. The worker already sends `printableIsUndefined`;
+discarding that metadata prevents a completion notification from reliably
+distinguishing the two cases. Keep `printable` unchanged and use the flag only
+for completion descriptions.
+
+**Alternatives not used.** Inferring absence from null or a missing type can give
+an incorrect answer. Restoring a different printable value during deserialization
+would risk changing existing rendered output instead of preserving it.
