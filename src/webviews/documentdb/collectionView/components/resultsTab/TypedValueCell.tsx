@@ -61,6 +61,16 @@ const useStyles = makeStyles({
         fontSize: 'smaller',
         opacity: 0.4,
     },
+    srOnly: {
+        position: 'absolute',
+        width: '1px',
+        height: '1px',
+        padding: 0,
+        margin: '-1px',
+        overflow: 'hidden',
+        clip: 'rect(0, 0, 0, 0)',
+        whiteSpace: 'nowrap',
+    },
 });
 
 export interface TypedValueCellProps {
@@ -83,11 +93,12 @@ export function TypedValueCell({ value }: TypedValueCellProps): JSX.Element {
     const typeName = bsonStringToDisplayString(value.type);
 
     return (
-        <Tooltip content={typeName} relationship="description">
-            <span className={styles.root}>
-                <span className={styles.value}>{value.display}</span>
-                <span className={styles.type}>{glyph}</span>
+        <span className={styles.root}>
+            <span className={styles.srOnly}>{typeName}</span>{' '}
+            <span className={styles.value}>{value.display}</span>
+            <span className={styles.type} aria-hidden="true">
+                {glyph}
             </span>
-        </Tooltip>
+        </span>
     );
 }

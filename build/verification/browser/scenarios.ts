@@ -505,6 +505,29 @@ export const collectionViewContracts = {
             property: 'color',
             expected: '',
         },
+        {
+            kind: 'attribute',
+            name: 'TDD: K7 visual BSON glyph is hidden from the accessible name',
+            requiresGrid: 'grid',
+            selector:
+                '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="3"] > span > span:last-child',
+            attribute: 'aria-hidden',
+            expected: 'true',
+            steps: [
+                { action: 'press', key: 'Home' },
+                { action: 'press', key: 'ArrowRight' },
+                { action: 'press', key: 'ArrowRight' },
+            ],
+        },
+        {
+            kind: 'attribute',
+            name: 'TDD: M6 typed value introduces no extra cell Tab stop',
+            requiresGrid: 'grid',
+            selector:
+                '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="3"] [tabindex]:not([tabindex="-1"])',
+            attribute: 'tabindex',
+            expected: null,
+        },
     ],
     'missing-vs-null': [
         {
