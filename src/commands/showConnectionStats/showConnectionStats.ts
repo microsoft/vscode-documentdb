@@ -10,7 +10,7 @@ import { ext } from '../../extensionVariables';
 
 function formatEntraExpiry(expiresAt: string | undefined, now: number): string {
     if (expiresAt === undefined) {
-        return 'unknown';
+        return '(not available)';
     }
 
     const remainingMs = Date.parse(expiresAt) - now;
@@ -28,32 +28,36 @@ function formatEntraExpiry(expiresAt: string | undefined, now: number): string {
 export function showConnectionStats(_context: IActionContext): void {
     const snapshot = ClustersClient.getDiagnosticsSnapshot();
     const now = Date.now();
-    ext.outputChannel.appendLog(`[Connection Stats] Extension-host cache entries: ${String(snapshot.length)}`);
+    ext.outputChannel.appendLog('[Connection Stats]');
+    ext.outputChannel.appendLog(`  Entries: ${String(snapshot.length)}`);
+    ext.outputChannel.appendLog('  Source: Extension host');
     ext.outputChannel.appendLog(
-        'Each cached client can own multiple sockets. Socket counts are not tracked here. For Shell and Playground, use Show Worker Stats.',
+        '  Socket counts: (not available); each cached client can own multiple sockets. For Shell and Playground, use Show Worker Stats.',
     );
     for (const [index, { client, pending, held, lastFailedStartupId }] of snapshot.entries()) {
         ext.outputChannel.appendLog(`  Connection ${String(index + 1)}:`);
-        ext.outputChannel.appendLog(
-            client
-                ? `    Client: ${client.state} generation=${String(client.generation)} ageMs=${String(client.ageMs)} auth=${client.authMethod ?? 'unknown'} startup=${client.startupId ?? 'none'} socketTrace=${String(client.socketTrace)}`
-                : '    Client: none',
-        );
+        ext.outputChannel.appendLog(`    Client state: ${client?.state ?? '(not available)'}`);
+        if (client) {
+            ext.outputChannel.appendLog(`    Generation: ${String(client.generation)}`);
+            ext.outputChannel.appendLog(`    Age (ms): ${String(client.ageMs)}`);
+            ext.outputChannel.appendLog(`    Auth method: ${client.authMethod ?? '(not available)'}`);
+            ext.outputChannel.appendLog(`    Startup ID: ${client.startupId ?? '(not available)'}`);
+            ext.outputChannel.appendLog(`    Socket trace: ${String(client.socketTrace)}`);
+        }
         if (client?.authMethod === AuthMethodId.MicrosoftEntraID) {
             ext.outputChannel.appendLog(
-                `    lastEntraTokenExpiresAt=${formatEntraExpiry(client.lastEntraTokenExpiresAt, now)}`,
+                `    Last Entra token expires at: ${formatEntraExpiry(client.lastEntraTokenExpiresAt, now)}`,
             );
         }
         if (pending) {
-            ext.outputChannel.appendLog(
-                `    Pending: ${pending.superseded ? 'superseded' : 'current'} startup=${pending.startupId}`,
-            );
+            ext.outputChannel.appendLog(`    Pending state: ${pending.superseded ? 'superseded' : 'current'}`);
+            ext.outputChannel.appendLog(`    Pending startup ID: ${pending.startupId}`);
         }
         if (held) {
-            ext.outputChannel.appendLog(`    Held: ${held}`);
+            ext.outputChannel.appendLog(`    Held reason: ${held}`);
         }
         if (lastFailedStartupId) {
-            ext.outputChannel.appendLog(`    Last failed startup: ${lastFailedStartupId}`);
+            ext.outputChannel.appendLog(`    Last failed startup ID: ${lastFailedStartupId}`);
         }
     }
     ext.outputChannel.show();
