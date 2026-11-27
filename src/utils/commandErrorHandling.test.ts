@@ -111,11 +111,12 @@ describe('tree command failure feedback', () => {
     it.each([new Error('Presented failure'), 'Presented primitive failure'])(
         'does not duplicate feedback marked for the same error: %#',
         async (error) => {
+            const rejectFailure = vi.fn<() => Promise<never>>().mockRejectedValue(error);
             const command = registerHandler(async (actionContext) => {
                 actionContext.errorHandling.suppressDisplay = true;
                 await vscode.window.showErrorMessage('Callback feedback.', { modal: true });
                 markCommandErrorPresented(actionContext, error);
-                throw error;
+                return rejectFailure();
             });
             vi.mocked(ErrorExplanationService.explain).mockResolvedValue(explanation);
 
@@ -152,6 +153,9 @@ describe('tree command failure feedback', () => {
     it('shows a different error thrown during cleanup after the original error was presented', async () => {
         const original = new Error('Original failure');
         const cleanup = new Error('Cleanup failure');
+        const failCleanup = (): never => {
+            throw cleanup;
+        };
         const command = registerHandler(async (actionContext) => {
             try {
                 throw original;
@@ -160,7 +164,7 @@ describe('tree command failure feedback', () => {
                 markCommandErrorPresented(actionContext, error);
                 throw error;
             } finally {
-                throw cleanup;
+                failCleanup();
             }
         });
 
