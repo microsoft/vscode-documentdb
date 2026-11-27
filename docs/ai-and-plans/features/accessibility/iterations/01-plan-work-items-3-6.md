@@ -242,6 +242,24 @@ instead of guessing indistinguishable VS Code invocation surfaces; see
 The coding interface uses bounded CodeLens, editor-menu, screen-reader-shortcut
 and other buckets, preserving existing CodeLens telemetry.
 
+> **Foundation done (2026-11-27), commit `9bee0fb6` (3a-3c):**
+> `mai-code-2` implemented shared block resolution, no-argument commands,
+> URI-targeted menu actions, active-editor context keys and the accepted standard
+> surfaces. The operator's 0002, 0003 and 0007 decisions define the behavior.
+> Advised (`claude-opus-5.5`): the first review identified title-toolbar calls
+> that include both a URI and editor-group context being misclassified and
+> routed to the active playground (85% confidence). The worker restored the
+> approved general URI fallback and added two regressions; re-review approved
+> the correction at 90% confidence. Existing CodeLens arguments, selected-block
+> content and target assertions remain intact; only the Run All marker changed
+> as specified. The initial Case 1 build found two new test-fixture typing
+> errors; those were corrected without double casts. `npm run build` then passed
+> and the focused suite passed 68 tests, including 42 additions. Build-generated
+> line-ending churn in an initially clean generated styles file was restored;
+> no pre-existing work was reverted. Result lifecycle, header guidance and
+> manual documentation are separate remaining phases. Localization generation
+> and real-workbench verification are deferred.
+
 **Decision 3a: which surfaces to add.** **Decided 2026-11-27
 ([decisions 0002](../decisions.md#0002--playground-actions-use-standard-vs-code-surfaces-no-new-keybindings)):**
 palette, editor title, context menu and header comment; no new default keybindings.
