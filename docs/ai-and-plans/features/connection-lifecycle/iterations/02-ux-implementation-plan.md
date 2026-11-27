@@ -231,6 +231,17 @@ duplicating framework behavior.
 > assertions intentionally became quiet, retaining no-auth-start assertions. No helper export
 > or helper expansion was added. Worker notification handling remains a separate follow-up.
 
+> **Done (2026-11-27), WI-1c-worker commit `0a01a24e4`:** an explicit stale sign-in click
+> gets existing Shell/Playground-specific removed/changed guidance only when the terminal/file
+> still exists and the current typed latch proves that failure. Cancellation, closed work,
+> already-reported revisions, epoch-only and no-latch cases stay quiet. No worker is reset,
+> stopped, restarted or rebound by these stale callbacks. Decisions: operator, explicit F5
+> worker-surface policy; advised (`claude-opus-5.5`), 85% approval; actual/recommended
+> `gpt-6.1-sol`. The leader's initial helper-name error was corrected before edits to reuse
+> `handleWorkerFailure` and `getPlaygroundRecovery`. Thirty-eight focused cases were added;
+> 163 tests passed. Existing ownership assertions are unchanged; the telemetry mock suppresses
+> only the production fire-and-forget sign-in action. Final batch verification remains pending.
+
 ## WI-2: Correct worker recovery guidance and Shell status output (F2, F8)
 
 **Depends on:** none.  
@@ -327,6 +338,14 @@ and Dashboard if their shared integration wiring differs.
 > Eight focused tests were added across the two existing files; 23 tests passed. The interim
 > type-check encountered concurrent WI-6 edits; WI-6 subsequently reported a successful root
 > type-check. Final batch build and browser scenarios remain pending.
+
+> **Browser fixture follow-up (2026-11-27), commit `039c1cbd8`:** real Document View lifecycle
+> scenarios failed because the existing fixture did not acknowledge the void `reportDirty`
+> mutation. The shared fixture now returns transport-compatible `null`; application code and
+> scenario behavior are unchanged. Model `mai-code-2`; leader, 99% confidence after checking
+> the actual host/link void-result contract. Static browser scenario tests passed (47).
+> The nine Document View routes are being rerun; the earlier Collection View/Dashboard runs
+> passed. This is a required validation-fixture repair, not a new product behavior.
 
 ## WI-4: Clarify teardown and retained-content wording (F9–F11)
 
@@ -514,7 +533,7 @@ Before calling this iteration complete:
 | WI | Status | Outcome / decision / verification |
 | --- | --- | --- |
 | WI-0 | Gates approved; F7 live evidence pending | Current-code baseline checked; no live reproduction claim |
-| WI-1 | Tree commands implemented; worker notification follow-up pending | WI-1b `57f96b23b`, WI-1c-tree `c77ba2115`; F3 expansion follows #1143 |
+| WI-1 | Implemented within approved scope; expansion deferred | `57f96b23b`, `c77ba2115`, `0a01a24e4`; F3 expansion follows #1143 |
 | WI-2 | Guidance implemented; system output pending | WI-2a `a2eba522a`; 118 focused tests passed; WI-2b queued last |
 | WI-3 | Implemented; final batch/browser checks pending | `6d2e10715`; 23 focused tests; exact revision advised at 88% |
 | WI-4 | Implemented; localization/live checks pending | `5d00558cb`; Batch 1 build/tests passed |
