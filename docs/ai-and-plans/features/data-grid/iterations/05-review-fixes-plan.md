@@ -1,7 +1,7 @@
 ---
 feature: data-grid
 kind: plan
-status: proposed
+status: active
 prs: [1142]
 created: 2026-11-27
 code:
@@ -26,6 +26,30 @@ source on 2026-11-27. The remote PR remains a draft at `4b222421`. This document
 implement the fixes, release G3a, authorize a push, or mark the PR ready. The review records
 accepted dispositions but says G3a is not released; obtain implementation authorization before
 executing these items. Runtime findings remain unverified until the checks below actually run.
+
+**Execution authorization (2026-11-27):** the operator explicitly instructed this `/lead` run to
+execute this plan and implement only the approved "do now" findings. This authorizes those
+implementation items, not release of G3a/G3b, a push, or review-thread replies. Keep #1142 in
+draft Case 1; formatting and the full Case 2 remain deferred to the separate handover. The
+operator requested `claude-opus-5.5` as advisor, implementation assignments favoring
+`mai-code-2`, and `mai-code-2-flash` for tool-running checks.
+The run began at `2026-11-27T14:58:25.973Z`; the source-plan baseline is commit `223844a9`.
+The pre-existing README plan-index edit was left out of that baseline commit and remains
+untouched. No implementation or runtime evidence is claimed by this authorization note.
+
+**Browser authorization (2026-11-27), G3-browser:** the operator answered "Yes, use the built in
+browser" to targeted L2-dev failing-first and post-fix runs in dark, light and high-contrast.
+This does not authorize packaged checks, formatting, Case 2, a push or thread replies.
+
+**Model assignments, advised (`claude-opus-5.5`):** WI-G3-1 through WI-G3-5 and the WI-G3-6
+documentation pass are recommended for `mai-code-2`, matching the operator's substitution
+request. WI-G3-1 is a bounded save/identity change; WI-G3-2 is a specified refactor; WI-G3-3
+requires request-bound focus and advisor review; WI-G3-4 is the approved accessible-name change;
+WI-G3-5 separates strict packaged expectations from source readiness; WI-G3-6 records earned
+evidence. Run shared-file items sequentially. Builds, focused tests and authorized source-browser
+runs use `mai-code-2-flash`. WI-G3-7 remains authorization-blocked. The first advisor packet
+returned on 2026-11-27; below-threshold R2 cancellation/timing recommendations and S1 interval
+evidence are being clarified before their coding prompts, not treated as approved designs.
 
 ## Scope
 
@@ -70,7 +94,43 @@ concurrent edits.
 
 ### 1. R1 + R6 — identity and save (decisions 0004 R1, 0005)
 
-**Status:** Pending.
+**Status:** Implemented; focused mocked evidence complete. No live-server verification requested.
+
+> **Done (2026-11-27), commit `8cc23e15`:** R1 now serializes an owned `_id` even when falsy;
+> R6 applies the accepted multi-key integer-like-key guard recursively while preserving display
+> and positional selection identity. Decisions: operator approved the R1/R6 behavior and exact
+> conservative regex in 0004/0005; advisor `claude-opus-5.5` approved the production revision at
+> approximately 90% confidence and the test-local mock correction with high confidence (no
+> numerical figure supplied); leader followed the prescribed scope and kept documentation
+> evidence in a separate commit. Added 16 focused cases in four test files. Failing-first:
+> 7 expected failures, 69 passes; post-fix: 76/76 passes. After correcting only the new router
+> mock's saved-document type, its 6/6 cases and `npm run build` passed (33.394 seconds).
+> Every behavioral assertion was retained. No localized string changed. No live collection,
+> package, formatting, Case 2, push or review-thread operation was performed.
+
+**Execution progress (2026-11-27):** `mai-code-2` is writing the focused regression tests only,
+before any production change. The separate `mai-code-2-flash` check must demonstrate the
+relevant failures on the unfixed code before implementation proceeds.
+
+**Failing-first evidence (2026-11-27), `mai-code-2-flash`:** on the unchanged production code,
+`npx vitest run src\webviews\documentdb\documentView\documentsViewRouter.test.ts
+src\documentdb\ClustersClient.test.ts src\utils\documentGrid\documentIdentity.test.ts
+src\utils\documentGrid\toTablePage.test.ts` found all four files: **69 passed, 7 failed** in
+8.496 seconds, with no setup failures. Four router cases passed the empty sentinel instead
+of the serialized `0`, `false`, `""` and `null` IDs; three identity/row/shaper assertions exposed
+unsafe object IDs still retaining action identity. Client filter and preservation cases passed.
+Implementation is now in progress; no post-fix or live-server result is claimed.
+
+**Post-fix evidence (2026-11-27):** the same focused command passed **76/76** tests in
+8.153 seconds. The advisor approved the exact production diff at approximately 90% confidence,
+including the real-upsert fixture. `npm run build` failed in the new router test at line 76:
+its production-signature mock rejects `string | number | boolean | null`. The advisor traced
+the constraint to the mocked saved document's `WithId<Document>._id`, not the returned
+`documentId` (already `unknown`). The approved test-only correction uses the production method's
+parameter types and a local saved-result shape with `_id: unknown`, retaining every assertion
+and the real typed router caller without double casts. No production/public API change is
+authorized; a commit remains blocked until the test correction builds.
+No existing `TDD:` runtime assertion failed. No live-server run was performed.
 
 **R1: Document View save keeps a falsy `_id`.**
 
@@ -123,6 +183,16 @@ Document View type-fidelity work is included.
 
 **Status:** Pending. Intended to preserve behavior; not yet proven by execution.
 
+**Execution design, advised (`claude-opus-5.5`, 2026-11-27):** keep the selection callback stable
+because Table's effect cleanup depends on it. `commandsFor` is a module-local pure function;
+`getSelectedTargets(context)` is a callback depending on `isCurrentTablePage`. Resolve commands
+against the next selection. For S1, the advisor's source argument (confidence approximately 80%)
+is React's synchronous effect flush for the current discrete-event setters
+(`react-dom-client.development.js:18323`, query action bar, navigation and paging toolbars,
+and step-in). A late reply released after a new request is preservation evidence, not a test
+of the render-to-effect interval. Record that distinction and the setter inventory; if a
+non-discrete setter invalidates the argument, stop for a decision rather than remove protection.
+
 Use the existing WI-7/WI-8, selection, paging, late-query, late-delete and step-in contracts as
 the baseline. No existing `TDD:` behavior contract changes.
 
@@ -167,6 +237,20 @@ change host cache versioning or claim end-to-end query isolation.
 ### 3. R2 — keyboard step-in restores grid focus (decision 0004)
 
 **Status:** Pending.
+
+**Execution design, advised (`claude-opus-5.5`, 2026-11-27, confidence 85%):** use local refs in
+Collection View, not a pure intent module created solely for testing. The intent retains
+`rowKey`, the initiating active-query object, destination path and claimed request number.
+A temporary `focusin` listener permanently cancels on focus outside the initiating grid,
+even if focus later returns. Remove it on cancellation, successful completion, current-request
+failure, superseding query/navigation or unmount. Table receives a local
+`{ page: TablePage; rowKey: string }` request and settles it once in `useLayoutEffect`, requiring
+the identical successfully applied page object and focus on body or in the grid. RDG uses its
+own layout effect for position focus (`react-data-grid/lib/index.js:455-471`). Add component
+wiring tests for failure/retry, same-path superseding query, outside-focus-and-return, pointer
+navigation and cleanup; pure helper tests alone would not establish that behavior. Browser
+focus remains required. A browser failure after one fix iteration triggers advisor review and
+operator authorization before substituting `gpt-6.1-sol`.
 
 **Contract first** (in the `step-in` scenario list, `scenarios.ts`, right after
 `TDD: M7 Enter on an object cell steps in`, before `M2 Level up`). That step already exercises the
@@ -219,6 +303,13 @@ because Delete starts from the toolbar through a host confirmation, so focus is 
 ### 4. R5 — type is part of the cell's name; no tooltip (decision 0004)
 
 **Status:** Pending.
+
+**Execution evidence design, advised (`claude-opus-5.5`, 2026-11-27):** do not extend the exported
+scenario assertion/step format with `exact` or `hover`. Use existing assertion forms for glyph
+and Tab-stop contracts, plus an external script in the authorized built-in browser to require
+the focused gridcell's exact computed name and absence of the BSON tooltip after hover.
+Run before and after the change in all three themes; distinguish this from spoken-screen-reader
+evidence. Keep the missing-field Tooltip and its existing label relationship.
 
 - `TypedValueCell.tsx`: remove the `Tooltip` around values and its import if unused. Render a
   visually hidden span with the full type name (`bsonStringToDisplayString`) **before** the value,
