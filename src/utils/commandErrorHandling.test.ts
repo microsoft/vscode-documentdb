@@ -12,8 +12,14 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import { rethrowBoundCommandUnavailable } from '../commands/rethrowBoundCommandUnavailable';
+import { ConnectionUnavailableError } from '../documentdb/ConnectionUnavailableError';
 import { ErrorExplanationService } from '../services/errorExplanationService';
-import { registerCommandWithTreeNodeUnwrappingAndDiagnostics, UserFacingError } from './commandErrorHandling';
+import {
+    markCommandErrorPresented,
+    registerCommandWithTreeNodeUnwrappingAndDiagnostics,
+    UserFacingError,
+} from './commandErrorHandling';
 
 vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => {
     const actual = await importOriginal<Record<string, unknown>>();
@@ -102,6 +108,76 @@ describe('tree command failure feedback', () => {
         expect(error.cause).toBe(cause);
     });
 
+    it.each([new Error('Presented failure'), 'Presented primitive failure'])(
+        'does not duplicate feedback marked for the same error: %#',
+        async (error) => {
+            const command = registerHandler(async (actionContext) => {
+                actionContext.errorHandling.suppressDisplay = true;
+                await vscode.window.showErrorMessage('Callback feedback.', { modal: true });
+                markCommandErrorPresented(actionContext, error);
+                throw error;
+            });
+            vi.mocked(ErrorExplanationService.explain).mockResolvedValue(explanation);
+
+            await expect(command(context, node, [node])).rejects.toBe(error);
+
+            expect(ErrorExplanationService.explain).toHaveBeenCalledExactlyOnceWith({
+                clusterId: node.cluster?.clusterId,
+                error,
+            });
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledExactlyOnceWith('Callback feedback.', {
+                modal: true,
+            });
+            expect(context.telemetry.properties.explanationProviderId).toBe(explanation.providerId);
+            expect(context.errorHandling.suppressDisplay).toBe(true);
+            expect(context.errorHandling.rethrow).toBe(true);
+        },
+    );
+
+    it('does not treat suppressDisplay without a presentation marker as feedback ownership', async () => {
+        const error = new ConnectionUnavailableError('identityChanged');
+        const command = registerHandler((actionContext) => {
+            rethrowBoundCommandUnavailable(actionContext, error);
+        });
+
+        await expect(command(context, node, [node])).rejects.toBe(error);
+
+        expect(vscode.window.showErrorMessage).toHaveBeenCalledExactlyOnceWith('Unable to complete this tree action.', {
+            modal: true,
+            detail: error.message,
+        });
+        expect(context.errorHandling.suppressDisplay).toBe(true);
+    });
+
+    it('shows a different error thrown during cleanup after the original error was presented', async () => {
+        const original = new Error('Original failure');
+        const cleanup = new Error('Cleanup failure');
+        const command = registerHandler(async (actionContext) => {
+            try {
+                throw original;
+            } catch (error) {
+                await vscode.window.showErrorMessage('Original callback feedback.', { modal: true });
+                markCommandErrorPresented(actionContext, error);
+                throw error;
+            } finally {
+                throw cleanup;
+            }
+        });
+
+        await expect(command(context, node, [node])).rejects.toBe(cleanup);
+
+        expect(vscode.window.showErrorMessage).toHaveBeenCalledTimes(2);
+        expect(vscode.window.showErrorMessage).toHaveBeenNthCalledWith(
+            2,
+            'Unable to complete this tree action.',
+            { modal: true, detail: cleanup.message },
+        );
+        expect(ErrorExplanationService.explain).toHaveBeenCalledExactlyOnceWith({
+            clusterId: node.cluster?.clusterId,
+            error: cleanup,
+        });
+    });
+
     it.each([
         { error: new Error('Driver failure'), detail: 'Driver failure' },
         { error: { error: { message: 'Structured driver failure' } }, detail: 'Structured driver failure' },
@@ -162,6 +238,23 @@ describe('tree command failure feedback', () => {
             expect(context.telemetry.properties.explanationProviderId).toBe(explanation.providerId);
         },
     );
+
+    it('keeps webview notification behavior for an error marked by its callback', async () => {
+        const error = new Error('Driver failure');
+        const command = registerHandler((actionContext) => {
+            markCommandErrorPresented(actionContext, error);
+            throw error;
+        });
+        vi.mocked(ErrorExplanationService.explain).mockResolvedValue(explanation);
+
+        await expect(command(context, node, null, { source: 'webview;collectionView' })).rejects.toBe(error);
+
+        expect(vscode.window.showErrorMessage).toHaveBeenCalledExactlyOnceWith(
+            `${explanation.message} (${error.message})`,
+        );
+        expect(context.errorHandling.suppressDisplay).toBe(true);
+        expect(context.telemetry.properties.explanationProviderId).toBe(explanation.providerId);
+    });
 
     it('keeps unexplained webview failures on the default notification path', async () => {
         const error = new Error('Driver failure');

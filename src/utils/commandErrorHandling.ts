@@ -14,6 +14,12 @@ import { unwrapArgs } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
 import { ErrorExplanationService } from '../services/errorExplanationService';
 
+const presentedCommandErrors = new WeakMap<IActionContext, unknown>();
+
+export function markCommandErrorPresented(context: IActionContext, error: unknown): void {
+    presentedCommandErrors.set(context, error);
+}
+
 /**
  * UserFacingError represents an error that should be prominently displayed to the user
  * in a modal dialog rather than a notification. Use this for critical errors that
@@ -137,6 +143,8 @@ export function registerCommandWithTreeNodeUnwrappingAndDiagnostics<T>(
                 unwrappedArgs = unwrapArgs<T>(args);
                 return await callback(context, ...unwrappedArgs);
             } catch (error) {
+                const presented =
+                    presentedCommandErrors.has(context) && presentedCommandErrors.get(context) === error;
                 const clusterId = (unwrappedArgs[0] as unknown as { cluster?: { clusterId?: string } } | undefined)
                     ?.cluster?.clusterId;
                 const treeError = !webviewInvocation && clusterId ? parseError(error) : undefined;
@@ -147,10 +155,12 @@ export function registerCommandWithTreeNodeUnwrappingAndDiagnostics<T>(
                 if (error instanceof UserFacingError) {
                     if (treeError) {
                         context.errorHandling.suppressDisplay = true;
-                        await vscode.window.showErrorMessage(error.message, {
-                            modal: true,
-                            detail: error.options.details,
-                        });
+                        if (!presented) {
+                            await vscode.window.showErrorMessage(error.message, {
+                                modal: true,
+                                detail: error.options.details,
+                            });
+                        }
                     }
                     throw error;
                 }
@@ -163,10 +173,12 @@ export function registerCommandWithTreeNodeUnwrappingAndDiagnostics<T>(
 
                 if (treeError) {
                     context.errorHandling.suppressDisplay = true;
-                    await vscode.window.showErrorMessage(
-                        explanation?.message ?? vscode.l10n.t('Unable to complete this tree action.'),
-                        { modal: true, detail: treeError.message },
-                    );
+                    if (!presented) {
+                        await vscode.window.showErrorMessage(
+                            explanation?.message ?? vscode.l10n.t('Unable to complete this tree action.'),
+                            { modal: true, detail: treeError.message },
+                        );
+                    }
                 } else if (explanation) {
                     context.errorHandling.suppressDisplay = true;
                     // `detail` is only rendered for modal messages, so the raw text is appended.
