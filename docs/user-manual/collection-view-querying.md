@@ -242,9 +242,11 @@ This is a significant improvement over earlier versions of the extension, which 
 ## Navigating Nested Results
 
 In **Table View**, focus an object cell and press **Enter**, or double-click the cell, to step into
-that field. Use **Level Up** to return one level, activate an ancestor breadcrumb to jump back to
-it, or choose **Root Level** to return to the document root. The help beside the navigation
-controls describes these actions.
+that field. After **Enter**, focus moves to the same document row's `_id` cell, so you can continue
+with the arrow keys or press **Space** to select that row. Mouse step-in is unchanged. Use
+**Level Up** to return one level, activate an ancestor breadcrumb to jump back to it, or choose
+**Root Level** to return to the document root. The help beside the navigation controls describes
+these actions.
 
 In **Tree View**, focus an expandable **Field** cell and press **Enter** to expand or collapse it.
 The chevron button beside the field also toggles expansion.

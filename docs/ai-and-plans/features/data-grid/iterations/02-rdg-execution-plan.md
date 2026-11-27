@@ -1485,3 +1485,19 @@ resize fix and approved E3 viewport setup passed A8 in all three themes. A9 pass
 `20c1c7ab`. The operator released G2 after hands-on testing and approving the follow-up
 schedule. All five G2 follow-ups and WI-10/WI-11 are complete, and A10 passed. WI-12 awaits
 authorization to push and open a draft PR. No draft PR has been opened.
+
+The later approved review-fix pass is recorded in
+[05-review-fixes-plan.md](./05-review-fixes-plan.md) without changing the outcome above:
+
+- WI-G3-1 / R1 + R6: implemented in `8cc23e15`.
+- WI-G3-2 / S1-S5: implemented in `bf7285d3`.
+- WI-G3-3 / R2: implemented in `9eb782bd`.
+- WI-G3-4 / R5: implemented in `c09cdb6d`.
+- WI-G3-5 / R3: implemented in `3ac66077`.
+- WI-G3-6: the final current-docs pass links the completed items and separates source evidence
+  from pending packaged/manual evidence.
+
+Focused test/build evidence for the five code items and affected source-scenario runs are recorded
+in the review-fix plan; R1 save/filter coverage is mocked, not live. R3's fresh packaged normal run
+and broken-CSS negative control, actual NVDA/Narrator checks, packaged/manual G3b checks, and Case
+2 handover remain pending. G3a and G3b have not been released.

@@ -35,27 +35,48 @@ Identity and action eligibility are distinct from whether a row can be browsed o
   `_id` makes identity untrusted.
 - A safe `_id` is serialized as canonical Extended JSON and must round-trip without changing
   representation. Unsupported or unsafe values are not action identities.
+- An object `_id` is unsafe when it has more than one own key and any own key matches
+  `/^(0|[1-9]\d*)$/`. The object check applies recursively at any depth, including objects inside
+  arrays; array indexes are not treated as object keys, and integer-like strings above the
+  JavaScript array-index range are still guarded.
 - IDs are counted within the current fetched page. A unique safe ID yields `id:<canonical-id>`;
   otherwise the row gets a page-position key (`pos:<index>`) and no `documentId`.
 - All rows remain visible and selectable. Document actions resolve selected keys against the
   current `TablePage` and fail closed if a page/key is stale or any row lacks `documentId`.
+- A Document View save preserves an owned falsy `_id` (`0`, `false`, `""`, or `null`) by passing its
+  serialized value. Only a missing `_id` uses the existing Add sentinel. This does not claim
+  numeric BSON-type fidelity on Document View save.
 
 This deliberately does not introduce cross-page or cross-shard uniqueness handling. It also
 does not promise that duplicate IDs will be rejected by the database.
+The conservative object guard is a fail-closed transport rule: it does not compare reordered
+objects or carry raw BSON bytes. Display and positional browsing/selection remain available.
 
 ## Table interactions
 
 Plain click selects one row; Ctrl/Cmd-click toggles it; Shift-click extends the selection. Space
 toggles the focused row and Shift+Space extends from the selection anchor. Enter on a focused
-object cell, or double-clicking that cell, steps into that field. The handler rejects stale pages,
-the root `_id` column, `_id` fields, and non-object values before changing the nested path.
+object cell, or double-clicking that cell, steps into that field. For a valid keyboard step-in,
+the successful response matching the current query, request, and destination path restores focus
+once, after the Table page is committed, to column 0—the same row's root `_id` cell—using its
+`rowKey`, not its previous column or numeric index. It does not select the row.
+
+The pending focus restoration is permanently cancelled if focus leaves the initiating results
+grid, the query or navigation supersedes the request, the load fails, the row disappears, or the
+view unmounts. A stale intent cannot fire on a later load. Pointer step-in has no new focus
+behavior. The handler rejects stale pages, the root `_id` column, `_id` fields, and non-object
+values before changing the nested path.
 
 Level Up returns one level. The ancestor breadcrumb jumps to that level, and Root Level returns to
 the document root. The localized help beside the navigation controls explains these actions.
 
 Long cell values ellipsize independently of the BSON type indicator; the full value text remains
-in the DOM, with no additional per-cell Tab stop. The packaged-workbench path for inspecting a
-full value, especially when its row has no actionable ID, remains to be verified.
+in the DOM, with no additional per-cell Tab stop. For defined values, visually hidden text puts
+the full BSON type before the value in the focused cell's accessible name, for example
+`Int32 7`; the glyph is visual-only (`aria-hidden`) and there is no BSON type Tooltip. Missing
+fields retain their blank presentation and "This field is not set" Tooltip/label relationship.
+The packaged-workbench path for inspecting a full value, especially when its row has no actionable
+ID, remains to be verified.
 
 ## Tree behavior and grid focus
 

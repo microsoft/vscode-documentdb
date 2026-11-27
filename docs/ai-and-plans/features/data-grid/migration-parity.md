@@ -42,6 +42,14 @@ Preserve the user outcome, not an implementation accident or a defect.
 | T11 | Preserve       | Native text selection inside cells remains possible, without accidentally starting editing or invoking a document action.                                                                                                                                                                                                           |
 | T12 | Improve        | Cell content and field names are data, never HTML. Render React text safely; expose tooltip/type information on keyboard focus as well as hover, without duplicate announcements.                                                                                                                                                   |
 
+**Approved RDG disposition for T06/T12 (2026-11-27):** keep the visual type glyph, but mark it
+decorative. For a defined value, put the full BSON type name before the value as visually hidden
+text so the focused gridcell's accessible name includes, for example, `Int32 7`; do not add a Tab
+stop. Remove the BSON type hover Tooltip under D8 because the type is now readable as text. The
+missing-field `"This field is not set"` label/Tooltip behavior is unchanged. This is an appended
+implementation disposition, not a rewrite of the legacy baseline above or a spoken-screen-reader
+verification claim.
+
 Primary sources:
 [table](../../../../src/webviews/documentdb/collectionView/components/resultsTab/DataViewPanelTable.tsx),
 [type styles](../../../../src/webviews/documentdb/collectionView/components/resultsTab/dataViewPanelTable.scss),

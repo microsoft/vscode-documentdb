@@ -15,7 +15,8 @@ code:
 
 The Table and Tree result views now use React Data Grid. The migration is implemented on the
 feature branch; G2 was released on 2026-11-27, with follow-up decisions recorded in the execution
-plan.
+plan. The approved WI-G3-1 through WI-G3-5 source changes are also implemented. G3a and G3b are
+not released.
 This feature folder records the current architecture and its rationale. It does not imply a
 released extension version or completion of the remaining handover gates.
 
@@ -28,9 +29,15 @@ released extension version or completion of the remaining handover gates.
   React components do not depend on database documents directly.
 - The Table supports nested-object step-in. The Tree flattens visible descendants from an
   arbitrary-depth document model rather than using RDG's `TreeDataGrid`.
+- After keyboard step-in, focus moves to the same root row's `_id` cell after the matching Table
+  page is applied. Pointer step-in is unchanged.
 - Long Table values ellipsize without hiding the BSON type indicator or adding per-cell Tab stops.
+  Defined values expose their full BSON type before the value in the accessible cell name; the
+  visual glyph is decorative and there is no BSON type hover tooltip.
 - Row selection and document-action eligibility are separate. Rows without a safe, unique
   identity remain browsable and selectable, but cannot become View/Edit/Delete targets.
+- Object `_id` values with more than one own key and an integer-like key at any depth are
+  conservatively ineligible for document actions. Their rows remain displayed and selectable.
 
 The exact VS Code support declaration is `^1.123.0` in the root `package.json` (minimum
 `1.123.0`). A9's isolated VSIX install and activation on VS Code 1.123.0 passed, but did not
@@ -56,15 +63,34 @@ for A9 evidence and the remaining workbench checks.
   evaluation evidence and the behavior inventory.
 - [Execution plan](./iterations/02-rdg-execution-plan.md): gates, implementation record, and
   outstanding handover checks.
+- [Review-fix plan](./iterations/05-review-fixes-plan.md): proposed implementation of the
+  approved "do now" findings, excluding the explanation and numeric-fidelity follow-up issues.
+
+WI-G3-1 through WI-G3-5 are now implemented; the plan records their earned source evidence.
 
 ## Verification status
 
 The L2-dev Collection View scenarios are on-demand, not CI checks. The recipe is in
 [`build/verification/README.md`](../../../../build/verification/README.md#l2-dev-source-scenarios).
-The execution plan records Integrated Browser scenarios for Table and Tree behavior and
-navigation help on dark, light, and high-contrast routes. Actual screen-reader announcements and
-Windows contrast themes in a packaged VS Code workbench remain unverified; browser emulation is
-not a substitute for either.
+Focused test/build evidence for all five G3 code items and affected source-scenario runs are
+recorded in the [review-fix plan](./iterations/05-review-fixes-plan.md); R1 save/filter coverage is
+mocked, not live:
+
+- WI-G3-1: 76/76 focused tests, build, and failing-first identity/save contracts.
+- WI-G3-2: 29/29 focused tests, 146/146 harness tests, build, and 21 affected source journeys
+  with 228/228 assertions.
+- WI-G3-3: 11 component tests, 78/78 harness tests, build, and 9 source journeys with 90/90
+  assertions.
+- WI-G3-4: 3 cell tests, 79/79 harness tests, build, and 15 source journeys with 261/261
+  assertions across three themes. Browser-computed names matched `Int32 7` and `Decimal128 12.50`;
+  this is not spoken screen-reader verification.
+- WI-G3-5: 154/154 focused/harness tests, build, and 15 source journeys with 177/177 assertions.
+
+This is source evidence, with mocked save-path coverage; no live collection was exercised.
+R3's strict packaged Collection View readiness is implemented, but a fresh packaged normal run and
+broken-CSS negative control are still pending. Actual NVDA/Narrator announcements, Windows contrast
+themes, and the packaged/manual G3b checks remain unverified. Browser emulation is not a
+substitute for them, and neither G3a nor G3b has been released.
 
 The migration does not add spreadsheet-style cell-range selection, Tree row selection, or
 cross-page/shard duplicate-ID mitigation.
