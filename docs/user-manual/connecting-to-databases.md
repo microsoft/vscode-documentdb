@@ -21,11 +21,17 @@ The actions available depend on the connection and the failure:
 1. **Update connection string…**, when offered, corrects the saved destination before you change credentials.
 2. **Update credentials…**, when offered, lets you review the saved authentication.
 3. **Diagnose connection…** opens [step-by-step connection diagnostics](./diagnose-connection).
-4. **Open shell** opens the Interactive Shell for further investigation.
+4. **Open shell without authentication** opens a diagnostic Interactive Shell without using the
+   failed saved login. The server can still reject database commands that require authentication.
 5. **Retry** tries the connection again after you have corrected or investigated the problem.
 
 Retry is always last. These shorter labels apply to the recovery rows under a failed cluster;
 context-menu and Command Palette titles can differ.
+
+The normal context-menu Shell still uses the connection's saved authentication. The diagnostic
+Shell keeps local commands, methods, operators and history suggestions, but does not borrow
+database, collection or field suggestions from an authenticated shared client. If the endpoint is
+not available, the action explains that instead of retrying the saved authentication.
 
 ## Keep connections usable
 

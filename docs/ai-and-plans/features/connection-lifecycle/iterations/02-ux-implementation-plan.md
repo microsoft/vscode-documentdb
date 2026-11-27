@@ -448,6 +448,20 @@ path. Test the anonymous command failure feedback.
 > dependent owned files. Normal Shell behavior is unchanged; no fake IDs, new setting or
 > blanket completion disablement is authorized. Implementation is in progress, not complete.
 
+> **Done (2026-11-27), commit `aea08108a`:** the failure-row Shell is a separate NoAuth entry
+> with a sanitized, re-read endpoint and epoch/latch guards. It does not read `CredentialCache`,
+> alter saved credentials/clients, use shared authenticated metadata, pin an authenticated
+> identity, create a token relay, fall back to saved authentication or replay operations.
+> Local completion/history/bracket behavior and normal Shell startup are preserved. Constructor
+> parser errors become the approved bounded message without an unsafe cause. Pre-terminal
+> failures use one modal; later driver failures stay in the terminal.
+> Decisions: operator, explicit F1 authentication/endpoint/parser/metadata boundaries; advised
+> (`claude-opus-5.5`), 88% full-path approval and 90% approval of the final pre-terminal hunk.
+> Actual/recommended model: `gpt-6.1-sol`. Seventy-two cases were added across the existing/new
+> test files; the initial eight-suite run passed 392 tests without TDD failures, the final
+> command suite passed 29 and the strengthened Shell suite passed 111. Root type-check passed;
+> final build/localization remain pending. No public command contract or manifest entry was added.
+
 ## WI-7: Investigate F7 only if WI-0 reproduces it
 
 **Depends on:** WI-0 evidence.  
@@ -505,5 +519,5 @@ Before calling this iteration complete:
 | WI-3 | Implemented; final batch/browser checks pending | `6d2e10715`; 23 focused tests; exact revision advised at 88% |
 | WI-4 | Implemented; localization/live checks pending | `5d00558cb`; Batch 1 build/tests passed |
 | WI-5 | Implemented and locally verified | `e4a6ad337`; Batch 1 build/tests passed |
-| WI-6 | Anonymous startup in progress | Parser and metadata-only completion scope approved |
+| WI-6 | Implemented; final build/localization pending | `aea08108a`; full-path approval 88%, final hunk 90% |
 | WI-7 | Deferred pending operator reproduction | No speculative code change; exact live sequence recorded |

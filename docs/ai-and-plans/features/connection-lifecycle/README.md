@@ -100,6 +100,10 @@ entries are unpublished drafts and do not represent a shipped release.
 - After a database rejects a verified Entra identity, discard the client but keep its in-memory
   connection settings for explicit sign-in. Do not retain the rejected token or retry silently.
   When the tree offers **Retry sign-in**, it does not also offer **Retry**.
+- Failure rows offer **Open shell without authentication** as a separate diagnostic entry.
+  It never uses the failed saved authentication or shared authenticated metadata, and does not
+  promise that anonymous commands are authorized. Normal context-menu Shell startup is unchanged.
+  Pre-terminal failures use a tree modal; later failures stay in the terminal.
 - **Disconnect and Remove Connection** share a teardown and a tab choice. Saving a change to
   connection details (including a password-only change) in this window keeps old tabs open and
   copyable, but they cannot recover. Open new tabs from the tree. Unchanged settings still
