@@ -58,12 +58,12 @@ evidence are being clarified before their coding prompts, not treated as approve
 
 ## Scope
 
-| In scope (this plan)                                        | Out of scope (not implemented here)                                     |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------- |
-| R1, R2, R3, R5, R6, S1–S5; thread replies for R2, R4 and R5 | R7 → #1145 (Document View numeric types on save)                        |
+| In scope (this plan)                                        | Out of scope (not implemented here)                                    |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------- |
+| R1, R2, R3, R5, R6, S1–S5; thread replies for R2, R4 and R5 | R7 → #1145 (Document View numeric types on save)                       |
 |                                                             | R6 follow-up → #1144 (explain withheld actions, link to a manual page) |
 |                                                             | S6–S8 (won't fix), R4 code change (none), Delete `deletedCount`        |
-|                                                             | Correcting the `parseDocumentId` "preserves field order" comment        |
+|                                                             | Correcting the `parseDocumentId` "preserves field order" comment       |
 
 The R6 safety guard is **in scope**; only its explanation UI and manual page are deferred to
 #1144. R1 does **not** include R7's numeric-type preservation, driver promotion options, or a
@@ -83,15 +83,15 @@ refactor lands as its own behavior-preserving commit **before** R2, keeping the 
 change separate from cleanup. Use one implementation commit per code row; carry its directly
 related documentation with it.
 
-| Work item | Findings | Deliverable | Prerequisites |
-| --- | --- | --- | --- |
-| WI-G3-1 | R1 + R6 | Safe save identity and conservative grid action eligibility | Implementation authorization |
-| WI-G3-2 | S1–S5 | Behavior-preserving simplification | Implementation authorization |
-| WI-G3-3 | R2 | One-shot focus restoration after keyboard step-in | WI-G3-2 |
-| WI-G3-4 | R5 | Full type name in the focused cell's accessible name | WI-G3-2 (S4 props) |
-| WI-G3-5 | R3 | Packaged result/grid expectations without breaking source scenarios | Implementation authorization |
-| WI-G3-6 | Documentation | Implementation/evidence links and accurate current design | Relevant code items; final pass after 1–5 |
-| WI-G3-7 | R2, R4, R5 replies | Evidence-based responses, no extra product fixes | Relevant evidence and authorization to push/reply |
+| Work item | Findings           | Deliverable                                                         | Prerequisites                                     |
+| --------- | ------------------ | ------------------------------------------------------------------- | ------------------------------------------------- |
+| WI-G3-1   | R1 + R6            | Safe save identity and conservative grid action eligibility         | Implementation authorization                      |
+| WI-G3-2   | S1–S5              | Behavior-preserving simplification                                  | Implementation authorization                      |
+| WI-G3-3   | R2                 | One-shot focus restoration after keyboard step-in                   | WI-G3-2                                           |
+| WI-G3-4   | R5                 | Full type name in the focused cell's accessible name                | WI-G3-2 (S4 props)                                |
+| WI-G3-5   | R3                 | Packaged result/grid expectations without breaking source scenarios | Implementation authorization                      |
+| WI-G3-6   | Documentation      | Implementation/evidence links and accurate current design           | Relevant code items; final pass after 1–5         |
+| WI-G3-7   | R2, R4, R5 replies | Evidence-based responses, no extra product fixes                    | Relevant evidence and authorization to push/reply |
 
 The first, second and fifth items have no logical dependency on each other. Prefer the listed
 sequence: WI-G3-2 and WI-G3-5 both edit browser fixtures, so independent does not mean safe for
@@ -588,7 +588,7 @@ success is claimed yet.
 **First post-fix checks and TDD gate (2026-11-27):** cell tests passed 3/3 in 5.61 seconds,
 harness tests 79/79 in 1.31 seconds, and build passed. The single targeted helper execution
 completed all 15 requested routes, with **258/261 assertions passed**, 114 RPC calls and
-zero route errors. Its three failures are the *new* glyph `aria-hidden` contract (one per
+zero route errors. Its three failures are the _new_ glyph `aria-hidden` contract (one per
 theme), reporting `null` rather than `"true"`; no pre-existing contract failed, contrary to
 the worker's initial label. The helper's route loop had already executed the whole selection
 before the failure report was inspected. No retry or external post-fix name/hover run occurred.
@@ -943,26 +943,26 @@ snapshot. Summed model-request spans are **53m28s** and are not wall-clock elaps
 check/CI time is not reported by the host (individual check durations are recorded inline).
 AIU are not dollars.
 
-| Model | Role | Requests | Model time | AIU | AIU share |
-| --- | --- | ---: | ---: | ---: | ---: |
-| claude-opus-5.5 | advisor | 93 | 17m19s | 669.1 | 72.7% |
-| gpt-6.1-sol | leader | 80 | 17m34s | 200.0 | 21.7% |
-| mai-code-2 | coding | 41 | 8m40s | 44.1 | 4.8% |
-| mai-code-2-flash | checks | 71 | 9m55s | 7.0 | 0.8% |
+| Model            | Role    | Requests | Model time |   AIU | AIU share |
+| ---------------- | ------- | -------: | ---------: | ----: | --------: |
+| claude-opus-5.5  | advisor |       93 |     17m19s | 669.1 |     72.7% |
+| gpt-6.1-sol      | leader  |       80 |     17m34s | 200.0 |     21.7% |
+| mai-code-2       | coding  |       41 |      8m40s |  44.1 |      4.8% |
+| mai-code-2-flash | checks  |       71 |      9m55s |   7.0 |      0.8% |
 
-| Role | Requests | Model time | AIU | AIU share |
-| --- | ---: | ---: | ---: | ---: |
-| leader | 80 | 17m34s | 200.0 | 21.7% |
-| coding | 41 | 8m40s | 44.1 | 4.8% |
-| advisor | 93 | 17m19s | 669.1 | 72.7% |
-| checks | 71 | 9m55s | 7.0 | 0.8% |
+| Role    | Requests | Model time |   AIU | AIU share |
+| ------- | -------: | ---------: | ----: | --------: |
+| leader  |       80 |     17m34s | 200.0 |     21.7% |
+| coding  |       41 |      8m40s |  44.1 |      4.8% |
+| advisor |       93 |     17m19s | 669.1 |     72.7% |
+| checks  |       71 |      9m55s |   7.0 |      0.8% |
 
-| Model | Role | Input | Output | Cache read | Cache write | Reasoning |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| claude-opus-5.5 | advisor | 10,704,500 | 104,565 | 10,192,161 | 512,137 | 69,999 |
-| gpt-6.1-sol | leader | 9,281,289 | 48,843 | 9,037,972 | 243,077 | 16,634 |
-| mai-code-2 | coding | 3,341,456 | 29,708 | 2,745,344 | 0 | 12,929 |
-| mai-code-2-flash | checks | 5,575,338 | 32,878 | 4,811,264 | 0 | 14,678 |
+| Model            | Role    |      Input |  Output | Cache read | Cache write | Reasoning |
+| ---------------- | ------- | ---------: | ------: | ---------: | ----------: | --------: |
+| claude-opus-5.5  | advisor | 10,704,500 | 104,565 | 10,192,161 |     512,137 |    69,999 |
+| gpt-6.1-sol      | leader  |  9,281,289 |  48,843 |  9,037,972 |     243,077 |    16,634 |
+| mai-code-2       | coding  |  3,341,456 |  29,708 |  2,745,344 |           0 |    12,929 |
+| mai-code-2-flash | checks  |  5,575,338 |  32,878 |  4,811,264 |           0 |    14,678 |
 
 Cache/reasoning fields may overlap input/output; do not add them into a purported token total.
 Totals: **leader 200.0 AIU; subagents 720.3 AIU; run 920.3 AIU**.
@@ -992,51 +992,51 @@ Aggregate check/CI execution time is not reported by the host; available individ
 durations are recorded under the items. The final bookkeeping commit and final response
 are excluded from this snapshot. AIU are not dollars.
 
-| Model | Role | Requests | Model time | AIU | AIU share |
-| --- | --- | ---: | ---: | ---: | ---: |
-| claude-opus-5.5 | advisor | 63 | 6m37s | 354.6 | 31.7% |
-| gpt-6.1-sol | leader | 134 | 56m23s | 685.1 | 61.2% |
-| mai-code-2 | coding | 82 | 17m59s | 69.3 | 6.2% |
-| mai-code-2-flash | review | 1 | 11s | 0.1 | 0.0% |
-| mai-code-2-flash | checks | 97 | 15m44s | 10.5 | 0.9% |
+| Model            | Role    | Requests | Model time |   AIU | AIU share |
+| ---------------- | ------- | -------: | ---------: | ----: | --------: |
+| claude-opus-5.5  | advisor |       63 |      6m37s | 354.6 |     31.7% |
+| gpt-6.1-sol      | leader  |      134 |     56m23s | 685.1 |     61.2% |
+| mai-code-2       | coding  |       82 |     17m59s |  69.3 |      6.2% |
+| mai-code-2-flash | review  |        1 |        11s |   0.1 |      0.0% |
+| mai-code-2-flash | checks  |       97 |     15m44s |  10.5 |      0.9% |
 
 The coding role includes the documentation worker; it does not include leading or advising.
 
-| Role | Requests | Model time | AIU | AIU share |
-| --- | ---: | ---: | ---: | ---: |
-| leader | 134 | 56m23s | 685.1 | 61.2% |
-| coding | 82 | 17m59s | 69.3 | 6.2% |
-| advisor | 63 | 6m37s | 354.6 | 31.7% |
-| review | 1 | 11s | 0.1 | 0.0% |
-| checks | 97 | 15m44s | 10.5 | 0.9% |
+| Role    | Requests | Model time |   AIU | AIU share |
+| ------- | -------: | ---------: | ----: | --------: |
+| leader  |      134 |     56m23s | 685.1 |     61.2% |
+| coding  |       82 |     17m59s |  69.3 |      6.2% |
+| advisor |       63 |      6m37s | 354.6 |     31.7% |
+| review  |        1 |        11s |   0.1 |      0.0% |
+| checks  |       97 |     15m44s |  10.5 |      0.9% |
 
-| Model | Role | Input | Output | Cache read | Cache write | Reasoning |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| claude-opus-5.5 | advisor | 5,006,265 | 37,706 | 4,633,098 | 373,031 | 21,205 |
-| gpt-6.1-sol | leader | 23,639,089 | 149,359 | 23,015,775 | 622,912 | 99,413 |
-| mai-code-2 | coding | 6,910,341 | 63,517 | 6,149,632 | 0 | 29,079 |
-| mai-code-2-flash | review | 29,996 | 766 | 4,608 | 0 | 729 |
-| mai-code-2-flash | checks | 6,891,255 | 66,613 | 5,700,096 | 0 | 28,998 |
+| Model            | Role    |      Input |  Output | Cache read | Cache write | Reasoning |
+| ---------------- | ------- | ---------: | ------: | ---------: | ----------: | --------: |
+| claude-opus-5.5  | advisor |  5,006,265 |  37,706 |  4,633,098 |     373,031 |    21,205 |
+| gpt-6.1-sol      | leader  | 23,639,089 | 149,359 | 23,015,775 |     622,912 |    99,413 |
+| mai-code-2       | coding  |  6,910,341 |  63,517 |  6,149,632 |           0 |    29,079 |
+| mai-code-2-flash | review  |     29,996 |     766 |      4,608 |           0 |       729 |
+| mai-code-2-flash | checks  |  6,891,255 |  66,613 |  5,700,096 |           0 |    28,998 |
 
 Cache/reasoning fields may overlap input/output; do not sum them into a purported total.
 Totals: **leader 685.1 AIU; subagents 434.6 AIU; run 1119.7 AIU**.
 
 ### Agent attribution
 
-| Agent ID | Item | Role | Model |
-| --- | --- | --- | --- |
-| `2657bec3-cdf3-4663-a8e4-85f6b1dc1f78` | WI-G3-3 | advisor | claude-opus-5.5 |
-| `a38262e5-1c8e-41cf-b90f-bb6017ad4c24` | WI-G3-3 | checks | mai-code-2-flash |
-| `4f3e63e0-c6fd-4831-94d6-c5a7274f98b5` | WI-G3-3 | coding | mai-code-2 |
+| Agent ID                               | Item    | Role                   | Model            |
+| -------------------------------------- | ------- | ---------------------- | ---------------- |
+| `2657bec3-cdf3-4663-a8e4-85f6b1dc1f78` | WI-G3-3 | advisor                | claude-opus-5.5  |
+| `a38262e5-1c8e-41cf-b90f-bb6017ad4c24` | WI-G3-3 | checks                 | mai-code-2-flash |
+| `4f3e63e0-c6fd-4831-94d6-c5a7274f98b5` | WI-G3-3 | coding                 | mai-code-2       |
 | `8c577ad1-dbbd-4ef5-b42c-2b3cc97a5ab8` | WI-G3-3 | blocked review attempt | mai-code-2-flash |
-| `1a5fc69d-a6af-4420-b2ac-efa9a2f5e6ec` | WI-G3-4 | checks | mai-code-2-flash |
-| `dee65487-fc66-437f-b95b-fdfe721115df` | WI-G3-4 | coding | mai-code-2 |
-| `3d7b09b0-c597-4875-8647-c8ac859b80b9` | WI-G3-4 | advisor | claude-opus-5.5 |
-| `f111cf4c-87b6-4e39-bd3e-b4f59a8c12e9` | WI-G3-5 | coding | mai-code-2 |
-| `0fb2fd0f-5183-458d-9a46-7bfaf682ed87` | WI-G3-5 | retired checks | mai-code-2-flash |
-| `e992939d-7a80-417a-a76a-2297a8b31084` | WI-G3-5 | advisor | claude-opus-5.5 |
-| `4cc1d91f-0ee4-4480-ace2-67c0668368a5` | WI-G3-5 | fresh checks | mai-code-2-flash |
-| `0a6d3570-9406-4261-9c95-5b678d65aa40` | WI-G3-6 | documentation/coding | mai-code-2 |
+| `1a5fc69d-a6af-4420-b2ac-efa9a2f5e6ec` | WI-G3-4 | checks                 | mai-code-2-flash |
+| `dee65487-fc66-437f-b95b-fdfe721115df` | WI-G3-4 | coding                 | mai-code-2       |
+| `3d7b09b0-c597-4875-8647-c8ac859b80b9` | WI-G3-4 | advisor                | claude-opus-5.5  |
+| `f111cf4c-87b6-4e39-bd3e-b4f59a8c12e9` | WI-G3-5 | coding                 | mai-code-2       |
+| `0fb2fd0f-5183-458d-9a46-7bfaf682ed87` | WI-G3-5 | retired checks         | mai-code-2-flash |
+| `e992939d-7a80-417a-a76a-2297a8b31084` | WI-G3-5 | advisor                | claude-opus-5.5  |
+| `4cc1d91f-0ee4-4480-ace2-67c0668368a5` | WI-G3-5 | fresh checks           | mai-code-2-flash |
+| `0a6d3570-9406-4261-9c95-5b678d65aa40` | WI-G3-6 | documentation/coding   | mai-code-2       |
 
 Three advisor agents handled **five consultations**: WI-G3-3 interfaces/positional coverage,
 production review and test-only typing correction; WI-G3-4 virtualized-column assertion;
@@ -1073,13 +1073,13 @@ This follow-up is separate from the frozen 17:54 implementation snapshot above.
 A streaming session-log pass through **18:04:40 UTC** covered approximately **113m06s**
 since the resumed run began; it found no malformed records.
 
-| Role | Model requests | Summed model time | AIU |
-| --- | ---: | ---: | ---: |
-| leader | 139 | 65m51s | 769.2 |
-| coding | 82 | 17m59s | 69.3 |
-| advisor | 63 | 6m37s | 354.6 |
-| checks | 99 | 16m37s | 10.8 |
-| review | 1 | 11s | 0.1 |
+| Role    | Model requests | Summed model time |   AIU |
+| ------- | -------------: | ----------------: | ----: |
+| leader  |            139 |            65m51s | 769.2 |
+| coding  |             82 |            17m59s |  69.3 |
+| advisor |             63 |             6m37s | 354.6 |
+| checks  |             99 |            16m37s |  10.8 |
+| review  |              1 |               11s |   0.1 |
 
 The refreshed window reported **1204.0 AIU** and **107m15s summed model-request spans**.
 It includes later bookkeeping/diagnostic activity; it is not added to either earlier snapshot.
@@ -1106,3 +1106,70 @@ workloads before further heavy checks, while preserving the shared Vite server. 
 leader reasoning/reconciliation short and reuse the verified wrapper/structured reporting.
 No process, service, browser session, source implementation or machine setting was changed by
 this diagnostic.
+
+### Authorized synchronization and Case 2 follow-up
+
+On 2026-11-27 the operator authorized cleaning/synchronizing the local feature branch,
+integrating remote feature updates and `main`, resolving conflicts, and pushing normally.
+The subsequent instruction explicitly authorized the full **Case 2** checks and addressing
+their failures so the PR can be reviewed/tested. This supersedes the earlier prohibition on
+Case 2 formatting/packaging for this follow-up only. Push is now authorized; review-thread
+replies/resolution, automation, merge and G3a/G3b release remain unauthorized.
+
+The initial worktree was clean. Fetch showed 21 local-only and 16 remote-only commits.
+Remote feature updates merged cleanly in `186678b1`; no conflict resolution was needed.
+That remote branch already included current `origin/main`, and the explicit main merge
+reported up to date. #1142 remains draft. The branch adds localized UI strings relative to
+main, so Case 2 includes localization generation before formatting and localization checks.
+All eight applicable checks will be recorded separately; failures block clean publication
+and are not replaced by earlier source-only results.
+
+**Initial Case 2 (2026-11-27), `mai-code-2-flash`:**
+
+| Command | Exit | Duration | Result |
+| --- | ---: | ---: | --- |
+| `npm run l10n` | 0 | 83.547s | passed |
+| `npm run prettier-fix` | 0 | 115.621s | passed |
+| `npm run l10n:check` | 0 | 48.050s | passed |
+| `npm run lint` | 1 | 293.614s | five lint errors |
+| `npm run build` | 0 | 49.318s | passed |
+| `npm run typecheck:tests` | 0 | 14.570s | passed |
+| `npx vitest run --reporter=json` | 1 | 204.236s | 9,663 passed, five failed, 37 pending; OpenSSL suite setup also failed |
+| `npm run package` | 0 | 53.556s | built, not yet accepted for handover |
+
+The full runtime report covers 428 files; its 1,757 suite count includes nested describe
+blocks. Raw JSON is retained as `files/case2-tests-first.txt`. No `TDD:`-prefixed test failed.
+The five lint fixes are inline type imports, a test mock rejecting with an `Error`, a
+single-assignment `const` focus intent, and `tabIndex=-1` on the keyboard-enabled mock row.
+They preserve every focus/selection assertion and add no Tab stop.
+
+Formatting was isolated in `47da8754` (13 files); localization and snapshot files had only
+normalization/stat changes, not content changes. The Source-plan formatting/authorization
+record is kept separate. A passing package alone did not waive lint/runtime failures.
+The first VSIX SHA256 was
+`a22246d53f640e3311ab920e00e2b4e964bda625c1ce101a3009e60b6147171f`;
+it predates the corrective patches and is not the final handover artifact.
+
+**Failure diagnosis and bounded corrections:** the two static-analysis assertions assumed
+English commas, while Windows Node's `en-DE` formats 10,000 as `10.000`; changing `LANG`/
+`LC_ALL` did not change the Node locale. Advisor `claude-opus-5.5` approved native-formatted
+expected values for the same known counts/prefixes, without changing production formatting.
+The three `STACK_TRACE_ERROR` failures were Vitest's captured timeout stacks (15,018,
+19,336 and 16,748 milliseconds), not new assertion failures. All passed in a focused
+two-worker run with the unchanged 15-second timeout: 8.831s, 8.941s and 11.423s.
+No widths/assertions were removed and no timeout was increased.
+
+Git's existing OpenSSL was made available only through the test process's temporary PATH;
+no installation, global environment or authentication-code change was required. Its 29
+harness cases passed. The five-file diagnostic had 157 passes and only the two expected
+locale failures remaining. `mai-code-2` then applied the five mechanical lint fixes and
+the two locale assertions in separate owned scopes. Quick formatting/lint/focused validation
+is pending before their commits and final Case 2 revalidation.
+
+**Corrective commits:** `f9f59e7c` contains the five collection lint corrections; `8094c338`
+contains only the two locale-portable count assertions. Focused formatting passed (4.683s),
+four-file ESLint passed (51.033s), and the three focused test files passed **28/28**
+(12.541s). Every original behavior assertion is retained; the production count formatter
+and test timeouts are unchanged. Final Case 2 revalidation is next, with the full runtime
+suite bounded to two workers and Git OpenSSL on that process's PATH. Localization generation
+already passed and no localized string changed in the corrective commits.
