@@ -506,7 +506,15 @@ identity/telemetry retained, and webview behavior unchanged.
 
 **Author decision (2026-11-27):** selected explicit feedback ownership for the particular
 error/invocation when an index catch presents it, with one presentation and no generic
-`suppressDisplay` shortcut. Implementation pending.
+`suppressDisplay` shortcut.
+
+**Done (2026-11-27), commit `61f09ffcd` (local, not pushed):** mai-code-2 added exact
+invocation/error ownership markers at the three index catches and gated only additional tree
+modals. Suppression-only errors, early validation, primitives and replacement cleanup errors remain
+visible; original errors, explanation telemetry and webview behavior are unchanged. Added 12
+focused cases, including real callback/wrapper integration; 26 passed. Advised (claude-opus-5.5):
+approved with high confidence after checking context lifetime and original error identity.
+Final batch build remains pending. [Thread reply](https://github.com/microsoft/vscode-documentdb/pull/1146#discussion_r4722240271).
 
 ## C12. Host-side stale Retry cancellation becomes an alert
 
