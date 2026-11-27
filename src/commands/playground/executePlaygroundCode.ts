@@ -417,6 +417,7 @@ function offerPlaygroundRecovery(
         if (choice !== action || ClustersClient.getEpoch(clusterId) !== epoch || !stillOwnsAction()) {
             if (
                 choice === action &&
+                service.getConnection(documentUri) === connection &&
                 vscode.workspace.textDocuments.some((d) => d.uri.toString() === documentUri.toString())
             ) {
                 const reason = ClustersClient.getLatchReason(clusterId);
@@ -435,7 +436,10 @@ function offerPlaygroundRecovery(
             try {
                 const result = await signInAgainForWorker(context, clusterId, identity);
                 if (!result || ClustersClient.getEpoch(clusterId) !== result.epoch || !stillOwnsAction()) {
-                    if (vscode.workspace.textDocuments.some((d) => d.uri.toString() === documentUri.toString())) {
+                    if (
+                        service.getConnection(documentUri) === connection &&
+                        vscode.workspace.textDocuments.some((d) => d.uri.toString() === documentUri.toString())
+                    ) {
                         const reason = ClustersClient.getLatchReason(clusterId);
                         if (
                             reason === 'connectionRemoved' ||

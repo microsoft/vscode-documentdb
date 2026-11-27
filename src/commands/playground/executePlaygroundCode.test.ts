@@ -438,6 +438,8 @@ describe('executePlaygroundCode', () => {
             ['before click', 'epoch only'],
             ['before click', 'unproven no latch'],
             ['before click', 're-picked healthy'],
+            ['before click', 're-picked removed'],
+            ['before click', 're-picked changed'],
             ['before click', 'already completed'],
             ['during sign-in', 'cancelled'],
             ['during sign-in', 'closed'],
@@ -445,6 +447,8 @@ describe('executePlaygroundCode', () => {
             ['during sign-in', 'epoch only'],
             ['during sign-in', 'unproven no latch'],
             ['during sign-in', 're-picked healthy'],
+            ['during sign-in', 're-picked removed'],
+            ['during sign-in', 're-picked changed'],
             ['during sign-in', 'already completed'],
         ] as const)(
             'keeps %s %s quiet without replacing the worker or result',
@@ -458,7 +462,12 @@ describe('executePlaygroundCode', () => {
                         stopPlaygroundEvaluator('cluster');
                         dispose.mockClear();
                     }
-                    if (outcome === 're-picked healthy' || outcome === 'unproven no latch') {
+                    if (
+                        outcome === 're-picked healthy' ||
+                        outcome === 're-picked removed' ||
+                        outcome === 're-picked changed' ||
+                        outcome === 'unproven no latch'
+                    ) {
                         getConnection.mockReturnValue({
                             ...connection,
                             clusterId: 'healthy-cluster',
@@ -467,9 +476,14 @@ describe('executePlaygroundCode', () => {
                     }
                     getEpoch.mockReturnValue(2);
                     getLatchReason.mockReturnValue(
-                        outcome === 'closed' || outcome === 'disposed' || outcome === 'cancelled'
+                        outcome === 'closed' ||
+                            outcome === 'disposed' ||
+                            outcome === 'cancelled' ||
+                            outcome === 're-picked removed'
                             ? 'connectionRemoved'
-                            : undefined,
+                            : outcome === 're-picked changed'
+                              ? 'credentialsChanged'
+                              : undefined,
                     );
                 };
                 if (stage === 'before click') {
