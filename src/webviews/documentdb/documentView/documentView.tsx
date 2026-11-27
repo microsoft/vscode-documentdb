@@ -12,6 +12,7 @@ import * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api'; // eslin
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { useViewLoadTelemetry } from '../../_integration/useViewLoadTelemetry';
+import { focusWithVisibleIndicator } from '../../components/accessibility';
 import { MonacoEditor } from '../../components/MonacoEditor';
 import { useSelectiveContextMenuPrevention } from '../../components/useSelectiveContextMenuPrevention';
 import { ToolbarDocuments } from './components/toolbarDocuments';
@@ -56,10 +57,12 @@ export const DocumentView = (): JSX.Element => {
     const initialContent = configuration.mode === 'add' ? '{  }' : '{ "loading…": true }';
     const [editorContent] = useState(initialContent);
     const [isLoading, setIsLoading] = useState(configuration.mode !== 'add');
-    const [isDirty, setIsDirty] = useState(true);
+    const [isDirty, setIsDirty] = useState(configuration.mode === 'add');
+    const [editorMounted, setEditorMounted] = useState(false);
 
-    // Ref for the Save button to manage focus
     const saveButtonRef = useRef<HTMLButtonElement>(null);
+    const reloadButtonRef = useRef<HTMLButtonElement>(null);
+    const initialFocusAppliedRef = useRef(false);
 
     const editorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
     // Monaco can mount after the initial document fetch resolves (e.g. fast local emulator
@@ -92,6 +95,7 @@ export const DocumentView = (): JSX.Element => {
                 .query(documentId)
                 .then((response) => {
                     setContent(response);
+                    setIsDirty(false);
                     // A document deleted since it was listed reads back as `null`.
                     viewLoad.reportFirstData(
                         response === 'null' ? 'empty' : 'dataShown',
@@ -131,17 +135,24 @@ export const DocumentView = (): JSX.Element => {
         if (pendingContentRef.current !== null) {
             editor.setValue(pendingContentRef.current);
             pendingContentRef.current = null;
+            setIsDirty(false);
         }
 
         handleResize();
-
-        // Accessibility: Focus the Save button instead of the editor
-        // Monaco editor captures Tab/Shift-Tab for document editing, making it difficult
-        // for keyboard users to navigate away. Setting focus on the toolbar button
-        // provides better keyboard navigation until Tab navigation from editor is improved.
-        // Addresses WCAG 2.4.3 Focus Order requirement.
-        saveButtonRef.current?.focus();
+        setEditorMounted(true);
     };
+
+    useEffect(() => {
+        if (!editorMounted || isLoading || initialFocusAppliedRef.current) {
+            return;
+        }
+        initialFocusAppliedRef.current = true;
+
+        const activeElement = document.activeElement;
+        if (activeElement === null || activeElement === document.body) {
+            focusWithVisibleIndicator([saveButtonRef.current, reloadButtonRef.current]);
+        }
+    }, [editorMounted, isLoading]);
 
     useEffect(() => {
         // Add the debounced resize event listener
@@ -209,6 +220,7 @@ export const DocumentView = (): JSX.Element => {
             .then((response) => {
                 documentLength = response.length ?? 0;
                 setContent(response);
+                setIsDirty(false);
             })
             .catch(async (error) => {
                 const cause = error instanceof Error ? error.message : String(error);
@@ -291,7 +303,7 @@ export const DocumentView = (): JSX.Element => {
 
     // Accessibility: Handle Escape key to exit Monaco editor
     const handleEscapeEditor = useCallback(() => {
-        saveButtonRef.current?.focus();
+        focusWithVisibleIndicator([saveButtonRef.current, reloadButtonRef.current]);
     }, []);
 
     return (
@@ -305,6 +317,7 @@ export const DocumentView = (): JSX.Element => {
                     onValidateRequest={handleOnValidateRequest}
                     onRefreshRequest={handleOnRefreshRequest}
                     saveButtonRef={saveButtonRef}
+                    reloadButtonRef={reloadButtonRef}
                 />
             </div>
             <div className="monacoContainer">

@@ -18,6 +18,7 @@ interface ToolbarDocumentsProps {
     // Must accept null because useRef<HTMLButtonElement>(null) creates RefObject<HTMLButtonElement | null>
     // See: https://react.dev/reference/react/useRef#typing-the-ref-with-an-initial-null-value
     saveButtonRef?: RefObject<HTMLButtonElement | null>;
+    reloadButtonRef?: RefObject<HTMLButtonElement | null>;
 }
 
 export const ToolbarDocuments = ({
@@ -27,6 +28,7 @@ export const ToolbarDocuments = ({
     onRefreshRequest,
     onSaveRequest,
     saveButtonRef,
+    reloadButtonRef,
 }: ToolbarDocumentsProps): JSX.Element => {
     return (
         <Toolbar size="small">
@@ -58,6 +60,7 @@ export const ToolbarDocuments = ({
 
             <Tooltip content={l10n.t('Reload document from the database')} relationship="description" withArrow>
                 <ToolbarButton
+                    ref={reloadButtonRef}
                     onClick={onRefreshRequest}
                     aria-label={l10n.t('Reload document from the database')}
                     icon={<ArrowClockwiseRegular />}

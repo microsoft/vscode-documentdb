@@ -32,8 +32,8 @@ describe('L2-dev manifest and routes', (): void => {
 
     it('round-trips every scenario and theme, without duplicate routes', (): void => {
         const routes = scenarioRoutes();
-        expect(routes).toHaveLength(171);
-        expect(new Set(routes.map((route): string => route.path)).size).toBe(171);
+        expect(routes).toHaveLength(177);
+        expect(new Set(routes.map((route): string => route.path)).size).toBe(177);
         for (const route of routes) expect(parseScenarioRoute(route.path)).toEqual(route);
     });
 
@@ -65,13 +65,28 @@ describe('L2-dev manifest and routes', (): void => {
         expect(notFound).toContain('high-contrast');
     });
 
+    it.each(['add', 'view'] as const)('covers Document %s initial focus in every theme', (mode): void => {
+        const routes = scenarioRoutes().filter(
+            (route): boolean => route.view === 'documentView' && route.scenario === mode,
+        );
+        expect(routes.map((route) => route.theme)).toEqual(['dark', 'light', 'high-contrast']);
+        expect(scenarios.documentView[mode].config.mode).toBe(mode);
+        expect(scenarios.documentView[mode].assertions).toContainEqual(
+            expect.objectContaining({
+                kind: 'attribute',
+                attribute: 'data-fui-focus-visible',
+                expected: '',
+            }),
+        );
+    });
+
     it('escapes diagnostic HTML and lists all routes', (): void => {
         expect(scenarioIndex('<script>alert(1)</script>')).not.toContain('<script>alert');
         for (const route of scenarioRoutes()) expect(scenarioIndex()).toContain(`href="${route.path}"`);
     });
 
     it('provides path-only all/view/theme helpers and rejects unknown subsets', (): void => {
-        expect(runnerRoutes('/scenarios/run-all.js')).toHaveLength(171);
+        expect(runnerRoutes('/scenarios/run-all.js')).toHaveLength(177);
         expect(runnerRoutes('/scenarios/run-all/connectionDiagnostics.js')).toHaveLength(84);
         expect(runnerRoutes('/scenarios/run-all/localQuickStart.js')).toHaveLength(75);
         expect(runnerRoutes('/scenarios/run-all/localQuickStart/dark.js')).toHaveLength(25);

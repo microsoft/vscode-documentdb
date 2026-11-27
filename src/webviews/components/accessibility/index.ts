@@ -4,3 +4,4 @@
  *--------------------------------------------------------------------------------------------*/
 
 export { Announcer, type AnnouncerProps } from './Announcer';
+export { focusWithVisibleIndicator } from './focusWithVisibleIndicator';
