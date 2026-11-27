@@ -1065,3 +1065,44 @@ The failed extra review cost 0.1 AIU; retry-only usage is not separately reporte
 Future runs should freeze the proven inline-array wrapper and JSON reporting before the first
 checks, and keep leader packets/reconciliation short. Preserve the approved models and
 mandatory gates; these figures do not rank model quality on unlike work.
+
+### Operator-requested timing diagnosis
+
+The operator asked where time went and whether machine performance was responsible.
+This follow-up is separate from the frozen 17:54 implementation snapshot above.
+A streaming session-log pass through **18:04:40 UTC** covered approximately **113m06s**
+since the resumed run began; it found no malformed records.
+
+| Role | Model requests | Summed model time | AIU |
+| --- | ---: | ---: | ---: |
+| leader | 139 | 65m51s | 769.2 |
+| coding | 82 | 17m59s | 69.3 |
+| advisor | 63 | 6m37s | 354.6 |
+| checks | 99 | 16m37s | 10.8 |
+| review | 1 | 11s | 0.1 |
+
+The refreshed window reported **1204.0 AIU** and **107m15s summed model-request spans**.
+It includes later bookkeeping/diagnostic activity; it is not added to either earlier snapshot.
+Tool spans were PowerShell 650 seconds, browser 587 seconds, operator forms 186 seconds,
+search 39 seconds, file reads 29 seconds and patches seven seconds. These overlap model and
+other-agent activity and must not be added to wall time. The longest leader model records
+were 351, 227, 178 and 128 seconds; overall model-duration median was 7.979 seconds and p95
+59.303 seconds. Lengthy leader reasoning and repeated evidence reconciliation were material
+overhead, independent of whether the machine also slowed local tools.
+
+A current machine snapshot at **18:05 UTC** reported 22 logical cores, 31.6 GB RAM,
+approximately 0.1 GB free and a 100% CIM CPU-load sample. A follow-up counter probe at
+**18:09:34–18:09:57 UTC** found CPU 68% then 52%, 2,381 MB available memory,
+96% committed bytes and 5,345 pages input/second. This confirms current memory/commit
+pressure and significant, variable CPU utilization, not sustained 100% CPU.
+Sampled individual working sets included Copilot runtime 1.670 GB, node 1.196 GB,
+WebView2 1.099 GB, Code 0.651 GB and the antimalware process 0.592 GB; that list is not
+complete memory accounting or proof of a single culprit.
+
+No CPU/memory history was collected during the earlier implementation, so the share of past
+delay caused by hardware cannot be quantified. Model/coordination spans dominate the recorded
+activity; memory pressure can also slow browser/tool execution. Reduce unnecessary local
+workloads before further heavy checks, while preserving the shared Vite server. Keep future
+leader reasoning/reconciliation short and reuse the verified wrapper/structured reporting.
+No process, service, browser session, source implementation or machine setting was changed by
+this diagnostic.
