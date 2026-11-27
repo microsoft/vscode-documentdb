@@ -706,13 +706,15 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
             // A notification as well: the terminal may be in the background, or closed by the user
             // before they read it.
-            void vscode.window.showErrorMessage(
-                explanation?.message ??
-                    l10n.t('Failed to connect to "{cluster}": {error}', {
-                        cluster: this._connectionInfo.clusterDisplayName,
-                        error: errorMessage,
-                    }),
-            );
+            if (!this._unauthenticated) {
+                void vscode.window.showErrorMessage(
+                    explanation?.message ??
+                        l10n.t('Failed to connect to "{cluster}": {error}', {
+                            cluster: this._connectionInfo.clusterDisplayName,
+                            error: errorMessage,
+                        }),
+                );
+            }
 
             // Deliberately no _closeEmitter.fire(): disposing the terminal would take the message
             // with it. The session is still uninitialized, so ShellSessionManager.evaluate() re-runs

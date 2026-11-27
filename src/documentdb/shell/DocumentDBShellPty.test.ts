@@ -344,11 +344,13 @@ describe('DocumentDBShellPty', () => {
         });
 
         it('handles anonymous initialization failures without cache-backed explanations or redaction', async (): Promise<void> => {
+            const notification = vi.spyOn(vscode.window, 'showErrorMessage');
             mockInitialize.mockReset().mockRejectedValueOnce(new Error('Server requires authentication'));
             pty.open(undefined);
             await new Promise((resolve) => setTimeout(resolve, 20));
             expect(written).toContain('Server requires authentication');
             expect(ext.outputChannel.error).toHaveBeenCalled();
+            expect(notification).not.toHaveBeenCalled();
             mockInitialize.mockResolvedValue({
                 host: 'test-host.documents.azure.com:10255',
                 additionalHostCount: 0,
@@ -787,10 +789,12 @@ describe('DocumentDBShellPty', () => {
         });
 
         it('should show error and stay open on connection failure', async () => {
+            const notification = vi.spyOn(vscode.window, 'showErrorMessage');
             mockInitialize.mockRejectedValue(new Error('Connection refused'));
             pty.open(undefined);
             await new Promise((resolve) => setTimeout(resolve, 10));
             expect(written).toContain('Failed to connect: Connection refused');
+            expect(notification).toHaveBeenCalledOnce();
             // Closing would dispose the terminal and take the message with it; the prompt lets the
             // user retry, since evaluate() re-initializes an uninitialized session.
             expect(closeCode).toBeUndefined();
