@@ -1194,7 +1194,7 @@ in the release message.
 | WI-G2-2: Tree expander | After WI-G2-1, before draft PR | Use a transparent Fluent-style chevron for branches, with a matching empty slot for leaves. Animate the chevron's rotation on expansion and collapse; use an instant state change with reduced motion. Keep the current named button, pointer hit area, Enter and focus behavior, and high-contrast visibility. |
 | WI-G2-3: Table cell readability | After G2, before draft PR | Reserve space for the type indicator; ellipsize only the overflowing value. Keep full text available through existing document inspection/JSON and preserve the cell's accessible text. Check narrow columns, long strings, and zoom without adding per-cell Tab stops. |
 | WI-G2-4: Breadcrumb help | After G2, before draft PR; carry the same guidance into WI-11 | Update in-product help for Enter or double-click on an object cell, and for Level Up or activating an ancestor breadcrumb. Replace example accessibility labels with product labels and localize changed strings. Any pinned locator changes follow E3. |
-| WI-G2-5: Keyboard-only replace selection | Evaluate at WI-10; decide before G3a | Preserve Space toggle, Shift+Space range, and the current safe-ID rules. Assess a discoverable, conflict-free way to replace the selection with the focused Table row. No binding change until the operator approves one. |
+| WI-G2-5: Clear Table selection with Escape | Before closing WI-10/A10 | With Table rows selected, Escape clears the selection and keeps grid focus; the next Escape returns focus to the view picker. Space then selects just the focused row if desired. Preserve the existing selection gestures and safe-ID rules, Tree Escape, and popup dismissal. |
 
 **Implementation notes:**
 
@@ -1216,10 +1216,10 @@ in the release message.
   allows truncation where full content remains available on focus or activation and
   that route is discoverable. Verify keyboard access to full values through existing
   View/JSON, including rows without actionable IDs. Don't add hover-only tooltips.
-- **Selection:** Current Table code handles plain Space and Shift+Space, but does not
-  bind Ctrl+Space as a row action. Record the reported experience without treating
-  Ctrl+Space as an existing contract. Evaluate it only as a candidate, alongside
-  discoverability and platform/grid conflicts, before proposing a binding.
+- **Selection:** The operator chose Escape to clear selected Table rows before leaving
+  the grid, rather than adding a new replace-selection shortcut. Do not bind Ctrl+Space.
+  Check both Escape presses, document-action availability after clearing, and selecting
+  one row again with Space. A held Escape must not perform both actions.
 
 **Tree Space behavior:** Keep Space/Shift+Space as scrolling and Ctrl+Space without a
 Tree action; Tree has no row selection and Enter is its activation key. Do not add selection
@@ -1262,6 +1262,16 @@ passed. The existing VSIX is the G2 baseline, not an artifact containing these f
 > and `late-query` 3/3 in each theme. Localization bundle regeneration remains Case 2.
 > Coding: 5.7 AIU on `mai-code-2` (8 requests); shared WI-G2-2/4 initial checks:
 > 0.2 AIU terminal (3), 13.5 AIU Integrated Browser (23).
+
+> **WI-G2-5 done (2026-11-27):** Escape clears selected Table rows without moving focus or
+> leaving document actions enabled. A held key does not exit the grid; a distinct Escape
+> with no selection returns to the picker. Tree and popup behavior are unchanged. The build,
+> 102 targeted tests and browser type check passed; the Integrated Browser selection scenario
+> passed 28/28 in each theme. A held-key probe kept focus on Beta after clearing both rows
+> and left only on the next press. The new scenario sets up selection with the keyboard
+> so a pointer hover does not open a type tooltip that gets Escape first. Coding: 40.3 AIU
+> on `gpt-6.1-sol` (18 requests); 0.4 AIU terminal on `mai-code-2-flash` (6); 15.4 AIU
+> initial browser probe on `gpt-6.1-terra` (23), plus the shared WI-10 sweep.
 
 ### Step 4
 

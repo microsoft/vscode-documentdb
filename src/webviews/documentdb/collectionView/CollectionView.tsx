@@ -907,6 +907,16 @@ export const CollectionView = (): JSX.Element => {
                                     // Bubble after cell/popup handlers; only grid cells can request this exit.
                                     event.preventDefault();
                                     event.stopPropagation();
+                                    if (currentContext.currentView === Views.TABLE) {
+                                        // A held Escape must not clear selection and then leave the grid.
+                                        if (event.repeat) {
+                                            return;
+                                        }
+                                        if (currentContext.dataSelection.selectedRowKeys.length > 0) {
+                                            handleSelectedRowKeysChange([]);
+                                            return;
+                                        }
+                                    }
                                     picker.focus();
                                 }}
                             >
