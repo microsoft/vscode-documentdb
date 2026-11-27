@@ -10,6 +10,8 @@ import licenseHeader from 'eslint-plugin-license-header';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import ts from 'typescript-eslint';
 
 export default ts.config(
@@ -24,6 +26,8 @@ export default ts.config(
             '**/out',
             '**/node_modules',
             '**/*.d.ts',
+            // A nested checkout is a separate workspace, even when it has no ESLint ignore pattern.
+            (filePath) => existsSync(join(filePath, '.git')),
         ],
     },
     {
