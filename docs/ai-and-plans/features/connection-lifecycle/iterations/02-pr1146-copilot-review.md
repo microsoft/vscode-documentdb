@@ -246,7 +246,13 @@ latch, which is why they miss this combination. **Low; cheap fix.**
 - Won't fix. **Pros:** state remains safe. **Cons:** a straightforward ownership defect remains.
 
 **Author decision (2026-11-27):** selected the two document-connection ownership checks in the
-stale-feedback branches, not the full evaluator-ownership predicate. Implementation pending.
+stale-feedback branches, not the full evaluator-ownership predicate.
+
+**Done (2026-11-27), commit `1fdcfd43d` (local, not pushed):** mai-code-2 added both ownership
+guards and four stale-feedback race cases. Same-document feedback and evaluator state are preserved;
+no reset or replay. Advised (claude-opus-5.5): approved at 90% confidence after verifying the stored
+connection object identity and both async branches. Focused Playground suite: 38 passed.
+Final batch build remains pending. [Thread reply](https://github.com/microsoft/vscode-documentdb/pull/1146#discussion_r4722213773).
 
 ## C05. Completed edit can silently supersede tree sign-in
 
@@ -302,7 +308,14 @@ check first loses intentional feedback for genuine stale actions. **Low.**
 still explains; worker-origin recovery remains quiet; no client starts for either stale case.
 
 **Author decision (2026-11-27):** selected distinguishing actual session-acquisition dismissal
-from internally generated stale cancellation, keeping genuine dismissal quiet. Implementation pending.
+from internally generated stale cancellation, keeping genuine dismissal quiet.
+
+**Done (2026-11-27), commit `2688f86ca` (local, not pushed):** gpt-6.1-sol captures genuine
+acquisition dismissal and handles it before stale-action presentation. Successful stale acquisition,
+worker quietness and identity/provider/epoch guards are preserved. Added 13 focused cases;
+sign-in suite: 41 passed. Advised (claude-opus-5.5): approved at 90% confidence, including exact
+error identity through the acquisition handler. Final batch build remains pending.
+[Thread reply](https://github.com/microsoft/vscode-documentdb/pull/1146#discussion_r4722213722).
 
 ## C07. Disconnect restores text but not the cursor
 
