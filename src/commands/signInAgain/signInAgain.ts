@@ -155,6 +155,7 @@ async function signInAgainInternal(
     };
     let starting = false;
     let establishedClient: ClustersClient | undefined;
+    let dismissal: unknown;
     try {
         const handler = new MicrosoftEntraIDAuthHandler(credentials, {
             interactive: false,
@@ -166,8 +167,20 @@ async function signInAgainInternal(
             if (!isCurrent()) {
                 throw new UserCancelledError('signInAgain');
             }
-            const session = await getEntraSession(request);
-            if (!session || !isCurrent()) {
+            let session: vscode.AuthenticationSession | undefined;
+            try {
+                session = await getEntraSession(request);
+            } catch (error) {
+                if (isSignInDismissal(error)) {
+                    dismissal = error;
+                }
+                throw error;
+            }
+            if (!session) {
+                dismissal = new UserCancelledError('signInAgain');
+                throw dismissal;
+            }
+            if (!isCurrent()) {
                 throw new UserCancelledError('signInAgain');
             }
             if (session.account.id !== identity.accountId) {
@@ -213,6 +226,9 @@ async function signInAgainInternal(
         }
         return auth.verifiedIdentity ? { identity: auth.verifiedIdentity, epoch: startupEpoch } : undefined;
     } catch (error) {
+        if (dismissal !== undefined && error === dismissal) {
+            throw new UserCancelledError('signInAgain');
+        }
         if (closedReported) {
             throw error;
         }

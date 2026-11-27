@@ -217,6 +217,69 @@ describe('signInAgain', () => {
         } as ClusterItemBase;
     }
 
+    describe.each(['connectionRemoved', 'credentialsChanged', 'identityChanged'] as const)(
+        'when %s supersedes a dismissed session acquisition',
+        (reason): void => {
+            it.each([undefined, new Error('User did not consent to login.')])(
+                'keeps genuine tree dismissal quiet (%s)',
+                async (error): Promise<void> => {
+                    vi.mocked(getEntraSession).mockImplementationOnce(async () => {
+                        vi.mocked(ClustersClient.getEpoch).mockReturnValue(2);
+                        vi.mocked(ClustersClient.getLatchReason).mockReturnValue(reason);
+                        if (error) {
+                            throw error;
+                        }
+                        return undefined;
+                    });
+
+                    await expect(signInAgain(actionContext(), treeNode())).rejects.toBeInstanceOf(UserCancelledError);
+
+                    expect(getEntraSession).toHaveBeenCalledTimes(1);
+                    expect(refreshAuthenticationNode).not.toHaveBeenCalled();
+                    expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+                    expect(showClusterConnectFailure).not.toHaveBeenCalled();
+                    expect(ClustersClient.startAfterSignIn).not.toHaveBeenCalled();
+                },
+            );
+
+            it.each([undefined, new Error('User did not consent to login.')])(
+                'keeps genuine worker dismissal quiet (%s)',
+                async (error): Promise<void> => {
+                    vi.mocked(ClustersClient.getLatchReason).mockReturnValue(undefined);
+                    vi.mocked(getEntraSession).mockImplementationOnce(async () => {
+                        vi.mocked(ClustersClient.getEpoch).mockReturnValue(2);
+                        vi.mocked(ClustersClient.getLatchReason).mockReturnValue(reason);
+                        if (error) {
+                            throw error;
+                        }
+                        return undefined;
+                    });
+
+                    await expect(signInAgainForWorker(actionContext(), clusterId, pin)).rejects.toBeInstanceOf(
+                        UserCancelledError,
+                    );
+
+                    expect(getEntraSession).toHaveBeenCalledTimes(1);
+                    expect(refreshAuthenticationNode).not.toHaveBeenCalled();
+                    expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+                    expect(showClusterConnectFailure).not.toHaveBeenCalled();
+                    expect(ClustersClient.startAfterSignIn).not.toHaveBeenCalled();
+                },
+            );
+        },
+    );
+
+    it('preserves a noncancellation session acquisition error', async (): Promise<void> => {
+        const error = new Error('Session acquisition failed');
+        vi.mocked(getEntraSession).mockRejectedValueOnce(error);
+
+        await expect(signInAgain(actionContext(), treeNode())).rejects.toBe(error);
+
+        expect(showClusterConnectFailure).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ error }));
+        expect(refreshAuthenticationNode).not.toHaveBeenCalled();
+        expect(ClustersClient.startAfterSignIn).not.toHaveBeenCalled();
+    });
+
     it.each(['connectionRemoved', 'credentialsChanged', 'identityChanged'] as const)(
         'refreshes and explains an explicit stale tree sign-in for %s without auth work',
         async (reason): Promise<void> => {
