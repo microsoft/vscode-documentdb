@@ -20,7 +20,8 @@ that merge. After the grid update lands, reassess the parked reports against the
 updated implementation before making additional changes.
 
 The plan for work items 3-6 is in
-[iterations/01-plan-work-items-3-6.md](./iterations/01-plan-work-items-3-6.md).
+[iterations/01-plan-work-items-3-6.md](./iterations/01-plan-work-items-3-6.md); the
+operator's decisions are in [decisions.md](./decisions.md).
 
 The grid update is documented under [data-grid](../data-grid/README.md). The two
 VS Code-owned reports remain a separate upstream-tracking bucket, not presumed fixes
