@@ -150,6 +150,28 @@ describe('saved connection destination authentication', () => {
         );
     });
 
+    it.each([StorageZone.Clusters, StorageZone.Emulators])(
+        'reads the current %s stored endpoint without preparing or authenticating it',
+        async (storageZone): Promise<void> => {
+            const item = makeItem();
+            item.cluster.storageZone = storageZone;
+            item.cluster.connectionString = 'mongodb://stale-model/';
+            const getCredentials = vi.spyOn(item, 'getCredentials');
+            vi.mocked(ConnectionStorageService.get)
+                .mockResolvedValueOnce(makeConnection('mongodb://user:password@current-host/'))
+                .mockResolvedValueOnce(undefined);
+            expect(await item.getUnauthenticatedEndpoint()).toBe('mongodb://user:password@current-host/');
+            expect(await item.getUnauthenticatedEndpoint()).toBeUndefined();
+            expect(ConnectionStorageService.get).toHaveBeenCalledWith('stable-id', storageZone);
+            expect(getCredentials).not.toHaveBeenCalled();
+            expect(ConnectionReachabilityService.ensureReachable).not.toHaveBeenCalled();
+            expect(CredentialCache.getCredentials).not.toHaveBeenCalled();
+            expect(CredentialCache.setAuthCredentials).not.toHaveBeenCalled();
+            expect(ConnectionStorageService.save).not.toHaveBeenCalled();
+            expect(ClustersClient.connectInteractive).not.toHaveBeenCalled();
+        },
+    );
+
     it.each([AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity])(
         'reports a forced saved %s rejection without opening a picker or falling back',
         async (method): Promise<void> => {

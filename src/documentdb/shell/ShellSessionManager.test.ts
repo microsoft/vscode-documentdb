@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type * as azureAuth from '@microsoft/vscode-azext-azureauth';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest';
 
 import * as vscode from 'vscode';
 import { type AuthenticationSession } from 'vscode';
@@ -25,10 +25,11 @@ import {
 import { ClustersClient } from '../ClustersClient';
 import { CredentialCache } from '../CredentialCache';
 import { PlaygroundEvaluator } from '../playground/PlaygroundEvaluator';
-import { type WorkerSessionCallbacks } from '../playground/WorkerSessionManager';
+import { WorkerSessionManager, type WorkerSessionCallbacks } from '../playground/WorkerSessionManager';
 import { getWorkerAuthReason, type MainToWorkerMessage, type WorkerToMainMessage } from '../playground/workerTypes';
 import { ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { ShellSessionManager } from './ShellSessionManager';
+import { toUnauthenticatedConnectionString } from './unauthenticatedEndpoint';
 
 const mockGetSessionFromVSCode = vi.fn();
 const mockGetManagedIdentityAccessToken = vi.fn();
@@ -166,6 +167,242 @@ describe('ShellSessionManager', () => {
     afterEach(() => {
         CredentialCache.deleteCredentials(clusterId);
         resetEntraTokenFailuresForTests();
+    });
+
+    describe('unauthenticated sessions', () => {
+        const endpoint = 'mongodb://localhost:27017/test?tls=true&tlsCAFile=trust.pem';
+        let manager: ShellSessionManager;
+        const reread = vi.fn<() => Promise<string | undefined>>();
+        let cacheSpies: MockInstance[];
+
+        function ensureWorker(): Mock {
+            const worker = vi.mocked(WorkerSessionManager).mock.results.at(-1)?.value as { ensureWorker: Mock };
+            return worker.ensureWorker;
+        }
+
+        beforeEach((): void => {
+            reread.mockReset().mockResolvedValue(endpoint);
+            manager = new ShellSessionManager(
+                { clusterId, clusterDisplayName: 'Cluster', databaseName: 'test' },
+                undefined,
+                {},
+                {
+                    connectionString: endpoint,
+                    emulatorConfiguration: { isEmulator: true, disableEmulatorSecurity: true },
+                    reread,
+                },
+            );
+            cacheSpies = [
+                vi.spyOn(CredentialCache, 'getCredentials'),
+                vi.spyOn(CredentialCache, 'hasCredentials'),
+                vi.spyOn(CredentialCache, 'getConnectionUser'),
+                vi.spyOn(CredentialCache, 'getConnectionStringWithPassword'),
+                vi.spyOn(CredentialCache, 'getEmulatorConfiguration'),
+                vi.spyOn(CredentialCache, 'setAuthCredentials'),
+                vi.spyOn(CredentialCache, 'deleteCredentials'),
+                vi.spyOn(ClustersClient, 'getExpectedFingerprint'),
+                vi.spyOn(ClustersClient, 'getLastVerifiedIdentity'),
+            ];
+        });
+
+        afterEach((): void => {
+            for (const spy of cacheSpies) {
+                expect(spy).not.toHaveBeenCalled();
+            }
+            manager.dispose();
+            ClustersClient.unlatch(clusterId);
+            vi.restoreAllMocks();
+        });
+
+        it('initializes NoAuth with server TLS intact and no identity relay or credential state', async (): Promise<void> => {
+            const metadata = await manager.initialize();
+            expect(metadata).toMatchObject({ authMechanism: 'NoAuth', username: undefined, isEmulator: true });
+            expect(ensureWorker()).toHaveBeenCalledWith(
+                clusterId,
+                {
+                    type: 'init', requestId: '', connectionString: endpoint, databaseName: 'test',
+                    authMechanism: 'NoAuth', persistent: true,
+                    clientOptions: { serverSelectionTimeoutMS: 4000, tlsAllowInvalidCertificates: true },
+                },
+                expect.anything(),
+                {},
+            );
+            expect(manager.pinnedEntraIdentity).toBeUndefined();
+            const post = vi.fn();
+            await workerCallbacks.onTokenRequest?.({ type: 'tokenRequest', requestId: 'token' }, post, () => true);
+            expect(post).not.toHaveBeenCalled();
+            expect(mockGetSessionFromVSCode).not.toHaveBeenCalled();
+        });
+
+        it('starts and evaluates when cached credentials have already been evicted', async (): Promise<void> => {
+            vi.mocked(CredentialCache.deleteCredentials).mockRestore();
+            CredentialCache.deleteCredentials(clusterId);
+            const deletion = vi.spyOn(CredentialCache, 'deleteCredentials');
+            cacheSpies[6] = deletion;
+            await manager.initialize();
+            await manager.evaluate('db.stats()');
+            expect(sendEval).toHaveBeenCalledOnce();
+        });
+
+        it.each([
+            ['mongodb://127.0.0.1/?tls=true', true, 4000],
+            ['mongodb://public.example.com/?tls=true&tlsCAFile=trust.pem', undefined, undefined],
+        ] as const)('preserves host-gated TLS rules for %s', async (connectionString, tls, timeout): Promise<void> => {
+            manager.dispose();
+            manager = new ShellSessionManager(
+                { clusterId, clusterDisplayName: 'Cluster', databaseName: 'test' },
+                undefined,
+                {},
+                {
+                    connectionString,
+                    emulatorConfiguration: { isEmulator: false, disableEmulatorSecurity: true },
+                    reread: async (): Promise<string> => connectionString,
+                },
+            );
+            await expect(manager.initialize()).resolves.toMatchObject({ isEmulator: false });
+            expect(ensureWorker().mock.calls[0][1]).toMatchObject({
+                connectionString, authMechanism: 'NoAuth',
+                clientOptions: { tlsAllowInvalidCertificates: tls, serverSelectionTimeoutMS: timeout },
+            });
+        });
+
+        it('surfaces anonymous startup rejection without authentication or a retry', async (): Promise<void> => {
+            const rejection = Object.assign(new Error('Authentication required'), { code: 13 });
+            ensureWorker().mockRejectedValueOnce(rejection);
+            await expect(manager.initialize()).rejects.toBe(rejection);
+            expect(ensureWorker()).toHaveBeenCalledOnce();
+            expect(manager.isInitialized).toBe(false);
+            expect(mockGetSessionFromVSCode).not.toHaveBeenCalled();
+        });
+
+        it.each(['credentialsRejected', 'signInRequired', 'credentialsMissing'] as const)(
+            'allows %s at initialization and evaluation without clearing the hold',
+            async (reason): Promise<void> => {
+                ClustersClient.latch(clusterId, reason);
+                expect(manager.getBlockingLatchReason()).toBeUndefined();
+                await manager.initialize();
+                await manager.evaluate('db.stats()');
+                expect(sendEval).toHaveBeenCalledOnce();
+                expect(ClustersClient.getLatchReason(clusterId)).toBe(reason);
+            },
+        );
+
+        it.each(['credentialsUpdating', 'credentialsChanged', 'identityChanged', 'userDisconnected', 'connectionRemoved', 'unreachable'] as const)(
+            'blocks %s before endpoint reads, initialization and evaluation',
+            async (reason): Promise<void> => {
+                ClustersClient.latch(clusterId, reason);
+                expect(manager.getBlockingLatchReason()).toBe(reason);
+                await expect(manager.initialize()).rejects.toMatchObject({ reason });
+                await expect(manager.evaluate('db.stats()')).rejects.toMatchObject({ reason });
+                expect(reread).not.toHaveBeenCalled();
+                expect(ensureWorker()).not.toHaveBeenCalled();
+                expect(sendEval).not.toHaveBeenCalled();
+            },
+        );
+
+        it.each([
+            [undefined, 'connectionRemoved'],
+            ['mongodb://other-host/test', 'credentialsChanged'],
+        ] as const)('blocks endpoint %s before worker initialization', async (current, reason): Promise<void> => {
+            reread.mockResolvedValue(current);
+            await expect(manager.initialize()).rejects.toMatchObject({ reason });
+            expect(ensureWorker()).not.toHaveBeenCalled();
+        });
+
+        it.each([
+            [undefined, 'connectionRemoved'],
+            ['mongodb://other-host/test', 'credentialsChanged'],
+        ] as const)('blocks endpoint %s changed during worker initialization', async (current, reason): Promise<void> => {
+            reread.mockResolvedValueOnce(endpoint).mockResolvedValueOnce(current);
+            await expect(manager.initialize()).rejects.toMatchObject({ reason });
+            expect(manager.isInitialized).toBe(false);
+        });
+
+        it.each(['endpointRead', 'workerInitialization'] as const)(
+            'honors a superseding epoch during %s',
+            async (phase): Promise<void> => {
+                let epoch = 0;
+                vi.spyOn(ClustersClient, 'getEpoch').mockImplementation(() => epoch);
+                const changeEpoch = async (): Promise<string> => { epoch++; return endpoint; };
+                if (phase === 'endpointRead') {
+                    reread.mockImplementationOnce(changeEpoch);
+                } else {
+                    ensureWorker().mockImplementationOnce(changeEpoch);
+                }
+                await expect(manager.initialize()).rejects.toMatchObject({ reason: 'credentialsChanged' });
+                expect(manager.isInitialized).toBe(false);
+            },
+        );
+
+        it.each(['credentialsUpdating', 'userDisconnected', 'connectionRemoved'] as const)(
+            'honors %s introduced while awaiting the endpoint',
+            async (reason): Promise<void> => {
+                reread.mockImplementationOnce(async (): Promise<string> => {
+                    ClustersClient.latch(clusterId, reason);
+                    return endpoint;
+                });
+                await expect(manager.initialize()).rejects.toMatchObject({ reason });
+                expect(ensureWorker()).not.toHaveBeenCalled();
+            },
+        );
+
+        it('does not finish or respawn a disposed session', async (): Promise<void> => {
+            reread.mockImplementationOnce(async (): Promise<string> => {
+                manager.dispose();
+                return endpoint;
+            });
+            await expect(manager.initialize()).rejects.toMatchObject({ reason: 'connectionRemoved' });
+            await expect(manager.evaluate('db.stats()')).rejects.toMatchObject({ reason: 'connectionRemoved' });
+            expect(ensureWorker()).not.toHaveBeenCalled();
+        });
+
+        it('permits password-only edits on respawn but never switches endpoints', async (): Promise<void> => {
+            await manager.initialize();
+            manager.killWorker();
+            reread.mockResolvedValue(toUnauthenticatedConnectionString(
+                'mongodb://user:new-password@localhost:27017/test?tls=true&tlsCAFile=trust.pem&authSource=admin',
+            ));
+            await manager.evaluate('password-edit');
+            manager.killWorker();
+            reread.mockResolvedValue('mongodb://other-host/');
+            await expect(manager.evaluate('changed-host')).rejects.toMatchObject({ reason: 'credentialsChanged' });
+            expect(sendEval).toHaveBeenCalledOnce();
+        });
+
+        it('surfaces anonymous database rejection without replay or authenticated fallback', async (): Promise<void> => {
+            const rejection = Object.assign(new Error('Command requires authentication'), { code: 13 });
+            await manager.initialize();
+            sendEval.mockRejectedValueOnce(rejection);
+            await expect(manager.evaluate('db.stats()')).rejects.toBe(rejection);
+            expect(sendEval).toHaveBeenCalledOnce();
+            expect(ensureWorker()).toHaveBeenCalledOnce();
+        });
+
+        it('rejects a reply superseded by Disconnect', async (): Promise<void> => {
+            await manager.initialize();
+            sendEval.mockImplementationOnce(async (): Promise<unknown> => {
+                ClustersClient.latch(clusterId, 'userDisconnected');
+                return { result: { type: 'number', printable: '1', durationMs: 0 } };
+            });
+            await expect(manager.evaluate('db.stats()')).rejects.toMatchObject({ reason: 'userDisconnected' });
+        });
+    });
+
+    it('keeps ordinary Shell initialization authenticated with the saved native credentials', async (): Promise<void> => {
+        CredentialCache.setAuthCredentials(
+            clusterId,
+            AuthMethodId.NativeAuth,
+            'mongodb://native.example.com/?tls=true',
+            { connectionUser: 'saved-user', connectionPassword: 'saved-password' },
+        );
+        const manager = new ShellSessionManager({ clusterId, clusterDisplayName: 'Cluster', databaseName: 'test' });
+        const worker = vi.mocked(WorkerSessionManager).mock.results.at(-1)?.value as { ensureWorker: Mock };
+        await expect(manager.initialize()).resolves.toMatchObject({ authMechanism: 'NativeAuth', username: 'saved-user' });
+        expect(worker.ensureWorker.mock.calls[0][1]).toMatchObject({
+            authMechanism: 'NativeAuth',
+            connectionString: 'mongodb://saved-user:saved-password@native.example.com/?tls=true',
+        });
+        manager.dispose();
     });
 
     it('permits a password-only respawn but blocks a username change', async (): Promise<void> => {

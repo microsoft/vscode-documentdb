@@ -68,6 +68,7 @@ import { openIndexManagementView } from '../commands/openIndexManagementView/ope
 import {
     openInteractiveShell,
     openInteractiveShellWithInput,
+    openUnauthenticatedShell,
 } from '../commands/openInteractiveShell/openInteractiveShell';
 import { pasteCollection } from '../commands/pasteCollection/pasteCollection';
 import { pasteIndexes } from '../commands/pasteIndexes/pasteIndexes';
@@ -1019,6 +1020,10 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.internal.connectDisconnected',
                     withTreeNodeCommandCorrelation(connectDisconnected),
+                );
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.internal.shell.openWithoutAuthentication',
+                    withTreeNodeCommandCorrelation(openUnauthenticatedShell),
                 );
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.signInAgain',

@@ -76,14 +76,14 @@ describe('Connections recovery actions', () => {
                 ...(reason ? ['vscode-documentdb.command.connectionsView.updateConnectionString'] : []),
                 'vscode-documentdb.command.connectionsView.updateCredentials',
                 'vscode-documentdb.command.diagnoseConnection',
-                'vscode-documentdb.command.shell.open',
+                'vscode-documentdb.command.internal.shell.openWithoutAuthentication',
                 'vscode-documentdb.command.internal.retry',
             ]);
             expect(treeItems.map((child) => child.label)).toEqual([
                 ...(reason ? ['Update connection string…'] : []),
                 'Update credentials…',
                 'Diagnose connection…',
-                'Open shell',
+                'Open shell without authentication',
                 'Retry',
             ]);
             expect(treeItems.every((child) => !!child.command)).toBe(true);

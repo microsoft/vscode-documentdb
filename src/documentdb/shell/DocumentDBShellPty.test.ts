@@ -13,9 +13,12 @@ import { AuthMethodId } from '../auth/AuthMethod';
 import { ClustersClient } from '../ClustersClient';
 import { ConnectionUnavailableError } from '../ConnectionUnavailableError';
 import { CredentialCache } from '../CredentialCache';
+import { SchemaStore } from '../SchemaStore';
+import { ErrorExplanationService } from '../../services/errorExplanationService';
 import { DocumentDBShellPty, type DocumentDBShellPtyOptions } from './DocumentDBShellPty';
 import { ShellCompletionProvider } from './ShellCompletionProvider';
 import { ShellSpinner } from './ShellSpinner';
+import { ShellSessionManager, type ShellConnectionInfo, type ShellSessionCallbacks, type UnauthenticatedShellEndpoint } from './ShellSessionManager';
 
 const mockSessionTelemetry: Record<string, string | undefined>[] = [];
 const workerSignIn = vi.hoisted(() => ({
@@ -108,7 +111,12 @@ const mockSetActiveDatabase = vi.fn();
 const mockResetAfterSignIn = vi.fn();
 
 vi.mock('./ShellSessionManager', () => ({
-    ShellSessionManager: vi.fn().mockImplementation(function (_connectionInfo, callbacks) {
+    ShellSessionManager: vi.fn().mockImplementation(function (
+        connectionInfo: ShellConnectionInfo,
+        callbacks: ShellSessionCallbacks,
+        _telemetry: unknown,
+        unauthenticated?: UnauthenticatedShellEndpoint,
+    ) {
         // Store callbacks so tests can trigger events
         (mockInitialize as Mock & { _callbacks?: unknown })._callbacks = callbacks;
         return {
@@ -120,6 +128,13 @@ vi.mock('./ShellSessionManager', () => ({
             resetAfterSignIn: mockResetAfterSignIn,
             pinnedEntraIdentity: workerSignIn.pin,
             isInitialized: true,
+            getBlockingLatchReason: (): ReturnType<typeof ClustersClient.getLatchReason> => {
+                const reason = ClustersClient.getLatchReason(connectionInfo.clusterId);
+                return unauthenticated && reason &&
+                    ['credentialsRejected', 'signInRequired', 'credentialsMissing'].includes(reason)
+                    ? undefined
+                    : reason;
+            },
         };
     }),
 }));
@@ -193,6 +208,137 @@ describe('DocumentDBShellPty', () => {
         }
 
         vi.restoreAllMocks();
+    });
+
+    describe('unauthenticated isolation', () => {
+        const unauthenticated: UnauthenticatedShellEndpoint = {
+            connectionString: 'mongodb://anonymous-host/',
+            reread: async (): Promise<string> => 'mongodb://anonymous-host/',
+        };
+        let noCache: MockInstance;
+        let noClient: MockInstance;
+        let noSchema: MockInstance;
+        let noExplanation: MockInstance;
+        let noPrewarm: MockInstance;
+
+        beforeEach((): void => {
+            pty.close();
+            noCache = vi.spyOn(CredentialCache, 'getCredentials');
+            noClient = vi.spyOn(ClustersClient, 'getExistingClient');
+            noSchema = vi.spyOn(SchemaStore, 'getInstance');
+            noExplanation = vi.spyOn(ErrorExplanationService, 'explain');
+            noPrewarm = vi.spyOn(ShellCompletionProvider.prototype, 'prewarmCollections');
+            pty = new DocumentDBShellPty({ ...defaultOptions, unauthenticated });
+            pty.onDidWrite((data): void => { written += data; });
+            mockInitialize.mockResolvedValueOnce({
+                host: 'anonymous-host', additionalHostCount: 0, authMechanism: 'NoAuth', isEmulator: false,
+            });
+            mockEvaluate.mockResolvedValue({ type: 'string', printable: '"x"', durationMs: 1 });
+        });
+
+        afterEach((): void => {
+            pty.close();
+            for (const spy of [noCache, noClient, noSchema, noExplanation, noPrewarm]) {
+                expect(spy).not.toHaveBeenCalled();
+            }
+        });
+
+        async function openAnonymous(): Promise<void> {
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            written = '';
+        }
+
+        it('passes the anonymous option to the session and metadata-free context to local completions', async (): Promise<void> => {
+            const completions = vi.spyOn(ShellCompletionProvider.prototype, 'getCompletions');
+            await openAnonymous();
+            expect(vi.mocked(ShellSessionManager).mock.calls.at(-1)?.[3]).toBe(unauthenticated);
+            pty.handleInput('hel');
+            await new Promise((resolve) => setTimeout(resolve, 80));
+            expect(completions).toHaveBeenCalledWith('hel', 3, {
+                clusterId: 'test-cluster-id', databaseName: 'testdb', includeClusterMetadata: false,
+            });
+            pty.handleInput('\t');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            expect(mockEvaluate).toHaveBeenLastCalledWith('help', 80);
+        });
+
+        it('keeps local history suggestions without schema hints', async (): Promise<void> => {
+            settingOverrides['documentDB.shell.display.colorSupport'] = true;
+            await openAnonymous();
+            pty.handleInput("db['restaurants-something'].find()");
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            written = '';
+            pty.handleInput('db[');
+            await new Promise((resolve) => setTimeout(resolve, 80));
+            expect(written).toContain("\x1b[2m'restaurants-something'].find()");
+        });
+
+        it('keeps closing-bracket ghosts even when shared schema is unavailable', async (): Promise<void> => {
+            await openAnonymous();
+            pty.handleInput('db.c.find({ _id: 1 ');
+            await new Promise((resolve) => setTimeout(resolve, 80));
+            pty.handleInput('\x1b[C');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            expect(mockEvaluate).toHaveBeenLastCalledWith('db.c.find({ _id: 1 })', 80);
+        });
+
+        it('uses the shared anonymous latch policy and reports rejection without authenticated fallback', async (): Promise<void> => {
+            await openAnonymous();
+            ClustersClient.latch('test-cluster-id', 'credentialsRejected');
+            try {
+                mockEvaluate.mockRejectedValueOnce(new Error('Command requires authentication'));
+                pty.handleInput('db.stats()');
+                pty.handleInput('\r');
+                await new Promise((resolve) => setTimeout(resolve, 20));
+                expect(written).toContain('Command requires authentication');
+                expect(written).not.toContain('saved credentials were rejected');
+                expect(mockEvaluate).toHaveBeenCalledOnce();
+                expect(workerSignIn.recover).not.toHaveBeenCalled();
+            } finally {
+                ClustersClient.unlatch('test-cluster-id');
+            }
+        });
+
+        it('does not prewarm after use or feed anonymous query documents into shared schema', async (): Promise<void> => {
+            await openAnonymous();
+            mockEvaluate.mockResolvedValueOnce({ type: 'string', printable: '"switched to db next"', durationMs: 1 });
+            pty.handleInput('use next');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            mockEvaluate.mockResolvedValueOnce({
+                type: 'Document', printable: '{"_id":1,"name":"value"}', durationMs: 1,
+                source: { namespace: { db: 'next', collection: 'users' } },
+            });
+            pty.handleInput('db.users.find()');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            expect(mockSetActiveDatabase).toHaveBeenCalledWith('next');
+            expect(mockEvaluate).toHaveBeenCalledTimes(2);
+        });
+
+        it('omits only the shared-schema ghost hint for unknown fields', async (): Promise<void> => {
+            await openAnonymous();
+            pty.handleInput('db.users.find({ nam');
+            await new Promise((resolve) => setTimeout(resolve, 80));
+            expect(mockEvaluate).not.toHaveBeenCalled();
+            expect(noSchema).not.toHaveBeenCalled();
+        });
+
+        it('handles anonymous initialization failures without cache-backed explanations or redaction', async (): Promise<void> => {
+            mockInitialize.mockReset().mockRejectedValueOnce(new Error('Server requires authentication'));
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            expect(written).toContain('Server requires authentication');
+            expect(ext.outputChannel.error).toHaveBeenCalled();
+            mockInitialize.mockResolvedValue({
+                host: 'test-host.documents.azure.com:10255', additionalHostCount: 0,
+                authMechanism: 'NativeAuth', isEmulator: false,
+            });
+        });
     });
 
     describe('open', () => {

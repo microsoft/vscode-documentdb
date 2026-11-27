@@ -7,6 +7,7 @@ import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
+import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
 import { getBatchSizeSetting, getConnectionTimeoutMs } from '../../utils/workspacUtils';
 import { type VerifiedEntraIdentity } from '../auth/AuthHandler';
 import { AuthMethodId } from '../auth/AuthMethodId';
@@ -14,7 +15,7 @@ import { EntraIdentityMismatchError } from '../auth/entraErrors/entraCallbackErr
 import { createWorkerAuthError, sameEntraIdentity, WorkerTokenRelay } from '../auth/WorkerTokenRelay';
 import { ClustersClient } from '../ClustersClient';
 import { computeConnectionFingerprint } from '../connectionFingerprint';
-import { ConnectionUnavailableError } from '../ConnectionUnavailableError';
+import { ConnectionUnavailableError, type ConnectionUnavailableReason } from '../ConnectionUnavailableError';
 import { CredentialCache } from '../CredentialCache';
 import {
     WorkerSessionManager,
@@ -41,6 +42,12 @@ export interface ShellConnectionInfo {
     readonly clusterDisplayName: string;
     /** Initial database name for the session. */
     readonly databaseName: string;
+}
+
+export interface UnauthenticatedShellEndpoint {
+    readonly connectionString: string;
+    readonly emulatorConfiguration?: EmulatorConfiguration;
+    readonly reread: () => Promise<string | undefined>;
 }
 
 /**
@@ -110,6 +117,7 @@ export class ShellSessionManager implements vscode.Disposable {
         connectionInfo: ShellConnectionInfo,
         callbacks?: ShellSessionCallbacks,
         private readonly _telemetryContext: WorkerStartupTelemetryContext = {},
+        private readonly _unauthenticated?: UnauthenticatedShellEndpoint,
     ) {
         this._connectionInfo = connectionInfo;
         this._activeDatabase = connectionInfo.databaseName;
@@ -244,7 +252,29 @@ export class ShellSessionManager implements vscode.Disposable {
         this.assertAuthRecovery();
         const { clusterId } = this._connectionInfo;
         const epoch = ClustersClient.getEpoch(clusterId);
-        const fingerprint = ClustersClient.getExpectedFingerprint(clusterId, this._pin);
+        const checkEndpoint = async (): Promise<void> => {
+            if (!this._unauthenticated) {
+                return;
+            }
+            const current = await this._unauthenticated.reread();
+            this.assertConnectionAvailable();
+            if (epoch !== ClustersClient.getEpoch(clusterId)) {
+                throw new ConnectionUnavailableError('credentialsChanged');
+            }
+            if (current === undefined) {
+                throw new ConnectionUnavailableError('connectionRemoved');
+            }
+            if (current !== this._unauthenticated.connectionString) {
+                throw new ConnectionUnavailableError('credentialsChanged');
+            }
+        };
+        if (this._unauthenticated) {
+            await checkEndpoint();
+            this.assertConnectionAvailable();
+        }
+        const fingerprint = this._unauthenticated
+            ? undefined
+            : ClustersClient.getExpectedFingerprint(clusterId, this._pin);
         if (this._fingerprint !== undefined && this._fingerprint !== fingerprint) {
             throw new ConnectionUnavailableError('credentialsChanged');
         }
@@ -254,28 +284,30 @@ export class ShellSessionManager implements vscode.Disposable {
                 this._workerManager.killWorker();
             }
             this._initialized = false;
-            this._fingerprint ??= fingerprint;
-            const verified = ClustersClient.getLastVerifiedIdentity(clusterId);
-            const pin = this._pin ?? (verified?.kind === 'entra' ? verified : undefined);
-            if (initMsg.authMechanism === 'MicrosoftEntraID') {
-                this._pin = pin;
+            if (!this._unauthenticated) {
+                this._fingerprint ??= fingerprint;
+                const verified = ClustersClient.getLastVerifiedIdentity(clusterId);
+                const pin = this._pin ?? (verified?.kind === 'entra' ? verified : undefined);
+                if (initMsg.authMechanism === 'MicrosoftEntraID') {
+                    this._pin = pin;
+                }
+                this._relay = new WorkerTokenRelay(
+                    clusterId,
+                    initMsg,
+                    epoch,
+                    this._managedIdentityTokenCorrelationId,
+                    initMsg.authMechanism === 'MicrosoftEntraID' ? pin : undefined,
+                    (identity) => {
+                        this._pin = identity;
+                        // The keyed fingerprint stays on the host for reconnect comparisons, not in worker messages.
+                        this._fingerprint ??= computeConnectionFingerprint({
+                            connectionString: initMsg.connectionString,
+                            principal: identity,
+                        });
+                        this._displayName = identity.accountLabel || undefined;
+                    },
+                );
             }
-            this._relay = new WorkerTokenRelay(
-                clusterId,
-                initMsg,
-                epoch,
-                this._managedIdentityTokenCorrelationId,
-                initMsg.authMechanism === 'MicrosoftEntraID' ? pin : undefined,
-                (identity) => {
-                    this._pin = identity;
-                    // The keyed fingerprint stays on the host for reconnect comparisons, not in worker messages.
-                    this._fingerprint ??= computeConnectionFingerprint({
-                        connectionString: initMsg.connectionString,
-                        principal: identity,
-                    });
-                    this._displayName = identity.accountLabel || undefined;
-                },
-            );
         }
 
         const relay = this._relay;
@@ -297,6 +329,10 @@ export class ShellSessionManager implements vscode.Disposable {
             throw error;
         }
         this.assertConnectionAvailable();
+        if (this._unauthenticated) {
+            await checkEndpoint();
+            this.assertConnectionAvailable();
+        }
         if (relay !== this._relay || epoch !== ClustersClient.getEpoch(clusterId)) {
             throw new ConnectionUnavailableError('credentialsChanged');
         }
@@ -320,7 +356,9 @@ export class ShellSessionManager implements vscode.Disposable {
             // (`disableEmulatorSecurity` without `isEmulator`, design §7), which must not be
             // mislabeled "(Emulator)" in the banner or inflate the emulator telemetry metric.
             isEmulator:
-                CredentialCache.getCredentials(this._connectionInfo.clusterId)?.emulatorConfiguration?.isEmulator ??
+                (this._unauthenticated
+                    ? this._unauthenticated.emulatorConfiguration?.isEmulator
+                    : CredentialCache.getCredentials(this._connectionInfo.clusterId)?.emulatorConfiguration?.isEmulator) ??
                 false,
             username,
             displayName: this._displayName,
@@ -362,7 +400,14 @@ export class ShellSessionManager implements vscode.Disposable {
         const relay = this._relay;
         const epoch = ClustersClient.getEpoch(this._connectionInfo.clusterId);
         try {
-            return (await this._workerManager.sendEval(evalMsg)).result;
+            const response = await this._workerManager.sendEval(evalMsg);
+            if (this._unauthenticated) {
+                this.assertConnectionAvailable();
+                if (epoch !== ClustersClient.getEpoch(this._connectionInfo.clusterId)) {
+                    throw new ConnectionUnavailableError('credentialsChanged');
+                }
+            }
+            return response.result;
         } catch (error) {
             if (
                 relay === this._relay &&
@@ -405,7 +450,7 @@ export class ShellSessionManager implements vscode.Disposable {
     }
 
     private assertConnectionAvailable(): void {
-        const reason = ClustersClient.getLatchReason(this._connectionInfo.clusterId);
+        const reason = this.getBlockingLatchReason();
         if (reason) {
             throw new ConnectionUnavailableError(reason);
         }
@@ -414,7 +459,18 @@ export class ShellSessionManager implements vscode.Disposable {
         }
     }
 
+    public getBlockingLatchReason(): ConnectionUnavailableReason | undefined {
+        const reason = ClustersClient.getLatchReason(this._connectionInfo.clusterId);
+        return this._unauthenticated &&
+            (reason === 'credentialsRejected' || reason === 'signInRequired' || reason === 'credentialsMissing')
+            ? undefined
+            : reason;
+    }
+
     private assertAuthRecovery(): void {
+        if (this._unauthenticated) {
+            return;
+        }
         const reason = this._authFailure ?? this._workerManager.authFailure;
         if (this._pin && (reason === 'signInRequired' || reason === 'identityMismatch')) {
             throw createWorkerAuthError(reason);
@@ -424,6 +480,26 @@ export class ShellSessionManager implements vscode.Disposable {
     // ─── Private: Init message ───────────────────────────────────────────────
 
     private buildInitMessage(): MainToWorkerMessage & { type: 'init' } {
+        if (this._unauthenticated) {
+            const { connectionString, emulatorConfiguration } = this._unauthenticated;
+            const allowInvalidCertificates = resolveAllowInvalidCertificates(
+                emulatorConfiguration?.disableEmulatorSecurity,
+                connectionString,
+            );
+            return {
+                type: 'init',
+                requestId: '',
+                connectionString,
+                databaseName: this._activeDatabase,
+                authMechanism: 'NoAuth',
+                persistent: true,
+                clientOptions: {
+                    serverSelectionTimeoutMS:
+                        emulatorConfiguration?.isEmulator || allowInvalidCertificates ? 4000 : undefined,
+                    tlsAllowInvalidCertificates: allowInvalidCertificates,
+                },
+            };
+        }
         const credentials = CredentialCache.getCredentials(this._connectionInfo.clusterId);
         if (!credentials) {
             throw new Error(l10n.t('No credentials found for cluster {0}', this._connectionInfo.clusterId));

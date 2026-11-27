@@ -56,6 +56,7 @@ export interface CompletionCandidate {
  * Context required by the completion provider to resolve dynamic completions.
  */
 export interface ShellCompletionContext {
+    readonly includeClusterMetadata?: boolean;
     /** Stable cluster ID for cache lookups. */
     readonly clusterId: string;
     /** Current active database name. */
@@ -164,6 +165,9 @@ export class ShellCompletionProvider {
      * Warm the collection cache for a database without blocking shell input.
      */
     async prewarmCollections(context: ShellCompletionContext): Promise<void> {
+        if (context.includeClusterMetadata === false) {
+            return;
+        }
         const fetchKey = `colls:${context.clusterId}:${context.databaseName}`;
         if (this._backgroundFetchTriggered.has(fetchKey)) {
             return;
@@ -584,6 +588,9 @@ export class ShellCompletionProvider {
      * Get database name candidates from ClustersClient cache + SchemaStore.
      */
     private getDatabaseCandidates(context: ShellCompletionContext): CompletionCandidate[] {
+        if (context.includeClusterMetadata === false) {
+            return [];
+        }
         const candidates: CompletionCandidate[] = [];
         const seen = new Set<string>();
 
@@ -651,7 +658,8 @@ export class ShellCompletionProvider {
         const seen = new Set<string>();
 
         // Collection names from ClustersClient cache
-        const client = ClustersClient.getExistingClient(context.clusterId);
+        const client =
+            context.includeClusterMetadata === false ? undefined : ClustersClient.getExistingClient(context.clusterId);
         if (client) {
             const cached = client.getCachedCollections(context.databaseName);
             if (cached) {
@@ -668,15 +676,17 @@ export class ShellCompletionProvider {
         }
 
         // Collection names from SchemaStore
-        const store = SchemaStore.getInstance();
-        const stats = store.getStats();
-        const keyPrefix = `${context.clusterId}::${context.databaseName}::`;
-        for (const coll of stats.collections) {
-            if (coll.key.startsWith(keyPrefix)) {
-                const collName = coll.key.substring(keyPrefix.length);
-                if (collName && !seen.has(collName)) {
-                    seen.add(collName);
-                    candidates.push(this.makeCollectionCandidate(collName));
+        if (context.includeClusterMetadata !== false) {
+            const store = SchemaStore.getInstance();
+            const stats = store.getStats();
+            const keyPrefix = `${context.clusterId}::${context.databaseName}::`;
+            for (const coll of stats.collections) {
+                if (coll.key.startsWith(keyPrefix)) {
+                    const collName = coll.key.substring(keyPrefix.length);
+                    if (collName && !seen.has(collName)) {
+                        seen.add(collName);
+                        candidates.push(this.makeCollectionCandidate(collName));
+                    }
                 }
             }
         }
@@ -712,6 +722,9 @@ export class ShellCompletionProvider {
      * `db['` inserts `restaurants']`.
      */
     private getDbBracketCandidates(context: ShellCompletionContext, quote: '"' | "'" | ''): CompletionCandidate[] {
+        if (context.includeClusterMetadata === false) {
+            return [];
+        }
         const candidates: CompletionCandidate[] = [];
         const seen = new Set<string>();
 
@@ -811,12 +824,13 @@ export class ShellCompletionProvider {
         }
 
         // Build a field type lookup from SchemaStore (pre-compute Map for O(1) lookups)
-        const fields = SchemaStore.getInstance().getKnownFields(
-            shellCtx.clusterId,
-            shellCtx.databaseName,
-            ctx.collectionName,
+        const fieldTypeByPath = new Map(
+            shellCtx.includeClusterMetadata === false
+                ? []
+                : SchemaStore.getInstance()
+                      .getKnownFields(shellCtx.clusterId, shellCtx.databaseName, ctx.collectionName)
+                      .map((f) => [f.path, f.type]),
         );
-        const fieldTypeByPath = new Map(fields.map((f) => [f.path, f.type]));
         const fieldLookup: FieldTypeLookup = (fieldName: string): string | undefined => {
             return fieldTypeByPath.get(fieldName);
         };
@@ -876,6 +890,9 @@ export class ShellCompletionProvider {
         context: ShellCompletionContext,
         collectionName: string,
     ): void {
+        if (context.includeClusterMetadata === false) {
+            return;
+        }
         const fields = SchemaStore.getInstance().getKnownFields(
             context.clusterId,
             context.databaseName,

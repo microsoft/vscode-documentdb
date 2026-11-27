@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import {
@@ -12,9 +12,13 @@ import {
     type DeepLinkOpenResult,
 } from '../../deepLinks/deepLinkTelemetry';
 import { CredentialCache } from '../../documentdb/CredentialCache';
+import { ClustersClient } from '../../documentdb/ClustersClient';
+import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
 import { DocumentDBShellPty } from '../../documentdb/shell/DocumentDBShellPty';
 import { type ShellConnectionInfo } from '../../documentdb/shell/ShellSessionManager';
 import { registerShellTerminal } from '../../documentdb/shell/ShellTerminalLinkProvider';
+import { toUnauthenticatedConnectionString } from '../../documentdb/shell/unauthenticatedEndpoint';
+import { type ConnectionClusterModel } from '../../tree/connections-view/models/ConnectionClusterModel';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
@@ -92,6 +96,75 @@ export async function openInteractiveShell(
 
     terminal.show();
     return { opened: true, shellSessionId: pty.shellSessionId };
+}
+
+export async function openUnauthenticatedShell(context: IActionContext, node?: ClusterItemBase): Promise<void> {
+    if (!node) {
+        return;
+    }
+    const connectionInfo = extractConnectionInfo(node);
+    let pty: DocumentDBShellPty;
+    try {
+        const { clusterId } = node.cluster;
+        const assertAvailable = (): void => {
+            const reason = ClustersClient.getLatchReason(clusterId);
+            if (reason && !['credentialsRejected', 'signInRequired', 'credentialsMissing'].includes(reason)) {
+                throw new ConnectionUnavailableError(reason);
+            }
+        };
+        assertAvailable();
+        const epoch = ClustersClient.getEpoch(clusterId);
+        const endpoint = await node.getUnauthenticatedEndpoint();
+        assertAvailable();
+        if (epoch !== ClustersClient.getEpoch(clusterId)) {
+            throw new ConnectionUnavailableError('credentialsChanged');
+        }
+        if (!endpoint) {
+            await vscode.window.showErrorMessage(
+                vscode.l10n.t(
+                    'Cannot open a shell without authentication for "{0}": its endpoint is not available.',
+                    node.cluster.name,
+                ),
+                { modal: true },
+            );
+            return;
+        }
+        const connectionString = toUnauthenticatedConnectionString(endpoint);
+        pty = new DocumentDBShellPty({
+            connectionInfo,
+            unauthenticated: {
+                connectionString,
+                emulatorConfiguration: (node.cluster as Partial<ConnectionClusterModel>).emulatorConfiguration,
+                reread: async (): Promise<string | undefined> => {
+                    const current = await node.getUnauthenticatedEndpoint();
+                    return current ? toUnauthenticatedConnectionString(current) : undefined;
+                },
+            },
+        });
+    } catch (error) {
+        if (error instanceof UserCancelledError) {
+            throw error;
+        }
+        context.errorHandling.suppressDisplay = true;
+        await vscode.window.showErrorMessage(l10n.t('Unable to complete this tree action.'), {
+            modal: true,
+            detail: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+    }
+    context.telemetry.properties.shellSessionId = pty.shellSessionId;
+    const terminal = vscode.window.createTerminal({
+        name: l10n.t('DocumentDB: {0}/{1}', connectionInfo.clusterDisplayName, connectionInfo.databaseName),
+        pty,
+        iconPath: new vscode.ThemeIcon('terminal'),
+    });
+    pty.setTerminal(terminal);
+    registerShellTerminal(
+        terminal,
+        () => pty.getTerminalInfo(),
+        () => pty.disconnect(),
+    );
+    terminal.show();
 }
 
 /**

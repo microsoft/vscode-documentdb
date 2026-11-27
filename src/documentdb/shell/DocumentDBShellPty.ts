@@ -37,7 +37,12 @@ import { findCommonPrefix, renderCompletionList } from './ShellCompletionRendere
 import { ShellGhostText } from './ShellGhostText';
 import { ShellInputHandler } from './ShellInputHandler';
 import { extractErrorCode, ShellOutputFormatter } from './ShellOutputFormatter';
-import { type ShellConnectionInfo, type ShellSessionCallbacks, ShellSessionManager } from './ShellSessionManager';
+import {
+    type ShellConnectionInfo,
+    type ShellSessionCallbacks,
+    ShellSessionManager,
+    type UnauthenticatedShellEndpoint,
+} from './ShellSessionManager';
 import { ShellSpinner } from './ShellSpinner';
 import {
     ACTION_LINE_PREFIX,
@@ -55,6 +60,7 @@ const COMPACT_CONNECTION_SUMMARY_MIN_COLUMNS = 100;
  * Configuration for the interactive shell Pseudoterminal.
  */
 export interface DocumentDBShellPtyOptions {
+    readonly unauthenticated?: UnauthenticatedShellEndpoint;
     readonly deepLink?: DeepLinkTelemetry;
     /** Connection parameters for the shell session. */
     readonly connectionInfo: ShellConnectionInfo;
@@ -86,6 +92,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private readonly _inputHandler: ShellInputHandler;
     private readonly _outputFormatter: ShellOutputFormatter;
     private readonly _connectionInfo: ShellConnectionInfo;
+    private readonly _unauthenticated: UnauthenticatedShellEndpoint | undefined;
 
     /** Current database name — updated when `use <db>` changes it. */
     private _currentDatabase: string;
@@ -144,6 +151,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     constructor(options: DocumentDBShellPtyOptions) {
         this._deepLink = options.deepLink;
         this._connectionInfo = options.connectionInfo;
+        this._unauthenticated = options.unauthenticated;
         this._currentDatabase = options.connectionInfo.databaseName;
         this._initialInput = options.initialInput;
 
@@ -182,13 +190,18 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             },
         };
 
-        this._connectionCorrelationId = ClustersClient.getExistingClient(
-            options.connectionInfo.clusterId,
-        )?.connectionCorrelationId;
-        this._sessionManager = new ShellSessionManager(options.connectionInfo, sessionCallbacks, {
-            shellSessionId: this._shellSessionId,
-            connectionCorrelationId: this._connectionCorrelationId,
-        });
+        this._connectionCorrelationId = options.unauthenticated
+            ? undefined
+            : ClustersClient.getExistingClient(options.connectionInfo.clusterId)?.connectionCorrelationId;
+        this._sessionManager = new ShellSessionManager(
+            options.connectionInfo,
+            sessionCallbacks,
+            {
+                shellSessionId: this._shellSessionId,
+                connectionCorrelationId: this._connectionCorrelationId,
+            },
+            options.unauthenticated,
+        );
 
         this._outputFormatter = new ShellOutputFormatter();
 
@@ -532,10 +545,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 throw new UserCancelledError('shell.sessionStart');
             }
 
-            void this._completionProvider.prewarmCollections({
-                clusterId: this._connectionInfo.clusterId,
-                databaseName: this._currentDatabase,
-            });
+            if (!this._unauthenticated) {
+                void this._completionProvider.prewarmCollections({
+                    clusterId: this._connectionInfo.clusterId,
+                    databaseName: this._currentDatabase,
+                });
+            }
 
             // Stop the connection spinner
             this._spinner?.stop();
@@ -652,10 +667,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
             // Written as a separate line rather than merged into the message above, so the raw text
             // stays intact for extractErrorCode and the SettingsHintError check below.
-            const explanation = await ErrorExplanationService.explain({
-                clusterId: this._connectionInfo.clusterId,
-                error,
-            });
+            const explanation = this._unauthenticated
+                ? undefined
+                : await ErrorExplanationService.explain({
+                      clusterId: this._connectionInfo.clusterId,
+                      error,
+                  });
             if (explanation) {
                 this.writeLine(this._outputFormatter.formatError(explanation.message));
             }
@@ -702,7 +719,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     private async handleLineInput(line: string): Promise<void> {
         const disconnectRevision = this._disconnectRevision;
-        const latchReason = ClustersClient.getLatchReason(this._connectionInfo.clusterId);
+        const latchReason = this._sessionManager.getBlockingLatchReason();
         if (latchReason) {
             this.handleWorkerFailure(new ConnectionUnavailableError(latchReason));
             if (!this._closed) {
@@ -863,10 +880,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         // talks to gets stopped, a port-forward drops — and the next command is where they find
         // out. Written as a separate line so the raw text above stays intact for extractErrorCode
         // and the checks below.
-        const explanation = await ErrorExplanationService.explain({
-            clusterId: this._connectionInfo.clusterId,
-            error,
-        });
+        const explanation = this._unauthenticated
+            ? undefined
+            : await ErrorExplanationService.explain({
+                  clusterId: this._connectionInfo.clusterId,
+                  error,
+              });
         if (explanation) {
             this.writeLine(this._outputFormatter.formatError(explanation.message));
         }
@@ -1073,10 +1092,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         if (newDb) {
             this._currentDatabase = newDb;
             this._sessionManager.setActiveDatabase(newDb);
-            void this._completionProvider.prewarmCollections({
-                clusterId: this._connectionInfo.clusterId,
-                databaseName: newDb,
-            });
+            if (!this._unauthenticated) {
+                void this._completionProvider.prewarmCollections({
+                    clusterId: this._connectionInfo.clusterId,
+                    databaseName: newDb,
+                });
+            }
             this.updateTerminalTitle();
         }
     }
@@ -1239,6 +1260,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * Failures are silently ignored — schema feeding is best-effort.
      */
     private maybeFeedSchemaStore(result: SerializableExecutionResult): void {
+        if (this._unauthenticated) {
+            return;
+        }
         // Only Cursor and Document results with a namespace are worth parsing
         if (result.type !== 'Cursor' && result.type !== 'Document') {
             return;
@@ -1366,6 +1390,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         return this._completionProvider.getCompletions(buffer, cursor, {
             clusterId: this._connectionInfo.clusterId,
             databaseName: this._currentDatabase,
+            ...(this._unauthenticated ? { includeClusterMetadata: false } : {}),
         });
     }
 
@@ -1526,7 +1551,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         // No completions inside a method argument — show schema hint only if
         // SchemaStore has no fields for this collection (not just a typo/no match)
-        if (result.candidates.length === 0) {
+        if (!this._unauthenticated && result.candidates.length === 0) {
             const ctx = this._completionProvider.detectContext(buffer, cursor);
             if (ctx.kind === 'method-argument') {
                 const fields = SchemaStore.getInstance().getKnownFields(
@@ -1725,6 +1750,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     /** Cached secrets for this cluster, so they can be redacted before anything is logged. */
     private credentialSecrets(): string[] {
+        if (this._unauthenticated) {
+            return [this._unauthenticated.connectionString];
+        }
         const credentials = CredentialCache.getCredentials(this._connectionInfo.clusterId);
         return [credentials?.nativeAuthConfig?.connectionPassword, credentials?.connectionString].filter(
             (secret): secret is string => !!secret,
@@ -1737,11 +1765,13 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      */
     private collectShellDomainTelemetry(properties: Record<string, string | undefined>): void {
         try {
-            const credentials = CredentialCache.getCredentials(this._connectionInfo.clusterId);
-            if (!credentials?.connectionString) {
+            const connectionString = this._unauthenticated
+                ? this._unauthenticated.connectionString
+                : CredentialCache.getCredentials(this._connectionInfo.clusterId)?.connectionString;
+            if (!connectionString) {
                 return;
             }
-            const hosts = getHostsFromConnectionString(credentials.connectionString);
+            const hosts = getHostsFromConnectionString(connectionString);
             addDomainInfoToProperties(hosts, properties);
         } catch {
             // Domain info is best-effort — don't fail telemetry if parsing fails

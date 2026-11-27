@@ -18,7 +18,6 @@ import { ClustersClient, type DatabaseItemModel } from '../../documentdb/Cluster
 import { teardownConnection } from '../../documentdb/connectionTeardown';
 import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
 import { CredentialCache } from '../../documentdb/CredentialCache';
-import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { Views } from '../../documentdb/Views';
 import { type Experience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
@@ -193,6 +192,18 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
         ClustersClientMock.exists.mockReturnValue(false);
     });
 
+    it('reads only the available model endpoint without authentication or client acquisition', async (): Promise<void> => {
+        const cluster: TreeCluster<BaseClusterModel> = { ...makeCluster(), connectionString: 'mongodb://user:password@host/' };
+        const item = new TestClusterItem(cluster, null);
+        const credentials = vi.spyOn(item, 'getCredentials');
+        expect(await item.getUnauthenticatedEndpoint()).toBe(cluster.connectionString);
+        cluster.connectionString = undefined;
+        expect(await item.getUnauthenticatedEndpoint()).toBeUndefined();
+        expect(credentials).not.toHaveBeenCalled();
+        expect(CredentialCache.getCredentials).not.toHaveBeenCalled();
+        expect(ClustersClientMock.connectInteractive).not.toHaveBeenCalled();
+    });
+
     it('returns a retry node (and records telemetry) when listDatabases is rejected', async () => {
         const listDatabases = vi
             .fn()
@@ -225,8 +236,8 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
 
         expect(children[1].id).toBe('cluster-1/open-shell');
         expect(children[1].contextValue).toBe('error');
-        expect(children[1].label).toBe('Open shell');
-        expect(children[1].commandId).toBe(ShellCommandIds.open);
+        expect(children[1].label).toBe('Open shell without authentication');
+        expect(children[1].commandId).toBe('vscode-documentdb.command.internal.shell.openWithoutAuthentication');
         expect(children[1].commandArgs).toEqual([item]);
 
         // The branch data provider detects (and caches) the error state via hasRetryNode().
@@ -243,7 +254,10 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
             'cluster-1/open-shell',
             'cluster-1/retry',
         ]);
-        expect(children[1]).toMatchObject({ commandId: ShellCommandIds.open, commandArgs: [item] });
+        expect(children[1]).toMatchObject({
+            commandId: 'vscode-documentdb.command.internal.shell.openWithoutAuthentication',
+            commandArgs: [item],
+        });
     });
 
     it.each(['authentication', 'listDatabases'] as const)(
@@ -727,7 +741,7 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
         ]);
         expect(children.map((child) => (child as TreeElement & { commandId: string }).commandId)).toEqual([
             'vscode-documentdb.command.diagnoseConnection',
-            'vscode-documentdb.command.shell.open',
+            'vscode-documentdb.command.internal.shell.openWithoutAuthentication',
             'vscode-documentdb.command.internal.retry',
         ]);
     });
