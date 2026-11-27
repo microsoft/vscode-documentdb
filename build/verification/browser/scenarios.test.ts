@@ -142,8 +142,19 @@ describe('TDD: Collection View grid contracts', (): void => {
         }));
         expect(collectionViewContracts.arrays).toContainEqual(expect.objectContaining({
             kind: 'text', name: 'TDD: M4 arrays of ten expand from the keyboard',
-            selector: '[role="treegrid"]', includes: ['ten[0]', 'ten[9]'], excludes: ['eleven[0]'],
+            selector: '[role="treegrid"]', includes: ['ten[0]'], excludes: ['eleven\\[0\\]'],
             steps: [{ action: 'focus', role: 'gridcell', name: 'ten' }, { action: 'press', key: 'Enter' }],
+        }));
+        expect(collectionViewContracts.arrays).toContainEqual(expect.objectContaining({
+            kind: 'text', name: 'TDD: M4 keyboard scrolling reaches the last child of an array of ten',
+            selector: '[role="treegrid"]', includes: ['ten[9]'], excludes: ['eleven\\[0\\]'],
+            waitForText: true,
+            steps: [{ action: 'press', key: 'Control+End' }],
+        }));
+        expect(collectionViewContracts.arrays).toContainEqual(expect.objectContaining({
+            kind: 'text', name: 'TDD: M4 the top viewport is mounted before comparing over-ten array text',
+            requiresGrid: 'treegrid', selector: '[role="treegrid"]',
+            includes: ['"arrays-root"', '(elements: 11)'], excludes: ['eleven\\[0\\]'], waitForText: true,
         }));
         expect(collectionViewContracts.arrays).toContainEqual(expect.objectContaining({
             kind: 'stableText', name: 'TDD: M4 arrays over ten do not gain children',
