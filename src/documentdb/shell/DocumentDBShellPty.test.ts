@@ -521,7 +521,7 @@ describe('DocumentDBShellPty', () => {
                     chooseAction('Sign in again' as unknown as vscode.MessageItem);
                     await vi.waitFor(() => expect(written).toContain(message));
 
-                    expect(written.trim()).toBe(message);
+                    expect(written).toBe(`\r\x1b[8C\x1b[J\r\n${message}\r\ntestdb> \r\x1b[8C\x1b[J`);
                     expect(warning).toHaveBeenCalledExactlyOnceWith(
                         'Microsoft sign-in expired for this shell. Sign in again to continue.',
                         'Sign in again',
@@ -538,6 +538,339 @@ describe('DocumentDBShellPty', () => {
                     for (const call of connectionStateCalls) {
                         expect(call).not.toHaveBeenCalled();
                     }
+                },
+            );
+
+            it.each([
+                ['success', '', 0, 80, '\r\x1b[8C\x1b[J', '\r\x1b[8C\x1b[J', 'X'],
+                [
+                    'success',
+                    'abcdef',
+                    2,
+                    80,
+                    '\r\x1b[8Cabcdef\x1b[J',
+                    '\r\x1b[8Cabcdef\x1b[J\r\x1b[10C',
+                    'abXcdef',
+                ],
+                [
+                    'before click',
+                    'abcdef',
+                    2,
+                    80,
+                    '\r\x1b[8Cabcdef\x1b[J',
+                    '\r\x1b[8Cabcdef\x1b[J\r\x1b[10C',
+                    'abXcdef',
+                ],
+                [
+                    'during sign-in',
+                    'abcdef',
+                    2,
+                    80,
+                    '\r\x1b[8Cabcdef\x1b[J',
+                    '\r\x1b[8Cabcdef\x1b[J\r\x1b[10C',
+                    'abXcdef',
+                ],
+                [
+                    'success',
+                    'db.collection.find()',
+                    15,
+                    20,
+                    '\x1b[1A\r\x1b[8Cdb.collection.find()\x1b[J',
+                    '\r\x1b[8Cdb.collection.find()\x1b[J\r\x1b[3C',
+                    'db.collection.fXind()',
+                ],
+                [
+                    'before click',
+                    'db.collection.find()',
+                    2,
+                    20,
+                    '\r\x1b[8Cdb.collection.find()\x1b[J',
+                    '\r\x1b[8Cdb.collection.find()\x1b[J\r\x1b[1A\x1b[10C',
+                    'dbX.collection.find()',
+                ],
+                [
+                    'during sign-in',
+                    'db.c.find(1)',
+                    0,
+                    20,
+                    '\r\x1b[8Cdb.c.find(1)\x1b[J',
+                    '\r\x1b[8Cdb.c.find(1)\x1b[J\r\x1b[8C',
+                    'Xdb.c.find(1)',
+                ],
+            ] as const)(
+                'redraws %s feedback around "%s" at cursor %s, width %s without resetting or submitting it',
+                async (stage, input, cursor, columns, oldRender, newRender, nextCommand): Promise<void> => {
+                    const message =
+                        stage === 'success'
+                            ? 'Sign-in restored. Run your command again.'
+                            : 'This connection was removed. Open a shell from another connection.';
+                    if (stage === 'before click') {
+                        getEpoch.mockReturnValue(1);
+                        getLatchReason.mockReturnValue('connectionRemoved');
+                    } else {
+                        workerSignIn.recover.mockImplementationOnce(async () => {
+                            if (stage === 'during sign-in') {
+                                getLatchReason.mockReturnValue('connectionRemoved');
+                                return undefined;
+                            }
+                            return { identity: workerSignIn.pin, epoch: 0 };
+                        });
+                    }
+                    pty.setDimensions({ columns, rows: 24 });
+                    pty.handleInput(input);
+                    pty.handleInput('\x1b[H');
+                    for (let i = 0; i < cursor; i++) {
+                        pty.handleInput('\x1b[C');
+                    }
+                    const resetLine = vi.spyOn(pty['_inputHandler'], 'resetLine');
+                    written = '';
+
+                    chooseAction('Sign in again' as unknown as vscode.MessageItem);
+                    await vi.waitFor(() => expect(written).toContain(message));
+
+                    expect(written).toBe(`${oldRender}\r\n${message}\r\ntestdb> ${newRender}`);
+                    expect(resetLine).not.toHaveBeenCalled();
+                    expect(mockEvaluate).toHaveBeenCalledOnce();
+                    expect(mockResetAfterSignIn).toHaveBeenCalledTimes(stage === 'success' ? 1 : 0);
+                    expect(mockInitialize).not.toHaveBeenCalled();
+                    expect(mockKillWorker).not.toHaveBeenCalled();
+                    expect(modal).not.toHaveBeenCalled();
+                    for (const call of connectionStateCalls) {
+                        expect(call).not.toHaveBeenCalled();
+                    }
+
+                    getLatchReason.mockReturnValue(undefined);
+                    mockEvaluate.mockResolvedValueOnce({ type: 'string', printable: '"continued"', durationMs: 1 });
+                    pty.handleInput('X');
+                    pty.handleInput('\r');
+                    await vi.waitFor(() => expect(mockEvaluate).toHaveBeenCalledTimes(2));
+                    expect(mockEvaluate).toHaveBeenLastCalledWith(nextCommand, columns);
+                },
+            );
+
+            it.each(['success', 'failure'] as const)(
+                'preserves the continuation prompt and accumulated lines after delayed %s',
+                async (outcome): Promise<void> => {
+                    const message =
+                        outcome === 'success'
+                            ? 'Sign-in restored. Run your command again.'
+                            : 'This shell is bound to the previous connection. Open a new shell from the tree.';
+                    workerSignIn.recover.mockImplementationOnce(async () => {
+                        if (outcome === 'failure') {
+                            getLatchReason.mockReturnValue('identityChanged');
+                            return undefined;
+                        }
+                        return { identity: workerSignIn.pin, epoch: 0 };
+                    });
+                    pty.handleInput('db.test.find({');
+                    pty.handleInput('\r');
+                    pty.handleInput('name: "partial"');
+                    pty.handleInput('\x1b[H');
+                    const resetLine = vi.spyOn(pty['_inputHandler'], 'resetLine');
+                    written = '';
+
+                    chooseAction('Sign in again' as unknown as vscode.MessageItem);
+                    await vi.waitFor(() => expect(written).toContain(message));
+
+                    expect(written).toBe(
+                        `\r\x1b[4Cname: "partial"\x1b[J\r\n${message}\r\n┆ > \r\x1b[4Cname: "partial"\x1b[J\r\x1b[4C`,
+                    );
+                    expect(resetLine).not.toHaveBeenCalled();
+                    expect(mockEvaluate).toHaveBeenCalledOnce();
+
+                    getLatchReason.mockReturnValue(undefined);
+                    mockEvaluate.mockResolvedValueOnce({ type: null, printable: null, durationMs: 1 });
+                    pty.handleInput('// ');
+                    pty.handleInput('\r');
+                    expect(mockEvaluate).toHaveBeenCalledOnce();
+                    expect(written.endsWith('\r\n┆ > ')).toBe(true);
+                    pty.handleInput('})');
+                    pty.handleInput('\r');
+                    await vi.waitFor(() => expect(mockEvaluate).toHaveBeenCalledTimes(2));
+                    expect(mockEvaluate).toHaveBeenLastCalledWith('db.test.find({\n// name: "partial"\n})', 80);
+                },
+            );
+
+            it.each(['success', 'before click', 'during sign-in'] as const)(
+                'defers %s feedback during evaluation until the next database prompt',
+                async (stage): Promise<void> => {
+                    let resolveEvaluation!: (result: unknown) => void;
+                    mockEvaluate.mockImplementationOnce(
+                        () =>
+                            new Promise((resolve) => {
+                                resolveEvaluation = resolve;
+                            }),
+                    );
+                    pty.handleInput('use 日本語');
+                    pty.handleInput('\r');
+                    written = '';
+                    const message =
+                        stage === 'success'
+                            ? 'Sign-in restored. Run your command again.'
+                            : 'This connection was removed. Open a shell from another connection.';
+                    if (stage === 'before click') {
+                        getEpoch.mockReturnValue(1);
+                        getLatchReason.mockReturnValue('connectionRemoved');
+                    } else {
+                        workerSignIn.recover.mockImplementationOnce(async () => {
+                            if (stage === 'during sign-in') {
+                                getLatchReason.mockReturnValue('connectionRemoved');
+                                return undefined;
+                            }
+                            return { identity: workerSignIn.pin, epoch: 0 };
+                        });
+                    }
+
+                    chooseAction('Sign in again' as unknown as vscode.MessageItem);
+                    await new Promise((resolve) => setTimeout(resolve, 20));
+
+                    expect(written).toBe('');
+                    expect(mockEvaluate).toHaveBeenCalledTimes(2);
+                    resolveEvaluation({ type: null, printable: '"switched to db 日本語"', durationMs: 1 });
+                    await vi.waitFor(() => expect(written).toContain('日本語> '));
+
+                    expect(written).toBe(`switched to db 日本語\r\n${message}\r\n日本語> `);
+                    expect(mockEvaluate).toHaveBeenCalledTimes(2);
+                    getLatchReason.mockReturnValue(undefined);
+                    written = '';
+                    pty.handleInput('\r');
+                    expect(written).toBe('\r\n日本語> ');
+                    written = '';
+                    pty.handleInput('x');
+                    expect(written).toBe('\r\x1b[8Cx\x1b[J');
+                },
+            );
+
+            it.each([
+                ['success', 'closed'],
+                ['success', 'disconnected'],
+                ['failure', 'closed'],
+                ['failure', 'disconnected'],
+            ] as const)(
+                'discards queued %s feedback when the terminal is %s',
+                async (outcome, terminalState): Promise<void> => {
+                    let resolveEvaluation!: (result: unknown) => void;
+                    mockEvaluate.mockImplementationOnce(
+                        () =>
+                            new Promise((resolve) => {
+                                resolveEvaluation = resolve;
+                            }),
+                    );
+                    pty.handleInput('pending()');
+                    pty.handleInput('\r');
+                    written = '';
+                    workerSignIn.recover.mockImplementationOnce(async () => {
+                        if (outcome === 'failure') {
+                            getLatchReason.mockReturnValue('connectionRemoved');
+                            return undefined;
+                        }
+                        return { identity: workerSignIn.pin, epoch: 0 };
+                    });
+
+                    chooseAction('Sign in again' as unknown as vscode.MessageItem);
+                    await new Promise((resolve) => setTimeout(resolve, 20));
+                    expect(written).toBe('');
+                    if (terminalState === 'closed') {
+                        pty.close();
+                    } else {
+                        pty.disconnect();
+                    }
+                    const boundaryOutput = terminalState === 'closed' ? '' : 'Disconnected\r\ntestdb> ';
+                    expect(written).toBe(boundaryOutput);
+                    resolveEvaluation({ type: 'string', printable: '"obsolete result"', durationMs: 1 });
+                    await new Promise((resolve) => setTimeout(resolve, 20));
+
+                    expect(written).toBe(boundaryOutput);
+                    expect(mockEvaluate).toHaveBeenCalledTimes(2);
+                    if (terminalState === 'disconnected') {
+                        getLatchReason.mockReturnValue(undefined);
+                        pty.handleInput('\r');
+                        expect(written).toBe(`${boundaryOutput}\r\ntestdb> `);
+                    }
+                },
+            );
+
+            it('waits for a safe prompt when input is disabled without an evaluation', async (): Promise<void> => {
+                workerSignIn.recover.mockResolvedValueOnce({ identity: workerSignIn.pin, epoch: 0 });
+                pty['_inputHandler'].setEnabled(false);
+
+                chooseAction('Sign in again' as unknown as vscode.MessageItem);
+                await vi.waitFor(() => expect(mockResetAfterSignIn).toHaveBeenCalledOnce());
+
+                expect(written).toBe('');
+                expect(mockEvaluate).toHaveBeenCalledOnce();
+                pty['_inputHandler'].setEnabled(true);
+                pty.handleInput('\r');
+                expect(written).toBe('\r\nSign-in restored. Run your command again.\r\ntestdb> ');
+                written = '';
+                pty.handleInput('\r');
+                expect(written).toBe('\r\ntestdb> ');
+            });
+
+            it('keeps the history selection and its saved draft after delayed success', async (): Promise<void> => {
+                workerSignIn.recover.mockResolvedValueOnce({ identity: workerSignIn.pin, epoch: 0 });
+                pty.handleInput('draft()');
+                pty.handleInput('\x1b[A');
+                written = '';
+
+                chooseAction('Sign in again' as unknown as vscode.MessageItem);
+                await vi.waitFor(() => expect(written).toContain('Sign-in restored.'));
+
+                expect(written).toBe(
+                    '\r\x1b[8Cdb.stats()\x1b[J\r\nSign-in restored. Run your command again.\r\ntestdb> \r\x1b[8Cdb.stats()\x1b[J',
+                );
+                expect(mockEvaluate).toHaveBeenCalledOnce();
+                written = '';
+                pty.handleInput('\x1b[B');
+                expect(written).toBe('\r\x1b[8Cdraft()\x1b[J');
+                mockEvaluate.mockResolvedValueOnce({ type: null, printable: null, durationMs: 1 });
+                pty.handleInput('\r');
+                await vi.waitFor(() => expect(mockEvaluate).toHaveBeenCalledTimes(2));
+                expect(mockEvaluate).toHaveBeenLastCalledWith('draft()', 80);
+            });
+
+            it.each(['pending ghost', 'visible ghost', 'completion list'] as const)(
+                'clears %s without resurrecting or accepting a suggestion after delayed success',
+                async (suggestionState): Promise<void> => {
+                    workerSignIn.recover.mockResolvedValueOnce({ identity: workerSignIn.pin, epoch: 0 });
+                    const completions = vi.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
+                        candidates:
+                            suggestionState === 'completion list'
+                                ? [
+                                      { label: 'help', insertText: 'help', kind: 'method' },
+                                      { label: 'hello', insertText: 'hello', kind: 'method' },
+                                  ]
+                                : [{ label: 'help', insertText: 'help', kind: 'method' }],
+                        prefix: 'hel',
+                        replacementStart: 0,
+                    });
+                    pty.handleInput('hel');
+                    if (suggestionState === 'visible ghost') {
+                        await vi.waitFor(() => expect(written).toContain('p\x1b[1D'));
+                    } else if (suggestionState === 'completion list') {
+                        pty.handleInput('\x09');
+                        expect(written).toContain('hello');
+                    }
+                    completions.mockClear();
+                    written = '';
+
+                    chooseAction('Sign in again' as unknown as vscode.MessageItem);
+                    await vi.waitFor(() => expect(written).toContain('Sign-in restored.'));
+
+                    const feedbackOutput = written;
+                    expect(written).toBe(
+                        `${suggestionState === 'visible ghost' ? '\x1b[K' : ''}\r\x1b[8Chel\x1b[J\r\nSign-in restored. Run your command again.\r\ntestdb> \r\x1b[8Chel\x1b[J`,
+                    );
+                    expect(pty['_completionListVisible']).toBe(false);
+                    await new Promise((resolve) => setTimeout(resolve, 80));
+                    expect(written).toBe(feedbackOutput);
+                    expect(completions).not.toHaveBeenCalled();
+                    expect(mockEvaluate).toHaveBeenCalledOnce();
+                    mockEvaluate.mockResolvedValueOnce({ type: null, printable: null, durationMs: 1 });
+                    pty.handleInput('\x1b[C');
+                    pty.handleInput('\r');
+                    await vi.waitFor(() => expect(mockEvaluate).toHaveBeenCalledTimes(2));
+                    expect(mockEvaluate).toHaveBeenLastCalledWith('hel', 80);
                 },
             );
 

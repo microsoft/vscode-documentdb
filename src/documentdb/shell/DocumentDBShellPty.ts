@@ -18,7 +18,7 @@ import { COMPLETION_OFFERED_EVENT, type CompletionCategory } from '../../telemet
 import { accumulateTelemetry } from '../../utils/accumulatingTelemetry';
 import { classifyCommand, extractRunCommandName } from '../../utils/classifyCommand';
 import { ClustersClient } from '../ClustersClient';
-import { ConnectionUnavailableError } from '../ConnectionUnavailableError';
+import { ConnectionUnavailableError, type ConnectionUnavailableReason } from '../ConnectionUnavailableError';
 import { CredentialCache } from '../CredentialCache';
 import { deserializeResultForSchema, feedResultToSchemaStore } from '../feedResultToSchemaStore';
 import {
@@ -102,6 +102,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private _evaluating = false;
     /** Whether the shell has been closed. */
     private _closed = false;
+    private readonly _deferredFeedback: string[] = [];
     /** Whether the current evaluation was cancelled by Ctrl+C. */
     private _interrupted = false;
     /** Spinner shown during long-running evaluations. */
@@ -250,6 +251,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     close(): void {
         this._closed = true;
+        this._deferredFeedback.length = 0;
         this._spinner?.stop();
         this._spinner = undefined;
         if (this._ghostTextTimer) {
@@ -292,6 +294,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         const partialCursor = retainPartialInput ? this._inputHandler.getCursor() : 0;
 
         this._disconnectRevision += 1;
+        this._deferredFeedback.length = 0;
         this.clearGhostState();
         this._spinner?.stop();
         this._spinner = undefined;
@@ -928,43 +931,38 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             return true;
         }
         if (error instanceof ConnectionUnavailableError) {
-            let message: string;
-            switch (error.reason) {
-                case 'userDisconnected':
-                    message = l10n.t('Disconnected. Reconnect from the tree, then run your command again.');
-                    break;
-                case 'unreachable':
-                    message = l10n.t(
-                        'The connection is unavailable. Check the server or network, then run your command again.',
-                    );
-                    break;
-                case 'credentialsRejected':
-                    message = l10n.t(
-                        'The saved credentials were rejected. Update them from the tree, then run your command again.',
-                    );
-                    break;
-                case 'credentialsUpdating':
-                    message = l10n.t(
-                        'This connection is being updated. Run your command again when the update finishes.',
-                    );
-                    break;
-                case 'connectionRemoved':
-                    message = l10n.t('This connection was removed. Open a shell from another connection.');
-                    break;
-                case 'credentialsChanged':
-                case 'identityChanged':
-                    message = l10n.t('This shell is bound to the previous connection. Open a new shell from the tree.');
-                    break;
-                default:
-                    message = l10n.t(
-                        'This connection is unavailable. Reconnect from the tree, then run your command again.',
-                    );
-                    break;
-            }
-            this.writeLine(this._outputFormatter.formatError(message));
+            this.writeLine(this._outputFormatter.formatError(this.unavailableMessage(error.reason)));
             return true;
         }
         return false;
+    }
+
+    private unavailableMessage(reason: ConnectionUnavailableReason): string {
+        switch (reason) {
+            case 'userDisconnected':
+                return l10n.t('Disconnected. Reconnect from the tree, then run your command again.');
+            case 'unreachable':
+                return l10n.t(
+                    'The connection is unavailable. Check the server or network, then run your command again.',
+                );
+            case 'credentialsRejected':
+                return l10n.t(
+                    'The saved credentials were rejected. Update them from the tree, then run your command again.',
+                );
+            case 'credentialsUpdating':
+                return l10n.t(
+                    'This connection is being updated. Run your command again when the update finishes.',
+                );
+            case 'connectionRemoved':
+                return l10n.t('This connection was removed. Open a shell from another connection.');
+            case 'credentialsChanged':
+            case 'identityChanged':
+                return l10n.t('This shell is bound to the previous connection. Open a new shell from the tree.');
+            default:
+                return l10n.t(
+                    'This connection is unavailable. Reconnect from the tree, then run your command again.',
+                );
+        }
     }
 
     private writeBoundedWorkerFailure(reason: WorkerAuthReason): void {
@@ -1022,7 +1020,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                         reason === 'credentialsChanged' ||
                         reason === 'identityChanged'
                     ) {
-                        this.handleWorkerFailure(new ConnectionUnavailableError(reason));
+                        this.writeAsyncFeedback(
+                            this._outputFormatter.formatError(this.unavailableMessage(reason)),
+                        );
                     }
                 }
                 return;
@@ -1046,13 +1046,15 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                                 reason === 'credentialsChanged' ||
                                 reason === 'identityChanged'
                             ) {
-                                this.handleWorkerFailure(new ConnectionUnavailableError(reason));
+                                this.writeAsyncFeedback(
+                                    this._outputFormatter.formatError(this.unavailableMessage(reason)),
+                                );
                             }
                         }
                         return;
                     }
                     this._sessionManager.resetAfterSignIn(result.identity, result.epoch);
-                    this.writeLine(
+                    this.writeAsyncFeedback(
                         this._outputFormatter.formatSystemMessage(l10n.t('Sign-in restored. Run your command again.')),
                     );
                 });
@@ -1176,7 +1178,41 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             this._ghostTextTimer = undefined;
         }
 
+        if (!this._closed) {
+            for (const line of this._deferredFeedback.splice(0)) {
+                this.writeLine(line);
+            }
+        }
         this._writeEmitter.fire(prompt);
+    }
+
+    private writeAsyncFeedback(line: string): void {
+        if (this._closed) {
+            return;
+        }
+        if (this._evaluating || !this._inputHandler.isEnabled) {
+            this._deferredFeedback.push(line);
+            return;
+        }
+
+        const text = this._inputHandler.buffer;
+        const cursor = this._inputHandler.cursor;
+        this.clearGhostState();
+        if (this._ghostTextTimer) {
+            clearTimeout(this._ghostTextTimer);
+            this._ghostTextTimer = undefined;
+        }
+        this._completionListVisible = false;
+
+        // Use the old render origin to move past all wrapped input before writing feedback.
+        this._inputHandler.restoreLine(text, text.length);
+        this._writeEmitter.fire('\r\n');
+        this.writeLine(line);
+
+        const prompt = this._inputHandler.isInMultiLineMode ? '┆ > ' : `${this._currentDatabase}> `;
+        this._inputHandler.setPromptWidth(terminalDisplayWidth(prompt));
+        this._writeEmitter.fire(prompt);
+        this._inputHandler.restoreLine(text, cursor);
     }
 
     /**
