@@ -77,18 +77,25 @@ Because the playground uses a full JavaScript runtime, you can write queries the
 
 ## Running Code
 
-The playground provides two execution modes, each triggered through CodeLens buttons that appear above your code:
+The playground provides two execution modes. You can use CodeLens, the Command Palette, or the
+editor title toolbar and overflow menu:
 
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="images/query-playground-codelens_dark.png"><img src="images/query-playground-codelens.png" alt="Query Playground showing Run All at the top, and Run, Collection View, Shell CodeLens links on each block" width="800" style="max-width:100%;height:auto;"></picture></p>
 
-| Mode          | Trigger                                                                          | Behavior                                  |
-| ------------- | -------------------------------------------------------------------------------- | ----------------------------------------- |
-| **Run Block** | Click the **Run** button above a specific block, or press `Ctrl+Enter`           | Executes the block at the cursor position |
-| **Run All**   | Click the **Run All** button at the top of the file, or press `Ctrl+Shift+Enter` | Executes the entire file, top to bottom   |
+| Mode          | Trigger                                                                                                   | Behavior                                  |
+| ------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| **Run Block** | CodeLens, Command Palette, editor title overflow, or editor context menu; `Ctrl+Enter`                     | Executes the block at the cursor position |
+| **Run All**   | CodeLens, Command Palette, or editor title; `Ctrl+Shift+Enter`                                            | Executes the entire file, top to bottom   |
 
-Each block also shows **Collection View** and **Shell** CodeLens links. These open the same query in the Collection View or the Interactive Shell, so you can switch tools without copy-pasting. Some scripts (e.g., loops, aggregations, or multi-statement blocks) may not be convertible to the Collection View.
+Each block also shows **Collection View** and **Shell** CodeLens links. The corresponding
+**Query Playground: Open Block in Collection View** and **Query Playground: Open Block in Shell**
+commands are available from the Command Palette, editor title overflow, and editor context menu.
+They require a connection and code in the target block. The Shell opens with the block text ready
+for execution. Some scripts (for example, loops, aggregations, or multi-statement blocks) may not
+be convertible to the Collection View.
 
-When you press `Ctrl+Enter` and the cursor is on a blank line between blocks, the playground runs the nearest preceding block.
+When a block action has no arguments, it uses the block at the cursor. If the cursor is on a blank
+line, it falls back to the nearest preceding block.
 
 Each execution reuses the connection you established when you connected to the cluster. There is no need to authenticate again or provide credentials separately.
 
@@ -157,12 +164,13 @@ You can also trigger this manually at any time through the Command Palette: run 
 
 ## Connections and Multiple Files
 
-Each playground file is permanently bound to the cluster and database it was created for. This means:
+Each playground file is bound to a cluster and database, and the connection can be changed for the
+active file:
 
 - **Multiple playgrounds, multiple connections**: You can have several `.documentdb.js` files open at the same time, each connected to a different server or database.
 - **Status bar indicator**: The VS Code status bar shows the active playground's connection details when the file is focused.
-- **CodeLens header**: The first line of each file displays a CodeLens showing the connection status. Click it to see connection details.
-- **No "switch connection" workflow**: To query a different database, create a new playground from that database's tree node.
+- **Connection actions**: Use **Query Playground: Connect to Database** or **Query Playground: Change Connection** from the Command Palette or editor title. The CodeLens header and status bar expose the same connection flow.
+- **Run with no saved connection**: A playground prompts for a connection when you run it without one.
 
 ## Keyboard Shortcuts
 
@@ -171,12 +179,16 @@ Each playground file is permanently bound to the cluster and database it was cre
 | `Ctrl+Enter`       | Run the current block |
 | `Ctrl+Shift+Enter` | Run the entire file   |
 
+Use `Cmd` on macOS. Connect, Shell, Collection View, and the focus commands have no default
+shortcuts. See [Accessibility](./accessibility) for the keyboard-reachable surfaces and
+screen-reader after-run behavior.
+
 ## Navigating to Other Features
 
 The playground is connected to the other query surfaces in the extension:
 
-- **Open in Collection View**: A CodeLens link lets you open the collection referenced in your script directly in the Collection View, where you can browse results visually.
-- **Open in Interactive Shell**: A CodeLens link lets you launch an Interactive Shell session for the same connection, pre-filled with your code.
+- **Open in Collection View**: A CodeLens link or the keyboard-reachable **Open Block in Collection View** command opens the collection referenced in your script in the Collection View, where you can browse results visually.
+- **Open in Interactive Shell**: A CodeLens link or the keyboard-reachable **Open Block in Shell** command launches an Interactive Shell session for the same connection, pre-filled with your code.
 - **From the Collection View**: The Collection View toolbar has an **Open in Playground** button that exports your current find query (filter, project, sort) into a new playground file.
 
 For more details on the Interactive Shell, see the [Interactive Shell](./interactive-shell) documentation.
@@ -192,6 +204,7 @@ connection timeout is under **Connections & Discovery**. You can also search for
 | `documentDB.playground.confirmRunAll` | `true`  | Show a confirmation dialog before running the entire playground file with Run All                                |
 | `documentDB.batchSize`                | `50`    | Number of documents to display per cursor iteration in the Query Playground and Interactive Shell                |
 | `documentDB.connectionTimeout`        | `30`    | Maximum time (in seconds) to wait for the playground to connect and authenticate (shared with Interactive Shell) |
+| `documentDB.playground.afterRun`       | `auto`  | Controls focus or notification behavior after a successful run; see the [Accessibility behavior table](./accessibility#screen-readers) |
 
 The connection timeout does not limit query execution. Use **Cancel** to stop a long-running query,
 or use `.maxTimeMS()` on a supported query to set a server-side limit.

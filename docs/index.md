@@ -81,6 +81,10 @@ The User Manual provides guidance on using the extension. It contains detailed d
 
 - [AI Performance Insights: Model and Billing](./user-manual/ai-utility-model)
 
+### Accessibility
+
+- [Accessibility](./user-manual/accessibility)
+
 ## Release Notes
 
 Explore the history of updates and improvements to the extension. Each release brings new features, enhancements, and fixes to improve your experience.

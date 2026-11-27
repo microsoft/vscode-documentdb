@@ -33,7 +33,10 @@ There are several ways to open an Interactive Shell session:
 1. **From the tree view**: Right-click a cluster, database, or collection node in the Connections, Discovery, or Azure views, then select **Open Interactive Shell**.
 2. **From the inline button**: Click the terminal icon (rightmost icon) next to a database or collection node in the tree view.
 3. **From the Collection View**: Use the **Open in Shell** toolbar button to export your current find query into a new shell session.
-4. **From the Query Playground**: Use a CodeLens link to launch a shell for the same connection.
+4. **From the Query Playground**: Use a CodeLens link, the Command Palette, the editor title
+   overflow, or the editor context menu to run **Open Block in Shell**. The playground must be
+   connected and the block at the cursor (or nearest preceding block on a blank line) must contain
+   code. See [Accessibility](./accessibility) for the complete keyboard workflow.
 
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="images/inline-action-buttons_dark.png"><img src="images/inline-action-buttons.png" alt="Inline action buttons on a collection node: Open Collection View, New Query Playground, Open Interactive Shell" width="800" style="max-width:100%;height:auto;"></picture></p>
 
@@ -152,7 +155,9 @@ The shell colorizes your input in real time as you type:
 | Gray    | Comments                                          |
 | Red     | Regex literals (and unterminated string errors)   |
 
-Syntax highlighting can be disabled via the `documentDB.shell.display.colorSupport` setting for accessibility (screen readers) or piped output.
+Set `documentDB.shell.display.colorSupport` to `false` for plain output. Shell links stay
+underlined when colors are disabled. See [Accessibility](./accessibility#interactive-shell) for the
+documented accessibility behavior and caveats.
 
 ## Cursor Iteration
 
@@ -213,7 +218,9 @@ The Interactive Shell is connected to the other query surfaces in the extension:
 - **To Collection View**: Click the `↗ Collection View` link that appears after query results.
 - **To Query Playground**: Click the `↗ Query Playground` link that appears after query results to open a playground for the same collection.
 - **From the Collection View**: The Collection View toolbar has an **Open in Shell** button that pre-feeds your current find query into a new shell session.
-- **From the Query Playground**: CodeLens links let you launch a shell from within your script.
+- **From the Query Playground**: CodeLens or the keyboard-reachable **Open Block in Shell**
+  command launches a shell from the block at the cursor, with the preceding-block fallback on a
+  blank line.
 
 For more details on the Query Playground, see the [Query Playground](./query-playground) documentation.
 
@@ -226,7 +233,7 @@ and the shared batch size is under **Queries & Results**. You can also search fo
 | Setting                                   | Default | Description                                                                                                        |
 | ----------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------ |
 | `documentDB.connectionTimeout`            | `30`    | Maximum time (in seconds) to wait for the shell to connect and authenticate (shared with Query Playground)         |
-| `documentDB.shell.display.colorSupport`   | `true`  | Enable ANSI color support for syntax highlighting and formatted output. Disable for screen readers or piped output |
+| `documentDB.shell.display.colorSupport`   | `true`  | Controls ANSI colors and plain shell output; see [Accessibility](./accessibility#interactive-shell) for the supported behavior |
 | `documentDB.shell.display.autocompletion` | `true`  | Tab completion, the candidate list, and the dim inline suggestions at the cursor                                   |
 | `documentDB.shell.display.inlineHints`    | `true`  | The informational hints marked with 🛈, which are never inserted into your input                                    |
 | `documentDB.shell.multiLinePasteBehavior` | `ask`   | Controls how multi-line text is handled when pasted into the shell                                                 |
@@ -246,7 +253,8 @@ The help output also prints the full Settings search query for manual access.
 - **Use variables for iteration**: Store intermediate results in variables and refine your queries step by step.
 - **Switch databases with `use`**: No need to open a new shell. Just type `use otherDatabase` and the prompt updates.
 - **Copy queries to the playground**: If an ad-hoc query grows complex, use the navigation links to move it to a playground file where you can save and refine it.
-- **Disable colors for accessibility**: If you use a screen reader, set `documentDB.shell.display.colorSupport` to `false` for clean, unformatted output.
+- **Disable colors for accessibility**: See [Accessibility](./accessibility#interactive-shell)
+  for the `documentDB.shell.display.colorSupport` setting and its limitations.
 
 ---
 

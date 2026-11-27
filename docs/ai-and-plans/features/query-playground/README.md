@@ -31,10 +31,14 @@ sibling areas [interactive-shell](../interactive-shell/README.md) and
 - `src/documentdb/playground/**` — the playground service, evaluation, result rendering, type
   definitions, and the TypeScript server plugin
 - `src/commands/playground/**` — commands, including the Connect picker
+- Playground result lifecycle is shared by the run commands, with `documentDB.playground.afterRun`
+  resolved separately for screen-reader shortcut invocations and other entry points.
 
 ## User docs
 
 - [docs/user-manual/query-playground.md](../../../user-manual/query-playground.md)
+- [docs/user-manual/accessibility.md](../../../user-manual/accessibility.md) — keyboard entry
+  points, focus commands, and the after-run setting
 - [docs/user-manual/query-runtime.md](../../../user-manual/query-runtime.md) — including
   "Running Several Sessions at Once", which is the source of truth for the per-cluster worker
   behavior that [multi-connection-behavior.md](./multi-connection-behavior.md) used to hold
@@ -55,6 +59,10 @@ sibling areas [interactive-shell](../interactive-shell/README.md) and
   and well formatted instead of ad-hoc.
 - **The name is "Query Playground".** "Scrapbook" and "scratchpad" were removed everywhere,
   including command ids, language ids, folder names, and webpack entry points.
+- **Accessibility actions use standard VS Code surfaces.** CodeLens remains available for mouse
+  users; palette, title, overflow and context-menu entry points do not require new default
+  shortcuts. The after-run behavior is defined by
+  [accessibility decision 0004](../accessibility/decisions.md#0004--after-a-run-focus-moves-to-the-result-only-in-screen-reader-mode).
 
 ## Timeline
 
