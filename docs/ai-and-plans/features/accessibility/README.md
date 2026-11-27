@@ -102,7 +102,7 @@ implementation; the comment alone does not establish that a fix has landed.
 
 ### 6. Index-creation completion announcement
 
-**Status:** available now.
+**Status:** implemented in `91dd07c4`; focused tests passed; screen-reader verification pending.
 **Issue:** [#772](https://github.com/microsoft/vscode-documentdb/issues/772).
 
 Announce successful index creation from AI Performance Insights without requiring

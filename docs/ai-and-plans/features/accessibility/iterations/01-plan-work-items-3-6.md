@@ -111,6 +111,18 @@ established pattern in this repo.
 text, and that the button keeps focus. Add a browser scenario if Query Insights already
 has one.
 
+> **Done (2026-11-27), commit `91dd07c4`:** `mai-code-2` added four persistent
+> Announcers for primary/secondary success and failure and used `disabledFocusable`
+> during loading and after success. This follows the operator's accepted 0006
+> design. Advised (`claude-opus-5.5`), 88% confidence: action handlers and
+> disabling conditions stay unchanged; retry clears error state so the existing
+> Announcer can announce the same failure again. The leader required a fresh DOM
+> identity assertion and a post-success duplicate-click check. Four new component
+> tests passed, covering both actions and repeated failures. The worker's type
+> check hit TS6305 because workspace declaration outputs had not been built;
+> the Case 1 batch build remains pending. No new message keys or live-region
+> provider were introduced. Actual screen-reader announcement remains unverified.
+
 ## 4. New Document focus management (#769, #770)
 
 **Finding (#770).** On mount, `DocumentView` calls `saveButtonRef.current?.focus()`
