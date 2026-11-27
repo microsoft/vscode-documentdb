@@ -69,7 +69,11 @@ it('dismisses without closing, and only closes a dirty view after confirmation',
         expect(onAction).not.toHaveBeenCalled();
         expect(dialog()).not.toBeNull();
         await act(async () =>
-            dialog()?.querySelector<HTMLButtonElement>('button[aria-label^="Dismiss dialog"]')?.click(),
+            dialog()
+                ?.querySelector<HTMLButtonElement>(
+                    'button[aria-label="Dismiss dialog to access view contents"]',
+                )
+                ?.click(),
         );
         expect(onDismiss).toHaveBeenCalledOnce();
         expect(confirm).not.toHaveBeenCalled();

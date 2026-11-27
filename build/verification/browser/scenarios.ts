@@ -2709,7 +2709,7 @@ const collectionViewScenarios = {
                 selector: '.disconnectedOverlayBackground',
                 attribute: 'inert',
                 expected: null,
-                steps: [{ action: 'click', role: 'button', name: 'Dismiss dialog to copy view contents' }],
+                steps: [{ action: 'click', role: 'button', name: 'Dismiss dialog to access view contents' }],
             },
             {
                 kind: 'text',

@@ -318,6 +318,26 @@ describe('connect request telemetry', () => {
         });
     });
 
+    it('does not save the decoded password when the saved-credentials offer is dismissed', async (): Promise<void> => {
+        const connection = makeConnection('mongodb://localhost:27017/', AuthMethodId.NativeAuth);
+        connection.secrets.nativeAuthConfig = { connectionUser: 'test-user', connectionPassword: 'test%40password' };
+        vi.mocked(ConnectionStorageService.get).mockResolvedValue(connection);
+        vi.mocked(ClustersClient.connectInteractive)
+            .mockRejectedValueOnce(new Error('Authentication failed.'))
+            .mockResolvedValueOnce({ connectionCorrelationId: 'retry' } as ClustersClient);
+        showErrorMessage.mockResolvedValueOnce('Try with decoded password');
+        vi.mocked(vscode.window.showInformationMessage).mockResolvedValueOnce(undefined);
+
+        await expect(makeItem().connect()).resolves.toMatchObject({ connectionCorrelationId: 'retry' });
+
+        expect(vscode.window.showInformationMessage).toHaveBeenCalledExactlyOnceWith(
+            'Connected to "Saved connection" using the decoded password. Would you like to update your saved credentials with the correctly formatted password?',
+            { modal: false },
+            'Update saved password',
+        );
+        expect(ConnectionStorageService.save).not.toHaveBeenCalled();
+    });
+
     it('reports a successful connection with its connection ID', async (): Promise<void> => {
         vi.mocked(ClustersClient.connectInteractive).mockResolvedValue({
             connectionCorrelationId: 'attempt',

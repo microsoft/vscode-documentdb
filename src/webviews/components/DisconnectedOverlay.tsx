@@ -98,7 +98,7 @@ export function DisconnectedOverlay({
                                         <Button
                                             appearance="subtle"
                                             icon={<DismissRegular />}
-                                            aria-label={l10n.t('Dismiss dialog to copy view contents')}
+                                            aria-label={l10n.t('Dismiss dialog to access view contents')}
                                             disabledFocusable={confirming || recovering}
                                         />
                                     </DialogTrigger>
