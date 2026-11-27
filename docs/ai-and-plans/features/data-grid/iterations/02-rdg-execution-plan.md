@@ -124,13 +124,14 @@ identify the current and upcoming gates and what they block.
 
 ### G2: hands-on direction check (operator test gate)
 
-- **When:** A2–A8 have passed (WI-5 to WI-9 done) and the VSIX for G2 is built (A9).
+- **When:** A2–A8 have passed (including WI-9b) and the VSIX for G2 is built (A9).
 - **Steps for the operator:** install the VSIX in VS Code; against a real cluster, open a
   collection with wide and nested data; in Table view step into an object by double-click and by
   the G1 key, step out by Level up and a breadcrumb; select one, several and no rows and try
-  View/Edit/Delete on a throwaway collection; page through 10/50/100/500; switch to Tree view,
-  expand and collapse with arrow keys, check Narrator reads level and expanded state; switch the
-  three VS Code themes.
+  View/Edit/Delete on a throwaway collection; page through 10/50/100/500. In both grids, check
+  arrow and forward/reverse Tab navigation, Escape to the view picker, and that only the
+  currently focused control shows a focus ring. In Tree view, expand and collapse with Enter
+  and check Narrator reads level and expanded state. Switch the three VS Code themes.
 - **Cross-collection isolation (added by operator, 2026-11-26):** Open two collection panels with
   distinct document IDs. While a refresh in the first is pending, switch to the second, select a
   row and open View. Check that the namespace and ID belong to the second collection before and
@@ -173,7 +174,7 @@ identify the current and upcoming gates and what they block.
 | A5   | WI-5, WI-6             | Their scope rows' contract checks pass; no earlier passing check regresses; build green.                                                                                                                                |
 | A6   | WI-7                   | K1–K2 checks pass, including the late-delete and missing-`_id` cases; advisor logic review approved.                                                                                                                    |
 | A7   | WI-8                   | M1, M2, M7 checks pass; step-in telemetry still fires (unit test or harness call log).                                                                                                                                  |
-| A8   | WI-9                   | M4–M5 checks pass; advisor logic review approved.                                                                                                                                                                       |
+| A8   | WI-9, WI-9b            | M4–M5 and the shared focus/navigation checks pass; advisor logic review approved; the resize investigation is resolved separately.                                                                                       |
 | A9   | Before G2              | `npm run package` succeeds; L1 and L3 checks green; a VSIX path is in the G2 message.                                                                                                                                   |
 | A10  | WI-10                  | Sweep report written with "verified" and "not verified" lists; no console errors or CSP violations in any Collection View route.                                                                                        |
 | A11  | Before G3b             | Full Case 2 list from `.github/copilot-instructions.md` ran and passed, each result reported separately.                                                                                                                |
@@ -242,17 +243,17 @@ theme with no reported console, page or CSP errors. Each run recorded `common.re
 | 1    | WI-2b ∥ WI-4b         | WI-2b after WI-4a (placeholders); WI-4b owns a new theme file                                                         | —            |
 | 1    | WI-3b                 | After WI-2b, WI-3a, WI-4a (shares `fixtures.ts` and `scenarios.ts`)                                                   | A2           |
 | 1    | WI-3c ∥ WI-9a         | WI-9a in a scratch worktree                                                                                           | A3, A4       |
-| 2    | WI-5 ∥ WI-6 ∥ WI-9    | WI-6 owns the cell; WI-5 the table; WI-9 the tree. WI-6's last step wires the cell into the table after WI-5 commits. | A5, A8       |
+| 2    | WI-5 ∥ WI-6 ∥ WI-9    | WI-6 owns the cell; WI-5 the table; WI-9 the tree. WI-6's last step wires the cell into the table after WI-5 commits. | A5           |
 | 2    | WI-7 → WI-8           | Same files; one after the other                                                                                       | A6, A7       |
+| 2    | WI-9b                 | Follow-up to the WI-9 implementation; the WI-9 resize investigation remains separate.                                 | A8           |
 | 3    | (build)               | —                                                                                                                     | A9, **G2**   |
 | 3    | WI-G2-n               | Findings from G2, sized by the leader                                                                                 | —            |
 | 4    | WI-10 ∥ WI-11         | WI-10 owns checks; WI-11 owns docs                                                                                    | A10          |
 | 4    | WI-12                 | Needs the draft PR                                                                                                    | **G3a**      |
 | 4    | WI-G3-n, then Case 2  | —                                                                                                                     | A11, **G3b** |
 
-Critical path: G1 → WI-4a → WI-2b → WI-3b → WI-3c → WI-5 → WI-7 → WI-8 → G2 → WI-10 → WI-12 → G3a
-→ G3b. The tree (WI-9a, WI-9) runs beside the table and must not become the critical path; if A4
-fails, it does, through E1.
+Current critical path: WI-9 resize investigation and WI-9b → A8 → A9 → G2 → WI-10 → WI-12
+→ G3a → G3b. The main table lane through WI-8 is complete.
 
 ### Models
 
@@ -1096,6 +1097,38 @@ through `mai-code-2-flash` after each pair of items, not after every commit.
 > in that observation; it does not clear the recorded page error or authorize a pin or contract
 > change. Pause after the current checks to collect the operator's other accessibility feedback.
 
+> **Resize investigation (E1), still open:** The authorized `hydrafusion-max` model was
+> unavailable, so the diagnosis did not run. Keep the resize error in WI-9, separate from
+> WI-9b. Diagnose it without suppressing page errors or counting the manual scroll check as
+> an A8 pass. If the array assertion needs to navigate to a virtualized row to check its
+> contents, handle that setup change under E3 separately.
+
+**WI-9b: Table and Tree keyboard navigation** · scheduled in Step 2, before A8/A9 and G2
+
+- **Found during WI-9 testing (2026-11-27):** On `arrays/dark`, Right on the expandable Field
+  cell opened the node instead of moving to Value, so the operator used Tab to move across.
+  Shift+Tab then moved focus to the view picker while the old cell retained its focus-coloured
+  outline. RDG styles its remembered active cell independently of browser focus; the exact
+  cause of the early reverse-Tab exit has not been reproduced.
+- **Operator decision:** In both grids, arrows move among visible cells and Tab/Shift+Tab move
+  forward/backward across cells and row boundaries. Shift+Tab leaves from the upper-left
+  header; Tab leaves from the last cell. Escape leaves either grid and focuses the view picker.
+  A popup that already handles Escape gets first use of the key. In Tree, Enter on an
+  expandable Field cell toggles it without moving focus; the pointer chevron still works.
+  Up/Down through the visible hierarchy is sufficient; no separate parent shortcut.
+- **Scope:** Fix the shared focus ring without removing Table's selected-row styling.
+  Reproduce and fix the early reverse-Tab exit independently of the ring. Keep native RDG
+  navigation where it meets the agreed behavior and add only the focus wiring needed for
+  Escape. Preserve Table Enter-to-step-in and the existing selection gestures. When implementing
+  the revised M5 behavior, replace the pinned Left/Right tree-action expectations with
+  Enter and visible-cell navigation expectations; retain the hierarchy and expansion-state
+  checks. No changes to the ResizeObserver investigation, pin, or unrelated contracts.
+- **Acceptance:** Integrated Browser checks in dark, light and high contrast for focus
+  entry/exit, both Tab directions across rows, Ctrl+Home to the start, Escape to the picker,
+  one visible focus ring, and tree expansion and navigation with an unchanged array cap.
+  Cover the 500-row Table case and verify the keyboard path and announcements with Narrator at G2.
+  Finish the current WI-9 resize track separately; do not edit shared tree files concurrently.
+
 ### Step 3
 
 Leader runs A9 through `mai-code-2-flash`, then raises **G2**. After release: WI-G2-n items, each
@@ -1241,7 +1274,7 @@ packaged-theme caveat. The operator accepted release metadata for the support fl
 stable workbench smoke, a real collection, screen readers and high-contrast were not run.
 
 Step 1 is complete. A1–A7 passed; the Table works through WI-8, including nested actions and
-the held late query. WI-9 is not accepted: A8 remains under E1, with the operator confirming
-that the end of the ten-element array can be reached by scrolling. Pause to collect the
-operator's accessibility feedback before taking another implementation step. A9 and G2 are
-not reached, and no draft PR has been opened.
+the held late query. WI-9 is not accepted: A8 remains under E1 for the resize error, with the
+operator confirming that the end of the ten-element array can be reached by scrolling.
+The navigation feedback is scheduled separately as WI-9b before A8/A9 and G2. Implementation
+remains paused. No draft PR has been opened.
