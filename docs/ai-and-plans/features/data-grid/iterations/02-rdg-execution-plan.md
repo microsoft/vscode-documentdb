@@ -1245,6 +1245,15 @@ passed. The existing VSIX is the G2 baseline, not an artifact containing these f
 > `gpt-6.1-terra` (19). The keyboard path to full values in View/JSON still merits a
 > workbench check, especially for projected rows without an actionable ID.
 
+> **WI-G2-4 done (2026-11-27):** Localized help now describes Enter or double-click to
+> step in, Level Up, ancestor breadcrumbs, and Root Level. The toolbar and breadcrumb
+> have descriptive names. Under operator-approved E3, only the late-query breadcrumb
+> locator changed; its behavior assertions are unchanged. The build and 102 targeted
+> tests passed. The Integrated Browser displayed the help and passed `step-in` 10/10
+> and `late-query` 3/3 in each theme. Localization bundle regeneration remains Case 2.
+> Coding: 5.7 AIU on `mai-code-2` (8 requests); shared WI-G2-2/4 initial checks:
+> 0.2 AIU terminal (3), 13.5 AIU Integrated Browser (23).
+
 ### Step 4
 
 **WI-10: automated sweep** · `mai-code-2` (fallback `gpt-6.1-sol`), runs by `mai-code-2-flash`

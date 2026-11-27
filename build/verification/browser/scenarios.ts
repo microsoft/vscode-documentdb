@@ -747,7 +747,7 @@ export const collectionViewContracts = {
     ],
     'late-query': [
         { kind: 'text', name: 'TDD: K2 an old nested request can remain pending while returning to Root',
-            requiresGrid: 'grid', selector: '[aria-label="Small breadcrumb example with buttons"]',
+            requiresGrid: 'grid', selector: '[aria-label="Document field path"]',
             includes: ['details'], excludes: [],
             steps: [{ action: 'dblclick', role: 'gridcell', name: '{...}' }] },
         { kind: 'text', name: 'TDD: K2 late same-panel data cannot replace current root results',
