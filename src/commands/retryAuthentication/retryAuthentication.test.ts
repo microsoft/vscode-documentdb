@@ -213,10 +213,7 @@ describe('retryAuthentication', () => {
     ] as const)(
         'allows the existing discovery credential setup only for Native auth (%s, %s)',
         async (view, authMechanism, shouldRefresh): Promise<void> => {
-            const node = withRetryCapability(
-                { id: `${view}/test`, cluster: { clusterId: 'test' }, getTreeItem },
-                view,
-            );
+            const node = withRetryCapability({ id: `${view}/test`, cluster: { clusterId: 'test' }, getTreeItem }, view);
             vi.mocked(CredentialCache.getCredentials).mockReturnValueOnce({
                 clusterId: 'test',
                 connectionString: 'mongodb://test',
@@ -333,10 +330,7 @@ describe('retryAuthentication', () => {
                 return;
             }
 
-            expect(ClustersClient.clearCredentialRejection).toHaveBeenCalledExactlyOnceWith(
-                node.cluster.clusterId,
-                0,
-            );
+            expect(ClustersClient.clearCredentialRejection).toHaveBeenCalledExactlyOnceWith(node.cluster.clusterId, 0);
             expect(CredentialCache.deleteCredentials).toHaveBeenCalledExactlyOnceWith(node.cluster.clusterId);
             expect(ClustersClient.clearCredentialRejection).toHaveBeenCalledBefore(
                 vi.mocked(CredentialCache.deleteCredentials),

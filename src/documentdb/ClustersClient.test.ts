@@ -422,17 +422,13 @@ describe('regular connection startup diagnostics', () => {
             throw new Error('Expected the query to fail.');
         }
         expect(caught).not.toBe(failure);
-        expect(caught.message).toBe(
-            'private-query-connection-closed Run the query again to retry the connection.',
-        );
+        expect(caught.message).toBe('private-query-connection-closed Run the query again to retry the connection.');
         expect(caught.cause).toBe(failure);
         expect(ClustersClient.getBinding(clusterId)).toBe(client.binding);
         expect(ClustersClient.hasReusableClient(clusterId)).toBe(false);
 
         mockToArray.mockResolvedValueOnce([{ _id: 'retried' }]);
-        await expect(
-            session.runFindQueryWithCache('db', 'items', { filter: '{}' }, 1, 10),
-        ).resolves.toBe(1);
+        await expect(session.runFindQueryWithCache('db', 'items', { filter: '{}' }, 1, 10)).resolves.toBe(1);
         expect(ClustersClient.getBinding(clusterId)).toMatchObject({
             generation: client.generation + 1,
         });
@@ -445,9 +441,7 @@ describe('regular connection startup diagnostics', () => {
         const failure = new MongoNotConnectedError('private-replacement-connection-closed');
         mockConnect.mockRejectedValueOnce(failure);
 
-        await expect(
-            session.runFindQueryWithCache('db', 'items', { filter: '{}' }, 1, 10),
-        ).rejects.toBe(failure);
+        await expect(session.runFindQueryWithCache('db', 'items', { filter: '{}' }, 1, 10)).rejects.toBe(failure);
         expect(failure.message).toBe('private-replacement-connection-closed');
         expect(mockToArray).not.toHaveBeenCalled();
         expect(mockConnect).toHaveBeenCalledTimes(2);
@@ -892,9 +886,9 @@ describe('regular connection startup diagnostics', () => {
         const driverCallback = vi.mocked(MongoClient).mock.lastCall?.[1]?.authMechanismProperties?.OIDC_CALLBACK;
         const pin = ClustersClient.getLastVerifiedIdentity(clusterId);
         const credentials = CredentialCache.getCredentials(clusterId);
-        await expect(
-            driverCallback!({ version: 1, timeoutContext: new AbortController().signal }),
-        ).rejects.toBe(signInMiss);
+        await expect(driverCallback!({ version: 1, timeoutContext: new AbortController().signal })).rejects.toBe(
+            signInMiss,
+        );
         expect(ClustersClient.getExistingClient(clusterId)).toBe(client);
         expect(mockClose).not.toHaveBeenCalled();
         const handshake = pauseNextConnect();

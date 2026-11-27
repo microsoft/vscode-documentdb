@@ -103,9 +103,7 @@ export class AzureSubscriptionProviderWithFilters extends VSCodeAzureSubscriptio
 
         const counters = { skippedAccounts: 0, skippedTenants: 0 };
         try {
-            const subscriptions = await this.listingSkips.run(counters, () =>
-                super.getAvailableSubscriptions(options),
-            );
+            const subscriptions = await this.listingSkips.run(counters, () => super.getAvailableSubscriptions(options));
             if (counters.skippedAccounts > 0 || counters.skippedTenants > 0) {
                 void callWithTelemetryAndErrorHandling('azureSubscriptions.partialListing', (context) => {
                     context.errorHandling.suppressDisplay = true;

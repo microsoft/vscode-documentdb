@@ -367,10 +367,9 @@ export class ClusterSession {
                 !ClustersClient.hasReusableClient(ran.clusterId) &&
                 ClustersClient.getLatchReason(ran.clusterId) === undefined
             ) {
-                throw new Error(
-                    `${error.message} ${l10n.t('Run the query again to retry the connection.')}`,
-                    { cause: error },
-                );
+                throw new Error(`${error.message} ${l10n.t('Run the query again to retry the connection.')}`, {
+                    cause: error,
+                });
             }
             throw error;
         }

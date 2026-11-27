@@ -94,8 +94,7 @@ export class WorkerTokenRelay {
             driverAbortFlag instanceof SharedArrayBuffer && driverAbortFlag.byteLength === Int32Array.BYTES_PER_ELEMENT
                 ? new Int32Array(driverAbortFlag)
                 : undefined;
-        const shouldObserve = (): boolean =>
-            postStartup && authMechanism === 'MicrosoftEntraID';
+        const shouldObserve = (): boolean => postStartup && authMechanism === 'MicrosoftEntraID';
         const surface = persistent ? 'shell' : 'playground';
         const assertDestination = (): void => {
             const decision = evaluateEntraDestinationFromSettings(connectionString);

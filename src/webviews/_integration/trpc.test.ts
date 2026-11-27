@@ -160,8 +160,7 @@ describe('publicProcedureWithTelemetry', (): void => {
         ['ordinary', ordinaryResponse],
         ['malformed unavailable', malformedUnavailableResponse],
     ] as const)('does not add unavailableReason for an %s response', async (procedure, expected): Promise<void> => {
-        const result =
-            procedure === 'ordinary' ? await caller().ordinary() : await caller().malformedUnavailable();
+        const result = procedure === 'ordinary' ? await caller().ordinary() : await caller().malformedUnavailable();
         expect(result).toBe(expected);
         expect(recordedContexts).toHaveLength(1);
         expect(recordedContexts[0].telemetry.properties.unavailableReason).toBeUndefined();

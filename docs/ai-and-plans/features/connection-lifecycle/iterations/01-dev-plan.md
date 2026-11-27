@@ -83,13 +83,13 @@ followed by:
 Do not continue past the blocked step until the operator replies. Work that does not depend on the
 result may continue, but say so in the message. Record the result in the Progress block of the WI.
 
-| OP   | When               | Test                                                                                                                                               |
-| ---- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| OP-1 | WI-1, CP-0         | **Two parts.** (a) Before the handler change: does an expired token on a new socket get code 18 or a socket close? (b) After it: renewal succeeds. |
-| OP-2 | WI-3, CP-W3        | The azext workflow checks on the packaged VSIX: Azure sign-in, discovery, filters, deep links, wizards, Azure Resources view.                      |
-| OP-3 | WI-5 done          | OT-2's tree part with a real sign-out: Sign in again, a dismissal, no reprompt.                                                                    |
-| OP-4 | WI-6 done          | Cleared: short OT-1 and OT-3 identity-guard evidence; the original password-only recovery check was waived by the operator.                        |
-| OP-5 | WI-7 done          | OT-7, including **Keep open (disabled)** and its pushed disable message, plus OT-3's immediate lock after a saved edit (decision 0018).            |
+| OP   | When               | Test                                                                                                                                                                                      |
+| ---- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OP-1 | WI-1, CP-0         | **Two parts.** (a) Before the handler change: does an expired token on a new socket get code 18 or a socket close? (b) After it: renewal succeeds.                                        |
+| OP-2 | WI-3, CP-W3        | The azext workflow checks on the packaged VSIX: Azure sign-in, discovery, filters, deep links, wizards, Azure Resources view.                                                             |
+| OP-3 | WI-5 done          | OT-2's tree part with a real sign-out: Sign in again, a dismissal, no reprompt.                                                                                                           |
+| OP-4 | WI-6 done          | Cleared: short OT-1 and OT-3 identity-guard evidence; the original password-only recovery check was waived by the operator.                                                               |
+| OP-5 | WI-7 done          | OT-7, including **Keep open (disabled)** and its pushed disable message, plus OT-3's immediate lock after a saved edit (decision 0018).                                                   |
 | OP-6 | Before PR F (CP-5) | OT-1 to OT-7 on the packaged VSIX: first action a write after at least two hours idle, continuous use across expiry, and sleep/wake plus Shell and Playground after expiry (PR F step 3). |
 
 ### Per-PR workflow
