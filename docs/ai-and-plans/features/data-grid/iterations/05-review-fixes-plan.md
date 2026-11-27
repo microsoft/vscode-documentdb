@@ -357,7 +357,25 @@ change host cache versioning or claim end-to-end query isolation.
 
 ### 3. R2 — keyboard step-in restores grid focus (decision 0004)
 
-**Status:** In progress; clean failing-first browser evidence complete, implementation pending.
+**Status:** Implemented; focused component and three-theme source-browser evidence complete.
+
+> **Done (2026-11-27), commit `9eb782bd`:** keyboard step-in now carries a local,
+> request/query/path-bound one-shot focus intent to the successfully applied Table page.
+> Table resolves the same `rowKey` and focuses column 0 after commit without selecting it;
+> outside focus, supersession, failure and unmount cancel permanently. Pointer behavior is
+> unchanged. Added 11 component cases and one harness case, the three uninterrupted M7
+> contracts, positional-row coverage and held-reply picker-focus preservation. Decisions:
+> operator specified the behavior and models; advisor `claude-opus-5.5` approved the exact
+> production logic and test-only leaf-column correction at high confidence (no numerical
+> figures supplied); leader carried out those decisions and committed only owned item files.
+> All behavioral assertions were retained. Initial build failed in the new RDG mock and
+> was corrected without production changes. Component tests passed 11/11; the changed
+> four-case Table file passed again after correction; harness tests passed 78/78; build
+> passed. Post-fix source journeys: 9/9 ready, 90/90 assertions, 135 RPC calls, zero errors
+> in 49.410 seconds, including positional focus and held-reply picker focus in all themes.
+> Full reports and the setup failure/retry/authorized clean baseline remain recorded below.
+> No localized string changed. No packaged/workbench screen-reader check, Case 2,
+> formatting, push, thread reply, automation or G3a/G3b release was performed.
 
 **Fresh-run progress (2026-11-27):** resumed from `47539263` at
 `2026-11-27T16:11:34.558Z`, with the operator retaining `mai-code-2` for implementation/docs,
@@ -405,6 +423,53 @@ Full raw assertion/call/error reports are persisted in the fresh session's `file
 `wi-g3-3-before-clean.txt` (30,055 bytes) and `wi-g3-3-before-retry.txt` (24,542 bytes).
 The leader accepted this operator-authorized reproduction gate and dispatched `mai-code-2`
 to implement the recorded design and component tests. No post-fix result is claimed yet.
+
+**Implementation returned (2026-11-27), `mai-code-2`:** the worker added the local
+request-bound intent, keyboard/pointer discrimination and Table's exact-page one-shot layout
+effect, plus 11 component cases (seven parent wiring, four Table) and a held keyboard-step-in
+picker-focus contract appended to `late-query`. Existing contracts are unchanged. No checks
+were run by the coding worker. The exact revision is now with `claude-opus-5.5` for lifecycle
+review while `mai-code-2-flash` runs the focused component/harness tests, Case 1 build and,
+only if they pass, nine affected source journeys. No approval or post-fix success is claimed
+before those agents return.
+
+**Review and first post-fix checks (2026-11-27):** the assigned advisor approved the exact
+production revision at high confidence (no numerical figure supplied), including request
+binding, cancellation, cleanup and Table's public-handle handoff. Component tests passed
+11/11 in 15.25 seconds; harness tests passed 78/78 in 2.27 seconds. `npm run build` failed
+with TS2339 in the new `DataViewPanelTable.test.tsx`, lines 54 and 71: the mock accesses
+`key` on RDG's column-or-group union without narrowing the group case. No browser journeys
+were run after this failure, and no existing `TDD:` assertion failed. The leader requested
+an advisor-approved test-only typing correction; production and every behavioral assertion
+must remain unchanged. Commit and post-fix browser evidence remain blocked.
+
+**Test-only correction (2026-11-27):** the advisor approved narrowing the mocked RDG columns
+to leaf `Column<TableRow>` values, throwing on unexpected groups rather than filtering and
+shifting column indexes. `mai-code-2` applied exactly that correction, without changing
+production or assertions. The parent same-path supersession case explicitly asserts equal
+old/new paths; no coverage reduction was accepted. The changed four-case Table test, build
+and nine source journeys are now with the checks worker.
+
+**Checks delegation deviation (2026-11-27):** host events revealed an unnecessary
+`mai-code-2-flash` review child (`8c577ad1-dbbd-4ef5-b42c-2b3cc97a5ab8`), started by the checks
+worker without a model override and blocked before inspection (12.223 seconds, zero tools).
+Its result was not used as advice or substituted for the designated `claude-opus-5.5`
+approval. The worker's claimed child ID and statement that the assigned advisor could not
+inspect were incorrect; host records established the actual ID/model. This failed attempt
+is included under `review` in fresh-run usage, and further checks delegation is prohibited.
+
+**Post-fix completion evidence (2026-11-27), `mai-code-2-flash`:** after the exact test-only
+correction, the four Table cases passed in 7.78 seconds and `npm run build` passed (npm
+did not report a duration). The unchanged parent seven cases and harness 78 cases had
+already passed; they were not redundantly rerun. One preserved-helper execution ran
+`step-in`, `no-id` and `late-query` in dark, light and high-contrast:
+**9/9 ready, 90/90 assertions passed, 135 RPC calls, zero errors**, in 49.410 seconds.
+Each theme contributed 13 step-in assertions/18 calls, 12 no-ID assertions/8 calls and
+five late-query assertions/19 calls. There were no post-fix setup/gesture failures,
+retries or focus repairs. The exact 41,739-byte raw report is persisted as
+`files/wi-g3-3-after.txt` in the fresh session. The existing server and 713 x 813 page
+were preserved. Production review covered the committed revision; only the previously
+approved mock narrowing followed it.
 
 **Execution design, advised (`claude-opus-5.5`, 2026-11-27, confidence 85%):** use local refs in
 Collection View, not a pure intent module created solely for testing. The intent retains
@@ -625,8 +690,8 @@ AI-review/operator gates are not waived by completing these fixes.
 
 # Outcome
 
-Execution is in progress. WI-G3-1 (`8cc23e15`) and WI-G3-2 (`bf7285d3`) are implemented with
-their focused evidence recorded inline. WI-G3-3 through WI-G3-6 remain pending; WI-G3-7 requires
+Execution is in progress. WI-G3-1 (`8cc23e15`), WI-G3-2 (`bf7285d3`) and WI-G3-3 (`9eb782bd`)
+are implemented with their focused evidence recorded inline. WI-G3-4 through WI-G3-6 remain pending; WI-G3-7 requires
 push/reply authorization. Browser setup and intermittent gesture failures are retained above,
 including the distinction between combined affected-scenario coverage and clean full runs.
 No push, thread reply, package, formatting or gate release has occurred. #1142 remains draft
