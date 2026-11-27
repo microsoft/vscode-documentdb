@@ -249,6 +249,12 @@ shell suites passed with two workers. Two Query Insights expectations still fail
 because this host formats numbers using `en-DE` instead of `en-US`; the tests were not
 changed. The full final suite is still due on the post-G3a revision before A11.
 
+**E3 approved during Case 2 (2026-11-27):** The delete scenario now waits for the existing
+deleted-row exclusion to hold before checking cleared selection and the disabled Delete
+button. It still sends one request with the exact IDs and checks the same outcomes; no
+production code changed. All three Integrated Browser selection routes passed 28/28, with
+one canonical delete request each. Dark paging passed 15/15 and dark arrays passed 9/9.
+
 ### Escalations
 
 | ID  | Trigger                                                                                                                                    | Operator chooses                                                                                          |
@@ -1350,6 +1356,12 @@ passed. The existing VSIX is the G2 baseline, not an artifact containing these f
   `gpt-6-astra`; Copilot reviewer comments merged from the draft PR; validation and independent
   sweep by `claude-opus-5.5`, which must not reuse its advisor context.
 - Then **G3a**.
+
+> **Done (2026-11-27):** The initial review and three GitHub Copilot comments were consolidated
+> and independently validated in [the review file](./03-rdg-migration-review.md). No author
+> dispositions or implementation changes were made. G3a is raised, not released.
+> Review usage: 527.3 AIU on `gpt-6-astra` (21 requests) and 235.4 AIU on
+> `claude-opus-5.5` (44).
 
 ## Open decisions
 
