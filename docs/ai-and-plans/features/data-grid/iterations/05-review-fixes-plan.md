@@ -41,6 +41,11 @@ untouched. No implementation or runtime evidence is claimed by this authorizatio
 browser" to targeted L2-dev failing-first and post-fix runs in dark, light and high-contrast.
 This does not authorize packaged checks, formatting, Case 2, a push or thread replies.
 
+**Existing-server authorization (2026-11-27), G3-browser-port:** the first source-browser check
+found port 18080 occupied by a responsive server (PID 54856) and did not reuse or stop it.
+The operator then explicitly approved "reuse" after verifying it serves this checkout. This
+server is not owned by this run and must remain running; no restart or termination is authorized.
+
 **Model assignments, advised (`claude-opus-5.5`):** WI-G3-1 through WI-G3-5 and the WI-G3-6
 documentation pass are recommended for `mai-code-2`, matching the operator's substitution
 request. WI-G3-1 is a bounded save/identity change; WI-G3-2 is a specified refactor; WI-G3-3
@@ -182,6 +187,61 @@ Document View type-fidelity work is included.
 ### 2. S1–S5 — simplify `CollectionView.tsx` (decision 0004)
 
 **Status:** Pending. Intended to preserve behavior; not yet proven by execution.
+
+**Execution progress (2026-11-27):** `mai-code-2` added a new active-query/held-nested-reply
+preservation contract without changing existing `TDD:` assertions. Pre-refactor focused
+document-grid/cell tests passed **29/29**, and focused browser-harness tests passed **146/146**.
+These Vitest runs did not execute real browser journeys. The first browser attempt stopped
+at the occupied-port gate without opening a page. The operator-authorized reuse retry verified
+this checkout's served source and left the existing server running. Its 21 affected journeys had
+**20 passes** and **218/218 executed assertions passed**, with 410 RPC calls and one
+harness/runtime error: dark `no-id` timed out clicking `Browse only` because a column-header
+row intercepted pointer events, before assertions began. Light/high-contrast `no-id` passed;
+the new active-query/held-reply contract passed in all three themes. This is not a clean
+all-journey baseline. A narrow advisor assessment is pending before a permitted unchanged
+retry or any refactor. No test expectation, forced click, focus repair or product change was
+used to hide the failure.
+
+**Baseline retry decision (2026-11-27):** the advisor recommended one isolated unchanged
+dark `no-id` retry with viewport/layout evidence at 75% confidence. Because that is below the
+80% follow threshold, the leader escalated rather than treating it as approval. The operator
+explicitly authorized the single retry. Preserve source, viewport and runner; if it fails
+again, stop for the operator. A pass would establish an intermittent pre-refactor failure,
+not diagnose or fix its cause. S1-S5 remains unimplemented while that evidence is pending.
+
+**Retry dispatch returned blocked (2026-11-27):** no retry was executed. The checks worker
+reported that the served helper exposes view/theme runs, not an isolated scenario route.
+The advisor is identifying a supported single-scenario invocation of the same typed runner
+before any execution or scope expansion. Captured current viewport: 713 x 813 CSS pixels,
+DPR 1.5; this is not original-failure layout evidence. The existing server was untouched.
+The leader also requested clarification of whether the first report's 21 journeys were the
+executed set or a subset of a larger run; the prior counts remain provisional pending that
+provenance clarification.
+
+**Runner clarification, advised (`claude-opus-5.5`, 2026-11-27, confidence 85%):** the served
+helper contains the standalone `runScenario` function followed by a route-list loop
+(`scenario-server.ts:76-83`). Preserve the fetched function bytes unchanged and supply the one
+existing `no-id`/dark route through the same orchestration; no new helper route or framework
+change is needed. Guard the cut marker and the existing route before execution. The checks
+worker clarified that the first helpers executed **54 journeys** (18 per theme), then reported
+only the **21 affected journeys** above. Those counts are subset results, not full-run totals.
+Full retained outcomes and the worker's reference to an earlier dark rerun have been requested;
+do not infer missing full-run error counts.
+
+**Isolated baseline retry (2026-11-27), `mai-code-2-flash`:** the one unchanged `no-id`/dark
+route passed **10/10 assertions**, `ready=true`, six RPC calls and zero errors, at 713 x 813
+CSS pixels / DPR 1.5. The cell-centre hit was the intended gridcell; no forced click, resize,
+focus repair or new wait was used. Record the earlier gesture timeout as unexplained
+intermittent behavior on the pre-refactor source, not a resolved defect. S1-S5 implementation
+has now started. Post-refactor affected journeys still need to run in all three themes.
+
+**Baseline provenance correction (2026-11-27):** outcomes for the other 33 routes in the
+54-journey helper runs were not retained, so no full-run totals are asserted. The worker also
+disclosed an earlier dark helper invocation missing the external `setTimeout` primitive;
+all seven filtered routes reported `setTimeout is not defined`. The source-unchanged dark
+helper was then rerun with the existing timer primitive, producing the affected-subset results
+recorded above. This execution-setup retry was previously omitted from the report; it is not
+a product fix or evidence of clean full-suite execution.
 
 **Execution design, advised (`claude-opus-5.5`, 2026-11-27):** keep the selection callback stable
 because Table's effect cleanup depends on it. `commandsFor` is a module-local pure function;
