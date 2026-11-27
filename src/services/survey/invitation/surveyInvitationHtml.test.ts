@@ -119,41 +119,44 @@ describe('survey invitation HTML', (): void => {
         expect(page.querySelector('[data-action="askLater"]')?.textContent).toBe('Close');
     });
 
-    it.each([false, true])('shows small GitHub feedback links below the explanation, manual=%s', (manuallyOpened): void => {
-        const page = parseHtml(
-            buildSurveyInvitationHtml({
-                strings,
-                nonce: 'test-nonce',
-                cspSource: 'vscode-webview:',
-                artworkUri: 'vscode-webview://extension/icon.png',
-                artworkDarkUri: 'vscode-webview://extension/icon-dark.svg',
-                explanation: {
-                    activeDayCount: 7,
-                    requiredActiveDays: 3,
-                    isReminder: false,
-                    previousOutcome: undefined,
-                },
-                manuallyOpened,
-            }),
-        );
-        const links = page.querySelector('.feedback-routes');
-        const details = page.querySelector('details');
-        expect(links?.textContent).toContain(strings.reportBug);
-        expect(links?.textContent).toContain(strings.suggestFeature);
-        expect(details?.nextElementSibling).toBe(links);
-        expect(links?.querySelectorAll('a')).toHaveLength(2);
-        expect(links?.querySelector('button')).toBeNull();
-        const styledPage = new JSDOM(page.documentElement.outerHTML);
-        const styledLinks = styledPage.window.document.querySelector('.feedback-routes');
-        if (!styledLinks) {
-            throw new Error('Expected feedback routes in rendered HTML.');
-        }
-        const routesStyle = styledPage.window.getComputedStyle(styledLinks);
-        expect(routesStyle.fontSize).toBe('12px');
-        expect(routesStyle.marginTop).toBe('auto');
-        expect(routesStyle.paddingTop).toBe('16px');
-        styledPage.window.close();
-    });
+    it.each([false, true])(
+        'shows small GitHub feedback links below the explanation, manual=%s',
+        (manuallyOpened): void => {
+            const page = parseHtml(
+                buildSurveyInvitationHtml({
+                    strings,
+                    nonce: 'test-nonce',
+                    cspSource: 'vscode-webview:',
+                    artworkUri: 'vscode-webview://extension/icon.png',
+                    artworkDarkUri: 'vscode-webview://extension/icon-dark.svg',
+                    explanation: {
+                        activeDayCount: 7,
+                        requiredActiveDays: 3,
+                        isReminder: false,
+                        previousOutcome: undefined,
+                    },
+                    manuallyOpened,
+                }),
+            );
+            const links = page.querySelector('.feedback-routes');
+            const details = page.querySelector('details');
+            expect(links?.textContent).toContain(strings.reportBug);
+            expect(links?.textContent).toContain(strings.suggestFeature);
+            expect(details?.nextElementSibling).toBe(links);
+            expect(links?.querySelectorAll('a')).toHaveLength(2);
+            expect(links?.querySelector('button')).toBeNull();
+            const styledPage = new JSDOM(page.documentElement.outerHTML);
+            const styledLinks = styledPage.window.document.querySelector('.feedback-routes');
+            if (!styledLinks) {
+                throw new Error('Expected feedback routes in rendered HTML.');
+            }
+            const routesStyle = styledPage.window.getComputedStyle(styledLinks);
+            expect(routesStyle.fontSize).toBe('12px');
+            expect(routesStyle.marginTop).toBe('auto');
+            expect(routesStyle.paddingTop).toBe('16px');
+            styledPage.window.close();
+        },
+    );
 
     it('moves focus to Continue to survey when the host asks', (): void => {
         const h = interactiveHtml();
