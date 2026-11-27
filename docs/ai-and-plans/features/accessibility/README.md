@@ -8,9 +8,9 @@ created: 2026-11-27
 # Accessibility work items
 
 Issue-based grouping of all **13 open issues labelled `a11y`** as of 2026-11-27.
-The issue bodies and comments were read; the codebase was not inspected to establish
-current behavior or root causes. "Available" means available to start, not implemented
-or verified.
+The initial grouping came from issue bodies and comments, not a code inspection.
+Implementation and verification progress are recorded below and inline in the
+work-item plan. "Available" means available to start, not implemented or verified.
 
 ## Scope and sequencing
 
@@ -75,8 +75,9 @@ a shared implementation root cause.
 - Make newly opened query results discoverable through focus movement **or
   notification**, as #774 permits.
 
-Treat these as an editor-to-results workflow. @tnaum-ms identifies the CodeLens
-approach as the concern in #773; no replacement approach has been selected here.
+Treat these as an editor-to-results workflow. The accepted approach keeps CodeLens
+and adds standard palette/title/context commands, with the `afterRun` setting for
+result focus (decisions 0002-0004).
 
 ### 4. New Document focus management
 
@@ -91,7 +92,7 @@ approach as the concern in #773; no replacement approach has been selected here.
 
 ### 5. Explorer tree accessible names
 
-**Status:** available now.
+**Status:** implemented in `04affdf7`; focused tests passed; workbench verification pending.
 **Issue:** [#768](https://github.com/microsoft/vscode-documentdb/issues/768).
 
 Accessible names must include the visible "Documents" label. @Jacquelinezhong's
@@ -124,6 +125,7 @@ under work item 2 rather than assuming an upstream Quick Pick fix covers it.
 
 ## Verification and closure
 
-This document records grouping and sequencing only; no fix or accessibility
-verification is claimed. The reports that reserve closure for TCS/C+AI accessibility
-testers must remain open until those testers verify the fixes.
+Implementation commits and automated checks are recorded in the work-item plan.
+They do not establish what a real screen reader announces or how the installed
+workbench handles focus. Reports that reserve closure for TCS/C+AI accessibility
+testers remain open until those testers verify the fixes.

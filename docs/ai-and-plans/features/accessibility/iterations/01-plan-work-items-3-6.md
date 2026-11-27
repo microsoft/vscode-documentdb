@@ -73,6 +73,16 @@ before implementation. The accepted prerequisite is to ask, not to require a
 reply. Indexes still needs a real Accessibility Insights check; a unit assertion
 is not that verification.
 
+> **Done (2026-11-27), commit `04affdf7`:** `mai-code-2` added the explicit
+> Documents accessible label while preserving the tooltip, plus two Documents
+> tests and one Indexes guard. Naming follows the operator's accepted 0006
+> decision; the leader approved the one-line implementation at 99% confidence
+> because it directly supplies VS Code's supported accessibility label.
+> The leader requested reuse of the existing Indexes test fixture instead of a
+> new double cast; no existing behavior assertions were weakened. The focused
+> Documents/Indexes run passed all 16 tests. Case 1 batch build and real
+> Accessibility Insights verification remain pending; the issue stays open.
+
 ## 6. Index-creation completion announcement (#772)
 
 **Finding.** `ImprovementCard` renders success and error `MessageBar`s conditionally
@@ -147,6 +157,14 @@ and `document.hasFocus()` after F6 in Webview DevTools and compare Markdown
 preview. Do not infer upstream ownership or add a speculative redirect.
 Initial Save focus-ring verification also remains pending. The operator chose
 a direct keyborg dependency for the accepted focus helper (decision 0008).
+
+**Helper-idea inspection (2026-11-27).** At the operator's request, a read-only
+`mai-code-2-flash` agent inspected public `microsoft/vscode-cosmosdb`. Its
+[Monaco wrapper](https://github.com/microsoft/vscode-cosmosdb/blob/main/src/webviews/MonacoEditor.tsx#L139-L151)
+has an invisible focus-trap bumper and uses `useUncontrolledFocus`; the inspected
+Document panel had no explicit initial-focus or F6 handling. This is a candidate
+to identify during the F6 reproduction, not evidence of the root cause or a
+recommended implementation. No bumper or focus-trap change is authorized here.
 
 ## 3. Query Playground keyboard workflow (#773, #774)
 
