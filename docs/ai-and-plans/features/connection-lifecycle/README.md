@@ -105,14 +105,15 @@ entries are unpublished drafts and do not represent a shipped release.
 
 ## Documents
 
-| Document                                                                       | Kind      |
-| ------------------------------------------------------------------------------ | --------- |
-| [research-findings.md](./research-findings.md)                                 | research  |
-| [decisions.md](./decisions.md)                                                 | decisions |
-| [iterations/01-implementation-plan.md](./iterations/01-implementation-plan.md) | plan      |
-| [iterations/01-dev-plan.md](./iterations/01-dev-plan.md)                       | plan      |
-| [iterations/01-pr1136-final-review.md](./iterations/01-pr1136-final-review.md) | review    |
-| [iterations/01-pr1136-ux-review.md](./iterations/01-pr1136-ux-review.md)       | ux-review |
+| Document                                                                            | Kind      |
+| ----------------------------------------------------------------------------------- | --------- |
+| [research-findings.md](./research-findings.md)                                      | research  |
+| [decisions.md](./decisions.md)                                                      | decisions |
+| [iterations/01-implementation-plan.md](./iterations/01-implementation-plan.md)     | plan      |
+| [iterations/01-dev-plan.md](./iterations/01-dev-plan.md)                            | plan      |
+| [iterations/02-ux-implementation-plan.md](./iterations/02-ux-implementation-plan.md) | plan      |
+| [iterations/01-pr1136-final-review.md](./iterations/01-pr1136-final-review.md)     | review    |
+| [iterations/01-pr1136-ux-review.md](./iterations/01-pr1136-ux-review.md)            | ux-review |
 
 ## Decisions index
 
@@ -151,3 +152,4 @@ See [decisions.md](./decisions.md):
 | 2026-11-24 | WI-6 through WI-8 implement bound views, teardown and Dashboard behavior    |
 | 2026-11-25 | WI-2 review fixes and WI-9 lifecycle measurements                           |
 | 2026-11-26 | WI-10 documentation draft, skill updates and unpublished 1.2.0 notes        |
+| 2026-11-27 | UX review findings organized into a draft implementation plan               |
