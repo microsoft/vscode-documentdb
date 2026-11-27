@@ -23,7 +23,7 @@ before relying on them.
 | 1 | 5. Explorer tree accessible names | #768 | XS | One-line fix, no UX decision. Coordinate with the volunteer first. |
 | 2 | 6. Index-creation announcement | #772 | S | Reuses the existing `Announcer` pattern. |
 | 3 | 4. New Document focus management | #769, #770 | S-M | #769 needs a reproduction before a fix can be chosen. |
-| 4 | 3. Query Playground keyboard workflow | #773, #774 | M | Needs two UX decisions (below). |
+| 4 | 3. Query Playground keyboard workflow | #773, #774 | M | Needs four UX decisions (3a-3d below). |
 
 One PR per work item keeps each fix independently verifiable by the TCS/C+AI testers,
 who close the issues. Items 5 and 6 are small enough to share a PR if preferred.
@@ -126,68 +126,225 @@ this). A browser scenario for the Document view can assert the initial
 
 ## 3. Query Playground keyboard workflow (#773, #774)
 
-**Finding (#773).** Connect, Run, Run All, Collection View and Shell are CodeLens items
-([PlaygroundCodeLensProvider.ts](../../../../../src/documentdb/playground/PlaygroundCodeLensProvider.ts)).
-CodeLens items are not in the Tab order; keyboard users can only reach them through
-VS Code's "Show CodeLens Commands for Current Line", which has no default keybinding.
-Current non-CodeLens surfaces:
+The two issues describe one workflow: connect, write a query, run it, read the result,
+and move it to another surface. Today that workflow assumes a mouse at two points
+(the CodeLens buttons) and assumes sight at a third (noticing that the result tab
+updated). The decisions below are listed in the order they block implementation.
 
-- `playground.connect` is in the Command Palette.
-- `runAll` and `runSelected` have keybindings (`Ctrl+Shift+Enter`, `Ctrl+Enter`) but are
-  hidden from the palette.
-- `openQueryInShell` and `openQueryInCollectionView` are **not contributed in
-  `package.json` at all**, so they have no keyboard path.
-- `editor/title` and `editor/context` menus are empty (`package.json:973-974`).
-- A status bar item exists, but it only shows connection info
-  ([PlaygroundService.ts:75-76](../../../../../src/documentdb/playground/PlaygroundService.ts)).
+### 3.1 Current behavior (from the code)
 
-**Suggested fix (#773).** Keep CodeLens for mouse users and add native,
-keyboard-reachable surfaces:
+| Action | CodeLens (mouse) | Keyboard path today | Gaps |
+| --- | --- | --- | --- |
+| Connect | "Connect" on line 1 | Command Palette "Query Playground: Connect to Database"; status bar item (F6 to the status bar, then arrow keys) | Neither is visible from the editor or the Tab order, so testers did not find them |
+| Change connection | "$(plug) cluster/db" on line 1 → modal | Status bar item → same modal | `showConnectionInfo` is hidden from the palette |
+| Run All | line 1 | `Ctrl+Shift+Enter` | Hidden from the palette; only documented in the file's header comment |
+| Run block | block start line | `Ctrl+Enter` | Same as Run All |
+| Open block in Shell | block start line, only when connected and the block contains code | **none** | Not contributed in `package.json`; the handler returns silently without `uri, startLine, endLine` arguments |
+| Open block in Collection View | same as Shell | **none** | Same as Shell |
 
-1. Contribute `openQueryInShell` and `openQueryInCollectionView` as commands. Without
-   arguments they act on the block at the cursor. Show them in the palette when a
-   playground is active and connected (new context key, for example
-   `documentdb.playgroundConnected`; it must not have the `name.ext` shape when used on
-   its own, see the manifest-ID rule in `copilot-instructions.md`).
-2. Add `editor/title` actions for playground editors: Run All and Connect / Change
-   Connection inline, Shell and Collection View in the overflow menu. The editor title
-   toolbar is keyboard reachable.
-3. Add an `editor/context` group with the same commands (Shift+F10).
-4. Make the status bar item act as Connect while disconnected, and offer "Change
-   connection" when connected. The status bar is reachable with F6.
-5. Show `runAll` and `runSelected` in the palette for playground editors.
-6. Optionally mention the shortcuts and "Show CodeLens Commands for Current Line" in the
-   new-playground header template.
+Sources: [PlaygroundCodeLensProvider.ts](../../../../../src/documentdb/playground/PlaygroundCodeLensProvider.ts),
+[PlaygroundService.ts:347-366](../../../../../src/documentdb/playground/PlaygroundService.ts)
+(the status bar item already switches to Connect when disconnected),
+[playgroundOpenInShell.ts:26-28](../../../../../src/commands/playground/playgroundOpenInShell.ts),
+`package.json:973-974` (empty `editor/title` and `editor/context`) and the
+`commandPalette` entries that set `when: never` for `runAll`, `runSelected` and
+`showConnectionInfo`.
 
-**Finding (#774).** `PlaygroundResultProvider.showResult()` always opens the result
-beside the editor with `preserveFocus: true`
+VS Code's built-in fallback, "Show CodeLens Commands for Current Line"
+(`codelens.showLensesInCurrentLine`), has no default keybinding and lists only the lenses
+on the **cursor's line** (checked in VS Code's `codelensController.ts`). Our Connect and
+Run All lenses sit on line 1 and the block lenses on the block's first line, so a
+keyboard user would have to move the cursor to exactly those lines. It is a workaround,
+not a fix.
+
+Running a query reports progress in a notification and shows failures with
+`showErrorMessage`, which screen readers announce. **Success is the only silent
+outcome**: the result opens or updates beside the editor with `preserveFocus: true`
 ([PlaygroundResultProvider.ts:95-113](../../../../../src/documentdb/playground/PlaygroundResultProvider.ts)).
-This is deliberate for the edit-run loop: `Ctrl+Enter` is bound only while the
-playground editor has focus, so moving focus would break repeated runs.
 
-**Options (#774).** The issue accepts either moving focus or notifying.
+### 3.2 #773: make every action reachable without CodeLens
 
-| Option | Effect | Trade-off |
+The principle: CodeLens stays as the mouse shortcut, and every lens action also exists
+as a regular command on standard keyboard-reachable VS Code surfaces. No custom focus
+handling is needed in the editor.
+
+Required groundwork, independent of the decisions below:
+
+- Make `openQueryInShell` and `openQueryInCollectionView` work without arguments by
+  using the block at the cursor, with the same fallback to the preceding block that
+  `runSelected` uses. Extract that block resolution into a shared helper so CodeLens,
+  `runSelected` and the new entry points agree on the block.
+- Add context keys for menu `when` clauses: the playground is connected, and the
+  current block contains code. Set them from the existing `onDidChangeState` and
+  selection listeners. Context-key names must not have the `name.ext` shape when they
+  appear on their own in `package.json` (see the manifest-ID rule in
+  `copilot-instructions.md`).
+- Record `activationSource` per surface (`codeLens`, `editorTitle`, `editorContext`,
+  `commandPalette`, `keybinding`) so we can see which surfaces people use.
+
+**Decision 3a: which surfaces to add.** **Decided 2026-11-27
+([decisions 0002](../decisions.md#0002--playground-actions-use-standard-vs-code-surfaces-no-new-keybindings)):**
+palette, editor title, context menu and header comment; no new default keybindings.
+`Ctrl+Enter` and `Ctrl+Shift+Enter` stay as they are.
+
+| Surface | How keyboard users reach it | Discoverable? | Cost | Recommendation |
+| --- | --- | --- | --- | --- |
+| Command Palette entries | `Ctrl+Shift+P`, type "Query Playground" | Medium | Tiny: change `when: never` to `editorLangId == 'documentdb-playground'` | **Yes**, the minimum |
+| Editor title toolbar (`editor/title`) | Focus the tab, then Tab into the toolbar | High: visible buttons next to the tab | Small; icons needed | **Yes**, the closest equivalent to the CodeLens buttons |
+| Editor context menu (`editor/context`) | `Shift+F10` or the Menu key in the editor | Medium | Small | **Yes**, it acts on the cursor's block, matching the block lenses |
+| Default keybindings for Shell / Collection View | Shortcut | Low unless documented | Risk of conflicts with user or other extension bindings | **No**; users can bind the commands themselves |
+| Header comment in new playgrounds | Read with the file | High for screen-reader users | Tiny | **Yes**: name the palette commands and the context menu |
+
+**Decision 3b: what goes inline in the editor title and what goes in the overflow
+menu ("…").** Inline buttons are the most visible but crowd the title bar, which also
+holds VS Code's own split and more-actions buttons.
+
+- Recommended inline: **Run All** (with the `run-all` icon) and **Connect / Change
+  Connection** (with the `plug` icon). These are file-level actions, like their
+  line-1 lenses.
+- Recommended overflow: **Run Block**, **Open Block in Shell**, **Open Block in
+  Collection View**. They depend on the cursor position, so they fit the context menu
+  better and should be there too.
+- Alternative: put all five in the overflow menu to keep the title bar clean, at the
+  cost of discoverability.
+
+**Decision 3c: one Connect entry point or two.** Today the connected state uses
+`showConnectionInfo` (a modal offering to switch), and the disconnected state uses
+`connect`. The editor title can show the right command per state using the
+"connected" context key, or show a single "Connect to Database…" that always opens the
+picker. Recommended: one title action per state, mirroring the CodeLens and the status
+bar, so all three surfaces behave the same.
+
+**Decisions 3b and 3c: decided as recommended
+([decisions 0003](../decisions.md#0003--playground-editor-title-layout-and-connect-follow-the-recommendations)).**
+
+**Out of scope.** A setting to hide CodeLens, and changing the CodeLens layout. The
+issue is about reachability, not about removing CodeLens.
+
+### 3.3 #774: make the completed run discoverable
+
+The issue accepts either outcome: "keyboard focus should move to the newly opened
+result tab, **or** users should be notified". Moving focus is costly here because
+`Ctrl+Enter` and `Ctrl+Shift+Enter` only work while the playground editor has focus. A
+user whose focus moves to the result after every run has to return to the playground
+(for example with "View: Focus Previous Editor Group") before running again.
+
+**Decision 3d: what happens by default after a successful run.** **Decided 2026-11-27
+([decisions 0004](../decisions.md#0004--after-a-run-focus-moves-to-the-result-only-in-screen-reader-mode)):**
+option B through the `afterRun` setting below, documented on a new Accessibility page
+(§7). The options are kept for the record.
+
+| Option | Behavior | Who benefits | Cost | Satisfies #774 for a tester using NVDA? |
+| --- | --- | --- | --- | --- |
+| A. Always move focus | `preserveFocus: false` | Screen-reader users | Breaks the edit-run loop for everyone | Yes |
+| B. Move focus only in screen-reader-optimized mode | A second `Ctrl+Enter` / `Ctrl+Shift+Enter` keybinding with `when: … && accessibilityModeEnabled` and `args: { screenReaderMode: true }`; the command then moves focus to the result | Screen-reader users | Sighted keyboard-only users see no change. Runs started from CodeLens or the palette do not carry the args. | Yes, if VS Code detected the screen reader or `editor.accessibilitySupport` is `on` |
+| C. Announce instead of moving focus | On success, show a non-modal notification such as "Query returned 20 documents" with a **Focus Result** button; focus stays in the playground | Screen-reader users; also gives everyone a one-step way to the result | A toast after every run is noise for sighted users | Yes, notifications are announced |
+| C'. Announce instead of moving focus, only in screen-reader mode | Same as C, but only for runs that carry `screenReaderMode: true` (same keybinding mechanism as B). **An alternative to B, not an addition**: in screen-reader mode a run either moves focus (B) or announces (C'), never both | Screen-reader users | Same path limits as B | Yes, if the testers accept "notified" rather than "focus moved" |
+| D. Setting only | `documentDB.playground.afterRun`: `stay` (default), `focusResult`, `notify` | Users who find the setting | Default behavior unchanged | **No**, default behavior still fails |
+
+Notes for evaluating the options:
+
+- VS Code defines `CONTEXT_ACCESSIBILITY_MODE_ENABLED` for screen-reader-optimized mode,
+  and VS Code's own features gate keybindings on it. **Verify** that the key string is
+  `accessibilityModeEnabled` with "Developer: Inspect Context Keys" before relying on it.
+  Extensions cannot read context keys directly, so the keybinding `args` is the only
+  way to pass this mode to the command. Reading the `editor.accessibilitySupport`
+  setting only helps when it is explicitly `on`, not `auto`.
+- `runSelected(context, startLine, endLine)` takes positional line numbers from
+  CodeLens. Keybinding `args` arrive as one object in the first position, so the
+  signature must accept either form, for example `startLineOrOptions: number | { screenReaderMode?: boolean }`.
+- "Focus Query Playground Result" as a palette command is cheap and useful under every
+  option. A matching "Focus Query Playground" command, also bound inside the result
+  editor, gives a one-key way back, which removes most of option A's cost for users who
+  choose to move focus.
+- A completion announcement should state what came back (count or type, from
+  `formatResult`), not only "done", so it carries information for every user.
+
+**Recommendation: B as the default, exposed through one setting.** The setting is the
+single source of truth; the screen-reader keybinding only informs its `auto` value.
+
+`documentDB.playground.afterRun`:
+
+| Value | Run started in screen-reader mode (keybinding passes `screenReaderMode: true`) | Any other run (normal keybinding, CodeLens, palette, title or context menu) |
 | --- | --- | --- |
-| A. Always move focus (`preserveFocus: false`) | Matches the issue's first expectation | Breaks the run-edit-run loop for everyone |
-| B. Move focus only in screen-reader mode | Add a `Ctrl+Enter` keybinding variant with `when: … && accessibilityModeEnabled` and `args: { focusResult: true }` | Testers who check keyboard-only without screen-reader mode still see no change. **Verify** the context key. |
-| C. Setting `documentDB.playground.focusResultAfterRun` (default off) plus a "Focus Query Playground Result" command | User control and a fast way to jump | Default behavior still fails the report |
-| D. Notify on completion (`showInformationMessage` with a "Focus Result" button) | Announced by screen readers | Noisy for sighted users on every run |
+| `auto` (default) | Move focus to the result (option B) | Stay in the playground (today's behavior) |
+| `stay` | Stay in the playground | Stay in the playground |
+| `focusResult` | Move focus to the result | Move focus to the result |
+| `notify` | Stay, and show the completion notification with **Focus Result** (option C) | Same |
 
-**Recommendation.** B + C: screen-reader mode moves focus by default, everyone else can
-opt in, and a dedicated command makes results reachable with one keystroke. Choose D
-instead if the testers verify #774 without screen-reader mode enabled.
+Rules:
 
-**Tests.** Unit tests for the `showResult` focus option and the command `when` clauses.
-`npm run build` covers the manifest; the activation check applies if any new command is
-registered lazily.
+- An explicit value (`stay`, `focusResult`, `notify`) overrides the screen-reader
+  default for every run and every entry point. Only `auto` looks at
+  `screenReaderMode`.
+- The behaviors never combine: one run produces exactly one of "stay", "move focus" or
+  "notify". C' is therefore not part of the recommendation; it is the alternative to
+  choose for `auto` if the operator prefers announcing over moving focus in
+  screen-reader mode.
+- Errors keep today's error notification under every value.
+- The "Focus Query Playground Result" and "Focus Query Playground" commands are added
+  under every value, so returning to the playground after a focus move is one command.
 
-## Open decisions for the operator
+Everyone who does not use screen-reader-optimized mode keeps today's edit-run loop
+unless they change the setting.
 
-1. #774: which option (B + C recommended, or D).
-2. #773: which commands go inline in the editor title versus the overflow menu.
-3. #768: wait for @Jacquelinezhong, or take the fix.
-4. Ship items 5 and 6 together or separately.
+**Fallback if the testers do not use screen-reader mode.** With `auto`, nothing changes
+for a keyboard-only tester. Ask on #774 which configuration they verify with before
+implementing. If the answer is "keyboard only", change `auto` so that runs outside
+screen-reader mode show the notification (option C) only on the **first** run per
+playground, the run that opens the result tab, which is the "newly opened tab" case the
+issue describes. Later runs stay silent, and the explicit setting values keep the
+meaning in the table above.
+
+### 3.4 Tests and verification
+
+- Unit tests: block resolution for the new no-argument command paths, the
+  `runSelected` argument forms, and the `showResult` focus option.
+- Manifest: every new command and menu `when` clause is checked by `npm run build` and
+  the VSIX/activation checks. Commands registered at activation do not need a
+  `LAZY_COMMANDS` entry.
+- Manual pass with NVDA and with keyboard only: connect, run a block, run all, open the
+  block in Shell and in Collection View, and return to the playground, without the
+  mouse. Record the result in the PR.
+
+## 7. Accessibility page in the user manual
+
+**Decided 2026-11-27
+([decisions 0005](../decisions.md#0005--a-dedicated-accessibility-page-in-the-user-manual)).**
+A new top-level page, `docs/user-manual/accessibility.md` (`parent: 'User Manual'`,
+`nav_order: 5`, after AI Features), collects what the extension offers for assistive
+technology. Proposed outline:
+
+1. **Keyboard access**: Query Playground actions through the palette, editor title and
+   context menu; the run shortcuts; the new focus commands.
+2. **Screen readers**: the playground `afterRun` setting and its screen-reader default;
+   status announcements in webviews (Query Insights, index management, connection
+   diagnostics); Escape to leave embedded editors.
+3. **Interactive Shell**: `documentDB.shell.display.colorSupport` for plain output;
+   links are underlined even with colors off, so they never rely on color alone
+   ([#631](https://github.com/microsoft/vscode-documentdb/pull/631)); the open terminal
+   accessibility pass
+   ([#941](https://github.com/microsoft/vscode-documentdb/issues/941)), mentioned only
+   for whatever it ships.
+4. **Settings reference**: `documentDB.accessibility.hideCountPrefix`,
+   `documentDB.shell.display.colorSupport`, `documentDB.playground.afterRun`, and any
+   other accessibility-related settings found while writing the page.
+5. **Known limitations and reporting**: VS Code-owned issues (Quick Pick contrast, see the
+   README's upstream tracking) and how to file an issue.
+
+Rules: describe only shipped behavior; link from Query Playground and Interactive Shell
+instead of repeating content; add the page in the PR that ships work item 3, or earlier
+with sections 3-5 only. Preview with the `previewing-docs-site` skill.
+
+## Decisions
+
+All decisions from this plan are recorded in [decisions.md](../decisions.md)
+(0002-0006). Still open:
+
+1. Confirm the `accessibilityModeEnabled` context key (0004).
+2. Ask on #774 which configuration the testers verify with. If they test keyboard-only,
+   the first-run notification fallback for `auto` needs a new decision.
+3. Ask @Jacquelinezhong on #768 whether they still plan a PR.
 
 ## Verification and closure
 
