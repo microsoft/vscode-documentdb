@@ -543,15 +543,7 @@ describe('DocumentDBShellPty', () => {
 
             it.each([
                 ['success', '', 0, 80, '\r\x1b[8C\x1b[J', '\r\x1b[8C\x1b[J', 'X'],
-                [
-                    'success',
-                    'abcdef',
-                    2,
-                    80,
-                    '\r\x1b[8Cabcdef\x1b[J',
-                    '\r\x1b[8Cabcdef\x1b[J\r\x1b[10C',
-                    'abXcdef',
-                ],
+                ['success', 'abcdef', 2, 80, '\r\x1b[8Cabcdef\x1b[J', '\r\x1b[8Cabcdef\x1b[J\r\x1b[10C', 'abXcdef'],
                 [
                     'before click',
                     'abcdef',

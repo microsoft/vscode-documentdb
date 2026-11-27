@@ -167,11 +167,10 @@ describe('tree command failure feedback', () => {
         await expect(command(context, node, [node])).rejects.toBe(cleanup);
 
         expect(vscode.window.showErrorMessage).toHaveBeenCalledTimes(2);
-        expect(vscode.window.showErrorMessage).toHaveBeenNthCalledWith(
-            2,
-            'Unable to complete this tree action.',
-            { modal: true, detail: cleanup.message },
-        );
+        expect(vscode.window.showErrorMessage).toHaveBeenNthCalledWith(2, 'Unable to complete this tree action.', {
+            modal: true,
+            detail: cleanup.message,
+        });
         expect(ErrorExplanationService.explain).toHaveBeenCalledExactlyOnceWith({
             clusterId: node.cluster?.clusterId,
             error: cleanup,

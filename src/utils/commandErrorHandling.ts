@@ -143,8 +143,7 @@ export function registerCommandWithTreeNodeUnwrappingAndDiagnostics<T>(
                 unwrappedArgs = unwrapArgs<T>(args);
                 return await callback(context, ...unwrappedArgs);
             } catch (error) {
-                const presented =
-                    presentedCommandErrors.has(context) && presentedCommandErrors.get(context) === error;
+                const presented = presentedCommandErrors.has(context) && presentedCommandErrors.get(context) === error;
                 const clusterId = (unwrappedArgs[0] as unknown as { cluster?: { clusterId?: string } } | undefined)
                     ?.cluster?.clusterId;
                 const treeError = !webviewInvocation && clusterId ? parseError(error) : undefined;

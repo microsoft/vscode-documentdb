@@ -41,20 +41,20 @@ other item. This selects nine fixes and three won't-fix/defer outcomes (C05, C10
 No additional rationale was supplied; the review's option analysis is preserved below rather
 than attributing new reasoning to the operator. Selection is not implementation.
 
-| Item | Copilot severity | Validity | Assessed severity | Selected action |
-| --- | --- | --- | --- | --- |
-| [C01](#c01-diagnostic-worker-startup-rejects-authentication-holds) | High | Confirmed | High | Fix: explicit diagnostic startup capability |
-| [C02](#c02-vm-diagnostic-shell-can-use-the-wrong-port) | High | Confirmed | Medium | Fix: retain attempted endpoint; fail closed when unknown |
-| [C03](#c03-stale-diagnostic-shell-click-has-generic-feedback) | Medium | Confirmed, stale-node claim qualified | Low | Fix: supported-view refresh and typed stale feedback |
-| [C04](#c04-old-playground-sign-in-can-warn-a-new-connection) | Medium | Confirmed | Low | Fix: two connection-ownership checks |
-| [C05](#c05-completed-edit-can-silently-supersede-tree-sign-in) | Medium | Confirmed | Low | Won't fix / defer richer change attribution |
-| [C06](#c06-genuine-sign-in-dismissal-can-show-a-stale-modal) | Medium | Confirmed | Low | Fix: distinguish genuine dismissal from stale cancellation |
-| [C07](#c07-disconnect-restores-text-but-not-the-cursor) | Medium | Confirmed | Low | Fix with C09: restore text and cursor |
-| [C08](#c08-anonymous-startup-failure-also-notifies-the-host) | Medium | Confirmed | Low | Fix: anonymous-only notification guard |
-| [C09](#c09-late-shell-sign-in-output-corrupts-the-visible-prompt) | Medium | Confirmed | Medium | Fix: bounded asynchronous output handling |
-| [C10](#c10-anonymous-command-result-is-discarded-on-host-client-churn) | Medium | Confirmed; guard is intentional | Medium for write-outcome feedback | Won't fix: operator override; no guard or message changes |
-| [C11](#c11-index-failures-can-show-two-tree-modals) | Medium | Confirmed | Medium | Fix: explicit feedback ownership, not suppressDisplay |
-| [C12](#c12-host-side-stale-retry-cancellation-becomes-an-alert) | Medium | Confirmed | Low | Won't fix / defer typed cancellation outcome |
+| Item                                                                   | Copilot severity | Validity                              | Assessed severity                 | Selected action                                            |
+| ---------------------------------------------------------------------- | ---------------- | ------------------------------------- | --------------------------------- | ---------------------------------------------------------- |
+| [C01](#c01-diagnostic-worker-startup-rejects-authentication-holds)     | High             | Confirmed                             | High                              | Fix: explicit diagnostic startup capability                |
+| [C02](#c02-vm-diagnostic-shell-can-use-the-wrong-port)                 | High             | Confirmed                             | Medium                            | Fix: retain attempted endpoint; fail closed when unknown   |
+| [C03](#c03-stale-diagnostic-shell-click-has-generic-feedback)          | Medium           | Confirmed, stale-node claim qualified | Low                               | Fix: supported-view refresh and typed stale feedback       |
+| [C04](#c04-old-playground-sign-in-can-warn-a-new-connection)           | Medium           | Confirmed                             | Low                               | Fix: two connection-ownership checks                       |
+| [C05](#c05-completed-edit-can-silently-supersede-tree-sign-in)         | Medium           | Confirmed                             | Low                               | Won't fix / defer richer change attribution                |
+| [C06](#c06-genuine-sign-in-dismissal-can-show-a-stale-modal)           | Medium           | Confirmed                             | Low                               | Fix: distinguish genuine dismissal from stale cancellation |
+| [C07](#c07-disconnect-restores-text-but-not-the-cursor)                | Medium           | Confirmed                             | Low                               | Fix with C09: restore text and cursor                      |
+| [C08](#c08-anonymous-startup-failure-also-notifies-the-host)           | Medium           | Confirmed                             | Low                               | Fix: anonymous-only notification guard                     |
+| [C09](#c09-late-shell-sign-in-output-corrupts-the-visible-prompt)      | Medium           | Confirmed                             | Medium                            | Fix: bounded asynchronous output handling                  |
+| [C10](#c10-anonymous-command-result-is-discarded-on-host-client-churn) | Medium           | Confirmed; guard is intentional       | Medium for write-outcome feedback | Won't fix: operator override; no guard or message changes  |
+| [C11](#c11-index-failures-can-show-two-tree-modals)                    | Medium           | Confirmed                             | Medium                            | Fix: explicit feedback ownership, not suppressDisplay      |
+| [C12](#c12-host-side-stale-retry-cancellation-becomes-an-alert)        | Medium           | Confirmed                             | Low                               | Won't fix / defer typed cancellation outcome               |
 
 Suggested implementation order for this run: C01, C02, C11; then the shared C07/C09 input work;
 then cheap C04/C08/C06/C03 feedback refinements. C05 and C12 need no new architecture this round.
@@ -90,17 +90,17 @@ No new user-facing strings or changed authentication identity rules are planned.
 its own code commit; C07 precedes C09, and C01 precedes C03. Items sharing the PTY run sequentially.
 Tests use the root Vitest configuration with `--maxWorkers=2`.
 
-| Item | Advisor-recommended / assigned model | Owned implementation and test scope | Confidence |
-| --- | --- | --- | --- |
-| C01 | gpt-6.1-sol | ConnectionUnavailableError; WorkerSessionManager; ShellSessionManager; openInteractiveShell; dependent tests | 85% |
-| C02 | gpt-6.1-sol | AzureVMResourceItem and its focused new test | 80% |
-| C03 | mai-code-2 | openInteractiveShell and its test, after C01 | 85% |
-| C04 | mai-code-2 | executePlaygroundCode and its test | 95% |
-| C06 | gpt-6.1-sol | signInAgain and its test; final cross-surface checks after other edits | 80% |
-| C07 | mai-code-2 | ShellInputHandler and DocumentDBShellPty with their tests, after C08 | 90% |
-| C08 | mai-code-2 | DocumentDBShellPty and its test | 95% |
-| C09 | gpt-6.1-sol | DocumentDBShellPty and tests, using C07's input restore method | 90% after render-origin refinement |
-| C11 | mai-code-2 | commandErrorHandling; three index callbacks; wrapper and focused index tests | 90% |
+| Item | Advisor-recommended / assigned model | Owned implementation and test scope                                                                          | Confidence                         |
+| ---- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
+| C01  | gpt-6.1-sol                          | ConnectionUnavailableError; WorkerSessionManager; ShellSessionManager; openInteractiveShell; dependent tests | 85%                                |
+| C02  | gpt-6.1-sol                          | AzureVMResourceItem and its focused new test                                                                 | 80%                                |
+| C03  | mai-code-2                           | openInteractiveShell and its test, after C01                                                                 | 85%                                |
+| C04  | mai-code-2                           | executePlaygroundCode and its test                                                                           | 95%                                |
+| C06  | gpt-6.1-sol                          | signInAgain and its test; final cross-surface checks after other edits                                       | 80%                                |
+| C07  | mai-code-2                           | ShellInputHandler and DocumentDBShellPty with their tests, after C08                                         | 90%                                |
+| C08  | mai-code-2                           | DocumentDBShellPty and its test                                                                              | 95%                                |
+| C09  | gpt-6.1-sol                          | DocumentDBShellPty and tests, using C07's input restore method                                               | 90% after render-origin refinement |
+| C11  | mai-code-2                           | commandErrorHandling; three index callbacks; wrapper and focused index tests                                 | 90%                                |
 
 Approved implementation interfaces supplied by the advisor:
 
@@ -504,7 +504,7 @@ No mutation was executed during this review.
 
 **Options.**
 
-- **Recommended:** keep epoch/latch guards, but distinguish an epoch-only stale *evaluation reply*
+- **Recommended:** keep epoch/latch guards, but distinguish an epoch-only stale _evaluation reply_
   from a proven settings change when presenting it. Proposed bounded copy:
   **"This command may have completed, but its result is no longer current. Check the database
   before running it again."**
@@ -692,17 +692,17 @@ the final Case 1 checks. The source plan was committed before coding; progress n
 separately from code. No push, PR-status change, thread resolution, or Case 2 handoff was performed.
 The remote PR head remains `dec9ac64c`; the new code is local.
 
-| Item | Code commit (local) | Actual coding model | Outcome |
-| --- | --- | --- | --- |
-| C01 | `476e65176` | gpt-6.1-sol | Diagnostic startup capability across the worker boundary |
-| C02 | `e3bd77b21` | gpt-6.1-sol | Sanitized attempted VM endpoint, unknown fails closed |
-| C03 | `c952e9624` | mai-code-2 | Current-state stale diagnostic feedback and supported refresh |
-| C04 | `1fdcfd43d` | mai-code-2 | Playground document-connection feedback ownership |
-| C06 | `2688f86ca` | gpt-6.1-sol | Genuine dismissal separated from internal stale acquisition |
-| C07 | `ce2cf8d8b` | mai-code-2 | Retained input cursor restored with wrap-aware rendering |
-| C08 | `bd70e3298` | mai-code-2 | Anonymous errors stay terminal-only |
-| C09 | `b32d0a0dc` | gpt-6.1-sol | Asynchronous feedback preserves input and defers safely |
-| C11 | `61f09ffcd` | mai-code-2 | Exact callback error-presentation ownership |
+| Item | Code commit (local) | Actual coding model | Outcome                                                       |
+| ---- | ------------------- | ------------------- | ------------------------------------------------------------- |
+| C01  | `476e65176`         | gpt-6.1-sol         | Diagnostic startup capability across the worker boundary      |
+| C02  | `e3bd77b21`         | gpt-6.1-sol         | Sanitized attempted VM endpoint, unknown fails closed         |
+| C03  | `c952e9624`         | mai-code-2          | Current-state stale diagnostic feedback and supported refresh |
+| C04  | `1fdcfd43d`         | mai-code-2          | Playground document-connection feedback ownership             |
+| C06  | `2688f86ca`         | gpt-6.1-sol         | Genuine dismissal separated from internal stale acquisition   |
+| C07  | `ce2cf8d8b`         | mai-code-2          | Retained input cursor restored with wrap-aware rendering      |
+| C08  | `bd70e3298`         | mai-code-2          | Anonymous errors stay terminal-only                           |
+| C09  | `b32d0a0dc`         | gpt-6.1-sol         | Asynchronous feedback preserves input and defers safely       |
+| C11  | `61f09ffcd`         | mai-code-2          | Exact callback error-presentation ownership                   |
 
 C05, C10 and C12 retain their operator-selected no-code outcomes.
 **All 12 comments received individual replies in their own Copilot review threads**; links are
@@ -768,31 +768,31 @@ This is the current lead run only, not the earlier implementation/review session
 The final response and subsequent report-persistence operations are excluded.
 AIU are usage units, not dollars. Model-request spans overlap and are not wall-clock elapsed time.
 
-| Model | Role | Requests | Summed model time | AIU | AIU share |
-| --- | --- | ---: | ---: | ---: | ---: |
-| claude-opus-5.5 | advisor | 106 | 11m09s | 522.2 | 56.9% |
-| gpt-6.1-sol | leader | 73 | 21m07s | 249.0 | 27.1% |
-| gpt-6.1-sol | coding | 52 | 8m19s | 102.1 | 11.1% |
-| mai-code-2 | coding | 66 | 10m23s | 43.8 | 4.8% |
-| mai-code-2-flash | checks | 3 | 12s | 0.1 | 0.0% |
+| Model            | Role    | Requests | Summed model time |   AIU | AIU share |
+| ---------------- | ------- | -------: | ----------------: | ----: | --------: |
+| claude-opus-5.5  | advisor |      106 |            11m09s | 522.2 |     56.9% |
+| gpt-6.1-sol      | leader  |       73 |            21m07s | 249.0 |     27.1% |
+| gpt-6.1-sol      | coding  |       52 |             8m19s | 102.1 |     11.1% |
+| mai-code-2       | coding  |       66 |            10m23s |  43.8 |      4.8% |
+| mai-code-2-flash | checks  |        3 |               12s |   0.1 |      0.0% |
 
-| Role | Requests | Summed model time | AIU | AIU share |
-| --- | ---: | ---: | ---: | ---: |
-| leader | 73 | 21m07s | 249.0 | 27.1% |
-| coding | 118 | 18m42s | 145.8 | 15.9% |
-| advisor | 106 | 11m09s | 522.2 | 56.9% |
-| checks | 3 | 12s | 0.1 | 0.0% |
+| Role    | Requests | Summed model time |   AIU | AIU share |
+| ------- | -------: | ----------------: | ----: | --------: |
+| leader  |       73 |            21m07s | 249.0 |     27.1% |
+| coding  |      118 |            18m42s | 145.8 |     15.9% |
+| advisor |      106 |            11m09s | 522.2 |     56.9% |
+| checks  |        3 |               12s |   0.1 |      0.0% |
 
 **Totals:** leader **249.0 AIU**, subagents **668.2 AIU**, run **917.2 AIU**.
 Rounding individual rows can differ from these host totals.
 
-| Model | Role | Input | Output | Cache read | Cache write | Reasoning |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| claude-opus-5.5 | advisor | 7,417,828 | 66,866 | 6,917,519 | 500,069 | 32,299 |
-| gpt-6.1-sol | leader | 16,168,987 | 62,617 | 16,066,066 | 102,702 | 27,412 |
-| gpt-6.1-sol | coding | 2,599,223 | 29,702 | 2,405,939 | 193,128 | 9,412 |
-| mai-code-2 | coding | 3,261,276 | 35,323 | 2,697,728 | 0 | 17,143 |
-| mai-code-2-flash | checks | 49,634 | 798 | 31,744 | 0 | 310 |
+| Model            | Role    |      Input | Output | Cache read | Cache write | Reasoning |
+| ---------------- | ------- | ---------: | -----: | ---------: | ----------: | --------: |
+| claude-opus-5.5  | advisor |  7,417,828 | 66,866 |  6,917,519 |     500,069 |    32,299 |
+| gpt-6.1-sol      | leader  | 16,168,987 | 62,617 | 16,066,066 |     102,702 |    27,412 |
+| gpt-6.1-sol      | coding  |  2,599,223 | 29,702 |  2,405,939 |     193,128 |     9,412 |
+| mai-code-2       | coding  |  3,261,276 | 35,323 |  2,697,728 |           0 |    17,143 |
+| mai-code-2-flash | checks  |     49,634 |    798 |     31,744 |           0 |       310 |
 
 Cache and reasoning fields may overlap input/output; they must not be added into a purported
 token total. Figures are copied from the host session-log helper with explicit agent roles.

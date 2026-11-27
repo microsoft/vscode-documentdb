@@ -896,7 +896,9 @@ describe('WorkerSessionManager', () => {
                     await vi.waitFor(() => expect(prepareDriverConnectionString).toHaveBeenCalledOnce());
                     if (guard === 'abort') {
                         session.killWorker();
-                        expect(vi.mocked(prepareDriverConnectionString).mock.calls[0][0].abortSignal?.aborted).toBe(true);
+                        expect(vi.mocked(prepareDriverConnectionString).mock.calls[0][0].abortSignal?.aborted).toBe(
+                            true,
+                        );
                     } else {
                         ClustersClient.invalidate(clusterId);
                     }

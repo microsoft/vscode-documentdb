@@ -7,14 +7,14 @@ import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
-import { DocumentDBExperience } from '../../../../DocumentDBExperiences';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache, type CachedClusterCredentials } from '../../../../documentdb/CredentialCache';
-import { showClusterConnectFailure } from '../../../../documentdb/showClusterConnectFailure';
 import * as unauthenticatedEndpoint from '../../../../documentdb/shell/unauthenticatedEndpoint';
+import { showClusterConnectFailure } from '../../../../documentdb/showClusterConnectFailure';
 import { DocumentDBConnectionString } from '../../../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../../../documentdb/Views';
 import { type AuthenticateWizardContext } from '../../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
+import { DocumentDBExperience } from '../../../../DocumentDBExperiences';
 import { type TreeCluster } from '../../../../tree/models/BaseClusterModel';
 import { AzureVMResourceItem, type VirtualMachineModel } from './AzureVMResourceItem';
 
@@ -263,9 +263,7 @@ describe('Azure VM attempted unauthenticated endpoint', (): void => {
 
         expect(ClustersClient.connectInteractive).toHaveBeenCalledOnce();
         await expect(vm.getUnauthenticatedEndpoint()).resolves.toBeUndefined();
-        expect(showClusterConnectFailure).toHaveBeenLastCalledWith(
-            expect.objectContaining({ error }),
-        );
+        expect(showClusterConnectFailure).toHaveBeenLastCalledWith(expect.objectContaining({ error }));
         expect(CredentialCache.getCredentials(clusterId)).toBeUndefined();
         expect(ClustersClient.deleteClient).toHaveBeenCalledTimes(2);
     });

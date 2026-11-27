@@ -139,8 +139,7 @@ describe('openInteractiveShell', () => {
         }>,
     ): unknown {
         return {
-            contextValue:
-                overrides?.contextValue ?? 'connectionsView;treeItem_documentdbcluster',
+            contextValue: overrides?.contextValue ?? 'connectionsView;treeItem_documentdbcluster',
             cluster: {
                 clusterId: overrides?.clusterId ?? 'test-cluster-id',
                 name: overrides?.clusterName ?? 'TestCluster',
@@ -273,11 +272,7 @@ describe('openInteractiveShell', () => {
         it.each([
             [Views.ConnectionsView, 'connectionsView;treeItem_documentdbcluster', 'connectionRemoved'],
             [Views.DiscoveryView, 'discoveryView;treeItem_documentdbcluster', 'credentialsChanged'],
-            [
-                Views.AzureResourcesView,
-                'azureResourcesView;ruBranch;treeItem_documentdbcluster',
-                'identityChanged',
-            ],
+            [Views.AzureResourcesView, 'azureResourcesView;ruBranch;treeItem_documentdbcluster', 'identityChanged'],
             [
                 Views.AzureResourcesView,
                 'azureResourcesView;documentDbBranch;treeItem_documentdbcluster',
@@ -293,9 +288,7 @@ describe('openInteractiveShell', () => {
                         reason,
                     });
                     expect(refreshAuthenticationNode).toHaveBeenCalledExactlyOnceWith(node);
-                    expect(refreshAuthenticationNode).toHaveBeenCalledBefore(
-                        vi.mocked(vscode.window.showErrorMessage),
-                    );
+                    expect(refreshAuthenticationNode).toHaveBeenCalledBefore(vi.mocked(vscode.window.showErrorMessage));
                     expect(mockShowErrorMessage).toHaveBeenCalledExactlyOnceWith(
                         reason === 'connectionRemoved'
                             ? 'This connection was removed. Choose another connection.'

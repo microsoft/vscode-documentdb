@@ -289,8 +289,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     public disconnect(): void {
         const wasEvaluating = this._evaluating;
         const retainPartialInput = !wasEvaluating && !this._inputHandler.isInMultiLineMode;
-        const partialInput =
-            retainPartialInput ? this._inputHandler.getBuffer() : '';
+        const partialInput = retainPartialInput ? this._inputHandler.getBuffer() : '';
         const partialCursor = retainPartialInput ? this._inputHandler.getCursor() : 0;
 
         this._disconnectRevision += 1;
@@ -950,18 +949,14 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                     'The saved credentials were rejected. Update them from the tree, then run your command again.',
                 );
             case 'credentialsUpdating':
-                return l10n.t(
-                    'This connection is being updated. Run your command again when the update finishes.',
-                );
+                return l10n.t('This connection is being updated. Run your command again when the update finishes.');
             case 'connectionRemoved':
                 return l10n.t('This connection was removed. Open a shell from another connection.');
             case 'credentialsChanged':
             case 'identityChanged':
                 return l10n.t('This shell is bound to the previous connection. Open a new shell from the tree.');
             default:
-                return l10n.t(
-                    'This connection is unavailable. Reconnect from the tree, then run your command again.',
-                );
+                return l10n.t('This connection is unavailable. Reconnect from the tree, then run your command again.');
         }
     }
 
@@ -1020,9 +1015,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                         reason === 'credentialsChanged' ||
                         reason === 'identityChanged'
                     ) {
-                        this.writeAsyncFeedback(
-                            this._outputFormatter.formatError(this.unavailableMessage(reason)),
-                        );
+                        this.writeAsyncFeedback(this._outputFormatter.formatError(this.unavailableMessage(reason)));
                     }
                 }
                 return;
