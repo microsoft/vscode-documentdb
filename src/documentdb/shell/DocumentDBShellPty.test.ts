@@ -11,6 +11,7 @@ import { ext } from '../../extensionVariables';
 import { accumulateTelemetry } from '../../utils/accumulatingTelemetry';
 import { AuthMethodId } from '../auth/AuthMethod';
 import { ClustersClient } from '../ClustersClient';
+import { ConnectionUnavailableError } from '../ConnectionUnavailableError';
 import { CredentialCache } from '../CredentialCache';
 import { DocumentDBShellPty, type DocumentDBShellPtyOptions } from './DocumentDBShellPty';
 import { ShellCompletionProvider } from './ShellCompletionProvider';
@@ -528,6 +529,60 @@ describe('DocumentDBShellPty', () => {
 
             expect(mockEvaluate).toHaveBeenCalledExactlyOnceWith('accepted', 80);
             expect(getLatchReason).toHaveBeenCalled();
+        });
+
+        it.each([
+            [
+                'userDisconnected',
+                'Disconnected. Reconnect from the tree, then run your command again.',
+            ],
+            [
+                'unreachable',
+                'The connection is unavailable. Check the server or network, then run your command again.',
+            ],
+            [
+                'credentialsRejected',
+                'The saved credentials were rejected. Update them from the tree, then run your command again.',
+            ],
+            [
+                'credentialsUpdating',
+                'This connection is being updated. Run your command again when the update finishes.',
+            ],
+            ['connectionRemoved', 'This connection was removed. Open a shell from another connection.'],
+            [
+                'credentialsChanged',
+                'This shell is bound to the previous connection. Open a new shell from the tree.',
+            ],
+            [
+                'identityChanged',
+                'This shell is bound to the previous connection. Open a new shell from the tree.',
+            ],
+            [
+                'credentialsMissing',
+                'This connection is unavailable. Reconnect from the tree, then run your command again.',
+            ],
+            [
+                'signInRequired',
+                'This connection is unavailable. Reconnect from the tree, then run your command again.',
+            ],
+        ] as const)('uses %s guidance for latch and worker failures', async (reason, message) => {
+            vi.spyOn(ClustersClient, 'getLatchReason').mockReturnValueOnce(reason).mockReturnValue(undefined);
+
+            pty.handleInput('blocked');
+            pty.handleInput('\r');
+            expect(written).toContain(message);
+            expect(mockEvaluate).not.toHaveBeenCalled();
+
+            written = '';
+            const failure = new ConnectionUnavailableError(reason);
+            mockEvaluate.mockRejectedValueOnce(failure);
+
+            pty.handleInput('retry');
+            pty.handleInput('\r');
+            await vi.waitFor(() => expect(written).toContain(message));
+
+            expect(written).toContain(message);
+            expect(mockEvaluate).toHaveBeenCalledExactlyOnceWith('retry', 80);
         });
 
         it('should display error message on evaluation failure', async () => {

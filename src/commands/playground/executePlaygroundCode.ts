@@ -359,8 +359,41 @@ function getPlaygroundRecovery(error: unknown, connection: PlaygroundConnection)
             ),
         };
     }
+    if (error.reason === 'userDisconnected') {
+        return {
+            message: l10n.t(
+                'This connection is disconnected. Reconnect from the tree, then run the script again.',
+            ),
+        };
+    }
+    if (error.reason === 'unreachable') {
+        return {
+            message: l10n.t(
+                'The connection is unavailable. Check the server or network, then run the script again.',
+            ),
+        };
+    }
+    if (error.reason === 'credentialsRejected') {
+        return {
+            message: l10n.t(
+                'The saved credentials were rejected. Update them from the tree, then run the script again.',
+            ),
+        };
+    }
+    if (error.reason === 'credentialsUpdating') {
+        return {
+            message: l10n.t(
+                'This connection is being updated. Run the script again when the update finishes.',
+            ),
+        };
+    }
+    if (error.reason === 'connectionRemoved') {
+        return {
+            message: l10n.t('This connection was removed. Choose another connection for this playground.'),
+        };
+    }
     return {
-        message: l10n.t('This connection is unavailable. Reconnect from the tree, then re-pick it here.'),
+        message: l10n.t('This connection is unavailable. Reconnect from the tree, then run the script again.'),
     };
 }
 

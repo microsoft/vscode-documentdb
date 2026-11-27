@@ -6,16 +6,28 @@
 import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
 import { type PlaygroundConnection } from '../../documentdb/playground/types';
 import { executePlaygroundCode, stopPlaygroundEvaluator } from './executePlaygroundCode';
 
-const { evaluate, dispose, setExecuting, showResult, getConnection, getEpoch, canRecover, recover, contexts } =
-    vi.hoisted(() => ({
+const {
+    evaluate,
+    dispose,
+    setExecuting,
+    showResult,
+    getConnection,
+    getLatchReason,
+    getEpoch,
+    canRecover,
+    recover,
+    contexts,
+} = vi.hoisted(() => ({
         evaluate: vi.fn(),
         dispose: vi.fn(),
         setExecuting: vi.fn(),
         showResult: vi.fn(),
         getConnection: vi.fn<() => PlaygroundConnection | undefined>(),
+        getLatchReason: vi.fn(),
         getEpoch: vi.fn<() => number>(),
         canRecover: vi.fn(),
         recover: vi.fn(),
@@ -35,7 +47,7 @@ vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
 }));
 
 vi.mock('../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getLatchReason: vi.fn(), getExistingClient: vi.fn(), getEpoch },
+    ClustersClient: { getLatchReason, getExistingClient: vi.fn(), getEpoch },
 }));
 
 vi.mock('../signInAgain/signInAgain', () => ({
@@ -72,6 +84,76 @@ describe('executePlaygroundCode', () => {
         getConnection.mockReturnValue({ clusterId: 'cluster', clusterDisplayName: 'Cluster', databaseName: 'test' });
         getEpoch.mockReturnValue(0);
         canRecover.mockReturnValue(false);
+    });
+
+    it.each([
+        [
+            'userDisconnected',
+            'This connection is disconnected. Reconnect from the tree, then run the script again.',
+        ],
+        [
+            'unreachable',
+            'The connection is unavailable. Check the server or network, then run the script again.',
+        ],
+        [
+            'credentialsRejected',
+            'The saved credentials were rejected. Update them from the tree, then run the script again.',
+        ],
+        [
+            'credentialsUpdating',
+            'This connection is being updated. Run the script again when the update finishes.',
+        ],
+        [
+            'connectionRemoved',
+            'This connection was removed. Choose another connection for this playground.',
+        ],
+        [
+            'credentialsChanged',
+            'This playground is bound to the previous connection. Re-pick its connection from the tree.',
+        ],
+        [
+            'identityChanged',
+            'This playground is bound to the previous connection. Re-pick its connection from the tree.',
+        ],
+        [
+            'credentialsMissing',
+            'This connection is unavailable. Reconnect from the tree, then run the script again.',
+        ],
+        [
+            'signInRequired',
+            'This connection is unavailable. Reconnect from the tree, then run the script again.',
+        ],
+    ] as const)('uses %s guidance for latch and worker failures', async (reason, message) => {
+        getLatchReason.mockReturnValueOnce(reason);
+        const showWarning = vi.spyOn(vscode.window, 'showWarningMessage');
+        const progress = vi
+            .spyOn(vscode.window, 'withProgress')
+            .mockImplementation((_options, task) =>
+                Promise.resolve(
+                    task({ report: vi.fn() }, { isCancellationRequested: false, onCancellationRequested: vi.fn() }),
+                ),
+            );
+
+        try {
+            const uri = vscode.Uri.file('test.documentdb.js');
+            await executePlaygroundCode('db.stats()', 'runAll', uri);
+            expect(showWarning).toHaveBeenCalledExactlyOnceWith(message);
+            expect(evaluate).not.toHaveBeenCalled();
+            expect(setExecuting).not.toHaveBeenCalled();
+
+            showWarning.mockClear();
+            const failure = new ConnectionUnavailableError(reason);
+            evaluate.mockRejectedValueOnce(failure);
+
+            await expect(executePlaygroundCode('db.stats()', 'runAll', uri)).rejects.toBe(failure);
+            expect(showResult).toHaveBeenCalledExactlyOnceWith(expect.anything(), expect.stringContaining(message));
+            expect(evaluate).toHaveBeenCalledOnce();
+            expect(showWarning).not.toHaveBeenCalled();
+        } finally {
+            progress.mockRestore();
+            showWarning.mockRestore();
+            stopPlaygroundEvaluator('cluster');
+        }
     });
 
     it('cancels a stopped worker without replacing the retained result or showing an error', async () => {

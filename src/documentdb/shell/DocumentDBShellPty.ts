@@ -893,12 +893,41 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             return true;
         }
         if (error instanceof ConnectionUnavailableError) {
-            const message =
-                error.reason === 'userDisconnected'
-                    ? l10n.t('Disconnected. Reconnect from the tree, then open a new shell.')
-                    : error.reason === 'credentialsChanged' || error.reason === 'identityChanged'
-                      ? l10n.t('This shell is bound to the previous connection. Open a new shell from the tree.')
-                      : l10n.t('This connection is unavailable. Reconnect from the tree, then open a new shell.');
+            let message: string;
+            switch (error.reason) {
+                case 'userDisconnected':
+                    message = l10n.t('Disconnected. Reconnect from the tree, then run your command again.');
+                    break;
+                case 'unreachable':
+                    message = l10n.t(
+                        'The connection is unavailable. Check the server or network, then run your command again.',
+                    );
+                    break;
+                case 'credentialsRejected':
+                    message = l10n.t(
+                        'The saved credentials were rejected. Update them from the tree, then run your command again.',
+                    );
+                    break;
+                case 'credentialsUpdating':
+                    message = l10n.t(
+                        'This connection is being updated. Run your command again when the update finishes.',
+                    );
+                    break;
+                case 'connectionRemoved':
+                    message = l10n.t('This connection was removed. Open a shell from another connection.');
+                    break;
+                case 'credentialsChanged':
+                case 'identityChanged':
+                    message = l10n.t(
+                        'This shell is bound to the previous connection. Open a new shell from the tree.',
+                    );
+                    break;
+                default:
+                    message = l10n.t(
+                        'This connection is unavailable. Reconnect from the tree, then run your command again.',
+                    );
+                    break;
+            }
             this.writeLine(this._outputFormatter.formatError(message));
             return true;
         }
