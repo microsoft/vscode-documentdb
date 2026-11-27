@@ -112,6 +112,7 @@ entries are unpublished drafts and do not represent a shipped release.
 | [iterations/01-implementation-plan.md](./iterations/01-implementation-plan.md) | plan      |
 | [iterations/01-dev-plan.md](./iterations/01-dev-plan.md)                       | plan      |
 | [iterations/01-pr1136-final-review.md](./iterations/01-pr1136-final-review.md) | review    |
+| [iterations/01-pr1136-ux-review.md](./iterations/01-pr1136-ux-review.md)       | ux-review |
 
 ## Decisions index
 
