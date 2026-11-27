@@ -6,6 +6,8 @@
 .documentDataGrid {
     // Reserve Tree scrollbar width to keep RDG's ResizeObserver measurements stable.
     &[role='treegrid'] {
+        block-size: 100%;
+        min-block-size: 0;
         scrollbar-gutter: stable;
     }
 

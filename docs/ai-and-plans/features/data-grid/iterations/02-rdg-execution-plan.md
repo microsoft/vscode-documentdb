@@ -1230,6 +1230,12 @@ draft. A10 covers the full sweep; G3b retains the packaged screen-reader and Win
 checks. The G2 feedback did not include a Narrator announcement result; do not mark that check
 passed. The existing VSIX is the G2 baseline, not an artifact containing these follow-ups.
 
+> **WI-G2-1 done (2026-11-27):** Tree now fills the results area and retains its stable
+> gutter. In the Integrated Browser the grid and its parent matched at four viewport
+> heights (400–1045 px). At the shortest height the grid remained an internal scrollport
+> and reached `ten[9]`. Dark deep-nesting and dark/light arrays were ready and passed
+> without reported errors. Coding: 2.4 AIU on `mai-code-2` (5 requests).
+
 ### Step 4
 
 **WI-10: automated sweep** · `mai-code-2` (fallback `gpt-6.1-sol`), runs by `mai-code-2-flash`
