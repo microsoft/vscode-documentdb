@@ -93,6 +93,8 @@ export const DocumentView = (): JSX.Element => {
         revisionRef: operationRevisionRef,
         disposedRef,
         recovering,
+        recoveryFailure,
+        retryOffered,
         recoveryAnnouncement,
         showUnavailable,
         isOperationCurrent: isCurrentOperation,
@@ -445,6 +447,8 @@ export const DocumentView = (): JSX.Element => {
             onDismiss={() => setUnavailable(undefined)}
             onAction={handleUnavailableAction}
             recovering={recovering}
+            retryFailure={recoveryFailure}
+            retryOffered={retryOffered}
         >
             <div className="documentView">
                 <div className="toolbarContainer">

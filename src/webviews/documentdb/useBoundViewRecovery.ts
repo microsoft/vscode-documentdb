@@ -56,6 +56,8 @@ interface BoundViewRecovery {
     revisionRef: RefObject<number>;
     disposedRef: RefObject<boolean>;
     recovering: boolean;
+    recoveryFailure: string | undefined;
+    retryOffered: boolean;
     recoveryAnnouncement: string | undefined;
     showUnavailable(failure: ConnectionUnavailableDetails): void;
     isOperationCurrent(revision: number): boolean;
@@ -75,13 +77,20 @@ export function useBoundViewRecovery({
     const revisionRef = useRef(0);
     const disposedRef = useRef(false);
     const [recovering, setRecovering] = useState(false);
+    const [recoveryFailure, setRecoveryFailure] = useState<string>();
+    const [retryOffered, setRetryOffered] = useState(false);
     const [recoveryAnnouncement, setRecoveryAnnouncement] = useState<string>();
 
     const showUnavailable = useCallback(
         (failure: ConnectionUnavailableDetails): void => {
             revisionRef.current += 1;
+            const newEpisode = unavailableRef.current === undefined;
             unavailableRef.current = failure;
             setUnavailable(failure);
+            setRetryOffered((offered) =>
+                newEpisode ? failure.action === 'retry' : offered || failure.action === 'retry',
+            );
+            setRecoveryFailure(undefined);
             setRecoveryAnnouncement(undefined);
             if (resetRecoveringOnUnavailable) {
                 setRecovering(false);
@@ -106,6 +115,7 @@ export function useBoundViewRecovery({
 
             const revision = ++revisionRef.current;
             setRecovering(true);
+            setRecoveryFailure(undefined);
             void recovery
                 .mutate({ action })
                 .then((response) => {
@@ -113,8 +123,18 @@ export function useBoundViewRecovery({
                         return;
                     }
                     if ('unavailable' in response) {
-                        unavailableRef.current = response.unavailable;
-                        setUnavailable(response.unavailable);
+                        const current = unavailableRef.current;
+                        if (
+                            current &&
+                            (current.reason !== response.unavailable.reason ||
+                                current.action !== response.unavailable.action)
+                        ) {
+                            unavailableRef.current = response.unavailable;
+                            setUnavailable(response.unavailable);
+                        }
+                        setRecoveryFailure(
+                            l10n.t('Unable to recover the connection. Try Retry again, or close this view.'),
+                        );
                         return;
                     }
                     if (advanceRevisionAfterRecovery) {
@@ -122,10 +142,18 @@ export function useBoundViewRecovery({
                     }
                     unavailableRef.current = undefined;
                     setUnavailable(undefined);
+                    setRecoveryFailure(undefined);
+                    setRetryOffered(false);
                     setRecoveryAnnouncement(response.recovered.text);
                 })
                 .catch(async (error: unknown) => {
                     if (disposedRef.current || revision !== revisionRef.current) {
+                        return;
+                    }
+                    if (action === 'retry') {
+                        setRecoveryFailure(
+                            l10n.t('Unable to recover the connection. Try Retry again, or close this view.'),
+                        );
                         return;
                     }
                     const cause = error instanceof Error ? error.message : String(error);
@@ -154,6 +182,8 @@ export function useBoundViewRecovery({
         revisionRef,
         disposedRef,
         recovering,
+        recoveryFailure,
+        retryOffered,
         recoveryAnnouncement,
         showUnavailable,
         isOperationCurrent,
