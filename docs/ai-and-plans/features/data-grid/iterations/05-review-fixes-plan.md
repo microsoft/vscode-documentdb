@@ -767,7 +767,16 @@ scenarios still reach their intended entry state. No migration of the on-demand 
 
 ### 6. Docs
 
-**Status:** Pending with implementation; this planning task adds only the plan and its index link.
+**Status:** Implemented.
+
+> **Done (2026-11-27), commit `668118be`, `mai-code-2`:** updated the current feature
+> README/design, nested-navigation manual, parity disposition and the two earlier execution/
+> review records. Preserved the original findings, unreleased gates and the user's two-line
+> README plan entry verbatim. Decisions: leader carried out the accepted documentation scope
+> at 95% confidence and corrected factual wording at 100% confidence: 63 passed/12 failed,
+> and R1 save coverage is mocked, not browser/live-server evidence. No design deviation or
+> operator rationale was invented. No tests were added or run for this docs-only item.
+> Packaged normal/broken-CSS and native screen-reader/workbench evidence remain pending.
 
 - `README.md`: link this plan now; update the current behavior/verification summary as fixes land.
 - `design.md` "Table interactions": keyboard step-in moves focus to the same row's `_id` cell; the
@@ -786,7 +795,13 @@ scenarios still reach their intended entry state. No migration of the on-demand 
 
 ### 7. Thread replies and push (always-ask)
 
-**Status:** Pending; not authorized by this planning request.
+**Status:** Deferred, authorization-gated.
+
+> **Deferred, escalated (2026-11-27), operator boundary:** the current instruction forbids
+> pushing, replying/resolving threads, automation and G3a/G3b release without required
+> authorization. Option A is to keep these actions pending (recommended); option B requires
+> explicit future push/reply authorization and the relevant packaged/manual evidence.
+> No external action was attempted, and no approval is inferred from completed source fixes.
 
 After relevant fixes and evidence are available, and only with operator approval to push/reply:
 reply on the three Copilot threads
@@ -853,15 +868,20 @@ AI-review/operator gates are not waived by completing these fixes.
 
 # Outcome
 
-Execution is in progress. WI-G3-1 (`8cc23e15`), WI-G3-2 (`bf7285d3`), WI-G3-3 (`9eb782bd`)
-WI-G3-4 (`c09cdb6d`) and WI-G3-5 (`3ac66077`) are implemented with their focused evidence
-recorded inline. WI-G3-6 remains pending; WI-G3-7 requires
+Source execution is complete; handover remains gated. WI-G3-1 (`8cc23e15`),
+WI-G3-2 (`bf7285d3`), WI-G3-3 (`9eb782bd`),
+WI-G3-4 (`c09cdb6d`), WI-G3-5 (`3ac66077`) and WI-G3-6 (`668118be`) are implemented with their
+evidence recorded inline. Authorized draft-stage source/documentation work is complete.
+The full delivery plan remains gated on fresh packaged/manual evidence and WI-G3-7
 push/reply authorization. Browser setup and intermittent gesture failures are retained above,
 including the distinction between combined affected-scenario coverage and clean full runs.
 No push, thread reply, package, formatting or gate release has occurred. #1142 remains draft
 Case 1; full Case 2 checks, including `prettier-fix`, remain deferred until handover.
 
 ## Fresh-session handoff (operator-requested pause, 2026-11-27)
+
+This is the original pre-resumption checkpoint, retained as history. Current completion and
+pending gates are recorded in **Outcome** and **Fresh-run usage and completion** below.
 
 The operator chose `fresh-handoff` after WI-G3-2 and its done note were committed. The parent
 delivery plan is **paused, not complete**: two of seven accepted items are done. No coding,
@@ -961,3 +981,87 @@ A future run can reduce overhead by preparing smaller source-linked decision pac
 verifying the built-in runner invocation/viewport before dispatch. Preserve the approved model
 plan and mandatory review/operator gates; these figures do not compare model quality on unlike
 work.
+
+## Fresh-run usage and completion
+
+Window: `2026-11-27T16:11:34.558Z` to host snapshot **2026-11-27 17:54 UTC**.
+Session: `319da234-4c7c-4cc6-b872-6a56a0063cb1`. This is the resumed run only; the earlier
+920.3-AIU snapshot above is not included or added to these totals. Approximate wall-clock
+elapsed: **1h42m**. Summed model-request time: **1h36m54s**, not wall-clock time.
+Aggregate check/CI execution time is not reported by the host; available individual
+durations are recorded under the items. The final bookkeeping commit and final response
+are excluded from this snapshot. AIU are not dollars.
+
+| Model | Role | Requests | Model time | AIU | AIU share |
+| --- | --- | ---: | ---: | ---: | ---: |
+| claude-opus-5.5 | advisor | 63 | 6m37s | 354.6 | 31.7% |
+| gpt-6.1-sol | leader | 134 | 56m23s | 685.1 | 61.2% |
+| mai-code-2 | coding | 82 | 17m59s | 69.3 | 6.2% |
+| mai-code-2-flash | review | 1 | 11s | 0.1 | 0.0% |
+| mai-code-2-flash | checks | 97 | 15m44s | 10.5 | 0.9% |
+
+The coding role includes the documentation worker; it does not include leading or advising.
+
+| Role | Requests | Model time | AIU | AIU share |
+| --- | ---: | ---: | ---: | ---: |
+| leader | 134 | 56m23s | 685.1 | 61.2% |
+| coding | 82 | 17m59s | 69.3 | 6.2% |
+| advisor | 63 | 6m37s | 354.6 | 31.7% |
+| review | 1 | 11s | 0.1 | 0.0% |
+| checks | 97 | 15m44s | 10.5 | 0.9% |
+
+| Model | Role | Input | Output | Cache read | Cache write | Reasoning |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| claude-opus-5.5 | advisor | 5,006,265 | 37,706 | 4,633,098 | 373,031 | 21,205 |
+| gpt-6.1-sol | leader | 23,639,089 | 149,359 | 23,015,775 | 622,912 | 99,413 |
+| mai-code-2 | coding | 6,910,341 | 63,517 | 6,149,632 | 0 | 29,079 |
+| mai-code-2-flash | review | 29,996 | 766 | 4,608 | 0 | 729 |
+| mai-code-2-flash | checks | 6,891,255 | 66,613 | 5,700,096 | 0 | 28,998 |
+
+Cache/reasoning fields may overlap input/output; do not sum them into a purported total.
+Totals: **leader 685.1 AIU; subagents 434.6 AIU; run 1119.7 AIU**.
+
+### Agent attribution
+
+| Agent ID | Item | Role | Model |
+| --- | --- | --- | --- |
+| `2657bec3-cdf3-4663-a8e4-85f6b1dc1f78` | WI-G3-3 | advisor | claude-opus-5.5 |
+| `a38262e5-1c8e-41cf-b90f-bb6017ad4c24` | WI-G3-3 | checks | mai-code-2-flash |
+| `4f3e63e0-c6fd-4831-94d6-c5a7274f98b5` | WI-G3-3 | coding | mai-code-2 |
+| `8c577ad1-dbbd-4ef5-b42c-2b3cc97a5ab8` | WI-G3-3 | blocked review attempt | mai-code-2-flash |
+| `1a5fc69d-a6af-4420-b2ac-efa9a2f5e6ec` | WI-G3-4 | checks | mai-code-2-flash |
+| `dee65487-fc66-437f-b95b-fdfe721115df` | WI-G3-4 | coding | mai-code-2 |
+| `3d7b09b0-c597-4875-8647-c8ac859b80b9` | WI-G3-4 | advisor | claude-opus-5.5 |
+| `f111cf4c-87b6-4e39-bd3e-b4f59a8c12e9` | WI-G3-5 | coding | mai-code-2 |
+| `0fb2fd0f-5183-458d-9a46-7bfaf682ed87` | WI-G3-5 | retired checks | mai-code-2-flash |
+| `e992939d-7a80-417a-a76a-2297a8b31084` | WI-G3-5 | advisor | claude-opus-5.5 |
+| `4cc1d91f-0ee4-4480-ace2-67c0668368a5` | WI-G3-5 | fresh checks | mai-code-2-flash |
+| `0a6d3570-9406-4261-9c95-5b678d65aa40` | WI-G3-6 | documentation/coding | mai-code-2 |
+
+Three advisor agents handled **five consultations**: WI-G3-3 interfaces/positional coverage,
+production review and test-only typing correction; WI-G3-4 virtualized-column assertion;
+WI-G3-5 strict/preset readiness review. Their verdicts were followed. The blocked additional
+flash review was not used as advice. No coding-model substitution occurred.
+
+Operator gates resolved in this run: **G3-browser-baseline-retry** (one clean rerun) and
+**WI-G3-4-TDD** (exact visibility steps, expectation unchanged). At the operator's environment
+steering, the retained checker was retired and the built-in page reloaded; the shared Vite
+server was never restarted. Remaining gates are fresh packaged normal/broken-CSS evidence,
+native screen-reader/workbench G3b checks, G3a/G3b release and WI-G3-7 external authorization.
+#1144 and #1145 were not implemented.
+
+**Checks:** draft **Case 1** only. Builds passed after the recorded new-test typing failure;
+focused component tests passed 11/11 (changed Table file 4/4 again), cell tests 3/3,
+and the final JSON-reported harness selection passed 154/154. Completed affected source
+matrices passed 90/90, 261/261 and 177/177 assertions respectively. Exact type-name/hover
+observations passed in all three themes. Earlier failures, retries and incomplete checker
+reports remain inline and in the raw session reports. Documentation changes required no tests.
+Full Case 2, including `prettier-fix`, `l10n:check`, strict `typecheck:tests`, full runtime
+tests and packaging, remains deferred. No localized string changed.
+
+**Optimization:** leading is the largest measured category (61.2%); advising is 31.7%.
+Repeated evidence reconciliation, checker resets and long leader turns dominated overhead.
+The failed extra review cost 0.1 AIU; retry-only usage is not separately reported.
+Future runs should freeze the proven inline-array wrapper and JSON reporting before the first
+checks, and keep leader packets/reconciliation short. Preserve the approved models and
+mandatory gates; these figures do not rank model quality on unlike work.
