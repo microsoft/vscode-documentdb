@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
+    parseError,
     registerCommand,
     type CommandCallback,
     type IActionContext,
@@ -101,14 +102,20 @@ export function registerCommandWithModalErrors(
     );
 }
 
+function isWebviewInvocation(args: unknown[]): boolean {
+    const metadata = args[2];
+    return (
+        typeof metadata === 'object' &&
+        metadata !== null &&
+        'source' in metadata &&
+        typeof metadata.source === 'string' &&
+        metadata.source.startsWith('webview;')
+    );
+}
+
 /**
- * Registers a tree-node command that explains infrastructure-caused failures, without changing how
- * anything else is reported.
- *
- * Separate from {@link registerCommandWithTreeNodeUnwrappingAndModalErrors}: the database commands
- * (create, drop, import, export, index) report their failures as notifications today, and a
- * explanation is not a reason to start blocking the user with a modal. Only the wording changes, and
- * only when a provider recognises the cluster.
+ * Registers a tree-node command that explains infrastructure-caused failures. Tree-origin failures
+ * associated with a cluster use a modal; shared webview calls retain their notification behavior.
  *
  * @param commandId The command ID to register
  * @param callback The command handler function that expects unwrapped tree node arguments
@@ -124,22 +131,43 @@ export function registerCommandWithTreeNodeUnwrappingAndDiagnostics<T>(
     registerCommand(
         commandId,
         async (context: IActionContext, ...args: unknown[]) => {
+            const webviewInvocation = isWebviewInvocation(args);
             let unwrappedArgs: ReturnType<typeof unwrapArgs<T>> = [];
             try {
                 unwrappedArgs = unwrapArgs<T>(args);
                 return await callback(context, ...unwrappedArgs);
             } catch (error) {
-                // A UserFacingError already says what it needs to; leave it to default handling.
-                if (error instanceof UserFacingError) {
+                const clusterId = (unwrappedArgs[0] as unknown as { cluster?: { clusterId?: string } } | undefined)
+                    ?.cluster?.clusterId;
+                const treeError = !webviewInvocation && clusterId ? parseError(error) : undefined;
+                if (treeError?.isUserCancelledError) {
                     throw error;
                 }
 
-                const clusterId = (unwrappedArgs[0] as unknown as { cluster?: { clusterId?: string } } | undefined)
-                    ?.cluster?.clusterId;
+                if (error instanceof UserFacingError) {
+                    if (treeError) {
+                        context.errorHandling.suppressDisplay = true;
+                        await vscode.window.showErrorMessage(error.message, {
+                            modal: true,
+                            detail: error.options.details,
+                        });
+                    }
+                    throw error;
+                }
+
                 const explanation = clusterId ? await ErrorExplanationService.explain({ clusterId, error }) : undefined;
 
                 if (explanation) {
                     context.telemetry.properties.explanationProviderId = explanation.providerId;
+                }
+
+                if (treeError) {
+                    context.errorHandling.suppressDisplay = true;
+                    await vscode.window.showErrorMessage(
+                        explanation?.message ?? vscode.l10n.t('Unable to complete this tree action.'),
+                        { modal: true, detail: treeError.message },
+                    );
+                } else if (explanation) {
                     context.errorHandling.suppressDisplay = true;
                     // `detail` is only rendered for modal messages, so the raw text is appended.
                     const cause = error instanceof Error ? error.message : String(error);
