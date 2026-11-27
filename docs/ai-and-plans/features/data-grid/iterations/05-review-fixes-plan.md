@@ -535,7 +535,93 @@ because Delete starts from the toolbar through a host confirmation, so focus is 
 
 ### 4. R5 — type is part of the cell's name; no tooltip (decision 0004)
 
-**Status:** Pending.
+**Status:** Implemented; focused tests and three-theme computed-name/hover evidence complete.
+
+> **Done (2026-11-27), commit `c09cdb6d`:** defined Table values now name their full BSON
+> type before the value; the original glyph remains visual and is `aria-hidden`. The
+> BSON value Tooltip is removed; missing-field Tooltip/label behavior is unchanged.
+> Decisions: operator specified R5 and approved the exact visibility-step amendment to
+> the new glyph contract; advisor `claude-opus-5.5` diagnosed virtualization at 85%;
+> leader approved the local production revision at 95% after direct review. Added one
+> harness case and two browser contracts, retaining every original `TDD:` assertion.
+> Cell tests passed 3/3, harness 79/79 and build passed. After the recorded harness-only
+> repair, 15/15 source journeys passed 261/261 assertions with 114 RPC calls and zero
+> errors. In all themes focused computed names were exactly `Int32 7` and
+> `Decimal128 12.50`, excluding glyphs; no visible `Int32` Tooltip appeared after
+> 544–568 milliseconds of observation. The initial 258/261 result and all raw reports
+> remain recorded. No l10n string changed, screen reader was exercised, packaged check
+> ran, gate was released, or external operation/Case 2/formatting was performed.
+
+**Failing-first evidence (2026-11-27), `mai-code-2-flash`:** the unchanged `mixed-types`
+journeys were ready in dark, light and high-contrast, each passing 39/39 existing assertions
+with zero errors (117/117 combined), with five RPC calls per route. The worker initially
+misreported 38/38 and 114 combined; its retained-report clarification corrected the counts.
+In each theme the focused count gridcell's computed
+snapshot was `7 i32`; exact `Int32 7` role lookup found zero matches. The glyph lacked
+`aria-hidden`, and hovering displayed the `Int32` Tooltip after 426/434/413 milliseconds
+respectively (installed Tooltip default show delay: 250 milliseconds). Decimal128 snapshots
+were `12.50 d128`, not exact `Decimal128 12.50`. Inner spans had no added Tab stop.
+These are browser-computed observations, not spoken-screen-reader evidence.
+The server/page/viewport were preserved. The worker initially reported a persistence
+restriction, then clarified that no write was attempted and no tool denial occurred.
+The leader preserved the already-generated raw outputs as `files/wi-g3-4-before.txt`
+(32,510 bytes) and `files/wi-g3-4-before-external.txt` (59,027 bytes) in the fresh session.
+This corrected the omitted persistence without a browser rerun or source change.
+
+The leader accepted the reproduced R5 failure and dispatched `mai-code-2` for the specified
+hidden text, visual-only glyph and value-Tooltip removal, retaining the missing-field Tooltip.
+The known runner uses substring matching for guarded cell names and `includes` for ordered
+text, so no existing `TDD:` contract change is presumed or authorized. Two new glyph/Tab-stop
+contracts use the existing assertion format; exact-name/hover evidence remains external.
+
+**Implementation returned (2026-11-27), `mai-code-2`:** defined values now use the repository's
+visually-hidden text style before their visible value; the original glyph is `aria-hidden`,
+and only the BSON value Tooltip is removed. Missing-field Tooltip code is unchanged. The
+worker updated the specified non-`TDD:` cell expectations and added one harness case/two
+browser contracts without changing existing contracts or adding assertion-format fields.
+Leader direct review accepted this local change at 95% confidence: the only production
+consumer is Table, the props/host boundary and localization are unchanged, and the existing
+layout style is preserved. Focused tests/build, 15 affected source journeys and three-theme
+external computed-name/hover observations are now with `mai-code-2-flash`; no post-fix
+success is claimed yet.
+
+**First post-fix checks and TDD gate (2026-11-27):** cell tests passed 3/3 in 5.61 seconds,
+harness tests 79/79 in 1.31 seconds, and build passed. The single targeted helper execution
+completed all 15 requested routes, with **258/261 assertions passed**, 114 RPC calls and
+zero route errors. Its three failures are the *new* glyph `aria-hidden` contract (one per
+theme), reporting `null` rather than `"true"`; no pre-existing contract failed, contrary to
+the worker's initial label. The helper's route loop had already executed the whole selection
+before the failure report was inspected. No retry or external post-fix name/hover run occurred.
+Full output is persisted as `files/wi-g3-4-after-first.txt`. Production and tests are unchanged
+pending a narrow advisor assessment of target-column visibility/selector shape.
+**WI-G3-4-TDD** blocks any contract repair and the implementation commit; the operator must
+approve the recommended test amendment after that assessment. The intended glyph expectation
+must not be weakened or removed.
+
+**WI-G3-4-TDD resolution (2026-11-27):** advisor `claude-opus-5.5` attributed `null` to the
+count column being virtualized away after header traversal ends at column 12 (85% confidence,
+source-based, not a browser run). RDG renders visible columns plus overscan; the selector
+matches the intended glyph when column 3 is mounted. It recommended `Home`, `ArrowRight`,
+`ArrowRight` before the glyph assertion, with the unchanged Tab-stop check immediately after.
+The operator selected **`approve-harness-only`**, authorizing those exact steps and their
+harness pin, plus focused checks and the targeted rerun. The selector, `"true"` expectation
+and all original contracts are retained; a passing glyph assertion will establish that the
+following Tab-stop check examines a mounted cell. Production remains unchanged. A repeated
+`null` after these steps would reopen the gate, not justify weakening the test.
+
+**Post-fix completion evidence (2026-11-27), `mai-code-2-flash`:** the amended focused
+harness passed 79/79 in 1.54 seconds. The preserved helper ran the same 15 routes:
+`mixed-types`, `missing-vs-null`, `html-values`, `heterogeneous` and `step-in`, each in
+dark, light and high-contrast. All were ready; **261/261 assertions passed**, with
+114 RPC calls and zero errors. Per theme, route assertions/calls were 41/5, 2/5,
+2/5, 29/5 and 13/18 respectively. External checks then found exactly one focused
+`Int32 7` and one `Decimal128 12.50` gridcell in every theme, with `i32`/`d128` visual
+glyphs `aria-hidden="true"` and no inner Tab stop. Hover observed zero visible `Int32`
+Tooltips after 551/568/544 milliseconds (500-millisecond bounded observation over
+the verified 250-millisecond entry delay). This wait was only hover observation, not
+M7 focus repair or a runner change. Full results are persisted as
+`files/wi-g3-4-after.txt` and `files/wi-g3-4-after-external.txt`; the server and viewport
+were preserved. Spoken screen-reader output remains unverified.
 
 **Execution evidence design, advised (`claude-opus-5.5`, 2026-11-27):** do not extend the exported
 scenario assertion/step format with `exact` or `hover`. Use existing assertion forms for glyph
@@ -690,8 +776,9 @@ AI-review/operator gates are not waived by completing these fixes.
 
 # Outcome
 
-Execution is in progress. WI-G3-1 (`8cc23e15`), WI-G3-2 (`bf7285d3`) and WI-G3-3 (`9eb782bd`)
-are implemented with their focused evidence recorded inline. WI-G3-4 through WI-G3-6 remain pending; WI-G3-7 requires
+Execution is in progress. WI-G3-1 (`8cc23e15`), WI-G3-2 (`bf7285d3`), WI-G3-3 (`9eb782bd`)
+and WI-G3-4 (`c09cdb6d`) are implemented with their focused evidence recorded inline.
+WI-G3-5 and WI-G3-6 remain pending; WI-G3-7 requires
 push/reply authorization. Browser setup and intermittent gesture failures are retained above,
 including the distinction between combined affected-scenario coverage and clean full runs.
 No push, thread reply, package, formatting or gate release has occurred. #1142 remains draft
