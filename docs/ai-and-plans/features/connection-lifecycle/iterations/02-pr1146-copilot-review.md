@@ -151,12 +151,20 @@ blocked; Disconnect, removal, updates, aborts and superseding epochs remain bloc
 token relay, shared-client mutation, or automatic authenticated fallback.
 
 **Author decision (2026-11-27):** selected the recommended explicit diagnostic startup capability
-and shared narrow authentication-hold predicate. Implementation pending.
+and shared narrow authentication-hold predicate.
 
 **Deferred by operator (2026-11-27):** skip C01 for this lead run. The accepted fix remains pending.
 
 **Deferral withdrawn by operator (2026-11-27):** the skip instruction was for a different
-project. C01's accepted fix is included in this lead run; implementation pending.
+project. C01's accepted fix is included in this lead run.
+
+**Done (2026-11-27), commit `476e65176` (local, not pushed):** gpt-6.1-sol passed the explicit
+diagnostic capability through worker startup and shared the exact three-hold predicate across
+the command, Shell and Worker. Ordinary NoAuth, all other holds, abort and epoch fences stay strict;
+no credentials, relay, wire flag or hold clearing. Added 21 focused cases; four targeted files:
+224 passed. The extra startup argument assertion preserves the existing isolation assertions.
+Advised (claude-opus-5.5): approved at 90% confidence after checking startup and worker ownership.
+Final batch build remains pending. [Thread reply](https://github.com/microsoft/vscode-documentdb/pull/1146#discussion_r4722230665).
 
 ## C02. VM diagnostic Shell can use the wrong port
 
