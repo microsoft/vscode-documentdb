@@ -888,7 +888,8 @@
         "//": "[Query Playground] Show Connection Info",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.playground.showConnectionInfo",
-        "title": "Query Playground: Show Connection Info"
+        "title": "Query Playground: Change Connection",
+        "icon": "$(plug)"
       },
       {
         "//": "[Query Playground] Connect / Reconnect",
@@ -905,11 +906,25 @@
         "icon": "$(run-all)"
       },
       {
-        "//": "[Query Playground] Run Selected / Current Block",
+        "//": "[Query Playground] Run Current Block",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.playground.runSelected",
-        "title": "Query Playground: Run Selected",
+        "title": "Query Playground: Run Block",
         "icon": "$(play)"
+      },
+      {
+        "//": "[Query Playground] Open Block in Shell",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.playground.openQueryInShell",
+        "title": "%playground.openBlockInShell%",
+        "icon": "$(terminal)"
+      },
+      {
+        "//": "[Query Playground] Open Block in Collection View",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.playground.openQueryInCollectionView",
+        "title": "%playground.openBlockInCollectionView%",
+        "icon": "$(screen-full)"
       },
       {
         "//": "[Query Playground] Scan Collection Schema for field completions",
@@ -970,8 +985,55 @@
           "group": "navigation@5"
         }
       ],
-      "editor/context": [],
-      "editor/title": [],
+      "editor/context": [
+        {
+          "command": "vscode-documentdb.command.playground.runSelected",
+          "when": "editorLangId == 'documentdb-playground'",
+          "group": "1_documentdb@1"
+        },
+        {
+          "command": "vscode-documentdb.command.playground.openQueryInShell",
+          "when": "editorLangId == 'documentdb-playground' && documentdbPlaygroundConnected && documentdbPlaygroundBlockHasCode",
+          "group": "1_documentdb@2"
+        },
+        {
+          "command": "vscode-documentdb.command.playground.openQueryInCollectionView",
+          "when": "editorLangId == 'documentdb-playground' && documentdbPlaygroundConnected && documentdbPlaygroundBlockHasCode",
+          "group": "1_documentdb@3"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "vscode-documentdb.command.playground.connect",
+          "when": "editorLangId == 'documentdb-playground' && !documentdbPlaygroundConnected",
+          "group": "navigation@1"
+        },
+        {
+          "command": "vscode-documentdb.command.playground.showConnectionInfo",
+          "when": "editorLangId == 'documentdb-playground' && documentdbPlaygroundConnected",
+          "group": "navigation@1"
+        },
+        {
+          "command": "vscode-documentdb.command.playground.runAll",
+          "when": "editorLangId == 'documentdb-playground'",
+          "group": "navigation@2"
+        },
+        {
+          "command": "vscode-documentdb.command.playground.runSelected",
+          "when": "editorLangId == 'documentdb-playground'",
+          "group": "2_playground@1"
+        },
+        {
+          "command": "vscode-documentdb.command.playground.openQueryInShell",
+          "when": "editorLangId == 'documentdb-playground' && documentdbPlaygroundConnected && documentdbPlaygroundBlockHasCode",
+          "group": "2_playground@2"
+        },
+        {
+          "command": "vscode-documentdb.command.playground.openQueryInCollectionView",
+          "when": "editorLangId == 'documentdb-playground' && documentdbPlaygroundConnected && documentdbPlaygroundBlockHasCode",
+          "group": "2_playground@3"
+        }
+      ],
       "webview/context": [
         {
           "command": "vscode-documentdb.command.clusterDashboard.context.viewCollections",
@@ -1886,19 +1948,27 @@
         },
         {
           "command": "vscode-documentdb.command.playground.showConnectionInfo",
-          "when": "never"
+          "when": "editorLangId == 'documentdb-playground' && documentdbPlaygroundConnected"
         },
         {
           "command": "vscode-documentdb.command.playground.connect",
-          "when": "editorLangId == 'documentdb-playground'"
+          "when": "editorLangId == 'documentdb-playground' && !documentdbPlaygroundConnected"
         },
         {
           "command": "vscode-documentdb.command.playground.runAll",
-          "when": "never"
+          "when": "editorLangId == 'documentdb-playground'"
         },
         {
           "command": "vscode-documentdb.command.playground.runSelected",
-          "when": "never"
+          "when": "editorLangId == 'documentdb-playground'"
+        },
+        {
+          "command": "vscode-documentdb.command.playground.openQueryInShell",
+          "when": "editorLangId == 'documentdb-playground' && documentdbPlaygroundConnected && documentdbPlaygroundBlockHasCode"
+        },
+        {
+          "command": "vscode-documentdb.command.playground.openQueryInCollectionView",
+          "when": "editorLangId == 'documentdb-playground' && documentdbPlaygroundConnected && documentdbPlaygroundBlockHasCode"
         }
       ]
     },

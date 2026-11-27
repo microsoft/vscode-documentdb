@@ -6,9 +6,9 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { PLAYGROUND_LANGUAGE_ID } from '../../documentdb/playground/constants';
-import { detectBlocks, detectCurrentBlock } from '../../documentdb/playground/statementDetector';
+import { detectBlocks, getBlockText, resolveBlockAtLine } from '../../documentdb/playground/statementDetector';
 import { executePlaygroundCode } from './executePlaygroundCode';
+import { parsePlaygroundInvocation, resolvePlaygroundEditor } from './playgroundInvocation';
 
 /**
  * Runs the block specified by CodeLens arguments or the current block
@@ -18,50 +18,34 @@ import { executePlaygroundCode } from './executePlaygroundCode';
  * CodeLens passes `[startLine, endLine]` as arguments so clicking
  * a per-block "▶ Run" lens executes exactly that block.
  */
-export async function runSelected(_context: IActionContext, startLine?: number, endLine?: number): Promise<void> {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor || editor.document.languageId !== PLAYGROUND_LANGUAGE_ID) {
+export async function runSelected(context: IActionContext, ...args: unknown[]): Promise<void> {
+    const invocation = parsePlaygroundInvocation(args);
+    context.telemetry.properties.activationSource = invocation.activationSource;
+
+    const editor = resolvePlaygroundEditor(invocation.uri);
+    if (!editor) {
         return;
     }
 
     let codeToRun: string;
     let selectionSource: string;
 
-    if (startLine !== undefined && endLine !== undefined) {
+    if (invocation.range) {
         // Invoked from CodeLens with explicit block range
         selectionSource = 'codeLens';
-        const range = new vscode.Range(startLine, 0, endLine, editor.document.lineAt(endLine).text.length);
-        codeToRun = editor.document.getText(range);
+        codeToRun = getBlockText(editor.document, invocation.range);
     } else {
         // Run current block at cursor, fall back to preceding block.
         // Any active selection (e.g. from autocomplete) is intentionally
         // ignored so we always execute the full block.
-        selectionSource = 'cursor';
-        codeToRun = detectCurrentBlock(editor.document, editor.selection.active);
-        if (!codeToRun.trim()) {
-            // Cursor is on a blank line — fall back to the nearest preceding block
-            // (same behavior as CodeLens resolveActiveBlock)
-            selectionSource = 'fallback';
-            const blocks = detectBlocks(editor.document);
-            const cursorLine = editor.selection.active.line;
-            for (let i = blocks.length - 1; i >= 0; i--) {
-                if (blocks[i].endLine < cursorLine) {
-                    const range = new vscode.Range(
-                        blocks[i].startLine,
-                        0,
-                        blocks[i].endLine,
-                        editor.document.lineAt(blocks[i].endLine).text.length,
-                    );
-                    codeToRun = editor.document.getText(range);
-                    break;
-                }
-            }
-        }
+        const resolved = resolveBlockAtLine(detectBlocks(editor.document), editor.selection.active.line);
+        selectionSource = resolved?.match === 'preceding' ? 'fallback' : 'cursor';
+        codeToRun = resolved ? getBlockText(editor.document, resolved.block) : '';
     }
 
-    _context.telemetry.properties.selectionSource = selectionSource;
+    context.telemetry.properties.selectionSource = selectionSource;
     const blocks = detectBlocks(editor.document);
-    _context.telemetry.measurements.blockCount = blocks.length;
+    context.telemetry.measurements.blockCount = blocks.length;
 
     if (!codeToRun.trim()) {
         void vscode.window.showInformationMessage(l10n.t('No code to run. Place the cursor in a code block.'));

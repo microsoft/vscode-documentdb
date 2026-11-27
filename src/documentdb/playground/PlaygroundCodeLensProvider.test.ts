@@ -74,6 +74,7 @@ describe('PlaygroundCodeLensProvider', () => {
         const runAllLens = lenses[1];
         expect(runAllLens.command?.command).toBe(PlaygroundCommandIds.runAll);
         expect(runAllLens.command?.title).toContain('Run All');
+        expect(runAllLens.command?.arguments).toEqual([{ activationSource: 'playgroundCodeLens' }]);
         expect(runAllLens.range.start.line).toBe(0);
     });
 

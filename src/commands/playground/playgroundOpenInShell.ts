@@ -6,8 +6,10 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { detectBlocks, resolveBlockAtLine } from '../../documentdb/playground/statementDetector';
 import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
 import { ShellCommandIds } from '../../documentdb/shell/constants';
+import { parsePlaygroundInvocation, resolvePlaygroundEditor } from './playgroundInvocation';
 
 /**
  * Opens the current playground code block in an Interactive Shell.
@@ -19,31 +21,40 @@ import { ShellCommandIds } from '../../documentdb/shell/constants';
  */
 export async function playgroundOpenQueryInShell(
     context: IActionContext,
-    uri?: vscode.Uri,
-    startLine?: number,
-    endLine?: number,
+    ...args: unknown[]
 ): Promise<void> {
-    if (!uri || startLine === undefined || endLine === undefined) {
+    const invocation = parsePlaygroundInvocation(args);
+    context.telemetry.properties.activationSource = invocation.activationSource;
+
+    const editor = resolvePlaygroundEditor(invocation.uri);
+    if (!editor) {
+        void vscode.window.showInformationMessage(l10n.t('No code to run. Place the cursor in a code block.'));
         return;
     }
 
     const service = PlaygroundService.getInstance();
-    const connection = service.getConnection(uri);
+    const connection = service.getConnection(editor.document.uri);
 
     if (!connection) {
         void vscode.window.showWarningMessage(l10n.t('This playground has no connection.'));
         return;
     }
 
-    const document = await vscode.workspace.openTextDocument(uri);
-    const blockText = document.getText(new vscode.Range(startLine, 0, endLine + 1, 0)).trim();
-
-    if (!blockText) {
+    const range =
+        invocation.range ??
+        resolveBlockAtLine(detectBlocks(editor.document), editor.selection.active.line)?.block;
+    if (!range) {
+        void vscode.window.showInformationMessage(l10n.t('No code to run. Place the cursor in a code block.'));
         return;
     }
+    const blockText = editor.document
+        .getText(new vscode.Range(range.startLine, 0, range.endLine + 1, 0))
+        .trim();
 
-    // ── Telemetry: cross-feature navigation ──────────────────────────
-    context.telemetry.properties.activationSource = 'playgroundCodeLens';
+    if (!blockText) {
+        void vscode.window.showInformationMessage(l10n.t('No code to run. Place the cursor in a code block.'));
+        return;
+    }
 
     await vscode.commands.executeCommand(ShellCommandIds.openWithInput, {
         clusterId: connection.clusterId,

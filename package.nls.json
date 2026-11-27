@@ -2,5 +2,7 @@
   "survey.containerTitle": "DocumentDB Feedback",
   "survey.viewTitle": "Share Your Experience",
   "survey.giveFeedbackTitle": "Give Feedback",
+  "playground.openBlockInShell": "Query Playground: Open Block in Shell",
+  "playground.openBlockInCollectionView": "Query Playground: Open Block in Collection View",
   "translation.placeholder": "Translation placeholder…"
 }

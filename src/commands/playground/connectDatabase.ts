@@ -6,7 +6,6 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { PLAYGROUND_LANGUAGE_ID } from '../../documentdb/playground/constants';
 import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
 import { type PlaygroundConnection } from '../../documentdb/playground/types';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
@@ -16,6 +15,7 @@ import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { type BaseClusterModel, type TreeCluster } from '../../tree/models/BaseClusterModel';
 import { type TreeElement } from '../../tree/TreeElement';
 import { pickTreeNode } from '../../utils/pickItem/pickTreeNode';
+import { parsePlaygroundInvocation, resolvePlaygroundEditor } from './playgroundInvocation';
 
 /**
  * Context-value token marking a database node in the Connections tree.
@@ -32,9 +32,12 @@ const DATABASE_CONTEXT_VALUE = 'treeItem_database';
  * replaced once a new database is actually selected, so cancelling the picker
  * leaves the current connection intact.
  */
-export async function showConnectionInfo(context: IActionContext): Promise<void> {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor || editor.document.languageId !== PLAYGROUND_LANGUAGE_ID) {
+export async function showConnectionInfo(context: IActionContext, ...args: unknown[]): Promise<void> {
+    const invocation = parsePlaygroundInvocation(args);
+    context.telemetry.properties.activationSource = invocation.activationSource;
+
+    const editor = resolvePlaygroundEditor(invocation.uri);
+    if (!editor) {
         return;
     }
 
@@ -73,9 +76,12 @@ export async function showConnectionInfo(context: IActionContext): Promise<void>
  *
  * Invoked from the "Not connected" CodeLens / StatusBar affordance.
  */
-export async function connectPlayground(context: IActionContext): Promise<void> {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor || editor.document.languageId !== PLAYGROUND_LANGUAGE_ID) {
+export async function connectPlayground(context: IActionContext, ...args: unknown[]): Promise<void> {
+    const invocation = parsePlaygroundInvocation(args);
+    context.telemetry.properties.activationSource = invocation.activationSource;
+
+    const editor = resolvePlaygroundEditor(invocation.uri);
+    if (!editor) {
         return;
     }
     await promptAndConnectPlayground(context, editor.document.uri, 'playground.connect');

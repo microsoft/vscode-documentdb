@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import { modifierKey } from '../../constants';
 import { PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './constants';
 import { PlaygroundService } from './PlaygroundService';
-import { detectBlocks, findBlockAtLine } from './statementDetector';
+import { blockContainsCode, detectBlocks, resolveBlockAtLine } from './statementDetector';
 
 /**
  * Provides CodeLens actions for Query Playground files:
@@ -49,7 +49,7 @@ export class PlaygroundCodeLensProvider implements vscode.CodeLensProvider, vsco
                 }
                 const cursorLine = e.selections[0].active.line;
                 const blocks = detectBlocks(e.textEditor.document);
-                const newStart = this.resolveActiveBlock(blocks, cursorLine)?.startLine;
+                const newStart = resolveBlockAtLine(blocks, cursorLine)?.block.startLine;
 
                 if (newStart !== this._lastActiveBlockStart) {
                     this._lastActiveBlockStart = newStart;
@@ -57,28 +57,6 @@ export class PlaygroundCodeLensProvider implements vscode.CodeLensProvider, vsco
                 }
             }),
         );
-    }
-
-    /**
-     * Find the block at the cursor line. If the cursor is on a blank line
-     * between blocks, fall back to the nearest preceding block to avoid
-     * CodeLens flickering.
-     */
-    private resolveActiveBlock(
-        blocks: ReturnType<typeof detectBlocks>,
-        cursorLine: number,
-    ): ReturnType<typeof findBlockAtLine> {
-        const direct = findBlockAtLine(blocks, cursorLine);
-        if (direct) {
-            return direct;
-        }
-        // Fall back: find the last block that ends before the cursor
-        for (let i = blocks.length - 1; i >= 0; i--) {
-            if (blocks[i].endLine < cursorLine) {
-                return blocks[i];
-            }
-        }
-        return undefined;
     }
 
     provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
@@ -116,6 +94,7 @@ export class PlaygroundCodeLensProvider implements vscode.CodeLensProvider, vsco
             new vscode.CodeLens(topRange, {
                 title: runAllTitle,
                 command: PlaygroundCommandIds.runAll,
+                arguments: [{ activationSource: 'playgroundCodeLens' }],
                 tooltip: runAllTooltip,
             }),
         );
@@ -126,7 +105,7 @@ export class PlaygroundCodeLensProvider implements vscode.CodeLensProvider, vsco
         if (editor && editor.document === document) {
             const cursorLine = editor.selection.active.line;
             const blocks = detectBlocks(document);
-            const activeBlock = this.resolveActiveBlock(blocks, cursorLine);
+            const activeBlock = resolveBlockAtLine(blocks, cursorLine)?.block;
 
             if (activeBlock) {
                 const blockRange = new vscode.Range(activeBlock.startLine, 0, activeBlock.startLine, 0);
@@ -145,7 +124,7 @@ export class PlaygroundCodeLensProvider implements vscode.CodeLensProvider, vsco
 
                 // Navigation CodeLens — open this block in other surfaces
                 // Only show for blocks that contain actual code (not comment-only blocks)
-                if (displayName && this.blockContainsCode(document, activeBlock)) {
+                if (displayName && blockContainsCode(document, activeBlock)) {
                     lenses.push(
                         new vscode.CodeLens(blockRange, {
                             title: `$(screen-full)  ${l10n.t('Collection View')}`,
@@ -165,47 +144,6 @@ export class PlaygroundCodeLensProvider implements vscode.CodeLensProvider, vsco
         }
 
         return lenses;
-    }
-
-    /**
-     * Returns true if the block contains at least one line that is not a comment.
-     * Comment-only blocks (e.g., the header block) should not get navigation lenses.
-     */
-    private blockContainsCode(document: vscode.TextDocument, block: { startLine: number; endLine: number }): boolean {
-        let inBlockComment = false;
-        for (let i = block.startLine; i <= block.endLine; i++) {
-            const trimmed = document.lineAt(i).text.trim();
-            if (inBlockComment) {
-                const closeIdx = trimmed.indexOf('*/');
-                if (closeIdx !== -1) {
-                    inBlockComment = false;
-                    // Check if there's code after the closing */
-                    const afterComment = trimmed.substring(closeIdx + 2).trim();
-                    if (afterComment.length > 0 && !afterComment.startsWith('//')) {
-                        return true;
-                    }
-                }
-                continue;
-            }
-            if (trimmed.startsWith('/*')) {
-                const closeIdx = trimmed.indexOf('*/', 2);
-                if (closeIdx === -1) {
-                    inBlockComment = true;
-                    continue;
-                }
-                // Inline block comment — check if there's code after */
-                const afterComment = trimmed.substring(closeIdx + 2).trim();
-                if (afterComment.length > 0 && !afterComment.startsWith('//')) {
-                    return true;
-                }
-                continue;
-            }
-            if (trimmed.startsWith('//') || trimmed.length === 0) {
-                continue;
-            }
-            return true;
-        }
-        return false;
     }
 
     dispose(): void {

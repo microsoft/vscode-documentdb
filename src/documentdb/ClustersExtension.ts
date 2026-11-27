@@ -146,6 +146,7 @@ import { EntraErrorExplainer } from './auth/entraErrors/EntraErrorExplainer';
 import { PLAYGROUND_FILE_EXTENSION, PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './playground/constants';
 import { PlaygroundBlockHighlighter } from './playground/PlaygroundBlockHighlighter';
 import { PlaygroundCodeLensProvider } from './playground/PlaygroundCodeLensProvider';
+import { PlaygroundContextKeyTracker } from './playground/PlaygroundContextKeys';
 import { PlaygroundService } from './playground/PlaygroundService';
 import { ensureTsPluginStub } from './playground/tsPluginStub';
 import { CollectionNameCache } from './query-language/playground-completions/CollectionNameCache';
@@ -360,6 +361,7 @@ export class ClustersExtension implements vscode.Disposable {
                 ext.context.subscriptions.push(
                     vscode.languages.registerCodeLensProvider({ language: PLAYGROUND_LANGUAGE_ID }, codeLensProvider),
                 );
+                ext.context.subscriptions.push(new PlaygroundContextKeyTracker());
 
                 // Register block highlighter for query playground files
                 const blockHighlighter = new PlaygroundBlockHighlighter(ext.context.extensionPath);

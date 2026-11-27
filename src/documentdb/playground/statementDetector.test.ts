@@ -6,7 +6,15 @@
 import { describe, expect, it } from 'vitest';
 
 import * as vscode from 'vscode';
-import { detectBlocks, detectCurrentBlock, findBlockAtLine, type CodeBlock } from './statementDetector';
+import {
+    blockContainsCode,
+    detectBlocks,
+    detectCurrentBlock,
+    findBlockAtLine,
+    getBlockText,
+    resolveBlockAtLine,
+    type CodeBlock,
+} from './statementDetector';
 
 /**
  * Helper to create a mock TextDocument from a multiline string.
@@ -146,6 +154,52 @@ describe('statementDetector', () => {
             const position = new vscode.Position(1, 0);
             const result = detectCurrentBlock(doc, position);
             expect(result).toBe('');
+        });
+    });
+
+    describe('resolveBlockAtLine', () => {
+        const blocks: CodeBlock[] = [
+            { startLine: 1, endLine: 2 },
+            { startLine: 5, endLine: 6 },
+        ];
+
+        it('identifies a block containing the cursor', () => {
+            expect(resolveBlockAtLine(blocks, 2)).toEqual({
+                block: { startLine: 1, endLine: 2 },
+                match: 'cursor',
+            });
+        });
+
+        it('falls back to the nearest preceding block on a blank line', () => {
+            expect(resolveBlockAtLine(blocks, 4)).toEqual({
+                block: { startLine: 1, endLine: 2 },
+                match: 'preceding',
+            });
+        });
+
+        it('returns undefined before the first block and for an empty list', () => {
+            expect(resolveBlockAtLine(blocks, 0)).toBeUndefined();
+            expect(resolveBlockAtLine([], 0)).toBeUndefined();
+        });
+    });
+
+    describe('block text and code detection', () => {
+        it('extracts a block through the last line character', () => {
+            const doc = mockDocument('db.users.find({});\n\n db.orders.find({});');
+            expect(getBlockText(doc, { startLine: 2, endLine: 2 })).toBe(' db.orders.find({});');
+        });
+
+        it.each(['// heading', '/* heading */', '/*\n * heading\n */'])(
+            'does not treat a comment-only block as code: %s',
+            (text) => {
+                const doc = mockDocument(text);
+                expect(blockContainsCode(doc, { startLine: 0, endLine: doc.lineCount - 1 })).toBe(false);
+            },
+        );
+
+        it('finds code following a block comment', () => {
+            const doc = mockDocument('/* heading */ db.users.find({});');
+            expect(blockContainsCode(doc, { startLine: 0, endLine: 0 })).toBe(true);
         });
     });
 });
