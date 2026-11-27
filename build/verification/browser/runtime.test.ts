@@ -235,9 +235,7 @@ describe('Stage 0 L2 fixture transport', (): void => {
 
         const report = await window.stage0Harness.check();
 
-        expect(report.errors).toContain(
-            `Fixture content has not settled: ${collectionFixture.content.join(', ')}`,
-        );
+        expect(report.errors).toContain(`Fixture content has not settled: ${collectionFixture.content.join(', ')}`);
     });
 
     it('rejects Collection View rows when the required grid is missing', async (): Promise<void> => {
@@ -525,8 +523,7 @@ describe('Stage 0 L2 fixture transport', (): void => {
         });
 
         it('reports the Collection View grid style alone when bundle CSS is removed', async (): Promise<void> => {
-            document.head.innerHTML =
-                '<style data-documentdb-views-css>[role="grid"] { display: grid; }</style>';
+            document.head.innerHTML = '<style data-documentdb-views-css>[role="grid"] { display: grid; }</style>';
             await boot({ ...collectionFixture, brokenCss: 'bundle-stylesheet' });
             settleCollectionView(['Documents', ...collectionRows].join(' '), { gridDisplay: false });
             vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 640, 480));

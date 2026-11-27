@@ -93,9 +93,7 @@ export const documentsViewRouter = router({
             const upsertResult = await client.upsertDocument(
                 myCtx.databaseName,
                 myCtx.collectionName,
-                Object.prototype.hasOwnProperty.call(documentBson, '_id')
-                    ? EJSON.stringify(documentBson._id)
-                    : '',
+                Object.prototype.hasOwnProperty.call(documentBson, '_id') ? EJSON.stringify(documentBson._id) : '',
                 documentBson,
             );
 

@@ -266,12 +266,7 @@ const base = fixtures.localQuickStart;
 const collectionViewBase = defaultScenario('collectionView');
 const collectionViewPresetReadiness: ScenarioReadiness = {
     content: ['Documents'],
-    selectors: [
-        '.collectionView',
-        '.monaco-editor',
-        '.monaco-editor .overflow-guard',
-        '.monaco-editor .view-lines',
-    ],
+    selectors: ['.collectionView', '.monaco-editor', '.monaco-editor .overflow-guard', '.monaco-editor .view-lines'],
     noProgressbar: true,
 };
 
@@ -1080,8 +1075,7 @@ export const collectionViewContracts = {
             name: 'TDD: M7 keyboard step-in focuses a no-ID row',
             requiresGrid: 'grid',
             target: {
-                selector:
-                    '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="1"]',
+                selector: '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="1"]',
             },
         },
     ],
@@ -1138,11 +1132,10 @@ export const collectionViewContracts = {
         },
         {
             kind: 'focused',
-            name: 'TDD: M7 keyboard step-in focuses the same row\'s _id cell',
+            name: "TDD: M7 keyboard step-in focuses the same row's _id cell",
             requiresGrid: 'grid',
             target: {
-                selector:
-                    '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="1"]',
+                selector: '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="1"]',
             },
         },
         {
@@ -1150,8 +1143,7 @@ export const collectionViewContracts = {
             name: 'TDD: M7 arrow keys continue after keyboard step-in',
             requiresGrid: 'grid',
             target: {
-                selector:
-                    '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="2"]',
+                selector: '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="2"]',
             },
             steps: [{ action: 'press', key: 'ArrowRight' }],
         },

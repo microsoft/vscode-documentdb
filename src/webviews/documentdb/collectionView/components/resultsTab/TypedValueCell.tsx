@@ -94,8 +94,7 @@ export function TypedValueCell({ value }: TypedValueCellProps): JSX.Element {
 
     return (
         <span className={styles.root}>
-            <span className={styles.srOnly}>{typeName}</span>{' '}
-            <span className={styles.value}>{value.display}</span>
+            <span className={styles.srOnly}>{typeName}</span> <span className={styles.value}>{value.display}</span>
             <span className={styles.type} aria-hidden="true">
                 {glyph}
             </span>

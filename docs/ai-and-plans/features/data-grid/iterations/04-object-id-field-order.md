@@ -36,14 +36,14 @@ Every later step serializes the reordered object faithfully: canonical EJSON (`t
 order (via `Map`), deserializes it as the driver does, builds the action ID, and compares the
 filter bytes with the stored `_id` bytes:
 
-| Stored `_id` key order                    | Read back as                  | `toDocumentId` guard | Filter matches stored bytes |
-| ----------------------------------------- | ----------------------------- | -------------------- | --------------------------- |
-| `b, a`                                    | `b, a`                        | passes               | yes                         |
-| `b, "1"`                                  | `"1", b`                      | passes               | **no**                      |
-| `x: { b, "2" }` (nested)                  | `x: { "2", b }`               | passes               | **no**                      |
-| `region, "2024"`                          | `"2024", region`              | passes               | **no**                      |
-| `b, "01", "-1", "1.5", "4294967295"`      | unchanged                     | passes               | yes                         |
-| `b, "4294967294"`                         | `"4294967294", b`             | passes               | **no**                      |
+| Stored `_id` key order               | Read back as      | `toDocumentId` guard | Filter matches stored bytes |
+| ------------------------------------ | ----------------- | -------------------- | --------------------------- |
+| `b, a`                               | `b, a`            | passes               | yes                         |
+| `b, "1"`                             | `"1", b`          | passes               | **no**                      |
+| `x: { b, "2" }` (nested)             | `x: { "2", b }`   | passes               | **no**                      |
+| `region, "2024"`                     | `"2024", region`  | passes               | **no**                      |
+| `b, "01", "-1", "1.5", "4294967295"` | unchanged         | passes               | yes                         |
+| `b, "4294967294"`                    | `"4294967294", b` | passes               | **no**                      |
 
 The round-trip guard (`documentIdentity.ts:49–54`) passes in every case, because the order is
 already lost before it runs. js-bson has no option that preserves the order: `fieldsAsRaw` applies
@@ -64,15 +64,15 @@ integer-like key that is not stored in JS order. This is pre-existing: `x-object
 canonical stringify of the deserialized object since microsoft/vscode-cosmosdb#2405 (2024). This
 PR does not introduce it, but its identity layer does not catch it either.
 
-| Action           | Effect (source-traced; not reproduced against a server)                                                                                                                                                                                                                                                                                        |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| View / Edit      | `findOne` (`ClustersClient.ts:1202–1211`) misses, and Document View receives `null`. If a sibling document whose `_id` has the JS order exists, the wrong document opens.                                                                                                                                                                    |
+| Action           | Effect (source-traced; not reproduced against a server)                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| View / Edit      | `findOne` (`ClustersClient.ts:1202–1211`) misses, and Document View receives `null`. If a sibling document whose `_id` has the JS order exists, the wrong document opens.                                                                                                                                                                                                                                    |
 | Delete           | `deleteMany` matches nothing but returns `acknowledged` (`ClustersClient.ts:1190–1200`). `ClusterSession.deleteDocuments` removes the row from the cache, because it compares strings built from the same JS object (`ClusterSession.ts:337–344`), and the user sees "1 document has been deleted." (`collectionViewRouter.ts:375–381`): a wrong answer. If a sibling exists, the wrong document is deleted. |
-| Save (Doc. View) | `EJSON.parse` of the editor text reorders the keys again, and `replaceOne(..., { upsert: true })` inserts a duplicate document with the reordered `_id`.                                                                                                                                                                                       |
+| Save (Doc. View) | `EJSON.parse` of the editor text reorders the keys again, and `replaceOne(..., { upsert: true })` inserts a duplicate document with the reordered `_id`.                                                                                                                                                                                                                                                     |
 
 **Finding 4: history.** No issue, PR or commit describes this bug. The closest match is a comment
-removed in `017abf6a` (#719): "deep equality for _id is tricky as we'd have to consider embedded
-objects, arrays, etc. For now, we'll just stringify the _id and compare the strings." That is
+removed in `017abf6a` (#719): "deep equality for \_id is tricky as we'd have to consider embedded
+objects, arrays, etc. For now, we'll just stringify the \_id and compare the strings." That is
 probably the unfinished comparator; its string compare is still at `ClusterSession.ts:337–344`.
 In #719 a maintainer wrote that embedded-document keys "already round-tripped correctly", which
 holds only for non-integer keys. `parseDocumentId.ts:26–28` claims that field order is preserved;
@@ -151,13 +151,13 @@ the `replaceOne` filter `{ _id: null }` targets that document. A canonical strin
 
 ## Decisions
 
-| Item       | Decision                                                                    | Where                                                                   |
-| ---------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| R6         | (a) withhold View, Edit and Delete for these IDs                            | #1142                                                                   |
-| R6 follow-up | Tell the user why actions are unavailable; link to a new manual page      | [#1144](https://github.com/microsoft/vscode-documentdb/issues/1144)     |
-| R7         | (a) separate issue                                                          | [#1145](https://github.com/microsoft/vscode-documentdb/issues/1145)     |
-| Comparator | Rejected: an order-insensitive comparator would merge distinct server IDs   | —                                                                       |
-| `deletedCount` | Won't fix in #1142; nothing in the grid reaches that path once R6 lands | —                                                                       |
+| Item           | Decision                                                                  | Where                                                               |
+| -------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| R6             | (a) withhold View, Edit and Delete for these IDs                          | #1142                                                               |
+| R6 follow-up   | Tell the user why actions are unavailable; link to a new manual page      | [#1144](https://github.com/microsoft/vscode-documentdb/issues/1144) |
+| R7             | (a) separate issue                                                        | [#1145](https://github.com/microsoft/vscode-documentdb/issues/1145) |
+| Comparator     | Rejected: an order-insensitive comparator would merge distinct server IDs | —                                                                   |
+| `deletedCount` | Won't fix in #1142; nothing in the grid reaches that path once R6 lands   | —                                                                   |
 
 The operator approved these on 2026-11-27. They are also recorded in
 [decisions.md](../decisions.md).

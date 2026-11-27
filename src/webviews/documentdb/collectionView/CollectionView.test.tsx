@@ -8,12 +8,7 @@
 import { act, type ReactNode, type Ref } from 'react';
 import { createRoot, type Root } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-    fieldColumnKey,
-    ROOT_ID_COLUMN_KEY,
-    type ColumnKey,
-    type TablePage,
-} from '../../../utils/documentGrid/types';
+import { fieldColumnKey, ROOT_ID_COLUMN_KEY, type ColumnKey, type TablePage } from '../../../utils/documentGrid/types';
 import { CollectionView } from './CollectionView';
 import { Views } from './collectionViewContext';
 import type { DataViewPanelTableFocusRequest } from './components/resultsTab/DataViewPanelTable';
@@ -29,11 +24,7 @@ interface DeferredTableRequest {
 interface TableHostProps {
     readonly page: TablePage | undefined;
     readonly focusRequest?: DataViewPanelTableFocusRequest;
-    readonly onStepIn: (
-        rowKey: string,
-        columnKey: ColumnKey,
-        gesture: 'keyboard' | 'pointer',
-    ) => void;
+    readonly onStepIn: (rowKey: string, columnKey: ColumnKey, gesture: 'keyboard' | 'pointer') => void;
 }
 
 const rootPage: TablePage = {
@@ -110,7 +101,9 @@ const client = vi.hoisted(() => {
                     queryInsights: {
                         getQueryInsightsStage1: { query: vi.fn(async (): Promise<never> => Promise.reject()) },
                     },
-                    runFindQuery: { query: vi.fn(async (): Promise<{ documentCount: number }> => ({ documentCount: 1 })) },
+                    runFindQuery: {
+                        query: vi.fn(async (): Promise<{ documentCount: number }> => ({ documentCount: 1 })),
+                    },
                     setCollectionDocumentView: mutation(),
                     viewDocumentById: mutation(),
                 },
@@ -156,7 +149,9 @@ vi.mock('@fluentui/react-components', () => ({
 }));
 vi.mock('./components/queryEditor/QueryEditor', () => ({
     QueryEditor: ({ onExecuteRequest }: { readonly onExecuteRequest: () => void }): React.JSX.Element => (
-        <button type="button" onClick={onExecuteRequest}>Execute query</button>
+        <button type="button" onClick={onExecuteRequest}>
+            Execute query
+        </button>
     ),
 }));
 vi.mock('./components/resultsTab/DataViewPanelTable', async () => {
@@ -219,11 +214,7 @@ vi.mock('./components/toolbar/ToolbarViewNavigation', () => ({
     ToolbarViewNavigation: (): React.JSX.Element => <div />,
 }));
 vi.mock('./components/toolbar/ViewSwitcher', () => ({
-    ViewSwitcher: ({
-        focusTargetRef,
-    }: {
-        readonly focusTargetRef?: Ref<HTMLButtonElement>;
-    }): React.JSX.Element => (
+    ViewSwitcher: ({ focusTargetRef }: { readonly focusTargetRef?: Ref<HTMLButtonElement> }): React.JSX.Element => (
         <button ref={focusTargetRef} type="button" aria-label="Select view type">
             Table View
         </button>

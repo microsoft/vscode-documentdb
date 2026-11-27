@@ -19,11 +19,7 @@ interface DataViewPanelTableProps {
     readonly page: TablePage | undefined;
     readonly selectedRowKeys: readonly string[];
     readonly onSelectedRowKeysChange: (rowKeys: readonly string[]) => void;
-    readonly onStepIn: (
-        rowKey: string,
-        columnKey: ColumnKey,
-        gesture: 'keyboard' | 'pointer',
-    ) => void;
+    readonly onStepIn: (rowKey: string, columnKey: ColumnKey, gesture: 'keyboard' | 'pointer') => void;
     readonly focusRequest?: DataViewPanelTableFocusRequest;
 }
 

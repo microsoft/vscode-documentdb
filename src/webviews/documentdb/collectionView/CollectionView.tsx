@@ -32,10 +32,7 @@ import {
 import { type CollectionViewWebviewConfigurationType } from './collectionViewController';
 import { QueryEditor } from './components/queryEditor/QueryEditor';
 import { DataViewPanelJSON } from './components/resultsTab/DataViewPanelJSON';
-import {
-    DataViewPanelTable,
-    type DataViewPanelTableFocusRequest,
-} from './components/resultsTab/DataViewPanelTable';
+import { DataViewPanelTable, type DataViewPanelTableFocusRequest } from './components/resultsTab/DataViewPanelTable';
 import { DataViewPanelTree } from './components/resultsTab/DataViewPanelTree';
 import { CollectionQueryActionBar } from './components/toolbar/CollectionQueryActionBar';
 import { ToolbarDocumentManipulation } from './components/toolbar/ToolbarDocumentManipulation';
@@ -64,9 +61,7 @@ interface PendingTableFocusIntent {
     readonly dispose: () => void;
 }
 
-function commandsFor(
-    targets: readonly DocumentTarget[] | undefined,
-): CollectionViewContextType['commands'] {
+function commandsFor(targets: readonly DocumentTarget[] | undefined): CollectionViewContextType['commands'] {
     return {
         disableAddDocument: false,
         disableViewDocument: targets?.length !== 1,
@@ -231,7 +226,10 @@ export const CollectionView = (): JSX.Element => {
     const getSelectedTargets = useCallback(
         (context: CollectionViewContextType): DocumentTarget[] | undefined =>
             isCurrentTablePage(context)
-                ? resolveDocumentTargets(currentQueryResultsRef.current?.tablePage, context.dataSelection.selectedRowKeys)
+                ? resolveDocumentTargets(
+                      currentQueryResultsRef.current?.tablePage,
+                      context.dataSelection.selectedRowKeys,
+                  )
                 : undefined,
         [isCurrentTablePage],
     );
@@ -736,11 +734,7 @@ export const CollectionView = (): JSX.Element => {
         });
     }
 
-    function handleStepInRequest(
-        rowKey: string,
-        columnKey: ColumnKey,
-        gesture: 'keyboard' | 'pointer',
-    ): void {
+    function handleStepInRequest(rowKey: string, columnKey: ColumnKey, gesture: 'keyboard' | 'pointer'): void {
         const page = currentQueryResultsRef.current?.tablePage;
         const context = currentContextRef.current;
         const path = context.currentViewState?.currentPath ?? [];

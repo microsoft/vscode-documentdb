@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { EJSON, ObjectId } from 'bson';
 import { type initWebviewTrpc as InitWebviewTrpc } from '@microsoft/vscode-ext-webview';
+import { EJSON, ObjectId } from 'bson';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { API } from '../../../DocumentDBExperiences';
 import { type ClustersClient } from '../../../documentdb/ClustersClient';

@@ -252,8 +252,7 @@ describe('TDD: Collection View grid contracts', (): void => {
                 name: "TDD: M7 keyboard step-in focuses the same row's _id cell",
                 requiresGrid: 'grid',
                 target: {
-                    selector:
-                        '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="1"]',
+                    selector: '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="1"]',
                 },
             },
             {
@@ -261,8 +260,7 @@ describe('TDD: Collection View grid contracts', (): void => {
                 name: 'TDD: M7 arrow keys continue after keyboard step-in',
                 requiresGrid: 'grid',
                 target: {
-                    selector:
-                        '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="2"]',
+                    selector: '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="2"]',
                 },
                 steps: [{ action: 'press', key: 'ArrowRight' }],
             },
@@ -326,8 +324,7 @@ describe('TDD: Collection View grid contracts', (): void => {
                 name: 'TDD: M7 keyboard step-in focuses a no-ID row',
                 requiresGrid: 'grid',
                 target: {
-                    selector:
-                        '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="1"]',
+                    selector: '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="1"]',
                 },
             },
         ]);
@@ -560,9 +557,7 @@ describe('L2-dev manifest and routes', (): void => {
                 ...(name === 'empty' ? ['No results found'] : []),
             ]);
             expect(scenario.readiness.selectors).toEqual(
-                name === 'first-load' || name === 'loading-to-results'
-                    ? shellSelectors.slice(0, 2)
-                    : shellSelectors,
+                name === 'first-load' || name === 'loading-to-results' ? shellSelectors.slice(0, 2) : shellSelectors,
             );
             expect(scenario.readiness.selectors).not.toContain('[role="grid"]');
             expect(scenario.readiness.content).not.toEqual(expect.arrayContaining(fixtureRows));

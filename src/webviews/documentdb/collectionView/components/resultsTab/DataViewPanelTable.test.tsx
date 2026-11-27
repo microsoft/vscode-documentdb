@@ -6,9 +6,9 @@
 // @vitest-environment jsdom
 
 import { act, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import type { Column, DataGridHandle, DataGridProps, RenderRowProps } from 'react-data-grid';
 import { createRoot, type Root } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Column, DataGridHandle, DataGridProps, RenderRowProps } from 'react-data-grid';
 import {
     fieldColumnKey,
     getCell,
@@ -36,15 +36,22 @@ vi.mock('react-data-grid', async () => {
     }: {
         readonly children: ReactNode;
         readonly onKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => void;
-    }): React.JSX.Element => <div role="row" onKeyDown={onKeyDown}>{children}</div>;
+    }): React.JSX.Element => (
+        <div role="row" onKeyDown={onKeyDown}>
+            {children}
+        </div>
+    );
 
     const DataGrid = React.forwardRef<DataGridHandle, DataGridProps<TableRow>>(function MockDataGrid(props, ref) {
         const elementRef = React.useRef<HTMLDivElement>(null);
-        React.useImperativeHandle(ref, (): DataGridHandle => ({
-            element: elementRef.current,
-            scrollToCell: vi.fn(),
-            setActivePosition: rdg.setActivePosition,
-        }));
+        React.useImperativeHandle(
+            ref,
+            (): DataGridHandle => ({
+                element: elementRef.current,
+                scrollToCell: vi.fn(),
+                setActivePosition: rdg.setActivePosition,
+            }),
+        );
         const leafColumns = props.columns.map((column): Column<TableRow> => {
             if (!('key' in column)) {
                 throw new Error('Unexpected column group in DataViewPanelTable');
@@ -123,8 +130,11 @@ let root: Root;
 async function render(
     currentPage: TablePage,
     focusRequest?: DataViewPanelTableFocusRequest,
-    onStepIn: (rowKey: string, columnKey: TablePage['columns'][number]['key'], gesture: 'keyboard' | 'pointer') => void =
-        vi.fn(),
+    onStepIn: (
+        rowKey: string,
+        columnKey: TablePage['columns'][number]['key'],
+        gesture: 'keyboard' | 'pointer',
+    ) => void = vi.fn(),
     onSelectedRowKeysChange: (rowKeys: readonly string[]) => void = vi.fn(),
 ): Promise<void> {
     await act(async () => {
@@ -214,9 +224,7 @@ describe('TDD: DataViewPanelTable keyboard step-in focus', (): void => {
         objectCell.focus();
 
         await act(async () => {
-            objectCell.dispatchEvent(
-                new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
-            );
+            objectCell.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
             objectCell.dispatchEvent(new MouseEvent('dblclick', { button: 0, bubbles: true, cancelable: true }));
         });
 
