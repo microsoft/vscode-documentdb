@@ -17,6 +17,7 @@ import {
     isDiagnosticAuthenticationHold,
 } from '../../documentdb/ConnectionUnavailableError';
 import { CredentialCache } from '../../documentdb/CredentialCache';
+import { Views } from '../../documentdb/Views';
 import { DocumentDBShellPty } from '../../documentdb/shell/DocumentDBShellPty';
 import { type ShellConnectionInfo } from '../../documentdb/shell/ShellSessionManager';
 import { registerShellTerminal } from '../../documentdb/shell/ShellTerminalLinkProvider';
@@ -25,6 +26,7 @@ import { type ConnectionClusterModel } from '../../tree/connections-view/models/
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
+import { refreshAuthenticationNode } from '../retryAuthentication/retryAuthentication';
 
 /**
  * Parameters for opening an interactive shell with pre-formatted content.
@@ -149,6 +151,29 @@ export async function openUnauthenticatedShell(context: IActionContext, node?: C
             throw error;
         }
         context.errorHandling.suppressDisplay = true;
+        if (
+            error instanceof ConnectionUnavailableError &&
+            (node.cluster.viewId === String(Views.ConnectionsView) ||
+                node.cluster.viewId === String(Views.DiscoveryView) ||
+                (node.cluster.viewId === String(Views.AzureResourcesView) &&
+                    /\bruBranch\b|\bdocumentDbBranch\b/i.test(node.contextValue)))
+        ) {
+            const currentReason = ClustersClient.getLatchReason(node.cluster.clusterId);
+            refreshAuthenticationNode(node);
+            if (
+                currentReason === 'connectionRemoved' ||
+                currentReason === 'credentialsChanged' ||
+                currentReason === 'identityChanged'
+            ) {
+                await vscode.window.showErrorMessage(
+                    currentReason === 'connectionRemoved'
+                        ? l10n.t('This connection was removed. Choose another connection.')
+                        : l10n.t('This connection changed. Refresh the tree and try again.'),
+                    { modal: true },
+                );
+                throw error;
+            }
+        }
         await vscode.window.showErrorMessage(l10n.t('Unable to complete this tree action.'), {
             modal: true,
             detail: error instanceof Error ? error.message : String(error),

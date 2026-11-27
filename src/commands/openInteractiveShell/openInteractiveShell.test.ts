@@ -8,12 +8,15 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockIn
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
+import { ConnectionUnavailableError } from '../../documentdb/ConnectionUnavailableError';
 import { CredentialCache } from '../../documentdb/CredentialCache';
+import { Views } from '../../documentdb/Views';
 import { DocumentDBShellPty, type DocumentDBShellPtyOptions } from '../../documentdb/shell/DocumentDBShellPty';
 import { registerShellTerminal } from '../../documentdb/shell/ShellTerminalLinkProvider';
 import * as unauthenticatedEndpoint from '../../documentdb/shell/unauthenticatedEndpoint';
 import { ErrorExplanationService } from '../../services/errorExplanationService';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
+import { refreshAuthenticationNode } from '../retryAuthentication/retryAuthentication';
 import { openInteractiveShell, openUnauthenticatedShell } from './openInteractiveShell';
 
 vi.mock('../../documentdb/ClustersClient', () => {
@@ -34,6 +37,10 @@ vi.mock('../../documentdb/ClustersClient', () => {
 
 vi.mock('../../services/errorExplanationService', () => ({
     ErrorExplanationService: { explain: vi.fn() },
+}));
+
+vi.mock('../retryAuthentication/retryAuthentication', () => ({
+    refreshAuthenticationNode: vi.fn(),
 }));
 
 // Mock DocumentDBShellPty
@@ -127,14 +134,18 @@ describe('openInteractiveShell', () => {
         overrides?: Partial<{
             clusterId: string;
             clusterName: string;
+            viewId: string;
+            contextValue: string;
         }>,
     ): unknown {
         return {
+            contextValue:
+                overrides?.contextValue ?? 'connectionsView;treeItem_documentdbcluster',
             cluster: {
                 clusterId: overrides?.clusterId ?? 'test-cluster-id',
                 name: overrides?.clusterName ?? 'TestCluster',
                 treeId: 'treeId-test',
-                viewId: 'connectionsView',
+                viewId: overrides?.viewId ?? 'connectionsView',
                 dbExperience: { api: 'documentDB' },
             },
             experience: { api: 'documentDB' },
@@ -182,9 +193,14 @@ describe('openInteractiveShell', () => {
             expect(mockContext.errorHandling.suppressDisplay).toBe(true);
         }
 
-        function makeAnonymousNode(): ClusterItemBase {
+        function makeAnonymousNode(
+            overrides?: Partial<{
+                viewId: string;
+                contextValue: string;
+            }>,
+        ): ClusterItemBase {
             return {
-                ...(makeClusterNode() as object),
+                ...(makeClusterNode(overrides) as object),
                 getUnauthenticatedEndpoint: vi.fn().mockResolvedValue('mongodb://user:secret@host/?authSource=admin'),
                 getCredentials: vi.fn(),
                 getCredentialsForDiagnostics: vi.fn(),
@@ -255,19 +271,109 @@ describe('openInteractiveShell', () => {
         );
 
         it.each([
-            'userDisconnected',
-            'credentialsUpdating',
-            'connectionRemoved',
-            'identityChanged',
-            'unreachable',
-            'credentialsChanged',
-        ] as const)('blocks the %s hold before reading an endpoint', async (reason): Promise<void> => {
+            [Views.ConnectionsView, 'connectionsView;treeItem_documentdbcluster', 'connectionRemoved'],
+            [Views.DiscoveryView, 'discoveryView;treeItem_documentdbcluster', 'credentialsChanged'],
+            [
+                Views.AzureResourcesView,
+                'azureResourcesView;ruBranch;treeItem_documentdbcluster',
+                'identityChanged',
+            ],
+            [
+                Views.AzureResourcesView,
+                'azureResourcesView;documentDbBranch;treeItem_documentdbcluster',
+                'connectionRemoved',
+            ],
+        ] as const)(
+            'refreshes and explains %s stale nodes with routing tag %s for %s',
+            async (viewId, contextValue, reason): Promise<void> => {
+                const node = makeAnonymousNode({ viewId, contextValue });
+                ClustersClient.latch(node.cluster.clusterId, reason);
+                try {
+                    await expect(openUnauthenticatedShell(mockContext as never, node)).rejects.toMatchObject({
+                        reason,
+                    });
+                    expect(refreshAuthenticationNode).toHaveBeenCalledExactlyOnceWith(node);
+                    expect(refreshAuthenticationNode).toHaveBeenCalledBefore(
+                        vi.mocked(vscode.window.showErrorMessage),
+                    );
+                    expect(mockShowErrorMessage).toHaveBeenCalledExactlyOnceWith(
+                        reason === 'connectionRemoved'
+                            ? 'This connection was removed. Choose another connection.'
+                            : 'This connection changed. Refresh the tree and try again.',
+                        { modal: true },
+                    );
+                    expect(node.getUnauthenticatedEndpoint).not.toHaveBeenCalled();
+                    expect(mockCreateTerminal).not.toHaveBeenCalled();
+                    expect(mockContext.errorHandling.suppressDisplay).toBe(true);
+                } finally {
+                    ClustersClient.unlatch(node.cluster.clusterId);
+                }
+            },
+        );
+
+        it.each(['userDisconnected', 'credentialsUpdating', 'unreachable'] as const)(
+            'uses the generic modal for the %s hold before reading an endpoint',
+            async (reason): Promise<void> => {
+                const node = makeAnonymousNode();
+                ClustersClient.latch(node.cluster.clusterId, reason);
+                try {
+                    await expect(openUnauthenticatedShell(mockContext as never, node)).rejects.toMatchObject({
+                        reason,
+                    });
+                    expect(node.getUnauthenticatedEndpoint).not.toHaveBeenCalled();
+                    expect(refreshAuthenticationNode).toHaveBeenCalledExactlyOnceWith(node);
+                    expectPreTerminalModal('The connection is unavailable.');
+                } finally {
+                    ClustersClient.unlatch(node.cluster.clusterId);
+                }
+            },
+        );
+
+        it.each([
+            [Views.AzureWorkspaceView, 'azureWorkspaceView;treeItem_documentdbcluster'],
+            [Views.AzureResourcesView, 'azureResourcesView;otherBranch;treeItem_documentdbcluster'],
+        ] as const)(
+            'keeps typed stale feedback generic for unsupported %s node',
+            async (viewId, contextValue): Promise<void> => {
+                const node = makeAnonymousNode({ viewId, contextValue });
+                ClustersClient.latch(node.cluster.clusterId, 'connectionRemoved');
+                try {
+                    await expect(openUnauthenticatedShell(mockContext as never, node)).rejects.toMatchObject({
+                        reason: 'connectionRemoved',
+                    });
+                    expect(refreshAuthenticationNode).not.toHaveBeenCalled();
+                    expectPreTerminalModal('The connection is unavailable.');
+                } finally {
+                    ClustersClient.unlatch(node.cluster.clusterId);
+                }
+            },
+        );
+
+        it('rethrows the same unavailability error with generic feedback when no current latch exists', async (): Promise<void> => {
             const node = makeAnonymousNode();
-            ClustersClient.latch(node.cluster.clusterId, reason);
+            const error = new ConnectionUnavailableError('credentialsChanged');
+            vi.mocked(node.getUnauthenticatedEndpoint).mockRejectedValueOnce(error);
+
+            await expect(openUnauthenticatedShell(mockContext as never, node)).rejects.toBe(error);
+
+            expect(refreshAuthenticationNode).toHaveBeenCalledExactlyOnceWith(node);
+            expectPreTerminalModal(error.message);
+        });
+
+        it('uses the current latch rather than the unavailable error reason', async (): Promise<void> => {
+            const node = makeAnonymousNode();
+            const error = new ConnectionUnavailableError('credentialsChanged');
+            vi.mocked(node.getUnauthenticatedEndpoint).mockImplementationOnce(async (): Promise<string> => {
+                ClustersClient.latch(node.cluster.clusterId, 'connectionRemoved');
+                throw error;
+            });
             try {
-                await expect(openUnauthenticatedShell(mockContext as never, node)).rejects.toMatchObject({ reason });
-                expect(node.getUnauthenticatedEndpoint).not.toHaveBeenCalled();
-                expectPreTerminalModal('The connection is unavailable.');
+                await expect(openUnauthenticatedShell(mockContext as never, node)).rejects.toBe(error);
+                expect(refreshAuthenticationNode).toHaveBeenCalledExactlyOnceWith(node);
+                expect(mockShowErrorMessage).toHaveBeenCalledExactlyOnceWith(
+                    'This connection was removed. Choose another connection.',
+                    { modal: true },
+                );
             } finally {
                 ClustersClient.unlatch(node.cluster.clusterId);
             }
@@ -302,6 +408,7 @@ describe('openInteractiveShell', () => {
                 reason: 'credentialsChanged',
             });
             expectPreTerminalModal('The connection is unavailable.');
+            expect(refreshAuthenticationNode).toHaveBeenCalledExactlyOnceWith(node);
             vi.mocked(ClustersClient.getEpoch).mockReturnValue(0);
         });
 
@@ -334,6 +441,7 @@ describe('openInteractiveShell', () => {
             vi.mocked(node.getUnauthenticatedEndpoint).mockRejectedValueOnce(cancellation);
             await expect(openUnauthenticatedShell(mockContext as never, node)).rejects.toBe(cancellation);
             expect(mockShowErrorMessage).not.toHaveBeenCalled();
+            expect(refreshAuthenticationNode).not.toHaveBeenCalled();
             expect(mockCreateTerminal).not.toHaveBeenCalled();
             expect(mockContext.errorHandling.suppressDisplay).toBeUndefined();
             expect(CredentialCache.hasCredentials).not.toHaveBeenCalled();
