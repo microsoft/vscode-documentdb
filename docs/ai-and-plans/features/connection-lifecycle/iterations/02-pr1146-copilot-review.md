@@ -803,3 +803,85 @@ The helper's multi-turn elapsed summaries are not used as per-item wall-clock me
 Future runs could use a smaller planning packet and a fresh, narrowly scoped context for late
 interface questions instead of rehydrating a large planning context. C02 needed one bounded
 implementation rework and a final re-review; no coding model was silently downgraded to reduce cost.
+
+## Case 2 pre-push verification (2026-11-27, 18:24 UTC snapshot)
+
+The operator expanded the endpoint: **"run case 2 checks, address issues, then push."**
+The earlier local-only endpoint and deferred Case 2 notes are historical. This snapshot was
+recorded after all local checks passed and before the authorized push; the delivered head and CI
+state are reported in the handoff. No PR-status change or thread resolution is part of this request.
+
+### All eight commands passed
+
+| Command                   | Result                                                          |
+| ------------------------- | --------------------------------------------------------------- |
+| `npm run l10n`            | Passed; generated bundle unchanged                              |
+| `npm run prettier-fix`    | Passed; nine tracked files formatted                            |
+| `npm run l10n:check`      | Passed                                                          |
+| `npm run lint`            | Passed on full rerun after fixture corrections                  |
+| `npm run build`           | Passed                                                          |
+| `npm run typecheck:tests` | Passed; exact strict workspace-test script                      |
+| `npx vitest run`          | Passed: 451 files, 10,294 passed, 1 skipped; 118.89s            |
+| `npm run package`         | Passed: `vscode-documentdb-1.1.1-alpha.4.vsix`, 9,268,165 bytes |
+
+Formatting was committed separately as `e33bb7bb1`.
+The full runtime suite passed before the two test-only fixture corrections; afterwards the
+two relevant suites passed **26/26**, and full lint passed. Those 26 tests are not additional
+unique tests. Production source did not change after the successful build, strict package-test
+checks and package run. No TDD-prefixed contract failed, no dependencies were changed or installed,
+and no larger-heap or worktree-ignore workaround was needed.
+
+### C11 fixture correction
+
+**Commit `2589ec75d`:** the primitive-error fixture now uses a typed
+`vi.fn<() => Promise<never>>().mockRejectedValue(error)` instead of a direct primitive throw.
+The cleanup fixture calls a typed throwing cleanup function from `finally`.
+Error/primitive identity, marked-feedback modal counts, explanation telemetry, cleanup precedence
+and the exact replacement-error assertions remain unchanged. No lint rule was disabled.
+
+The first attempt used `Promise.reject(error)`, which triggered a second production-style rule,
+`prefer-promise-reject-errors`. Advised (claude-opus-5.5): use the existing typed rejection-mock
+pattern; the advisor verified its `unknown` rejection input and awaited-wrapper equivalence.
+MAI Code 2 applied the final fixture changes and passed targeted Prettier, ESLint and Vitest.
+This is test setup, not a production behavior change or a weakened contract.
+
+### Publishing and remaining checks
+
+The verified commits and this record are to be pushed together to
+`dev/tnaum/connection-lifecycle-ux`, targeting `feature/connection-lifecycle` in PR #1146.
+The milestone remains 1.2.0. Individual thread updates will reference published commits;
+no omnibus PR comment or automatic thread resolution is requested.
+
+C05/C10/C12 retain their selected no-code outcomes. Real VM node-lifetime/custom-port and installed
+terminal visual checks remain unperformed, as listed above. All CONTRIBUTING section 6
+initial-review/validation/sweep requirements are not claimed complete merely because Case 2 passed.
+
+### Case 2 follow-up usage
+
+Window: **2026-11-27T17:59:57.853Z through the host's 18:24 UTC snapshot**.
+These figures are separate from the earlier lead snapshot; publication, subsequent report
+persistence and the final response are excluded. AIU are not dollars.
+
+| Model            | Role    | Requests | Summed model time |   AIU | AIU share |
+| ---------------- | ------- | -------: | ----------------: | ----: | --------: |
+| claude-opus-5.5  | advisor |        3 |               14s |  25.5 |      7.0% |
+| gpt-6.1-sol      | leader  |       20 |            17m02s | 336.1 |     92.2% |
+| mai-code-2       | coding  |        9 |               49s |   2.6 |      0.7% |
+| mai-code-2-flash | checks  |       13 |               46s |   0.5 |      0.1% |
+
+**Role totals:** leader 336.1 AIU; coding 2.6; advisor 25.5; checks 0.5.
+**Host totals:** leader 336.1 AIU, subagents 28.6 AIU, follow-up run 364.7 AIU.
+Rounded rows may differ from the host total.
+
+| Model            | Role    |     Input | Output | Cache read | Cache write | Reasoning |
+| ---------------- | ------- | --------: | -----: | ---------: | ----------: | --------: |
+| claude-opus-5.5  | advisor |   122,674 |  1,445 |     80,680 |      41,986 |       400 |
+| gpt-6.1-sol      | leader  | 6,087,797 | 42,590 |  5,774,418 |     313,319 |    37,441 |
+| mai-code-2       | coding  |   218,487 |  2,089 |    186,368 |           0 |       699 |
+| mai-code-2-flash | checks  |   254,047 |  1,913 |    179,200 |           0 |       901 |
+
+Cache/reasoning fields overlap input/output and are not a token total. Request spans are not
+wall-clock elapsed time. The full-suite agent's initial tool span was about 8m31s; per-step
+durations other than the runtime suite were not reported. Leading was the largest measured
+follow-up cost; a fresh, smaller-context session for long verification/publishing rounds would
+reduce coordination overhead.
