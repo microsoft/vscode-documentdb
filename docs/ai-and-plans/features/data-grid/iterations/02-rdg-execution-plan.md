@@ -219,6 +219,13 @@ theme with no reported console, page or CSP errors. Each run recorded `common.re
 `stepIn` calls in order: `step-in-button` depths 1 and 2, `step-out-button` depth 1,
 `step-in-button` depth 2, and `breadcrumb` depths 1 and 0.
 
+**A8 passed (2026-11-27).** WI-9 and WI-9b passed advisor logic review. With the Tree-only
+stable scrollbar gutter and the approved E3 array navigation setup, all six Integrated
+Browser routes were ready: `deep-nesting` 47/47 and `arrays` 9/9 in each of dark, light and
+high contrast (168 assertions). No ResizeObserver, console, page or CSP errors were
+reported. The dark Table regression passed 29/29; computed gutter was `auto` for Table and
+`stable` for Tree. This releases A8, not the G2 Narrator or packaged-workbench check.
+
 ### Escalations
 
 | ID  | Trigger                                                                                                                                    | Operator chooses                                                                                          |
@@ -1099,13 +1106,25 @@ through `mai-code-2-flash` after each pair of items, not after every commit.
 > The initial WI-9 implementation is committed at `59281cdb`, not accepted. Coding used
 > 49.2 AIU on `gpt-6.1-sol` (17 requests), including the keyboard retry.
 
-> **Resize investigation (E1), paused:** The authorized `hydrafusion-max` model was unavailable
-> on both attempts; neither did any work. The operator asked to pause this track and receive a
-> detailed prompt for a separate session once the A8 keyboard checks are complete. Keep the
-> resize error separate from WI-9b. It remains open for A8 release; do not suppress page
-> errors or count the manual scroll check as an A8 pass. If the array assertion needs to
-> navigate to a virtualized row to check its contents, handle that setup change under E3
-> separately.
+> **Resize investigation (E1), diagnosis returned (2026-11-27):** Both delegated model calls
+> were unavailable. In the operator's separate diagnosis session, a same-tab trace
+> on `a2cdd238` showed RDG remeasuring the treegrid when expansion adds a vertical scrollbar.
+> The old column widths briefly cause a horizontal scrollbar; removing it changes the same
+> observed content box again during delivery. Parent size, focus and scroll position did not
+> change. A temporary Tree-only `scrollbar-gutter: stable` eliminated the observer error in
+> both dark routes; removing it reproduced the error. `deep-nesting` passed 47/47, and
+> `arrays` passed 5/6 before navigating to the unmounted `ten[9]`. The operator approved the
+> scoped CSS fix and, separately under E3, keyboard navigation to check the last array child
+> without weakening the expansion cap.
+
+> **Done (2026-11-27):** The Tree-only gutter fix eliminated the observer error without
+> changing keyboard handling or filtering errors. The E3 follow-up verifies the first child
+> after Enter and the last after Ctrl+End, then waits for the returned viewport before the
+> unchanged over-ten non-expansion comparison. The build, 102 browser-runner unit tests,
+> browser TypeScript and all six live Tree routes passed. Follow-up usage: 26.6 AIU coding
+> on `gpt-6.1-sol` (16 requests), 37.7 AIU browser on `gpt-6.1-terra` (27), and 0.6 AIU
+> terminal on `mai-code-2-flash` (6). The separate diagnosis log recorded 107.7 AIU across
+> 17 requests on `gpt-6.2-astra`, under Auto selection.
 
 **WI-9b: Table and Tree keyboard navigation** · scheduled in Step 2, before A8/A9 and G2
 
@@ -1139,8 +1158,8 @@ through `mai-code-2-flash` after each pair of items, not after every commit.
 > tests, 102 browser-runner tests and browser TypeScript passed. Integrated Browser Table:
 > 29/29 in each theme; 27/27 for the 500-row dark route. Targeted Tree checks for Enter,
 > arrows, Tab, Escape and focus passed in all three themes. The advisor approved the revised
-> keyboard logic (85% confidence). Full Tree checks still stop on the ResizeObserver error,
-> so A8 is not released. The required separate-session investigation is ready for handoff.
+> keyboard logic (85% confidence). At WI-9b completion, the full Tree run was still blocked
+> by the ResizeObserver error. The separate WI-9 fix and three-theme rerun closed A8.
 > Coding: 109.5 AIU on `gpt-6.1-sol` (37 requests); advisor: 160.0 AIU on `claude-opus-5.5`
 > (11); browser: 32.0 AIU on `gpt-6.1-terra` (37); terminal: 0.3 AIU on `mai-code-2-flash` (4).
 
@@ -1289,7 +1308,6 @@ packaged-theme caveat. The operator accepted release metadata for the support fl
 stable workbench smoke, a real collection, screen readers and high-contrast were not run.
 
 Step 1 is complete. A1–A7 passed; the Table works through WI-8, including nested actions and
-the held late query. WI-9b keyboard navigation is complete. WI-9 is implemented but not
-accepted: A8 remains under E1 for the resize error, with the operator confirming that the
-end of the ten-element array can be reached by scrolling. The resize investigation remains
-paused for the operator's separate session. A9 and G2 are blocked; no draft PR has been opened.
+the held late query. WI-9 Tree and WI-9b keyboard navigation are complete. The separate
+resize fix and approved E3 viewport setup passed A8 in all three themes. A9 packages and
+checks the VSIX before G2. No draft PR has been opened.

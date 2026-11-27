@@ -4,6 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 .documentDataGrid {
+    // Reserve Tree scrollbar width to keep RDG's ResizeObserver measurements stable.
+    &[role='treegrid'] {
+        scrollbar-gutter: stable;
+    }
+
     // RDG remembers its active cell on blur. That memory is not a second focus indicator.
     :is([role='gridcell'], [role='columnheader']):not(:focus-within) {
         outline: none;
