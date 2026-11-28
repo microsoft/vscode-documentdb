@@ -1499,5 +1499,44 @@ The later approved review-fix pass is recorded in
 
 Focused test/build evidence for the five code items and affected source-scenario runs are recorded
 in the review-fix plan; R1 save/filter coverage is mocked, not live. R3's fresh packaged normal run
-and broken-CSS negative control, actual NVDA/Narrator checks, packaged/manual G3b checks, and Case
-2 handover remain pending. G3a and G3b have not been released.
+and broken-CSS negative control were pending at that completion point.
+
+**Packaged R3 and Case 2 follow-up (2026-11-27).** A fresh L2 run of
+`vscode-documentdb-1.1.1-alpha.0.vsix` from `3429b30f`, SHA-256
+`b8599529968b826f965f8fc1dbbd0bbc7b977f62a64a90e8c2b6e5c8ee66faa1`, earned the normal and negative
+R3 proof. All six normal views reported `verified: true` with empty error lists; the normal
+Collection View settled its result-row markers and rendered the grid with `display: grid` and a
+nonzero layout. The negative control reported `verified: true`, `expectedFailure: true`, and
+only four CSS style errors (`.collectionView` display, Monaco position, overflow and grid
+display). There were no unrelated, CSP or HTTP errors; all recorded responses were 200.
+The Collection worker completed `$computeUnicodeHighlights`, and the Document worker completed
+JSON `doValidation`. The owned port-18084 server was stopped; the shared Vite port-18080 server
+was not changed.
+
+That Case 2 attempt was not fully green. Lint, build, strict package-test type-checking, localization
+generation/checking and packaging passed. The full runtime result is 9,696 passed, one failure
+and eight pre-existing pending cases; the failure is the unchanged DNS test fixture's TCP bind
+(`EACCES`). The required DNS contract amendment was not approved, so no code or test changed.
+An unmodified retest was attempted before the operator requested a stop. Native NVDA/Narrator, Windows contrast-theme and other manual
+G3b checks remain outstanding. A11 is not passed, and G3a/G3b have not been released.
+
+**Authorized environment-resilience follow-up (2026-11-28).** The operator subsequently
+approved test-only corrections for environment changes. The DNS stub now uses random
+dynamic-range candidates, retrying TCP/UDP port conflicts or reservations up to ten times,
+with cleanup and explicit failure on exhaustion. Other bind errors remain fail-fast.
+The shell width sweeps retain every width from 20 through 200 and every original assertion,
+but each width is a separate case under the unchanged 15-second timeout.
+
+The focused DNS lifecycle/real-transport and shell run passed **500/500**, and the Case 1
+build passed. **A11's automated Case 2 checks now pass**: localization generation/checking,
+formatting, lint, build, the exact strict package-test typecheck, full runtime
+(**10,063 passed, zero failed, eight unchanged pre-existing skipped cases**), and packaging.
+Each command's result is recorded separately in
+[05-review-fixes-plan.md](./05-review-fixes-plan.md), together with the original failures.
+The new VSIX SHA-256 is
+`330238b9f677344189b1e250c23753844106ff8f1ca5aeb032eb858e7daecc8c`.
+
+Normal publication is authorized, with this verification record accompanying the feature-branch
+push. The committed AI pre-review was confirmed. Native NVDA/Narrator, Windows contrast themes and the remaining manual G3b checks
+were not rerun. These test-only corrections do not change production behavior or release
+G3a/G3b; #1142 stays draft.

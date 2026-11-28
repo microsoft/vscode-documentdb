@@ -660,7 +660,7 @@ removed by decision.
 
 ### 5. R3 — packaged L2 requires Collection View results (decision 0004)
 
-**Status:** Implemented; source/harness evidence complete. Fresh packaged normal/negative-control evidence remains authorization-gated.
+**Status:** Implemented; source/harness and fresh packaged normal/CSS-negative evidence complete.
 
 > **Done (2026-11-27), commit `3ac66077`:** restored the packaged fixture's Alpha/Beta
 > result markers and `display: grid` expectation; non-default source presets retain
@@ -1126,16 +1126,16 @@ and are not replaced by earlier source-only results.
 
 **Initial Case 2 (2026-11-27), `mai-code-2-flash`:**
 
-| Command | Exit | Duration | Result |
-| --- | ---: | ---: | --- |
-| `npm run l10n` | 0 | 83.547s | passed |
-| `npm run prettier-fix` | 0 | 115.621s | passed |
-| `npm run l10n:check` | 0 | 48.050s | passed |
-| `npm run lint` | 1 | 293.614s | five lint errors |
-| `npm run build` | 0 | 49.318s | passed |
-| `npm run typecheck:tests` | 0 | 14.570s | passed |
-| `npx vitest run --reporter=json` | 1 | 204.236s | 9,663 passed, five failed, 37 pending; OpenSSL suite setup also failed |
-| `npm run package` | 0 | 53.556s | built, not yet accepted for handover |
+| Command                          | Exit | Duration | Result                                                                 |
+| -------------------------------- | ---: | -------: | ---------------------------------------------------------------------- |
+| `npm run l10n`                   |    0 |  83.547s | passed                                                                 |
+| `npm run prettier-fix`           |    0 | 115.621s | passed                                                                 |
+| `npm run l10n:check`             |    0 |  48.050s | passed                                                                 |
+| `npm run lint`                   |    1 | 293.614s | five lint errors                                                       |
+| `npm run build`                  |    0 |  49.318s | passed                                                                 |
+| `npm run typecheck:tests`        |    0 |  14.570s | passed                                                                 |
+| `npx vitest run --reporter=json` |    1 | 204.236s | 9,663 passed, five failed, 37 pending; OpenSSL suite setup also failed |
+| `npm run package`                |    0 |  53.556s | built, not yet accepted for handover                                   |
 
 The full runtime report covers 428 files; its 1,757 suite count includes nested describe
 blocks. Raw JSON is retained as `files/case2-tests-first.txt`. No `TDD:`-prefixed test failed.
@@ -1173,3 +1173,116 @@ four-file ESLint passed (51.033s), and the three focused test files passed **28/
 and test timeouts are unchanged. Final Case 2 revalidation is next, with the full runtime
 suite bounded to two workers and Git OpenSSL on that process's PATH. Localization generation
 already passed and no localized string changed in the corrective commits.
+
+**Final-suite attempt:** formatting, localization check, lint, build, strict package-test
+type-checking and packaging all passed. Full runtime results were 9,696 passed, one failed
+and eight pre-existing pending cases; all locale, timeout and OpenSSL failures were resolved.
+The sole new blocker was a DNS test stub's TCP bind:
+`listen EACCES 127.0.0.1:49675`. The stub obtains a UDP ephemeral port and then binds TCP
+to the same number, retrying only `EADDRINUSE`. Windows TCP/UDP excluded ranges differ;
+the exact historical reservation for 49675 is not confirmed by the later read-only snapshot.
+A narrow advisor review is assessing a bounded test-fixture allocation correction.
+No OS permissions, exclusions or shared service will be changed.
+
+The operator separately authorized fresh packaged normal/CSS-negative browser checks,
+updating the PR description, and assigning milestone **1.2.0** (milestone 63).
+These permissions do not authorize thread resolution, automation, merge or gate release.
+The current pre-final-artifact SHA256 is
+`b8599529968b826f965f8fc1dbbd0bbc7b977f62a64a90e8c2b6e5c8ee66faa1`;
+publication remains pending a clean final runtime result.
+
+**Case2-DNS-fixture gate:** advisor `claude-opus-5.5` endorsed TCP-only bounded `EACCES`
+retry at approximately 85% confidence, with failed-stub cleanup and a final error after
+three attempts. The UDP bind error must remain fail-fast. The existing lifecycle test
+explicitly pins TCP `EACCES` to one attempt, so its amendment requires operator approval.
+The operator was unavailable; that is not approval. This item is parked unchanged.
+Recommended option is the bounded TCP-only amendment with a recovery case; alternatives
+are keeping the current contract and investigating environment allocation, or pausing.
+No DNS test or helper was edited and no OS permission/exclusion was changed.
+
+Independent approved work continues: fresh packaged L2 normal/CSS-negative checks are
+running on a separately owned temporary server. The selected **1.2.0** milestone was assigned
+to #1142. The PR remains draft with all automation off. Description update and normal push
+remain pending actual publication; the runtime blocker is not presented as a clean suite.
+
+**Packaged invocation failures:** the first preparation used a corrupted output path and
+failed before serving. The corrected quoted path prepared successfully. The first helper
+invocation then used an incompatible timer adapter (`page.waitForTimeout.bind(page)` instead
+of the callback/milliseconds contract); its deferred result was not recoverable, and no
+report was produced. The owned server was stopped, leaving the shared Vite untouched.
+The exact helper source calls `setTimeout(resolve, 100)`. The leader supplied the previously
+validated callback adapter, a short initial tool wait and explicit deferred-result resumption
+without a `code` argument. One corrected helper invocation is running against the same
+prepared VSIX/site; no helper assertions, fixtures, CSP or source implementation changed.
+
+**Packaged evidence completed:** despite a lost tool deferred-return channel, the canonical
+helper persisted all seven JSON reports under `files/packaged-case2-l2/reports/`.
+The leader inspected each report: six normal views verified with zero errors, and the
+Collection View CSS-negative control verified with exactly four expected style failures
+(root display, Monaco position/overflow, and grid display) and no unrelated diagnostics.
+Normal Collection View settled both fixture rows, measured `display: grid` without empty
+layout errors, and proved the rendered-editor Unicode worker round-trip. Document View
+proved its JSON validation worker round-trip. All report HTTP responses were 200 and no
+CSP violations were recorded. The tested VSIX is the `b859...faa1` artifact above.
+The owned server was stopped; the shared Vite was untouched. This completes R3's packaged
+proof, not native screen-reader/manual acceptance or full-runtime success.
+
+At that point the DNS helper/contract remained unchanged because its proposed amendment was
+unapproved. An unchanged focused/full revalidation was attempted; the operator subsequently
+asked for an explanation and a stop. The earlier failures remain recorded.
+
+**Environment-resilience follow-up (2026-11-28).** The operator then authorized test changes:
+"the tests need an upate to acommodate for this. you may modify the tests to be more resilient
+when environment changes." This supersedes the parked fixture amendment, not the outstanding
+native/manual acceptance gates. No production DNS or grid behavior, OS permissions, shared
+service, test timeout, or behavior assertion changes.
+
+The initial run passed Case 1 (build and 154 targeted tests), all Case 2 static checks, the exact
+`npm run typecheck:tests`, and packaging. The full runtime result was 9,681 passed, 16 failed,
+and eight pre-existing pending cases: 14 DNS fixture TCP binds and two shell sweep timeouts.
+A read-only Windows reservation check confirmed that the failed ports 49774-49787 belonged
+to the TCP-only excluded range 49727-49926. A single-worker diagnostic still timed out the
+unchanged ghost-text sweep, so reducing concurrency alone was not a sufficient correction.
+
+The test-only DNS stub now tries random dynamic-range port candidates instead of walking
+UDP's sequential allocation through a TCP-reserved block. `EADDRINUSE` and `EACCES` from either
+transport permit up to ten attempts, with partial-stub cleanup before every retry and the
+original error thrown on exhaustion. Other bind failures still fail immediately. Lifecycle
+tests inject recovery/exhaustion errors while obtaining separate OS-assigned loopback ports;
+the unchanged fallback-client integration tests still exercise actual UDP and TCP traffic on
+the same candidate port, including truncated-reply TCP fallback.
+
+Each shell sweep is now 181 separately timed cases, one per width from 20 through 200, with
+every original character-class, suggestion and width assertion retained. The existing
+15-second timeout applies to each case; it was not increased.
+
+The focused four-file run passed **500/500** and the Case 1 build passed. The first
+post-correction lint run caught six unsafe-call/return errors in the lifecycle mocks;
+a typed callback guard and returning the socket explicitly resolved them. The exact
+strict package-test typecheck and full lint then passed.
+
+**Final Case 2 results (2026-11-28):**
+
+| Command                                         | Result                                                                                   |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `npm run l10n`                                  | passed earlier in this session; no localized string changed in the test-only corrections |
+| `npm run prettier-fix`                          | passed after the corrections                                                             |
+| `npm run l10n:check`                            | passed; bundle matches the source                                                        |
+| `npm run lint`                                  | passed                                                                                   |
+| `npm run build`                                 | passed                                                                                   |
+| `npm run typecheck:tests`                       | passed across all workspaces                                                             |
+| `npx vitest run --maxWorkers=2 --reporter=json` | passed: **10,063 passed, zero failed, eight pre-existing skipped cases**                 |
+| `npm run package`                               | passed; VSIX SHA-256 `330238b9f677344189b1e250c23753844106ff8f1ca5aeb032eb858e7daecc8c`  |
+
+The eight skipped test names exactly match the initial failed run; no new test was skipped.
+The larger runtime count comes from the per-width shell cases and additional DNS lifecycle
+cases, not reduced coverage. The runtime process used Git's existing OpenSSL through a
+process-local PATH addition and two workers; no tool installation or global environment change
+was made. The branch's committed AI pre-review is
+[03-rdg-migration-review.md](./03-rdg-migration-review.md).
+
+This satisfies A11's automated Case 2 requirement. The earlier packaged R3 proof remains
+separate; the new VSIX was packaged but not rerun through native/manual G3b checks. G3a/G3b
+remain unreleased and #1142 remains draft. Normal publication is authorized; this verification
+record accompanies the feature-branch push. No review thread resolution, automation, ready
+transition or merge is included.

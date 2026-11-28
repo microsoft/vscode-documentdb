@@ -127,17 +127,18 @@ describe('ShellGhostText', () => {
             }
         });
 
-        it('should keep emitted ghost text on the cursor row across widths and character classes', () => {
-            const buffers = ['ascii'.repeat(50), '日本語'.repeat(50), '📦'.repeat(100), 'é'.repeat(100)];
-            const suggestions = ['suggestion', '候補一覧', '📦 inventory', 'café menu'];
-            const inputHandler = new ShellInputHandler({
-                write: vi.fn(),
-                onLine: vi.fn(),
-                onInterrupt: vi.fn(),
-                onContinuation: vi.fn(),
-            });
+        it.each(Array.from({ length: 181 }, (_, index): number => index + 20))(
+            'should keep emitted ghost text on the cursor row across character classes at %i columns',
+            (columns): void => {
+                const buffers = ['ascii'.repeat(50), '日本語'.repeat(50), '📦'.repeat(100), 'é'.repeat(100)];
+                const suggestions = ['suggestion', '候補一覧', '📦 inventory', 'café menu'];
+                const inputHandler = new ShellInputHandler({
+                    write: vi.fn(),
+                    onLine: vi.fn(),
+                    onInterrupt: vi.fn(),
+                    onContinuation: vi.fn(),
+                });
 
-            for (let columns = 20; columns <= 200; columns++) {
                 for (const buffer of buffers) {
                     inputHandler.resetLine();
                     inputHandler.setPromptWidth(5);
@@ -161,8 +162,8 @@ describe('ShellGhostText', () => {
                         expect(written).toContain(`\x1b[${String(width)}D`);
                     }
                 }
-            }
-        });
+            },
+        );
 
         it('should move the cursor back exactly as far as it wrote', () => {
             ghostText.show('  🛈 Run db.vector_index_debug_cases.find() first', write, 12);

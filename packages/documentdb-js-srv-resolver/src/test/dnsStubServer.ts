@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as dnsPacket from 'dns-packet';
+import crypto from 'node:crypto';
 import dgram from 'node:dgram';
 import net from 'node:net';
 
@@ -66,7 +67,8 @@ export class DnsStubServer {
             try {
                 await new Promise<void>((resolve, reject): void => {
                     stub.udp.once('error', reject);
-                    stub.udp.bind(0, '127.0.0.1', (): void => {
+                    // UDP and TCP reservations differ; random candidates avoid walking a reserved block.
+                    stub.udp.bind(crypto.randomInt(49152, 65536), '127.0.0.1', (): void => {
                         stub.udpBound = true;
                         stub.udp.removeListener('error', reject);
                         resolve();
@@ -84,8 +86,14 @@ export class DnsStubServer {
                 return stub;
             } catch (error) {
                 await stub.close();
-                // A UDP-assigned port can already be occupied by an unrelated TCP listener.
-                if (!(error instanceof Error && 'code' in error && error.code === 'EADDRINUSE' && attempt < 2)) {
+                if (
+                    !(
+                        error instanceof Error &&
+                        'code' in error &&
+                        (error.code === 'EADDRINUSE' || error.code === 'EACCES') &&
+                        attempt < 9
+                    )
+                ) {
                     throw error;
                 }
             }

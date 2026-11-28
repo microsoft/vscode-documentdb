@@ -573,10 +573,36 @@ commands, timings, failures, and retries remain in the
 | R1    | Item 1, commit `8cc23e15`: owned falsy `_id` values now retain their identity through save; only an absent `_id` takes the Add sentinel. The four falsy cases are covered by mocked save/filter integration. Failing first: 7 failures, 69 passes; after fix: 76/76 and build. This is not live-server evidence and does not claim numeric BSON-type preservation on save.                                                                                                    |
 | R6    | Item 1, commit `8cc23e15`: the exact conservative multi-key integer-like-key object guard is recursive, including objects inside arrays, while array indexes, displayed values, and positional browsing/selection are retained. A row with an unsafe identity has no `documentId`. The item-1 76/76 suite and build cover the guard; no comparator or raw-BSON transport was added.                                                                                           |
 | R2    | Item 3, commit `9eb782bd`: keyboard step-in restores focus once after the matching current Table page to the same `rowKey`'s root `_id` column (0), without selecting it; outside focus, failure, supersession, disappearance and unmount cancel. Pointer behavior is unchanged. Failing first: 63/75 passed, 12 new M7 failures; then component 11/11, harness 78/78, build, and 9 source journeys 90/90 with 135 calls and zero errors passed.                              |
-| R3    | Item 5, commit `3ac66077`: strict default fixture readiness again requires the Alpha/Beta result rows and a grid with `display: grid`; non-default source presets remain independent. Six regressions failed before the fix; afterward 154/154 tests, build, and 15 source journeys 177/177 with 66 calls and zero errors passed. A fresh packaged normal/broken-CSS control is still pending.                                                                                |
+| R3    | Item 5, commit `3ac66077`: strict default fixture readiness again requires the Alpha/Beta result rows and a grid with `display: grid`; non-default source presets remain independent. Six regressions failed before the fix; afterward 154/154 tests, build, and 15 source journeys 177/177 with 66 calls and zero errors passed. The fresh packaged normal/broken-CSS proof was pending at that source-evidence point and is recorded below.                                 |
 | R5    | Item 4, commit `c09cdb6d`: the full type precedes the value in the focused cell name, the glyph is decorative, the BSON type Tooltip is removed, and missing-field behavior is unchanged. Cell tests 3/3, harness 79/79, build, and 15 source journeys 261/261 with 114 calls and zero errors passed. Exact browser-computed names were `Int32 7` and `Decimal128 12.50`; no BSON hover Tooltip appeared during 544-568 ms observations. NVDA/Narrator speech was not tested. |
 | S1-S5 | Item 2, commit `bf7285d3`: the stale-reply and selection/action simplifications, step-in guard cleanup, dead `isRootId` removal, and named Escape handler were implemented with behavior preserved. Focused tests 29/29, harness 146/146, build, and 21 affected source journeys 228/228 with 411 calls and zero errors passed; the multi-attempt/retry provenance is retained in the plan.                                                                                   |
 | R4    | No code change. The original trigger analysis remains: Tree replacement begins from controls outside the Tree; it was not established as a regression. The later R2 focus evidence applies only to Table keyboard step-in, not to Tree refresh or Delete focus.                                                                                                                                                                                                               |
 
-These completed source changes do not release G3a or G3b and do not verify the pending packaged
-manual checks.
+**R3 packaged follow-up (2026-11-27).** The fresh packaged L2 reports from
+`vscode-documentdb-1.1.1-alpha.0.vsix` at `3429b30f` (SHA-256
+`b8599529968b826f965f8fc1dbbd0bbc7b977f62a64a90e8c2b6e5c8ee66faa1`) are authoritative. The normal
+Collection View report was verified with empty errors, settled Alpha/Beta result-row markers and
+the expected grid `display: grid` with a nonzero layout. The broken-CSS control was verified as an
+expected failure and reported only four CSS mismatches: Collection View `display`, Monaco editor
+`position`, overflow, and grid `display`. It reported no unrelated, CSP or HTTP errors. Across the
+seven persisted reports, all six normal views verified with empty error lists and all recorded
+responses were HTTP 200. The Collection `$computeUnicodeHighlights` and Document JSON
+`doValidation` worker round trips succeeded. The owned port-18084 server was stopped and shared
+Vite port 18080 was left untouched.
+
+This closes R3's packaged positive/negative evidence gap, not the entire handover. That Case 2
+static/package checks passed: formatting, localization generation/checking, lint, build, strict
+test type-checking and packaging. Its runtime suite had 9,696 passed, one unchanged DNS
+port-fixture bind failure and eight pre-existing pending cases. The DNS contract amendment was
+not approved at that point; no code or test changed, and an unmodified retest was attempted. Native NVDA/Narrator
+announcements, Windows contrast themes and manual G3b checks remain unverified. These results do
+not release G3a/G3b, release the feature, or make A11 green.
+
+On 2026-11-28 the operator approved test-only environment-resilience changes. Random
+bounded dual-transport port allocation and per-width shell sweep cases passed **500/500**
+focused tests and build, without changing production behavior, assertions or timeouts.
+The final full Case 2 checks now pass, including the exact strict package-test typecheck,
+runtime (**10,063 passed, zero failed, eight unchanged pre-existing skipped cases**) and
+packaging. The [review-fix plan](./05-review-fixes-plan.md) records each command separately,
+the original failures and the new VSIX hash. This satisfies A11's automated requirement;
+native/manual acceptance and G3a/G3b release are still outstanding. #1142 remains draft.

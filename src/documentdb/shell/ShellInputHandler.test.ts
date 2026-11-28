@@ -874,10 +874,11 @@ describe('ShellInputHandler', () => {
             expect(handler.availableColumnsAfterCursor()).toBe(0);
         });
 
-        it('should keep available columns within the current row across widths and character classes', () => {
-            const samples = ['ascii'.repeat(50), '日本語'.repeat(50), '📦'.repeat(100), 'é'.repeat(100)];
+        it.each(Array.from({ length: 181 }, (_, index): number => index + 20))(
+            'should keep available columns within the current row across character classes at %i columns',
+            (columns): void => {
+                const samples = ['ascii'.repeat(50), '日本語'.repeat(50), '📦'.repeat(100), 'é'.repeat(100)];
 
-            for (let columns = 20; columns <= 200; columns++) {
                 for (const sample of samples) {
                     handler.resetLine();
                     handler.setPromptWidth(5);
@@ -893,8 +894,8 @@ describe('ShellInputHandler', () => {
                         expect([0, columns - 1]).toContain(handler.cursorColumn % columns);
                     }
                 }
-            }
-        });
+            },
+        );
     });
 
     describe('findHistorySuggestion', () => {

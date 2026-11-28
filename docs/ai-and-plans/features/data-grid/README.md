@@ -87,10 +87,25 @@ mocked, not live:
 - WI-G3-5: 154/154 focused/harness tests, build, and 15 source journeys with 177/177 assertions.
 
 This is source evidence, with mocked save-path coverage; no live collection was exercised.
-R3's strict packaged Collection View readiness is implemented, but a fresh packaged normal run and
-broken-CSS negative control are still pending. Actual NVDA/Narrator announcements, Windows contrast
-themes, and the packaged/manual G3b checks remain unverified. Browser emulation is not a
-substitute for them, and neither G3a nor G3b has been released.
+R3's packaged checks are now earned from
+`vscode-documentdb-1.1.1-alpha.0.vsix` at `3429b30f` (SHA-256
+`b8599529968b826f965f8fc1dbbd0bbc7b977f62a64a90e8c2b6e5c8ee66faa1`): the fresh normal
+Collection View run verified its result-row markers and grid display/layout, and the broken-CSS
+negative control produced exactly four expected style errors with no unrelated, CSP or HTTP
+errors. Six normal packaged views verified with empty error lists, and every recorded response
+was HTTP 200; Collection's `$computeUnicodeHighlights` and Document's JSON `doValidation`
+worker round trips also succeeded.
+
+Case 1 and the full automated Case 2 checks passed on 2026-11-28 after approved test-only
+environment-resilience corrections. The focused DNS/shell run passed 500/500; the full runtime
+suite passed **10,063 tests, with zero failures and eight unchanged pre-existing skipped cases**.
+Formatting, localization generation/checking, lint, build, the exact strict package-test
+typecheck and packaging passed. The committed AI pre-review was confirmed. Each command's
+result and the original failures are recorded in the
+[review-fix plan](./iterations/05-review-fixes-plan.md). Actual
+NVDA/Narrator announcements, native Windows contrast themes and the remaining manual G3b checks
+remain unverified. Browser emulation is not a substitute for them, and neither G3a nor G3b has
+been released.
 
 The migration does not add spreadsheet-style cell-range selection, Tree row selection, or
 cross-page/shard duplicate-ID mitigation.
