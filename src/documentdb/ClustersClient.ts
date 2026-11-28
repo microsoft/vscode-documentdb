@@ -1205,7 +1205,9 @@ export class ClustersClient {
         // connect and execute
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
 
-        const documentContent = await collection.findOne({ _id: parsedDocumentId } as Filter<Document>);
+        const documentContent = await collection.findOne({ _id: parsedDocumentId } as Filter<Document>, {
+            promoteValues: false,
+        });
 
         return documentContent;
     }
@@ -1245,7 +1247,7 @@ export class ClustersClient {
         const newDocumentId = (replaceResult.upsertedId as any) ?? parsedId;
 
         // eslint-disable-next-line
-        const newDocument = await collection.findOne({ _id: newDocumentId });
+        const newDocument = await collection.findOne({ _id: newDocumentId }, { promoteValues: false });
 
         return { documentId: newDocumentId, document: newDocument };
     }
