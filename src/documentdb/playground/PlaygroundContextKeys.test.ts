@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { PlaygroundContextKeyTracker, PlaygroundContextKeys } from './PlaygroundContextKeys';
-import { PlaygroundService } from './PlaygroundService';
+import { type PlaygroundService } from './PlaygroundService';
 import { PLAYGROUND_LANGUAGE_ID } from './constants';
 
 vi.mock('../../extensionVariables', () => ({
@@ -19,7 +19,11 @@ interface MockDocument extends vscode.TextDocument {
     lines: string[];
 }
 
-function makeEditor(uri: vscode.Uri, lines: string[], line: number): {
+function makeEditor(
+    uri: vscode.Uri,
+    lines: string[],
+    line: number,
+): {
     editor: vscode.TextEditor;
     document: MockDocument;
 } {

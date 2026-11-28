@@ -25,8 +25,10 @@ The plan for work items 3-6 is in
 operator's decisions are in [decisions.md](./decisions.md).
 
 Implementation is published in draft [#1147](https://github.com/microsoft/vscode-documentdb/pull/1147),
-targeting `main` with milestone `1.2.0`. Case 1 applies; full review-ready checks
-and the remaining workbench gates are deferred.
+targeting `main` with milestone `1.2.0`. The operator explicitly requested both
+Case 1 and Case 2 checks on 2026-11-28; both passed with the local test-run
+conditions recorded in the work-item plan. The PR remains a draft: the formal AI
+pre-review and the remaining workbench gates are still outstanding.
 
 The grid update is documented under [data-grid](../data-grid/README.md). The two
 VS Code-owned reports remain a separate upstream-tracking bucket, not presumed fixes
@@ -134,9 +136,9 @@ Both reports below are open with the `wontfix` label. @tnaum-ms identifies the n
 VS Code Quick Pick colors as outside extension control; @kapilvaishna links the
 corresponding upstream reports:
 
-| Local issue | Report | Upstream |
-| --- | --- | --- |
-| [#767](https://github.com/microsoft/vscode-documentdb/issues/767) | Quick Pick placeholder text contrast | [microsoft/vscode#321135](https://github.com/microsoft/vscode/issues/321135) |
+| Local issue                                                       | Report                                | Upstream                                                                     |
+| ----------------------------------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------- |
+| [#767](https://github.com/microsoft/vscode-documentdb/issues/767) | Quick Pick placeholder text contrast  | [microsoft/vscode#321135](https://github.com/microsoft/vscode/issues/321135) |
 | [#778](https://github.com/microsoft/vscode-documentdb/issues/778) | Quick Pick focused-item text contrast | [microsoft/vscode#325289](https://github.com/microsoft/vscode/issues/325289) |
 
 Upstream issue status was not checked. Keep the focused table-row symptom from #778

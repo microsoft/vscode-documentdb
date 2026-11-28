@@ -441,7 +441,8 @@ describe('PlaygroundEvaluator result deserialization', () => {
             mocks.sendEval.mockResolvedValue({ result: serialized });
 
             const result = await evaluator.evaluate(
-                { clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' }, '1',
+                { clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' },
+                '1',
             );
 
             expect(result.printableIsUndefined).toBe(printableIsUndefined);

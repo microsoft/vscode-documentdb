@@ -30,13 +30,16 @@ interface KeybindingContribution {
 
 interface ConfigurationContribution {
     readonly title: string;
-    readonly properties: Record<string, {
-        readonly type: string;
-        readonly default: unknown;
-        readonly enum?: readonly string[];
-        readonly description: string;
-        readonly enumDescriptions?: readonly string[];
-    }>;
+    readonly properties: Record<
+        string,
+        {
+            readonly type: string;
+            readonly default: unknown;
+            readonly enum?: readonly string[];
+            readonly description: string;
+            readonly enumDescriptions?: readonly string[];
+        }
+    >;
 }
 
 interface PackageContributions {
@@ -77,14 +80,14 @@ describe('query playground command contributions', () => {
         );
     });
 
-    it.each([
-        'vscode-documentdb.command.playground.runAll',
-        'vscode-documentdb.command.playground.runSelected',
-    ])('exposes %s in the palette for playground editors', (command) => {
-        expect(contributes.menus.commandPalette).toContainEqual(
-            expect.objectContaining({ command, when: "editorLangId == 'documentdb-playground'" }),
-        );
-    });
+    it.each(['vscode-documentdb.command.playground.runAll', 'vscode-documentdb.command.playground.runSelected'])(
+        'exposes %s in the palette for playground editors',
+        (command) => {
+            expect(contributes.menus.commandPalette).toContainEqual(
+                expect.objectContaining({ command, when: "editorLangId == 'documentdb-playground'" }),
+            );
+        },
+    );
 
     it.each([
         'vscode-documentdb.command.playground.openQueryInShell',
@@ -103,9 +106,7 @@ describe('query playground command contributions', () => {
     });
 
     it('puts only connection and Run All actions inline in the editor title', () => {
-        expect(
-            contributes.menus['editor/title'].filter((entry) => entry.group?.startsWith('navigation')),
-        ).toEqual(
+        expect(contributes.menus['editor/title'].filter((entry) => entry.group?.startsWith('navigation'))).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({
                     command: 'vscode-documentdb.command.playground.connect',
@@ -161,11 +162,7 @@ describe('query playground command contributions', () => {
             'vscode-documentdb.command.playground.runSelected',
             "editorLangId == 'documentdb-playground'",
         ],
-        [
-            'editor/title',
-            'vscode-documentdb.command.playground.runSelected',
-            "editorLangId == 'documentdb-playground'",
-        ],
+        ['editor/title', 'vscode-documentdb.command.playground.runSelected', "editorLangId == 'documentdb-playground'"],
     ])('contributes Run Block to %s for playground editors', (menu, command, when) => {
         const entries = contributes.menus[menu as 'editor/context' | 'editor/title'];
         expect(entries).toContainEqual(expect.objectContaining({ command, when }));
@@ -235,7 +232,9 @@ describe('query playground command contributions', () => {
                 '%playground.afterRun.notify%',
             ],
         });
-        const localized = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../../package.nls.json'), 'utf8')) as Record<string, string>;
+        const localized = JSON.parse(
+            fs.readFileSync(path.resolve(__dirname, '../../../package.nls.json'), 'utf8'),
+        ) as Record<string, string>;
         for (const key of settings?.properties['documentDB.playground.afterRun'].enumDescriptions ?? []) {
             expect(localized[key.slice(1, -1)]).toBeTruthy();
         }
@@ -249,7 +248,9 @@ describe('query playground command contributions', () => {
         expect(contributes.commands).toContainEqual(expect.objectContaining({ command, title: `%playground.${id}%` }));
         expect(contributes.menus.commandPalette).toContainEqual({ command, when });
         expect(contributes.keybindings.some((entry) => entry.command === command)).toBe(false);
-        const localized = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../../package.nls.json'), 'utf8')) as Record<string, string>;
+        const localized = JSON.parse(
+            fs.readFileSync(path.resolve(__dirname, '../../../package.nls.json'), 'utf8'),
+        ) as Record<string, string>;
         expect(localized[`playground.${id}`]).toBe(title);
     });
 });

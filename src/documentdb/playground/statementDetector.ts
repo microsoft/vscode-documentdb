@@ -88,10 +88,7 @@ export function findBlockAtLine(blocks: CodeBlock[], line: number): CodeBlock | 
     return blocks.find((b) => line >= b.startLine && line <= b.endLine);
 }
 
-export function resolveBlockAtLine(
-    blocks: readonly CodeBlock[],
-    line: number,
-): ResolvedBlock | undefined {
+export function resolveBlockAtLine(blocks: readonly CodeBlock[], line: number): ResolvedBlock | undefined {
     const direct = blocks.find((block) => line >= block.startLine && line <= block.endLine);
     if (direct) {
         return { block: direct, match: 'cursor' };
@@ -107,12 +104,7 @@ export function resolveBlockAtLine(
 }
 
 export function getBlockText(document: vscode.TextDocument, block: CodeBlock): string {
-    const range = new vscode.Range(
-        block.startLine,
-        0,
-        block.endLine,
-        document.lineAt(block.endLine).text.length,
-    );
+    const range = new vscode.Range(block.startLine, 0, block.endLine, document.lineAt(block.endLine).text.length);
     return document.getText(range);
 }
 

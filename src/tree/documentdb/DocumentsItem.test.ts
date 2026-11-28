@@ -38,24 +38,14 @@ const parentCollectionNode = {} as CollectionItem;
 
 describe('DocumentsItem accessibility', () => {
     it('includes the visible label in its accessible name', () => {
-        const treeItem = new DocumentsItem(
-            cluster,
-            databaseInfo,
-            collectionInfo,
-            parentCollectionNode,
-        ).getTreeItem();
+        const treeItem = new DocumentsItem(cluster, databaseInfo, collectionInfo, parentCollectionNode).getTreeItem();
 
         expect(treeItem.label).toBe('Documents');
         expect(treeItem.accessibilityInformation?.label).toContain(treeItem.label as string);
     });
 
     it('retains the hover tooltip', () => {
-        const treeItem = new DocumentsItem(
-            cluster,
-            databaseInfo,
-            collectionInfo,
-            parentCollectionNode,
-        ).getTreeItem();
+        const treeItem = new DocumentsItem(cluster, databaseInfo, collectionInfo, parentCollectionNode).getTreeItem();
 
         expect(treeItem.tooltip).toBe('Click to open the collection view');
     });

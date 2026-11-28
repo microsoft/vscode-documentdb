@@ -9,17 +9,17 @@ created: 2026-11-27
 
 > The decisions that shape the accessibility work items, and what was rejected on the way.
 
-| #    | Decision                                                                  | Status   | Changed from the proposal?                                  | Date       | PR  |
-| ---- | ------------------------------------------------------------------------- | -------- | ----------------------------------------------------------- | ---------- | --- |
-| 0001 | Park work items 1 and 2 until the grid update lands on `main`             | Accepted | Recorded in the README before this file existed             | 2026-11-27 | —   |
-| 0002 | Playground actions use standard VS Code surfaces, no new keybindings      | Accepted | Confirms the 3a recommendation; makes "no keybindings" firm | 2026-11-27 | —   |
-| 0003 | Playground editor-title layout and Connect follow the recommendations     | Accepted | Accepted as proposed (3b, 3c)                               | 2026-11-27 | —   |
-| 0004 | After a run, focus moves to the result only in screen-reader mode         | Accepted | Picks option B for `auto`; rejects C' as the default        | 2026-11-27 | —   |
-| 0005 | A dedicated Accessibility page in the user manual                         | Accepted | New; not in the plan                                        | 2026-11-27 | —   |
-| 0006 | Work items 4-6 and #768 proceed as recommended in the plan                | Accepted | Accepted as proposed                                        | 2026-11-27 | —   |
-| 0007 | Playground telemetry groups indistinguishable invocation surfaces       | Accepted | Amends the plan's five-surface attribution requirement       | 2026-11-27 | —   |
-| 0008 | Declare keyborg directly for the Document focus helper                   | Accepted | Rejects relying on the transitive dependency                 | 2026-11-27 | —   |
-| 0009 | Preserve undefined metadata for truthful completion summaries            | Accepted | Preserve rendered text while retaining the existing flag     | 2026-11-27 | —   |
+| #    | Decision                                                              | Status   | Changed from the proposal?                                  | Date       | PR  |
+| ---- | --------------------------------------------------------------------- | -------- | ----------------------------------------------------------- | ---------- | --- |
+| 0001 | Park work items 1 and 2 until the grid update lands on `main`         | Accepted | Recorded in the README before this file existed             | 2026-11-27 | —   |
+| 0002 | Playground actions use standard VS Code surfaces, no new keybindings  | Accepted | Confirms the 3a recommendation; makes "no keybindings" firm | 2026-11-27 | —   |
+| 0003 | Playground editor-title layout and Connect follow the recommendations | Accepted | Accepted as proposed (3b, 3c)                               | 2026-11-27 | —   |
+| 0004 | After a run, focus moves to the result only in screen-reader mode     | Accepted | Picks option B for `auto`; rejects C' as the default        | 2026-11-27 | —   |
+| 0005 | A dedicated Accessibility page in the user manual                     | Accepted | New; not in the plan                                        | 2026-11-27 | —   |
+| 0006 | Work items 4-6 and #768 proceed as recommended in the plan            | Accepted | Accepted as proposed                                        | 2026-11-27 | —   |
+| 0007 | Playground telemetry groups indistinguishable invocation surfaces     | Accepted | Amends the plan's five-surface attribution requirement      | 2026-11-27 | —   |
+| 0008 | Declare keyborg directly for the Document focus helper                | Accepted | Rejects relying on the transitive dependency                | 2026-11-27 | —   |
+| 0009 | Preserve undefined metadata for truthful completion summaries         | Accepted | Preserve rendered text while retaining the existing flag    | 2026-11-27 | —   |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -84,12 +84,12 @@ work while the playground editor has focus. See
 
 **Decision.** Option B, through one setting, `documentDB.playground.afterRun`:
 
-| Value | Run started in screen-reader mode | Any other run |
-| --- | --- | --- |
-| `auto` (default) | Move focus to the result | Stay in the playground (today's behavior) |
-| `stay` | Stay | Stay |
-| `focusResult` | Move focus to the result | Move focus to the result |
-| `notify` | Stay and show a completion notification with **Focus Result** | Same |
+| Value            | Run started in screen-reader mode                             | Any other run                             |
+| ---------------- | ------------------------------------------------------------- | ----------------------------------------- |
+| `auto` (default) | Move focus to the result                                      | Stay in the playground (today's behavior) |
+| `stay`           | Stay                                                          | Stay                                      |
+| `focusResult`    | Move focus to the result                                      | Move focus to the result                  |
+| `notify`         | Stay and show a completion notification with **Focus Result** | Same                                      |
 
 - "Run started in screen-reader mode" means the run came from the `Ctrl+Enter` or
   `Ctrl+Shift+Enter` contribution gated on screen-reader-optimized mode (see 0002).

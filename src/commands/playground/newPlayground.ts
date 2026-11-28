@@ -105,11 +105,7 @@ export async function newPlaygroundWithContent(
     // ── Telemetry: cross-feature activation ──────────────────────────
     context.telemetry.properties.activationSource = 'crossFeature';
 
-    const template = [
-        ...buildPlaygroundHeader(params.clusterDisplayName),
-        params.content,
-        '',
-    ].join('\n');
+    const template = [...buildPlaygroundHeader(params.clusterDisplayName), params.content, ''].join('\n');
 
     await createPlaygroundWithContent(template, {
         clusterId: params.clusterId,

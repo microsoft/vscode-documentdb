@@ -21,10 +21,7 @@ import { parsePlaygroundInvocation, resolvePlaygroundEditor } from './playground
  *
  * Arguments: [uri: vscode.Uri, startLine: number, endLine: number]
  */
-export async function playgroundOpenQueryInCollectionView(
-    context: IActionContext,
-    ...args: unknown[]
-): Promise<void> {
+export async function playgroundOpenQueryInCollectionView(context: IActionContext, ...args: unknown[]): Promise<void> {
     const invocation = parsePlaygroundInvocation(args);
     context.telemetry.properties.activationSource = invocation.activationSource;
 
@@ -43,8 +40,7 @@ export async function playgroundOpenQueryInCollectionView(
     }
 
     const range =
-        invocation.range ??
-        resolveBlockAtLine(detectBlocks(editor.document), editor.selection.active.line)?.block;
+        invocation.range ?? resolveBlockAtLine(detectBlocks(editor.document), editor.selection.active.line)?.block;
     if (!range) {
         void vscode.window.showInformationMessage(l10n.t('No code to run. Place the cursor in a code block.'));
         return;

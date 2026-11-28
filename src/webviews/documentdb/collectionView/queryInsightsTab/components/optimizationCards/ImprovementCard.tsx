@@ -278,10 +278,7 @@ export function ImprovementCard({
                             </MessageBar>
                         )}
 
-                        <Announcer
-                            when={!!primaryState.successMessage}
-                            message={primaryState.successMessage ?? ''}
-                        />
+                        <Announcer when={!!primaryState.successMessage} message={primaryState.successMessage ?? ''} />
                         <Announcer
                             when={!!primaryState.errorMessage}
                             message={l10n.t('Error: {0}', primaryState.errorMessage ?? '')}

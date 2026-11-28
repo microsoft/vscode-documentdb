@@ -54,48 +54,59 @@ describe('PlaygroundResultProvider', () => {
 
     it('returns no source for an invalid encoded URI', () => {
         const resultUri = provider.getResultUri(sourceUri);
-        vi.spyOn(vscode.Uri, 'parse').mockImplementationOnce(() => { throw new Error('Invalid URI'); });
+        vi.spyOn(vscode.Uri, 'parse').mockImplementationOnce(() => {
+            throw new Error('Invalid URI');
+        });
         expect(provider.getSourceUri(resultUri)).toBeUndefined();
     });
 
-    it.each([undefined, false, true])('opens a new result with focus=%s and preserves content and language', async (focus) => {
-        const resultUri = provider.getResultUri(sourceUri);
-        resultUri.toString();
-        const changes: vscode.Uri[] = [];
-        const subscription = provider.onDidChange((uri) => changes.push(uri));
+    it.each([undefined, false, true])(
+        'opens a new result with focus=%s and preserves content and language',
+        async (focus) => {
+            const resultUri = provider.getResultUri(sourceUri);
+            resultUri.toString();
+            const changes: vscode.Uri[] = [];
+            const subscription = provider.onDidChange((uri) => changes.push(uri));
 
-        await provider.showResult(sourceUri, 'result bytes', focus === undefined ? undefined : { focus });
+            await provider.showResult(sourceUri, 'result bytes', focus === undefined ? undefined : { focus });
 
-        expect(vscode.workspace.openTextDocument).toHaveBeenCalledWith(resultUri);
-        expect(vscode.window.showTextDocument).toHaveBeenCalledExactlyOnceWith(
-            expect.objectContaining({ uri: resultUri }),
-            { viewColumn: vscode.ViewColumn.Beside, preserveFocus: focus !== true, preview: false },
-        );
-        expect(vscode.languages.setTextDocumentLanguage).toHaveBeenCalledWith(
-            expect.objectContaining({ uri: resultUri }), 'documentdb-playground-result',
-        );
-        expect(provider.provideTextDocumentContent(resultUri)).toBe('result bytes');
-        expect(changes).toEqual([resultUri]);
-        subscription.dispose();
-    });
+            expect(vscode.workspace.openTextDocument).toHaveBeenCalledWith(resultUri);
+            expect(vscode.window.showTextDocument).toHaveBeenCalledExactlyOnceWith(
+                expect.objectContaining({ uri: resultUri }),
+                { viewColumn: vscode.ViewColumn.Beside, preserveFocus: focus !== true, preview: false },
+            );
+            expect(vscode.languages.setTextDocumentLanguage).toHaveBeenCalledWith(
+                expect.objectContaining({ uri: resultUri }),
+                'documentdb-playground-result',
+            );
+            expect(provider.provideTextDocumentContent(resultUri)).toBe('result bytes');
+            expect(changes).toEqual([resultUri]);
+            subscription.dispose();
+        },
+    );
 
-    it.each([undefined, false, true])('updates a visible result with focus=%s without duplicate reveals', async (focus) => {
-        const doc = makeDocument(provider.getResultUri(sourceUri));
-        documents = [doc];
-        editors = [makeEditor(doc, vscode.ViewColumn.Three)];
+    it.each([undefined, false, true])(
+        'updates a visible result with focus=%s without duplicate reveals',
+        async (focus) => {
+            const doc = makeDocument(provider.getResultUri(sourceUri));
+            documents = [doc];
+            editors = [makeEditor(doc, vscode.ViewColumn.Three)];
 
-        await provider.showResult(sourceUri, 'updated', focus === undefined ? undefined : { focus });
+            await provider.showResult(sourceUri, 'updated', focus === undefined ? undefined : { focus });
 
-        expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
-        expect(provider.provideTextDocumentContent(doc.uri)).toBe('updated');
-        if (focus) {
-            expect(vscode.window.showTextDocument).toHaveBeenCalledExactlyOnceWith(doc, {
-                viewColumn: vscode.ViewColumn.Three, preserveFocus: false, preview: false,
-            });
-        } else {
-            expect(vscode.window.showTextDocument).not.toHaveBeenCalled();
-        }
-    });
+            expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
+            expect(provider.provideTextDocumentContent(doc.uri)).toBe('updated');
+            if (focus) {
+                expect(vscode.window.showTextDocument).toHaveBeenCalledExactlyOnceWith(doc, {
+                    viewColumn: vscode.ViewColumn.Three,
+                    preserveFocus: false,
+                    preview: false,
+                });
+            } else {
+                expect(vscode.window.showTextDocument).not.toHaveBeenCalled();
+            }
+        },
+    );
 
     it.each([false, true])('reveals a hidden open result with focus=%s', async (focus) => {
         const doc = makeDocument(provider.getResultUri(sourceUri));
@@ -105,7 +116,9 @@ describe('PlaygroundResultProvider', () => {
 
         expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
         expect(vscode.window.showTextDocument).toHaveBeenCalledExactlyOnceWith(doc, {
-            viewColumn: vscode.ViewColumn.Beside, preserveFocus: !focus, preview: false,
+            viewColumn: vscode.ViewColumn.Beside,
+            preserveFocus: !focus,
+            preview: false,
         });
     });
 
@@ -116,17 +129,20 @@ describe('PlaygroundResultProvider', () => {
         expect(vscode.window.showTextDocument).not.toHaveBeenCalled();
     });
 
-    it.each([false, true])('focuses the actual open result (visible=%s) in its existing group when visible', async (visible) => {
-        const doc = makeDocument(provider.getResultUri(sourceUri));
-        documents = [doc];
-        editors = visible ? [makeEditor(doc, vscode.ViewColumn.Two)] : [];
+    it.each([false, true])(
+        'focuses the actual open result (visible=%s) in its existing group when visible',
+        async (visible) => {
+            const doc = makeDocument(provider.getResultUri(sourceUri));
+            documents = [doc];
+            editors = visible ? [makeEditor(doc, vscode.ViewColumn.Two)] : [];
 
-        expect(await provider.focusResult(sourceUri)).toBe(true);
-        expect(vscode.window.showTextDocument).toHaveBeenCalledExactlyOnceWith(doc, {
-            viewColumn: visible ? vscode.ViewColumn.Two : vscode.ViewColumn.Beside,
-            preserveFocus: false,
-            preview: false,
-        });
-        expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
-    });
+            expect(await provider.focusResult(sourceUri)).toBe(true);
+            expect(vscode.window.showTextDocument).toHaveBeenCalledExactlyOnceWith(doc, {
+                viewColumn: visible ? vscode.ViewColumn.Two : vscode.ViewColumn.Beside,
+                preserveFocus: false,
+                preview: false,
+            });
+            expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
+        },
+    );
 });

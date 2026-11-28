@@ -46,10 +46,7 @@ export class PlaygroundContextKeyTracker implements vscode.Disposable {
 
         if (editor?.document.languageId === PLAYGROUND_LANGUAGE_ID) {
             connected = this._service.isConnected(editor.document.uri);
-            const block = resolveBlockAtLine(
-                detectBlocks(editor.document),
-                editor.selection.active.line,
-            )?.block;
+            const block = resolveBlockAtLine(detectBlocks(editor.document), editor.selection.active.line)?.block;
             blockHasCode = block ? blockContainsCode(editor.document, block) : false;
         }
 
@@ -63,11 +60,7 @@ export class PlaygroundContextKeyTracker implements vscode.Disposable {
         }
     }
 
-    private updateContextKey(
-        key: string,
-        value: boolean,
-        property: '_connected' | '_blockHasCode',
-    ): void {
+    private updateContextKey(key: string, value: boolean, property: '_connected' | '_blockHasCode'): void {
         if (this[property] === value) {
             return;
         }
@@ -77,9 +70,7 @@ export class PlaygroundContextKeyTracker implements vscode.Disposable {
             (): void => undefined,
             (error: unknown): void => {
                 const errorMessage = error instanceof Error ? error.message : String(error);
-                ext.outputChannel.error(
-                    vscode.l10n.t('Failed to update Query Playground context: {0}', errorMessage),
-                );
+                ext.outputChannel.error(vscode.l10n.t('Failed to update Query Playground context: {0}', errorMessage));
             },
         );
     }

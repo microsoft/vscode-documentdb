@@ -230,14 +230,14 @@ Open VS Code Settings and expand **Extensions** > **DocumentDB**. The display an
 options are under **Interactive Shell**. The shared connection timeout is under **Connections & Discovery**,
 and the shared batch size is under **Queries & Results**. You can also search for a setting ID from the table.
 
-| Setting                                   | Default | Description                                                                                                        |
-| ----------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------ |
-| `documentDB.connectionTimeout`            | `30`    | Maximum time (in seconds) to wait for the shell to connect and authenticate (shared with Query Playground)         |
+| Setting                                   | Default | Description                                                                                                                    |
+| ----------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `documentDB.connectionTimeout`            | `30`    | Maximum time (in seconds) to wait for the shell to connect and authenticate (shared with Query Playground)                     |
 | `documentDB.shell.display.colorSupport`   | `true`  | Controls ANSI colors and plain shell output; see [Accessibility](./accessibility#interactive-shell) for the supported behavior |
-| `documentDB.shell.display.autocompletion` | `true`  | Tab completion, the candidate list, and the dim inline suggestions at the cursor                                   |
-| `documentDB.shell.display.inlineHints`    | `true`  | The informational hints marked with 🛈, which are never inserted into your input                                    |
-| `documentDB.shell.multiLinePasteBehavior` | `ask`   | Controls how multi-line text is handled when pasted into the shell                                                 |
-| `documentDB.batchSize`                    | `50`    | Number of documents to display per cursor iteration (shared with Query Playground)                                 |
+| `documentDB.shell.display.autocompletion` | `true`  | Tab completion, the candidate list, and the dim inline suggestions at the cursor                                               |
+| `documentDB.shell.display.inlineHints`    | `true`  | The informational hints marked with 🛈, which are never inserted into your input                                                |
+| `documentDB.shell.multiLinePasteBehavior` | `ask`   | Controls how multi-line text is handled when pasted into the shell                                                             |
+| `documentDB.batchSize`                    | `50`    | Number of documents to display per cursor iteration (shared with Query Playground)                                             |
 
 The connection timeout applies when connecting and authenticating, not while running queries. Queries
 have no extension-side time limit. Press **Ctrl+C** to cancel, or use `.maxTimeMS()` on a supported query

@@ -82,10 +82,10 @@ editor title toolbar and overflow menu:
 
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="images/query-playground-codelens_dark.png"><img src="images/query-playground-codelens.png" alt="Query Playground showing Run All at the top, and Run, Collection View, Shell CodeLens links on each block" width="800" style="max-width:100%;height:auto;"></picture></p>
 
-| Mode          | Trigger                                                                                                   | Behavior                                  |
-| ------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| **Run Block** | CodeLens, Command Palette, editor title overflow, or editor context menu; `Ctrl+Enter`                     | Executes the block at the cursor position |
-| **Run All**   | CodeLens, Command Palette, or editor title; `Ctrl+Shift+Enter`                                            | Executes the entire file, top to bottom   |
+| Mode          | Trigger                                                                                | Behavior                                  |
+| ------------- | -------------------------------------------------------------------------------------- | ----------------------------------------- |
+| **Run Block** | CodeLens, Command Palette, editor title overflow, or editor context menu; `Ctrl+Enter` | Executes the block at the cursor position |
+| **Run All**   | CodeLens, Command Palette, or editor title; `Ctrl+Shift+Enter`                         | Executes the entire file, top to bottom   |
 
 Each block also shows **Collection View** and **Shell** CodeLens links. The corresponding
 **Query Playground: Open Block in Collection View** and **Query Playground: Open Block in Shell**
@@ -199,12 +199,12 @@ Open VS Code Settings and expand **Extensions** > **DocumentDB**. The Run All co
 is under **Query Playground**. The shared batch size is under **Queries & Results**, and the shared
 connection timeout is under **Connections & Discovery**. You can also search for a setting ID from the table.
 
-| Setting                               | Default | Description                                                                                                      |
-| ------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------- |
-| `documentDB.playground.confirmRunAll` | `true`  | Show a confirmation dialog before running the entire playground file with Run All                                |
-| `documentDB.batchSize`                | `50`    | Number of documents to display per cursor iteration in the Query Playground and Interactive Shell                |
-| `documentDB.connectionTimeout`        | `30`    | Maximum time (in seconds) to wait for the playground to connect and authenticate (shared with Interactive Shell) |
-| `documentDB.playground.afterRun`       | `auto`  | Controls focus or notification behavior after a successful run; see the [Accessibility behavior table](./accessibility#screen-readers) |
+| Setting                               | Default | Description                                                                                                                            |
+| ------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `documentDB.playground.confirmRunAll` | `true`  | Show a confirmation dialog before running the entire playground file with Run All                                                      |
+| `documentDB.batchSize`                | `50`    | Number of documents to display per cursor iteration in the Query Playground and Interactive Shell                                      |
+| `documentDB.connectionTimeout`        | `30`    | Maximum time (in seconds) to wait for the playground to connect and authenticate (shared with Interactive Shell)                       |
+| `documentDB.playground.afterRun`      | `auto`  | Controls focus or notification behavior after a successful run; see the [Accessibility behavior table](./accessibility#screen-readers) |
 
 The connection timeout does not limit query execution. Use **Cancel** to stop a long-running query,
 or use `.maxTimeMS()` on a supported query to set a server-side limit.

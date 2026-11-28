@@ -87,9 +87,7 @@ export class PlaygroundResultProvider implements vscode.TextDocumentContentProvi
         if (!doc) {
             return false;
         }
-        const editor = vscode.window.visibleTextEditors.find(
-            (e) => e.document.uri.toString() === resultUri.toString(),
-        );
+        const editor = vscode.window.visibleTextEditors.find((e) => e.document.uri.toString() === resultUri.toString());
         await vscode.window.showTextDocument(doc, {
             viewColumn: editor?.viewColumn ?? vscode.ViewColumn.Beside,
             preserveFocus: false,

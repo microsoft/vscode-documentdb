@@ -19,12 +19,12 @@ before relying on them.
 
 ## Suggested order and PR shape
 
-| Order | Work item | Issues | Size | Why this order |
-| --- | --- | --- | --- | --- |
-| 1 | 5. Explorer tree accessible names | #768 | XS | One-line fix, no UX decision. Coordinate with the volunteer first. |
-| 2 | 6. Index-creation announcement | #772 | S | Reuses the existing `Announcer` pattern. |
-| 3 | 4. New Document focus management | #769, #770 | S-M | #769 needs a reproduction before a fix can be chosen. |
-| 4 | 3. Query Playground keyboard workflow | #773, #774 | M | Needs four UX decisions (3a-3d below). |
+| Order | Work item                             | Issues     | Size | Why this order                                                     |
+| ----- | ------------------------------------- | ---------- | ---- | ------------------------------------------------------------------ |
+| 1     | 5. Explorer tree accessible names     | #768       | XS   | One-line fix, no UX decision. Coordinate with the volunteer first. |
+| 2     | 6. Index-creation announcement        | #772       | S    | Reuses the existing `Announcer` pattern.                           |
+| 3     | 4. New Document focus management      | #769, #770 | S-M  | #769 needs a reproduction before a fix can be chosen.              |
+| 4     | 3. Query Playground keyboard workflow | #773, #774 | M    | Needs four UX decisions (3a-3d below).                             |
 
 One PR per work item keeps each fix independently verifiable by the TCS/C+AI testers,
 who close the issues. Items 5 and 6 are small enough to share a PR if preferred.
@@ -223,14 +223,14 @@ updated). The decisions below are listed in the order they block implementation.
 
 ### 3.1 Current behavior (from the code)
 
-| Action | CodeLens (mouse) | Keyboard path today | Gaps |
-| --- | --- | --- | --- |
-| Connect | "Connect" on line 1 | Command Palette "Query Playground: Connect to Database"; status bar item (F6 to the status bar, then arrow keys) | Neither is visible from the editor or the Tab order, so testers did not find them |
-| Change connection | "$(plug) cluster/db" on line 1 → modal | Status bar item → same modal | `showConnectionInfo` is hidden from the palette |
-| Run All | line 1 | `Ctrl+Shift+Enter` | Hidden from the palette; only documented in the file's header comment |
-| Run block | block start line | `Ctrl+Enter` | Same as Run All |
-| Open block in Shell | block start line, only when connected and the block contains code | **none** | Not contributed in `package.json`; the handler returns silently without `uri, startLine, endLine` arguments |
-| Open block in Collection View | same as Shell | **none** | Same as Shell |
+| Action                        | CodeLens (mouse)                                                  | Keyboard path today                                                                                              | Gaps                                                                                                        |
+| ----------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Connect                       | "Connect" on line 1                                               | Command Palette "Query Playground: Connect to Database"; status bar item (F6 to the status bar, then arrow keys) | Neither is visible from the editor or the Tab order, so testers did not find them                           |
+| Change connection             | "$(plug) cluster/db" on line 1 → modal                            | Status bar item → same modal                                                                                     | `showConnectionInfo` is hidden from the palette                                                             |
+| Run All                       | line 1                                                            | `Ctrl+Shift+Enter`                                                                                               | Hidden from the palette; only documented in the file's header comment                                       |
+| Run block                     | block start line                                                  | `Ctrl+Enter`                                                                                                     | Same as Run All                                                                                             |
+| Open block in Shell           | block start line, only when connected and the block contains code | **none**                                                                                                         | Not contributed in `package.json`; the handler returns silently without `uri, startLine, endLine` arguments |
+| Open block in Collection View | same as Shell                                                     | **none**                                                                                                         | Same as Shell                                                                                               |
 
 Sources: [PlaygroundCodeLensProvider.ts](../../../../../src/documentdb/playground/PlaygroundCodeLensProvider.ts),
 [PlaygroundService.ts:347-366](../../../../../src/documentdb/playground/PlaygroundService.ts)
@@ -313,13 +313,13 @@ and other buckets, preserving existing CodeLens telemetry.
 palette, editor title, context menu and header comment; no new default keybindings.
 `Ctrl+Enter` and `Ctrl+Shift+Enter` stay as they are.
 
-| Surface | How keyboard users reach it | Discoverable? | Cost | Recommendation |
-| --- | --- | --- | --- | --- |
-| Command Palette entries | `Ctrl+Shift+P`, type "Query Playground" | Medium | Tiny: change `when: never` to `editorLangId == 'documentdb-playground'` | **Yes**, the minimum |
-| Editor title toolbar (`editor/title`) | Focus the tab, then Tab into the toolbar | High: visible buttons next to the tab | Small; icons needed | **Yes**, the closest equivalent to the CodeLens buttons |
-| Editor context menu (`editor/context`) | `Shift+F10` or the Menu key in the editor | Medium | Small | **Yes**, it acts on the cursor's block, matching the block lenses |
-| Default keybindings for Shell / Collection View | Shortcut | Low unless documented | Risk of conflicts with user or other extension bindings | **No**; users can bind the commands themselves |
-| Header comment in new playgrounds | Read with the file | High for screen-reader users | Tiny | **Yes**: name the palette commands and the context menu |
+| Surface                                         | How keyboard users reach it               | Discoverable?                         | Cost                                                                    | Recommendation                                                    |
+| ----------------------------------------------- | ----------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Command Palette entries                         | `Ctrl+Shift+P`, type "Query Playground"   | Medium                                | Tiny: change `when: never` to `editorLangId == 'documentdb-playground'` | **Yes**, the minimum                                              |
+| Editor title toolbar (`editor/title`)           | Focus the tab, then Tab into the toolbar  | High: visible buttons next to the tab | Small; icons needed                                                     | **Yes**, the closest equivalent to the CodeLens buttons           |
+| Editor context menu (`editor/context`)          | `Shift+F10` or the Menu key in the editor | Medium                                | Small                                                                   | **Yes**, it acts on the cursor's block, matching the block lenses |
+| Default keybindings for Shell / Collection View | Shortcut                                  | Low unless documented                 | Risk of conflicts with user or other extension bindings                 | **No**; users can bind the commands themselves                    |
+| Header comment in new playgrounds               | Read with the file                        | High for screen-reader users          | Tiny                                                                    | **Yes**: name the palette commands and the context menu           |
 
 **Decision 3b: what goes inline in the editor title and what goes in the overflow
 menu ("…").** Inline buttons are the most visible but crowd the title bar, which also
@@ -360,13 +360,13 @@ user whose focus moves to the result after every run has to return to the playgr
 option B through the `afterRun` setting below, documented on a new Accessibility page
 (§7). The options are kept for the record.
 
-| Option | Behavior | Who benefits | Cost | Satisfies #774 for a tester using NVDA? |
-| --- | --- | --- | --- | --- |
-| A. Always move focus | `preserveFocus: false` | Screen-reader users | Breaks the edit-run loop for everyone | Yes |
-| B. Move focus only in screen-reader-optimized mode | A second `Ctrl+Enter` / `Ctrl+Shift+Enter` keybinding with `when: … && accessibilityModeEnabled` and `args: { screenReaderMode: true }`; the command then moves focus to the result | Screen-reader users | Sighted keyboard-only users see no change. Runs started from CodeLens or the palette do not carry the args. | Yes, if VS Code detected the screen reader or `editor.accessibilitySupport` is `on` |
-| C. Announce instead of moving focus | On success, show a non-modal notification such as "Query returned 20 documents" with a **Focus Result** button; focus stays in the playground | Screen-reader users; also gives everyone a one-step way to the result | A toast after every run is noise for sighted users | Yes, notifications are announced |
-| C'. Announce instead of moving focus, only in screen-reader mode | Same as C, but only for runs that carry `screenReaderMode: true` (same keybinding mechanism as B). **An alternative to B, not an addition**: in screen-reader mode a run either moves focus (B) or announces (C'), never both | Screen-reader users | Same path limits as B | Yes, if the testers accept "notified" rather than "focus moved" |
-| D. Setting only | `documentDB.playground.afterRun`: `stay` (default), `focusResult`, `notify` | Users who find the setting | Default behavior unchanged | **No**, default behavior still fails |
+| Option                                                           | Behavior                                                                                                                                                                                                                      | Who benefits                                                          | Cost                                                                                                        | Satisfies #774 for a tester using NVDA?                                             |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| A. Always move focus                                             | `preserveFocus: false`                                                                                                                                                                                                        | Screen-reader users                                                   | Breaks the edit-run loop for everyone                                                                       | Yes                                                                                 |
+| B. Move focus only in screen-reader-optimized mode               | A second `Ctrl+Enter` / `Ctrl+Shift+Enter` keybinding with `when: … && accessibilityModeEnabled` and `args: { screenReaderMode: true }`; the command then moves focus to the result                                           | Screen-reader users                                                   | Sighted keyboard-only users see no change. Runs started from CodeLens or the palette do not carry the args. | Yes, if VS Code detected the screen reader or `editor.accessibilitySupport` is `on` |
+| C. Announce instead of moving focus                              | On success, show a non-modal notification such as "Query returned 20 documents" with a **Focus Result** button; focus stays in the playground                                                                                 | Screen-reader users; also gives everyone a one-step way to the result | A toast after every run is noise for sighted users                                                          | Yes, notifications are announced                                                    |
+| C'. Announce instead of moving focus, only in screen-reader mode | Same as C, but only for runs that carry `screenReaderMode: true` (same keybinding mechanism as B). **An alternative to B, not an addition**: in screen-reader mode a run either moves focus (B) or announces (C'), never both | Screen-reader users                                                   | Same path limits as B                                                                                       | Yes, if the testers accept "notified" rather than "focus moved"                     |
+| D. Setting only                                                  | `documentDB.playground.afterRun`: `stay` (default), `focusResult`, `notify`                                                                                                                                                   | Users who find the setting                                            | Default behavior unchanged                                                                                  | **No**, default behavior still fails                                                |
 
 Notes for evaluating the options:
 
@@ -391,12 +391,12 @@ single source of truth; the screen-reader keybinding only informs its `auto` val
 
 `documentDB.playground.afterRun`:
 
-| Value | Run started in screen-reader mode (keybinding passes `screenReaderMode: true`) | Any other run (normal keybinding, CodeLens, palette, title or context menu) |
-| --- | --- | --- |
-| `auto` (default) | Move focus to the result (option B) | Stay in the playground (today's behavior) |
-| `stay` | Stay in the playground | Stay in the playground |
-| `focusResult` | Move focus to the result | Move focus to the result |
-| `notify` | Stay, and show the completion notification with **Focus Result** (option C) | Same |
+| Value            | Run started in screen-reader mode (keybinding passes `screenReaderMode: true`) | Any other run (normal keybinding, CodeLens, palette, title or context menu) |
+| ---------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `auto` (default) | Move focus to the result (option B)                                            | Stay in the playground (today's behavior)                                   |
+| `stay`           | Stay in the playground                                                         | Stay in the playground                                                      |
+| `focusResult`    | Move focus to the result                                                       | Move focus to the result                                                    |
+| `notify`         | Stay, and show the completion notification with **Focus Result** (option C)    | Same                                                                        |
 
 Rules:
 
@@ -526,14 +526,14 @@ All implementation and documentation changes were committed on
 `dev/tnaum/a11y-issues` at the initial implementation snapshot. No push or PR
 had been performed at that point. Issues were not closed.
 
-| Work item | Outcome | Implementation commit(s) | Actual coding model |
-| --- | --- | --- | --- |
-| 5, #768 | Explicit Documents name; Indexes guard; real AT check pending | `04affdf7` | `mai-code-2` |
-| 6, #772 | Persistent success/error announcements and retained button focus | `91dd07c4` | `mai-code-2` |
+| Work item    | Outcome                                                            | Implementation commit(s)           | Actual coding model                                            |
+| ------------ | ------------------------------------------------------------------ | ---------------------------------- | -------------------------------------------------------------- |
+| 5, #768      | Explicit Documents name; Indexes guard; real AT check pending      | `04affdf7`                         | `mai-code-2`                                                   |
+| 6, #772      | Persistent success/error announcements and retained button focus   | `91dd07c4`                         | `mai-code-2`                                                   |
 | 3, #773/#774 | Keyboard surfaces, header, result preferences and focus navigation | `9bee0fb6`, `58c679d3`, `4c65547f` | `mai-code-2` foundation/header; `gpt-6.1-sol` result lifecycle |
-| 7 | Central manual page, related links and verified docs preview | `66f64d92` | `mai-code-2` |
-| 4a, #770 | Visible initial focus and enabled fallback | `0274a8dd` | `mai-code-2` |
-| 4b, #769 | Deferred pending workbench reproduction | none | none |
+| 7            | Central manual page, related links and verified docs preview       | `66f64d92`                         | `mai-code-2`                                                   |
+| 4a, #770     | Visible initial focus and enabled fallback                         | `0274a8dd`                         | `mai-code-2`                                                   |
+| 4b, #769     | Deferred pending workbench reproduction                            | none                               | none                                                           |
 
 ### Checks and remaining gates
 
@@ -597,31 +597,31 @@ Build and live-browser wall times were not separately reported by the host;
 the focused and manifest test times are given above. No CI was run. AIU are not
 dollars.
 
-| Model | Role | Requests | Model time | AIU | AIU share |
-| --- | --- | ---: | ---: | ---: | ---: |
-| claude-opus-5.5 | advisor | 119 | 17m32s | 829.7 | 52.3% |
-| gpt-6.1-sol | leader | 111 | 50m02s | 489.7 | 30.8% |
-| gpt-6.1-sol | coding | 45 | 10m35s | 119.6 | 7.5% |
-| mai-code-2 | coding | 163 | 28m34s | 134.0 | 8.4% |
-| mai-code-2-flash | checks | 173 | 18m12s | 14.3 | 0.9% |
-| mai-code-2-flash | exploration | 9 | 37s | 0.2 | 0.0% |
+| Model            | Role        | Requests | Model time |   AIU | AIU share |
+| ---------------- | ----------- | -------: | ---------: | ----: | --------: |
+| claude-opus-5.5  | advisor     |      119 |     17m32s | 829.7 |     52.3% |
+| gpt-6.1-sol      | leader      |      111 |     50m02s | 489.7 |     30.8% |
+| gpt-6.1-sol      | coding      |       45 |     10m35s | 119.6 |      7.5% |
+| mai-code-2       | coding      |      163 |     28m34s | 134.0 |      8.4% |
+| mai-code-2-flash | checks      |      173 |     18m12s |  14.3 |      0.9% |
+| mai-code-2-flash | exploration |        9 |        37s |   0.2 |      0.0% |
 
-| Role | Requests | Model time | AIU | AIU share |
-| --- | ---: | ---: | ---: | ---: |
-| leader | 111 | 50m02s | 489.7 | 30.8% |
-| coding | 208 | 39m09s | 253.6 | 16.0% |
-| advisor | 119 | 17m32s | 829.7 | 52.3% |
-| checks | 173 | 18m12s | 14.3 | 0.9% |
-| exploration | 9 | 37s | 0.2 | 0.0% |
+| Role        | Requests | Model time |   AIU | AIU share |
+| ----------- | -------: | ---------: | ----: | --------: |
+| leader      |      111 |     50m02s | 489.7 |     30.8% |
+| coding      |      208 |     39m09s | 253.6 |     16.0% |
+| advisor     |      119 |     17m32s | 829.7 |     52.3% |
+| checks      |      173 |     18m12s |  14.3 |      0.9% |
+| exploration |        9 |        37s |   0.2 |      0.0% |
 
-| Model | Role | Input | Output | Cache read | Cache write | Reasoning |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| claude-opus-5.5 | advisor | 13,148,767 | 104,957 | 12,405,259 | 743,244 | 63,071 |
-| gpt-6.1-sol | leader | 18,820,937 | 134,398 | 18,264,239 | 556,365 | 82,891 |
-| gpt-6.1-sol | coding | 4,745,297 | 37,158 | 4,599,531 | 145,631 | 12,310 |
-| mai-code-2 | coding | 14,612,884 | 94,054 | 13,056,512 | 0 | 31,026 |
-| mai-code-2-flash | checks | 15,964,795 | 52,121 | 14,858,752 | 0 | 22,345 |
-| mai-code-2-flash | exploration | 103,941 | 2,585 | 81,920 | 0 | 671 |
+| Model            | Role        |      Input |  Output | Cache read | Cache write | Reasoning |
+| ---------------- | ----------- | ---------: | ------: | ---------: | ----------: | --------: |
+| claude-opus-5.5  | advisor     | 13,148,767 | 104,957 | 12,405,259 |     743,244 |    63,071 |
+| gpt-6.1-sol      | leader      | 18,820,937 | 134,398 | 18,264,239 |     556,365 |    82,891 |
+| gpt-6.1-sol      | coding      |  4,745,297 |  37,158 |  4,599,531 |     145,631 |    12,310 |
+| mai-code-2       | coding      | 14,612,884 |  94,054 | 13,056,512 |           0 |    31,026 |
+| mai-code-2-flash | checks      | 15,964,795 |  52,121 | 14,858,752 |           0 |    22,345 |
+| mai-code-2-flash | exploration |    103,941 |   2,585 |     81,920 |           0 |       671 |
 
 Cache and reasoning counts may overlap input/output and must not be summed into
 a token total. All displayed fields were reported; zero is not a missing-data
@@ -662,3 +662,41 @@ Separate cumulative snapshot, 2026-11-27 21:51:41.468 UTC, for the whole run
 since 17:22:28.744 UTC: leader 797.5 AIU, subagents 1097.8 AIU, run 1895.2 AIU;
 leader 125 requests and 62m24s summed model time. This includes implementation
 and follow-up activity through that snapshot, not just publication.
+
+### Operator-requested verification sweep (2026-11-28)
+
+The operator requested both Case 1 and Case 2 checks, fixes until green, and a
+push while leaving the PR's draft status unchanged.
+
+| Check                                                       | Result                                                            |
+| ----------------------------------------------------------- | ----------------------------------------------------------------- |
+| Case 1: `npm run build`                                     | Passed, including workspace builds                                |
+| Case 1: targeted Vitest                                     | 24 files / 377 tests passed                                       |
+| Changed browser scenario contracts, dedicated Vitest config | 1 file / 49 tests passed                                          |
+| `npm run l10n`                                              | Regenerated the bundle with nine new keys                         |
+| `npm run prettier-fix`                                      | Passed; formatted branch changes                                  |
+| `npm run l10n:check`                                        | Passed                                                            |
+| `npm run lint`                                              | Passed after correcting four test type-import violations          |
+| Case 2: `npm run build`                                     | Passed again after the fixes                                      |
+| `npm run typecheck:tests`                                   | Passed across all eight workspaces, separately from runtime tests |
+| Full Vitest runtime suite                                   | 434 files passed; 9,812 tests passed, 8 skipped                   |
+| `npm run package`                                           | Passed; produced the production VSIX                              |
+| Final targeted tests after import/locale fixes              | 5 files / 86 tests passed                                         |
+
+The first full runtime invocation exposed three local portability conditions:
+OpenSSL was installed with Git but absent from PATH; two static-analysis
+assertions assumed US number grouping despite the host's `en-DE` locale; and
+two exhaustive shell width matrices exceeded the default 15-second timeout.
+The assertions now compare the expected counts using the host locale, preserving
+the product's localized output. No product behavior or shell assertions changed.
+
+The successful full invocation was
+`npx vitest run --maxWorkers=2 --testTimeout=60000`, with
+`C:\Program Files\Git\usr\bin` prepended to PATH only for that command process.
+Reducing concurrency alone did not consistently keep the shell matrices below
+15 seconds, so the local run allowed 60 seconds per test. No global environment,
+repository test configuration, or existing skip was changed.
+
+The PR remains a draft. These automated results do not complete the formal
+AI pre-review under CONTRIBUTING.md section 6 or the installed-workbench and
+screen-reader gates above, and do not establish tester-owned issue closure.

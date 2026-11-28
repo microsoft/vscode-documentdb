@@ -71,11 +71,7 @@ async function renderCard(
     mounted.push({ host, root });
     await act(async () => {
         root.render(
-            <ImprovementCard
-                config={config}
-                onPrimaryAction={primaryAction}
-                onSecondaryAction={secondaryAction}
-            />,
+            <ImprovementCard config={config} onPrimaryAction={primaryAction} onSecondaryAction={secondaryAction} />,
         );
     });
     return host;
@@ -107,10 +103,7 @@ describe('ImprovementCard action announcements', () => {
             vi.useFakeTimers();
             const pending = deferred();
             const action = vi.fn((_actionId: string, _payload: unknown) => pending.promise);
-            const host =
-                actionKind === 'primary'
-                    ? await renderCard(action)
-                    : await renderCard(undefined, action);
+            const host = actionKind === 'primary' ? await renderCard(action) : await renderCard(undefined, action);
             const regions = Array.from(host.querySelectorAll<HTMLElement>('[role="status"]'));
             const politeRegions = Array.from(host.querySelectorAll<HTMLElement>('[aria-live="polite"]'));
             const successRegion = politeRegions[actionKind === 'primary' ? 0 : 1];
@@ -135,9 +128,9 @@ describe('ImprovementCard action announcements', () => {
             expect(document.activeElement).toBe(button);
 
             await act(async () => vi.advanceTimersByTimeAsync(100));
-            const currentSuccessRegion = Array.from(
-                host.querySelectorAll<HTMLElement>('[aria-live="polite"]'),
-            )[actionKind === 'primary' ? 0 : 1];
+            const currentSuccessRegion = Array.from(host.querySelectorAll<HTMLElement>('[aria-live="polite"]'))[
+                actionKind === 'primary' ? 0 : 1
+            ];
             expect(currentSuccessRegion).toBe(successRegion);
             expect(successRegion.textContent).toBe(`${actionKind} completed`);
             expect(document.activeElement).toBe(button);
@@ -157,10 +150,7 @@ describe('ImprovementCard action announcements', () => {
                 .fn((_actionId: string, _payload: unknown) => first.promise)
                 .mockReturnValueOnce(first.promise)
                 .mockReturnValueOnce(second.promise);
-            const host =
-                actionKind === 'primary'
-                    ? await renderCard(action)
-                    : await renderCard(undefined, action);
+            const host = actionKind === 'primary' ? await renderCard(action) : await renderCard(undefined, action);
             const errorRegion = Array.from(host.querySelectorAll<HTMLElement>('[aria-live="assertive"]'))[
                 actionKind === 'primary' ? 0 : 1
             ];

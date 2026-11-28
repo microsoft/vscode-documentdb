@@ -42,12 +42,7 @@ export function parsePlaygroundInvocation(args: readonly unknown[]): PlaygroundI
         };
     }
 
-    if (
-        args.length === 3 &&
-        isUri(args[0]) &&
-        typeof args[1] === 'number' &&
-        typeof args[2] === 'number'
-    ) {
+    if (args.length === 3 && isUri(args[0]) && typeof args[1] === 'number' && typeof args[2] === 'number') {
         return {
             activationSource: 'playgroundCodeLens',
             uri: args[0],
@@ -96,16 +91,12 @@ export function resolvePlaygroundEditor(uri: vscode.Uri | undefined): vscode.Tex
         return active?.document.languageId === PLAYGROUND_LANGUAGE_ID ? active : undefined;
     }
 
-    if (
-        active?.document.languageId === PLAYGROUND_LANGUAGE_ID &&
-        active.document.uri.toString() === uri.toString()
-    ) {
+    if (active?.document.languageId === PLAYGROUND_LANGUAGE_ID && active.document.uri.toString() === uri.toString()) {
         return active;
     }
 
     return vscode.window.visibleTextEditors.find(
         (editor) =>
-            editor.document.languageId === PLAYGROUND_LANGUAGE_ID &&
-            editor.document.uri.toString() === uri.toString(),
+            editor.document.languageId === PLAYGROUND_LANGUAGE_ID && editor.document.uri.toString() === uri.toString(),
     );
 }

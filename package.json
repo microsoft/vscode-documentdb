@@ -2009,14 +2009,18 @@
         "key": "ctrl+shift+enter",
         "mac": "cmd+shift+enter",
         "when": "editorLangId == 'documentdb-playground' && editorTextFocus && accessibilityModeEnabled",
-        "args": { "screenReaderMode": true }
+        "args": {
+          "screenReaderMode": true
+        }
       },
       {
         "command": "vscode-documentdb.command.playground.runSelected",
         "key": "ctrl+enter",
         "mac": "cmd+enter",
         "when": "editorLangId == 'documentdb-playground' && editorTextFocus && accessibilityModeEnabled",
-        "args": { "screenReaderMode": true }
+        "args": {
+          "screenReaderMode": true
+        }
       }
     ],
     "configuration": [
@@ -2170,7 +2174,12 @@
             "order": 2,
             "type": "string",
             "default": "auto",
-            "enum": ["auto", "stay", "focusResult", "notify"],
+            "enum": [
+              "auto",
+              "stay",
+              "focusResult",
+              "notify"
+            ],
             "description": "%playground.afterRun.description%",
             "enumDescriptions": [
               "%playground.afterRun.auto%",

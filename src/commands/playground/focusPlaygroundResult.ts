@@ -30,9 +30,9 @@ export async function focusPlayground(_context: IActionContext): Promise<void> {
     const editor = vscode.window.visibleTextEditors.find(
         (candidate) => candidate.document.uri.toString() === sourceUri.toString(),
     );
-    let document = editor?.document ?? vscode.workspace.textDocuments.find(
-        (candidate) => candidate.uri.toString() === sourceUri.toString(),
-    );
+    let document =
+        editor?.document ??
+        vscode.workspace.textDocuments.find((candidate) => candidate.uri.toString() === sourceUri.toString());
     if (!document && sourceUri.scheme === 'untitled') {
         await vscode.window.showInformationMessage(l10n.t('No Query Playground is available to focus.'));
         return;

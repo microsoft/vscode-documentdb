@@ -14,14 +14,14 @@ Screen-reader output can vary by screen reader and VS Code configuration.
 The [Query Playground](./query-playground) keeps its CodeLens actions for mouse users and also
 exposes them through standard VS Code surfaces:
 
-| Action | Command Palette | Editor title or overflow menu | Editor context menu |
-| --- | --- | --- | --- |
-| Connect or change connection | Yes | Yes, in the title | No |
-| Run All | Yes | Yes, in the title | No |
-| Run Block | Yes | Yes, in the overflow menu | Yes |
-| Open Block in Shell | Yes | Yes, in the overflow menu | Yes |
-| Open Block in Collection View | Yes | Yes, in the overflow menu | Yes |
-| Focus Result | Yes | No | No |
+| Action                        | Command Palette | Editor title or overflow menu | Editor context menu |
+| ----------------------------- | --------------- | ----------------------------- | ------------------- |
+| Connect or change connection  | Yes             | Yes, in the title             | No                  |
+| Run All                       | Yes             | Yes, in the title             | No                  |
+| Run Block                     | Yes             | Yes, in the overflow menu     | Yes                 |
+| Open Block in Shell           | Yes             | Yes, in the overflow menu     | Yes                 |
+| Open Block in Collection View | Yes             | Yes, in the overflow menu     | Yes                 |
+| Focus Result                  | Yes             | No                            | No                  |
 
 Open the Command Palette and search for **Query Playground**. Open the editor context menu with
 `Shift+F10` or the Menu key. Block actions use the block containing the cursor; on a blank line,
@@ -42,12 +42,12 @@ keybinding.
 `documentDB.playground.afterRun` controls what happens after a successful Query Playground run.
 Its default is `auto`.
 
-| Value | Run from the screen-reader shortcut contribution | Any other run |
-| --- | --- | --- |
-| `auto` (default) | Move focus to the result | Stay in the playground |
-| `stay` | Stay in the playground | Stay in the playground |
-| `focusResult` | Move focus to the result | Move focus to the result |
-| `notify` | Stay in the playground and show a completion notification with a **Focus Result** button | Stay in the playground and show a completion notification with a **Focus Result** button |
+| Value            | Run from the screen-reader shortcut contribution                                         | Any other run                                                                            |
+| ---------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `auto` (default) | Move focus to the result                                                                 | Stay in the playground                                                                   |
+| `stay`           | Stay in the playground                                                                   | Stay in the playground                                                                   |
+| `focusResult`    | Move focus to the result                                                                 | Move focus to the result                                                                 |
+| `notify`         | Stay in the playground and show a completion notification with a **Focus Result** button | Stay in the playground and show a completion notification with a **Focus Result** button |
 
 Automatic screen-reader focus applies only to the `Ctrl/Cmd+Enter` and
 `Ctrl/Cmd+Shift+Enter` contributions while VS Code's `accessibilityModeEnabled` context is active.
@@ -80,10 +80,10 @@ Shell terminal accessibility pass is still tracked by
 
 ## Settings reference
 
-| Setting | Default | Effect |
-| --- | --- | --- |
-| `documentDB.playground.afterRun` | `auto` | Controls focus or notification behavior after a successful playground run as described above. |
-| `documentDB.shell.display.colorSupport` | `true` | Enables ANSI syntax and result colors in the Interactive Shell. Set it to `false` for plain output. |
+| Setting                                    | Default | Effect                                                                                                                               |
+| ------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `documentDB.playground.afterRun`           | `auto`  | Controls focus or notification behavior after a successful playground run as described above.                                        |
+| `documentDB.shell.display.colorSupport`    | `true`  | Enables ANSI syntax and result colors in the Interactive Shell. Set it to `false` for plain output.                                  |
 | `documentDB.accessibility.hideCountPrefix` | `false` | Removes the two-dot visual separator before database, collection, index, and Kubernetes namespace counts. The counts remain visible. |
 
 ## Known limitations and reporting

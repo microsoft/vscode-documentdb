@@ -46,20 +46,23 @@ describe('playground focus commands', () => {
         vi.clearAllMocks();
     });
 
-    it.each(['documentdb-playground', 'documentdb-playground-result'])('focuses the source-specific result from %s', async (languageId) => {
-        activeEditor = makeEditor(
-            languageId === 'documentdb-playground' ? sourceUri : provider.getResultUri(sourceUri),
-            languageId,
-            vscode.ViewColumn.One,
-        );
+    it.each(['documentdb-playground', 'documentdb-playground-result'])(
+        'focuses the source-specific result from %s',
+        async (languageId) => {
+            activeEditor = makeEditor(
+                languageId === 'documentdb-playground' ? sourceUri : provider.getResultUri(sourceUri),
+                languageId,
+                vscode.ViewColumn.One,
+            );
 
-        await focusPlaygroundResult(context);
+            await focusPlaygroundResult(context);
 
-        expect(provider.focusResult).toHaveBeenCalledOnce();
-        expect(vi.mocked(provider.focusResult).mock.calls[0][0].toString()).toBe(sourceUri.toString());
-        expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
-        expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
-    });
+            expect(provider.focusResult).toHaveBeenCalledOnce();
+            expect(vi.mocked(provider.focusResult).mock.calls[0][0].toString()).toBe(sourceUri.toString());
+            expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+            expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
+        },
+    );
 
     it('reports when the active playground has no open result', async () => {
         activeEditor = makeEditor(sourceUri, 'documentdb-playground', vscode.ViewColumn.One);
@@ -80,7 +83,11 @@ describe('playground focus commands', () => {
     });
 
     it('returns to the exact source in its existing editor group rather than another playground', async () => {
-        activeEditor = makeEditor(provider.getResultUri(sourceUri), 'documentdb-playground-result', vscode.ViewColumn.Two);
+        activeEditor = makeEditor(
+            provider.getResultUri(sourceUri),
+            'documentdb-playground-result',
+            vscode.ViewColumn.Two,
+        );
         const target = makeEditor(sourceUri, 'documentdb-playground', vscode.ViewColumn.Three);
         visibleEditors = [
             makeEditor(vscode.Uri.file('/other.documentdb.js'), 'documentdb-playground', vscode.ViewColumn.One),
@@ -91,13 +98,18 @@ describe('playground focus commands', () => {
         await focusPlayground(context);
 
         expect(vscode.window.showTextDocument).toHaveBeenCalledExactlyOnceWith(target.document, {
-            viewColumn: vscode.ViewColumn.Three, preserveFocus: false,
+            viewColumn: vscode.ViewColumn.Three,
+            preserveFocus: false,
         });
         expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
     });
 
     it('opens a source not currently visible without running or connecting', async () => {
-        activeEditor = makeEditor(provider.getResultUri(sourceUri), 'documentdb-playground-result', vscode.ViewColumn.Two);
+        activeEditor = makeEditor(
+            provider.getResultUri(sourceUri),
+            'documentdb-playground-result',
+            vscode.ViewColumn.Two,
+        );
 
         await focusPlayground(context);
 
@@ -105,24 +117,33 @@ describe('playground focus commands', () => {
         expect(vi.mocked(vscode.workspace.openTextDocument).mock.calls[0][0]).toEqual(
             expect.objectContaining({ scheme: sourceUri.scheme, path: sourceUri.path }),
         );
-        expect(vscode.window.showTextDocument).toHaveBeenCalledWith(
-            expect.objectContaining({ uri: sourceUri }),
-            { viewColumn: vscode.ViewColumn.Active, preserveFocus: false },
-        );
+        expect(vscode.window.showTextDocument).toHaveBeenCalledWith(expect.objectContaining({ uri: sourceUri }), {
+            viewColumn: vscode.ViewColumn.Active,
+            preserveFocus: false,
+        });
         expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
     });
 
-    it.each([undefined, 'documentdb-playground'])('reports no playground without an active result (%s)', async (languageId) => {
-        activeEditor = languageId ? makeEditor(sourceUri, languageId, vscode.ViewColumn.One) : undefined;
+    it.each([undefined, 'documentdb-playground'])(
+        'reports no playground without an active result (%s)',
+        async (languageId) => {
+            activeEditor = languageId ? makeEditor(sourceUri, languageId, vscode.ViewColumn.One) : undefined;
 
-        await focusPlayground(context);
+            await focusPlayground(context);
 
-        expect(vscode.window.showInformationMessage).toHaveBeenCalledWith('No Query Playground is available to focus.');
-        expect(vscode.window.showTextDocument).not.toHaveBeenCalled();
-    });
+            expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+                'No Query Playground is available to focus.',
+            );
+            expect(vscode.window.showTextDocument).not.toHaveBeenCalled();
+        },
+    );
 
     it('reports when the result source can no longer be opened', async () => {
-        activeEditor = makeEditor(provider.getResultUri(sourceUri), 'documentdb-playground-result', vscode.ViewColumn.Two);
+        activeEditor = makeEditor(
+            provider.getResultUri(sourceUri),
+            'documentdb-playground-result',
+            vscode.ViewColumn.Two,
+        );
         vi.mocked(vscode.workspace.openTextDocument).mockRejectedValue(new Error('File not found'));
 
         await focusPlayground(context);
@@ -134,10 +155,14 @@ describe('playground focus commands', () => {
     it('does not recreate a closed untitled playground or a stale pre-Save As source', async () => {
         const untitledUri = vscode.Uri.parse('untitled:Query-1.documentdb.js');
         activeEditor = makeEditor(
-            provider.getResultUri(untitledUri), 'documentdb-playground-result', vscode.ViewColumn.Two,
+            provider.getResultUri(untitledUri),
+            'documentdb-playground-result',
+            vscode.ViewColumn.Two,
         );
         const savedEditor = makeEditor(
-            vscode.Uri.file('/saved.documentdb.js'), 'documentdb-playground', vscode.ViewColumn.One,
+            vscode.Uri.file('/saved.documentdb.js'),
+            'documentdb-playground',
+            vscode.ViewColumn.One,
         );
         documents = [savedEditor.document];
         visibleEditors = [savedEditor, activeEditor];
@@ -154,7 +179,9 @@ describe('playground focus commands', () => {
     it('reveals an already-open but hidden untitled playground without creating another document', async () => {
         const untitledUri = vscode.Uri.parse('untitled:Query-1.documentdb.js');
         activeEditor = makeEditor(
-            provider.getResultUri(untitledUri), 'documentdb-playground-result', vscode.ViewColumn.Two,
+            provider.getResultUri(untitledUri),
+            'documentdb-playground-result',
+            vscode.ViewColumn.Two,
         );
         const source = makeEditor(untitledUri, 'documentdb-playground', vscode.ViewColumn.One);
         documents = [source.document, activeEditor.document];
@@ -165,7 +192,8 @@ describe('playground focus commands', () => {
         expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
         expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
         expect(vscode.window.showTextDocument).toHaveBeenCalledExactlyOnceWith(source.document, {
-            viewColumn: vscode.ViewColumn.Active, preserveFocus: false,
+            viewColumn: vscode.ViewColumn.Active,
+            preserveFocus: false,
         });
     });
 });

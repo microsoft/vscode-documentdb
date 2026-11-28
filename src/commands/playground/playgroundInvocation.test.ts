@@ -63,14 +63,13 @@ describe('parsePlaygroundInvocation', () => {
         expect(parsePlaygroundInvocation([{ screenReaderMode: false }]).activationSource).toBe('playgroundOther');
     });
 
-    it.each([
-        ['playgroundEditorMenu'],
-        ['playgroundScreenReaderKeybinding'],
-        ['unbounded-source'],
-    ])('does not accept a caller-supplied telemetry string %s', (activationSource) => {
-        expect(parsePlaygroundInvocation([{ activationSource }]).activationSource).toBe('playgroundOther');
-        expect(parsePlaygroundInvocation([activationSource]).activationSource).toBe('playgroundOther');
-    });
+    it.each([['playgroundEditorMenu'], ['playgroundScreenReaderKeybinding'], ['unbounded-source']])(
+        'does not accept a caller-supplied telemetry string %s',
+        (activationSource) => {
+            expect(parsePlaygroundInvocation([{ activationSource }]).activationSource).toBe('playgroundOther');
+            expect(parsePlaygroundInvocation([activationSource]).activationSource).toBe('playgroundOther');
+        },
+    );
 });
 
 describe('resolvePlaygroundEditor', () => {

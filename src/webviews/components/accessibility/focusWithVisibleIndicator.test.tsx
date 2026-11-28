@@ -43,13 +43,7 @@ describe('focusWithVisibleIndicator', (): void => {
         const buttons = host.querySelectorAll('button');
         const disconnected = document.createElement('button');
 
-        const focused = focusWithVisibleIndicator([
-            null,
-            disconnected,
-            buttons[0],
-            buttons[1],
-            buttons[2],
-        ]);
+        const focused = focusWithVisibleIndicator([null, disconnected, buttons[0], buttons[1], buttons[2]]);
 
         expect(focused).toBe(buttons[2]);
         expect(document.activeElement).toBe(buttons[2]);

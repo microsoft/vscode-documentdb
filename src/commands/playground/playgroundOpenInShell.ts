@@ -6,8 +6,8 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { detectBlocks, resolveBlockAtLine } from '../../documentdb/playground/statementDetector';
 import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
+import { detectBlocks, resolveBlockAtLine } from '../../documentdb/playground/statementDetector';
 import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { parsePlaygroundInvocation, resolvePlaygroundEditor } from './playgroundInvocation';
 
@@ -19,10 +19,7 @@ import { parsePlaygroundInvocation, resolvePlaygroundEditor } from './playground
  *
  * Arguments: [uri: vscode.Uri, startLine: number, endLine: number]
  */
-export async function playgroundOpenQueryInShell(
-    context: IActionContext,
-    ...args: unknown[]
-): Promise<void> {
+export async function playgroundOpenQueryInShell(context: IActionContext, ...args: unknown[]): Promise<void> {
     const invocation = parsePlaygroundInvocation(args);
     context.telemetry.properties.activationSource = invocation.activationSource;
 
@@ -41,15 +38,12 @@ export async function playgroundOpenQueryInShell(
     }
 
     const range =
-        invocation.range ??
-        resolveBlockAtLine(detectBlocks(editor.document), editor.selection.active.line)?.block;
+        invocation.range ?? resolveBlockAtLine(detectBlocks(editor.document), editor.selection.active.line)?.block;
     if (!range) {
         void vscode.window.showInformationMessage(l10n.t('No code to run. Place the cursor in a code block.'));
         return;
     }
-    const blockText = editor.document
-        .getText(new vscode.Range(range.startLine, 0, range.endLine + 1, 0))
-        .trim();
+    const blockText = editor.document.getText(new vscode.Range(range.startLine, 0, range.endLine + 1, 0)).trim();
 
     if (!blockText) {
         void vscode.window.showInformationMessage(l10n.t('No code to run. Place the cursor in a code block.'));

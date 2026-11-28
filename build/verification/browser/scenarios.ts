@@ -2450,8 +2450,7 @@ export const scenarios = {
                 {
                     kind: 'attribute',
                     name: 'Initial focus is Reload with a visible Fluent indicator',
-                    selector:
-                        'button[aria-label="Reload document from the database"]:focus[data-fui-focus-visible]',
+                    selector: 'button[aria-label="Reload document from the database"]:focus[data-fui-focus-visible]',
                     attribute: 'data-fui-focus-visible',
                     expected: '',
                 },
