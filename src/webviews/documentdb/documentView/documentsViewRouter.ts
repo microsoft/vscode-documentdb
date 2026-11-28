@@ -12,6 +12,7 @@ import { recordSurveyActivity } from '../../../services/survey/SurveyService';
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
+import { parseDocumentFromEditor, stringifyDocumentForEditor } from './documentEjson';
 
 export type RouterContext = BaseRouterContext & {
     /**
@@ -64,7 +65,7 @@ export const documentsViewRouter = router({
              * Not all BSON objects can be serialized to JSON. Therefore, we're using
              * EJSON to serialize the document to an object that can be serialized to JSON.
              */
-            const extendedJson = EJSON.stringify(documentContent, undefined, 4);
+            const extendedJson = stringifyDocumentForEditor(documentContent);
 
             //const documentContetntAsString = JSON.stringify(extendedJson, null, 4);
 
@@ -77,8 +78,7 @@ export const documentsViewRouter = router({
         .mutation(async ({ input, ctx }) => {
             const myCtx = ctx as RouterContext;
 
-            // eslint-disable-next-line
-            const documentBson: Document = EJSON.parse(input.documentContent);
+            const documentBson: Document = parseDocumentFromEditor(input.documentContent);
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             let documentId: any;
@@ -112,8 +112,7 @@ export const documentsViewRouter = router({
              * Not all BSON objects can be serialized to JSON. Therefore, we're using
              * EJSON to serialize the document to an object that can be serialized to JSON.
              */
-            const extendedJson = EJSON.serialize(upsertResult.document);
-            const newDocumentStringified = JSON.stringify(extendedJson, null, 4);
+            const newDocumentStringified = stringifyDocumentForEditor(upsertResult.document);
 
             myCtx.viewPanelTitleSetter(`${myCtx.databaseName}/${myCtx.collectionName}/${newDocumentId}`);
 
