@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { type callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { Int32 } from 'bson';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { type AuthTraceContext } from '../../utils/authTrace';
@@ -25,7 +26,7 @@ import { type getManagedIdentityAccessToken } from '../auth/managedIdentityToken
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { PlaygroundEvaluator } from './PlaygroundEvaluator';
 import { type WorkerSessionCallbacks } from './WorkerSessionManager';
-import { type MainToWorkerMessage, type WorkerToMainMessage } from './workerTypes';
+import { type MainToWorkerMessage, type SerializableExecutionResult, type WorkerToMainMessage } from './workerTypes';
 
 type InitMessage = Extract<MainToWorkerMessage, { type: 'init' }>;
 type TokenRequest = Extract<WorkerToMainMessage, { type: 'tokenRequest' }>;
@@ -47,6 +48,7 @@ const mocks = vi.hoisted(() => ({
     callbacks: undefined as WorkerSessionCallbacks | undefined,
     initMessage: undefined as InitMessage | undefined,
     clusterId: undefined as string | undefined,
+    sendEval: vi.fn<() => Promise<{ result: SerializableExecutionResult }>>(),
 }));
 
 vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
@@ -106,7 +108,7 @@ vi.mock('./WorkerSessionManager', () => ({
             get workerClusterId(): string | undefined {
                 return mocks.clusterId;
             },
-            sendEval: vi.fn().mockResolvedValue({ result: { type: 'number', printable: '1', durationMs: 0 } }),
+            sendEval: mocks.sendEval,
             dispose: vi.fn(),
         };
     }),
@@ -137,6 +139,7 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
         mocks.callbacks = undefined;
         mocks.initMessage = undefined;
         mocks.clusterId = undefined;
+        mocks.sendEval.mockResolvedValue({ result: { type: 'number', printable: '1', durationMs: 0 } });
         customSuffix = undefined;
         vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
             get: vi.fn((_key: string, defaultValue: unknown): unknown => defaultValue),
@@ -401,6 +404,51 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
                 error: "Microsoft Entra ID isn't allowed for this server.",
                 errorName: 'EntraDestinationRejectedError',
             });
+        },
+    );
+});
+
+describe('PlaygroundEvaluator result deserialization', () => {
+    const clusterId = 'playground-cluster';
+    let evaluator: PlaygroundEvaluator;
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mocks.getCredentials.mockReturnValue({
+            clusterId,
+            connectionString: 'mongodb://localhost:27017/',
+            authMechanism: AuthMethodId.NativeAuth,
+        });
+        mocks.getConnectionStringWithPassword.mockReturnValue('mongodb://localhost:27017/');
+        vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+            get: (_key: string, defaultValue: unknown): unknown => defaultValue,
+        } as vscode.WorkspaceConfiguration);
+        evaluator = new PlaygroundEvaluator();
+    });
+
+    afterEach(() => {
+        evaluator.dispose();
+    });
+
+    it.each([
+        [{ type: null, printable: 'null', printableIsUndefined: true, durationMs: 10 }, null, true],
+        [{ type: null, printable: 'null', durationMs: 10 }, null, undefined],
+        [{ type: null, printable: '42', durationMs: 10 }, new Int32(42), undefined],
+        [{ type: null, printable: '"value"', printableIsUndefined: false, durationMs: 10 }, 'value', false],
+    ] satisfies readonly (readonly [SerializableExecutionResult, unknown, boolean | undefined])[])(
+        'copies the worker undefined flag without changing printable for %j',
+        async (serialized, printable, printableIsUndefined) => {
+            mocks.sendEval.mockResolvedValue({ result: serialized });
+
+            const result = await evaluator.evaluate(
+                { clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' },
+                '1',
+            );
+
+            expect(result.printableIsUndefined).toBe(printableIsUndefined);
+            expect(result.printable).toEqual(printable);
+            expect(result.type).toBe(serialized.type);
+            expect(result.durationMs).toBe(serialized.durationMs);
         },
     );
 });

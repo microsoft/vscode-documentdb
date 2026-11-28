@@ -9,7 +9,9 @@ import * as vscode from 'vscode';
 import { extractCollectionName } from '../../documentdb/playground/extractCollectionName';
 import { parseFindExpression } from '../../documentdb/playground/parseFindExpression';
 import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
+import { detectBlocks, resolveBlockAtLine } from '../../documentdb/playground/statementDetector';
 import { Views } from '../../documentdb/Views';
+import { parsePlaygroundInvocation, resolvePlaygroundEditor } from './playgroundInvocation';
 
 /**
  * Opens the current playground code block in Collection View.
@@ -19,26 +21,31 @@ import { Views } from '../../documentdb/Views';
  *
  * Arguments: [uri: vscode.Uri, startLine: number, endLine: number]
  */
-export async function playgroundOpenQueryInCollectionView(
-    context: IActionContext,
-    uri?: vscode.Uri,
-    startLine?: number,
-    endLine?: number,
-): Promise<void> {
-    if (!uri || startLine === undefined || endLine === undefined) {
+export async function playgroundOpenQueryInCollectionView(context: IActionContext, ...args: unknown[]): Promise<void> {
+    const invocation = parsePlaygroundInvocation(args);
+    context.telemetry.properties.activationSource = invocation.activationSource;
+
+    const editor = resolvePlaygroundEditor(invocation.uri);
+    if (!editor) {
+        void vscode.window.showInformationMessage(l10n.t('No code to run. Place the cursor in a code block.'));
         return;
     }
 
     const service = PlaygroundService.getInstance();
-    const connection = service.getConnection(uri);
+    const connection = service.getConnection(editor.document.uri);
 
     if (!connection) {
         void vscode.window.showWarningMessage(l10n.t('This playground has no connection.'));
         return;
     }
 
-    const document = await vscode.workspace.openTextDocument(uri);
-    const blockText = document.getText(new vscode.Range(startLine, 0, endLine + 1, 0));
+    const range =
+        invocation.range ?? resolveBlockAtLine(detectBlocks(editor.document), editor.selection.active.line)?.block;
+    if (!range) {
+        void vscode.window.showInformationMessage(l10n.t('No code to run. Place the cursor in a code block.'));
+        return;
+    }
+    const blockText = editor.document.getText(new vscode.Range(range.startLine, 0, range.endLine + 1, 0));
     const collectionName = extractCollectionName(blockText);
 
     if (!collectionName) {
@@ -49,8 +56,6 @@ export async function playgroundOpenQueryInCollectionView(
     // Try to extract filter/project/sort from the code block for a richer handoff
     const parsed = parseFindExpression(blockText);
 
-    // ── Telemetry: cross-feature navigation context ──────────────────
-    context.telemetry.properties.activationSource = 'playgroundCodeLens';
     context.telemetry.properties.hasFilter = parsed.filter ? 'true' : 'false';
 
     try {

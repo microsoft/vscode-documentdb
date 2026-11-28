@@ -21,6 +21,17 @@ interface PlaygroundFileNameContext {
     readonly databaseOrCollectionName: string;
 }
 
+export function buildPlaygroundHeader(clusterName: string): string[] {
+    return [
+        `// Query Playground: ${clusterName}`,
+        '//',
+        `// Use ${modifierKey}+Enter to run the current block or ${modifierKey}+Shift+Enter to run the entire file`,
+        `// ${l10n.t('Use the Command Palette (Query Playground) or the editor context menu for all actions.')}`,
+        '// Note: when running multiple statements, only the last result is displayed',
+        '',
+    ];
+}
+
 /**
  * Creates a new Query Playground file.
  *
@@ -45,14 +56,9 @@ export async function newPlayground(context: IActionContext, node?: DatabaseItem
 
     // Build template — customize when launched from a collection node
     const collectionName = isCollectionItem(node) ? escapeJsString(node.collectionInfo.name) : 'collectionName';
-    const headerComment = `// Query Playground: ${node.cluster.name}`;
 
     const template = [
-        headerComment,
-        '//',
-        `// Use ${modifierKey}+Enter to run the current block or ${modifierKey}+Shift+Enter to run the entire file`,
-        '// Note: when running multiple statements, only the last result is displayed',
-        '',
+        ...buildPlaygroundHeader(node.cluster.name),
         `db.getCollection('${collectionName}').find({ })`,
         '',
     ].join('\n');
@@ -99,15 +105,7 @@ export async function newPlaygroundWithContent(
     // ── Telemetry: cross-feature activation ──────────────────────────
     context.telemetry.properties.activationSource = 'crossFeature';
 
-    const template = [
-        `// Query Playground: ${params.clusterDisplayName}`,
-        '//',
-        `// Use ${modifierKey}+Enter to run the current block or ${modifierKey}+Shift+Enter to run the entire file`,
-        '// Note: when running multiple statements, only the last result is displayed',
-        '',
-        params.content,
-        '',
-    ].join('\n');
+    const template = [...buildPlaygroundHeader(params.clusterDisplayName), params.content, ''].join('\n');
 
     await createPlaygroundWithContent(template, {
         clusterId: params.clusterId,

@@ -34,6 +34,7 @@ export namespace settingsKeys {
 
     // Query Playground
     export const playgroundConfirmRunAll = 'documentDB.playground.confirmRunAll';
+    export const playgroundAfterRun = 'documentDB.playground.afterRun';
 
     // Interactive Shell
     export const shellMultiLinePasteBehavior = 'documentDB.shell.multiLinePasteBehavior';

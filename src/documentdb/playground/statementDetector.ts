@@ -17,6 +17,11 @@ export interface CodeBlock {
     readonly endLine: number;
 }
 
+export interface ResolvedBlock {
+    readonly block: CodeBlock;
+    readonly match: 'cursor' | 'preceding';
+}
+
 /**
  * Detects code blocks in a query playground document using blank-line separation.
  *
@@ -81,4 +86,59 @@ export function detectCurrentBlock(document: vscode.TextDocument, position: vsco
  */
 export function findBlockAtLine(blocks: CodeBlock[], line: number): CodeBlock | undefined {
     return blocks.find((b) => line >= b.startLine && line <= b.endLine);
+}
+
+export function resolveBlockAtLine(blocks: readonly CodeBlock[], line: number): ResolvedBlock | undefined {
+    const direct = blocks.find((block) => line >= block.startLine && line <= block.endLine);
+    if (direct) {
+        return { block: direct, match: 'cursor' };
+    }
+
+    for (let i = blocks.length - 1; i >= 0; i--) {
+        if (blocks[i].endLine < line) {
+            return { block: blocks[i], match: 'preceding' };
+        }
+    }
+
+    return undefined;
+}
+
+export function getBlockText(document: vscode.TextDocument, block: CodeBlock): string {
+    const range = new vscode.Range(block.startLine, 0, block.endLine, document.lineAt(block.endLine).text.length);
+    return document.getText(range);
+}
+
+export function blockContainsCode(document: vscode.TextDocument, block: CodeBlock): boolean {
+    let inBlockComment = false;
+    for (let i = block.startLine; i <= block.endLine; i++) {
+        const trimmed = document.lineAt(i).text.trim();
+        if (inBlockComment) {
+            const closeIdx = trimmed.indexOf('*/');
+            if (closeIdx !== -1) {
+                inBlockComment = false;
+                const afterComment = trimmed.substring(closeIdx + 2).trim();
+                if (afterComment.length > 0 && !afterComment.startsWith('//')) {
+                    return true;
+                }
+            }
+            continue;
+        }
+        if (trimmed.startsWith('/*')) {
+            const closeIdx = trimmed.indexOf('*/', 2);
+            if (closeIdx === -1) {
+                inBlockComment = true;
+                continue;
+            }
+            const afterComment = trimmed.substring(closeIdx + 2).trim();
+            if (afterComment.length > 0 && !afterComment.startsWith('//')) {
+                return true;
+            }
+            continue;
+        }
+        if (trimmed.startsWith('//') || trimmed.length === 0) {
+            continue;
+        }
+        return true;
+    }
+    return false;
 }

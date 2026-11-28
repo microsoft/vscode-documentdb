@@ -69,7 +69,7 @@ describe('buildStaticAnalysisSummary', () => {
 
     it('should include collection context with total docs', () => {
         const summary = buildStaticAnalysisSummary(makeStage2Response(), 10000);
-        expect(summary).toContain('Total documents in collection: 10,000');
+        expect(summary).toContain(`Total documents in collection: ${(10000).toLocaleString()}`);
         expect(summary).toContain('Documents returned by query: 50');
         expect(summary).toContain('Documents examined: 100');
     });
@@ -223,7 +223,7 @@ describe('buildStaticAnalysisSummary', () => {
         });
         const summary = buildStaticAnalysisSummary(stage2, 60000);
         expect(summary).toContain('Performance Rating: POOR (scale: Excellent > Good > Fair > Poor)');
-        expect(summary).toContain('Total documents in collection: 60,000');
+        expect(summary).toContain(`Total documents in collection: ${(60000).toLocaleString()}`);
         expect(summary).toContain('Documents returned by query: 5');
         expect(summary).toContain('[-] **Very low efficiency ratio**');
         expect(summary).toContain('[-] **Full collection scan**');

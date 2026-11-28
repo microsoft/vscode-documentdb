@@ -2,5 +2,14 @@
   "survey.containerTitle": "DocumentDB Feedback",
   "survey.viewTitle": "Share Your Experience",
   "survey.giveFeedbackTitle": "Give Feedback",
+  "playground.openBlockInShell": "Query Playground: Open Block in Shell",
+  "playground.openBlockInCollectionView": "Query Playground: Open Block in Collection View",
+  "playground.focusResult": "Query Playground: Focus Result",
+  "playground.focusPlayground": "Query Playground: Focus Playground",
+  "playground.afterRun.description": "What happens after a successful Query Playground run.",
+  "playground.afterRun.auto": "Focus the result when a run shortcut passes screen-reader mode; otherwise stay in the playground.",
+  "playground.afterRun.stay": "Stay in the playground after every run.",
+  "playground.afterRun.focusResult": "Focus the result after every run.",
+  "playground.afterRun.notify": "Stay in the playground and show a completion notification with a Focus Result action after every run.",
   "translation.placeholder": "Translation placeholder…"
 }

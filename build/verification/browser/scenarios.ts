@@ -2424,7 +2424,39 @@ const diagnosticsScenarios = {
 
 export const scenarios = {
     collectionView: { default: defaultScenario('collectionView') },
-    documentView: { default: defaultScenario('documentView') },
+    documentView: {
+        default: defaultScenario('documentView'),
+        add: {
+            ...defaultScenario('documentView'),
+            config: { ...fixtures.documentView.config, mode: 'add' },
+            readiness: {
+                ...defaultScenario('documentView').readiness,
+                content: ['Save', 'Reload'],
+            },
+            assertions: [
+                {
+                    kind: 'attribute',
+                    name: 'Initial focus is Save with a visible Fluent indicator',
+                    selector: 'button[aria-label="Save to the database"]:focus[data-fui-focus-visible]',
+                    attribute: 'data-fui-focus-visible',
+                    expected: '',
+                },
+            ],
+        },
+        view: {
+            ...defaultScenario('documentView'),
+            config: { ...fixtures.documentView.config, mode: 'view' },
+            assertions: [
+                {
+                    kind: 'attribute',
+                    name: 'Initial focus is Reload with a visible Fluent indicator',
+                    selector: 'button[aria-label="Reload document from the database"]:focus[data-fui-focus-visible]',
+                    attribute: 'data-fui-focus-visible',
+                    expected: '',
+                },
+            ],
+        },
+    },
     clusterDashboard: { default: defaultScenario('clusterDashboard') },
     atlasCredentials: { default: defaultScenario('atlasCredentials', atlasSteps) },
     connectionDiagnostics: diagnosticsScenarios,

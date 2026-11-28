@@ -13,9 +13,10 @@ import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { feedResultToSchemaStore } from '../../documentdb/feedResultToSchemaStore';
+import { type PlaygroundAfterRunOutcome } from '../../documentdb/playground/afterRun';
 import { PlaygroundEvaluator } from '../../documentdb/playground/PlaygroundEvaluator';
 import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
-import { formatError, formatResult } from '../../documentdb/playground/resultFormatter';
+import { describeCompletion, formatError, formatResult } from '../../documentdb/playground/resultFormatter';
 import { type PlaygroundConnection } from '../../documentdb/playground/types';
 import { extractErrorCode } from '../../documentdb/shell/ShellOutputFormatter';
 import { getHostsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
@@ -91,10 +92,15 @@ export function getPlaygroundEvaluators(): ReadonlyMap<string, PlaygroundEvaluat
  */
 export type PlaygroundRunMode = 'runAll' | 'runSelected';
 
+export interface ExecutePlaygroundOptions {
+    readonly afterRun?: PlaygroundAfterRunOutcome;
+}
+
 export async function executePlaygroundCode(
     code: string,
     runMode: PlaygroundRunMode,
     documentUri: vscode.Uri,
+    options?: ExecutePlaygroundOptions,
 ): Promise<void> {
     const service = PlaygroundService.getInstance();
     let connection = service.getConnection(documentUri);
@@ -182,7 +188,7 @@ export async function executePlaygroundCode(
                 cancellable: true,
             },
             async (progress, token) => {
-                let cancelled = false;
+                let cancelled = token.isCancellationRequested;
 
                 token.onCancellationRequested(() => {
                     cancelled = true;
@@ -218,11 +224,31 @@ export async function executePlaygroundCode(
                     }
 
                     if (sourceUri) {
-                        await ext.playgroundResultProvider.showResult(sourceUri, formattedOutput);
+                        await ext.playgroundResultProvider.showResult(sourceUri, formattedOutput, {
+                            focus: !cancelled && options?.afterRun === 'focusResult',
+                        });
                     }
 
                     if (!cancelled) {
                         recordSurveyActivity('queryPlayground');
+                        if (options?.afterRun === 'notify') {
+                            const description = describeCompletion(result);
+                            const message = description
+                                ? l10n.t('Query completed: {0}', description)
+                                : l10n.t('Query completed without a return value.');
+                            // The notification choice must not keep execution progress open.
+                            void callWithTelemetryAndErrorHandling('playground.afterRun.notify', async () => {
+                                const focusResult = l10n.t('Focus Result');
+                                const choice = await vscode.window.showInformationMessage(message, focusResult);
+                                if (choice === focusResult) {
+                                    if (!(await ext.playgroundResultProvider.focusResult(sourceUri))) {
+                                        await vscode.window.showInformationMessage(
+                                            l10n.t('No Query Playground result is open.'),
+                                        );
+                                    }
+                                }
+                            });
+                        }
                     }
                     // result: 'Succeeded' is set automatically by the framework
                 } catch (error: unknown) {

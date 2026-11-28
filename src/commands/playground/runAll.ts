@@ -6,16 +6,26 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { PLAYGROUND_LANGUAGE_ID } from '../../documentdb/playground/constants';
+import { resolveAfterRunOutcome } from '../../documentdb/playground/afterRun';
 import { settingsKeys } from '../../settingsKeys';
 import { executePlaygroundCode } from './executePlaygroundCode';
+import { parsePlaygroundInvocation, resolvePlaygroundEditor } from './playgroundInvocation';
 
 /**
  * Runs the entire content of the active query playground file.
  */
-export async function runAll(_context: IActionContext): Promise<void> {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor || editor.document.languageId !== PLAYGROUND_LANGUAGE_ID) {
+export async function runAll(context: IActionContext, ...args: unknown[]): Promise<void> {
+    const invocation = parsePlaygroundInvocation(args);
+    context.telemetry.properties.activationSource = invocation.activationSource;
+    const afterRun = resolveAfterRunOutcome(
+        vscode.workspace.getConfiguration().get<unknown>(settingsKeys.playgroundAfterRun),
+        invocation.screenReaderMode,
+    );
+    context.telemetry.properties.afterRun = afterRun;
+    context.telemetry.properties.screenReaderMode = invocation.screenReaderMode ? 'true' : 'false';
+
+    const editor = resolvePlaygroundEditor(invocation.uri);
+    if (!editor) {
         return;
     }
 
@@ -44,13 +54,13 @@ export async function runAll(_context: IActionContext): Promise<void> {
         );
 
         if (!confirmed) {
-            _context.telemetry.properties.runAllDialogConfirmed = 'false';
+            context.telemetry.properties.runAllDialogConfirmed = 'false';
             return;
         }
-        _context.telemetry.properties.runAllDialogConfirmed = 'true';
+        context.telemetry.properties.runAllDialogConfirmed = 'true';
     } else {
-        _context.telemetry.properties.runAllDialogConfirmed = 'skipped';
+        context.telemetry.properties.runAllDialogConfirmed = 'skipped';
     }
 
-    await executePlaygroundCode(code, 'runAll', editor.document.uri);
+    await executePlaygroundCode(code, 'runAll', editor.document.uri, { afterRun });
 }

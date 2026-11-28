@@ -349,6 +349,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         printable: string;
         durationMs: number;
         cursorHasMore?: boolean;
+        printableIsUndefined?: boolean;
         source?: { namespace?: { db: string; collection: string } };
     }): ExecutionResult {
         let printable: unknown;
@@ -370,6 +371,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             printable,
             durationMs: serResult.durationMs,
             cursorHasMore: serResult.cursorHasMore,
+            printableIsUndefined: serResult.printableIsUndefined,
             source: serResult.source,
         };
     }

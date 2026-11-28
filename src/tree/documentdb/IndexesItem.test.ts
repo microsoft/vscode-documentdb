@@ -131,6 +131,13 @@ describe('IndexesItem - async index loading', () => {
         return new Promise((resolve) => setImmediate(resolve));
     }
 
+    it('uses the visible Indexes label without a plain-string tooltip', () => {
+        const treeItem = new IndexesItem(cluster, databaseInfo, collectionInfo).getTreeItem();
+
+        expect(treeItem.label).toBe('Indexes');
+        expect(treeItem.tooltip).toBeUndefined();
+    });
+
     it('loadIndexCount fetches indexes once and exposes the count via description', async () => {
         const item = new IndexesItem(cluster, databaseInfo, collectionInfo);
 

@@ -72,6 +72,7 @@ import { pasteCollection } from '../commands/pasteCollection/pasteCollection';
 import { pasteIndexes } from '../commands/pasteIndexes/pasteIndexes';
 import { connectPlayground, showConnectionInfo } from '../commands/playground/connectDatabase';
 import { disposeEvaluators, shutdownOrphanedEvaluators } from '../commands/playground/executePlaygroundCode';
+import { focusPlayground, focusPlaygroundResult } from '../commands/playground/focusPlaygroundResult';
 import { newPlayground, newPlaygroundWithContent } from '../commands/playground/newPlayground';
 import { playgroundOpenQueryInCollectionView } from '../commands/playground/playgroundOpenInCollectionView';
 import { playgroundOpenQueryInShell } from '../commands/playground/playgroundOpenInShell';
@@ -146,6 +147,7 @@ import { EntraErrorExplainer } from './auth/entraErrors/EntraErrorExplainer';
 import { PLAYGROUND_FILE_EXTENSION, PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './playground/constants';
 import { PlaygroundBlockHighlighter } from './playground/PlaygroundBlockHighlighter';
 import { PlaygroundCodeLensProvider } from './playground/PlaygroundCodeLensProvider';
+import { PlaygroundContextKeyTracker } from './playground/PlaygroundContextKeys';
 import { PlaygroundService } from './playground/PlaygroundService';
 import { ensureTsPluginStub } from './playground/tsPluginStub';
 import { CollectionNameCache } from './query-language/playground-completions/CollectionNameCache';
@@ -360,6 +362,7 @@ export class ClustersExtension implements vscode.Disposable {
                 ext.context.subscriptions.push(
                     vscode.languages.registerCodeLensProvider({ language: PLAYGROUND_LANGUAGE_ID }, codeLensProvider),
                 );
+                ext.context.subscriptions.push(new PlaygroundContextKeyTracker());
 
                 // Register block highlighter for query playground files
                 const blockHighlighter = new PlaygroundBlockHighlighter(ext.context.extensionPath);
@@ -572,6 +575,10 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommand(PlaygroundCommandIds.runAll, withCommandCorrelation(runAll));
 
                 registerCommand(PlaygroundCommandIds.runSelected, withCommandCorrelation(runSelected));
+
+                registerCommand(PlaygroundCommandIds.focusResult, withCommandCorrelation(focusPlaygroundResult));
+
+                registerCommand(PlaygroundCommandIds.focusPlayground, withCommandCorrelation(focusPlayground));
 
                 // Register scan schema command (triggered by "Discover Fields" completion item)
                 registerCommand(
