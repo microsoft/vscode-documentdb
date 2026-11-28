@@ -1,0 +1,106 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.documentDataGrid {
+    // Reserve Tree scrollbar width to keep RDG's ResizeObserver measurements stable.
+    &[role='treegrid'] {
+        block-size: 100%;
+        min-block-size: 0;
+        scrollbar-gutter: stable;
+
+        .treeExpanderButton,
+        .treeExpanderSlot {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            inline-size: 24px;
+            block-size: 24px;
+            flex: 0 0 24px;
+            vertical-align: middle;
+        }
+
+        .treeExpanderButton {
+            appearance: none;
+            margin: 0;
+            padding: 0;
+            border: 0;
+            background: transparent;
+            color: currentColor;
+            cursor: pointer;
+        }
+
+        .treeExpanderIcon {
+            color: currentColor;
+            transform: rotate(0deg);
+        }
+
+        .treeExpanderButton[aria-expanded='true'] .treeExpanderIcon {
+            transform: rotate(90deg);
+        }
+
+        @media (prefers-reduced-motion: no-preference) {
+            .treeExpanderIcon {
+                transition: transform 100ms ease-out;
+            }
+        }
+
+        @media (forced-colors: active) {
+            .treeExpanderIcon {
+                color: CanvasText;
+            }
+        }
+    }
+
+    // RDG remembers its active cell on blur. That memory is not a second focus indicator.
+    :is([role='gridcell'], [role='columnheader']):not(:focus-within) {
+        outline: none;
+    }
+
+    @media (forced-colors: none) {
+        --rdg-color: var(--vscode-editor-foreground, var(--vscode-foreground));
+        --rdg-background-color: var(--vscode-editor-background);
+        --rdg-border-color: var(
+            --vscode-contrastBorder,
+            var(--vscode-panel-border, var(--vscode-widget-border, var(--vscode-editorWidget-border)))
+        );
+        --rdg-header-background-color: var(
+            --vscode-editorWidget-background,
+            var(--vscode-editor-background)
+        );
+        --rdg-header-draggable-background-color: var(
+            --vscode-list-hoverBackground,
+            var(--vscode-editorWidget-background, var(--vscode-editor-background))
+        );
+        --rdg-row-hover-background-color: var(
+            --vscode-list-hoverBackground,
+            var(--vscode-editorWidget-background, var(--vscode-editor-background))
+        );
+        --rdg-row-selected-background-color: var(
+            --vscode-list-inactiveSelectionBackground,
+            var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground))
+        );
+        --rdg-row-selected-hover-background-color: var(
+            --vscode-list-activeSelectionBackground,
+            var(--vscode-list-inactiveSelectionBackground, var(--vscode-list-hoverBackground))
+        );
+        --rdg-selection-color: var(--vscode-focusBorder);
+        --rdg-checkbox-focus-color: var(--vscode-focusBorder);
+
+        [role='row'][aria-selected='true'] {
+            color: var(--vscode-list-inactiveSelectionForeground, var(--vscode-editor-foreground));
+
+            &:hover {
+                color: var(
+                    --vscode-list-activeSelectionForeground,
+                    var(
+                        --vscode-list-inactiveSelectionForeground,
+                        var(--vscode-editor-foreground)
+                    )
+                );
+            }
+        }
+    }
+}

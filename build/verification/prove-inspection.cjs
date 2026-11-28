@@ -261,8 +261,14 @@ try {
     const { viewModules } = require('./inspect.cjs');
     const lazy = views.chunks.find((chunk) => chunk.facadeModuleId === viewModules.localQuickStart);
     const monaco = views.chunks.find((chunk) => /^monaco-[A-Za-z0-9_-]+\.js$/.test(chunk.fileName));
+    const reactDataGrid = views.chunks.find((chunk) =>
+        chunk.moduleIds.some((moduleId) => moduleId.replaceAll('\\', '/').includes('/node_modules/react-data-grid/')),
+    );
+    const collectionView = views.chunks.find((chunk) => chunk.facadeModuleId === viewModules.collectionView);
     assert.ok(lazy, 'Proof requires Local Quick Start lazy chunk');
     assert.ok(monaco, 'Proof requires Monaco chunk');
+    assert.ok(reactDataGrid, 'Proof requires React Data Grid chunk');
+    assert.ok(collectionView, 'Proof requires Collection View lazy chunk');
     const monacoLoader = budgetEntry('/monaco-editor/');
     const loaderChunk = views.chunks.find((chunk) => chunk.moduleIds.includes(monacoLoader.moduleId));
     assert.ok(loaderChunk, `Proof requires the chunk containing ${monacoLoader.moduleId}`);
@@ -283,9 +289,28 @@ try {
         [
             'monaco-in-local-quick-start',
             undefined,
-            /localQuickStart must exclude Monaco and SlickGrid/,
+            /localQuickStart must exclude Monaco and React Data Grid/,
             (report) => {
                 report.chunks.find((chunk) => chunk.fileName === lazy.fileName).imports.push(monaco.fileName);
+            },
+        ],
+        [
+            'react-data-grid-in-local-quick-start',
+            undefined,
+            /localQuickStart must exclude Monaco and React Data Grid/,
+            (report) => {
+                report.chunks.find((chunk) => chunk.fileName === lazy.fileName).imports.push(reactDataGrid.fileName);
+            },
+        ],
+        [
+            'missing-react-data-grid',
+            undefined,
+            /collectionView must include React Data Grid/,
+            (report) => {
+                const chunk = report.chunks.find((candidate) => candidate.fileName === reactDataGrid.fileName);
+                chunk.moduleIds = chunk.moduleIds.filter(
+                    (moduleId) => !moduleId.replaceAll('\\', '/').includes('/node_modules/react-data-grid/'),
+                );
             },
         ],
         [

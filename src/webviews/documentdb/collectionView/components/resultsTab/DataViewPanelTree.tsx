@@ -3,111 +3,147 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { debounce } from 'es-toolkit';
+import { ChevronRight12Regular } from '@fluentui/react-icons';
+import * as l10n from '@vscode/l10n';
 import * as React from 'react';
-import { Formatters, SlickgridReact, type GridOption } from 'slickgrid-react';
+import { Cell, DataGrid, Row, type Column, type DataGridHandle } from 'react-data-grid';
+// eslint-disable-next-line import/no-internal-modules -- beta.64 explicitly exports this public stylesheet subpath.
+import 'react-data-grid/lib/styles.css';
+import { type TreeNode } from '../../../../../utils/documentGrid/types';
+import { bsonStringToDisplayString } from '../../../../utils/documentGrid/typeToDisplayString';
+import './dataGridTheme.scss';
+import { useTreeRows } from './useTreeRows';
 
-interface Props {
-    liveData: { [key: string]: unknown }[];
+interface DataViewPanelTreeProps {
+    readonly nodes: readonly TreeNode[];
 }
 
-export const DataViewPanelTree = ({ liveData }: Props): React.JSX.Element => {
-    const gridRef = React.useRef<SlickgridReact>(null);
-
-    const columnsDef = [
-        {
-            id: 'id_field',
-            name: 'Field',
-            field: 'field',
-            minWidth: 100,
-            type: 'string' as const,
-            formatter: Formatters.tree,
-            cssClass: 'cell-title',
-            filterable: true,
-            sortable: true,
-        },
-        { id: 'id_value', name: 'Value', field: 'value', minWidth: 100, filterable: true },
-        { id: 'id_type', name: 'Type', field: 'type', minWidth: 100, filterable: true },
-    ];
-
-    const gridOptions: GridOption = {
-        // keep this so that slickgrid uses the container when we resize it manually
-        autoResize: {
-            calculateAvailableSizeBy: 'container',
-            container: '.resultsDisplayArea', // this is a selector of the parent container, in this case it's the collectionView.tsx and the class is "resultsDisplayArea"
-            bottomPadding: 0,
-        },
-        enableAutoResize: false, // Disable SlickGrid's automatic resize, we'll handle it manually with ResizeObserver
-        enableAutoSizeColumns: true, // true as when using a tree, there are only 3 columns to work with
-
-        showHeaderRow: false, // this actually hides the filter-view, not the header: https://ghiscoding.gitbook.io/slickgrid-universal/grid-functionalities/tree-data-grid#parentchild-relation-dataset:~:text=If%20you%20don%27t,showHeaderRow%3A%20false
-
-        enableFiltering: true, // required by slickgrid to render Tree Data
-        enableSorting: false,
-
-        enableTreeData: true,
-
-        treeDataOptions: {
-            columnId: 'id_field',
-            parentPropName: 'parentId',
-            // this is optional, you can define the tree level property name that will be used for the sorting/indentation, internally it will use "__treeLevel"
-            levelPropName: 'treeLevel',
-            indentMarginLeft: 15,
-            initiallyCollapsed: true,
-
-            // initialSort: {
-            //     // tn: incredible! this is actually needed if you want to shown chevrons to expand/collapse the tree (!??? 2h+ to find this by trial&error)
-            //     // https://github.com/ghiscoding/slickgrid-react/discussions/393
-            //     // with the 5.5.1 release of slickgrid-react, this is no longer needed
-            //     columnId: 'id_field',
-            //     direction: 'ASC',
-            // },
-
-            // we can also add a custom Formatter just for the title text portion
-            titleFormatter: (_row, _cell, value, _def, _dataContext) => {
-                //return `<span class="bold">${value}</span> <span style="font-size:11px; margin-left: 15px;">(id: ${dataContext.id} | ${dataContext.parentId ? `parentId: ` + dataContext.parentId : `root`})</span>`;
-                return `<span class="bold">${value}</span>`;
+export const DataViewPanelTree = ({ nodes }: DataViewPanelTreeProps): React.JSX.Element => {
+    const gridRef = React.useRef<DataGridHandle>(null);
+    const { rows, expandedKeys, setExpanded } = useTreeRows(nodes);
+    const columns = React.useMemo<readonly Column<TreeNode>[]>(
+        (): readonly Column<TreeNode>[] => [
+            {
+                key: 'field',
+                name: l10n.t('Field'),
+                renderCell: ({ row, rowIdx }): React.ReactNode => (
+                    <>
+                        <span aria-hidden="true">{'\u00a0\u00a0'.repeat(row.depth)}</span>
+                        {row.expandable ? (
+                            <button
+                                className="treeExpanderButton"
+                                type="button"
+                                tabIndex={-1}
+                                aria-label={
+                                    expandedKeys.has(row.key)
+                                        ? l10n.t('Collapse fields for {0}', row.field)
+                                        : l10n.t('Expand fields for {0}', row.field)
+                                }
+                                aria-expanded={expandedKeys.has(row.key)}
+                                onMouseDown={(event): void => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                }}
+                                onClick={(event): void => {
+                                    event.stopPropagation();
+                                    // Focus the surviving cell before hiding any active descendant.
+                                    event.currentTarget.closest<HTMLElement>('[role="gridcell"]')?.focus();
+                                    gridRef.current?.setActivePosition({ rowIdx, idx: 0 }, { shouldFocus: true });
+                                    setExpanded(row, !expandedKeys.has(row.key));
+                                }}
+                            >
+                                <ChevronRight12Regular className="treeExpanderIcon" aria-hidden="true" />
+                            </button>
+                        ) : (
+                            <span className="treeExpanderSlot" aria-hidden="true" />
+                        )}
+                        {row.field}
+                    </>
+                ),
             },
-        },
-        multiColumnSort: false, // multi-column sorting is not supported with Tree Data, so you need to disable it
-        // disalbing features that would require more polishing to make them production-ready
-        enableColumnPicker: false,
-        enableColumnReorder: false,
-        enableContextMenu: false,
-        enableGridMenu: false,
-        enableHeaderButton: false,
-        enableHeaderMenu: false,
-    };
+            {
+                key: 'value',
+                name: l10n.t('Value'),
+                renderCell: ({ row }): string => row.value.display,
+            },
+            {
+                key: 'type',
+                name: l10n.t('Type'),
+                renderCell: ({ row }): string =>
+                    row.depth === 0 ? l10n.t('Document') : bsonStringToDisplayString(row.value.type),
+            },
+        ],
+        [expandedKeys, setExpanded],
+    );
 
-    // Setup ResizeObserver to watch the results container and manually trigger grid resize
-    React.useEffect(() => {
-        const container = document.querySelector('.resultsDisplayArea');
-        let resizeObserver: ResizeObserver | null = null;
-
-        if (container) {
-            const debouncedResizeHandler = debounce(() => {
-                void gridRef.current?.resizerService?.resizeGrid(10);
-            }, 200);
-
-            resizeObserver = new ResizeObserver(debouncedResizeHandler);
-            resizeObserver.observe(container);
+    function onTreeKeyDown(
+        row: TreeNode,
+        rowIdx: number,
+        setActivePosition: DataGridHandle['setActivePosition'],
+        event: React.KeyboardEvent<HTMLDivElement>,
+    ): void {
+        if (event.target !== event.currentTarget) {
+            return;
+        }
+        // RDG's treegrid Left boundary otherwise selects the whole row (idx: -1).
+        if (event.key === 'ArrowLeft') {
+            event.stopPropagation();
+            event.preventDefault();
+            return;
+        }
+        if (event.key !== 'Enter' || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+            return;
         }
 
-        return () => {
-            if (resizeObserver) {
-                resizeObserver.disconnect();
-            }
-        };
-    }, []);
+        event.stopPropagation();
+        event.preventDefault();
+        if (row.expandable && !event.repeat) {
+            setActivePosition({ rowIdx, idx: 0 }, { shouldFocus: true });
+            setExpanded(row, !expandedKeys.has(row.key));
+        }
+    }
 
     return (
-        <SlickgridReact
-            gridId="myGridTree"
+        <DataGrid
             ref={gridRef}
-            options={gridOptions}
-            columns={columnsDef}
-            dataset={liveData}
-            onReactGridCreated={() => console.log('Tree View created')}
+            role="treegrid"
+            aria-label={l10n.t('Tree View')}
+            className="documentDataGrid"
+            columns={columns}
+            rows={rows}
+            getRowKey={(row): string => row.key}
+            defaultColumnOptions={{ minWidth: 100, resizable: true }}
+            renderers={{
+                // Name the Field cell from its value, not its nested expander's action label.
+                renderCell: (key, props): React.ReactNode => (
+                    <Cell
+                        key={key}
+                        {...props}
+                        aria-label={props.column.key === 'field' ? props.row.field : undefined}
+                        onFocusCapture={(event): void => {
+                            props.onFocusCapture?.(event);
+                            if (!event.defaultPrevented && event.target === event.currentTarget) {
+                                // Native Tab exit uses the remembered position, not the focused DOM cell.
+                                props.setActivePosition({ rowIdx: props.rowIdx, idx: props.column.idx });
+                            }
+                        }}
+                        onKeyDown={(event): void => {
+                            props.onKeyDown?.(event);
+                            if (!event.defaultPrevented && props.column.key === 'field') {
+                                onTreeKeyDown(props.row, props.rowIdx, props.setActivePosition, event);
+                            }
+                        }}
+                    />
+                ),
+                renderRow: (key, props): React.ReactNode => (
+                    <Row
+                        key={key}
+                        {...props}
+                        aria-level={props.row.depth + 1}
+                        aria-expanded={props.row.expandable ? expandedKeys.has(props.row.key) : undefined}
+                    />
+                ),
+            }}
         />
     );
 };

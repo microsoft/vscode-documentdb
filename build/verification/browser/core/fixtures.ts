@@ -24,6 +24,12 @@ export interface RpcFixture {
     readonly results: readonly unknown[];
     readonly keepOpen?: boolean;
     readonly undefinedResult?: boolean;
+    readonly cases?: readonly {
+        readonly input: unknown;
+        readonly results: readonly unknown[];
+        readonly hold?: string;
+    }[];
+    readonly hold?: string;
 }
 
 export type RpcFixtures = Readonly<Partial<Record<FixturePaths, RpcFixture>>>;
@@ -38,11 +44,16 @@ export type FixtureAtPath<T, P extends string> = P extends `${infer Head}.${infe
 
 type StreamItem<T> = T extends AsyncIterable<infer Item> ? Item : T;
 // tRPC's JSON-serialized output inference represents void procedures as never. The wire protocol
-// deliberately supports explicit undefined results, so these fixtures retain the host's void type.
-type FixtureResult<T> = [T] extends [never] ? void : StreamItem<T>;
+// supports explicit undefined results and the host's null void replies.
+type FixtureResult<T> = [T] extends [void] ? void | null : StreamItem<T>;
 export type TypedRpcFixtures = {
-    readonly [P in FixturePaths]?: Omit<RpcFixture, 'results'> & {
+    readonly [P in FixturePaths]?: Omit<RpcFixture, 'results' | 'cases'> & {
         readonly results: readonly FixtureResult<FixtureAtPath<FixtureOutputs, P>>[];
+        readonly cases?: readonly {
+            readonly input: FixtureAtPath<FixtureInputs, P>;
+            readonly results: readonly FixtureResult<FixtureAtPath<FixtureOutputs, P>>[];
+            readonly hold?: string;
+        }[];
     };
 };
 
@@ -57,6 +68,19 @@ export function isRpcFixture(value: unknown): value is RpcFixture {
         (!('keepOpen' in value) || value.keepOpen === undefined || typeof value.keepOpen === 'boolean') &&
         (!('undefinedResult' in value) ||
             value.undefinedResult === undefined ||
-            typeof value.undefinedResult === 'boolean')
+            typeof value.undefinedResult === 'boolean') &&
+        (!('hold' in value) || value.hold === undefined || typeof value.hold === 'string') &&
+        (!('cases' in value) ||
+            value.cases === undefined ||
+            (Array.isArray(value.cases) &&
+                value.cases.every(
+                    (item: unknown): boolean =>
+                        typeof item === 'object' &&
+                        item !== null &&
+                        'input' in item &&
+                        'results' in item &&
+                        Array.isArray(item.results) &&
+                        (!('hold' in item) || item.hold === undefined || typeof item.hold === 'string'),
+                )))
     );
 }

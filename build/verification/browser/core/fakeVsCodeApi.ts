@@ -19,6 +19,7 @@ export interface HarnessCall {
 declare global {
     interface Window {
         __harnessCalls: HarnessCall[];
+        __releaseScenarioReply?: (tag: string) => boolean;
     }
 }
 
@@ -38,7 +39,19 @@ export function fakeVsCodeApi(rpc: RpcFixtures, errors: string[]): typeof window
     const calls: HarnessCall[] = [];
     window.__harnessCalls = calls;
     const subscriptions = new Set<string>();
+    const held = new Map<string, { id: string; reply: () => void }[]>();
     let acquired = false;
+
+    window.__releaseScenarioReply = (tag: string): boolean => {
+        const replies = held.get(tag);
+        if (!replies?.length) {
+            errors.push(`No held scenario reply: ${tag}`);
+            return false;
+        }
+        held.delete(tag);
+        for (const { reply } of replies) reply();
+        return true;
+    };
 
     function send(message: VsCodeLinkResponseMessage): void {
         window.postMessage(message, window.location.origin);
@@ -52,6 +65,11 @@ export function fakeVsCodeApi(rpc: RpcFixtures, errors: string[]): typeof window
         const { id, op } = value;
         if (op.type === 'subscription.stop' || op.type === 'abort') {
             subscriptions.delete(id);
+            for (const [tag, replies] of held) {
+                const remaining = replies.filter((reply): boolean => reply.id !== id);
+                if (remaining.length) held.set(tag, remaining);
+                else held.delete(tag);
+            }
             return;
         }
         calls.push({ path: op.path, type: op.type, input: op.input });
@@ -65,11 +83,14 @@ export function fakeVsCodeApi(rpc: RpcFixtures, errors: string[]): typeof window
         if (response.keepOpen) {
             subscriptions.add(id);
         }
-        queueMicrotask((): void => {
+        const selected = response.cases?.find(
+            (item): boolean => JSON.stringify(item.input) === JSON.stringify(op.input),
+        );
+        const reply = (): void => {
             if (response.keepOpen && !subscriptions.has(id)) {
                 return;
             }
-            for (const result of response.results) {
+            for (const result of selected?.results ?? response.results) {
                 send({ id, result });
             }
             if (response.undefinedResult) {
@@ -78,7 +99,15 @@ export function fakeVsCodeApi(rpc: RpcFixtures, errors: string[]): typeof window
             if (!response.keepOpen) {
                 send({ id, complete: true });
             }
-        });
+        };
+        const tag = selected ? selected.hold : response.hold;
+        if (tag !== undefined) {
+            const replies = held.get(tag) ?? [];
+            replies.push({ id, reply });
+            held.set(tag, replies);
+        } else {
+            queueMicrotask(reply);
+        }
     }
 
     return <StateType = unknown>(): WebviewApi<StateType> => {

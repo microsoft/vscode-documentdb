@@ -284,7 +284,7 @@ Reopen your terminal after installation, then repeat the check.
 code --version
 ```
 
-Use a version satisfying `engines.vscode` in `package.json` (currently 1.109.0 or
+Use a version satisfying `engines.vscode` in `package.json` (currently 1.123.0 or
 later in the 1.x line). **Install if missing:** visit
 [code.visualstudio.com](https://code.visualstudio.com/), or run:
 

@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type IntegratedPage } from './playwright';
 import { runScenario } from './scenario-playwright';
 import { installScenario, readinessHolds } from './scenario-runtime';
-import { parseScenarioRoute } from './scenario-server';
+import { parseScenarioRoute, scenarioRunner } from './scenario-server';
 import { scenarios, type Scenario, type ScenarioAssertion } from './scenarios';
 
 describe('L2-dev readiness', (): void => {
@@ -106,6 +106,7 @@ describe('L2-dev readiness', (): void => {
 describe('L2-dev layout assertions', (): void => {
     afterEach((): void => {
         vi.restoreAllMocks();
+        vi.useRealTimers();
         document.body.innerHTML = '';
     });
 
@@ -128,12 +129,22 @@ describe('L2-dev layout assertions', (): void => {
         listTop: number,
         assertions: readonly ScenarioAssertion[],
         html?: string,
+        expectedErrors: readonly string[] = [],
     ): Promise<Awaited<ReturnType<typeof runScenario>>['assertions']> {
         document.body.innerHTML =
             html ??
             `<div id="list">${heights
                 .map((height): string => `<div role="listitem" data-height="${height}"></div>`)
                 .join('')}</div>`;
+        // jsdom omits innerText; these disposable fixture getters track text mutations.
+        for (const element of document.body.querySelectorAll('*')) {
+            if (element instanceof HTMLElement) {
+                Object.defineProperty(element, 'innerText', {
+                    configurable: true,
+                    get: (): string => element.textContent ?? '',
+                });
+            }
+        }
         vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element): DOMRect {
             const data = (this as HTMLElement).dataset;
             const height = this.id === 'list' ? 120 : Number(data.height);
@@ -162,6 +173,8 @@ describe('L2-dev layout assertions', (): void => {
         document.documentElement.dataset.ready = 'true';
         interface Locator {
             click(): Promise<void>;
+            dblclick(): Promise<void>;
+            evaluateAll<T>(operation: (elements: Element[]) => T): Promise<T>;
             fill(value: string): Promise<void>;
             press(key: string): Promise<void>;
             focus(): Promise<void>;
@@ -170,6 +183,8 @@ describe('L2-dev layout assertions', (): void => {
         }
         const locator: Locator = {
             click: vi.fn(async (): Promise<void> => {}),
+            dblclick: vi.fn(async (): Promise<void> => {}),
+            evaluateAll: async <T>(operation: (elements: Element[]) => T): Promise<T> => operation([]),
             fill: vi.fn(async (): Promise<void> => {}),
             press: vi.fn(async (): Promise<void> => {}),
             focus: vi.fn(async (): Promise<void> => {}),
@@ -181,9 +196,18 @@ describe('L2-dev layout assertions', (): void => {
             off: vi.fn(),
             bringToFront: vi.fn(async (): Promise<void> => {}),
             goto: vi.fn(async (): Promise<void> => {}),
-            keyboard: { insertText: vi.fn(async (): Promise<void> => {}) },
+            keyboard: {
+                insertText: vi.fn(async (): Promise<void> => {}),
+                press: vi.fn(async (): Promise<void> => {}),
+            },
             getByRole: vi.fn((): Locator => locator),
-            locator: vi.fn((): Locator => locator),
+            locator: vi.fn(
+                (selector: string): Locator => ({
+                    ...locator,
+                    evaluateAll: async <T>(operation: (elements: Element[]) => T): Promise<T> =>
+                        operation([...document.querySelectorAll(selector)]),
+                }),
+            ),
             // jsdom is the page: run each serialized operation in place.
             evaluate: vi
                 .fn()
@@ -193,9 +217,215 @@ describe('L2-dev layout assertions', (): void => {
                 ),
         };
         const report = await runScenario(page, 'http://localhost:18080', route);
-        expect(report.errors).toEqual([]);
+        expect(report.errors).toEqual(expectedErrors);
         return report.assertions;
     }
+
+    it.each([
+        '',
+        '<div inert><div id="list" role="grid"></div></div>',
+        '<div aria-hidden="true"><div id="list" role="grid"></div></div>',
+        '<div style="display:none"><div id="list" role="grid"></div></div>',
+    ])(
+        'reports a missing accessible grid without executing that contract or skipping its sibling (%s)',
+        async (grid): Promise<void> => {
+            const results = await measure(
+                [],
+                100,
+                [
+                    {
+                        kind: 'attribute',
+                        name: 'TDD: K2 cannot pass with a missing grid',
+                        requiresGrid: 'grid',
+                        selector: '[role="row"][aria-selected="true"]',
+                        attribute: 'role',
+                        expected: null,
+                        steps: [{ action: 'releaseReply', tag: 'must-not-run' }],
+                    },
+                    { kind: 'text', name: 'supporting shell', selector: 'h2', includes: ['Shell'], excludes: [] },
+                ],
+                `${grid}<h2>Shell</h2>`,
+            );
+            expect(results).toEqual([
+                {
+                    name: 'TDD: K2 cannot pass with a missing grid',
+                    passed: false,
+                    actual: 'Absent accessible grid (hidden/inert placeholders do not qualify)',
+                    expected: 'grid',
+                },
+                {
+                    name: 'supporting shell',
+                    passed: true,
+                    actual: { text: 'Shell', missing: [], found: [] },
+                    expected: { includes: ['Shell'], excludes: [] },
+                },
+            ]);
+            expect(document.documentElement.dataset.ready).toBe('true');
+        },
+    );
+
+    it('executes optional text steps after an accessible treegrid exists', async (): Promise<void> => {
+        const release = vi.fn((tag: string): boolean => {
+            expect(tag).toBe('tree-result');
+            const value = document.getElementById('value');
+            if (!value) throw new Error('Missing release result target');
+            value.textContent = 'Released result';
+            return true;
+        });
+        window.__releaseScenarioReply = release;
+        const [result] = await measure(
+            [],
+            100,
+            [
+                {
+                    kind: 'text',
+                    name: 'TDD: M4 released text',
+                    requiresGrid: 'treegrid',
+                    selector: '#value',
+                    includes: ['Released result'],
+                    excludes: ['Pending'],
+                    steps: [{ action: 'releaseReply', tag: 'tree-result' }],
+                },
+            ],
+            '<div id="list" role="treegrid"><span id="value">Pending</span></div>',
+        );
+        expect(result.passed).toBe(true);
+        expect(release).toHaveBeenCalledOnce();
+    });
+
+    it.each([false, true])(
+        'synchronizes text only when opted in (%s), without repeating its steps',
+        async (waitForText): Promise<void> => {
+            vi.useFakeTimers();
+            const release = vi.fn((): boolean => {
+                const value = document.getElementById('value');
+                if (!value) throw new Error('Missing text result target');
+                setTimeout((): void => {
+                    value.textContent = 'leaf Alpha nested Alpha';
+                }, 100);
+                setTimeout((): void => {
+                    value.textContent = 'leaf \n Alpha';
+                }, 200);
+                return true;
+            });
+            window.__releaseScenarioReply = release;
+            const run = measure(
+                [],
+                100,
+                [
+                    {
+                        kind: 'text',
+                        name: 'step-in result',
+                        selector: '#value',
+                        includes: ['leaf Alpha'],
+                        excludes: ['NESTED Alpha'],
+                        ...(waitForText ? { waitForText: true } : {}),
+                        steps: [{ action: 'releaseReply', tag: 'step-in' }],
+                    },
+                ],
+                '<span id="value">nested Alpha</span>',
+            );
+            await vi.advanceTimersByTimeAsync(250);
+            expect((await run)[0]).toEqual({
+                name: 'step-in result',
+                passed: waitForText,
+                actual: waitForText
+                    ? { text: 'leaf Alpha', missing: [], found: [] }
+                    : { text: 'nested Alpha', missing: ['leaf Alpha'], found: ['NESTED Alpha'] },
+                expected: { includes: ['leaf Alpha'], excludes: ['NESTED Alpha'] },
+            });
+            expect(release).toHaveBeenCalledOnce();
+        },
+    );
+
+    it.each([false, true])(
+        'keeps a synchronized text assertion failing on timeout or page failure (%s)',
+        async (pageFails): Promise<void> => {
+            vi.useFakeTimers();
+            const release = vi.fn((): boolean => {
+                if (pageFails) {
+                    setTimeout((): void => {
+                        const value = document.getElementById('value');
+                        if (!value) throw new Error('Missing text result target');
+                        value.textContent = 'leaf Alpha';
+                        document.documentElement.dataset.ready = 'failed';
+                    }, 100);
+                }
+                return true;
+            });
+            window.__releaseScenarioReply = release;
+            const run = measure(
+                [],
+                100,
+                [
+                    {
+                        kind: 'text',
+                        name: 'step-in result',
+                        selector: '#value',
+                        includes: ['leaf Alpha'],
+                        excludes: ['nested Alpha'],
+                        waitForText: true,
+                        steps: [{ action: 'releaseReply', tag: 'step-in' }],
+                    },
+                ],
+                '<span id="value">nested Alpha</span>',
+                [pageFails ? 'Page failed while waiting for step-in result' : 'Timed out waiting for step-in result'],
+            );
+            await vi.advanceTimersByTimeAsync(3100);
+            expect((await run)[0]).toEqual({
+                name: 'step-in result',
+                passed: false,
+                actual: pageFails
+                    ? { text: 'leaf Alpha', missing: [], found: [] }
+                    : { text: 'nested Alpha', missing: ['leaf Alpha'], found: ['nested Alpha'] },
+                expected: { includes: ['leaf Alpha'], excludes: ['nested Alpha'] },
+            });
+            expect(release).toHaveBeenCalledOnce();
+            expect(document.documentElement.dataset.ready).toBe('failed');
+        },
+    );
+
+    it('reports an unavailable contract target as an assertion result, not a harness failure', async (): Promise<void> => {
+        const [result] = await measure(
+            [],
+            100,
+            [
+                {
+                    kind: 'focused',
+                    name: 'TDD: M6 missing cell',
+                    requiresGrid: 'grid',
+                    target: { role: 'gridcell', name: 'Unavailable document' },
+                    steps: [{ action: 'focus', role: 'gridcell', name: 'Unavailable document' }],
+                },
+            ],
+            '<div id="list" role="grid"></div>',
+        );
+        expect(result).toMatchObject({
+            passed: false,
+            actual: 'Unavailable accessible gridcell: Unavailable document',
+        });
+        expect(document.documentElement.dataset.ready).toBe('true');
+    });
+
+    it('checks a DOM bound without claiming a timing or screen-reader measurement', async (): Promise<void> => {
+        const assertion: ScenarioAssertion = {
+            kind: 'countAtMost',
+            name: 'TDD: K11 mounted rows',
+            requiresGrid: 'grid',
+            selector: '[role="row"]',
+            max: 2,
+        };
+        const html = '<div id="list" role="grid"><div role="row"></div><div role="row"></div></div>';
+        expect((await measure([], 100, [assertion], html))[0]).toMatchObject({
+            passed: true,
+            actual: 2,
+            expected: '<= 2',
+        });
+        expect((await measure([], 100, [{ ...assertion, max: 1 }], html))[0]).toMatchObject({
+            passed: false,
+            actual: 2,
+        });
+    });
 
     it('compares an attribute after its steps, and treats a missing element as null', async (): Promise<void> => {
         const attribute = (
@@ -320,5 +550,119 @@ describe('L2-dev layout assertions', (): void => {
             passed: false,
             actual: null,
         });
+    });
+
+    it('drives keyboard, double-click and focus steps and checks exact focus targets', async (): Promise<void> => {
+        document.body.innerHTML =
+            '<button id="already">Already focused</button>' +
+            '<div id="record" role="gridcell" data-name="Open record"></div>' +
+            '<input id="filter" role="textbox" data-name="Filter">';
+        const already = document.getElementById('already');
+        const filter = document.getElementById('filter');
+        already?.focus();
+        const route = parseScenarioRoute('/connectionDiagnostics/default/dark');
+        if (!route) throw new Error('Missing test route');
+        window.__harnessErrors = [];
+        window.__harnessCalls = [];
+        window.__scenario = {
+            route,
+            data: {
+                ...scenarios.connectionDiagnostics.default,
+                steps: [
+                    { action: 'press', key: 'Control+Enter' },
+                    { action: 'dblclick', role: 'gridcell', name: 'Open record' },
+                ],
+                assertions: [
+                    {
+                        kind: 'focused',
+                        name: 'role target',
+                        target: { role: 'textbox', name: 'Filter' },
+                        steps: [{ action: 'focus', role: 'textbox', name: 'Filter' }],
+                    },
+                    { kind: 'focused', name: 'missing role target', target: { role: 'row', name: 'Missing' } },
+                    { kind: 'focused', name: 'selector target', target: { selector: '#filter' } },
+                    { kind: 'focused', name: 'missing selector target', target: { selector: '#missing' } },
+                ],
+            },
+            check: (): void => {},
+        };
+        document.documentElement.dataset.ready = 'true';
+
+        interface Locator {
+            click(): Promise<void>;
+            dblclick(): Promise<void>;
+            evaluateAll<T>(operation: (elements: Element[]) => T): Promise<T>;
+            fill(value: string): Promise<void>;
+            press(key: string): Promise<void>;
+            focus(): Promise<void>;
+            first(): Locator;
+            last(): Locator;
+        }
+        const dblclick = vi.fn(async (): Promise<void> => {});
+        const focus = vi.fn(async (onFocus?: () => void): Promise<void> => onFocus?.());
+        const makeLocator = (elements: Element[], onFocus?: () => void): Locator => ({
+            click: vi.fn(async (): Promise<void> => {}),
+            dblclick,
+            evaluateAll: async <T>(operation: (matched: Element[]) => T): Promise<T> => operation(elements),
+            fill: vi.fn(async (): Promise<void> => {}),
+            press: vi.fn(async (): Promise<void> => {}),
+            focus: async (): Promise<void> => focus(onFocus),
+            first: (): Locator => locatorFor(elements),
+            last: (): Locator => locatorFor(elements),
+        });
+        const locatorFor = (elements: Element[]): Locator => makeLocator(elements);
+        const getByRole = vi.fn((role: string, options: { name: string; exact?: boolean }): Locator => {
+            const elements = [...document.querySelectorAll(`[role="${role}"][data-name="${options.name}"]`)];
+            return makeLocator(elements, (): void => {
+                if (elements[0] instanceof HTMLElement) elements[0].focus();
+            });
+        });
+        const press = vi.fn(async (): Promise<void> => {
+            expect(document.activeElement).toBe(already);
+        });
+        const page: IntegratedPage = {
+            on: vi.fn(),
+            off: vi.fn(),
+            bringToFront: vi.fn(async (): Promise<void> => {}),
+            goto: vi.fn(async (): Promise<void> => {}),
+            keyboard: {
+                insertText: vi.fn(async (): Promise<void> => {}),
+                press,
+            },
+            getByRole,
+            locator: vi.fn((selector: string): Locator => locatorFor([...document.querySelectorAll(selector)])),
+            evaluate: vi
+                .fn()
+                .mockImplementation(
+                    async (operation: (argument: unknown) => unknown, argument?: unknown): Promise<unknown> =>
+                        operation(argument),
+                ),
+        };
+
+        const report = await runScenario(page, 'http://localhost:18080', route);
+
+        expect(report.errors).toEqual([]);
+        expect(report.ready).toBe(true);
+        expect(report.assertions.map((result): boolean => result.passed)).toEqual([true, false, true, false]);
+        expect(press).toHaveBeenCalledWith('Control+Enter');
+        expect(dblclick).toHaveBeenCalledTimes(1);
+        expect(focus).toHaveBeenCalledTimes(1);
+        expect(getByRole).toHaveBeenCalledWith('gridcell', { name: 'Open record', exact: true });
+        expect(getByRole).toHaveBeenCalledWith('textbox', { name: 'Filter', exact: true });
+        expect(document.activeElement).toBe(filter);
+
+        const snippet = scenarioRunner([route]);
+        type AsyncFunctionConstructor = new (...parameters: string[]) => (...args: unknown[]) => Promise<unknown>;
+        const asyncFunctionPrototype = Object.getPrototypeOf(async function () {}) as object;
+        const AsyncFunction: unknown = Reflect.get(asyncFunctionPrototype, 'constructor');
+        expect(typeof AsyncFunction).toBe('function');
+        if (typeof AsyncFunction !== 'function') {
+            throw new Error('Async function constructor is unavailable');
+        }
+        const createAsyncFunction = AsyncFunction as AsyncFunctionConstructor;
+        expect((): void => {
+            new createAsyncFunction('page', snippet);
+        }).not.toThrow();
+        expect(snippet).toContain('page.keyboard.press');
     });
 });

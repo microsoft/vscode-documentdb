@@ -385,7 +385,7 @@ function summarizeGraph(entryName, assets, modules, allowAbsentBson) {
         assets: [...assets].sort(),
         bsonModules: bsonModules.map((identifier) => identifier.slice(identifier.indexOf('/node_modules/') + 1)),
         monaco: [...modules].some((identifier) => identifier.includes('/monaco-editor/')),
-        slickgrid: [...modules].some((identifier) => /\/(?:slickgrid|@slickgrid-universal)\//.test(identifier)),
+        reactDataGrid: [...modules].some((identifier) => identifier.includes('/react-data-grid/')),
     };
 }
 
@@ -437,6 +437,7 @@ function hostGraphs(report, files) {
         const roots = [entry.fileName];
         const { assets, modules } = viteChunkClosure(report, name, roots, files, { dynamic: true, host: true });
         graphs[name] = summarizeGraph(name, assets, modules, name === 'playgroundTsPlugin');
+        assert.ok(!graphs[name].reactDataGrid, `${name} must exclude React Data Grid`);
         if (name === 'main') {
             const staticGraph = mainStartupClosure(report, entry, files);
             assert.ok(
@@ -472,7 +473,16 @@ function viewGraphs(report, files) {
         graphs[name] = viteViewGraph(report, name, files);
     }
     for (const name of ['localQuickStart', 'atlasCredentials']) {
-        assert.ok(!graphs[name].monaco && !graphs[name].slickgrid, `${name} must exclude Monaco and SlickGrid`);
+        assert.ok(
+            !graphs[name].monaco && !graphs[name].reactDataGrid,
+            `${name} must exclude Monaco and React Data Grid`,
+        );
+    }
+    assert.ok(graphs.collectionView.reactDataGrid, 'collectionView must include React Data Grid');
+    for (const [name, graph] of Object.entries(graphs)) {
+        if (name !== 'collectionView') {
+            assert.ok(!graph.reactDataGrid, `${name} must exclude React Data Grid`);
+        }
     }
     return graphs;
 }

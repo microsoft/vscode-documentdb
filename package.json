@@ -8,7 +8,7 @@
   "description": "DocumentDB GUI and MongoDB GUI for Azure DocumentDB, DocumentDB and MongoDB (including Atlas): connect, query and manage your data, in the cloud or locally.",
   "enableMongoClusters": true,
   "engines": {
-    "vscode": "^1.109.0",
+    "vscode": "^1.123.0",
     "node": ">=22.18.0",
     "npm": ">=10.0.0"
   },
@@ -196,11 +196,11 @@
     "monaco-editor": "~0.52.2",
     "mongodb": "^7.1.0",
     "mongodb-connection-string-url": "~3.0.2",
+    "react-data-grid": "7.0.0-beta.64",
     "react-hotkeys-hook": "~5.2.1",
     "react-markdown": "^10.1.0",
     "regenerator-runtime": "^0.14.1",
     "semver": "~7.7.4",
-    "slickgrid-react": "~9.13.0",
     "vscode-json-languageservice": "~5.6.2",
     "vscode-languageclient": "~9.0.1",
     "vscode-languageserver": "~9.0.1",

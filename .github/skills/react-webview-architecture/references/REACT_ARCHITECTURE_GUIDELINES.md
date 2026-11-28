@@ -396,69 +396,27 @@ setCurrentContext((prev) => ({
 }));
 ```
 
-#### Solving Stale Closure Issues
+#### Event Handler Freshness
 
-**🚨 CRITICAL PATTERN**: When using third-party components (like SlickGrid) that don't automatically update event handlers on re-renders:
-
-```tsx
-// Problem: Event handlers capture state at initialization time
-// Solution: Store latest state in refs
-
-const [currentQueryResults, setCurrentQueryResults] = useState<QueryResults>();
-const currentQueryResultsRef = useRef(currentQueryResults);
-
-// Keep ref in sync with state
-useEffect(() => {
-  currentQueryResultsRef.current = currentQueryResults;
-}, [currentQueryResults]);
-
-// In event handler, use ref to get latest data
-const onCellDblClick = useCallback((event: CustomEvent) => {
-  // ✅ Good: Access latest data via ref
-  const activeDocument = currentQueryResultsRef.current?.tableData?.[row];
-
-  // ❌ Bad: Would capture stale state
-  // const activeDocument = currentQueryResults?.tableData?.[row];
-}, []);
-```
-
-**Why this is needed:**
-
-```tsx
-// Third-party components like SlickGrid bind event handlers during initialization:
-// 1. Component initializes with state = { data: [...] }
-// 2. Event handler is created and captures state
-// 3. State updates to { data: [...new items...] }
-// 4. Event handler STILL sees old state (stale closure)
-// 5. Using ref solves this because ref.current is always the latest value
-```
+React event handlers passed through component props are refreshed during rendering. Prefer normal
+closures with correct dependencies; refs are not a general requirement for third-party components.
+Use a ref when a long-lived subscription or imperative API requires a stable callback, and keep
+the ref synchronized with current state. Clean up subscriptions when their source changes or the
+component unmounts.
 
 ### `useCallback` - Memoized Callbacks
 
-Use `useCallback` for event handlers passed to child components or third-party libraries:
+Use `useCallback` when stable callback identity is useful. Include every reactive value used by
+the callback in its dependency list. A ref is appropriate only when the API requires callback
+identity to remain stable:
 
 ```tsx
-const handleViewChanged = useCallback((optionValue: string) => {
-  setCurrentContext((prev) => ({ ...prev, currentView: selection }));
-  getDataForView(selection);
-}, []); // Dependencies array
-```
-
-**Note**: When combined with the ref pattern, dependencies should only include stable references:
-
-```tsx
-const onSelectedRowsChanged = useCallback(
-  (_eventData: unknown, _args: OnSelectedRowsChangedEventArgs): void => {
-    setCurrentContext((prev) => ({
-      ...prev,
-      dataSelection: {
-        selectedDocumentIndexes: _args.rows,
-        // Use ref for latest data, not the prop
-        selectedDocumentObjectIds: _args.rows.map((row) => liveDataRef.current[row]?.['x-objectid'] ?? ''),
-      },
-    }));
+const handleViewChanged = useCallback(
+  (selection: Views): void => {
+    setCurrentContext((previous) => ({ ...previous, currentView: selection }));
+    getDataForView(selection);
   },
-  [setCurrentContext], // Only setCurrentContext, NOT liveData
+  [getDataForView, setCurrentContext],
 );
 ```
 
@@ -578,95 +536,21 @@ monaco.languages.json.jsonDefaults.setDiagnosticsOptions({...});
 
 ## Third-Party Component Integration
 
-### SlickGrid Integration
+### Collection View Result Grids
 
-SlickGrid is used for table and tree views. It requires special handling due to stale closure issues.
+The Table and Tree use RDG's `DataGrid`; their input contracts remain in
+`src/utils/documentGrid/types.ts`.
 
-#### Basic SlickGrid Setup
-
-```tsx
-import { SlickgridReact, type GridOption } from 'slickgrid-react';
-
-<SlickgridReact
-  gridId="myGrid"
-  gridOptions={gridOptions}
-  columnDefinitions={gridColumns}
-  dataset={liveData}
-  onReactGridCreated={() => console.log('Grid created')}
-/>;
-```
-
-#### Grid Options Pattern
-
-```tsx
-const gridOptions: GridOption = {
-  autoResize: {
-    calculateAvailableSizeBy: 'container',
-    container: '#resultsDisplayAreaId', // Parent container selector
-    delay: 100,
-    bottomPadding: 2,
-  },
-  enableAutoResize: true,
-  enableCellNavigation: true,
-  enableTextSelectionOnCells: true,
-  enableRowSelection: true,
-  multiSelect: true,
-};
-```
-
-#### Event Handlers with Refs (Critical!)
-
-```tsx
-// Store latest data in refs
-const liveDataRef = useRef<TableDataEntry[]>(liveData);
-const gridColumnsRef = useRef<GridColumn[]>([]);
-
-// Keep refs in sync
-useEffect(() => {
-  liveDataRef.current = liveData;
-}, [liveData]);
-
-useEffect(() => {
-  gridColumnsRef.current = gridColumns;
-}, [gridColumns]);
-
-// Event handler using refs
-const onCellDblClick = useCallback(
-  (event: CustomEvent<{ args: OnDblClickEventArgs }>) => {
-    // ✅ Use ref to get latest data
-    const activeDocument = liveDataRef.current[event.detail.args.row];
-    const activeColumn = gridColumnsRef.current[event.detail.args.cell].field;
-
-    // Process event...
-  },
-  [handleStepIn],
-); // Only stable dependencies
-```
-
-**Why this matters:**
-
-- SlickGrid binds event handlers at initialization
-- These handlers don't update when props/state change
-- Without refs, handlers see stale/outdated data
-- This caused multiple bugs that took hours to debug
-
-### Custom Cell Formatters
-
-```tsx
-const cellFormatter: Formatter<object> = (_row: number, _cell: number, value: CellValue) => {
-  if (value === undefined || value === null) {
-    return {
-      text: '',
-      toolTip: l10n.t('This field is not set'),
-    };
-  }
-  return {
-    text: value.value,
-    addClasses: `typedTableCell type-${value.type}`,
-    toolTip: bsonStringToDisplayString(value.type),
-  };
-};
-```
+- Table columns render `TablePage` cells, retaining BSON display text and type metadata.
+  `getRowKey` uses the row identity supplied by the neutral shaper.
+- The application builds a flattened visible hierarchy for the Tree, with path-based `TreeNode`
+  keys, `aria-level` and `aria-expanded`; RDG does not own document expansion state.
+- Use `DataGridHandle.setActivePosition` only where focus must be synchronized after a custom
+  interaction. Keep focus on the surviving Tree cell before collapsing a branch.
+- Preserve the current Table selection gestures and safe-ID action guard. Do not infer action
+  eligibility from a selected row or invent an unapproved keyboard binding.
+- Avoid per-cell Tab stops. Native grid navigation, Escape to the view picker, and the Tree's Enter
+  expansion behavior are part of the current interaction contract.
 
 ---
 
@@ -931,23 +815,11 @@ For tRPC-related hooks (`useTrpcClient`) and patterns, see the **webview-trpc-me
 
 ### ⚠️ Common Pitfalls
 
-1. **Forgetting to use refs with third-party components**
+1. **Using refs as a blanket fix for stale closures**
 
-   ```tsx
-   // ❌ Will capture stale state
-   const onClick = () => {
-     console.log(someState);
-   };
-
-   // ✅ Use ref pattern
-   const stateRef = useRef(someState);
-   useEffect(() => {
-     stateRef.current = someState;
-   }, [someState]);
-   const onClick = () => {
-     console.log(stateRef.current);
-   };
-   ```
+   Ordinary React handlers can use the current render's values. For a long-lived external
+   subscription, include current values in the effect dependencies and clean it up; use a ref only
+   when the API requires a stable callback.
 
 2. **Not cleaning up event listeners**
 
@@ -1006,8 +878,8 @@ For tRPC-related hooks (`useTrpcClient`) and patterns, see the **webview-trpc-me
 
 - Use consistent 10px spacing units
 - Use flexbox with `row-gap`/`column-gap` for spacing
-- Store third-party component references in `useRef`
-- Use ref pattern to solve stale closure issues
+- Store imperative component handles in `useRef` when needed
+- Use refs for current state only when a long-lived API requires callback identity to stay stable
 - Clean up event listeners, subscriptions, and AbortControllers
 - Use functional state updates when depending on previous state
 - Always localize user-facing strings with `l10n.t()`
@@ -1023,7 +895,7 @@ For tRPC-related hooks (`useTrpcClient`) and patterns, see the **webview-trpc-me
 - Don't overuse negative margins (fix layout instead)
 - Don't forget to clean up in useEffect return (listeners, AbortControllers)
 - Don't use `any` type (use proper types or `unknown`)
-- Don't capture state in closures for third-party components (use refs)
+- Don't add refs for callbacks without a long-lived-API requirement
 - Don't hardcode delays (use proper initialization checks)
 - Don't forget to call `editor.layout()` after resize
 - Don't mix state management patterns inconsistently
@@ -1037,11 +909,11 @@ For tRPC-related hooks (`useTrpcClient`) and patterns, see the **webview-trpc-me
 - Accessibility: See `.github/skills/accessibility-aria-expert/SKILL.md`
 - VS Code Webview API: [VS Code Webview API](https://code.visualstudio.com/api/extension-guides/webview)
 - Monaco Editor API: [Monaco Editor API](https://microsoft.github.io/monaco-editor/api/index.html)
-- SlickGrid React: [SlickGrid React Docs](https://ghiscoding.gitbook.io/slickgrid-react/)
+- React Data Grid: consult the exact dependency pin in the root `package.json`; do not assume the latest API applies
 - React Hooks: [React Hooks Reference](https://react.dev/reference/react)
 
 ---
 
-_Document Version: 2.0_
-_Last Updated: February 12, 2026_
+_Document Version: 2.1_
+_Last Updated: November 27, 2026_
 _Based on: DocumentView, CollectionView, QueryEditor, QueryInsights analysis_

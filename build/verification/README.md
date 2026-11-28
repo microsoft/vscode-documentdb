@@ -101,7 +101,8 @@ that view's lazy chunk and its static import closure, never every dynamic child.
 `facadeModuleId` must match the registry-backed map and appear in the entry's `dynamicImports`.
 When adding a webview, register its facade in `viewModules` in
 [`inspect.cjs`](./inspect.cjs) and its page label in [`build-size-report.cjs`](./build-size-report.cjs).
-Local Quick Start and Atlas Credentials must always exclude Monaco and SlickGrid.
+Local Quick Start and Atlas Credentials must always exclude Monaco. In the JavaScript bundle
+graph, React Data Grid is reachable only through Collection View.
 
 The packaged manifest's top-level icon and local file paths under `contributes` are required,
 with missing paths reported alongside their JSON pointers; URLs, substitutions and codicons are excluded.
@@ -422,8 +423,9 @@ return await new AsyncFunction('page', source)(page);
 
 Use `/scenarios/run-all/localQuickStart.js` for one view, or
 `/scenarios/run-all/localQuickStart/dark.js` for one view/theme. Each route starts from `about:blank`.
-The helper drives the scenario's typed click/fill steps, polls `data-ready` with `page.evaluate`
-(not CSP-blocked `waitForFunction`), runs assertions, and returns JSON with `route`, `ready`,
+The helper drives the scenario's typed click/fill/press/double-click/focus steps, polls `data-ready`
+with `page.evaluate` (not CSP-blocked `waitForFunction`), runs assertions (including `focused`,
+matching the active element by exact role/name or selector), and returns JSON with `route`, `ready`,
 `errors`, `assertions` and `calls` (`window.__harnessCalls`). A route with steps initially shows its
 entry state: drive `window.__scenario.data.steps` manually or use the helper to reach the named state.
 Readiness checks visible content/selectors and no visible progressbar except in `provisioning`.

@@ -16,7 +16,7 @@ import {
 } from '@fluentui/react-components';
 import { ArrowUp16Filled } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { useContext } from 'react';
+import { Fragment, useContext } from 'react';
 import { useTrpcClient } from '../../../../_integration/useTrpcClient';
 import { CollectionViewContext, Views } from '../../collectionViewContext';
 
@@ -86,7 +86,7 @@ export const ToolbarTableNavigation = (): React.JSX.Element => {
     };
 
     const items: Item[] = [
-        { key: -1, item: 'Root Level' },
+        { key: -1, item: l10n.t('Root Level') },
         ...(currentContext.currentViewState?.currentPath.map(
             (label, index): Item => ({
                 key: index,
@@ -96,7 +96,7 @@ export const ToolbarTableNavigation = (): React.JSX.Element => {
     ];
 
     return (
-        <Toolbar aria-label="with Popover" size="small">
+        <Toolbar aria-label={l10n.t('Table navigation')} size="small">
             <Tooltip content={l10n.t('Level up')} relationship="description" withArrow>
                 <ToolbarButton
                     onClick={levelUp}
@@ -112,38 +112,26 @@ export const ToolbarTableNavigation = (): React.JSX.Element => {
 
             <ToolbarDivider />
 
-            <Breadcrumb aria-label={l10n.t('Small breadcrumb example with buttons')} size="small">
+            <Breadcrumb aria-label={l10n.t('Document field path')} size="small">
                 {items?.map((item, index) => (
-                    <BreadcrumbItem key={item.key}>
-                        <BreadcrumbButton onClick={() => jumpToLevel(index)}>{item.item}</BreadcrumbButton>
+                    <Fragment key={item.key}>
+                        <BreadcrumbItem>
+                            <BreadcrumbButton onClick={() => jumpToLevel(index)}>{item.item}</BreadcrumbButton>
+                        </BreadcrumbItem>
                         {index < items.length - 1 && <BreadcrumbDivider />}
-                    </BreadcrumbItem>
+                    </Fragment>
                 ))}
             </Breadcrumb>
             <InfoLabel
                 info={
                     <>
                         {l10n.t(
-                            'Your database stores documents with embedded fields, allowing for hierarchical data organization.',
+                            'To step into an object field, focus its cell and press Enter, or double-click the cell.',
                         )}
                         <br />
-                        {l10n.t('This table view presents data at the root level by default.')}{' '}
-                        {l10n.t(
-                            'Using the table navigation, you can explore deeper levels or move back and forth between them.',
-                        )}
+                        {l10n.t('Use Level Up to return one level, or activate an ancestor breadcrumb to jump to it.')}
                         <br />
-                        <ul>
-                            <li>
-                                <strong>To navigate back to any level:</strong> Simply click on the{' '}
-                                <strong>desired level</strong> in the navigation path.
-                            </li>
-                            <li>
-                                <strong>To dive deeper into document fields:</strong> Double-click on fields of type{' '}
-                                <strong>object</strong>, marked by the{' '}
-                                <span style={{ fontFamily: 'monospace' }}>{' {} '}</span> icon, directly in the table
-                                view.
-                            </li>
-                        </ul>
+                        {l10n.t('Activate Root Level to return to the document root.')}
                     </>
                 }
             />

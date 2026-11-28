@@ -28,7 +28,6 @@ import { normalizeCompletionCategory } from '../../../../../telemetry/completion
 import { useTrpcClient } from '../../../../_integration/useTrpcClient';
 import { MonacoAutoHeight } from '../../../../components/MonacoAutoHeight';
 import { CollectionViewContext } from '../../collectionViewContext';
-import { useHideScrollbarsDuringResize } from '../../hooks/useHideScrollbarsDuringResize';
 import './queryEditor.scss';
 
 /**
@@ -85,8 +84,6 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
     const filterEditorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
     const projectEditorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
     const sortEditorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
-
-    const hideScrollbarsTemporarily = useHideScrollbarsDuringResize();
 
     /**
      * Creates a Monaco model with a URI scheme for the given editor type.
@@ -652,14 +649,6 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
 
                                 // Toggle enhanced mode
                                 setIsEnhancedQueryMode(enhancedModeEnabled);
-
-                                // Temporarily hide scrollbars during the transition to improve UX responsiveness.
-                                // Note: The window-level scrollbar flickering (caused by cumulative fractional
-                                // pixel rounding) is now fixed by a media query on .collectionView. However,
-                                // this logic remains useful for making the transition feel snappier by hiding
-                                // intermediate scrollbar states in SlickGrid (Table/Tree views) during the
-                                // ~100ms debounce period before resize handlers complete and grids re-render.
-                                hideScrollbarsTemporarily();
                             }}
                             icon={isEnhancedQueryMode ? <SettingsFilled /> : <SettingsRegular />}
                         ></ToggleButton>

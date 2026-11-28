@@ -37,6 +37,7 @@ The three inline icons next to each collection node are (from left to right): **
 - [Hover Documentation](#hover-documentation)
 - [Real-Time Validation](#real-time-validation)
 - [Relaxed Query Syntax](#relaxed-query-syntax)
+- [Navigating Nested Results](#navigating-nested-results)
 - [Navigating to Other Features](#navigating-to-other-features)
 
 ## The Three Query Editors
@@ -237,6 +238,26 @@ The Collection View editors accept relaxed JavaScript expression syntax, not jus
 | Comments                        | `{ /* filter */ name: "Alice" }`    |    Yes     |
 
 This is a significant improvement over earlier versions of the extension, which required strict JSON and didn't support BSON constructors or unquoted keys.
+
+## Navigating Nested Results
+
+In **Table View**, focus an object cell and press **Enter**, or double-click the cell, to step into
+that field. After **Enter**, focus moves to the same document row's `_id` cell, so you can continue
+with the arrow keys or press **Space** to select that row. Mouse step-in is unchanged. Use
+**Level Up** to return one level, activate an ancestor breadcrumb to jump back to it, or choose
+**Root Level** to return to the document root. The help beside the navigation controls describes
+these actions.
+
+In **Tree View**, focus an expandable **Field** cell and press **Enter** to expand or collapse it.
+The chevron button beside the field also toggles expansion.
+
+In either grid, use the arrow keys to move through visible cells and **Tab** or **Shift+Tab** to
+move forward or backward through the grid. In Table View, if rows are selected, press plain
+**Escape** once to clear the selection while keeping focus on the current cell or header. Press
+**Escape** again to return focus to the view picker. After clearing, press **Space** on a focused
+data cell to select only that row if desired. With no selected rows, **Escape** returns to the
+view picker immediately; in Tree View it exits immediately as well. A popup that handles
+**Escape** takes precedence.
 
 ## Navigating to Other Features
 

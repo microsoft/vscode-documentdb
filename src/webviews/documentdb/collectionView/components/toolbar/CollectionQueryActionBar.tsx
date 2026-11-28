@@ -40,7 +40,6 @@ import { useContext, type JSX } from 'react';
 import { useTrpcClient } from '../../../../_integration/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { type CollectionViewWebviewConfigurationType } from '../../collectionViewController';
-import { useHideScrollbarsDuringResize } from '../../hooks/useHideScrollbarsDuringResize';
 
 export interface CollectionQueryActionBarProps {
     variant: 'documents' | 'queryInsights';
@@ -63,8 +62,6 @@ const QueryExecutionToolbar = ({ variant }: CollectionQueryActionBarProps): JSX.
     const configuration = useConfiguration<CollectionViewWebviewConfigurationType>();
 
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
-    const hideScrollbarsTemporarily = useHideScrollbarsDuringResize();
-
     const handleExecuteQuery = () => {
         // return to the root level
         setCurrentContext((prev) => ({
@@ -155,9 +152,6 @@ const QueryExecutionToolbar = ({ variant }: CollectionQueryActionBarProps): JSX.
                 ...prev,
                 isAiRowVisible: checkedItems.includes('copilot'),
             }));
-
-            // Temporarily hide scrollbars during the transition to improve UX responsiveness
-            hideScrollbarsTemporarily();
         }
     };
 

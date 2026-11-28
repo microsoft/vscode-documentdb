@@ -285,9 +285,9 @@ export const collectionsViewRouter = router({
             const myCtx = ctx as RouterContext;
 
             const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
-            const tableData = session.getCurrentPageAsTable(input);
+            const tablePage = session.getCurrentPageAsTable(input);
 
-            return tableData;
+            return tablePage;
         }),
     getCurrentPageAsTree: publicProcedureWithTelemetry
         // procedure type
@@ -295,9 +295,9 @@ export const collectionsViewRouter = router({
             const myCtx = ctx as RouterContext;
 
             const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
-            const treeData = session.getCurrentPageAsTree();
+            const treeNodes = session.getCurrentPageAsTree();
 
-            return treeData;
+            return treeNodes;
         }),
     getCurrentPageAsJson: publicProcedureWithTelemetry
         // procedure type

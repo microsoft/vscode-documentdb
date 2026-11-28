@@ -7,7 +7,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type HarnessFixture } from './fixtures';
+import { fixtures, type HarnessFixture } from './fixtures';
 import { inertJson } from './template';
 
 const base: HarnessFixture = {
@@ -64,6 +64,35 @@ async function boot(fixture: unknown = base): Promise<ReturnType<typeof window.a
     vi.resetModules();
     await import('./runtime');
     return window.acquireVsCodeApi();
+}
+
+const collectionRows = ['Stage 0 fixture row Alpha', 'Stage 0 fixture row Beta'];
+const collectionFixture: HarnessFixture = {
+    ...fixtures.collectionView,
+    view: 'collectionView',
+    assetRoot: '/stage0/l2/artifact',
+    brokenCss: false,
+    monaco: false,
+};
+
+function settleCollectionView(
+    text: string,
+    options: { readonly grid?: boolean; readonly gridDisplay?: boolean } = {},
+): void {
+    const grid = options.grid ?? true;
+    const gridDisplay = options.gridDisplay ?? true;
+    document.body.insertAdjacentHTML(
+        'beforeend',
+        `<div class="collectionView" style="display: flex">
+            <div class="monaco-editor" style="position: relative">
+                <div class="overflow-guard" style="overflow: hidden">
+                    <div class="view-lines" style="position: absolute"></div>
+                </div>
+            </div>
+            ${grid ? `<div role="grid"${gridDisplay ? ' style="display: grid"' : ''}></div>` : ''}
+        </div>`,
+    );
+    Object.defineProperty(document.body, 'innerText', { configurable: true, value: text });
 }
 
 describe('Stage 0 L2 fixture transport', (): void => {
@@ -197,6 +226,41 @@ describe('Stage 0 L2 fixture transport', (): void => {
         const report = await window.stage0Harness.check();
         expect(report.errors).toContain('CSP: script-src: http://invalid.example/chunk.js');
         expect(report.errors).toContain('vite:preloadError');
+    });
+
+    it('rejects a settled Collection View shell without fixture results', async (): Promise<void> => {
+        await boot(collectionFixture);
+        settleCollectionView('Documents');
+        vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 640, 480));
+
+        const report = await window.stage0Harness.check();
+
+        expect(report.errors).toContain(`Fixture content has not settled: ${collectionFixture.content.join(', ')}`);
+    });
+
+    it('rejects Collection View rows when the required grid is missing', async (): Promise<void> => {
+        await boot(collectionFixture);
+        settleCollectionView(['Documents', ...collectionRows].join(' '), { grid: false });
+        vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 640, 480));
+
+        const report = await window.stage0Harness.check();
+
+        expect(report.errors).toContain('Style [role="grid"] display: expected grid, got <missing>');
+    });
+
+    it.each(['width', 'height'] as const)('rejects zero Collection View grid %s', async (dimension): Promise<void> => {
+        await boot(collectionFixture);
+        settleCollectionView(['Documents', ...collectionRows].join(' '));
+        vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element): DOMRect {
+            if (this.matches('[role="grid"]')) {
+                return new DOMRect(0, 0, dimension === 'width' ? 0 : 640, dimension === 'height' ? 0 : 480);
+            }
+            return new DOMRect(0, 0, 640, 480);
+        });
+
+        const report = await window.stage0Harness.check();
+
+        expect(report.errors).toContain('Empty layout: [role="grid"]');
     });
 
     it('never constructs a standalone worker or sends its own messages when checking', async (): Promise<void> => {
@@ -456,6 +520,18 @@ describe('Stage 0 L2 fixture transport', (): void => {
                 'Style #css-probe display: expected flex, got block',
                 'Empty layout: #css-probe',
             ]);
+        });
+
+        it('reports the Collection View grid style alone when bundle CSS is removed', async (): Promise<void> => {
+            document.head.innerHTML = '<style data-documentdb-views-css>[role="grid"] { display: grid; }</style>';
+            await boot({ ...collectionFixture, brokenCss: 'bundle-stylesheet' });
+            settleCollectionView(['Documents', ...collectionRows].join(' '), { gridDisplay: false });
+            vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 640, 480));
+            await Promise.resolve();
+
+            const report = await window.stage0Harness.check();
+
+            expect(report.errors).toEqual(['Style [role="grid"] display: expected grid, got block']);
         });
 
         it('fails loudly if only an unmarked or renamed stylesheet is inserted, but accepts a later marked removal', async (): Promise<void> => {

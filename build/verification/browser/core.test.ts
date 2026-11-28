@@ -8,7 +8,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { fakeVsCodeApi } from './core/fakeVsCodeApi';
-import { type FixtureOutputs, type RpcFixtures } from './core/fixtures';
+import { isRpcFixture, type FixtureOutputs, type RpcFixtures, type TypedRpcFixtures } from './core/fixtures';
 
 const port: FixtureOutputs['localQuickStart']['checkPort'] = 'available';
 const rpc = {
@@ -132,5 +132,154 @@ describe('Shared browser fixture core', (): void => {
         expect(window.__harnessCalls).toEqual([]);
         expect(next.getState()).toBeUndefined();
         expect(api.getState()).toEqual({ active: true });
+    });
+
+    it('uses the first JSON-input match and otherwise preserves the default response', async (): Promise<void> => {
+        type Page = FixtureOutputs['mongoClusters']['collectionView']['getCurrentPageAsTable'];
+        const root: Page = { path: [], columns: [], rows: [] };
+        const nested: Page = { path: ['details'], columns: [], rows: [] };
+        const ignored: Page = { path: ['wrong'], columns: [], rows: [] };
+        const responses = {
+            'mongoClusters.collectionView.getCurrentPageAsTable': {
+                type: 'query',
+                results: [root],
+                cases: [
+                    { input: ['details'], results: [nested] },
+                    { input: ['details'], results: [ignored] },
+                ],
+            },
+        } satisfies TypedRpcFixtures;
+        const messages = vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
+        const api = fakeVsCodeApi(responses, [])();
+        api.postMessage({
+            id: 'nested',
+            op: { type: 'query', path: 'mongoClusters.collectionView.getCurrentPageAsTable', input: ['details'] },
+        });
+        api.postMessage({
+            id: 'root',
+            op: { type: 'query', path: 'mongoClusters.collectionView.getCurrentPageAsTable', input: [] },
+        });
+        await Promise.resolve();
+        expect(messages.mock.calls.map((call): unknown => call[0])).toEqual([
+            { id: 'nested', result: nested },
+            { id: 'nested', complete: true },
+            { id: 'root', result: root },
+            { id: 'root', complete: true },
+        ]);
+    });
+
+    it('holds a void reply until explicit release and sends null on the wire', async (): Promise<void> => {
+        const errors: string[] = [];
+        const responses = {
+            'mongoClusters.collectionView.viewDocumentById': { type: 'mutation', results: [null], hold: 'view' },
+        } satisfies TypedRpcFixtures;
+        const messages = vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
+        const api = fakeVsCodeApi(responses, errors)();
+        api.postMessage({
+            id: 'view',
+            op: { type: 'mutation', path: 'mongoClusters.collectionView.viewDocumentById', input: '"a"' },
+        });
+        await Promise.resolve();
+        expect(messages).not.toHaveBeenCalled();
+        expect(window.__releaseScenarioReply?.('view')).toBe(true);
+        expect(messages.mock.calls.map((call): unknown => call[0])).toEqual([
+            { id: 'view', result: null },
+            { id: 'view', complete: true },
+        ]);
+        expect(window.__releaseScenarioReply?.('view')).toBe(false);
+        expect(errors).toEqual(['No held scenario reply: view']);
+    });
+
+    it('keeps case holds independent of the default hold', async (): Promise<void> => {
+        const errors: string[] = [];
+        const responses = {
+            'mongoClusters.collectionView.deleteDocumentsById': {
+                type: 'mutation',
+                results: [true],
+                hold: 'default',
+                cases: [
+                    { input: ['"a"'], results: [false], hold: 'cancelled' },
+                    { input: ['"immediate"'], results: [true] },
+                ],
+            },
+        } satisfies TypedRpcFixtures;
+        const messages = vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
+        const api = fakeVsCodeApi(responses, errors)();
+        api.postMessage({
+            id: 'a',
+            op: { type: 'mutation', path: 'mongoClusters.collectionView.deleteDocumentsById', input: ['"a"'] },
+        });
+        api.postMessage({
+            id: 'b',
+            op: { type: 'mutation', path: 'mongoClusters.collectionView.deleteDocumentsById', input: ['"b"'] },
+        });
+        api.postMessage({
+            id: 'immediate',
+            op: { type: 'mutation', path: 'mongoClusters.collectionView.deleteDocumentsById', input: ['"immediate"'] },
+        });
+        await Promise.resolve();
+        expect(messages.mock.calls.map((call): unknown => call[0])).toEqual([
+            { id: 'immediate', result: true },
+            { id: 'immediate', complete: true },
+        ]);
+        messages.mockClear();
+        expect(window.__releaseScenarioReply?.('cancelled')).toBe(true);
+        expect(messages.mock.calls.map((call): unknown => call[0])).toEqual([
+            { id: 'a', result: false },
+            { id: 'a', complete: true },
+        ]);
+        expect(window.__releaseScenarioReply?.('default')).toBe(true);
+        expect(messages.mock.calls.map((call): unknown => call[0]).slice(2)).toEqual([
+            { id: 'b', result: true },
+            { id: 'b', complete: true },
+        ]);
+        expect(errors).toEqual([]);
+    });
+
+    it('removes aborted held replies without discarding other pending requests', (): void => {
+        const errors: string[] = [];
+        const responses = {
+            'mongoClusters.collectionView.deleteDocumentsById': { type: 'mutation', results: [true], hold: 'delete' },
+        } satisfies TypedRpcFixtures;
+        const messages = vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
+        const api = fakeVsCodeApi(responses, errors)();
+        for (const id of ['aborted', 'live']) {
+            api.postMessage({
+                id,
+                op: { type: 'mutation', path: 'mongoClusters.collectionView.deleteDocumentsById', input: ['"a"'] },
+            });
+        }
+        api.postMessage({ id: 'aborted', op: { type: 'abort' } });
+        expect(window.__releaseScenarioReply?.('delete')).toBe(true);
+        expect(messages.mock.calls.map((call): unknown => call[0])).toEqual([
+            { id: 'live', result: true },
+            { id: 'live', complete: true },
+        ]);
+        expect(errors).toEqual([]);
+    });
+
+    it('does not release a held reply belonging to an earlier fake installation', (): void => {
+        const responses = {
+            'mongoClusters.collectionView.deleteDocumentsById': { type: 'mutation', results: [true], hold: 'old' },
+        } satisfies TypedRpcFixtures;
+        const messages = vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
+        const api = fakeVsCodeApi(responses, [])();
+        api.postMessage({
+            id: 'old',
+            op: { type: 'mutation', path: 'mongoClusters.collectionView.deleteDocumentsById', input: [] },
+        });
+        const errors: string[] = [];
+        fakeVsCodeApi({}, errors);
+        expect(window.__releaseScenarioReply?.('old')).toBe(false);
+        expect(errors).toEqual(['No held scenario reply: old']);
+        expect(messages).not.toHaveBeenCalled();
+    });
+
+    it('validates only well-formed optional input cases and hold tags', (): void => {
+        expect(
+            isRpcFixture({ type: 'query', results: [], cases: [{ input: [], results: [null], hold: 'nested' }] }),
+        ).toBe(true);
+        expect(isRpcFixture({ type: 'query', results: [], hold: 7 })).toBe(false);
+        expect(isRpcFixture({ type: 'query', results: [], cases: [{ input: [], results: null }] })).toBe(false);
     });
 });

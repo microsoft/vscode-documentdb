@@ -9,36 +9,16 @@ import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import { type Document, type Filter, type WithId } from 'mongodb';
 import { ext } from '../extensionVariables';
-import { getDataAtPath } from '../utils/slickgrid/mongo/toSlickGridTable';
-import { toSlickGridTree, type TreeData } from '../utils/slickgrid/mongo/toSlickGridTree';
+import { isIdentityTrustedForProjection } from '../utils/documentGrid/documentIdentity';
+import { toTablePage } from '../utils/documentGrid/toTablePage';
+import { toTreeNodes } from '../utils/documentGrid/toTreeNodes';
+import { type TablePage, type TreeNode } from '../utils/documentGrid/types';
 import { type QueryInsightsStage2Response } from '../webviews/documentdb/collectionView/types/queryInsights';
 import { ClustersClient, type FindQueryParams } from './ClustersClient';
 import { SchemaStore } from './SchemaStore';
 import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
 import { parseDocumentId } from './utils/parseDocumentId';
 import { toFilterQueryObj } from './utils/toFilterQuery';
-
-export type TableDataEntry = {
-    /**
-     * The unique identifier for the entry. It is used to identify the document in the table.
-     *
-     * @remarks
-     * The format of this identifier is a copy of the original '_id' value that is converted to EJSON and then stringified.
-     * This conversion is necessary to facilitate the movement of data between the extension and the webview,
-     * as webviews do not have access to the BSON library and require the identifier to be in string format.
-     *
-     * @type {string}
-     * @optional
-     */
-    'x-objectid'?: string;
-    [key: string]: unknown;
-};
-
-export interface TableData {
-    path: string[];
-    headers: string[];
-    data: TableDataEntry[];
-}
 
 /**
  * Parsed query parameters with BSON objects
@@ -111,6 +91,7 @@ export class ClusterSession {
      * This is NOT accumulated - it only contains the current page's data.
      */
     private _currentRawDocuments: WithId<Document>[] = [];
+    private _currentPageIdentityTrusted = false;
 
     /**
      * Query Insights caching
@@ -177,6 +158,7 @@ export class ClusterSession {
         // approximate/relative (e.g., "mostly String").
         this._currentPageSize = null;
         this._currentRawDocuments = [];
+        this._currentPageIdentityTrusted = false;
         this._lastExecutionTimeMs = undefined;
 
         // Clear query insights caches
@@ -263,6 +245,7 @@ export class ClusterSession {
         if (queryLimit > 0 && pageOffset >= queryLimit) {
             // We're trying to page beyond the query's limit - return empty results
             this._currentRawDocuments = [];
+            this._currentPageIdentityTrusted = false;
             return 0;
         }
 
@@ -294,6 +277,21 @@ export class ClusterSession {
             limit: dbLimit,
         };
 
+        let identityTrusted = true;
+        if (paginatedQueryParams.project && paginatedQueryParams.project.trim() !== '{}') {
+            try {
+                const projection: unknown = parseShellBSON(paginatedQueryParams.project, { mode: ParseMode.Loose });
+                identityTrusted =
+                    projection !== null &&
+                    typeof projection === 'object' &&
+                    !Array.isArray(projection) &&
+                    isIdentityTrustedForProjection(projection as Document);
+            } catch {
+                // The query execution retains its existing projection-error reporting.
+                identityTrusted = false;
+            }
+        }
+
         // Track execution time for query insights
         const startTime = performance.now();
         const documents: WithId<Document>[] = await this._client.runFindQuery(
@@ -305,6 +303,7 @@ export class ClusterSession {
 
         // Update current page documents (always replace, not accumulate)
         this._currentRawDocuments = documents;
+        this._currentPageIdentityTrusted = identityTrusted;
 
         // Store database/collection context for schema operations
         this._databaseName = databaseName;
@@ -327,8 +326,8 @@ export class ClusterSession {
         return this._currentRawDocuments.map((doc) => JSON.stringify(doc, null, 4));
     }
 
-    public getCurrentPageAsTree(): TreeData[] {
-        return toSlickGridTree(this._currentRawDocuments);
+    public getCurrentPageAsTree(): TreeNode[] {
+        return toTreeNodes(this._currentRawDocuments, this._currentPageIdentityTrusted);
     }
 
     async deleteDocuments(databaseName: string, collectionName: string, documentIds: string[]): Promise<boolean> {
@@ -350,18 +349,13 @@ export class ClusterSession {
         return acknowledged;
     }
 
-    public getCurrentPageAsTable(path: string[]): TableData {
+    public getCurrentPageAsTable(path: string[]): TablePage {
         const store = SchemaStore.getInstance();
-        const responsePack: TableData = {
-            path: path,
-            headers:
-                this._databaseName && this._collectionName
-                    ? store.getPropertyNamesAtLevel(this._clusterId, this._databaseName, this._collectionName, path)
-                    : [],
-            data: getDataAtPath(this._currentRawDocuments, path),
-        };
-
-        return responsePack;
+        const headers =
+            this._databaseName && this._collectionName
+                ? store.getPropertyNamesAtLevel(this._clusterId, this._databaseName, this._collectionName, path)
+                : [];
+        return toTablePage(this._currentRawDocuments, path, headers, this._currentPageIdentityTrusted);
     }
 
     /**

@@ -5,6 +5,7 @@
 
 import { InstanceState, type StageEvent } from '../../../src/services/localQuickStart/quickStartTypes';
 import { type WebviewName } from '../../../src/webviews/_integration/WebviewRegistry';
+import { collectionViewFixtures } from './collectionViewFixtures';
 import {
     type FixtureAtPath,
     type FixtureInputs,
@@ -44,13 +45,31 @@ export interface ScenarioReadiness {
     readonly noProgressbar: boolean;
 }
 
+export type ScenarioTargetRole =
+    | 'button'
+    | 'link'
+    | 'switch'
+    | 'menuitem'
+    | 'radio'
+    | 'textbox'
+    | 'row'
+    | 'gridcell'
+    | 'columnheader'
+    | 'grid'
+    | 'treegrid'
+    | 'combobox'
+    | 'option';
+
 export type ScenarioStep =
+    | { readonly action: 'releaseReply'; readonly tag: string }
+    | { readonly action: 'click'; readonly role: ScenarioTargetRole; readonly name: string }
+    | { readonly action: 'fill'; readonly role: 'textbox'; readonly name: string; readonly value: string }
+    | { readonly action: 'press'; readonly key: string }
     | {
-          readonly action: 'click';
-          readonly role: 'button' | 'link' | 'switch' | 'menuitem' | 'radio';
+          readonly action: 'dblclick' | 'focus';
+          readonly role: ScenarioTargetRole;
           readonly name: string;
-      }
-    | { readonly action: 'fill'; readonly role: 'textbox'; readonly name: string; readonly value: string };
+      };
 
 type CallAssertion = {
     [P in FixturePaths]: {
@@ -69,6 +88,7 @@ interface OrderAssertion {
     readonly name: string;
     readonly selector: string;
     readonly texts: readonly string[];
+    readonly steps?: readonly ScenarioStep[];
 }
 
 /** `below` follows `above` in the document and starts at or under its bottom edge. */
@@ -89,6 +109,9 @@ interface TextAssertion {
     readonly selector: string;
     readonly includes: readonly string[];
     readonly excludes: readonly string[];
+    readonly steps?: readonly ScenarioStep[];
+    /** Poll the same text condition for up to 3 seconds after the steps instead of snapshotting once. */
+    readonly waitForText?: boolean;
 }
 
 /**
@@ -165,18 +188,34 @@ interface SequenceAssertion {
     readonly minimumSpanMs: number;
 }
 
-export type ScenarioAssertion =
+interface FocusedAssertion {
+    readonly kind: 'focused';
+    readonly name: string;
+    readonly target: { readonly role: ScenarioTargetRole; readonly name: string } | { readonly selector: string };
+    readonly steps?: readonly ScenarioStep[];
+}
+
+export type ScenarioAssertion = (
     | CallAssertion
     | SequenceAssertion
-    | ({ readonly kind: 'style' } & StyleExpectation)
+    | ({ readonly kind: 'style'; readonly name?: string } & StyleExpectation)
     | OrderAssertion
     | BelowAssertion
     | TextAssertion
     | RowHeightsAssertion
     | TopAssertion
     | AttributeAssertion
+    | FocusedAssertion
     | InsideAssertion
-    | StableTextAssertion;
+    | StableTextAssertion
+    | {
+          readonly kind: 'countAtMost';
+          readonly name: string;
+          readonly selector: string;
+          readonly max: number;
+          readonly steps?: readonly ScenarioStep[];
+      }
+) & { readonly requiresGrid?: 'grid' | 'treegrid' };
 
 export interface Scenario<V extends WebviewName = WebviewName> {
     readonly config: (typeof fixtures)[V]['config'];
@@ -224,6 +263,1467 @@ function defaultScenario<V extends WebviewName>(view: V, steps: readonly Scenari
 }
 
 const base = fixtures.localQuickStart;
+const collectionViewBase = defaultScenario('collectionView');
+const collectionViewPresetReadiness: ScenarioReadiness = {
+    content: ['Documents'],
+    selectors: ['.collectionView', '.monaco-editor', '.monaco-editor .overflow-guard', '.monaco-editor .view-lines'],
+    noProgressbar: true,
+};
+
+function collectionViewScenario(name: keyof typeof collectionViewFixtures): Scenario<'collectionView'> {
+    const fixture = collectionViewFixtures[name];
+    return {
+        config: 'config' in fixture ? { ...collectionViewBase.config, ...fixture.config } : collectionViewBase.config,
+        rpc: {
+            ...collectionViewBase.rpc,
+            'common.reportEvent': { type: 'mutation', results: [null] },
+            'common.reportError': { type: 'mutation', results: [null] },
+            'common.reportViewLoad': { type: 'mutation', results: [null] },
+            'mongoClusters.collectionView.viewDocumentById': { type: 'mutation', results: [null] },
+            'mongoClusters.collectionView.editDocumentById': { type: 'mutation', results: [null] },
+            'mongoClusters.collectionView.deleteDocumentsById': { type: 'mutation', results: [true] },
+            'mongoClusters.collectionView.setCollectionDocumentView': { type: 'mutation', results: [null] },
+            ...fixture.rpc,
+        },
+        readiness:
+            'readiness' in fixture
+                ? { ...collectionViewPresetReadiness, ...fixture.readiness }
+                : collectionViewPresetReadiness,
+        assertions: collectionViewContracts[name],
+    };
+}
+
+interface MixedTypesColumnExpectation {
+    readonly texts?: readonly [string | undefined, string | undefined];
+    readonly indicator?: string;
+    readonly numericIndicator?: string;
+}
+
+const mixedTypesExpectations: Readonly<Record<number, MixedTypesColumnExpectation>> = {
+    2: { texts: ['fixture text', undefined], indicator: 'Ab' },
+    3: { texts: ['7', '-4.5'], indicator: 'i32', numericIndicator: '.12' },
+    4: { texts: ['true', 'false'], indicator: 'tf' },
+    5: { texts: ['2026-01-02T03:04:05.000Z', undefined], indicator: 'DT' },
+    6: { texts: ['12.50', undefined], indicator: 'd128', numericIndicator: 'L' },
+    7: { texts: ['000000000000000000000002', undefined], indicator: 'ID' },
+    8: { texts: ['00112233-4455-6677-8899-aabbccddeeff', undefined], indicator: 'U' },
+    9: { texts: ['AQI=', undefined], indicator: '01' },
+    10: { texts: ['array[3]', 'array[0]'], indicator: '[ ]' },
+    11: { indicator: '{ }' },
+    12: { indicator: 'U~' },
+};
+
+function resultsGridNavigationContracts(
+    role: 'grid' | 'treegrid',
+    firstHeader: string,
+    columnCount: number,
+    visibleRowCount: number,
+): ScenarioAssertion[] {
+    const grid = `[role="${role}"]`;
+    const contract = role === 'grid' ? 'M6' : 'M5';
+    const cell = (row: number, column: number): string =>
+        `${grid} [role="row"][aria-rowindex="${row}"] [role="gridcell"][aria-colindex="${column}"]`;
+    const focused = (name: string, selector: string, steps: readonly ScenarioStep[]): ScenarioAssertion => ({
+        kind: 'focused',
+        name: `TDD: ${contract} ${name}`,
+        requiresGrid: role,
+        target: { selector },
+        steps,
+    });
+    return [
+        focused('Ctrl+Home reaches the upper-left header', `${grid} [role="columnheader"][aria-colindex="1"]`, [
+            { action: 'focus', role: 'columnheader', name: firstHeader },
+            { action: 'press', key: 'Control+Home' },
+        ]),
+        focused('Tab moves to the next header', `${grid} [role="columnheader"][aria-colindex="2"]`, [
+            { action: 'press', key: 'Tab' },
+        ]),
+        focused('Shift+Tab returns to the previous header', `${grid} [role="columnheader"][aria-colindex="1"]`, [
+            { action: 'press', key: 'Shift+Tab' },
+        ]),
+        focused(
+            'Tab crosses from headers to the first data cell',
+            cell(2, 1),
+            Array.from({ length: columnCount }, (): ScenarioStep => ({ action: 'press', key: 'Tab' })),
+        ),
+        focused(
+            'Shift+Tab crosses back to the last header',
+            `${grid} [role="columnheader"][aria-colindex="${columnCount}"]`,
+            [{ action: 'press', key: 'Shift+Tab' }],
+        ),
+        focused('Tab crosses a data row boundary', cell(3, 1), [
+            { action: 'press', key: 'Tab' },
+            { action: 'press', key: 'End' },
+            { action: 'press', key: 'Tab' },
+        ]),
+        focused('Shift+Tab crosses the same data row boundary backwards', cell(2, columnCount), [
+            { action: 'press', key: 'Shift+Tab' },
+        ]),
+        focused('Ctrl+End reaches the last column at the end of the grid', cell(visibleRowCount + 1, columnCount), [
+            { action: 'press', key: 'Control+End' },
+        ]),
+        focused('Shift+Tab crosses the final data row boundary backwards', cell(visibleRowCount, columnCount), [
+            { action: 'press', key: 'Home' },
+            { action: 'press', key: 'Shift+Tab' },
+        ]),
+        focused('Tab crosses the final data row boundary forwards', cell(visibleRowCount + 1, 1), [
+            { action: 'press', key: 'Tab' },
+        ]),
+        focused('End returns to the final cell', cell(visibleRowCount + 1, columnCount), [
+            { action: 'press', key: 'End' },
+        ]),
+        focused('Escape focuses the existing view picker', '.collectionDocumentViewSwitcher [role="combobox"]', [
+            { action: 'press', key: 'Escape' },
+        ]),
+        {
+            kind: 'style',
+            name: `TDD: ${contract} the remembered cell has no focus outline after Escape`,
+            requiresGrid: role,
+            selector: `${grid} [role="gridcell"][aria-selected="true"]`,
+            property: 'outline-style',
+            expected: 'none',
+        },
+        focused('Tab reentry preserves the active cell', cell(visibleRowCount + 1, columnCount), [
+            { action: 'press', key: 'Tab' },
+        ]),
+        {
+            kind: 'style',
+            name: `TDD: ${contract} the focused active cell has a focus outline`,
+            requiresGrid: role,
+            selector: `${grid} [role="gridcell"]:focus`,
+            property: 'outline-style',
+            expected: 'solid',
+        },
+        focused(
+            'Ctrl+Home returns from the last cell to the upper-left header',
+            `${grid} [role="columnheader"][aria-colindex="1"]`,
+            [{ action: 'press', key: 'Control+Home' }],
+        ),
+        focused('Shift+Tab leaves only at the upper-left header', '.collectionDocumentViewSwitcher [role="combobox"]', [
+            { action: 'press', key: 'Shift+Tab' },
+        ]),
+        {
+            kind: 'style',
+            name: `TDD: ${contract} the remembered header has no focus outline after exit`,
+            requiresGrid: role,
+            selector: `${grid} [role="columnheader"][aria-selected="true"]`,
+            property: 'outline-style',
+            expected: 'none',
+        },
+        focused('Tab enters the remembered header', `${grid} [role="columnheader"][aria-colindex="1"]`, [
+            { action: 'press', key: 'Tab' },
+        ]),
+        focused(
+            'Escape from a header also focuses the existing view picker',
+            '.collectionDocumentViewSwitcher [role="combobox"]',
+            [{ action: 'press', key: 'Escape' }],
+        ),
+        focused('Tab reenters the header after Escape', `${grid} [role="columnheader"][aria-colindex="1"]`, [
+            { action: 'press', key: 'Tab' },
+        ]),
+        focused(
+            'Tab leaves at the last cell',
+            ':not([role="grid"], [role="treegrid"], [role="grid"] *, [role="treegrid"] *)',
+            [
+                { action: 'press', key: 'Control+End' },
+                { action: 'press', key: 'Tab' },
+            ],
+        ),
+        {
+            kind: 'attribute',
+            name: `TDD: ${contract} the view picker popup handles its own Escape`,
+            requiresGrid: role,
+            selector: '.collectionDocumentViewSwitcher [role="combobox"]',
+            attribute: 'aria-expanded',
+            expected: 'false',
+            steps: [
+                { action: 'click', role: 'combobox', name: 'Select view type' },
+                { action: 'press', key: 'Escape' },
+            ],
+        },
+    ];
+}
+
+// These are browser user-outcome contracts, not assertions about the grid package's DOM classes.
+export const collectionViewContracts = {
+    'mixed-types': [
+        ...collectionViewFixtures['mixed-types'].tablePage.columns.flatMap(({ label }, index): ScenarioAssertion[] => {
+            const column = index + 1;
+            const expectation = mixedTypesExpectations[column];
+            // Assertions run after readiness; finish both rows/types before advancing the header.
+            const advance: ScenarioStep =
+                column === 1
+                    ? { action: 'focus', role: 'columnheader', name: '_id' }
+                    : { action: 'press', key: 'ArrowRight' };
+            return [
+                ...[2, 3].map((row): ScenarioAssertion => {
+                    const text = expectation?.texts?.[row - 2];
+                    return {
+                        kind: 'text',
+                        name: `TDD: K5 BSON values retain their formatted text (${label}, row ${row - 1})`,
+                        requiresGrid: 'grid',
+                        selector: `[role="grid"] [role="row"][aria-rowindex="${row}"] [role="gridcell"][aria-colindex="${column}"]`,
+                        includes: text === undefined ? [] : [text],
+                        excludes: ['\\[object Object\\]'],
+                        steps: row === 2 ? [advance] : [],
+                    };
+                }),
+                ...(expectation?.indicator === undefined
+                    ? []
+                    : [
+                          {
+                              kind: 'text',
+                              name: `TDD: K7 distinct cell type indicator ${expectation.indicator}`,
+                              requiresGrid: 'grid',
+                              selector: `[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="${column}"]`,
+                              includes: [expectation.indicator],
+                              excludes: [],
+                          } as const,
+                      ]),
+                ...(expectation?.numericIndicator === undefined
+                    ? []
+                    : [
+                          {
+                              kind: 'text',
+                              name: `TDD: K5 numeric type ${expectation.numericIndicator} is not reduced to an ordinary number`,
+                              requiresGrid: 'grid',
+                              selector: `[role="grid"] [role="row"][aria-rowindex="3"] [role="gridcell"][aria-colindex="${column}"]`,
+                              includes: [expectation.numericIndicator],
+                              excludes: [],
+                          } as const,
+                      ]),
+            ];
+        }),
+        {
+            kind: 'style',
+            name: 'TDD: K10 grid background follows the VS Code theme',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            property: 'background-color',
+            expected: '',
+        },
+        {
+            kind: 'style',
+            name: 'TDD: K10 grid text follows the VS Code theme',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            property: 'color',
+            expected: '',
+        },
+        {
+            kind: 'attribute',
+            name: 'TDD: K7 visual BSON glyph is hidden from the accessible name',
+            requiresGrid: 'grid',
+            selector:
+                '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="3"] > span > span:last-child',
+            attribute: 'aria-hidden',
+            expected: 'true',
+            steps: [
+                { action: 'press', key: 'Home' },
+                { action: 'press', key: 'ArrowRight' },
+                { action: 'press', key: 'ArrowRight' },
+            ],
+        },
+        {
+            kind: 'attribute',
+            name: 'TDD: M6 typed value introduces no extra cell Tab stop',
+            requiresGrid: 'grid',
+            selector:
+                '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="3"] [tabindex]:not([tabindex="-1"])',
+            attribute: 'tabindex',
+            expected: null,
+        },
+    ],
+    'missing-vs-null': [
+        {
+            kind: 'order',
+            name: 'TDD: K6 missing, null, empty string, false and zero remain distinct',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="row"][aria-rowindex] [role="gridcell"][aria-colindex="2"]',
+            texts: ['', 'null', 'Ab', 'false', '0'],
+        },
+        {
+            kind: 'text',
+            name: 'TDD: K6 missing value is blank rather than typed null or string',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="2"]',
+            includes: [],
+            excludes: ['null', 'Ab'],
+        },
+    ],
+    heterogeneous: [
+        {
+            kind: 'order',
+            name: 'TDD: K3 columns include fields absent from the first document',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="columnheader"]',
+            texts: ['_id', 'name', 'quantity', 'details', 'tags'],
+        },
+        {
+            kind: 'text',
+            name: 'TDD: K3 heterogeneous documents remain rows',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            includes: ['Alpha', 'Beta', 'unavailable', 'null'],
+            excludes: [],
+        },
+        {
+            kind: 'focused',
+            name: 'TDD: M6 arrows navigate headers',
+            requiresGrid: 'grid',
+            target: { role: 'columnheader', name: 'name' },
+            steps: [
+                { action: 'focus', role: 'columnheader', name: '_id' },
+                { action: 'press', key: 'ArrowRight' },
+            ],
+        },
+        {
+            kind: 'focused',
+            name: 'TDD: M6 Down enters cells and Right moves to the next cell',
+            requiresGrid: 'grid',
+            target: { selector: '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="2"]' },
+            steps: [
+                { action: 'press', key: 'ArrowLeft' },
+                { action: 'press', key: 'ArrowDown' },
+                { action: 'press', key: 'ArrowRight' },
+            ],
+        },
+        {
+            kind: 'focused',
+            name: 'TDD: M6 Down moves to the next document without changing column',
+            requiresGrid: 'grid',
+            target: { selector: '[role="grid"] [role="row"][aria-rowindex="3"] [role="gridcell"][aria-colindex="2"]' },
+            steps: [{ action: 'press', key: 'ArrowDown' }],
+        },
+        {
+            kind: 'focused',
+            name: 'TDD: M6 Up returns to the header',
+            requiresGrid: 'grid',
+            target: { role: 'columnheader', name: 'name' },
+            steps: [
+                { action: 'press', key: 'ArrowUp' },
+                { action: 'press', key: 'ArrowUp' },
+            ],
+        },
+        ...resultsGridNavigationContracts('grid', '_id', 5, 3),
+    ],
+    'deep-nesting': [
+        {
+            kind: 'order',
+            name: 'TDD: M4 tree exposes Field, Value and Type columns',
+            requiresGrid: 'treegrid',
+            selector: '[role="treegrid"] [role="columnheader"]',
+            texts: ['Field', 'Value', 'Type'],
+        },
+        {
+            kind: 'text',
+            name: 'TDD: M4 document root is labelled by its ID and starts collapsed',
+            requiresGrid: 'treegrid',
+            selector: '[role="treegrid"]',
+            includes: ['"deep-root"', '{...}'],
+            excludes: ['profile', 'latitude'],
+        },
+        {
+            kind: 'order',
+            name: 'TDD: M4 each document has its own initially visible root',
+            requiresGrid: 'treegrid',
+            selector: '[role="treegrid"] [role="row"][aria-level="1"]',
+            texts: ['"deep-root"', '"second-root"'],
+        },
+        {
+            kind: 'attribute',
+            name: 'TDD: M5 root exposes collapsed state and level',
+            requiresGrid: 'treegrid',
+            selector: '[role="treegrid"] [role="row"][aria-level="1"]',
+            attribute: 'aria-expanded',
+            expected: 'false',
+        },
+        {
+            kind: 'attribute',
+            name: 'TDD: M5 Right navigates without expanding a focused root',
+            requiresGrid: 'treegrid',
+            selector: '[role="treegrid"] [role="row"][aria-level="1"]',
+            attribute: 'aria-expanded',
+            expected: 'false',
+            steps: [
+                { action: 'focus', role: 'gridcell', name: '"deep-root"' },
+                { action: 'press', key: 'ArrowRight' },
+            ],
+        },
+        {
+            kind: 'focused',
+            name: 'TDD: M5 Right moves from Field to Value',
+            requiresGrid: 'treegrid',
+            target: {
+                selector: '[role="treegrid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="2"]',
+            },
+        },
+        {
+            kind: 'attribute',
+            name: 'TDD: M5 Enter expands a focused root',
+            requiresGrid: 'treegrid',
+            selector: '[role="treegrid"] [role="row"][aria-level="1"]',
+            attribute: 'aria-expanded',
+            expected: 'true',
+            steps: [
+                { action: 'press', key: 'ArrowLeft' },
+                { action: 'press', key: 'Enter' },
+            ],
+        },
+        {
+            kind: 'focused',
+            name: 'TDD: M5 expansion keeps focus on the surviving Field cell',
+            requiresGrid: 'treegrid',
+            target: { role: 'gridcell', name: '"deep-root"' },
+        },
+        {
+            kind: 'focused',
+            name: 'TDD: M5 Right on an expanded Field still moves to Value',
+            requiresGrid: 'treegrid',
+            target: {
+                selector: '[role="treegrid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="2"]',
+            },
+            steps: [{ action: 'press', key: 'ArrowRight' }],
+        },
+        {
+            kind: 'attribute',
+            name: 'TDD: M5 Left at an expanded Field does not collapse the node',
+            requiresGrid: 'treegrid',
+            selector: '[role="treegrid"] [role="row"][aria-level="1"]',
+            attribute: 'aria-expanded',
+            expected: 'true',
+            steps: [
+                { action: 'press', key: 'ArrowLeft' },
+                { action: 'press', key: 'ArrowLeft' },
+            ],
+        },
+        {
+            kind: 'focused',
+            name: 'TDD: M5 Down reaches the next visible child Field',
+            requiresGrid: 'treegrid',
+            target: { selector: '[role="treegrid"] [role="row"][aria-level="2"] [role="gridcell"][aria-colindex="1"]' },
+            steps: [{ action: 'press', key: 'ArrowDown' }],
+        },
+        {
+            kind: 'focused',
+            name: 'TDD: M5 Left at Field stays in the cell rather than focusing the row or parent',
+            requiresGrid: 'treegrid',
+            target: { selector: '[role="treegrid"] [role="row"][aria-level="2"] [role="gridcell"][aria-colindex="1"]' },
+            steps: [{ action: 'press', key: 'ArrowLeft' }],
+        },
+        {
+            kind: 'focused',
+            name: 'TDD: M5 Down visits the next visible sibling rather than a direct child shortcut',
+            requiresGrid: 'treegrid',
+            target: { role: 'gridcell', name: 'profile' },
+            steps: [{ action: 'press', key: 'ArrowDown' }],
+        },
+        {
+            kind: 'focused',
+            name: 'TDD: M5 Up visits the previous visible sibling rather than a direct parent shortcut',
+            requiresGrid: 'treegrid',
+            target: { selector: '[role="treegrid"] [role="row"][aria-level="2"] [role="gridcell"][aria-colindex="1"]' },
+            steps: [{ action: 'press', key: 'ArrowUp' }],
+        },
+        {
+            kind: 'focused',
+            name: 'TDD: M5 Up reaches the preceding visible parent',
+            requiresGrid: 'treegrid',
+            target: { role: 'gridcell', name: '"deep-root"' },
+            steps: [{ action: 'press', key: 'ArrowUp' }],
+        },
+        {
+            kind: 'attribute',
+            name: 'TDD: M5 Enter collapses the parent',
+            requiresGrid: 'treegrid',
+            selector: '[role="treegrid"] [role="row"][aria-level="1"]',
+            attribute: 'aria-expanded',
+            expected: 'false',
+            steps: [{ action: 'press', key: 'Enter' }],
+        },
+        {
+            kind: 'focused',
+            name: 'TDD: M5 collapse keeps focus on the surviving Field cell',
+            requiresGrid: 'treegrid',
+            target: { role: 'gridcell', name: '"deep-root"' },
+        },
+        {
+            kind: 'text',
+            name: 'TDD: M4 deeply nested document fields remain browsable',
+            requiresGrid: 'treegrid',
+            selector: '[role="treegrid"]',
+            includes: ['latitude', '47.6062', 'longitude', '-122.3321'],
+            excludes: [],
+            steps: [
+                { action: 'press', key: 'Enter' },
+                { action: 'focus', role: 'gridcell', name: 'profile' },
+                { action: 'press', key: 'Enter' },
+                { action: 'focus', role: 'gridcell', name: 'address' },
+                { action: 'press', key: 'Enter' },
+                { action: 'focus', role: 'gridcell', name: 'location' },
+                { action: 'press', key: 'Enter' },
+                { action: 'focus', role: 'gridcell', name: 'coordinates' },
+                { action: 'press', key: 'Enter' },
+            ],
+        },
+        {
+            kind: 'text',
+            name: 'TDD: M5 deep children expose the correct hierarchy level',
+            requiresGrid: 'treegrid',
+            selector: '[role="treegrid"] [role="row"][aria-level="6"]',
+            includes: ['latitude'],
+            excludes: [],
+        },
+        {
+            kind: 'stableText',
+            name: 'TDD: M5 Enter on a leaf does nothing',
+            requiresGrid: 'treegrid',
+            selector: '[role="treegrid"]',
+            steps: [
+                { action: 'focus', role: 'gridcell', name: 'latitude' },
+                { action: 'press', key: 'Enter' },
+            ],
+        },
+        {
+            kind: 'focused',
+            name: 'TDD: M5 leaf Enter preserves cell focus',
+            requiresGrid: 'treegrid',
+            target: { role: 'gridcell', name: 'latitude' },
+        },
+        {
+            kind: 'focused',
+            name: 'TDD: M5 the pointer chevron collapses and focuses its surviving Field cell',
+            requiresGrid: 'treegrid',
+            target: { role: 'gridcell', name: 'coordinates' },
+            steps: [{ action: 'click', role: 'button', name: 'Collapse fields for coordinates' }],
+        },
+        {
+            kind: 'attribute',
+            name: 'TDD: M5 pointer collapse retains the correct expanded state',
+            requiresGrid: 'treegrid',
+            selector: '[role="treegrid"] [role="row"][aria-level="5"]',
+            attribute: 'aria-expanded',
+            expected: 'false',
+        },
+        {
+            kind: 'text',
+            name: 'TDD: M5 the pointer chevron restores the deep children',
+            requiresGrid: 'treegrid',
+            selector: '[role="treegrid"] [role="row"][aria-level="6"]',
+            includes: ['latitude'],
+            excludes: [],
+            steps: [{ action: 'click', role: 'button', name: 'Expand fields for coordinates' }],
+        },
+        // Nine visible rows: the deep chain is open; the second root remains collapsed.
+        ...resultsGridNavigationContracts('treegrid', 'Field', 3, 9),
+    ],
+    arrays: [
+        {
+            kind: 'text',
+            name: 'TDD: M4 tree summaries retain counts for 0, 10 and 11 elements',
+            requiresGrid: 'treegrid',
+            selector: '[role="treegrid"]',
+            includes: ['(elements: 0)', '(elements: 10)', '(elements: 11)'],
+            excludes: ['ten\\[0\\]', 'eleven\\[0\\]'],
+            steps: [
+                { action: 'focus', role: 'gridcell', name: '"arrays-root"' },
+                { action: 'press', key: 'Enter' },
+            ],
+        },
+        {
+            kind: 'text',
+            name: 'TDD: M4 arrays of ten expand from the keyboard',
+            requiresGrid: 'treegrid',
+            selector: '[role="treegrid"]',
+            includes: ['ten[0]'],
+            excludes: ['eleven\\[0\\]'],
+            steps: [
+                { action: 'focus', role: 'gridcell', name: 'ten' },
+                { action: 'press', key: 'Enter' },
+            ],
+        },
+        {
+            kind: 'text',
+            name: 'TDD: M4 keyboard scrolling reaches the last child of an array of ten',
+            requiresGrid: 'treegrid',
+            selector: '[role="treegrid"]',
+            includes: ['ten[9]'],
+            excludes: ['eleven\\[0\\]'],
+            waitForText: true,
+            steps: [{ action: 'press', key: 'Control+End' }],
+        },
+        {
+            kind: 'focused',
+            name: 'TDD: M4 returning to the top restores focus to the over-ten array',
+            requiresGrid: 'treegrid',
+            target: { role: 'gridcell', name: 'eleven' },
+            steps: [
+                { action: 'press', key: 'Control+Home' },
+                { action: 'focus', role: 'gridcell', name: 'eleven' },
+            ],
+        },
+        {
+            kind: 'text',
+            name: 'TDD: M4 the top viewport is mounted before comparing over-ten array text',
+            requiresGrid: 'treegrid',
+            selector: '[role="treegrid"]',
+            includes: ['"arrays-root"', '(elements: 11)'],
+            excludes: ['eleven\\[0\\]'],
+            waitForText: true,
+        },
+        {
+            kind: 'stableText',
+            name: 'TDD: M4 arrays over ten do not gain children',
+            requiresGrid: 'treegrid',
+            selector: '[role="treegrid"]',
+            steps: [
+                { action: 'focus', role: 'gridcell', name: 'eleven' },
+                { action: 'press', key: 'Enter' },
+            ],
+        },
+        {
+            kind: 'text',
+            name: 'TDD: M4 JSON view retains the existing document payload',
+            requiresGrid: 'treegrid',
+            selector:
+                '.monaco-editor:has([role="textbox"][aria-label="JSON results view: Read-only display of query results in JSON format"])',
+            includes: ['arrays-root'],
+            excludes: [],
+            steps: [
+                { action: 'click', role: 'combobox', name: 'Select view type' },
+                { action: 'click', role: 'option', name: 'JSON View' },
+            ],
+        },
+        {
+            kind: 'text',
+            name: 'M4 supporting switch back to Table',
+            requiresGrid: undefined,
+            selector: '[role="grid"]',
+            includes: ['arrays-root', 'array[10]'],
+            excludes: [],
+            steps: [
+                { action: 'click', role: 'combobox', name: 'Select view type' },
+                { action: 'click', role: 'option', name: 'Table View' },
+            ],
+        },
+        {
+            kind: 'text',
+            name: 'TDD: M4 Table and Tree present the same document identity',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            includes: ['arrays-root', 'array[10]'],
+            excludes: [],
+        },
+    ],
+    'page-500': [
+        {
+            kind: 'attribute',
+            name: 'TDD: K11 the accessible grid reports the loaded 500-row page',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            attribute: 'aria-rowcount',
+            expected: '501',
+        },
+        {
+            kind: 'countAtMost',
+            name: 'TDD: K11 virtualization bounds mounted rows below the full page',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="row"]',
+            max: 100,
+        },
+        {
+            kind: 'text',
+            name: 'TDD: K11 keyboard scrolling reaches the last document',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            includes: ['page-499'],
+            excludes: [],
+            steps: [
+                { action: 'focus', role: 'columnheader', name: '_id' },
+                { action: 'press', key: 'ArrowDown' },
+                { action: 'press', key: 'Control+End' },
+            ],
+        },
+        {
+            kind: 'countAtMost',
+            name: 'TDD: K11 mounted rows stay bounded near the last document',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="row"]',
+            max: 100,
+        },
+        ...resultsGridNavigationContracts('grid', '_id', 2, 500),
+    ],
+    'html-values': [
+        {
+            kind: 'text',
+            name: 'TDD: K8 HTML-looking data remains literal cell text',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            includes: ['<strong>display-only text</strong> &amp; literal angle brackets < >'],
+            excludes: [],
+        },
+        {
+            kind: 'countAtMost',
+            name: 'TDD: K8 data never creates HTML elements',
+            requiresGrid: 'grid',
+            selector: '[role="gridcell"] strong, [role="gridcell"] img, [role="gridcell"] script',
+            max: 0,
+        },
+    ],
+    empty: [
+        {
+            kind: 'text',
+            name: 'K9 supporting empty-result announcement',
+            selector: '.collectionView [role="status"][aria-live="assertive"]',
+            includes: ['No results found'],
+            excludes: [],
+        },
+        {
+            kind: 'attribute',
+            name: 'TDD: K9 empty results leave only the grid header',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            attribute: 'aria-rowcount',
+            expected: '1',
+        },
+        {
+            kind: 'countAtMost',
+            name: 'TDD: K9 the completed empty query has no document cells',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="row"] [role="gridcell"]',
+            max: 0,
+        },
+    ],
+    'no-id': [
+        {
+            kind: 'attribute',
+            name: 'TDD: K1 no-ID rows remain selectable for browsing',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="row"][aria-rowindex="2"]',
+            attribute: 'aria-selected',
+            expected: 'true',
+            steps: [{ action: 'click', role: 'gridcell', name: 'Browse only' }],
+        },
+        ...['View selected document', 'Edit selected document', 'Delete selected document(s)'].map(
+            (name): ScenarioAssertion => ({
+                kind: 'attribute',
+                name: `TDD: K2 no-ID selection never enables ${name}`,
+                requiresGrid: 'grid',
+                selector: `.collectionView :is(button,[role="button"])[aria-label="${name}"]`,
+                attribute: 'disabled',
+                expected: '',
+            }),
+        ),
+        {
+            kind: 'calls',
+            name: 'TDD: K2 no-ID rows never become a delete target',
+            requiresGrid: 'grid',
+            path: 'mongoClusters.collectionView.deleteDocumentsById',
+            input: [],
+            count: 0,
+            steps: [],
+        },
+        {
+            kind: 'calls',
+            name: 'TDD: K2 a safe row beside a no-ID row still opens the right document',
+            requiresGrid: 'grid',
+            path: 'mongoClusters.collectionView.viewDocumentById',
+            input: '"ordinary-target"',
+            count: 1,
+            steps: [
+                { action: 'click', role: 'gridcell', name: 'Ordinary target' },
+                { action: 'click', role: 'button', name: 'View selected document' },
+            ],
+        },
+        {
+            kind: 'attribute',
+            name: 'TDD: K1 a no-ID row can join an ordinary row selection',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="row"][aria-rowindex="2"]',
+            attribute: 'aria-selected',
+            expected: 'true',
+            steps: [
+                { action: 'focus', role: 'gridcell', name: 'Browse only' },
+                { action: 'press', key: 'Space' },
+            ],
+        },
+        ...['View selected document', 'Edit selected document', 'Delete selected document(s)'].map(
+            (name): ScenarioAssertion => ({
+                kind: 'attribute',
+                name: `TDD: K2 a selection containing a no-ID row withholds ${name}`,
+                requiresGrid: 'grid',
+                selector: `.collectionView :is(button,[role="button"])[aria-label="${name}"]`,
+                attribute: 'disabled',
+                expected: '',
+            }),
+        ),
+        {
+            kind: 'text',
+            name: 'TDD: M7 Enter on a no-ID object cell steps in',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            includes: ['Nested browse-only result'],
+            excludes: ['Browse only'],
+            waitForText: true,
+            steps: [
+                { action: 'focus', role: 'gridcell', name: '{...}' },
+                { action: 'press', key: 'Enter' },
+            ],
+        },
+        {
+            kind: 'focused',
+            name: 'TDD: M7 keyboard step-in focuses a no-ID row',
+            requiresGrid: 'grid',
+            target: {
+                selector: '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="1"]',
+            },
+        },
+    ],
+    'first-load': [],
+    'step-in': [
+        {
+            kind: 'text',
+            name: 'TDD: M1 double-click steps into the field across the whole page',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            includes: ['nested Alpha', 'heterogeneous-1', 'heterogeneous-2', 'heterogeneous-3'],
+            excludes: ['Beta'],
+            steps: [{ action: 'dblclick', role: 'gridcell', name: '{...}' }],
+        },
+        {
+            kind: 'order',
+            name: 'TDD: K3 nested columns come from the current object level',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="columnheader"]',
+            texts: ['_id', 'nestedName', 'child'],
+        },
+        {
+            kind: 'text',
+            name: 'TDD: K4 root IDs remain visible while inspecting nested fields',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            includes: ['heterogeneous-1', 'heterogeneous-2', 'heterogeneous-3'],
+            excludes: [],
+        },
+        {
+            kind: 'calls',
+            name: 'TDD: K4 nested inspection still targets the root document',
+            requiresGrid: 'grid',
+            path: 'mongoClusters.collectionView.viewDocumentById',
+            input: '"heterogeneous-1"',
+            count: 1,
+            steps: [
+                { action: 'click', role: 'gridcell', name: 'nested Alpha' },
+                { action: 'click', role: 'button', name: 'View selected document' },
+            ],
+        },
+        {
+            kind: 'text',
+            name: 'TDD: M7 Enter on an object cell steps in',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            includes: ['leaf Alpha'],
+            excludes: ['nested Alpha'],
+            waitForText: true,
+            steps: [
+                { action: 'focus', role: 'gridcell', name: '{...}' },
+                { action: 'press', key: 'Enter' },
+            ],
+        },
+        {
+            kind: 'focused',
+            name: "TDD: M7 keyboard step-in focuses the same row's _id cell",
+            requiresGrid: 'grid',
+            target: {
+                selector: '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="1"]',
+            },
+        },
+        {
+            kind: 'focused',
+            name: 'TDD: M7 arrow keys continue after keyboard step-in',
+            requiresGrid: 'grid',
+            target: {
+                selector: '[role="grid"] [role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="2"]',
+            },
+            steps: [{ action: 'press', key: 'ArrowRight' }],
+        },
+        {
+            kind: 'attribute',
+            name: 'TDD: M7 Space selects after keyboard step-in',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="row"][aria-rowindex="2"]',
+            attribute: 'aria-selected',
+            expected: 'true',
+            steps: [{ action: 'press', key: 'Space' }],
+        },
+        {
+            kind: 'text',
+            name: 'TDD: M2 Level up returns to the parent data',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            includes: ['nested Alpha'],
+            excludes: ['leaf Alpha'],
+            steps: [{ action: 'click', role: 'button', name: 'Up' }],
+        },
+        {
+            kind: 'text',
+            name: 'TDD: M2 breadcrumb jumps to an ancestor',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            includes: ['nested Alpha'],
+            excludes: ['leaf Alpha'],
+            steps: [
+                { action: 'dblclick', role: 'gridcell', name: '{...}' },
+                { action: 'click', role: 'button', name: 'details' },
+            ],
+        },
+        {
+            kind: 'text',
+            name: 'TDD: M2 Root Level returns to root data',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            includes: ['Alpha', 'Beta'],
+            excludes: ['nested Alpha', 'leaf Alpha'],
+            steps: [{ action: 'click', role: 'button', name: 'Root Level' }],
+        },
+        {
+            kind: 'stableText',
+            name: 'TDD: M1 scalar and array cells are not step-in targets',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            steps: [
+                { action: 'dblclick', role: 'gridcell', name: 'Alpha' },
+                { action: 'dblclick', role: 'gridcell', name: 'array[2]' },
+            ],
+        },
+        {
+            kind: 'stableText',
+            name: 'TDD: M7 Enter on a scalar does not step in',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            steps: [
+                { action: 'focus', role: 'gridcell', name: 'Beta' },
+                { action: 'press', key: 'Enter' },
+            ],
+        },
+    ],
+    selection: [
+        {
+            kind: 'order',
+            name: 'WI-G2-5 supporting two selected rows before Escape',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="row"][aria-selected="true"]',
+            texts: ['Alpha', 'Beta'],
+            steps: [
+                { action: 'focus', role: 'gridcell', name: 'Alpha' },
+                { action: 'press', key: 'Space' },
+                { action: 'focus', role: 'gridcell', name: 'Beta' },
+                { action: 'press', key: 'Space' },
+            ],
+        },
+        {
+            kind: 'focused',
+            name: 'WI-G2-5 Escape keeps the exact focused cell',
+            requiresGrid: 'grid',
+            target: { selector: '[role="grid"] [role="row"][aria-rowindex="3"] [role="gridcell"][aria-colindex="2"]' },
+            steps: [{ action: 'press', key: 'Escape' }],
+        },
+        {
+            kind: 'attribute',
+            name: 'WI-G2-5 Escape clears all selected rows, not the active cell',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="row"][aria-selected="true"]',
+            attribute: 'role',
+            expected: null,
+        },
+        ...['View selected document', 'Edit selected document', 'Delete selected document(s)'].map(
+            (name): ScenarioAssertion => ({
+                kind: 'attribute',
+                name: `WI-G2-5 cell Escape disables ${name}`,
+                requiresGrid: 'grid',
+                selector: `.collectionView :is(button,[role="button"])[aria-label="${name}"]`,
+                attribute: 'disabled',
+                expected: '',
+            }),
+        ),
+        {
+            kind: 'order',
+            name: 'WI-G2-5 Space after clearing selects only the focused row',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="row"][aria-selected="true"]',
+            texts: ['Beta'],
+            steps: [{ action: 'press', key: 'Space' }],
+        },
+        {
+            kind: 'focused',
+            name: 'WI-G2-5 Escape clears the reselected row without leaving its cell',
+            requiresGrid: 'grid',
+            target: { selector: '[role="grid"] [role="row"][aria-rowindex="3"] [role="gridcell"][aria-colindex="2"]' },
+            steps: [{ action: 'press', key: 'Escape' }],
+        },
+        {
+            kind: 'attribute',
+            name: 'WI-G2-5 Escape also clears a single selected row',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="row"][aria-selected="true"]',
+            attribute: 'role',
+            expected: null,
+        },
+        {
+            kind: 'focused',
+            name: 'WI-G2-5 a distinct Escape with no selection returns to the view picker',
+            requiresGrid: 'grid',
+            target: { selector: '.collectionDocumentViewSwitcher [role="combobox"]' },
+            steps: [{ action: 'press', key: 'Escape' }],
+        },
+        {
+            kind: 'focused',
+            name: 'WI-G2-5 Escape clears selection while keeping the exact focused header',
+            requiresGrid: 'grid',
+            target: { selector: '[role="grid"] [role="columnheader"][aria-colindex="1"]' },
+            steps: [
+                { action: 'focus', role: 'gridcell', name: 'Alpha' },
+                { action: 'press', key: 'Space' },
+                { action: 'focus', role: 'columnheader', name: '_id' },
+                { action: 'press', key: 'Escape' },
+            ],
+        },
+        {
+            kind: 'attribute',
+            name: 'WI-G2-5 header Escape clears all selected rows',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="row"][aria-selected="true"]',
+            attribute: 'role',
+            expected: null,
+        },
+        {
+            kind: 'focused',
+            name: 'WI-G2-5 a distinct header Escape with no selection returns to the view picker',
+            requiresGrid: 'grid',
+            target: { selector: '.collectionDocumentViewSwitcher [role="combobox"]' },
+            steps: [{ action: 'press', key: 'Escape' }],
+        },
+        ...['View selected document', 'Edit selected document', 'Delete selected document(s)'].map(
+            (name): ScenarioAssertion => ({
+                kind: 'attribute',
+                name: `TDD: K1 no selection disables ${name}`,
+                requiresGrid: 'grid',
+                selector: `.collectionView :is(button,[role="button"])[aria-label="${name}"]`,
+                attribute: 'disabled',
+                expected: '',
+            }),
+        ),
+        {
+            kind: 'attribute',
+            name: 'TDD: K1 one clicked row is selected, not treated as none',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="row"][aria-rowindex="2"]',
+            attribute: 'aria-selected',
+            expected: 'true',
+            steps: [{ action: 'click', role: 'gridcell', name: 'Alpha' }],
+        },
+        {
+            kind: 'calls',
+            name: 'TDD: K1 exactly one selected document can be viewed',
+            requiresGrid: 'grid',
+            path: 'mongoClusters.collectionView.viewDocumentById',
+            input: '"heterogeneous-1"',
+            count: 1,
+            steps: [{ action: 'click', role: 'button', name: 'View selected document' }],
+        },
+        {
+            kind: 'calls',
+            name: 'TDD: K1 exactly one selected document can be edited',
+            requiresGrid: 'grid',
+            path: 'mongoClusters.collectionView.editDocumentById',
+            input: '"heterogeneous-1"',
+            count: 1,
+            steps: [{ action: 'click', role: 'button', name: 'Edit selected document' }],
+        },
+        {
+            kind: 'order',
+            name: 'TDD: K1 Space adds a document to the selection',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="row"][aria-selected="true"]',
+            texts: ['Alpha', 'Beta'],
+            steps: [
+                { action: 'focus', role: 'gridcell', name: 'Beta' },
+                { action: 'press', key: 'Space' },
+            ],
+        },
+        ...['View selected document', 'Edit selected document'].map(
+            (name): ScenarioAssertion => ({
+                kind: 'attribute',
+                name: `TDD: K1 multiple rows disable ${name}`,
+                requiresGrid: 'grid',
+                selector: `.collectionView :is(button,[role="button"])[aria-label="${name}"]`,
+                attribute: 'disabled',
+                expected: '',
+            }),
+        ),
+        {
+            kind: 'order',
+            name: 'TDD: K1 arrow focus does not change the selected documents',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="row"][aria-selected="true"]',
+            texts: ['Alpha', 'Beta'],
+            steps: [{ action: 'press', key: 'ArrowDown' }],
+        },
+        {
+            kind: 'order',
+            name: 'TDD: K1 Shift+Space extends the keyboard selection',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="row"][aria-selected="true"]',
+            texts: ['Alpha', 'Beta', 'heterogeneous-3'],
+            steps: [{ action: 'press', key: 'Shift+Space' }],
+        },
+        {
+            kind: 'calls',
+            name: 'TDD: K2 multi-delete sends canonical IDs, never row positions',
+            requiresGrid: 'grid',
+            path: 'mongoClusters.collectionView.deleteDocumentsById',
+            input: ['"heterogeneous-1"', '"heterogeneous-2"', '"heterogeneous-3"'],
+            count: 1,
+            steps: [{ action: 'click', role: 'button', name: 'Delete selected document(s)' }],
+        },
+        {
+            kind: 'text',
+            name: 'TDD: K2 acknowledged deletion removes the deleted rows locally',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            includes: [],
+            excludes: ['heterogeneous-[123]', 'Alpha', 'Beta'],
+            waitForText: true,
+        },
+        {
+            kind: 'attribute',
+            name: 'TDD: K2 acknowledged deletion clears selection',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="row"][aria-selected="true"]',
+            attribute: 'role',
+            expected: null,
+        },
+        {
+            kind: 'attribute',
+            name: 'TDD: K1 no remaining selection disables Delete',
+            requiresGrid: 'grid',
+            selector: '.collectionView :is(button,[role="button"])[aria-label="Delete selected document(s)"]',
+            attribute: 'disabled',
+            expected: '',
+        },
+    ],
+    identity: [
+        {
+            kind: 'stableText',
+            name: 'TDD: M1 object-valued root IDs are not step-in targets',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            steps: [{ action: 'dblclick', role: 'gridcell', name: '{...}' }],
+        },
+        {
+            kind: 'stableText',
+            name: 'TDD: M7 Enter on an object-valued root ID does not step in',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            steps: [
+                { action: 'focus', role: 'gridcell', name: '{...}' },
+                { action: 'press', key: 'Enter' },
+            ],
+        },
+        {
+            kind: 'calls',
+            name: 'TDD: K2 null is a valid canonical ID for View',
+            requiresGrid: 'grid',
+            path: 'mongoClusters.collectionView.viewDocumentById',
+            input: 'null',
+            count: 1,
+            steps: [
+                { action: 'click', role: 'gridcell', name: 'Null ID' },
+                { action: 'click', role: 'button', name: 'View selected document' },
+            ],
+        },
+        {
+            kind: 'calls',
+            name: 'TDD: K2 zero is a valid canonical ID for Edit',
+            requiresGrid: 'grid',
+            path: 'mongoClusters.collectionView.editDocumentById',
+            input: '{"$numberInt":"0"}',
+            count: 1,
+            steps: [
+                { action: 'click', role: 'gridcell', name: 'Zero ID' },
+                { action: 'click', role: 'button', name: 'Edit selected document' },
+            ],
+        },
+        {
+            kind: 'calls',
+            name: 'TDD: K2 false, empty-string and composite IDs stay canonical for Delete',
+            requiresGrid: 'grid',
+            path: 'mongoClusters.collectionView.deleteDocumentsById',
+            input: ['false', '""', '{"tenant":{"$numberInt":"1"}}'],
+            count: 1,
+            steps: [
+                { action: 'click', role: 'gridcell', name: 'False ID' },
+                { action: 'focus', role: 'gridcell', name: 'Empty ID' },
+                { action: 'press', key: 'Space' },
+                { action: 'focus', role: 'gridcell', name: 'Composite ID' },
+                { action: 'press', key: 'Space' },
+                { action: 'click', role: 'button', name: 'Delete selected document(s)' },
+            ],
+        },
+    ],
+    'late-delete': [
+        {
+            kind: 'calls',
+            name: 'TDD: K2 delete starts against the originally selected ID',
+            requiresGrid: 'grid',
+            path: 'mongoClusters.collectionView.deleteDocumentsById',
+            input: ['"heterogeneous-1"'],
+            count: 1,
+            steps: [
+                { action: 'click', role: 'gridcell', name: 'Alpha' },
+                { action: 'click', role: 'button', name: 'Delete selected document(s)' },
+            ],
+        },
+        {
+            kind: 'text',
+            name: 'TDD: K2 late delete acknowledgement preserves the newer selection',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="row"][aria-selected="true"]',
+            includes: ['Beta', 'heterogeneous-2'],
+            excludes: ['Alpha'],
+            steps: [
+                { action: 'click', role: 'gridcell', name: 'Beta' },
+                { action: 'releaseReply', tag: 'delete-alpha' },
+            ],
+        },
+        {
+            kind: 'text',
+            name: 'TDD: K2 late acknowledgement removes only the requested document',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            includes: ['Beta', 'heterogeneous-3'],
+            excludes: ['Alpha', 'heterogeneous-1'],
+        },
+        {
+            kind: 'calls',
+            name: 'TDD: K2 the preserved selection still opens the newer document',
+            requiresGrid: 'grid',
+            path: 'mongoClusters.collectionView.viewDocumentById',
+            input: '"heterogeneous-2"',
+            count: 1,
+            steps: [{ action: 'click', role: 'button', name: 'View selected document' }],
+        },
+    ],
+    'late-query': [
+        {
+            kind: 'text',
+            name: "TDD: K2 late nested data cannot replace a newer query's results",
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            includes: ['Alpha', 'Beta'],
+            excludes: ['nested Alpha'],
+            waitForText: true,
+            steps: [
+                { action: 'dblclick', role: 'gridcell', name: '{...}' },
+                { action: 'click', role: 'button', name: 'Find Query: execute the current editor values' },
+                { action: 'releaseReply', tag: 'old-details' },
+            ],
+        },
+        {
+            kind: 'text',
+            name: 'TDD: K2 an old nested request can remain pending while returning to Root',
+            requiresGrid: 'grid',
+            selector: '[aria-label="Document field path"]',
+            includes: ['details'],
+            excludes: [],
+            steps: [{ action: 'dblclick', role: 'gridcell', name: '{...}' }],
+        },
+        {
+            kind: 'text',
+            name: 'TDD: K2 late same-panel data cannot replace current root results',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            includes: ['Alpha', 'Beta'],
+            excludes: ['nested Alpha'],
+            steps: [
+                { action: 'click', role: 'button', name: 'Root Level' },
+                { action: 'click', role: 'gridcell', name: 'Beta' },
+                { action: 'releaseReply', tag: 'old-details' },
+            ],
+        },
+        {
+            kind: 'calls',
+            name: 'TDD: K2 late same-panel data cannot retarget the newer selection',
+            requiresGrid: 'grid',
+            path: 'mongoClusters.collectionView.viewDocumentById',
+            input: '"heterogeneous-2"',
+            count: 1,
+            steps: [{ action: 'click', role: 'button', name: 'View selected document' }],
+        },
+        {
+            kind: 'focused',
+            name: 'TDD: M7 late keyboard step-in does not steal focus from the view picker',
+            requiresGrid: 'grid',
+            target: { selector: '.collectionDocumentViewSwitcher [role="combobox"]' },
+            steps: [
+                { action: 'focus', role: 'gridcell', name: '{...}' },
+                { action: 'press', key: 'Enter' },
+                { action: 'focus', role: 'combobox', name: 'Select view type' },
+                { action: 'releaseReply', tag: 'old-details' },
+            ],
+        },
+    ],
+    'loading-to-results': [
+        {
+            kind: 'attribute',
+            name: 'K9 supporting first-load shell shows loading content',
+            selector: '[aria-label="Loading Content"]',
+            attribute: 'aria-label',
+            expected: 'Loading Content',
+        },
+        {
+            kind: 'calls',
+            name: 'K9 supporting first-load request was observed before release',
+            path: 'mongoClusters.collectionView.runFindQuery',
+            count: 1,
+            steps: [],
+            input: {
+                filter: '{  }',
+                project: '{  }',
+                sort: '{  }',
+                skip: 0,
+                limit: 0,
+                pageNumber: 1,
+                pageSize: 50,
+                executionIntent: 'pagination',
+            },
+        },
+        {
+            kind: 'calls',
+            name: 'K9 supporting first-load request releases without a clock delay',
+            path: 'mongoClusters.collectionView.getCurrentPageAsTable',
+            input: [],
+            count: 1,
+            steps: [{ action: 'releaseReply', tag: 'initial-results' }],
+        },
+        {
+            kind: 'text',
+            name: 'TDD: K9 loading resolves to browsable document rows',
+            requiresGrid: 'grid',
+            selector: '[role="grid"]',
+            includes: ['Alpha', 'Beta'],
+            excludes: [],
+        },
+    ],
+    paging: [
+        {
+            kind: 'text',
+            name: 'TDD: M3 Next shows page two with loaded document rows',
+            requiresGrid: 'grid',
+            selector: '.collectionView',
+            includes: ['Page 2', 'Alpha', 'Beta'],
+            excludes: [],
+            steps: [
+                { action: 'click', role: 'gridcell', name: 'Alpha' },
+                { action: 'click', role: 'button', name: 'Go to next page' },
+            ],
+        },
+        {
+            kind: 'attribute',
+            name: 'TDD: K2 paging clears the old row selection',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="row"][aria-selected="true"]',
+            attribute: 'role',
+            expected: null,
+        },
+        {
+            kind: 'text',
+            name: 'TDD: M3 Previous returns to page one',
+            requiresGrid: 'grid',
+            selector: '.collectionView',
+            includes: ['Page 1', 'Alpha'],
+            excludes: [],
+            steps: [{ action: 'click', role: 'button', name: 'Go to previous page' }],
+        },
+        {
+            kind: 'text',
+            name: 'TDD: M3 First returns to page one',
+            requiresGrid: 'grid',
+            selector: '.collectionView',
+            includes: ['Page 1', 'Alpha'],
+            excludes: [],
+            steps: [
+                { action: 'click', role: 'button', name: 'Go to next page' },
+                { action: 'click', role: 'button', name: 'Go to start' },
+            ],
+        },
+        ...['50', '100', '500', '10'].flatMap((size): ScenarioAssertion[] => [
+            {
+                kind: 'text',
+                name: `TDD: M3 page size ${size} retains loaded rows and resets page one`,
+                requiresGrid: 'grid',
+                selector: '.collectionView',
+                includes: ['Page 1', 'Alpha', 'Beta'],
+                excludes: [],
+                steps: [
+                    { action: 'click', role: 'button', name: 'Go to next page' },
+                    { action: 'click', role: 'combobox', name: 'Change page size' },
+                    { action: 'click', role: 'option', name: size },
+                ],
+            },
+            {
+                kind: 'text',
+                name: `TDD: M3 page size ${size} is shown as the current choice`,
+                requiresGrid: 'grid',
+                selector: '[role="combobox"][aria-label="Change page size"]',
+                includes: [size],
+                excludes: ['10', '50', '100', '500']
+                    .filter((other): boolean => other !== size)
+                    .map((other): string => `^${other}$`),
+            },
+        ]),
+        {
+            kind: 'text',
+            name: 'TDD: M3 a new find query returns to page one with browsable results',
+            requiresGrid: 'grid',
+            selector: '.collectionView',
+            includes: ['Page 1', 'Alpha'],
+            excludes: [],
+            steps: [
+                { action: 'click', role: 'button', name: 'Go to next page' },
+                { action: 'click', role: 'button', name: 'Find Query: execute the current editor values' },
+            ],
+        },
+        {
+            kind: 'attribute',
+            name: 'TDD: K2 refresh clears old selection instead of retargeting it',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="row"][aria-selected="true"]',
+            attribute: 'role',
+            expected: null,
+            steps: [
+                { action: 'click', role: 'gridcell', name: 'Alpha' },
+                { action: 'click', role: 'button', name: 'Refresh: Rerun the last executed query' },
+            ],
+        },
+        {
+            kind: 'attribute',
+            name: 'TDD: K2 view switching clears invisible table selection',
+            requiresGrid: 'grid',
+            selector: '[role="grid"] [role="row"][aria-selected="true"]',
+            attribute: 'role',
+            expected: null,
+            steps: [
+                { action: 'click', role: 'gridcell', name: 'Alpha' },
+                { action: 'click', role: 'combobox', name: 'Select view type' },
+                { action: 'click', role: 'option', name: 'Tree View' },
+                { action: 'click', role: 'combobox', name: 'Select view type' },
+                { action: 'click', role: 'option', name: 'Table View' },
+            ],
+        },
+    ],
+} satisfies Record<keyof typeof collectionViewFixtures, readonly ScenarioAssertion[]>;
+
 const readyDocker = base.rpc['localQuickStart.getDockerStatus'].results[0];
 const completedStages = [
     { stage: 'checking', status: 'done', dockerReadiness: readyDocker.readiness },
@@ -2423,7 +3923,29 @@ const diagnosticsScenarios = {
 } as const satisfies Readonly<Record<string, Scenario<'connectionDiagnostics'>>>;
 
 export const scenarios = {
-    collectionView: { default: defaultScenario('collectionView') },
+    collectionView: {
+        default: collectionViewBase,
+        'mixed-types': collectionViewScenario('mixed-types'),
+        'missing-vs-null': collectionViewScenario('missing-vs-null'),
+        heterogeneous: collectionViewScenario('heterogeneous'),
+        'deep-nesting': collectionViewScenario('deep-nesting'),
+        arrays: collectionViewScenario('arrays'),
+        'page-500': collectionViewScenario('page-500'),
+        'html-values': collectionViewScenario('html-values'),
+        empty: {
+            ...collectionViewScenario('empty'),
+            readiness: { ...collectionViewPresetReadiness, content: ['Documents', 'No results found'] },
+        },
+        'no-id': collectionViewScenario('no-id'),
+        'first-load': collectionViewScenario('first-load'),
+        'step-in': collectionViewScenario('step-in'),
+        selection: collectionViewScenario('selection'),
+        identity: collectionViewScenario('identity'),
+        'late-delete': collectionViewScenario('late-delete'),
+        'late-query': collectionViewScenario('late-query'),
+        'loading-to-results': collectionViewScenario('loading-to-results'),
+        paging: collectionViewScenario('paging'),
+    },
     documentView: { default: defaultScenario('documentView') },
     clusterDashboard: { default: defaultScenario('clusterDashboard') },
     atlasCredentials: { default: defaultScenario('atlasCredentials', atlasSteps) },
@@ -3481,6 +5003,25 @@ export function findScenario(route: ScenarioRoute): Scenario {
     const scenario = entries[route.scenario];
     if (!scenario) {
         throw new Error(`Unknown scenario: ${route.path}`);
+    }
+    if (route.view === 'collectionView' && route.scenario === 'mixed-types') {
+        const palette = {
+            dark: { background: 'rgb(31, 31, 31)', foreground: 'rgb(204, 204, 204)' },
+            light: { background: 'rgb(255, 255, 255)', foreground: 'rgb(59, 59, 59)' },
+            'high-contrast': { background: 'rgb(0, 0, 0)', foreground: 'rgb(255, 255, 255)' },
+        }[route.theme];
+        return {
+            ...scenario,
+            assertions: scenario.assertions?.map(
+                (assertion): ScenarioAssertion =>
+                    assertion.kind === 'style' && assertion.requiresGrid
+                        ? {
+                              ...assertion,
+                              expected: assertion.property === 'color' ? palette.foreground : palette.background,
+                          }
+                        : assertion,
+            ),
+        };
     }
     return scenario;
 }
